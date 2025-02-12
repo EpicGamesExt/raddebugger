@@ -45,9 +45,9 @@ dr_hash_from_string(String8 string)
 //~ rjf: Fancy String Type Functions
 
 internal void
-dr_fancy_string_list_push(Arena *arena, DR_FancyStringList *list, DR_FancyString *str)
+dr_fstrs_push(Arena *arena, DR_FStrList *list, DR_FStr *str)
 {
-  DR_FancyStringNode *n = push_array_no_zero(arena, DR_FancyStringNode, 1);
+  DR_FStrNode *n = push_array_no_zero(arena, DR_FStrNode, 1);
   MemoryCopyStruct(&n->v, str);
   SLLQueuePush(list->first, list->last, n);
   list->node_count += 1;
@@ -55,7 +55,21 @@ dr_fancy_string_list_push(Arena *arena, DR_FancyStringList *list, DR_FancyString
 }
 
 internal void
-dr_fancy_string_list_concat_in_place(DR_FancyStringList *dst, DR_FancyStringList *to_push)
+dr_fstrs_push_new_(Arena *arena, DR_FStrList *list, DR_FStrParams *params, DR_FStrParams *overrides, String8 string)
+{
+  DR_FStr fstr = {string, *params};
+  for(U64 idx = 0; idx < sizeof(DR_FStrParams); idx += 1)
+  {
+    if(((U8 *)overrides)[idx] != 0)
+    {
+      ((U8 *)&fstr.params)[idx] = ((U8 *)overrides)[idx];
+    }
+  }
+  dr_fstrs_push(arena, list, &fstr);
+}
+
+internal void
+dr_fstrs_concat_in_place(DR_FStrList *dst, DR_FStrList *to_push)
 {
   if(dst->last != 0 && to_push->first != 0)
   {
@@ -71,27 +85,27 @@ dr_fancy_string_list_concat_in_place(DR_FancyStringList *dst, DR_FancyStringList
   MemoryZeroStruct(to_push);
 }
 
-internal DR_FancyStringList
-dr_fancy_string_list_copy(Arena *arena, DR_FancyStringList *src)
+internal DR_FStrList
+dr_fstrs_copy(Arena *arena, DR_FStrList *src)
 {
-  DR_FancyStringList dst = {0};
-  for(DR_FancyStringNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  DR_FStrList dst = {0};
+  for(DR_FStrNode *src_n = src->first; src_n != 0; src_n = src_n->next)
   {
-    DR_FancyString fstr = src_n->v;
+    DR_FStr fstr = src_n->v;
     fstr.string = push_str8_copy(arena, fstr.string);
-    dr_fancy_string_list_push(arena, &dst, &fstr);
+    dr_fstrs_push(arena, &dst, &fstr);
   }
   return dst;
 }
 
 internal String8
-dr_string_from_fancy_string_list(Arena *arena, DR_FancyStringList *list)
+dr_string_from_fstrs(Arena *arena, DR_FStrList *list)
 {
   String8 result = {0};
   result.size = list->total_size;
   result.str = push_array_no_zero(arena, U8, result.size);
   U64 idx = 0;
-  for(DR_FancyStringNode *n = list->first; n != 0; n = n->next)
+  for(DR_FStrNode *n = list->first; n != 0; n = n->next)
   {
     MemoryCopy(result.str+idx, n->v.string.str, n->v.string.size);
     idx += n->v.string.size;
@@ -99,19 +113,19 @@ dr_string_from_fancy_string_list(Arena *arena, DR_FancyStringList *list)
   return result;
 }
 
-internal DR_FancyRunList
-dr_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, FNT_RasterFlags flags, DR_FancyStringList *strs)
+internal DR_FRunList
+dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
 {
   ProfBeginFunction();
-  DR_FancyRunList run_list = {0};
+  DR_FRunList run_list = {0};
   F32 base_align_px = 0;
-  for(DR_FancyStringNode *n = strs->first; n != 0; n = n->next)
+  for(DR_FStrNode *n = strs->first; n != 0; n = n->next)
   {
-    DR_FancyRunNode *dst_n = push_array(arena, DR_FancyRunNode, 1);
-    dst_n->v.run = fnt_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, flags, n->v.string);
-    dst_n->v.color = n->v.color;
-    dst_n->v.underline_thickness = n->v.underline_thickness;
-    dst_n->v.strikethrough_thickness = n->v.strikethrough_thickness;
+    DR_FRunNode *dst_n = push_array(arena, DR_FRunNode, 1);
+    dst_n->v.run = fnt_push_run_from_string(arena, n->v.params.font, n->v.params.size, base_align_px, tab_size_px, n->v.params.raster_flags, n->v.string);
+    dst_n->v.color = n->v.params.color;
+    dst_n->v.underline_thickness = n->v.params.underline_thickness;
+    dst_n->v.strikethrough_thickness = n->v.params.strikethrough_thickness;
     SLLQueuePush(run_list.first, run_list.last, dst_n);
     run_list.node_count += 1;
     run_list.dim.x += dst_n->v.run.dim.x;
@@ -120,22 +134,6 @@ dr_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, FNT_Rast
   }
   ProfEnd();
   return run_list;
-}
-
-internal DR_FancyRunList
-dr_fancy_run_list_copy(Arena *arena, DR_FancyRunList *src)
-{
-  DR_FancyRunList dst = {0};
-  for(DR_FancyRunNode *src_n = src->first; src_n != 0; src_n = src_n->next)
-  {
-    DR_FancyRunNode *dst_n = push_array(arena, DR_FancyRunNode, 1);
-    SLLQueuePush(dst.first, dst.last, dst_n);
-    MemoryCopyStruct(&dst_n->v, &src_n->v);
-    dst_n->v.run.pieces = fnt_piece_array_copy(arena, &src_n->v.run.pieces);
-    dst.node_count += 1;
-  }
-  dst.dim = src->dim;
-  return dst;
 }
 
 ////////////////////////////////
@@ -468,7 +466,7 @@ dr_sub_bucket(DR_Bucket *bucket)
 //- rjf: text
 
 internal void
-dr_truncated_fancy_run_list(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FNT_Run trailer_run)
+dr_truncated_fancy_run_list(Vec2F32 p, DR_FRunList *list, F32 max_x, FNT_Run trailer_run)
 {
   ProfBeginFunction();
   
@@ -480,9 +478,9 @@ dr_truncated_fancy_run_list(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FNT_Run
   B32 trailer_found = 0;
   Vec4F32 last_color = {0};
   U64 byte_off = 0;
-  for(DR_FancyRunNode *n = list->first; n != 0; n = n->next)
+  for(DR_FRunNode *n = list->first; n != 0; n = n->next)
   {
-    DR_FancyRun *fr = &n->v;
+    DR_FRun *fr = &n->v;
     Rng1F32 pixel_range = {0};
     {
       pixel_range.min = 100000;
@@ -571,7 +569,7 @@ dr_truncated_fancy_run_list(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FNT_Run
 }
 
 internal void
-dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color)
+dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color)
 {
   for(FuzzyMatchRangeNode *match_n = ranges->first; match_n != 0; match_n = match_n->next)
   {
@@ -586,9 +584,9 @@ dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FancyRunList *list, F32 max_x
     F32 advance = 0;
     F32 ascent = 0;
     F32 descent = 0;
-    for(DR_FancyRunNode *fr_n = list->first; fr_n != 0; fr_n = fr_n->next)
+    for(DR_FRunNode *fr_n = list->first; fr_n != 0; fr_n = fr_n->next)
     {
-      DR_FancyRun *fr = &fr_n->v;
+      DR_FRun *fr = &fr_n->v;
       FNT_Run *run = &fr->run;
       ascent = run->ascent;
       descent = run->descent;

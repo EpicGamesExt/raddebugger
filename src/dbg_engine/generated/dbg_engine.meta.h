@@ -77,7 +77,6 @@ global B32 DEV_draw_ui_box_heatmap = 0;
 global B32 DEV_eval_compiler_tooltips = 0;
 global B32 DEV_eval_watch_key_tooltips = 0;
 global B32 DEV_cmd_context_tooltips = 0;
-global B32 DEV_scratch_mouse_draw = 0;
 global B32 DEV_updating_indicator = 0;
 struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {
@@ -88,7 +87,6 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_eval_compiler_tooltips, str8_lit_comp("eval_compiler_tooltips")},
 {&DEV_eval_watch_key_tooltips, str8_lit_comp("eval_watch_key_tooltips")},
 {&DEV_cmd_context_tooltips, str8_lit_comp("cmd_context_tooltips")},
-{&DEV_scratch_mouse_draw, str8_lit_comp("scratch_mouse_draw")},
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 #endif // DBG_ENGINE_META_H

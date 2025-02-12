@@ -6,15 +6,6 @@
 #ifndef RADDBG_META_H
 #define RADDBG_META_H
 
-typedef enum RD_CfgSrc
-{
-RD_CfgSrc_User,
-RD_CfgSrc_Project,
-RD_CfgSrc_CommandLine,
-RD_CfgSrc_Transient,
-RD_CfgSrc_COUNT,
-} RD_CfgSrc;
-
 typedef enum RD_RegSlot
 {
 RD_RegSlot_Null,
@@ -444,8 +435,8 @@ RD_ThemePreset_FarManager,
 RD_ThemePreset_COUNT,
 } RD_ThemePreset;
 
-typedef struct RD_VocabularyInfo RD_VocabularyInfo;
-struct RD_VocabularyInfo
+typedef struct RD_VocabInfo RD_VocabInfo;
+struct RD_VocabInfo
 {
 String8 code_name;
 String8 code_name_plural;
@@ -520,8 +511,6 @@ String8 string;
 String8 description;
 String8 search_tags;
 String8 ctx_filter;
-String8 display_name;
-RD_IconKind icon_kind;
 RD_CmdKindFlags flags;
 RD_Query query;
 };
@@ -566,13 +555,9 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern String8 rd_cfg_src_string_table[4];
-extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
-extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
-extern RD_VocabularyInfo rd_vocabulary_info_table[66];
+extern RD_VocabInfo rd_vocab_info_table[277];
 extern RD_NameSchemaInfo rd_name_schema_info_table[10];
 extern Rng1U64 rd_reg_slot_range_table[38];
-extern RD_StringBindingPair rd_default_binding_table[111];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[69];

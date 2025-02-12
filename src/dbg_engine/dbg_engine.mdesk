@@ -113,7 +113,6 @@ D_DevToggleTable:
   {eval_compiler_tooltips}
   {eval_watch_key_tooltips}
   {cmd_context_tooltips}
-  {scratch_mouse_draw}
   {updating_indicator}
 }
 

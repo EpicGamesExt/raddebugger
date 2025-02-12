@@ -983,13 +983,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: singular button for top-level cfg group elements
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fancy_strings = rd_title_fstrs_from_cfg(arena, info.group_cfg_child, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, info.group_cfg_child, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular button for top-level cfg roots
       else if(row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fancy_strings = rd_title_fstrs_from_cfg(arena, evalled_cfg, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, evalled_cfg, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular button for entities
@@ -1001,7 +1001,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: singular button for commands
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f);
+        RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
+        RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular cell for view ui
@@ -1168,7 +1170,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   RD_WatchRowCellInfo result = {0};
   result.view_ui_rule = &rd_nil_view_ui_rule;
   result.view_ui_tag = &e_expr_nil;
-  result.fancy_strings = cell->fancy_strings;
+  result.fstrs = cell->fstrs;
   switch(cell->kind)
   {
     default:{}break;
@@ -2787,9 +2789,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                                                                RD_LineEditFlag_NoBackground*!(cell_info.is_button)|
                                                                RD_LineEditFlag_Button*!!(cell_info.is_button)|
                                                                RD_LineEditFlag_KeyboardClickable|
-                                                               RD_LineEditFlag_Expander*!!(cell_x == 0 && row_is_expandable && cell == row_info.cells.first)|
-                                                               RD_LineEditFlag_ExpanderPlaceholder*(cell_x == 0 && row_depth==0 && cell == row_info.cells.first && !cell_info.is_button)|
-                                                               RD_LineEditFlag_ExpanderSpace*(cell_x == 0 && row_depth!=0 && cell == row_info.cells.first));
+                                                               RD_LineEditFlag_Expander*!!(row_is_expandable && cell == row_info.cells.first)|
+                                                               RD_LineEditFlag_ExpanderPlaceholder*(row_depth==0 && cell == row_info.cells.first && !cell_info.is_button)|
+                                                               RD_LineEditFlag_ExpanderSpace*((row_depth!=0 && cell == row_info.cells.first)));
                       line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                       line_edit_params.cursor               = &cell_edit_state->cursor;
                       line_edit_params.mark                 = &cell_edit_state->mark;
@@ -2798,7 +2800,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       line_edit_params.edit_string_size_out = &cell_edit_state->input_size;
                       line_edit_params.expanded_out         = &next_row_expanded;
                       line_edit_params.pre_edit_value       = cell_info.string;
-                      line_edit_params.fancy_strings        = cell_info.fancy_strings;
+                      line_edit_params.fstrs        = cell_info.fstrs;
                     }
                     sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", str8_zero(), cell_x, row_hash);
 #if 0 // TODO(rjf): @cfg
@@ -3337,7 +3339,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 if(!rd_entity_is_nil(entity) || ctrl_entity != &ctrl_entity_nil)
                 {
                   //- rjf: unpack entity info
-                  DR_FancyStringList fstrs = {0};
+                  DR_FStrList fstrs = {0};
                   if(!rd_entity_is_nil(entity))
                   {
                     fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
@@ -3346,7 +3348,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   {
                     fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
                   }
-                  String8 fstrs_string = dr_string_from_fancy_string_list(scratch.arena, &fstrs);
+                  String8 fstrs_string = dr_string_from_fstrs(scratch.arena, &fstrs);
                   FuzzyMatchRangeList fstrs_matches = fuzzy_match_find(scratch.arena, filter, fstrs_string);
                   UI_Key hover_t_key = ui_key_from_stringf(ui_key_zero(), "entity_hover_t_%p_%p", entity, ctrl_entity);
                   F32 hover_t = ui_anim(hover_t_key, (F32)!!is_hovering, .rate = entity_hover_t_rate);
@@ -3396,7 +3398,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                         next_row_expanded = !row_expanded;
                       }
                       UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTruncatedHover, ui_key_zero());
-                      ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                      ui_box_equip_display_fstrs(title_box, &fstrs);
                       ui_box_equip_fuzzy_match_ranges(title_box, &fstrs_matches);
                       UI_Signal sig = ui_signal_from_box(entity_box);
                       if(ui_hovering(sig)) 
@@ -4670,6 +4672,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: unpack visual params
   //
   FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
+  FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
   F32 font_size = rd_font_size_from_slot(RD_FontSlot_Code);
   F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
   F32 row_height_px = floor_f32(font_size*2.f);
@@ -4830,11 +4833,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: produce fancy string runs for all possible byte values in all cells
   //
-  DR_FancyStringList byte_fancy_strings[256] = {0};
+  DR_FStrList byte_fstrs[256] = {0};
   {
     Vec4F32 full_color = rd_rgba_from_theme_color(RD_ThemeColor_TextPositive);
     Vec4F32 zero_color = rd_rgba_from_theme_color(RD_ThemeColor_TextWeak);
-    for(U64 idx = 0; idx < ArrayCount(byte_fancy_strings); idx += 1)
+    for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
     {
       U8 byte = (U8)idx;
       F32 pct = (byte/255.f);
@@ -4843,8 +4846,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         text_color.w *= 0.5f;
       }
-      DR_FancyString fstr = {font, push_str8f(scratch.arena, "%02x", byte), text_color, font_size, 0, 0};
-      dr_fancy_string_list_push(scratch.arena, &byte_fancy_strings[idx], &fstr);
+      DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, text_color, font_size, 0, 0}};
+      dr_fstrs_push(scratch.arena, &byte_fstrs[idx], &fstr);
     }
   }
   
@@ -5245,7 +5248,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               // rjf: build
               ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = cell_bg_rgba));
               UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-              ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
+              ui_box_equip_display_fstrs(cell_box, &byte_fstrs[byte_value]);
               {
                 F32 off = 0;
                 for(Annotation *a = annotation; a != 0; a = a->next)
@@ -5784,26 +5787,20 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
     UI_WidthFill RD_Font(RD_FontSlot_Code)
     {
       text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-      DR_FancyStringList fancy_strings = {0};
+      DR_FStrList fstrs = {0};
       {
-        DR_FancyString open_paren = {ui_top_font(), str8_lit("("), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-        DR_FancyString comma = {ui_top_font(), str8_lit(", "), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-        DR_FancyString r_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.x), v4f32(1.f, 0.25f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
-        DR_FancyString g_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.y), v4f32(0.25f, 1.f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
-        DR_FancyString b_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.z), v4f32(0.25f, 0.25f, 1.f, 1.f), ui_top_font_size(), 4.f, 0};
-        DR_FancyString a_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.w), v4f32(1.f,   1.f,   1.f, 1.f), ui_top_font_size(), 4.f, 0};
-        DR_FancyString clse_paren = {ui_top_font(), str8_lit(")"), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &open_paren);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &r_fstr);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &g_fstr);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &b_fstr);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &a_fstr);
-        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &clse_paren);
+        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_top_palette()->text, ui_top_font_size()};
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("));
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.x), .color = v4f32(1.f, 0.25f, 0.25f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.y), .color = v4f32(0.25f, 1.f, 0.25f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.z), .color = v4f32(0.25f, 0.25f, 1.f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.w), .color = v4f32(1.f,   1.f,   1.f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(")"));
       }
-      ui_box_equip_display_fancy_strings(text_box, &fancy_strings);
+      ui_box_equip_display_fstrs(text_box, &fstrs);
     }
     
     //- rjf: build color box

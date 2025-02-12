@@ -34,13 +34,6 @@ struct RD_Binding
   OS_Modifiers modifiers;
 };
 
-typedef struct RD_StringBindingPair RD_StringBindingPair;
-struct RD_StringBindingPair
-{
-  String8 string;
-  RD_Binding binding;
-};
-
 typedef struct RD_KeyMapNode RD_KeyMapNode;
 struct RD_KeyMapNode
 {
@@ -273,6 +266,33 @@ enum
 //~ rjf: Generated Code
 
 #include "generated/raddbg.meta.h"
+
+////////////////////////////////
+//~ rjf: Vocabulary Map
+
+typedef struct RD_VocabInfoMapNode RD_VocabInfoMapNode;
+struct RD_VocabInfoMapNode
+{
+  RD_VocabInfoMapNode *single_next;
+  RD_VocabInfoMapNode *plural_next;
+  RD_VocabInfo v;
+};
+
+typedef struct RD_VocabInfoMapSlot RD_VocabInfoMapSlot;
+struct RD_VocabInfoMapSlot
+{
+  RD_VocabInfoMapNode *first;
+  RD_VocabInfoMapNode *last;
+};
+
+typedef struct RD_VocabInfoMap RD_VocabInfoMap;
+struct RD_VocabInfoMap
+{
+  U64 single_slots_count;
+  RD_VocabInfoMapSlot *single_slots;
+  U64 plural_slots_count;
+  RD_VocabInfoMapSlot *plural_slots;
+};
 
 ////////////////////////////////
 //~ rjf: Config Tree
@@ -702,6 +722,9 @@ struct RD_State
   // rjf: schema table
   MD_Node **schemas;
   
+  // rjf: vocab table
+  RD_VocabInfoMap vocab_info_map;
+  
   // rjf: log
   Log *log;
   String8 log_path;
@@ -832,7 +855,7 @@ struct RD_State
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global RD_VocabularyInfo rd_nil_vocabulary_info = {0};
+read_only global RD_VocabInfo rd_nil_vocab_info = {0};
 
 read_only global RD_Cfg rd_nil_cfg =
 {
@@ -990,7 +1013,7 @@ internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
 internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
-internal DR_FancyStringList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
 
 internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
 
@@ -1011,7 +1034,7 @@ internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
-internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras);
+internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -1067,7 +1090,6 @@ internal String8 rd_query_from_eval_string(Arena *arena, String8 string);
 //~ rjf: View Functions
 
 internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
-internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, String8 viewer_name_string, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
 internal void rd_view_ui(Rng2F32 rect);
 
 ////////////////////////////////
@@ -1167,26 +1189,23 @@ internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);
 internal F32 rd_font_size_from_slot(RD_FontSlot slot);
 internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
 
-//- rjf: config serialization
-internal int rd_qsort_compare__cfg_string_bindings(RD_StringBindingPair *a, RD_StringBindingPair *b);
-internal String8List rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source);
-
 ////////////////////////////////
 //~ rjf: Process Control Info Stringification
 
 internal String8 rd_string_from_exception_code(U32 code);
-internal DR_FancyStringList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
+internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
 
 ////////////////////////////////
-//~ rjf: Vocabulary Info Lookups
+//~ rjf: Vocab Info Lookups
 
-internal RD_VocabularyInfo *rd_vocabulary_info_from_code_name(String8 code_name);
-internal RD_VocabularyInfo *rd_vocabulary_info_from_code_name_plural(String8 code_name_plural);
-#define rd_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->code_name_plural)
-#define rd_display_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name)
-#define rd_display_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name_plural)
-#define rd_icon_kind_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->icon_kind)
-#define rd_singular_from_code_name_plural(code_name_plural) (rd_vocabulary_info_from_code_name_plural(code_name_plural)->code_name)
+internal RD_VocabInfo *rd_vocab_info_from_code_name(String8 code_name);
+internal RD_VocabInfo *rd_vocab_info_from_code_name_plural(String8 code_name_plural);
+#define rd_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->code_name_plural)
+#define rd_display_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name)
+#define rd_display_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name_plural)
+#define rd_icon_kind_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->icon_kind)
+#define rd_singular_from_code_name_plural(code_name_plural) (rd_vocab_info_from_code_name_plural(code_name_plural)->code_name)
+internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

@@ -202,8 +202,8 @@ rd_cmd_binding_buttons(String8 name)
         {
           if(!str8_match(n2->v->name, n->v->name, 0))
           {
-            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(n2->v->name);
-            ui_labelf("%S", info->display_name);
+            String8 display_name = rd_display_from_code_name(n2->v->name);
+            ui_labelf("%S", display_name);
           }
         }
       }
@@ -300,7 +300,7 @@ rd_cmd_spec_button(String8 name)
                                           "###cmd_%p", info);
   UI_Parent(box) UI_HeightFill UI_Padding(ui_em(1.f, 1.f))
   {
-    RD_IconKind canonical_icon = info->icon_kind;
+    RD_IconKind canonical_icon = rd_icon_kind_from_code_name(name);
     if(canonical_icon != RD_IconKind_Null)
     {
       RD_Font(RD_FontSlot_Icons)
@@ -315,7 +315,7 @@ rd_cmd_spec_button(String8 name)
     {
       UI_Flags(UI_BoxFlag_DrawTextFastpathCodepoint)
         UI_FastpathCodepoint(box->fastpath_codepoint)
-        ui_label(info->display_name);
+        ui_label(rd_display_from_code_name(name));
       ui_spacer(ui_pct(1, 0));
       ui_set_next_flags(UI_BoxFlag_Clickable);
       ui_set_next_group_key(ui_key_zero());
@@ -1250,12 +1250,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
            (stop_event.cause == CTRL_EventCause_InterruptedByException ||
             stop_event.cause == CTRL_EventCause_InterruptedByTrap))
         {
-          DR_FancyStringList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
+          DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
             UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
           {
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###exception_info");
-            ui_box_equip_display_fancy_strings(box, &explanation_fstrs);
+            ui_box_equip_display_fstrs(box, &explanation_fstrs);
           }
         }
       }
@@ -1730,20 +1730,18 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         dr_push_bucket(line_bucket);
         
         // rjf: string * tokens -> fancy string list
-        DR_FancyStringList line_fancy_strings = {0};
+        DR_FStrList line_fstrs = {0};
         {
           if(line_tokens->count == 0)
           {
-            DR_FancyString fstr =
+            DR_FStrParams fstr_params =
             {
               params->font,
-              line_string,
+              ui_top_text_raster_flags(),
               rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault),
               params->font_size,
-              0,
-              0,
             };
-            dr_fancy_string_list_push(scratch.arena, &line_fancy_strings, &fstr);
+            dr_fstrs_push_new(scratch.arena, &line_fstrs, &fstr_params, line_string);
           }
           else
           {
@@ -1778,22 +1776,20 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               
               // rjf: push fancy string
-              DR_FancyString fstr =
+              DR_FStrParams fstr_params =
               {
                 params->font,
-                token_string,
+                ui_top_text_raster_flags(),
                 token_color,
                 params->font_size,
-                0,
-                0,
               };
-              dr_fancy_string_list_push(scratch.arena, &line_fancy_strings, &fstr);
+              dr_fstrs_push_new(scratch.arena, &line_fstrs, &fstr_params, token_string);
             }
           }
         }
         
         // rjf: equip fancy strings to line box
-        ui_box_equip_display_fancy_strings(line_box, &line_fancy_strings);
+        ui_box_equip_display_fstrs(line_box, &line_fstrs);
         
         // rjf: extra rendering for strings that are currently being searched for
         if(params->search_query.size != 0)
@@ -2182,25 +2178,26 @@ rd_label(String8 string)
       active_part_flags ^= StringPartFlag_Code;
     }
   }
-  DR_FancyStringList fstrs = {0};
+  DR_FStrList fstrs = {0};
   for(StringPart *p = first_part; p != 0; p = p->next)
   {
-    DR_FancyString fstr = {0};
+    DR_FStr fstr = {0};
     {
-      fstr.font   = ui_top_font();
       fstr.string = p->string;
-      fstr.color  = ui_top_palette()->colors[UI_ColorCode_Text];
-      fstr.size   = ui_top_font_size();
+      fstr.params.font   = ui_top_font();
+      fstr.params.color  = ui_top_palette()->colors[UI_ColorCode_Text];
+      fstr.params.size   = ui_top_font_size();
       if(p->flags & StringPartFlag_Code)
       {
-        fstr.font = rd_font_from_slot(RD_FontSlot_Code);
-        fstr.color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+        fstr.params.font = rd_font_from_slot(RD_FontSlot_Code);
+        fstr.params.raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
+        fstr.params.color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
       }
     }
-    dr_fancy_string_list_push(scratch.arena, &fstrs, &fstr);
+    dr_fstrs_push(scratch.arena, &fstrs, &fstr);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-  ui_box_equip_display_fancy_strings(box, &fstrs);
+  ui_box_equip_display_fstrs(box, &fstrs);
   UI_Signal sig = ui_signal_from_box(box);
   scratch_end(scratch);
   return sig;
@@ -2249,12 +2246,12 @@ rd_help_label(String8 string)
   return result;
 }
 
-internal DR_FancyStringList
-rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
+internal DR_FStrList
+rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  DR_FancyStringList fancy_strings = {0};
+  DR_FStrList fstrs = {0};
   TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
   TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
@@ -2272,14 +2269,17 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
     {
       default:
       {
-        DR_FancyString fancy_string =
+        DR_FStr fstr =
         {
-          ui_top_font(),
           token_string,
-          token_color_rgba,
-          ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
+          {
+            ui_top_font(),
+            ui_top_text_raster_flags(),
+            token_color_rgba,
+            ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
+          }
         };
-        dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+        dr_fstrs_push(arena, &fstrs, &fstr);
       }break;
       case TXT_TokenKind_Identifier:
       case TXT_TokenKind_Keyword:
@@ -2291,14 +2291,17 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
           F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
           token_color_rgba = mix_4f32(token_color_rgba, lookup_color, lookup_color_mix_t);
         }
-        DR_FancyString fancy_string =
+        DR_FStr fstr =
         {
-          ui_top_font(),
           token_string,
-          token_color_rgba,
-          ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
+          {
+            ui_top_font(),
+            ui_top_text_raster_flags(),
+            token_color_rgba,
+            ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
+          },
         };
-        dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+        dr_fstrs_push(arena, &fstrs, &fstr);
       }break;
       case TXT_TokenKind_Numeric:
       {
@@ -2344,14 +2347,17 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         
         // rjf: push prefix
         {
-          DR_FancyString fancy_string =
+          DR_FStr fstr =
           {
-            ui_top_font(),
             prefix,
-            token_color_rgba,
-            font_size,
+            {
+              ui_top_font(),
+              ui_top_text_raster_flags(),
+              token_color_rgba,
+              font_size,
+            },
           };
-          dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+          dr_fstrs_push(arena, &fstrs, &fstr);
         }
         
         // rjf: push digit groups
@@ -2367,14 +2373,17 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
               num_digits_passed = 0;
               if(start_idx < idx)
               {
-                DR_FancyString fancy_string =
+                DR_FStr fstr =
                 {
-                  ui_top_font(),
                   str8_substr(whole, r1u64(start_idx, idx)),
-                  odd ? token_color_rgba_alt : token_color_rgba,
-                  font_size,
+                  {
+                    ui_top_font(),
+                    ui_top_text_raster_flags(),
+                    odd ? token_color_rgba_alt : token_color_rgba,
+                    font_size,
+                  },
                 };
-                dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+                dr_fstrs_push(arena, &fstrs, &fstr);
                 start_idx = idx;
                 odd ^= 1;
               }
@@ -2388,14 +2397,17 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         
         // rjf: push decimal
         {
-          DR_FancyString fancy_string =
+          DR_FStr fstr =
           {
-            ui_top_font(),
             decimal,
-            token_color_rgba,
-            font_size,
+            {
+              ui_top_font(),
+              ui_top_text_raster_flags(),
+              token_color_rgba,
+              font_size,
+            },
           };
-          dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+          dr_fstrs_push(arena, &fstrs, &fstr);
         }
         
       }break;
@@ -2406,16 +2418,16 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
   }
   scratch_end(scratch);
   ProfEnd();
-  return fancy_strings;
+  return fstrs;
 }
 
 internal UI_Box *
 rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  DR_FancyStringList fancy_strings = rd_fancy_string_list_from_code_string(scratch.arena, alpha, indirection_size_change, base_color, string);
+  DR_FStrList fstrs = rd_fstrs_from_code_string(scratch.arena, alpha, indirection_size_change, base_color, string);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-  ui_box_equip_display_fancy_strings(box, &fancy_strings);
+  ui_box_equip_display_fstrs(box, &fstrs);
   scratch_end(scratch);
   return box;
 }
@@ -2650,10 +2662,10 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
-    if(!is_focus_active && !is_focus_active_disabled && params->fancy_strings.total_size != 0)
+    if(!is_focus_active && !is_focus_active_disabled && params->fstrs.total_size != 0)
     {
       UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-      ui_box_equip_display_fancy_strings(label, &params->fancy_strings);
+      ui_box_equip_display_fstrs(label, &params->fstrs);
     }
     else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
     {
@@ -2710,15 +2722,15 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      DR_FancyStringList code_fancy_strings = rd_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
+      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
       if(autocomplete_hint_string.size != 0)
       {
         String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
         String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
         U64 off = 0;
         U64 cursor_off = params->cursor->column-1;
-        DR_FancyStringNode *prev_n = 0;
-        for(DR_FancyStringNode *n = code_fancy_strings.first; n != 0; n = n->next)
+        DR_FStrNode *prev_n = 0;
+        for(DR_FStrNode *n = code_fstrs.first; n != 0; n = n->next)
         {
           if(off <= cursor_off && cursor_off <= off+n->v.string.size)
           {
@@ -2728,13 +2740,13 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
           off += n->v.string.size;
         }
         {
-          DR_FancyStringNode *autocomp_fstr_n = push_array(scratch.arena, DR_FancyStringNode, 1);
-          DR_FancyString *fstr = &autocomp_fstr_n->v;
-          fstr->font = ui_top_font();
+          DR_FStrNode *autocomp_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+          DR_FStr *fstr = &autocomp_fstr_n->v;
           fstr->string = autocomplete_append_string;
-          fstr->color = ui_top_palette()->text;
-          fstr->color.w *= 0.5f;
-          fstr->size = ui_top_font_size();
+          fstr->params.font = ui_top_font();
+          fstr->params.color = ui_top_palette()->text;
+          fstr->params.color.w *= 0.5f;
+          fstr->params.size = ui_top_font_size();
           autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
           if(prev_n != 0)
           {
@@ -2742,40 +2754,40 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
           }
           if(prev_n == 0)
           {
-            code_fancy_strings.first = code_fancy_strings.last = autocomp_fstr_n;
+            code_fstrs.first = code_fstrs.last = autocomp_fstr_n;
           }
           if(prev_n != 0 && prev_n->next == 0)
           {
-            code_fancy_strings.last = autocomp_fstr_n;
+            code_fstrs.last = autocomp_fstr_n;
           }
-          code_fancy_strings.node_count += 1;
-          code_fancy_strings.total_size += autocomplete_hint_string.size;
+          code_fstrs.node_count += 1;
+          code_fstrs.total_size += autocomplete_hint_string.size;
           if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
           {
             String8 full_string = prev_n->v.string;
             U64 chop_amt = full_string.size - (cursor_off - off);
             prev_n->v.string = str8_chop(full_string, chop_amt);
-            code_fancy_strings.total_size -= chop_amt;
+            code_fstrs.total_size -= chop_amt;
             if(chop_amt != 0)
             {
               String8 post_cursor = str8_skip(full_string, cursor_off - off);
-              DR_FancyStringNode *post_fstr_n = push_array(scratch.arena, DR_FancyStringNode, 1);
-              DR_FancyString *post_fstr = &post_fstr_n->v;
+              DR_FStrNode *post_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+              DR_FStr *post_fstr = &post_fstr_n->v;
               MemoryCopyStruct(post_fstr, &prev_n->v);
               post_fstr->string   = post_cursor;
               if(autocomp_fstr_n->next == 0)
               {
-                code_fancy_strings.last = post_fstr_n;
+                code_fstrs.last = post_fstr_n;
               }
               post_fstr_n->next = autocomp_fstr_n->next;
               autocomp_fstr_n->next = post_fstr_n;
-              code_fancy_strings.node_count += 1;
-              code_fancy_strings.total_size += post_cursor.size;
+              code_fstrs.node_count += 1;
+              code_fstrs.total_size += post_cursor.size;
             }
           }
         }
       }
-      ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
+      ui_box_equip_display_fstrs(editstr_box, &code_fstrs);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = params->cursor[0];

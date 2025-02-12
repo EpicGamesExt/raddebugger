@@ -717,10 +717,10 @@ ui_string_hover_begin_time_us(void)
   return ui_state->string_hover_begin_us;
 }
 
-internal DR_FancyStringList
+internal DR_FStrList
 ui_string_hover_fstrs(Arena *arena)
 {
-  DR_FancyStringList result = dr_fancy_string_list_copy(arena, &ui_state->string_hover_fstrs);
+  DR_FStrList result = dr_fstrs_copy(arena, &ui_state->string_hover_fstrs);
   return result;
 }
 
@@ -1529,7 +1529,7 @@ ui_end_build(void)
             Vec2F32 drawn_text_dim = {0};
             {
               Temp scratch = scratch_begin(0, 0);
-              DR_FancyRunList fruns = dr_fancy_run_list_from_fancy_string_list(scratch.arena, b->tab_size, b->text_raster_flags, &b->display_fstrs);
+              DR_FRunList fruns = dr_fruns_from_fstrs(scratch.arena, b->tab_size, &b->display_fstrs);
               drawn_text_dim = fruns.dim;
               scratch_end(scratch);
             }
@@ -1546,7 +1546,7 @@ ui_end_build(void)
                 arena_clear(ui_state->string_hover_arena);
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
                 ui_state->string_hover_size = box->font_size;
-                ui_state->string_hover_fstrs = dr_fancy_string_list_copy(ui_state->string_hover_arena, &b->display_fstrs);
+                ui_state->string_hover_fstrs = dr_fstrs_copy(ui_state->string_hover_arena, &b->display_fstrs);
                 ui_state->string_hover_begin_us = os_now_microseconds();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
@@ -2421,10 +2421,10 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
-    DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
-    box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
+    DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
+    DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+    box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+    box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2435,19 +2435,19 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      DR_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
-      DR_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
-      box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
+      DR_FStrNode pst_fstr_n = {0,                   {str8_skip(display_string, fpcp_pos+fpcp.size), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
+      DR_FStrNode cdp_fstr_n = {&pst_fstr_n, {str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 3.f, 0}}};
+      DR_FStrNode pre_fstr_n = {&cdp_fstr_n, {str8_prefix(display_string, fpcp_pos), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&pre_fstr_n, &pst_fstr_n, 3};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     else
     {
-      DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
-      box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
+      DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     scratch_end(scratch);
   }
@@ -2455,12 +2455,12 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings)
+ui_box_equip_display_fstrs(UI_Box *box, DR_FStrList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = dr_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), strings);
-  box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
+  box->string = dr_string_from_fstrs(ui_build_arena(), strings);
+  box->display_fstrs = dr_fstrs_copy(ui_build_arena(), strings);
+  box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
 }
 
 internal inline void

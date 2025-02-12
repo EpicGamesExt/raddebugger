@@ -57,7 +57,7 @@ struct RD_WatchCell
   RD_WatchCell *next;
   RD_WatchCellKind kind;
   String8 string;
-  DR_FancyStringList fancy_strings;
+  DR_FStrList fstrs;
   F32 pct;
   F32 px;
 };
@@ -92,7 +92,7 @@ struct RD_WatchRowCellInfo
 {
   E_Eval eval;
   String8 string;
-  DR_FancyStringList fancy_strings;
+  DR_FStrList fstrs;
   B32 is_non_code;
   B32 is_button;
   B32 can_edit;

@@ -11,43 +11,10 @@
 @embed_file rd_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////
-//~ rjf: Config Sources
+//~ rjf: Vocabulary Map
 
-@table(string, name, load_cmd, write_cmd, apply_cmd)
-RD_CfgSrcTable:
-{
-  {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
-  {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
-  {"command_line"    CommandLine      Null           Null                Null             }
-  {"transient"       Transient        Null           Null                Null             }
-}
-
-@enum RD_CfgSrc:
-{
-  @expand(RD_CfgSrcTable a) `$(a.name)`,
-  COUNT,
-}
-
-@data(String8) rd_cfg_src_string_table:
-{
-  @expand(RD_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
-}
-
-@data(RD_CmdKind) rd_cfg_src_load_cmd_kind_table:
-{
-  @expand(RD_CfgSrcTable a) `RD_CmdKind_$(a.load_cmd)`,
-}
-
-@data(RD_CmdKind) rd_cfg_src_write_cmd_kind_table:
-{
-  @expand(RD_CfgSrcTable a) `RD_CmdKind_$(a.write_cmd)`,
-}
-
-////////////////////////////////
-//~ rjf: Vocabulary Maps
-
-@table(code_name     code_name_plural    display_name      display_name_plural    icon_kind)
-RD_VocabularyMap:
+@table(code_name       code_name_plural            display_name                 display_name_plural  icon_kind)
+RD_VocabTable:
 // NOTE(rjf): the _ character is used as a fastpath for default rules. when
 // pluralizing, you just append an `s`, and so on.
 {
@@ -119,7 +86,7 @@ RD_VocabularyMap:
   {id                   _                           "ID"                        _                     Null                                           }
 }
 
-@struct RD_VocabularyInfo:
+@struct RD_VocabInfo:
 {
   `String8 code_name`;
   `String8 code_name_plural`;
@@ -128,9 +95,11 @@ RD_VocabularyMap:
   `RD_IconKind icon_kind`;
 }
 
-@data(RD_VocabularyInfo) rd_vocabulary_info_table:
+@data(RD_VocabInfo) rd_vocab_info_table:
 {
-  @expand(RD_VocabularyMap a) `{str8_lit_comp("$(a.code_name)"), str8_lit_comp("$(a.code_name_plural == _ -> a.code_name .. 's')$(a.code_name_plural != _ -> a.code_name_plural)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.display_name_plural == _ -> a.display_name .. 's')$(a.display_name_plural != _ -> a.display_name_plural)"), RD_IconKind_$(a.icon_kind)}`;
+  @expand(RD_VocabTable a) `{str8_lit_comp("$(a.code_name)"), str8_lit_comp("$(a.code_name_plural == _ -> a.code_name .. 's')$(a.code_name_plural != _ -> a.code_name_plural)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.display_name_plural == _ -> a.display_name .. 's')$(a.display_name_plural != _ -> a.display_name_plural)"), RD_IconKind_$(a.icon_kind)}`;
+  @expand(D_CmdTable a)    `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
+  @expand(RD_CmdTable a)   `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
 }
 
 ////////////////////////////////
@@ -635,8 +604,6 @@ RD_CmdTable:    //               |        |              |                  |   
   `String8 description`;
   `String8 search_tags`;
   `String8 ctx_filter`;
-  `String8 display_name`;
-  `RD_IconKind icon_kind`;
   `RD_CmdKindFlags flags`;
   `RD_Query query`;
 };
@@ -645,9 +612,9 @@ RD_CmdTable:    //               |        |              |                  |   
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
 }
 
 ////////////////////////////////
@@ -819,7 +786,7 @@ RD_DefaultBindingTable:
   { "toggle_dev_menu"             D         ctrl     shift     alt        }
 }
 
-@data(RD_StringBindingPair) rd_default_binding_table:
+@data(`struct {String8 string; RD_Binding binding;}`) @c_file rd_default_binding_table:
 {
   @expand(RD_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_Modifier_Ctrl`) $(a.shift != 0 -> `|OS_Modifier_Shift`) $(a.alt != 0 -> `|OS_Modifier_Alt`)}}```;
 }

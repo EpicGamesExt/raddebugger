@@ -433,8 +433,8 @@ struct UI_Box
   F32 text_padding;
   
   //- rjf: per-build artifacts
-  DR_FancyStringList display_fstrs;
-  DR_FancyRunList display_fruns;
+  DR_FStrList display_fstrs;
+  DR_FRunList display_fruns;
   Rng2F32 rect;
   Vec2F32 fixed_position_animated;
   Vec2F32 position_delta;
@@ -682,7 +682,7 @@ struct UI_State
   Arena *string_hover_arena;
   String8 string_hover_string;
   F32 string_hover_size;
-  DR_FancyStringList string_hover_fstrs;
+  DR_FStrList string_hover_fstrs;
   U64 string_hover_begin_us;
   U64 string_hover_build_index;
   U64 last_time_mousemoved_us;
@@ -815,7 +815,7 @@ internal String8           ui_get_drag_data(U64 min_required_size);
 
 //- rjf: hovered string info
 internal B32                ui_string_hover_active(void);
-internal DR_FancyStringList ui_string_hover_fstrs(Arena *arena);
+internal DR_FStrList ui_string_hover_fstrs(Arena *arena);
 
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
@@ -882,7 +882,7 @@ internal UI_Box *          ui_build_box_from_stringf(UI_BoxFlags flags, char *fm
 
 //- rjf: box node equipment
 internal inline void       ui_box_equip_display_string(UI_Box *box, String8 string);
-internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings);
+internal inline void       ui_box_equip_display_fstrs(UI_Box *box, DR_FStrList *strings);
 internal inline void       ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches);
 internal inline void       ui_box_equip_draw_bucket(UI_Box *box, DR_Bucket *bucket);
 internal inline void       ui_box_equip_custom_draw(UI_Box *box, UI_BoxCustomDrawFunctionType *custom_draw, void *user_data);
