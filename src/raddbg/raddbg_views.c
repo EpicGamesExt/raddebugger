@@ -1287,6 +1287,13 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
       result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
       
+      //- rjf: determine if inlined
+      E_Type *type = e_type_from_key__cached(result.eval.type_key);
+      if(type->depth > 0)
+      {
+        result.is_inlined = 1;
+      }
+      
       scratch_end(scratch);
     }break;
     
@@ -4900,7 +4907,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           CTRL_Entity *module = ctrl_module_from_process_vaddr(process, f_rip);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           U64 rip_voff = ctrl_voff_from_vaddr(module, f_rip);
-          String8 symbol_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 1);
+          String8 symbol_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0, 1);
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");

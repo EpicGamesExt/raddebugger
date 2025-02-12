@@ -323,6 +323,8 @@ e_hash_from_cons_type_params(E_ConsTypeParams *params)
     params->direct_key.u32[2],
     (U32)((params->count & 0x00000000ffffffffull)>> 0),
     (U32)((params->count & 0xffffffff00000000ull)>> 32),
+    (U32)((params->depth & 0x00000000ffffffffull)>> 0),
+    (U32)((params->depth & 0xffffffff00000000ull)>> 32),
   };
   U64 hash = e_hash_from_string(5381, str8((U8 *)buffer, sizeof(buffer)));
   hash = e_hash_from_string(hash, params->name);
@@ -336,7 +338,8 @@ e_cons_type_params_match(E_ConsTypeParams *l, E_ConsTypeParams *r)
                 l->flags == r->flags &&
                 str8_match(l->name, r->name, 0) &&
                 e_type_key_match(l->direct_key, r->direct_key) &&
-                l->count == r->count);
+                l->count == r->count &&
+                l->depth == r->depth);
   if(result && l->members != 0 && r->members != 0)
   {
     for(U64 idx = 0; idx < l->count; idx += 1)
@@ -628,6 +631,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name             = push_str8_copy(arena, node->params.name);
             type->direct_type_key  = node->params.direct_key;
             type->count            = node->params.count;
+            type->depth            = node->params.depth;
             type->byte_size        = node->byte_size;
             switch(type->kind)
             {

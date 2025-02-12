@@ -4775,7 +4775,7 @@ rd_window_frame(void)
               }
               else
               {
-                rd_cmd(RD_CmdKind_RunToAddress, .vaddr = regs->vaddr);
+                rd_cmd(RD_CmdKind_RunToLine, .vaddr = regs->vaddr);
               }
               ui_ctx_menu_close();
             }
@@ -7366,10 +7366,7 @@ rd_window_frame(void)
           {
             String8 view_expr = rd_expr_from_cfg(selected_tab);
             String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
-            if(view_file_path.size != 0)
-            {
-              rd_regs()->file_path = view_file_path;
-            }
+            rd_regs()->file_path = view_file_path;
           }
           
           //- rjf: build view container
@@ -9129,7 +9126,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(call_stack)
       CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, accel->process);
       CTRL_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
       result.irtree_and_type.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
-      result.irtree_and_type.type_key = e_type_key_cons_ptr(process->arch, e_type_key_basic(E_TypeKind_Void), 1, 0);
+      result.irtree_and_type.type_key = e_type_key_cons(.arch = process->arch, .kind = E_TypeKind_Ptr, .direct_key = e_type_key_basic(E_TypeKind_Function), .count = 1, .depth = f->inline_depth);
       result.irtree_and_type.mode = E_Mode_Value;
     }
     scratch_end(scratch);
@@ -9605,8 +9602,10 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       case E_TypeKind_RRef:
       {
         // rjf: unpack type info
-        E_TypeKind type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
-        E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(e_type_unwrap(eval.type_key)));
+        E_TypeKey type_key = e_type_unwrap(eval.type_key);
+        E_Type *type = e_type_from_key__cached(type_key);
+        E_TypeKind type_kind = type->kind;
+        E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(type_key));
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         
         // rjf: unpack info about pointer destination
@@ -9623,7 +9622,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
           process = ctrl_process_from_entity(thread);
         }
-        String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
+        String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, type->depth, 1);
         
         // rjf: special case: push strings for textual string content
         B32 did_content = 0;

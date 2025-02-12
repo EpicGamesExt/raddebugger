@@ -669,35 +669,101 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 //- rjf: symbol lookups
 
 internal String8
-d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated)
+d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, U64 depth, B32 decorated)
 {
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
     DI_Scope *scope = di_scope_open();
     RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+    
+    //- rjf: try scopes
     if(result.size == 0)
     {
+      // rjf: voff -> scope
       U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
-      RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-      U64 proc_idx = scope->proc_idx;
-      RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-      E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
-      String8 name = {0};
-      name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
-      if(decorated && procedure->type_idx != 0)
+      
+      // rjf: scope -> # of max possible inline depth
+      U64 inline_site_count = 0;
+      for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
       {
-        String8List list = {0};
-        e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
-        str8_list_push(scratch.arena, &list, name);
-        e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
-        result = str8_list_join(arena, &list, 0);
+        RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
+        s_idx_next = s->parent_scope_idx;
+        if(s->inline_site_idx != 0)
+        {
+          inline_site_count += 1;
+        }
+        else
+        {
+          break;
+        }
       }
+      
+      // rjf: depth in [1, max]? -> form name from inline site
+      if(0 < depth && depth <= inline_site_count)
+      {
+        RDI_InlineSite *inline_site = 0;
+        U64 s_inline_depth = inline_site_count;
+        for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
+        {
+          RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
+          s_idx_next = s->parent_scope_idx;
+          if(s_inline_depth == depth)
+          {
+            inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+            break;
+          }
+          s_inline_depth -= 1;
+          if(s_inline_depth == 0)
+          {
+            break;
+          }
+        }
+        if(inline_site != 0)
+        {
+          E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+          if(decorated && inline_site->type_idx != 0)
+          {
+            String8List list = {0};
+            e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+            str8_list_push(scratch.arena, &list, name);
+            e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+            result = str8_list_join(arena, &list, 0);
+          }
+          else
+          {
+            result = push_str8_copy(arena, name);
+          }
+        }
+      }
+      
+      // rjf: depth == 0 or depth >= max? -> form name from scope procedure
       else
       {
-        result = push_str8_copy(arena, name);
+        RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
+        U64 proc_idx = scope->proc_idx;
+        RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+        E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
+        String8 name = {0};
+        name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+        if(decorated && procedure->type_idx != 0)
+        {
+          String8List list = {0};
+          e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+          str8_list_push(scratch.arena, &list, name);
+          e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+          result = str8_list_join(arena, &list, 0);
+        }
+        else
+        {
+          result = push_str8_copy(arena, name);
+        }
       }
     }
+    
+    //- rjf: try global variables
     if(result.size == 0)
     {
       U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, voff);
@@ -706,6 +772,7 @@ d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 d
       U8 *name_ptr = rdi_string_from_idx(rdi, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
+    
     di_scope_close(scope);
     scratch_end(scratch);
   }
@@ -713,7 +780,7 @@ d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 d
 }
 
 internal String8
-d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, B32 decorated)
+d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, U64 depth, B32 decorated)
 {
   ProfBeginFunction();
   String8 result = {0};
@@ -721,7 +788,7 @@ d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, 
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
     DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
     U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-    result = d_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff, decorated);
+    result = d_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff, depth, decorated);
   }
   ProfEnd();
   return result;
@@ -2173,15 +2240,15 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           run_extra_bps.count = 1;
           run_extra_bps.v = push_array(scratch.arena, D_Breakpoint, 1);
-          run_extra_bps.v[0].file_path = params->file_path;
-          run_extra_bps.v[0].pt        = params->cursor;
-          d_cmd(D_CmdKind_Run);
-        }break;
-        case D_CmdKind_RunToAddress:
-        {
-          run_extra_bps.count = 1;
-          run_extra_bps.v = push_array(scratch.arena, D_Breakpoint, 1);
-          run_extra_bps.v[0].vaddr = params->vaddr;
+          if(params->file_path.size != 0)
+          {
+            run_extra_bps.v[0].file_path = params->file_path;
+            run_extra_bps.v[0].pt        = params->cursor;
+          }
+          else if(params->vaddr != 0)
+          {
+            run_extra_bps.v[0].vaddr = params->vaddr;
+          }
           d_cmd(D_CmdKind_Run);
         }break;
         case D_CmdKind_Run:

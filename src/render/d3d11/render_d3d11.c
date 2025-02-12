@@ -673,7 +673,10 @@ r_tex2d_release(R_Handle handle)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
-    SLLStackPush(r_d3d11_state->first_to_free_tex2d, texture);
+    if(texture != &r_d3d11_tex2d_nil)
+    {
+      SLLStackPush(r_d3d11_state->first_to_free_tex2d, texture);
+    }
   }
   ProfEnd();
 }
@@ -706,15 +709,18 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
-    Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
-    U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
-    Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
-    D3D11_BOX dst_box =
+    if(texture != &r_d3d11_tex2d_nil)
     {
-      (UINT)subrect.x0, (UINT)subrect.y0, 0,
-      (UINT)subrect.x1, (UINT)subrect.y1, 1,
-    };
-    r_d3d11_state->device_ctx->lpVtbl->UpdateSubresource(r_d3d11_state->device_ctx, (ID3D11Resource *)texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+      Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
+      U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
+      Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
+      D3D11_BOX dst_box =
+      {
+        (UINT)subrect.x0, (UINT)subrect.y0, 0,
+        (UINT)subrect.x1, (UINT)subrect.y1, 1,
+      };
+      r_d3d11_state->device_ctx->lpVtbl->UpdateSubresource(r_d3d11_state->device_ctx, (ID3D11Resource *)texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+    }
   }
   ProfEnd();
 }

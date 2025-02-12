@@ -129,6 +129,7 @@ struct E_Type
   String8 name;
   U64 byte_size;
   U64 count;
+  U64 depth;
   U32 off;
   E_TypeKey direct_type_key;
   E_TypeKey owner_type_key;
@@ -176,6 +177,7 @@ struct E_ConsTypeParams
   String8 name;
   E_TypeKey direct_key;
   U64 count;
+  U64 depth;
   E_Member *members;
   E_EnumVal *enum_vals;
 };
