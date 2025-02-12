@@ -6288,297 +6288,6 @@ rd_window_frame(void)
             }
           }
         }
-        
-#if 0 // TODO(rjf): @cfg
-        Temp scratch = scratch_begin(0, 0);
-        DI_Scope *scope = di_scope_open();
-        String8 expr = ws->hover_eval_string;
-        E_Eval eval = e_eval_from_string(scratch.arena, expr);
-        EV_ViewRuleList top_level_view_rules = {0};
-        
-        //- rjf: build if good
-        if(!e_type_key_match(eval.type_key, e_type_key_zero()) && !ui_any_ctx_menu_is_open())
-          UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && ws->hover_eval_focused && !query_is_open) ? UI_FocusKind_Null : UI_FocusKind_Off)
-        {
-          //- rjf: eval -> viz artifacts
-          F32 row_height = floor_f32(ui_top_font_size()*2.8f);
-          RD_CfgTable cfg_table = {0};
-          U64 expr_hash = d_hash_from_string(expr);
-          String8 ev_view_key_string = push_str8f(scratch.arena, "eval_hover_%I64x", expr_hash);
-          EV_View *ev_view = rd_ev_view_from_key(d_hash_from_string(ev_view_key_string));
-          EV_Key parent_key = ev_key_make(5381, 1);
-          EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
-          EV_BlockTree block_tree = ev_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules);
-          EV_BlockRangeList block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
-          // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
-          CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-          U32 default_radix = (entity->kind == CTRL_EntityKind_Thread ? 16 : 10);
-          EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, ev_view, str8_zero(), &block_ranges, r1u64(0, 50));
-          // EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
-          
-          //- rjf: animate
-          {
-            B32 do_menu_animations = rd_setting_b32_from_name(str8_lit("menu_animations"));
-            F32 rate = do_menu_animations ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
-            
-            // rjf: animate height
-            {
-              F32 hover_eval_container_height_target = row_height * Min(30, block_tree.total_row_count);
-              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * rate;
-              if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
-              {
-                rd_request_frame();
-              }
-              else
-              {
-                ws->hover_eval_num_visible_rows_t = hover_eval_container_height_target;
-              }
-            }
-            
-            // rjf: animate open
-            {
-              F32 diff = 1.f - ws->hover_eval_open_t;
-              ws->hover_eval_open_t += diff*rate;
-              if(abs_f32(diff) < 0.01f)
-              {
-                ws->hover_eval_open_t = 1.f;
-              }
-              else
-              {
-                rd_request_frame();
-              }
-            }
-          }
-          
-          //- rjf: calculate width
-          F32 width_px = 40.f*ui_top_font_size();
-          F32 expr_column_width_px = 15.f*ui_top_font_size();
-          F32 value_column_width_px = 25.f*ui_top_font_size();
-          if(rows.first != 0)
-          {
-            EV_Row *row = rows.first;
-            E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-            String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
-            String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-            expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*10.f;
-            value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
-            F32 total_dim_px = (expr_column_width_px + value_column_width_px);
-            width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
-          }
-          
-          //- rjf: build hover eval box
-          F32 hover_eval_container_height = ws->hover_eval_num_visible_rows_t;
-          F32 corner_radius = ui_top_font_size()*0.25f;
-          ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
-          ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-          ui_set_next_pref_width(ui_px(width_px, 1.f));
-          ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
-          ui_set_next_corner_radius_00(0);
-          ui_set_next_corner_radius_01(corner_radius);
-          ui_set_next_corner_radius_10(corner_radius);
-          ui_set_next_corner_radius_11(corner_radius);
-          ui_set_next_child_layout_axis(Axis2_Y);
-          ui_set_next_squish(0.25f-0.25f*ws->hover_eval_open_t);
-          ui_set_next_transparency(1.f-ws->hover_eval_open_t);
-          UI_Focus(UI_FocusKind_On)
-          {
-            hover_eval_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
-                                                       UI_BoxFlag_DrawBackground|
-                                                       UI_BoxFlag_DrawBackgroundBlur|
-                                                       UI_BoxFlag_DrawDropShadow|
-                                                       UI_BoxFlag_DisableFocusOverlay|
-                                                       UI_BoxFlag_Clip|
-                                                       UI_BoxFlag_AllowOverflowY|
-                                                       UI_BoxFlag_ViewScroll|
-                                                       UI_BoxFlag_ViewClamp|
-                                                       UI_BoxFlag_Floating|
-                                                       UI_BoxFlag_AnimatePos|
-                                                       UI_BoxFlag_Clickable|
-                                                       UI_BoxFlag_DefaultFocusNav,
-                                                       "###hover_eval");
-          }
-          
-          //- rjf: build contents
-          UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
-          {
-            //- rjf: build rows
-            for(EV_Row *row = rows.first; row != 0; row = row->next)
-            {
-              //- rjf: unpack row
-              U64 row_depth = ev_depth_from_block(row->block);
-              E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-              String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
-              String8 row_edit_value = rd_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-              String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-              B32 row_is_editable   = ev_row_is_editable(row);
-              B32 row_is_expandable = ev_row_is_expandable(row);
-              
-              //- rjf: determine if row's data is fresh and/or bad
-              B32 row_is_fresh = 0;
-              B32 row_is_bad = 0;
-              switch(row_eval.mode)
-              {
-                default:{}break;
-                case E_Mode_Offset:
-                {
-                  CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
-                  if(space_entity->kind == CTRL_EntityKind_Process)
-                  {
-                    U64 size = e_type_byte_size_from_key(row_eval.type_key);
-                    size = Min(size, 64);
-                    Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
-                    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, 0);
-                    for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
-                    {
-                      if(slice.byte_changed_flags[idx] != 0)
-                      {
-                        row_is_fresh = 1;
-                      }
-                      if(slice.byte_bad_flags[idx] != 0)
-                      {
-                        row_is_bad = 1;
-                      }
-                    }
-                  }
-                }break;
-              }
-              
-              //- rjf: build row
-              UI_WidthFill UI_Row
-              {
-                ui_spacer(ui_em(0.5f, 1.f));
-                if(row_depth > 0)
-                {
-                  for(U64 indent = 0; indent < row_depth; indent += 1)
-                  {
-                    ui_spacer(ui_em(0.5f, 1.f));
-                    UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.f, 1.f));
-                  }
-                }
-                U64 row_hash = ev_hash_from_key(row->key);
-                B32 row_is_expanded = ev_expansion_from_key(ev_view, row->key);
-                if(row_is_expandable)
-                  UI_PrefWidth(ui_em(1.f, 1)) 
-                  if(ui_pressed(ui_expanderf(row->block->rows_default_expanded ? !row_is_expanded : row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_id)))
-                {
-                  ev_key_set_expansion(ev_view, row->block->key, row->key, !row_is_expanded);
-                }
-                if(!row_is_expandable)
-                {
-                  UI_PrefWidth(ui_em(1.f, 1))
-                    UI_Flags(UI_BoxFlag_DrawTextWeak)
-                    RD_Font(RD_FontSlot_Icons)
-                    ui_label(rd_icon_kind_text_table[RD_IconKind_Dot]);
-                }
-                UI_WidthFill UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Code))
-                {
-                  UI_PrefWidth(ui_px(expr_column_width_px, 1.f)) rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), row_expr_string);
-                  ui_spacer(ui_em(1.5f, 1.f));
-                  if(row_is_editable)
-                  {
-                    if(row_is_fresh)
-                    {
-                      Vec4F32 rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
-                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rgba));
-                    }
-                    UI_Signal sig = rd_line_editf(RD_LineEditFlag_CodeContents|
-                                                  RD_LineEditFlag_DisplayStringIsCode|
-                                                  RD_LineEditFlag_PreferDisplayString|
-                                                  RD_LineEditFlag_Border,
-                                                  0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row_edit_value, "%S###val_%I64x", row_display_value, row_hash);
-                    if(ui_pressed(sig))
-                    {
-                      ws->hover_eval_focused = 1;
-                    }
-                    if(ui_committed(sig))
-                    {
-                      String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
-                      B32 success = rd_commit_eval_value_string(row_eval, commit_string, 1);
-                      if(success == 0)
-                      {
-                        log_user_error(str8_lit("Could not commit value successfully."));
-                      }
-                    }
-                  }
-                  else
-                  {
-                    if(row_is_fresh)
-                    {
-                      Vec4F32 rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
-                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rgba));
-                      ui_set_next_flags(UI_BoxFlag_DrawBackground);
-                    }
-                    rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), row_display_value);
-                  }
-                }
-                if(row == rows.first)
-                {
-                  UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
-                    UI_CornerRadius00(0)
-                    UI_CornerRadius01(0)
-                    UI_CornerRadius10(0)
-                    UI_CornerRadius11(0)
-                  {
-                    UI_Signal watch_sig = rd_icon_buttonf(RD_IconKind_List, 0, "###watch_hover_eval");
-                    if(ui_hovering(watch_sig)) UI_Tooltip RD_Font(RD_FontSlot_Main) UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                    {
-                      ui_labelf("Add the hovered expression to an opened watch view.");
-                    }
-                    if(ui_clicked(watch_sig))
-                    {
-                      rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = expr);
-                    }
-                  }
-                  if(ws->hover_eval_file_path.size != 0 || ws->hover_eval_vaddr != 0)
-                    UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
-                    UI_CornerRadius10(corner_radius)
-                    UI_CornerRadius11(corner_radius)
-                  {
-                    UI_Signal pin_sig = rd_icon_buttonf(RD_IconKind_Pin, 0, "###pin_hover_eval");
-                    if(ui_hovering(pin_sig)) UI_Tooltip RD_Font(RD_FontSlot_Main) UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                      UI_CornerRadius00(0)
-                      UI_CornerRadius01(0)
-                      UI_CornerRadius10(0)
-                      UI_CornerRadius11(0)
-                    {
-                      ui_labelf("Pin the hovered expression to this code location.");
-                    }
-                    if(ui_clicked(pin_sig))
-                    {
-                      rd_cmd(RD_CmdKind_ToggleWatchPin,
-                             .file_path  = ws->hover_eval_file_path,
-                             .cursor     = ws->hover_eval_file_pt,
-                             .vaddr      = ws->hover_eval_vaddr,
-                             .string     = expr);
-                    }
-                  }
-                }
-              }
-            }
-            UI_PrefWidth(ui_px(0, 0)) ui_spacer(ui_px(hover_eval_container_height-row_height, 1.f));
-          }
-          
-          //- rjf: interact
-          {
-            UI_Signal hover_eval_sig = ui_signal_from_box(hover_eval_box);
-            if(ui_mouse_over(hover_eval_sig))
-            {
-              ws->hover_eval_last_frame_idx = rd_state->frame_index;
-            }
-            else if(ws->hover_eval_last_frame_idx+2 < rd_state->frame_index)
-            {
-              rd_request_frame();
-            }
-            if(ui_pressed(hover_eval_sig))
-            {
-              ws->hover_eval_focused = 1;
-            }
-          }
-        }
-        
-        di_scope_close(scope);
-        scratch_end(scratch);
-#endif
       }
     }
     
@@ -9731,9 +9440,64 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           did_content = 1;
           if(depth < 4)
           {
-            E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
-            E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, deref_eval, out);
+            if(type->count == 1)
+            {
+              E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
+              E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
+              space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, deref_eval, out);
+            }
+            else
+            {
+              String8 opener_string = str8_lit("[");
+              String8 closer_string = str8_lit("]");
+              
+              // rjf: opener ({, [)
+              {
+                str8_list_push(arena, out, opener_string);
+                space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, opener_string).x;
+              }
+              
+              // rjf: contents
+              {
+                E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr);
+                E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.expr, &irtree);
+                E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+                E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+                E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, str8_zero());
+                U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
+                B32 is_first = 1;
+                for(U64 idx = 0; idx < total_possible_child_count && max_size > space_taken; idx += 1)
+                {
+                  E_Expr *expr = &e_expr_nil;
+                  String8 expr_string = {0};
+                  lookup_rule->range(scratch.arena, eval.expr, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+                  if(expr != &e_expr_nil)
+                  {
+                    if(!is_first)
+                    {
+                      String8 comma = str8_lit(", ");
+                      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+                      str8_list_push(arena, out, comma);
+                    }
+                    is_first = 0;
+                    E_Eval child_eval = e_eval_from_expr(scratch.arena, expr);
+                    space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, child_eval, out);
+                    if(space_taken > max_size && idx+1 < total_possible_child_count)
+                    {
+                      String8 ellipses = str8_lit(", ...");
+                      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+                      str8_list_push(arena, out, ellipses);
+                    }
+                  }
+                }
+              }
+              
+              // rjf: closer (}, ])
+              {
+                str8_list_push(arena, out, closer_string);
+                space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, closer_string).x;
+              }
+            }
           }
           else
           {
