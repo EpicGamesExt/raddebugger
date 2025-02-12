@@ -3825,10 +3825,9 @@ rd_window_frame(void)
     if(ui_string_hover_active()) UI_Tooltip
     {
       Temp scratch = scratch_begin(0, 0);
-      String8 string = ui_string_hover_string(scratch.arena);
-      DR_FancyRunList runs = ui_string_hover_runs(scratch.arena);
+      DR_FancyStringList fstrs = ui_string_hover_fstrs(scratch.arena);
       UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-      ui_box_equip_display_string_fancy_runs(box, string, &runs);
+      ui_box_equip_display_fancy_strings(box, &fstrs);
       scratch_end(scratch);
     }
     
@@ -8201,11 +8200,11 @@ rd_window_frame(void)
           max_x = (box->rect.x1-text_position.x);
           ellipses_run = fnt_push_run_from_string(scratch.arena, box->font, box->font_size, 0, box->tab_size, 0, str8_lit("..."));
         }
-        dr_truncated_fancy_run_list(text_position, &box->display_string_runs, max_x, ellipses_run);
+        dr_truncated_fancy_run_list(text_position, &box->display_fruns, max_x, ellipses_run);
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
         {
           Vec4F32 match_color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
-          dr_truncated_fancy_run_fuzzy_matches(text_position, &box->display_string_runs, max_x, &box->fuzzy_match_ranges, match_color);
+          dr_truncated_fancy_run_fuzzy_matches(text_position, &box->display_fruns, max_x, &box->fuzzy_match_ranges, match_color);
         }
       }
       

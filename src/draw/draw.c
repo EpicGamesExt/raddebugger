@@ -71,6 +71,19 @@ dr_fancy_string_list_concat_in_place(DR_FancyStringList *dst, DR_FancyStringList
   MemoryZeroStruct(to_push);
 }
 
+internal DR_FancyStringList
+dr_fancy_string_list_copy(Arena *arena, DR_FancyStringList *src)
+{
+  DR_FancyStringList dst = {0};
+  for(DR_FancyStringNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    DR_FancyString fstr = src_n->v;
+    fstr.string = push_str8_copy(arena, fstr.string);
+    dr_fancy_string_list_push(arena, &dst, &fstr);
+  }
+  return dst;
+}
+
 internal String8
 dr_string_from_fancy_string_list(Arena *arena, DR_FancyStringList *list)
 {

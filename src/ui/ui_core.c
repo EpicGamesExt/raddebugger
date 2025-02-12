@@ -717,17 +717,10 @@ ui_string_hover_begin_time_us(void)
   return ui_state->string_hover_begin_us;
 }
 
-internal String8
-ui_string_hover_string(Arena *arena)
+internal DR_FancyStringList
+ui_string_hover_fstrs(Arena *arena)
 {
-  String8 result = push_str8_copy(arena, ui_state->string_hover_string);
-  return result;
-}
-
-internal DR_FancyRunList
-ui_string_hover_runs(Arena *arena)
-{
-  DR_FancyRunList result = dr_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
+  DR_FancyStringList result = dr_fancy_string_list_copy(arena, &ui_state->string_hover_fstrs);
   return result;
 }
 
@@ -1533,7 +1526,13 @@ ui_end_build(void)
             }
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
-            Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+            Vec2F32 drawn_text_dim = {0};
+            {
+              Temp scratch = scratch_begin(0, 0);
+              DR_FancyRunList fruns = dr_fancy_run_list_from_fancy_string_list(scratch.arena, b->tab_size, b->text_raster_flags, &b->display_fstrs);
+              drawn_text_dim = fruns.dim;
+              scratch_end(scratch);
+            }
             B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
                                                          rect.y0,
@@ -1542,11 +1541,12 @@ ui_end_build(void)
                                                   ui_state->mouse);
             if(text_is_truncated && mouse_is_hovering && !(b->flags & UI_BoxFlag_DisableTruncatedHover))
             {
-              if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+              if(!str8_match(box_display_string, ui_state->string_hover_string, 0) || box->font_size != ui_state->string_hover_size)
               {
                 arena_clear(ui_state->string_hover_arena);
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-                ui_state->string_hover_fancy_runs = dr_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_size = box->font_size;
+                ui_state->string_hover_fstrs = dr_fancy_string_list_copy(ui_state->string_hover_arena, &b->display_fstrs);
                 ui_state->string_hover_begin_us = os_now_microseconds();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
@@ -1599,7 +1599,7 @@ ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis)
     case UI_SizeKind_TextContent:
     {
       F32 padding = root->pref_size[axis].value;
-      F32 text_size = root->display_string_runs.dim.x;
+      F32 text_size = root->display_fruns.dim.x;
       root->fixed_size.v[axis] = padding + text_size + root->text_padding*2;
     }break;
   }
@@ -2423,7 +2423,8 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     String8 display_string = ui_box_display_string(box);
     DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
     DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+    box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
+    box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2438,13 +2439,15 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
       DR_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
       DR_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
       DR_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
+      box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
     }
     else
     {
       DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
       DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), &fancy_strings);
+      box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
     }
     scratch_end(scratch);
   }
@@ -2456,15 +2459,8 @@ ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = dr_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
-}
-
-internal inline void
-ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, DR_FancyRunList *runs)
-{
-  box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = push_str8_copy(ui_build_arena(), string);
-  box->display_string_runs = dr_fancy_run_list_copy(ui_build_arena(), runs);
+  box->display_fstrs = dr_fancy_string_list_copy(ui_build_arena(), strings);
+  box->display_fruns = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &box->display_fstrs);
 }
 
 internal inline void
@@ -2529,13 +2525,13 @@ ui_box_text_position(UI_Box *box)
     }break;
     case UI_TextAlign_Center:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p1.x) - text_dim.x - box->text_padding);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
