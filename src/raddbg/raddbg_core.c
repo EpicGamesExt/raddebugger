@@ -805,11 +805,15 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
         DLLPushBack_NPZ(&rd_nil_panel_node, dst_active_parent->first, dst_active_parent->last, dst, next, prev);
         dst_active_parent->child_count += 1;
       }
+      if(dst_root == &rd_nil_panel_node)
+      {
+        dst_root = dst;
+      }
       
       // rjf: extract cfg info
       B32 panel_has_children = 0;
       dst->cfg = src;
-      dst->pct_of_parent = (F32)f64_from_str8(src->string);
+      dst->pct_of_parent = (src == src_root ? 1.f : (F32)f64_from_str8(src->string));
       dst->tab_side = (rd_cfg_child_from_string(src, str8_lit("tabs_on_bottom")) != &rd_nil_cfg ? Side_Max : Side_Min);
       dst->split_axis = active_split_axis;
       for(RD_Cfg *src_child = src->first; src_child != &rd_nil_cfg; src_child = src_child->next)
@@ -855,10 +859,6 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
       if(rec.push_count > 0)
       {
         dst_active_parent = dst;
-        if(dst_root == &rd_nil_panel_node)
-        {
-          dst_root = dst;
-        }
         active_split_axis = axis2_flip(active_split_axis);
       }
       else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
@@ -12579,7 +12579,12 @@ rd_frame(void)
   //- rjf: animate theme
   //
   {
-    RD_Theme *last = rd_state->theme;
+    Temp scratch = scratch_begin(0, 0);
+    RD_Theme *last = push_array(scratch.arena, RD_Theme, 1);
+    if(rd_state->theme != 0)
+    {
+      MemoryCopyStruct(last, rd_state->theme);
+    }
     rd_state->theme = push_array(rd_frame_arena(), RD_Theme, 1);
     RD_Theme *current = rd_state->theme;
     RD_Theme *target = rd_state->theme_target;
@@ -12611,6 +12616,7 @@ rd_frame(void)
         current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
       }
     }
+    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -13459,12 +13465,15 @@ rd_frame(void)
             rd_cfg_newf(size, "720");
             for(RD_Cfg *old_child = old_window->first; old_child != &rd_nil_cfg; old_child = old_child->next)
             {
-              if(!str8_match(old_child->string, str8_lit("panels"), 0))
+              if(!str8_match(old_child->string, str8_lit("panels"), 0) &&
+                 !str8_match(old_child->string, str8_lit("size"), 0))
               {
                 RD_Cfg *new_child = rd_cfg_deep_copy(old_child);
                 rd_cfg_insert_child(new_window, new_window->last, new_child);
               }
             }
+            RD_Cfg *panels = rd_cfg_new(new_window, str8_lit("panels"));
+            rd_cfg_new(panels, str8_lit("selected"));
           }break;
           case RD_CmdKind_CloseWindow:
           {
