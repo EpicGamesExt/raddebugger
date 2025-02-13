@@ -427,7 +427,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
               RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
               E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
               E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 1, 0);
-              expr = e_expr_ref_cast(arena, ptr_to_derived_type_key, expr);
+              expr = e_expr_irext_cast(arena, ptr_to_derived_type_key);
             }
           }
         }

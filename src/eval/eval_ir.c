@@ -491,7 +491,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
       U64 read_range_count = dim_1u64(idx_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
-        exprs[idx] = e_expr_ref_array_index(arena, lhs, idx_range.min + idx);
+        exprs[idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, idx_range.min + idx);
       }
     }
   }
@@ -2291,7 +2291,7 @@ e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtre
   E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
   E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
-  lhs_bytecode->string = lhs->string;
+  lhs_bytecode->string = e_string_from_expr(arena, lhs);
   lhs_bytecode->space = lhs->space;
   lhs_bytecode->mode = lhs_irtree->mode;
   lhs_bytecode->type_key = lhs_irtree->type_key;
@@ -2300,6 +2300,57 @@ e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtre
   rhs->string = push_str8_copy(arena, member_name);
   e_expr_push_child(root, lhs_bytecode);
   e_expr_push_child(root, rhs);
+  return root;
+}
+
+internal E_Expr *
+e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
+  E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
+  E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
+  lhs_bytecode->string = e_string_from_expr(arena, lhs);
+  lhs_bytecode->space = lhs->space;
+  lhs_bytecode->mode = lhs_irtree->mode;
+  lhs_bytecode->type_key = lhs_irtree->type_key;
+  lhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
+  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+  rhs->value.u64 = index;
+  e_expr_push_child(root, lhs_bytecode);
+  e_expr_push_child(root, rhs);
+  return root;
+}
+
+internal E_Expr *
+e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
+  E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
+  E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
+  rhs_bytecode->string = e_string_from_expr(arena, rhs);
+  rhs_bytecode->space = rhs->space;
+  rhs_bytecode->mode = rhs_irtree->mode;
+  rhs_bytecode->type_key = rhs_irtree->type_key;
+  rhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &rhs_oplist);
+  e_expr_push_child(root, rhs_bytecode);
+  return root;
+}
+
+internal E_Expr *
+e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
+  E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
+  E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
+  rhs_bytecode->string = e_string_from_expr(arena, rhs);
+  rhs_bytecode->space = rhs->space;
+  rhs_bytecode->mode = rhs_irtree->mode;
+  rhs_bytecode->type_key = rhs_irtree->type_key;
+  rhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &rhs_oplist);
+  E_Expr *lhs = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
+  lhs->type_key = type_key;
+  e_expr_push_child(root, lhs);
+  e_expr_push_child(root, rhs_bytecode);
   return root;
 }
 

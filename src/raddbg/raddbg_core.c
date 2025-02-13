@@ -8544,17 +8544,19 @@ E_LOOKUP_RANGE_FUNCTION_DEF(top_level_cfg)
   Rng1U64 cmds_idx_range = accel->cmds_idx_range;
   Rng1U64 cfgs_idx_range = accel->cfgs_idx_range;
   U64 dst_idx = 0;
+  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
   
   // rjf: fill commands
   {
     Rng1U64 read_range = intersect_1u64(cmds_idx_range, idx_range);
     U64 read_count = dim_1u64(read_range);
     E_Expr *commands = e_parse_expr_from_text(arena, str8_lit("query:commands"));
+    E_IRTreeAndType commands_irtree = e_irtree_and_type_from_expr(arena, commands);
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       String8 cmd_name = accel->cmds.v[idx + read_range.min - cmds_idx_range.min];
       RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
-      exprs[dst_idx] = e_expr_ref_array_index(arena, commands, (U64)cmd_kind-1);
+      exprs[dst_idx] = e_expr_irext_array_index(arena, commands, &commands_irtree, (U64)cmd_kind-1);
     }
   }
   
@@ -8564,7 +8566,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(top_level_cfg)
     U64 read_count = dim_1u64(read_range);
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
-      exprs[dst_idx] = e_expr_ref_array_index(arena, lhs, idx + read_range.min - cfgs_idx_range.min);
+      exprs[dst_idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, idx + read_range.min - cfgs_idx_range.min);
     }
   }
 }
@@ -8813,6 +8815,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(environment)
 E_LOOKUP_RANGE_FUNCTION_DEF(environment)
 {
   RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
   Rng1U64 legal_idx_range = r1u64(0, cfgs->count);
   Rng1U64 read_range = intersect_1u64(idx_range, legal_idx_range);
   U64 read_range_count = dim_1u64(read_range);
@@ -8821,7 +8824,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(environment)
     U64 cfg_idx = read_range.min + idx;
     if(cfg_idx < cfgs->count)
     {
-      exprs[idx] = e_expr_ref_array_index(arena, lhs, cfg_idx);
+      exprs[idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, cfg_idx);
     }
   }
 }

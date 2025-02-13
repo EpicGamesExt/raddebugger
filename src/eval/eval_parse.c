@@ -699,30 +699,6 @@ e_expr_ref(Arena *arena, E_Expr *ref)
 }
 
 internal E_Expr *
-e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
-  E_Expr *lhs_ref = e_expr_ref(arena, lhs);
-  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafMember, 0);
-  rhs->string = push_str8_copy(arena, member_name);
-  e_expr_push_child(root, lhs_ref);
-  e_expr_push_child(root, rhs);
-  return root;
-}
-
-internal E_Expr *
-e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
-  E_Expr *lhs_ref = e_expr_ref(arena, lhs);
-  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-  rhs->value.u64 = index;
-  e_expr_push_child(root, lhs_ref);
-  e_expr_push_child(root, rhs);
-  return root;
-}
-
-internal E_Expr *
 e_expr_ref_deref(Arena *arena, E_Expr *rhs)
 {
   E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
