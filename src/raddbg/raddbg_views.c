@@ -3016,8 +3016,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   {
                     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%I64x_%I64x", cell_id, row_hash);
                     sig = ui_signal_from_box(box);
-                    if(row_info->callstack_unwind_index == rd_regs()->unwind_count &&
-                       row_info->callstack_inline_depth == rd_regs()->inline_depth)
+                    if(ctrl_handle_match(row_info->callstack_thread->handle, rd_base_regs()->thread) &&
+                       row_info->callstack_unwind_index == rd_base_regs()->unwind_count &&
+                       row_info->callstack_inline_depth == rd_base_regs()->inline_depth)
                     {
                       UI_Parent(box) UI_Flags(0) UI_TextAlignment(UI_TextAlign_Center)
                       {
