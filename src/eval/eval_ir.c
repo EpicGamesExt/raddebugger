@@ -152,8 +152,12 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         if(direct_type_kind == E_TypeKind_Struct ||
            direct_type_kind == E_TypeKind_Class ||
-           direct_type_kind == E_TypeKind_Union ||
-           direct_type_kind == E_TypeKind_Enum)
+           direct_type_kind == E_TypeKind_Union)
+        {
+          E_MemberArray data_members = e_type_data_members_from_key__cached(direct_type_key);
+          lookup_info.named_expr_count = data_members.count;
+        }
+        else if(direct_type_kind == E_TypeKind_Enum)
         {
           E_Type *direct_type = e_type_from_key__cached(direct_type_key);
           lookup_info.named_expr_count = direct_type->count;
@@ -430,7 +434,9 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
     
     //- rjf: pull out specific kinds of types
     B32 do_struct_range = 0;
+    B32 do_enum_range = 0;
     B32 do_index_range = 0;
+    E_TypeKey enum_type_key = zero_struct;
     E_TypeKey struct_type_key = zero_struct;
     E_TypeKind struct_type_kind = E_TypeKind_Null;
     if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
@@ -439,12 +445,16 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
       if(lhs_type->count == 1 &&
          (direct_type_kind == E_TypeKind_Struct ||
           direct_type_kind == E_TypeKind_Union ||
-          direct_type_kind == E_TypeKind_Class ||
-          direct_type_kind == E_TypeKind_Enum))
+          direct_type_kind == E_TypeKind_Class))
       {
         struct_type_key = direct_type_key;
         struct_type_kind = direct_type_kind;
         do_struct_range = 1;
+      }
+      else if(lhs_type->count == 1 && direct_type_kind == E_TypeKind_Enum)
+      {
+        do_enum_range = 1;
+        enum_type_key = direct_type_key;
       }
       else
       {
@@ -453,12 +463,16 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
     }
     else if(lhs_type_kind == E_TypeKind_Struct ||
             lhs_type_kind == E_TypeKind_Union ||
-            lhs_type_kind == E_TypeKind_Class ||
-            lhs_type_kind == E_TypeKind_Enum)
+            lhs_type_kind == E_TypeKind_Class)
     {
       struct_type_key = lhs_type_key;
       struct_type_kind = lhs_type_kind;
       do_struct_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Enum)
+    {
+      enum_type_key = lhs_type_key;
+      do_enum_range = 1;
     }
     else if(lhs_type_kind == E_TypeKind_Set)
     {
@@ -472,15 +486,29 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
     //- rjf: struct case -> the lookup-range will return a range of members
     if(do_struct_range)
     {
-      E_Type *struct_type = e_type_from_key__cached(struct_type_key);
-      Rng1U64 legal_idx_range = r1u64(0, struct_type->count);
+      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
+      Rng1U64 legal_idx_range = r1u64(0, data_members.count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
         U64 member_idx = idx + read_range.min;
-        String8 member_name = (struct_type->members   ? struct_type->members[member_idx].name :
-                               struct_type->enum_vals ? struct_type->enum_vals[member_idx].name : str8_lit(""));
+        String8 member_name = data_members.v[member_idx].name;
+        exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
+      }
+    }
+    
+    //- rjf: enum case -> the lookup-range will return a range of enum constants
+    else if(do_enum_range)
+    {
+      E_Type *type = e_type_from_key__cached(enum_type_key);
+      Rng1U64 legal_idx_range = r1u64(0, type->count);
+      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
+      U64 read_range_count = dim_1u64(read_range);
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
+      {
+        U64 member_idx = idx + read_range.min;
+        String8 member_name = type->enum_vals[member_idx].name;
         exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
       }
     }

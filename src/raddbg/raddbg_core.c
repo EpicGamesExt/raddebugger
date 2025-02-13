@@ -9282,6 +9282,17 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     }
   }
   
+  //- rjf: force no_string, if we are looking at padding members
+  if(eval.expr->kind == E_ExprKind_MemberAccess)
+  {
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr->first);
+    E_Member member = e_type_member_from_key_name__cached(irtree.type_key, eval.expr->last->string);
+    if(member.kind == E_MemberKind_Padding)
+    {
+      no_string = 1;
+    }
+  }
+  
   //- rjf: type evaluations -> display type string
   if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key))
   {
