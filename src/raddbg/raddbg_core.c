@@ -1222,14 +1222,14 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(icon_kind != RD_IconKind_Null)
     {
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = secondary_color);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
     //- rjf: push warning icon for command-line entities
     if(is_from_command_line)
     {
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Info], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
     //- rjf: push view title, if from window, and no file path
@@ -1239,7 +1239,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       if(view_display_name.size != 0)
       {
         dr_fstrs_push_new(arena, &result, &params, view_display_name);
-        dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
         start_secondary();
       }
     }
@@ -1248,7 +1248,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(label_string.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
     
@@ -1256,27 +1256,119 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(collection_name.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, collection_name);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
+    
+    //- rjf: query is file path - do specific file name strings
     else if(file_path.size != 0)
     {
-      dr_fstrs_push_new(arena, &result, &params, str8_skip_last_slash(file_path));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      // rjf: compute disambiguated file name
+      String8List qualifiers = {0};
+      String8 file_name = str8_skip_last_slash(file_path);
+      if(rd_state->ambiguous_path_slots_count != 0)
+      {
+        U64 hash = d_hash_from_string__case_insensitive(file_name);
+        U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+        RD_AmbiguousPathNode *node = 0;
+        {
+          for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
+              n != 0;
+              n = n->next)
+          {
+            if(str8_match(n->name, file_name, StringMatchFlag_CaseInsensitive))
+            {
+              node = n;
+              break;
+            }
+          }
+        }
+        if(node != 0 && node->paths.node_count > 1)
+        {
+          // rjf: get all colliding paths
+          String8Array collisions = str8_array_from_list(scratch.arena, &node->paths);
+          
+          // rjf: get all reversed path parts for each collision
+          String8List *collision_parts_reversed = push_array(scratch.arena, String8List, collisions.count);
+          for EachIndex(idx, collisions.count)
+          {
+            String8List parts = str8_split_path(scratch.arena, collisions.v[idx]);
+            for(String8Node *n = parts.first; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &collision_parts_reversed[idx], n->string);
+            }
+          }
+          
+          // rjf: get the search path & its reversed parts
+          String8List parts = str8_split_path(scratch.arena, file_path);
+          String8List parts_reversed = {0};
+          for(String8Node *n = parts.first; n != 0; n = n->next)
+          {
+            str8_list_push_front(scratch.arena, &parts_reversed, n->string);
+          }
+          
+          // rjf: iterate all collision part reversed lists, in lock-step with
+          // search path; disqualify until we only have one path remaining; gather
+          // qualifiers
+          {
+            U64 num_collisions_left = collisions.count;
+            String8Node **collision_nodes = push_array(scratch.arena, String8Node *, collisions.count);
+            for EachIndex(idx, collisions.count)
+            {
+              collision_nodes[idx] = collision_parts_reversed[idx].first;
+            }
+            for(String8Node *n = parts_reversed.first; num_collisions_left > 1 && n != 0; n = n->next)
+            {
+              B32 part_is_qualifier = 0;
+              for EachIndex(idx, collisions.count)
+              {
+                if(collision_nodes[idx] != 0 && !str8_match(collision_nodes[idx]->string, n->string, StringMatchFlag_CaseInsensitive))
+                {
+                  collision_nodes[idx] = 0;
+                  num_collisions_left -= 1;
+                  part_is_qualifier = 1;
+                }
+                else if(collision_nodes[idx] != 0)
+                {
+                  collision_nodes[idx] = collision_nodes[idx]->next;
+                }
+              }
+              if(part_is_qualifier)
+              {
+                str8_list_push_front(scratch.arena, &qualifiers, n->string);
+              }
+            }
+          }
+        }
+      }
+      
+      // rjf: push qualifiers
+      for(String8Node *n = qualifiers.first; n != 0; n = n->next)
+      {
+        String8 string = push_str8f(arena, "<%S> ", n->string);
+        dr_fstrs_push_new(arena, &result, &params, string, .color = secondary_color);
+      }
+      
+      // rjf: push file name
+      dr_fstrs_push_new(arena, &result, &params, push_str8_copy(arena, str8_skip_last_slash(file_path)));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
+    
+    //- rjf: cfg has expression attached -> use that
     else if(expr_string.size != 0 && !str8_match(cfg->string, str8_lit("watch"), 0))
     {
       dr_fstrs_push_new(arena, &result, &params, expr_string);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
     
     //- rjf: push text location
     if(loc.file_path.size != 0)
     {
-      String8 location_string = push_str8f(arena, "%S:%I64d:%I64d", loc.file_path, loc.pt.line, loc.pt.column);
+      String8 location_string = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc.file_path), loc.pt.line, loc.pt.column);
       dr_fstrs_push_new(arena, &result, &params, location_string);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
     
@@ -1284,7 +1376,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(target.exe.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_skip_last_slash(target.exe));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
     
@@ -1292,7 +1384,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(target.args.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, target.args);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
     //- rjf: push conditions
@@ -1300,9 +1392,10 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       String8 condition = rd_cfg_child_from_string(cfg, str8_lit("condition"))->first->string;
       if(condition.size != 0)
       {
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("if "), .font = rd_font_from_slot(RD_FontSlot_Code));
         DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, condition);
         dr_fstrs_concat_in_place(&result, &fstrs);
-        dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       }
     }
     
@@ -1310,7 +1403,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(is_disabled)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_lit("(Disabled)"));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
     //- rjf: push hit count
