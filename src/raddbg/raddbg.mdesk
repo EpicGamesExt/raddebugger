@@ -105,7 +105,7 @@ RD_VocabTable:
 ////////////////////////////////
 //~ rjf: Schemas
 
-@table(name schema cmd_names) RD_SchemaTable:
+@table(name schema) RD_SchemaTable:
 {
   //- rjf: settings
   {
@@ -138,7 +138,10 @@ RD_VocabTable:
   //- rjf: targets
   {
     target,
-    ```x:
+    ```
+      @commands(launch_and_run, launch_and_init, select_cfg, remove_cfg)
+      @collection_commands(add_target)
+      x:
     {
       'label':              code_string,
       'executable':         path,
@@ -151,13 +154,15 @@ RD_VocabTable:
       'debug_subprocesses': bool,
     }
     ```,
-    `launch_and_run,launch_and_init,select_cfg,remove_cfg`,
   }
   
   //- rjf: breakpoints
   {
     breakpoint,
-    ```x:
+    ```
+      @commands(enable_cfg, remove_cfg)
+      @collection_commands(add_breakpoint, add_address_breakpoint, add_function_breakpoint)
+      x:
     {
       'label':         code_string,
       'condition':     code_string,
@@ -166,34 +171,33 @@ RD_VocabTable:
       'disabled':      bool,
     }
     ```,
-    `enable_cfg,remove_cfg`,
   }
   
   //- rjf: watch pins
   {
     watch_pin,
-    ```x:
+    ```
+      @commands(remove_cfg)
+      @collection_commands(add_watch_pin)
+      x:
     {
       'expression': code_string,
       'view_rule':  code_string,
       'location':   location,
     }
     ```,
-    `remove_cfg`,
   }
   
   //- rjf: file path maps
   {
     file_path_map,
-    ```x:{'source':path, 'dest':path}```,
-    `remove_cfg`,
+    ```@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}```,
   }
   
   //- rjf: auto view rules
   {
     auto_view_rule,
-    ```x:{'source':code_string, 'dest':code_string}```,
-    `remove_cfg`,
+    ```@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}```,
   }
   
   //- rjf: machines
@@ -225,12 +229,11 @@ RD_VocabTable:
 {
   `String8 name`;
   `String8 schema`;
-  `String8 cmd_names`;
 }
 
 @data(RD_NameSchemaInfo) rd_name_schema_info_table:
 {
-  @expand(RD_SchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.cmd_names)")}`
+  @expand(RD_SchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)")}`
 }
 
 ////////////////////////////////
@@ -501,8 +504,8 @@ RD_CmdTable:    //               |        |              |                  |   
   {ToggleCodeBytesVisibility      1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Thumbnails            "toggle_code_bytes_visibility""Toggle Code Bytes Visibility"                "Toggles the visibility of machine code bytes in a disassembly view."                                              ""                               "$disasm,"                                                       }
   
   //- rjf: general config operations
-  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "enable_cfg"                  "Enable Config Tree"                          "Enables a config tree."                                                                                           ""                               ""                                                               }
-  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "disable_cfg"                 "Disable Config Tree"                         "Disables a config tree."                                                                                          ""                               ""                                                               }
+  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "enable_cfg"                  "Enable Config Tree"                          "Enables a config tree."                                                                                           ""                               ""                                                               }
+  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckFilled           "disable_cfg"                 "Disable Config Tree"                         "Disables a config tree."                                                                                          ""                               ""                                                               }
   {SelectCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "select_cfg"                  "Select Config Tree"                          "Selects a config tree, disabling all others of the same kind."                                                    ""                               ""                                                               }
   {RemoveCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Trash                 "remove_cfg"                  "Remove Config Tree"                          "Removes a config tree."                                                                                           ""                               ""                                                               }
   {NameCfg                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "name_cfg"                    "Name Config Tree"                            "Equips a config tree with a label."                                                                               ""                               ""                                                               }

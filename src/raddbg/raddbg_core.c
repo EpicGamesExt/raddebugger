@@ -1393,8 +1393,11 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       if(condition.size != 0)
       {
         dr_fstrs_push_new(arena, &result, &params, str8_lit("if "), .font = rd_font_from_slot(RD_FontSlot_Code));
-        DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, condition);
-        dr_fstrs_concat_in_place(&result, &fstrs);
+        RD_Font(RD_FontSlot_Code)
+        {
+          DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, condition);
+          dr_fstrs_concat_in_place(&result, &fstrs);
+        }
         dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       }
     }
@@ -5732,7 +5735,7 @@ rd_window_frame(void)
         
         //- rjf: center column
         UI_PrefWidth(ui_children_sum(1.f)) UI_Row
-          UI_PrefWidth(ui_em(2.25f, 1))
+          UI_PrefWidth(ui_em(2.5f, 1))
           RD_Font(RD_FontSlot_Icons)
           UI_FontSize(ui_top_font_size()*0.85f)
         {
@@ -8577,20 +8580,11 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
     String8 cfg_name = rd_singular_from_code_name_plural(lhs_type->name);
     RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);\
     String8List cmds_list = {0};
-    // TODO(rjf): @cfg hack - probably want to table-drive this
-    if(str8_match(cfg_name, str8_lit("target"), 0))
+    MD_Node *schema = rd_schema_from_name(scratch.arena, cfg_name);
+    MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
+    for MD_EachNode(cmd, collection_cmds_root->first)
     {
-      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
-    }
-    else if(str8_match(cfg_name, str8_lit("breakpoint"), 0))
-    {
-      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddBreakpoint].string);
-      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddAddressBreakpoint].string);
-      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string);
-    }
-    else if(str8_match(cfg_name, str8_lit("watch_pin"), 0))
-    {
-      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
+      str8_list_push(arena, &cmds_list, cmd->string);
     }
     RD_TopLevelCfgLookupAccel *accel = push_array(arena, RD_TopLevelCfgLookupAccel, 1);
     accel->cfgs = rd_cfg_array_from_list(arena, &cfgs_list);
@@ -11082,7 +11076,6 @@ rd_title_fstrs_from_code_name(Arena *arena, String8 code_name, Vec4F32 secondary
     //- rjf: push icon
     if(info->icon_kind != RD_IconKind_Null)
     {
-      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[info->icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = secondary_color);
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
@@ -13161,27 +13154,6 @@ rd_frame(void)
               if(recent_projects.count > 32)
               {
                 rd_cfg_release(recent_projects.last->v);
-              }
-            }
-            
-            //- TODO(rjf): @cfg set up debugging config state
-            if(kind == RD_CmdKind_OpenUser)
-            {
-              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-              {
-                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
-                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-                rd_cfg_new(expr, str8_lit("current_thread"));
-              }
-              {
-                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
-                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-                rd_cfg_new(expr, str8_lit("targets[0]"));
-              }
-              {
-                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
-                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-                rd_cfg_new(expr, str8_lit("basics"));
               }
             }
           }break;

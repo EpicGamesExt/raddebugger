@@ -226,8 +226,8 @@ RD_VocabInfo rd_vocab_info_table[277] =
 {str8_lit_comp("set_columns"), str8_lit_comp(""), str8_lit_comp("Set Columns"), str8_lit_comp(""), RD_IconKind_Thumbnails},
 {str8_lit_comp("toggle_address_visibility"), str8_lit_comp(""), str8_lit_comp("Toggle Address Visibility"), str8_lit_comp(""), RD_IconKind_Thumbnails},
 {str8_lit_comp("toggle_code_bytes_visibility"), str8_lit_comp(""), str8_lit_comp("Toggle Code Bytes Visibility"), str8_lit_comp(""), RD_IconKind_Thumbnails},
-{str8_lit_comp("enable_cfg"), str8_lit_comp(""), str8_lit_comp("Enable Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("disable_cfg"), str8_lit_comp(""), str8_lit_comp("Disable Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("enable_cfg"), str8_lit_comp(""), str8_lit_comp("Enable Config Tree"), str8_lit_comp(""), RD_IconKind_CheckHollow},
+{str8_lit_comp("disable_cfg"), str8_lit_comp(""), str8_lit_comp("Disable Config Tree"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("select_cfg"), str8_lit_comp(""), str8_lit_comp("Select Config Tree"), str8_lit_comp(""), RD_IconKind_CheckHollow},
 {str8_lit_comp("remove_cfg"), str8_lit_comp(""), str8_lit_comp("Remove Config Tree"), str8_lit_comp(""), RD_IconKind_Trash},
 {str8_lit_comp("name_cfg"), str8_lit_comp(""), str8_lit_comp("Name Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
@@ -287,16 +287,16 @@ RD_VocabInfo rd_vocab_info_table[277] =
 
 RD_NameSchemaInfo rd_name_schema_info_table[10] =
 {
-{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n"), str8_lit_comp("")},
-{str8_lit_comp("target"), str8_lit_comp("x:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n}\n"), str8_lit_comp("launch_and_run,launch_and_init,select_cfg,remove_cfg")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("x:\n{\n  'label':         code_string,\n  'condition':     code_string,\n  'location':      location,\n  'hit_count':     u64,\n  'disabled':      bool,\n}\n"), str8_lit_comp("enable_cfg,remove_cfg")},
-{str8_lit_comp("watch_pin"), str8_lit_comp("x:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n"), str8_lit_comp("remove_cfg")},
-{str8_lit_comp("file_path_map"), str8_lit_comp("x:{'source':path, 'dest':path}"), str8_lit_comp("remove_cfg")},
-{str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}"), str8_lit_comp("remove_cfg")},
-{str8_lit_comp("machine"), str8_lit_comp("x:{'frozen':bool, 'label':code_string}"), str8_lit_comp("")},
-{str8_lit_comp("process"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}"), str8_lit_comp("")},
-{str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}"), str8_lit_comp("")},
-{str8_lit_comp("thread"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}"), str8_lit_comp("")},
+{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n")},
+{str8_lit_comp("target"), str8_lit_comp("@commands(launch_and_run, launch_and_init, select_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':         code_string,\n  'condition':     code_string,\n  'location':      location,\n  'hit_count':     u64,\n  'disabled':      bool,\n}\n")},
+{str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n")},
+{str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}")},
+{str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}")},
+{str8_lit_comp("machine"), str8_lit_comp("x:{'frozen':bool, 'label':code_string}")},
+{str8_lit_comp("process"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}")},
+{str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}")},
+{str8_lit_comp("thread"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}")},
 };
 
 Rng1U64 rd_reg_slot_range_table[38] =

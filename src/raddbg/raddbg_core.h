@@ -889,20 +889,6 @@ read_only global RD_ViewUIRule rd_nil_view_ui_rule =
   RD_VIEW_UI_FUNCTION_NAME(null),
 };
 
-#if 0 // TODO(rjf): @cfg
-read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
-{
-  {0},
-  {0},
-  {0},
-  {0},
-  RD_IconKind_Null,
-  0,
-  EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
-  RD_VIEW_RULE_UI_FUNCTION_NAME(null)
-};
-#endif
-
 read_only global RD_ViewState rd_nil_view_state =
 {
   &rd_nil_view_state,
