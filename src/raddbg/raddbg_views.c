@@ -1011,7 +1011,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
               (row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg))
       {
         RD_Cfg *cfg = evalled_cfg;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size()));
         MD_Node *schema = rd_schema_from_name(arena, cfg->string);
         MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
         for MD_EachNode(cmd, cmds_root->first)
@@ -1040,7 +1040,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           }
           if(cmd_kind != RD_CmdKind_Null)
           {
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands[%I64u]", (U64)cmd_kind-1));
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands[%I64u]", (U64)cmd_kind-1));
           }
         }
       }
@@ -1048,7 +1048,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: entity rows
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && info.group_entity != &ctrl_entity_nil)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
       }
       
       // rjf: singular button for commands
@@ -1059,7 +1059,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
         RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular cell for view ui
@@ -1149,7 +1149,9 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   result.view_ui_rule = &rd_nil_view_ui_rule;
   result.view_ui_tag = &e_expr_nil;
   result.fstrs = cell->fstrs;
-  result.is_button = cell->is_button;
+  result.flags = cell->flags;
+  result.cfg = &rd_nil_cfg;
+  result.entity = &ctrl_entity_nil;
   
   //- rjf: do per-kind fills
   switch(cell->kind)
@@ -1162,7 +1164,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     {
       if(!ev_key_match(ev_key_root(), row->block->key) && (row->string.size != 0 || row->expr == &e_expr_nil))
       {
-        result.can_edit = 1;
+        result.flags |= RD_WatchCellFlag_CanEdit;
       }
       result.eval = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
       result.string = row->string;
@@ -1213,7 +1215,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
                 is_non_code = 1;
               }
             }
-            result.is_non_code = is_non_code;
+            result.flags |= (!!is_non_code * RD_WatchCellFlag_IsNonCode);
             result.string = string;
           }break;
         }
@@ -1270,7 +1272,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: evaluate wrapped expression
       result.eval     = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
       result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
-      result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
+      result.flags   |= !!(ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       
       scratch_end(scratch);
     }break;
@@ -1280,7 +1282,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     {
       EV_View *ev_view = rd_view_eval_view();
       result.string = ev_view_rule_from_key(ev_view, row->key);
-      result.can_edit = 1;
+      result.flags |= RD_WatchCellFlag_CanEdit;
     }break;
     
     //- rjf: view ui cells
@@ -1295,6 +1297,20 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //- rjf: adjust style based on evaluation
   switch(cell->kind)
   {
+    default:{}break;
+    case RD_WatchCellKind_Expr:
+    {
+      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+         result.eval.value.u64 == 0)
+      {
+        RD_Cfg *cfg = rd_cfg_from_eval_space(result.eval.space);
+        E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
+        if(e_type_key_match(cfg_type, result.eval.type_key))
+        {
+          result.cfg = cfg;
+        }
+      }
+    }break;
     case RD_WatchCellKind_Eval:
     {
       if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
@@ -1305,7 +1321,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         if(e_type_key_match(cfg_type, result.eval.type_key))
         {
           result.fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size());
-          result.is_button = 1;
+          result.flags |= RD_WatchCellFlag_Button;
+          result.cfg = cfg;
         }
       }
       else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
@@ -1321,7 +1338,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         {
           result.fstrs = rd_title_fstrs_from_code_name(arena, cmd_name, ui_top_palette()->text_weak, ui_top_font_size());
         }
-        result.is_button = 1;
+        result.flags |= RD_WatchCellFlag_Button;
       }
     }break;
   }
@@ -1649,8 +1666,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               continue;
             }
-            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-            if(cell_info.can_edit)
+            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags & (~EV_StringFlag_ReadOnlyDisplayRules), &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            if(cell_info.flags & RD_WatchCellFlag_CanEdit)
             {
               any_edits_started = 1;
               String8 string = cell_info.string;
@@ -2690,7 +2707,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 UI_BoxFlags cell_flags = 0;
                 UI_Palette *palette = ui_top_palette();
                 {
-                  if(cell_info.is_errored)
+                  if(cell_info.flags & RD_WatchCellFlag_IsErrored)
                   {
                     palette = ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .text_weak = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlayError));
                     cell_flags |= UI_BoxFlag_DrawBackground;
@@ -2700,6 +2717,19 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
                     cell_flags |= UI_BoxFlag_DrawBackground;
                   }
+                  else if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
+                          rd_state->hover_regs_slot == RD_RegSlot_Cfg)
+                  {
+                    RD_Cfg *cfg = cell_info.cfg;
+                    Vec4F32 rgba = rd_rgba_from_cfg(cfg);
+                    if(rgba.w == 0)
+                    {
+                      rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                    }
+                    rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
+                    palette = ui_build_palette(ui_top_palette(), .overlay = rgba);
+                    cell_flags |= UI_BoxFlag_DrawOverlay;
+                  }
                 }
                 ProfEnd();
                 
@@ -2708,7 +2738,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 UI_Palette(palette) UI_PrefWidth(ui_px(cell_width_px, 0.f))
                 {
                   ui_set_next_fixed_height(floor_f32(row->visual_size * row_height_px));
-                  cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft, "cell_%I64x_%I64x", row_hash, cell_id);
+                  cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft|cell_flags, "cell_%I64x_%I64x", row_hash, cell_id);
                 }
                 
                 //- rjf: build cell contents
@@ -2720,10 +2750,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   RD_Font(RD_FontSlot_Code)
                   UI_FlagsAdd(row_depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
                 {
-                  ui_set_next_flags(ui_top_flags() | cell_flags);
-                  
                   // rjf: cell has errors? -> build error box
-                  if(cell_info.is_errored) RD_Font(RD_FontSlot_Main)
+                  if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
                   {
                     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###%I64x_%I64x", cell_id, row_hash);
                     sig = ui_signal_from_box(box);
@@ -2793,16 +2821,17 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   }
                   
                   // rjf: build cell line edit
-                  else RD_Font(cell_info.is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
+                  else RD_Font(cell_info.flags & RD_WatchCellFlag_IsNonCode ? RD_FontSlot_Main : RD_FontSlot_Code)
                   {
                     RD_LineEditParams line_edit_params = {0};
                     {
                       line_edit_params.flags                = (RD_LineEditFlag_CodeContents|
-                                                               RD_LineEditFlag_NoBackground*!(cell_info.is_button)|
-                                                               RD_LineEditFlag_Button*!!(cell_info.is_button)|
+                                                               RD_LineEditFlag_NoBackground*!(cell_info.flags & RD_WatchCellFlag_Button)|
+                                                               RD_LineEditFlag_Button*!!(cell_info.flags & RD_WatchCellFlag_Button)|
+                                                               RD_LineEditFlag_SingleClickActivate*!!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick)|
                                                                RD_LineEditFlag_KeyboardClickable|
                                                                RD_LineEditFlag_Expander*!!(row_is_expandable && cell == row_info->cells.first)|
-                                                               RD_LineEditFlag_ExpanderPlaceholder*(row_depth==0 && cell == row_info->cells.first && !cell_info.is_button)|
+                                                               RD_LineEditFlag_ExpanderPlaceholder*(row_depth==0 && cell == row_info->cells.first && !(cell_info.flags & RD_WatchCellFlag_Button))|
                                                                RD_LineEditFlag_ExpanderSpace*((row_depth!=0 && cell == row_info->cells.first)));
                       line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                       line_edit_params.cursor               = &cell_edit_state->cursor;
@@ -2834,17 +2863,27 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 
                 //- rjf: handle interactions
                 {
+                  // rjf: hover -> rich hover cfgs
+                  if(ui_hovering(sig) && cell_info.cfg != &rd_nil_cfg)
+                  {
+                    RD_RegsScope(.cfg = cell_info.cfg->id) rd_set_hover_regs(RD_RegSlot_Cfg);
+                  }
+                  
                   // rjf: single-click -> move selection here
-                  if(ui_pressed(sig))
+                  if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_pressed(sig))
                   {
                     ewv->next_cursor = ewv->next_mark = cell_pt;
                     pressed = 1;
                   }
                   
                   // rjf: double-click actions
-                  if(ui_double_clicked(sig) || sig.f & UI_SignalFlag_KeyboardPressed)
+                  if(ui_double_clicked(sig) ||
+                     ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)))
                   {
-                    ui_kill_action();
+                    if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick))
+                    {
+                      ui_kill_action();
+                    }
                     
                     // rjf: has callstack info? -> select unwind
                     if(row_info->callstack_thread != &ctrl_entity_nil)
@@ -2856,24 +2895,19 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     }
                     
                     // rjf: can edit? -> begin editing
-                    else if(cell_info.can_edit)
+                    else if(cell_info.flags & RD_WatchCellFlag_CanEdit)
                     {
                       rd_cmd(RD_CmdKind_Edit);
                     }
                     
-                    
-#if 0 // TODO(rjf): @cfg
-                    // rjf: cannot edit, has addr info? -> go to address
-                    else if(row_kind == RD_WatchViewRowKind_Normal &&
-                            (col->kind == RD_WatchViewColumnKind_Value ||
-                             col->kind == RD_WatchViewColumnKind_Member) &&
-                            cell_eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+                    // rjf: can't edit, but has address info? -> go to address
+                    else if(cell_info.eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
                     {
-                      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell_eval.space);
+                      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell_info.eval.space);
                       CTRL_Entity *process = ctrl_process_from_entity(entity);
                       if(process != &ctrl_entity_nil)
                       {
-                        U64 vaddr = cell_eval.value.u64;
+                        U64 vaddr = cell_info.eval.value.u64;
                         CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
                         DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
                         U64 voff = ctrl_voff_from_vaddr(module, vaddr);
@@ -2884,15 +2918,14 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                         {
                           file_path = lines.first->v.file_path;
                           pt        = lines.first->v.pt;
+                          rd_cmd(RD_CmdKind_FindCodeLocation,
+                                 .process    = process->handle,
+                                 .vaddr      = vaddr,
+                                 .file_path  = file_path,
+                                 .cursor     = pt);
                         }
-                        rd_cmd(RD_CmdKind_FindCodeLocation,
-                               .process    = process->handle,
-                               .vaddr      = vaddr,
-                               .file_path  = file_path,
-                               .cursor     = pt);
                       }
                     }
-#endif
                   }
                   
                   // rjf: hovering with inheritance string -> show tooltip

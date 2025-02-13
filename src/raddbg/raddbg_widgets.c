@@ -755,8 +755,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                  rd_state->hover_regs_slot == RD_RegSlot_Thread);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
-              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
+              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
+              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               u->do_lines     = do_thread_lines;
@@ -903,8 +903,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                  rd_state->hover_regs_slot == RD_RegSlot_Thread);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
-              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
+              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
+              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               ui_box_equip_custom_draw(thread_box, rd_thread_box_draw_extensions, u);
@@ -960,11 +960,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             RD_Cfg *bp = n->v;
             Vec4F32 bp_rgba = rd_rgba_from_cfg(bp);
-            B32 bp_is_disabled = rd_disabled_from_cfg(bp);
             if(bp_rgba.w == 0)
             {
               bp_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Breakpoint);
             }
+            B32 bp_is_disabled = rd_disabled_from_cfg(bp);
             if(bp_is_disabled)
             {
               bp_rgba = v4f32(bp_rgba.x * 0.6f, bp_rgba.y * 0.6f, bp_rgba.z * 0.6f, bp_rgba.w * 0.6f);
@@ -976,8 +976,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               RD_Regs *hover_regs = rd_get_hover_regs();
               B32 is_hovering = (rd_cfg_from_id(hover_regs->cfg) == bp && rd_state->hover_regs_slot == RD_RegSlot_Cfg);
               bp_draw->color    = bp_rgba;
-              bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
-              bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
+              bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "cfg_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
+              bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "cfg_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               bp_draw->do_lines = do_bp_lines;
               bp_draw->do_glow  = do_bp_glow;
               if(params->line_vaddrs[line_idx] == 0)
@@ -1015,7 +1015,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
               rd_set_hover_eval(v2f32(bp_box->rect.x0, bp_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, push_str8f(scratch.arena, "$%I64u", bp->id));
-              // RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
+              RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: shift+click => enable breakpoint
@@ -1055,7 +1055,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             Vec4F32 color = rd_rgba_from_cfg(pin);
             if(color.w == 0)
             {
-              color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
+              color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
             }
             
             // rjf: build box for watch
@@ -2469,7 +2469,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
                                       (!!(params->flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       UI_BoxFlag_DrawHotEffects|
-                                      //(!!(params->flags & RD_LineEditFlag_Button)*UI_BoxFlag_DrawActiveEffects)|
+                                      (!!(params->flags & RD_LineEditFlag_SingleClickActivate)*UI_BoxFlag_DrawActiveEffects)|
                                       (!(params->flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
                                       (!!(params->flags & RD_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
@@ -2571,7 +2571,10 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       MemoryCopy(params->edit_buffer, edit_string.str, edit_string.size);
       params->edit_string_size_out[0] = edit_string.size;
       ui_set_auto_focus_active_key(key);
-      ui_kill_action();
+      if(!(params->flags & RD_LineEditFlag_Button))
+      {
+        ui_kill_action();
+      }
       params->cursor[0] = txt_pt(1, edit_string.size+1);
       params->mark[0] = txt_pt(1, 1);
       focus_started = 1;

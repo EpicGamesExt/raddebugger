@@ -19,8 +19,9 @@ enum
   RD_LineEditFlag_Border              = (1<<6),
   RD_LineEditFlag_NoBackground        = (1<<7),
   RD_LineEditFlag_Button              = (1<<8),
-  RD_LineEditFlag_PreferDisplayString = (1<<9),
-  RD_LineEditFlag_DisplayStringIsCode = (1<<10),
+  RD_LineEditFlag_SingleClickActivate = (1<<9),
+  RD_LineEditFlag_PreferDisplayString = (1<<10),
+  RD_LineEditFlag_DisplayStringIsCode = (1<<11),
 };
 
 typedef struct RD_LineEditParams RD_LineEditParams;

@@ -1152,7 +1152,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     Vec4F32 rgba = rd_rgba_from_cfg(cfg);
     if(rgba.w == 0)
     {
-      rgba = ui_top_palette()->text;
+      rgba = rd_rgba_from_theme_color(RD_ThemeColor_Text);
     }
     RD_IconKind icon_kind = rd_icon_kind_from_code_name(cfg->string);
     B32 is_from_command_line = 0;
@@ -2522,7 +2522,11 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
       E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
       E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.type_key);
       if(direct_type_kind == E_TypeKind_Char8 ||
+         direct_type_kind == E_TypeKind_Char16 ||
+         direct_type_kind == E_TypeKind_Char32 ||
          direct_type_kind == E_TypeKind_UChar8 ||
+         direct_type_kind == E_TypeKind_UChar16 ||
+         direct_type_kind == E_TypeKind_UChar32 ||
          e_type_kind_is_integer(direct_type_kind))
       {
         B32 is_quoted = 0;
@@ -2550,6 +2554,26 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
         if(type_kind == E_TypeKind_Ptr)
         {
           commit_at_ptr_dest = 1;
+        }
+        switch(direct_type_kind)
+        {
+          default:{}break;
+          case E_TypeKind_S16:
+          case E_TypeKind_U16:
+          case E_TypeKind_Char16:
+          case E_TypeKind_UChar16:
+          {
+            String16 data16 = str16_from_8(scratch.arena, commit_data);
+            commit_data = str8((U8 *)data16.str, data16.size*sizeof(U16));
+          }break;
+          case E_TypeKind_Char32:
+          case E_TypeKind_UChar32:
+          case E_TypeKind_S32:
+          case E_TypeKind_U32:
+          {
+            String32 data32 = str32_from_8(scratch.arena, commit_data);
+            commit_data = str8((U8 *)data32.str, data32.size*sizeof(U32));
+          }break;
         }
       }
       else if(type_kind == E_TypeKind_Ptr &&
@@ -7819,6 +7843,19 @@ rd_window_frame(void)
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
             MemoryCopyArray(inst->corner_radii, box->corner_radii);
+          }
+          
+          // rjf: soft circle around mouse
+          if(ui_key_match(ui_hot_key(), box->key))
+          {
+            DR_ClipScope(box->rect)
+            {
+              Vec2F32 center = ui_mouse();
+              F32 radius = box->font_size*12.f;
+              Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
+              color.w *= 0.1f*t;
+              dr_rect(pad_2f32(r2f32p(center.x, center.y, center.x, center.y), radius), color, radius, 0, radius/3.f);
+            }
           }
           
           // rjf: slight emboss fadeoff
@@ -14068,6 +14105,7 @@ Z(getting_started)
 #undef Z
             
             //- rjf: find all the fixed tabs, and all text viewers
+            B32 any_fixed_tabs_found = 0;
             RD_CfgList texts = {0};
             for(RD_PanelNode *panel = panel_tree.root;
                 panel != &rd_nil_panel_node;
@@ -14093,6 +14131,7 @@ Z(getting_started)
                 if(need_unhook)
                 {
                   rd_cfg_unhook(panel->cfg, tab);
+                  any_fixed_tabs_found = 1;
                 }
               }
             }
@@ -14103,7 +14142,7 @@ Z(getting_started)
             //- rjf: allocate any missing tabs
 #define X(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit("watch")); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit("query:" #name));}
 #define Y(name, rule, expr) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#rule)); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit(expr));}
-#define Z(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#name));}
+#define Z(name) if(name == &rd_nil_cfg && !any_fixed_tabs_found) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#name));}
             FixedTab_XList
 #undef X
 #undef Y

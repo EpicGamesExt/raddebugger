@@ -51,6 +51,16 @@ typedef enum RD_WatchCellKind
 }
 RD_WatchCellKind;
 
+typedef U32 RD_WatchCellFlags;
+enum
+{
+  RD_WatchCellFlag_Button                  = (1<<0),
+  RD_WatchCellFlag_ActivateWithSingleClick = (1<<1),
+  RD_WatchCellFlag_IsNonCode               = (1<<2),
+  RD_WatchCellFlag_CanEdit                 = (1<<3),
+  RD_WatchCellFlag_IsErrored               = (1<<4),
+};
+
 typedef struct RD_WatchCell RD_WatchCell;
 struct RD_WatchCell
 {
@@ -59,7 +69,7 @@ struct RD_WatchCell
   String8 string;
   E_Eval eval;
   DR_FStrList fstrs;
-  B32 is_button;
+  RD_WatchCellFlags flags;
   F32 default_pct;
   F32 pct;
   F32 px;
@@ -95,13 +105,12 @@ struct RD_WatchRowInfo
 typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
 struct RD_WatchRowCellInfo
 {
+  RD_WatchCellFlags flags;
   E_Eval eval;
+  RD_Cfg *cfg;
+  CTRL_Entity *entity;
   String8 string;
   DR_FStrList fstrs;
-  B32 is_button;
-  B32 is_non_code;
-  B32 can_edit;
-  B32 is_errored;
   String8 error_tooltip;
   String8 inheritance_tooltip;
   RD_ViewUIRule *view_ui_rule;

@@ -110,6 +110,29 @@ ev_type_key_is_editable(E_TypeKey type_key)
   for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
   {
     E_TypeKind kind = e_type_kind_from_key(t);
+    if(kind == E_TypeKind_Array)
+    {
+      E_TypeKind element_kind = e_type_kind_from_key(e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))));
+      if(element_kind != E_TypeKind_U8 &&
+         element_kind != E_TypeKind_U16 &&
+         element_kind != E_TypeKind_U32 &&
+         element_kind != E_TypeKind_S8 &&
+         element_kind != E_TypeKind_S16 &&
+         element_kind != E_TypeKind_S32 &&
+         element_kind != E_TypeKind_UChar8 &&
+         element_kind != E_TypeKind_UChar16 &&
+         element_kind != E_TypeKind_UChar32 &&
+         element_kind != E_TypeKind_Char8 &&
+         element_kind != E_TypeKind_Char16 &&
+         element_kind != E_TypeKind_Char32)
+      {
+        break;
+      }
+      else
+      {
+        result = 1;
+      }
+    }
     if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
     {
       break;
