@@ -47,7 +47,6 @@ typedef enum RD_WatchCellKind
   RD_WatchCellKind_Tag,    // strings to represent attached tags at row-granularity
   RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
   RD_WatchCellKind_ViewUI, // an arbitrary user interface, supplied by a hook
-  RD_WatchCellKind_Button, // a fancy button dedicated to the entire row's evaluation, used for listers/etc.
   RD_WatchCellKind_CallStackFrame, // a slot for a yellow arrow, to show call stack frame selection
 }
 RD_WatchCellKind;
@@ -59,6 +58,7 @@ struct RD_WatchCell
   RD_WatchCellKind kind;
   String8 string;
   DR_FStrList fstrs;
+  B32 is_button;
   F32 default_pct;
   F32 pct;
   F32 px;
@@ -96,8 +96,8 @@ struct RD_WatchRowCellInfo
   E_Eval eval;
   String8 string;
   DR_FStrList fstrs;
-  B32 is_non_code;
   B32 is_button;
+  B32 is_non_code;
   B32 can_edit;
   B32 is_errored;
   String8 error_tooltip;

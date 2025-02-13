@@ -1004,30 +1004,29 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       if(0){}
       
-      // rjf: singular button for top-level cfg group elements
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg)
+      // rjf: singular button for cfgs
+      else if((info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg) ||
+              (row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg))
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, info.group_cfg_child, ui_top_palette()->text_weak, ui_top_font_size()));
-      }
-      
-      // rjf: singular button for top-level cfg roots
-      else if(row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg)
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, evalled_cfg, ui_top_palette()->text_weak, ui_top_font_size()));
+        RD_Cfg *cfg = evalled_cfg;
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular button for entities
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && info.group_entity != &ctrl_entity_nil)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f);
       }
       
       // rjf: singular button for commands
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+      else if((block_eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection ||
+               block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection) &&
+              info.eval.space.kind == RD_EvalSpaceKind_MetaCmd &&
+              row_eval_matches_group)
       {
         RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
         RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .is_button = 1, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular cell for view ui
@@ -1221,9 +1220,14 @@ internal RD_WatchRowCellInfo
 rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_flags, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   RD_WatchRowCellInfo result = {0};
+  
+  //- rjf: fill basics/defaults
   result.view_ui_rule = &rd_nil_view_ui_rule;
   result.view_ui_tag = &e_expr_nil;
   result.fstrs = cell->fstrs;
+  result.is_button = cell->is_button;
+  
+  //- rjf: do per-kind fills
   switch(cell->kind)
   {
     default:{}break;
@@ -1236,6 +1240,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         result.can_edit = 1;
       }
+      result.eval = e_eval_from_expr(arena, row->expr);
       result.string = row->string;
       if(result.string.size == 0)
       {
@@ -1269,7 +1274,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           }break;
           case E_ExprKind_MemberAccess:
           {
-            E_Eval row_eval = e_eval_from_expr(arena, row->expr);
+            E_Eval row_eval = result.eval;
             String8 member_name = e_string_from_expr(arena, notable_expr->last);
             B32 is_non_code = 0;
             String8 string = push_str8f(arena, ".%S", member_name);
@@ -1342,6 +1347,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       result.eval     = e_eval_from_expr(scratch.arena, root_expr);
       result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
       result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
+      
       scratch_end(scratch);
     }break;
     
@@ -1360,13 +1366,18 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       result.view_ui_rule = row_info->view_ui_rule;
       result.view_ui_tag = row_info->view_ui_tag;
     }break;
-    
-    //- rjf: button cells
-    case RD_WatchCellKind_Button:
-    {
-      result.is_button = 1;
-    }break;
   }
+  
+  //- rjf: adjust style based on evaluation
+#if 0
+  if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+  {
+    RD_Cfg *cfg = rd_cfg_from_id(result.eval.value.u64);
+    result.fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size());
+    result.is_button = 1;
+  }
+#endif
+  
   return result;
 }
 
@@ -2209,7 +2220,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               default:{}break;
               case RD_WatchCellKind_Expr:
-              case RD_WatchCellKind_Button:
               {
                 RD_Cfg *cfg = row_info.group_cfg_child;
                 if(cfg != &rd_nil_cfg)
@@ -3050,7 +3060,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       line_edit_params.edit_string_size_out = &cell_edit_state->input_size;
                       line_edit_params.expanded_out         = &next_row_expanded;
                       line_edit_params.pre_edit_value       = cell_info.string;
-                      line_edit_params.fstrs        = cell_info.fstrs;
+                      line_edit_params.fstrs                = cell_info.fstrs;
                     }
                     sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", str8_zero(), cell_x, row_hash);
 #if 0 // TODO(rjf): @cfg

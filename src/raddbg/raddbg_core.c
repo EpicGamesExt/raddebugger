@@ -12691,6 +12691,7 @@ rd_frame(void)
         E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCmdCollection);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(commands),
