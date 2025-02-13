@@ -8650,7 +8650,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(thread)
   for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
   {
     U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_ref_member_access(arena, lhs, str8_lit("call_stack"));
+    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, str8_lit("call_stack"));
   }
   scratch_end(scratch);
 }
@@ -8754,7 +8754,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(target)
   for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
   {
     U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_ref_member_access(arena, lhs, str8_lit("environment"));
+    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, str8_lit("environment"));
   }
   scratch_end(scratch);
 }

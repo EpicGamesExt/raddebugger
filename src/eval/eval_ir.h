@@ -420,6 +420,9 @@ internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space 
 internal E_OpList e_oplist_from_irtree(Arena *arena, E_IRNode *root);
 internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
 
+//- rjf: leaf-bytecode expression extensions
+internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, String8 member_name);
+
 ////////////////////////////////
 //~ rjf: IRified Expression Cache
 

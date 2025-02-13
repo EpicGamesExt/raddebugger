@@ -481,7 +481,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
         U64 member_idx = idx + read_range.min;
         String8 member_name = (struct_type->members   ? struct_type->members[member_idx].name :
                                struct_type->enum_vals ? struct_type->enum_vals[member_idx].name : str8_lit(""));
-        exprs[idx] = e_expr_ref_member_access(arena, lhs, member_name);
+        exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
       }
     }
     
@@ -582,7 +582,7 @@ E_IRGEN_FUNCTION_DEF(slice)
     U64 count = 0;
     if(count_member != 0)
     {
-      E_Expr *count_member_expr = e_expr_ref_member_access(scratch.arena, expr, count_member->name);
+      E_Expr *count_member_expr = e_expr_irext_member_access(arena, expr, &irtree, count_member->name);
       E_Eval count_member_eval = e_eval_from_expr(scratch.arena, count_member_expr);
       E_Eval count_member_value_eval = e_value_eval_from_eval(count_member_eval);
       count = count_member_value_eval.value.u64;
@@ -2281,6 +2281,26 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
   result.size = size;
   result.str = str;
   return result;
+}
+
+//- rjf: leaf-bytecode expression extensions
+
+internal E_Expr *
+e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, String8 member_name)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
+  E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
+  E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
+  lhs_bytecode->string = lhs->string;
+  lhs_bytecode->space = lhs->space;
+  lhs_bytecode->mode = lhs_irtree->mode;
+  lhs_bytecode->type_key = lhs_irtree->type_key;
+  lhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
+  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafMember, 0);
+  rhs->string = push_str8_copy(arena, member_name);
+  e_expr_push_child(root, lhs_bytecode);
+  e_expr_push_child(root, rhs);
+  return root;
 }
 
 ////////////////////////////////
