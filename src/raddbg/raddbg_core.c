@@ -13077,7 +13077,7 @@ rd_frame(void)
               {
                 RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
                 RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-                rd_cfg_new(expr, str8_lit("targets[1]"));
+                rd_cfg_new(expr, str8_lit("targets[0]"));
               }
               {
                 RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
