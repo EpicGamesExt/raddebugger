@@ -812,6 +812,10 @@ rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell 
 {
   RD_WatchCell *cell = rd_watch_cell_list_push(arena, list);
   MemoryCopyStruct(cell, params);
+  if(cell->pct == 0)
+  {
+    cell->pct = cell->default_pct;
+  }
   cell->next = 0;
   return cell;
 }
@@ -1021,17 +1025,31 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: for meta-cfg evaluation spaces, only do expr/value
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 0.25f);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .pct = 0.75f);
+        info.cell_style_key = str8_lit("expr_and_eval");
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+        RD_Cfg *w_cfg = style->first;
+        F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
+#undef take_pct
       }
       
       // rjf: default cells
       else
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .pct = 0.25f);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .pct = 0.35f);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .pct = 0.15f);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .pct = 0.25f);
+        info.cell_style_key = str8_lit("normal");
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+        RD_Cfg *w_cfg = style->first;
+        F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .default_pct = 0.25f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .default_pct = 0.35f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .default_pct = 0.15f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .default_pct = 0.25f, .pct = take_pct());
+#undef take_pct
       }
     }
     
@@ -2505,6 +2523,156 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
           {
             EV_Row *row = &row_node->row;
             row_infos[idx] = rd_watch_row_info_from_row(scratch.arena, row);
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: build boundaries
+        //
+        ProfScope("build boundaries")
+        {
+          U64 idx = 0;
+          U64 boundary_start_idx = 0;
+          EV_Row *last_row = 0;
+          RD_WatchRowInfo *last_row_info = 0;
+          for(EV_WindowedRowNode *row_node = rows.first;; row_node = row_node->next, idx += 1)
+          {
+            //- rjf: determine if this row breaks the topology
+            B32 is_new_topology = (row_node == 0);
+            if(row_node != 0 && last_row_info != 0)
+            {
+              EV_Row *row = &row_node->row;
+              RD_WatchRowInfo *row_info = &row_infos[idx];
+              for(RD_WatchCell *last_cell = last_row_info->cells.first, *this_cell = row_info->cells.first;;
+                  last_cell = last_cell->next, this_cell = this_cell->next)
+              {
+                if(last_cell == 0 && this_cell == 0)
+                {
+                  break;
+                }
+                if((last_cell == 0 && this_cell != 0) || (last_cell != 0 && this_cell == 0))
+                {
+                  is_new_topology = 1;
+                  break;
+                }
+                if(rd_id_from_watch_cell(last_cell) != rd_id_from_watch_cell(this_cell))
+                {
+                  is_new_topology = 1;
+                  break;
+                }
+              }
+            }
+            
+            //- rjf: if we reached a new topology, or the end -> build boundaries for all cell separations
+            if(is_new_topology)
+            {
+              EV_Row *row = last_row;
+              RD_WatchRowInfo *row_info = last_row_info;
+              F32 row_width_px = (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
+              if(row_info != 0)
+              {
+                U64 row_hash = ev_hash_from_key(row->key);
+                F32 cell_x_px = 0;
+                U64 cell_idx = 0;
+                for(RD_WatchCell *cell = row_info->cells.first; cell != 0 && cell->next != 0; cell = cell->next, cell_idx += 1)
+                {
+                  U64 cell_id = rd_id_from_watch_cell(cell);
+                  F32 cell_width_px = cell->px + cell->pct * row_width_px;
+                  F32 next_cell_x_px = cell_x_px + cell_width_px;
+                  {
+                    Rng2F32 rect = r2f32p(next_cell_x_px - ui_top_font_size()*0.2f,
+                                          boundary_start_idx*row_height_px,
+                                          next_cell_x_px + ui_top_font_size()*0.2f,
+                                          idx*row_height_px);
+                    UI_Rect(rect) UI_HoverCursor(OS_Cursor_LeftRight)
+                    {
+                      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Floating, "boundary_%I64x_%I64x", row_hash, cell_id);
+                      UI_Signal sig = ui_signal_from_box(box);
+                      if(ui_dragging(sig))
+                      {
+                        typedef struct DragData DragData;
+                        struct DragData
+                        {
+                          F32 min_pct;
+                          F32 max_pct;
+                        };
+                        if(ui_pressed(sig))
+                        {
+                          DragData drag_data = {cell->pct, cell->next->pct};
+                          ui_store_drag_struct(&drag_data);
+                        }
+                        DragData *drag_data = ui_get_drag_struct(DragData);
+                        F32 min_pct__pre = drag_data->min_pct;
+                        F32 max_pct__pre = drag_data->max_pct;
+                        F32 min_px__pre = min_pct__pre*row_width_px;
+                        F32 max_px__pre = max_pct__pre*row_width_px;
+                        F32 min_px__post = min_px__pre + ui_drag_delta().x;
+                        F32 max_px__post = max_px__pre - ui_drag_delta().x;
+                        F32 min_pct__post = min_px__post/row_width_px;
+                        F32 max_pct__post = max_px__post/row_width_px;
+                        if(min_pct__post < 0.05f)
+                        {
+                          min_pct__post = 0.05f;
+                          max_pct__post = (min_pct__pre + max_pct__pre) - min_pct__post;
+                        }
+                        if(max_pct__post < 0.05f)
+                        {
+                          max_pct__post = 0.05f;
+                          min_pct__post = (min_pct__pre + max_pct__pre) - max_pct__post;
+                        }
+                        if(ui_double_clicked(sig))
+                        {
+                          min_pct__post = cell->default_pct;
+                          max_pct__post = cell->next->default_pct;
+                          ui_kill_action();
+                        }
+                        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+                        RD_Cfg *style = rd_cfg_child_from_string_or_alloc(view, row_info->cell_style_key);
+                        RD_Cfg *min_cfg = &rd_nil_cfg;
+                        RD_Cfg *max_cfg = &rd_nil_cfg;
+                        {
+                          RD_Cfg *pct_child = style->first;
+                          U64 c_idx = 0;
+                          for(RD_WatchCell *c = row_info->cells.first; c != 0; c = c->next, c_idx += 1)
+                          {
+                            if(pct_child == &rd_nil_cfg)
+                            {
+                              pct_child = rd_cfg_newf(style, "%f", c->pct);
+                            }
+                            if(c_idx == cell_idx)
+                            {
+                              min_cfg = pct_child;
+                            }
+                            if(c_idx == cell_idx+1)
+                            {
+                              max_cfg = pct_child;
+                            }
+                            pct_child = pct_child->next;
+                          }
+                          rd_cfg_equip_stringf(min_cfg, "%f", min_pct__post);
+                          rd_cfg_equip_stringf(max_cfg, "%f", max_pct__post);
+                          cell->pct = min_pct__post;
+                          cell->next->pct = max_pct__post;
+                        }
+                      }
+                    }
+                  }
+                  cell_x_px = next_cell_x_px;
+                }
+              }
+              boundary_start_idx = idx;
+            }
+            
+            //- rjf: advance
+            if(row_node == 0)
+            {
+              break;
+            }
+            else
+            {
+              last_row = &row_node->row;
+              last_row_info = &row_infos[idx];
+            }
           }
         }
         

@@ -58,6 +58,7 @@ struct RD_WatchCell
   RD_WatchCellKind kind;
   String8 string;
   DR_FStrList fstrs;
+  F32 default_pct;
   F32 pct;
   F32 px;
 };
@@ -82,6 +83,7 @@ struct RD_WatchRowInfo
   CTRL_Entity *callstack_thread;
   U64 callstack_unwind_index;
   U64 callstack_inline_depth;
+  String8 cell_style_key;
   RD_WatchCellList cells;
   RD_ViewUIRule *view_ui_rule;
   E_Expr *view_ui_tag;
