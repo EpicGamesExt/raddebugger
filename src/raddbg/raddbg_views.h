@@ -48,6 +48,7 @@ typedef enum RD_WatchCellKind
   RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
   RD_WatchCellKind_ViewUI, // an arbitrary user interface, supplied by a hook
   RD_WatchCellKind_Button, // a fancy button dedicated to the entire row's evaluation, used for listers/etc.
+  RD_WatchCellKind_CallStackFrame, // a slot for a yellow arrow, to show call stack frame selection
 }
 RD_WatchCellKind;
 
