@@ -794,6 +794,7 @@ rd_id_from_watch_cell(RD_WatchCell *cell)
 {
   U64 result = 5381;
   result = e_hash_from_string(result, str8_struct(&cell->kind));
+  result = e_hash_from_string(result, str8_struct(&cell->eval.mode));
   result = e_hash_from_string(result, cell->string);
   return result;
 }
@@ -956,6 +957,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
           info.callstack_unwind_index = f->unwind_count;
           info.callstack_inline_depth = f->inline_depth;
+          info.callstack_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         }
       }
     }
@@ -1093,14 +1095,23 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.callstack_thread != &ctrl_entity_nil)
       {
         info.cell_style_key = str8_lit("call_stack_frame");
+        CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
+        E_Space space = rd_eval_space_from_ctrl_entity(module, RD_EvalSpaceKind_MetaCtrlEntity);
+        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+        expr->space    = space;
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
+        E_Eval module_eval = e_eval_from_expr(arena, expr);
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
         RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                    .default_pct = 0.05f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                              .default_pct = 0.65f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),   .default_pct = 0.30f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                              .default_pct = 0.55f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),   .default_pct = 0.20f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .eval = module_eval,                         .default_pct = 0.20f, .pct = take_pct());
 #undef take_pct
       }
       
@@ -1153,7 +1164,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         result.can_edit = 1;
       }
-      result.eval = e_eval_from_expr(arena, row->expr);
+      result.eval = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
       result.string = row->string;
       if(result.string.size == 0)
       {
@@ -1257,7 +1268,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: evaluate wrapped expression
-      result.eval     = e_eval_from_expr(scratch.arena, root_expr);
+      result.eval     = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
       result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
       result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
       
@@ -1275,7 +1286,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     //- rjf: view ui cells
     case RD_WatchCellKind_ViewUI:
     {
-      result.eval = e_eval_from_expr(arena, row->expr);
+      result.eval = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
       result.view_ui_rule = row_info->view_ui_rule;
       result.view_ui_tag = row_info->view_ui_tag;
     }break;
@@ -1378,6 +1389,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
     ewv->initialized = 1;
     ewv->text_edit_arena = rd_push_view_arena();
   }
+  B32 is_query = (rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("query")) != &rd_nil_cfg);
   
   //////////////////////////////
   //- rjf: unpack arguments
