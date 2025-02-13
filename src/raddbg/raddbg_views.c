@@ -2529,6 +2529,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
         ////////////////////////
         //- rjf: build boundaries
         //
+        B32 cell_pcts_are_dirty = 0;
         ProfScope("build boundaries")
         {
           U64 idx = 0;
@@ -2651,8 +2652,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                           }
                           rd_cfg_equip_stringf(min_cfg, "%f", min_pct__post);
                           rd_cfg_equip_stringf(max_cfg, "%f", max_pct__post);
-                          cell->pct = min_pct__post;
-                          cell->next->pct = max_pct__post;
+                          cell_pcts_are_dirty = 1;
                         }
                       }
                     }
@@ -2673,6 +2673,19 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               last_row = &row_node->row;
               last_row_info = &row_infos[idx];
             }
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: if cell widths are dirty -> recompute row infos
+        //
+        if(cell_pcts_are_dirty)
+        {
+          U64 idx = 0;
+          for(EV_WindowedRowNode *row_node = rows.first; row_node != 0; row_node = row_node->next, idx += 1)
+          {
+            EV_Row *row = &row_node->row;
+            row_infos[idx] = rd_watch_row_info_from_row(scratch.arena, row);
           }
         }
         
