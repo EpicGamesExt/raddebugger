@@ -8630,7 +8630,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(thread)
   {
     E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, eval.space, e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
+    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
     result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("call_stack"));
     result.irtree_and_type.mode     = E_Mode_Offset;
   }
@@ -8734,7 +8734,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(target)
   {
     E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
     RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, eval.space, e_irtree_const_u(arena, cfg->id));
+    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCfgCollection), e_irtree_const_u(arena, cfg->id));
     result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("environment"));
     result.irtree_and_type.mode     = E_Mode_Offset;
   }
@@ -12487,6 +12487,7 @@ rd_frame(void)
         String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfgCollection);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(watches),
@@ -12564,6 +12565,7 @@ rd_frame(void)
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfgCollection);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg),

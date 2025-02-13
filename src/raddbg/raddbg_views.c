@@ -908,6 +908,10 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     EV_Key key = row->key;
     E_IRTreeAndType parent_irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
     E_Type *parent_type = e_type_from_key__cached(parent_irtree.type_key);
+    E_Eval block_eval = e_eval_from_expr(scratch.arena, row->block->expr);
+    E_TypeKey block_type_key = block_eval.type_key;
+    E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
+    E_Type *block_type = e_type_from_key__cached(block_type_key);
     
     // rjf: fill row's eval
     info.eval = e_eval_from_expr(arena, row->expr);
@@ -934,24 +938,40 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: determine cfg group name / parent
+    // rjf: determine call stack info
+    if(block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && block_type_kind == E_TypeKind_Set)
     {
-      E_Eval block_eval = e_eval_from_expr(scratch.arena, row->block->expr);
-      E_TypeKey block_type_key = block_eval.type_key;
-      E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
-      if(block_type_kind == E_TypeKind_Set)
+      CTRL_Handle handle = {0};
+      handle.machine_id = (CTRL_MachineID)block_eval.value.u128.u64[0];
+      handle.dmn_handle.u64[0] = (U64)block_eval.value.u128.u64[1];
+      CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+      if(entity->kind == CTRL_EntityKind_Thread)
       {
-        info.group_cfg_parent = rd_cfg_from_id(block_eval.value.u64);
-        E_Type *block_type = e_type_from_key__cached(block_type_key);
-        String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
-        if(singular_name.size != 0)
+        info.callstack_thread = entity;
+        U64 frame_num = block->lookup_rule->num_from_id(key.child_id, block->lookup_rule_user_data);
+        CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
+        CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, ctrl_process_from_entity(entity), &unwind);
+        if(1 <= frame_num && frame_num <= call_stack.count)
         {
-          info.group_cfg_name = singular_name;
+          CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
+          info.callstack_unwind_index = f->unwind_count;
+          info.callstack_inline_depth = f->inline_depth;
         }
-        else
-        {
-          info.group_cfg_name = block_type->name;
-        }
+      }
+    }
+    
+    // rjf: determine cfg group name / parent
+    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection)
+    {
+      info.group_cfg_parent = rd_cfg_from_id(block_eval.value.u64);
+      String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
+      if(singular_name.size != 0)
+      {
+        info.group_cfg_name = singular_name;
+      }
+      else
+      {
+        info.group_cfg_name = block_type->name;
       }
     }
     
@@ -1023,7 +1043,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: for meta-cfg evaluation spaces, only do expr/value
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg || info.eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection)
       {
         info.cell_style_key = str8_lit("expr_and_eval");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -1033,6 +1053,20 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
+#undef take_pct
+      }
+      
+      // rjf: callstack frames
+      else if(info.callstack_thread != &ctrl_entity_nil)
+      {
+        info.cell_style_key = str8_lit("call_stack_frame");
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+        RD_Cfg *w_cfg = style->first;
+        F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                              .default_pct = 0.65f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),   .default_pct = 0.35f, .pct = take_pct());
 #undef take_pct
       }
       
@@ -1239,6 +1273,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             B32 is_non_code = 0;
             String8 string = push_str8f(arena, ".%S", member_name);
             if(row_eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               row_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection ||
                row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
             {
               String8 fancy_name = rd_display_from_code_name(member_name);
