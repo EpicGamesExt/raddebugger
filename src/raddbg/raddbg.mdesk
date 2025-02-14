@@ -29,6 +29,11 @@ RD_VocabTable:
   {target               _                           "Target"                    _                     Target                                         }
   {executable           _                           "Executable"                _                     Module                                         }
   {arguments            arguments                   "Arguments"                 "Arguments"           Null                                           }
+  {exe                  exes                        "Executable"                _                     Module                                         }
+  {dbg                  dbgs                        "Debug Info Path"           _                     Module                                         }
+  {vaddr_range          _                           "Virtual Address Range"     _                     Null                                           }
+  {min                  _                           "Minimum"                   _                     Null                                           }
+  {max                  _                           "Maximum"                   _                     Null                                           }
   {working_directory    working_directories         "Working Directory"         "Working Directories" FolderClosedFilled                             }
   {entry_point          _                           "Entry Point"               _                     Null                                           }
   {stdout_path          _                           "Standard Output Path"      _                     Null                                           }

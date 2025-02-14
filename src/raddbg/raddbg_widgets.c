@@ -751,8 +751,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: custom draw
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (ctrl_handle_match(hover_regs->thread, thread->handle) &&
-                                 rd_state->hover_regs_slot == RD_RegSlot_Thread);
+              B32 is_hovering = (ctrl_handle_match(hover_regs->ctrl_entity, thread->handle) &&
+                                 rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
               u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
@@ -899,8 +899,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: custom draw
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (ctrl_handle_match(hover_regs->thread, thread->handle) &&
-                                 rd_state->hover_regs_slot == RD_RegSlot_Thread);
+              B32 is_hovering = (ctrl_handle_match(hover_regs->ctrl_entity, thread->handle) &&
+                                 rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
               u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###entity_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
@@ -938,7 +938,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: interactions
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.thread = thread->handle) rd_set_hover_regs(RD_RegSlot_Thread);
+              RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
             }
             if(ui_right_clicked(thread_sig))
             {

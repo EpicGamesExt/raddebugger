@@ -2767,7 +2767,28 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
                     }
+                    else
+                    {
+                      rgba.w *= 0.2f;
+                    }
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
+                    palette = ui_build_palette(ui_top_palette(), .overlay = rgba);
+                    cell_flags |= UI_BoxFlag_DrawOverlay;
+                  }
+                  else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
+                          rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
+                  {
+                    CTRL_Entity *entity = cell_info.entity;
+                    Vec4F32 rgba = rd_rgba_from_ctrl_entity(entity);
+                    if(rgba.w == 0)
+                    {
+                      rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                    }
+                    else
+                    {
+                      rgba.w *= 0.2f;
+                    }
+                    rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                     palette = ui_build_palette(ui_top_palette(), .overlay = rgba);
                     cell_flags |= UI_BoxFlag_DrawOverlay;
                   }
@@ -2908,6 +2929,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   if(ui_hovering(sig) && cell_info.cfg != &rd_nil_cfg)
                   {
                     RD_RegsScope(.cfg = cell_info.cfg->id) rd_set_hover_regs(RD_RegSlot_Cfg);
+                  }
+                  
+                  // rjf: hover -> rich hover entities
+                  if(ui_hovering(sig) && cell_info.entity != &ctrl_entity_nil)
+                  {
+                    RD_RegsScope(.ctrl_entity = cell_info.entity->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
                   }
                   
                   // rjf: dragging -> drag/drop

@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[277] =
+RD_VocabInfo rd_vocab_info_table[282] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -17,6 +17,11 @@ RD_VocabInfo rd_vocab_info_table[277] =
 {str8_lit_comp("target"), str8_lit_comp("targets"), str8_lit_comp("Target"), str8_lit_comp("Targets"), RD_IconKind_Target},
 {str8_lit_comp("executable"), str8_lit_comp("executables"), str8_lit_comp("Executable"), str8_lit_comp("Executables"), RD_IconKind_Module},
 {str8_lit_comp("arguments"), str8_lit_comp("arguments"), str8_lit_comp("Arguments"), str8_lit_comp("Arguments"), RD_IconKind_Null},
+{str8_lit_comp("exe"), str8_lit_comp("exes"), str8_lit_comp("Executable"), str8_lit_comp("Executables"), RD_IconKind_Module},
+{str8_lit_comp("dbg"), str8_lit_comp("dbgs"), str8_lit_comp("Debug Info Path"), str8_lit_comp("Debug Info Paths"), RD_IconKind_Module},
+{str8_lit_comp("vaddr_range"), str8_lit_comp("vaddr_ranges"), str8_lit_comp("Virtual Address Range"), str8_lit_comp("Virtual Address Ranges"), RD_IconKind_Null},
+{str8_lit_comp("min"), str8_lit_comp("mins"), str8_lit_comp("Minimum"), str8_lit_comp("Minimums"), RD_IconKind_Null},
+{str8_lit_comp("max"), str8_lit_comp("maxs"), str8_lit_comp("Maximum"), str8_lit_comp("Maximums"), RD_IconKind_Null},
 {str8_lit_comp("working_directory"), str8_lit_comp("working_directories"), str8_lit_comp("Working Directory"), str8_lit_comp("Working Directories"), RD_IconKind_FolderClosedFilled},
 {str8_lit_comp("entry_point"), str8_lit_comp("entry_points"), str8_lit_comp("Entry Point"), str8_lit_comp("Entry Points"), RD_IconKind_Null},
 {str8_lit_comp("stdout_path"), str8_lit_comp("stdout_paths"), str8_lit_comp("Standard Output Path"), str8_lit_comp("Standard Output Paths"), RD_IconKind_Null},
