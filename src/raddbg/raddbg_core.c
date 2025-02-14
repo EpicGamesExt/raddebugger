@@ -12589,6 +12589,7 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, ctrl_string_from_handle(scratch.arena, entity->handle), expr);
           if(entity->string.size != 0)
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);

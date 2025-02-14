@@ -151,6 +151,13 @@ ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src)
   return dst;
 }
 
+internal String8
+ctrl_string_from_handle(Arena *arena, CTRL_Handle handle)
+{
+  String8 result = push_str8f(arena, "$%I64x_%I64x", handle.machine_id, handle.dmn_handle.u64[0]);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Trap Type Functions
 

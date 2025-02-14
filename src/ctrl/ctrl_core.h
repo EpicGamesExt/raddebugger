@@ -726,6 +726,7 @@ internal CTRL_Handle ctrl_handle_make(CTRL_MachineID machine_id, DMN_Handle dmn_
 internal B32 ctrl_handle_match(CTRL_Handle a, CTRL_Handle b);
 internal void ctrl_handle_list_push(Arena *arena, CTRL_HandleList *list, CTRL_Handle *pair);
 internal CTRL_HandleList ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src);
+internal String8 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions

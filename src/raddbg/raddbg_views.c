@@ -995,10 +995,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // but does not evaluate them, from e.g. "targets", which uses the group of target
     // cfgs, and the evaluations are of the targets themselves.
     //
-    B32 row_eval_matches_group = 0;
+    B32 row_cfg_eval_matches_group = 0;
     RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(info.eval.space);
+    B32 row_entity_eval_matches_group = 0;
+    CTRL_Entity *evalled_entity = (info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(info.eval.space) : &ctrl_entity_nil);
     {
-      row_eval_matches_group = (evalled_cfg == info.group_cfg_child);
+      row_cfg_eval_matches_group = (evalled_cfg == info.group_cfg_child);
+      row_entity_eval_matches_group = (evalled_entity == info.group_entity);
     }
     
     // rjf: determine view ui rule
@@ -1013,7 +1016,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(0){}
       
       // rjf: cfg rows
-      else if((info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg) ||
+      else if((info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_cfg_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg) ||
               (row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg))
       {
         RD_Cfg *cfg = evalled_cfg;
@@ -1052,16 +1055,18 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: entity rows
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && info.group_entity != &ctrl_entity_nil)
+      else if((info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && row_entity_eval_matches_group && info.group_entity != &ctrl_entity_nil) ||
+              (row->block->parent == &ev_nil_block && evalled_entity != &ctrl_entity_nil))
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, info.group_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1));
+        CTRL_Entity *entity = evalled_entity;
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, ui_top_palette()->text_weak, ui_top_font_size(), 1));
       }
       
       // rjf: singular button for commands
       else if((block_eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection ||
                block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection) &&
               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd &&
-              row_eval_matches_group)
+              row_cfg_eval_matches_group)
       {
         RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
         RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
@@ -2943,6 +2948,17 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     if(cell_info.cfg != &rd_nil_cfg)
                     {
                       RD_RegsScope(.cfg = cell_info.cfg->id) rd_drag_begin(RD_RegSlot_Cfg);
+                    }
+                    else if(cell_info.entity != &ctrl_entity_nil)
+                    {
+                      RD_RegsScope(.ctrl_entity = cell_info.entity->handle) switch(cell_info.entity->kind)
+                      {
+                        default:{rd_drag_begin(RD_RegSlot_CtrlEntity);}break;
+                        case CTRL_EntityKind_Machine:{RD_RegsScope(.machine = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Machine);}break;
+                        case CTRL_EntityKind_Process:{RD_RegsScope(.process = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Process);}break;
+                        case CTRL_EntityKind_Module:{RD_RegsScope(.module = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Module);}break;
+                        case CTRL_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
+                      }
                     }
                   }
                   
