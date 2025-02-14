@@ -614,7 +614,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   margin_contents_palette->background = v4f32(0, 0, 0, 0);
   F32 line_num_padding_px = ui_top_font_size()*1.f;
   F32 entity_alive_t_rate = (1 - pow_f32(2, (-30.f * rd_state->frame_dt)));
-  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
+  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
   B32 do_thread_lines = rd_setting_b32_from_name(str8_lit("thread_lines"));
   B32 do_thread_glow = rd_setting_b32_from_name(str8_lit("thread_glow"));
   B32 do_bp_lines = rd_setting_b32_from_name(str8_lit("breakpoint_lines"));

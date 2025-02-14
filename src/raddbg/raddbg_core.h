@@ -127,27 +127,6 @@ struct RD_ViewUIRuleMap
 };
 
 ////////////////////////////////
-//~ rjf: View Rule Info Types
-
-typedef U32 RD_ViewRuleInfoFlags;
-enum
-{
-  RD_ViewRuleInfoFlag_ShowInDocs                 = (1<<0),
-  RD_ViewRuleInfoFlag_CanFilter                  = (1<<1),
-  RD_ViewRuleInfoFlag_FilterIsCode               = (1<<2),
-  RD_ViewRuleInfoFlag_TypingAutomaticallyFilters = (1<<3),
-  RD_ViewRuleInfoFlag_CanUseInWatchTable         = (1<<4),
-  RD_ViewRuleInfoFlag_CanFillValueCell           = (1<<5),
-  RD_ViewRuleInfoFlag_CanExpand                  = (1<<6),
-  RD_ViewRuleInfoFlag_ProjectFiltered            = (1<<7),
-};
-
-#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)
-#define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
-#define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
-typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
-
-////////////////////////////////
 //~ rjf: View State Types
 
 typedef struct RD_ArenaExt RD_ArenaExt;

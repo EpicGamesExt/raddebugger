@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[282] =
+RD_VocabInfo rd_vocab_info_table[283] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -104,8 +104,8 @@ RD_VocabInfo rd_vocab_info_table[282] =
 {str8_lit_comp("thaw_machine"), str8_lit_comp(""), str8_lit_comp("Thaw Machine"), str8_lit_comp(""), RD_IconKind_Unlocked},
 {str8_lit_comp("freeze_local_machine"), str8_lit_comp(""), str8_lit_comp("Freeze Local Machine"), str8_lit_comp(""), RD_IconKind_Machine},
 {str8_lit_comp("thaw_local_machine"), str8_lit_comp(""), str8_lit_comp("Thaw Local Machine"), str8_lit_comp(""), RD_IconKind_Machine},
-{str8_lit_comp("freeze_entity"), str8_lit_comp(""), str8_lit_comp("Freeze Entity"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("thaw_entity"), str8_lit_comp(""), str8_lit_comp("Thaw Entity"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("freeze_entity"), str8_lit_comp(""), str8_lit_comp("Freeze Entity"), str8_lit_comp(""), RD_IconKind_Unlocked},
+{str8_lit_comp("thaw_entity"), str8_lit_comp(""), str8_lit_comp("Thaw Entity"), str8_lit_comp(""), RD_IconKind_Locked},
 {str8_lit_comp("set_entity_color"), str8_lit_comp(""), str8_lit_comp("Set Entity Color"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("set_entity_name"), str8_lit_comp(""), str8_lit_comp("Set Entity Name"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("attach"), str8_lit_comp(""), str8_lit_comp("Attach"), str8_lit_comp(""), RD_IconKind_Null},
@@ -233,7 +233,8 @@ RD_VocabInfo rd_vocab_info_table[282] =
 {str8_lit_comp("toggle_code_bytes_visibility"), str8_lit_comp(""), str8_lit_comp("Toggle Code Bytes Visibility"), str8_lit_comp(""), RD_IconKind_Thumbnails},
 {str8_lit_comp("enable_cfg"), str8_lit_comp(""), str8_lit_comp("Enable Config Tree"), str8_lit_comp(""), RD_IconKind_CheckHollow},
 {str8_lit_comp("disable_cfg"), str8_lit_comp(""), str8_lit_comp("Disable Config Tree"), str8_lit_comp(""), RD_IconKind_CheckFilled},
-{str8_lit_comp("select_cfg"), str8_lit_comp(""), str8_lit_comp("Select Config Tree"), str8_lit_comp(""), RD_IconKind_CheckHollow},
+{str8_lit_comp("select_cfg"), str8_lit_comp(""), str8_lit_comp("Select Config Tree"), str8_lit_comp(""), RD_IconKind_RadioHollow},
+{str8_lit_comp("deselect_cfg"), str8_lit_comp(""), str8_lit_comp("Deselect Config Tree"), str8_lit_comp(""), RD_IconKind_RadioFilled},
 {str8_lit_comp("remove_cfg"), str8_lit_comp(""), str8_lit_comp("Remove Config Tree"), str8_lit_comp(""), RD_IconKind_Trash},
 {str8_lit_comp("name_cfg"), str8_lit_comp(""), str8_lit_comp("Name Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("condition_cfg"), str8_lit_comp(""), str8_lit_comp("Condition Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
@@ -346,7 +347,7 @@ Rng1U64 rd_reg_slot_range_table[38] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[212] =
+RD_CmdKindInfo rd_cmd_kind_info_table[213] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -361,7 +362,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[212] =
 { str8_lit_comp("step_over_line"), str8_lit_comp("Performs a step that skips calls, at the source code line level."), str8_lit_comp("step,thread"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("step_out"), str8_lit_comp("Runs to the end of the current function and exits it."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("halt"), str8_lit_comp("Halts all attached processes."), str8_lit_comp("pause"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("soft_halt_refresh"), str8_lit_comp("Interrupts all attached processes to collect data, and then resumes them."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("soft_halt_refresh"), str8_lit_comp("Interrupts all attached processes to collect data, and then resumes them."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("set_thread_ip"), str8_lit_comp("Sets the specified thread's instruction pointer at the specified address."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Vaddr, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("run_to_line"), str8_lit_comp("Runs until a particular source line is hit."), str8_lit_comp(""), str8_lit_comp("$text_pt,"), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("run"), str8_lit_comp("Runs all targets after starting them if they have not been started yet."), str8_lit_comp("play"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -506,6 +507,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[212] =
 { str8_lit_comp("enable_cfg"), str8_lit_comp("Enables a config tree."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("disable_cfg"), str8_lit_comp("Disables a config tree."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("select_cfg"), str8_lit_comp("Selects a config tree, disabling all others of the same kind."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("deselect_cfg"), str8_lit_comp("Deselects a config tree, disabling all others of the same kind."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("remove_cfg"), str8_lit_comp("Removes a config tree."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("name_cfg"), str8_lit_comp("Equips a config tree with a label."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("condition_cfg"), str8_lit_comp("Equips a config tree with a condition string."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -562,7 +564,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[212] =
 { str8_lit_comp("log_marker"), str8_lit_comp("Logs a marker in the application log, to denote specific points in time within the log."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), CTRL_EntityKind_Null}},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[111] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[110] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -570,7 +572,6 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[111] =
 {str8_lit_comp("step_out"), {OS_Key_F11, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("halt"), {OS_Key_X, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("halt"), {OS_Key_Pause, 0   }},
-{str8_lit_comp("soft_halt_refresh"), {OS_Key_R, 0   |OS_Modifier_Alt}},
 {str8_lit_comp("run"), {OS_Key_F5, 0   }},
 {str8_lit_comp("restart"), {OS_Key_F5, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("step_into"), {OS_Key_F11, 0   }},

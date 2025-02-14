@@ -795,7 +795,8 @@ rd_id_from_watch_cell(RD_WatchCell *cell)
   U64 result = 5381;
   result = e_hash_from_string(result, str8_struct(&cell->kind));
   result = e_hash_from_string(result, str8_struct(&cell->eval.mode));
-  result = e_hash_from_string(result, cell->string);
+  result = e_hash_from_string(result, str8_struct(&cell->index));
+  result = e_hash_from_string(result, str8_struct(&cell->default_pct));
   return result;
 }
 
@@ -803,6 +804,7 @@ internal RD_WatchCell *
 rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list)
 {
   RD_WatchCell *cell = push_array(arena, RD_WatchCell, 1);
+  cell->index = list->count;
   SLLQueuePush(list->first, list->last, cell);
   list->count += 1;
   return cell;
@@ -812,7 +814,9 @@ internal RD_WatchCell *
 rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params)
 {
   RD_WatchCell *cell = rd_watch_cell_list_push(arena, list);
+  U64 index = cell->index;
   MemoryCopyStruct(cell, params);
+  cell->index = index;
   if(cell->pct == 0)
   {
     cell->pct = cell->default_pct;
@@ -1046,6 +1050,22 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
                 cmd_kind = RD_CmdKind_EnableCfg;
               }
             }break;
+            case RD_CmdKind_SelectCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(!is_disabled)
+              {
+                cmd_kind = RD_CmdKind_DeselectCfg;
+              }
+            }break;
+            case RD_CmdKind_DeselectCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(is_disabled)
+              {
+                cmd_kind = RD_CmdKind_SelectCfg;
+              }
+            }break;
           }
           if(cmd_kind != RD_CmdKind_Null)
           {
@@ -1060,6 +1080,17 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         CTRL_Entity *entity = evalled_entity;
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, ui_top_palette()->text_weak, ui_top_font_size(), 1));
+        if(entity->kind == CTRL_EntityKind_Machine ||
+           entity->kind == CTRL_EntityKind_Process ||
+           entity->kind == CTRL_EntityKind_Thread)
+        {
+          RD_CmdKind cmd_kind = RD_CmdKind_FreezeEntity;
+          if(ctrl_entity_tree_is_frozen(entity))
+          {
+            cmd_kind = RD_CmdKind_ThawEntity;
+          }
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands[%I64u]", (U64)cmd_kind-1));
+        }
       }
       
       // rjf: singular button for commands
@@ -1442,9 +1473,11 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
   RD_WatchViewState *ewv = rd_view_state(RD_WatchViewState);
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
-  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
+  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
+  B32 is_first_frame = 0;
   if(ewv->initialized == 0)
   {
+    is_first_frame = 1;
     ewv->initialized = 1;
     ewv->text_edit_arena = rd_push_view_arena();
   }
@@ -1509,7 +1542,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
       {
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
-        ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
+        if(implicit_root || is_first_frame)
+        {
+          ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
+        }
         block_tree   = ev_block_tree_from_eval(scratch.arena, eval_view, filter, eval);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
         if(implicit_root && block_ranges.first != 0)
@@ -2480,8 +2516,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                         }
                         if(ui_double_clicked(sig))
                         {
-                          min_pct__post = cell->default_pct;
-                          max_pct__post = cell->next->default_pct;
+                          F32 default_sum = cell->default_pct + cell->next->default_pct;
+                          F32 current_sum = min_pct__pre + max_pct__pre;;
+                          min_pct__post = current_sum * (cell->default_pct / default_sum);
+                          max_pct__post = current_sum * (cell->next->default_pct / default_sum);
                           ui_kill_action();
                         }
                         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -2982,9 +3020,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     // rjf: has a command name? -> push command
                     if(cell_info.cmd_name.size != 0)
                     {
+                      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_info->eval.space);
                       RD_Cfg *cfg = rd_cfg_from_eval_space(row_info->eval.space);
                       RD_CmdKind kind = rd_cmd_kind_from_string(cell_info.cmd_name);
-                      rd_cmd(kind, .cfg = cfg->id);
+                      rd_cmd(kind, .cfg = cfg->id, .ctrl_entity = entity->handle);
                     }
                     
                     // rjf: row has callstack info? -> select unwind
@@ -5211,9 +5250,9 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
 }
 #endif
 
+#if 0 // TODO(rjf): @cfg
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
 {
-#if 0 // TODO(rjf): @cfg
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
@@ -5684,7 +5723,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
         }break;
         case RD_SettingsItemKind_WindowSetting:
         {
-          // TODO(rjf): @cfg val_table = &window->setting_vals[0];
+          val_table = &window->setting_vals[0];
         }goto setting;
         case RD_SettingsItemKind_GlobalSetting:{}goto setting;
         setting:;
@@ -5838,5 +5877,5 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
+#endif

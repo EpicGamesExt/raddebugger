@@ -66,6 +66,7 @@ struct RD_WatchCell
 {
   RD_WatchCell *next;
   RD_WatchCellKind kind;
+  U64 index;
   String8 string;
   E_Eval eval;
   DR_FStrList fstrs;
