@@ -109,6 +109,7 @@ struct RD_WatchRowCellInfo
   E_Eval eval;
   RD_Cfg *cfg;
   CTRL_Entity *entity;
+  String8 cmd_name;
   String8 string;
   DR_FStrList fstrs;
   String8 error_tooltip;

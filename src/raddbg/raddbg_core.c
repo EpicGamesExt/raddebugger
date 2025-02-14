@@ -3815,10 +3815,9 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: rich hover, drag/drop tooltips
+    //- rjf: drag/drop tooltips
     //
-    if(rd_state->hover_regs_slot != RD_RegSlot_Null ||
-       (rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()))
+    if(rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active())
     {
       Temp scratch = scratch_begin(0, 0);
       RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
@@ -5608,10 +5607,10 @@ rd_window_frame(void)
                 UI_TextAlignment(UI_TextAlign_Center)
                 UI_Padding(ui_pct(1, 0))
               {
-                ui_labelf("Search for commands by pressing ");
+                ui_labelf("Search for commands and options by pressing ");
                 UI_Flags(UI_BoxFlag_DrawBorder)
                   UI_TextAlignment(UI_TextAlign_Center)
-                  rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_RunCommand].string);
+                  rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
               }
               ui_spacer(ui_em(1.f, 1.f));
               RD_Palette(RD_PaletteCode_NeutralPopButton)
@@ -7846,16 +7845,13 @@ rd_window_frame(void)
           }
           
           // rjf: soft circle around mouse
-          if(ui_key_match(ui_hot_key(), box->key))
+          if(ui_key_match(ui_hot_key(), box->key)) DR_ClipScope(box->rect)
           {
-            DR_ClipScope(box->rect)
-            {
-              Vec2F32 center = ui_mouse();
-              F32 radius = box->font_size*12.f;
-              Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
-              color.w *= 0.1f*t;
-              dr_rect(pad_2f32(r2f32p(center.x, center.y, center.x, center.y), radius), color, radius, 0, radius/3.f);
-            }
+            Vec2F32 center = ui_mouse();
+            F32 radius = box->font_size*12.f;
+            Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
+            color.w *= 0.1f*t;
+            dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
           }
           
           // rjf: slight emboss fadeoff

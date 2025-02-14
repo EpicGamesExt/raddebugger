@@ -1310,6 +1310,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           result.cfg = cfg;
         }
       }
+      else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+      {
+        RD_CmdKind cmd_kind = (RD_CmdKind)result.eval.value.u64;
+        String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+        result.cmd_name = cmd_name;
+      }
     }break;
     case RD_WatchCellKind_Eval:
     {
@@ -1339,6 +1345,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           result.fstrs = rd_title_fstrs_from_code_name(arena, cmd_name, ui_top_palette()->text_weak, ui_top_font_size());
         }
         result.flags |= RD_WatchCellFlag_Button;
+        result.cmd_name = cmd_name;
       }
     }break;
   }
@@ -2869,24 +2876,32 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     RD_RegsScope(.cfg = cell_info.cfg->id) rd_set_hover_regs(RD_RegSlot_Cfg);
                   }
                   
-                  // rjf: single-click -> move selection here
+                  // rjf: (normally) single-click -> move selection here
                   if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_pressed(sig))
                   {
                     ewv->next_cursor = ewv->next_mark = cell_pt;
                     pressed = 1;
                   }
                   
-                  // rjf: double-click actions
+                  // rjf: activation (double-click normally, or single-clicks with special buttons)
                   if(ui_double_clicked(sig) ||
                      ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)))
                   {
+                    // rjf: kill if a double-clickable cell
                     if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick))
                     {
                       ui_kill_action();
                     }
                     
-                    // rjf: has callstack info? -> select unwind
-                    if(row_info->callstack_thread != &ctrl_entity_nil)
+                    // rjf: has a command name? -> push command
+                    if(cell_info.cmd_name.size != 0)
+                    {
+                      RD_CmdKind kind = rd_cmd_kind_from_string(cell_info.cmd_name);
+                      rd_cmd(kind, .cfg = row_info->group_cfg_child->id);
+                    }
+                    
+                    // rjf: row has callstack info? -> select unwind
+                    else if(row_info->callstack_thread != &ctrl_entity_nil)
                     {
                       rd_cmd(RD_CmdKind_SelectThread, .thread = row_info->callstack_thread->handle);
                       rd_cmd(RD_CmdKind_SelectUnwind,

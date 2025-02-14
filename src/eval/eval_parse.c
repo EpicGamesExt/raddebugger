@@ -724,6 +724,7 @@ e_expr_copy(Arena *arena, E_Expr *src)
 {
   E_Expr *result = &e_expr_nil;
   Temp scratch = scratch_begin(&arena, 1);
+  if(src != &e_expr_nil)
   {
     typedef struct Task Task;
     struct Task
