@@ -962,6 +962,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
+    // rjf: determine ctrl entity
+    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntityCollection)
+    {
+      info.group_entity = rd_ctrl_entity_from_eval_space(info.eval.space);
+    }
+    
     // rjf: determine cfg group name / parent
     if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection)
     {
@@ -1048,7 +1054,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: entity rows
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && info.group_entity != &ctrl_entity_nil)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, info.group_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1));
       }
       
       // rjf: singular button for commands
@@ -1078,7 +1084,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
               info.eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection ||
               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection)
+              info.eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection ||
+              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntityCollection)
       {
         info.cell_style_key = str8_lit("expr_and_eval");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -1300,8 +1308,18 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     default:{}break;
     case RD_WatchCellKind_Expr:
     {
-      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
          result.eval.value.u64 == 0)
+      {
+        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(result.eval.space);
+        E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
+        if(e_type_key_match(cfg_type, result.eval.type_key))
+        {
+          result.entity = entity;
+        }
+      }
+      else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+              result.eval.value.u64 == 0)
       {
         RD_Cfg *cfg = rd_cfg_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
@@ -1319,8 +1337,20 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     }break;
     case RD_WatchCellKind_Eval:
     {
-      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
          result.eval.value.u64 == 0)
+      {
+        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(result.eval.space);
+        E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
+        if(e_type_key_match(cfg_type, result.eval.type_key))
+        {
+          result.fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
+          result.flags |= RD_WatchCellFlag_Button;
+          result.entity = entity;
+        }
+      }
+      else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+              result.eval.value.u64 == 0)
       {
         RD_Cfg *cfg = rd_cfg_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
@@ -2612,7 +2642,11 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               if(row_is_fresh)
               {
-                palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
+                Vec4F32 start_color = rd_rgba_from_theme_color(RD_ThemeColor_NegativePopButtonBackground);
+                start_color.w *= 0.5f;
+                Vec4F32 end_color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                Vec4F32 color = mix_4f32(start_color, end_color, ui_anim(ui_key_from_stringf(ui_key_zero(), "row_fresh_%I64x", row_hash), 1.f));
+                palette = ui_build_palette(ui_top_palette(), .background = color);
                 row_flags |= UI_BoxFlag_DrawBackground;
               }
               else if(global_row_idx & 1)
@@ -2876,6 +2910,15 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     RD_RegsScope(.cfg = cell_info.cfg->id) rd_set_hover_regs(RD_RegSlot_Cfg);
                   }
                   
+                  // rjf: dragging -> drag/drop
+                  if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
+                  {
+                    if(cell_info.cfg != &rd_nil_cfg)
+                    {
+                      RD_RegsScope(.cfg = cell_info.cfg->id) rd_drag_begin(RD_RegSlot_Cfg);
+                    }
+                  }
+                  
                   // rjf: (normally) single-click -> move selection here
                   if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_pressed(sig))
                   {
@@ -2896,8 +2939,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     // rjf: has a command name? -> push command
                     if(cell_info.cmd_name.size != 0)
                     {
+                      RD_Cfg *cfg = rd_cfg_from_eval_space(row_info->eval.space);
                       RD_CmdKind kind = rd_cmd_kind_from_string(cell_info.cmd_name);
-                      rd_cmd(kind, .cfg = row_info->group_cfg_child->id);
+                      rd_cmd(kind, .cfg = cfg->id);
                     }
                     
                     // rjf: row has callstack info? -> select unwind

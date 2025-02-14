@@ -12716,6 +12716,7 @@ rd_frame(void)
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntityCollection);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
@@ -14783,6 +14784,14 @@ Z(getting_started)
             // open at all, cancel disasm, so that it doesn't open if the user
             // doesn't want it.
             if(!rd_regs()->prefer_disasm && panel_w_disasm == &rd_nil_panel_node)
+            {
+              disasm_dst_panel = &rd_nil_panel_node;
+            }
+            
+            // rjf: if disasm is not preferred, and we have no disassembly view
+            // *selected* at all, cancel disasm, so that it doesn't open if the user
+            // doesn't want it.
+            if(!rd_regs()->prefer_disasm && view_w_disasm != &rd_nil_cfg && rd_cfg_child_from_string(view_w_disasm, str8_lit("selected")) == &rd_nil_cfg)
             {
               disasm_dst_panel = &rd_nil_panel_node;
             }

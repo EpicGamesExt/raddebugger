@@ -795,7 +795,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
+    ui_state->default_animation_rate = 1 - pow_f32(2, (-80.f * ui_state->animation_dt));
   }
   
   //- rjf: prune unused animation nodes
@@ -1306,19 +1306,15 @@ ui_end_build(void)
         ui_state->is_animating = (ui_state->is_animating || abs_f32(n->params.target - n->current) > n->params.epsilon);
       }
     }
-    F32 vast_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
-    F32 fast_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
-    F32 fish_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
+    F32 fast_rate = ui_state->default_animation_rate;
     F32 slow_rate = 1 - pow_f32(2, (-30.f * ui_state->animation_dt));
-    F32 slug_rate = 1 - pow_f32(2, (-15.f * ui_state->animation_dt));
-    F32 slaf_rate = 1 - pow_f32(2, (-8.f * ui_state->animation_dt));
-    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? vast_rate : 1);
+    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? fast_rate : 1);
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
     }
-    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? vast_rate : 1);
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? fast_rate : 1);
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
     if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
     {
@@ -1374,7 +1370,7 @@ ui_end_build(void)
         
         // rjf: animate interaction transition states
         box->hot_t                   += hot_rate      * ((F32)is_hot - box->hot_t);
-        box->active_t                += active_rate   * ((F32)is_active - box->active_t);
+        box->active_t                = is_active ? 1.f : box->active_t + (active_rate   * ((F32)is_active - box->active_t));
         box->disabled_t              += disabled_rate * ((F32)is_disabled - box->disabled_t);
         box->focus_hot_t             += focus_rate    * ((F32)is_focus_hot - box->focus_hot_t);
         box->focus_active_t          += focus_rate    * ((F32)is_focus_active - box->focus_active_t);
