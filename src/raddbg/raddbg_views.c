@@ -2884,7 +2884,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   }
                   
                   // rjf: activation (double-click normally, or single-clicks with special buttons)
-                  if(ui_double_clicked(sig) ||
+                  if((!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_double_clicked(sig)) ||
                      ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)))
                   {
                     // rjf: kill if a double-clickable cell
