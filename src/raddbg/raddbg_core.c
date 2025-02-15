@@ -10,182 +10,6 @@
 #include "generated/raddbg.meta.c"
 
 ////////////////////////////////
-//~ rjf: Scheduler Eval Hooks
-
-typedef struct RD_CtrlEntityExpandAccel RD_CtrlEntityExpandAccel;
-struct RD_CtrlEntityExpandAccel
-{
-  CTRL_EntityArray entities;
-};
-
-#if 0 // TODO(rjf): @cfg
-typedef struct RD_EntityExpandAccel RD_EntityExpandAccel;
-struct RD_EntityExpandAccel
-{
-  RD_EntityArray entities;
-};
-
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(scheduler_machine)
-{
-  EV_ExpandInfo info = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
-  CTRL_Entity *machine = rd_ctrl_entity_from_eval_space(eval.space);
-  if(machine->kind == CTRL_EntityKind_Machine)
-  {
-    CTRL_EntityList processes = {0};
-    for(CTRL_Entity *child = machine->first; child != &ctrl_entity_nil; child = child->next)
-    {
-      if(child->kind == CTRL_EntityKind_Process)
-      {
-        ctrl_entity_list_push(scratch.arena, &processes, child);
-      }
-    }
-    CTRL_EntityArray *processes_array = push_array(arena, CTRL_EntityArray, 1);
-    *processes_array = ctrl_entity_array_from_list(arena, &processes);
-    info.user_data = processes_array;
-    info.row_count = processes.count;
-    info.rows_default_expanded = 1;
-  }
-  scratch_end(scratch);
-  return info;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_machine)
-{
-  EV_ExpandRangeInfo info = {0};
-  {
-    CTRL_EntityArray *processes = (CTRL_EntityArray *)user_data;
-    if(processes != 0)
-    {
-      info.row_exprs_count = dim_1u64(idx_range);
-      info.row_strings     = push_array(arena, String8,    info.row_exprs_count);
-      info.row_view_rules  = push_array(arena, String8,    info.row_exprs_count);
-      info.row_exprs       = push_array(arena, E_Expr *,   info.row_exprs_count);
-      info.row_members     = push_array(arena, E_Member *, info.row_exprs_count);
-      U64 row_expr_idx = 0;
-      for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, row_expr_idx += 1)
-      {
-        CTRL_Entity *process = processes->v[idx];
-        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
-        expr->space    = rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_MetaCtrlEntity);
-        expr->mode     = E_Mode_Offset;
-        expr->type_key = e_type_key_cons_base(type(CTRL_ProcessMetaEval));;
-        info.row_exprs[row_expr_idx]   = expr;
-        info.row_members[row_expr_idx] = &e_member_nil;
-      }
-    }
-  }
-  return info;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(scheduler_machine)
-{
-  return num;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(scheduler_machine)
-{
-  return id;
-}
-
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(scheduler_process)
-{
-  EV_ExpandInfo info = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
-  CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
-  if(process->kind == CTRL_EntityKind_Process)
-  {
-    CTRL_EntityList threads = {0};
-    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
-    {
-      if(child->kind == CTRL_EntityKind_Thread)
-      {
-        B32 is_in_filter = 1;
-        if(filter.size != 0)
-        {
-          is_in_filter = 0;
-          FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, child->string);
-          if(matches.count == matches.needle_part_count)
-          {
-            is_in_filter = 1;
-          }
-          else
-          {
-            DI_Scope *di_scope = di_scope_open();
-            CTRL_Unwind unwind = d_query_cached_unwind_from_thread(child);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &unwind);
-            for(U64 idx = 0; idx < call_stack.concrete_frame_count && idx < 5; idx += 1)
-            {
-              CTRL_CallStackFrame *f = &call_stack.frames[idx];
-              String8 name = {0};
-              name.str = rdi_string_from_idx(f->rdi, f->procedure->name_string_idx, &name.size);
-              FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
-              if(matches.count == matches.needle_part_count)
-              {
-                is_in_filter = 1;
-                break;
-              }
-            }
-            di_scope_close(di_scope);
-          }
-        }
-        if(is_in_filter)
-        {
-          ctrl_entity_list_push(scratch.arena, &threads, child);
-        }
-      }
-    }
-    CTRL_EntityArray *threads_array = push_array(arena, CTRL_EntityArray, 1);
-    *threads_array = ctrl_entity_array_from_list(arena, &threads);
-    info.user_data = threads_array;
-    info.row_count = threads.count;
-  }
-  scratch_end(scratch);
-  return info;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_process)
-{
-  EV_ExpandRangeInfo info = {0};
-  {
-    CTRL_EntityArray *threads = (CTRL_EntityArray *)user_data;
-    if(threads != 0)
-    {
-      info.row_exprs_count = dim_1u64(idx_range);
-      info.row_strings     = push_array(arena, String8,    info.row_exprs_count);
-      info.row_view_rules  = push_array(arena, String8,    info.row_exprs_count);
-      info.row_exprs       = push_array(arena, E_Expr *,   info.row_exprs_count);
-      info.row_members     = push_array(arena, E_Member *, info.row_exprs_count);
-      U64 row_expr_idx = 0;
-      for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, row_expr_idx += 1)
-      {
-        CTRL_Entity *thread = threads->v[idx];
-        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
-        expr->space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_MetaCtrlEntity);
-        expr->mode     = E_Mode_Offset;
-        expr->type_key = e_type_key_cons_base(type(CTRL_ThreadMetaEval));
-        info.row_exprs[row_expr_idx]   = expr;
-        info.row_members[row_expr_idx] = &e_member_nil;
-      }
-    }
-  }
-  return info;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(scheduler_process)
-{
-  return num;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(scheduler_process)
-{
-  return id;
-}
-#endif
-
-////////////////////////////////
 //~ rjf: Commands Eval Hooks
 
 E_LOOKUP_INFO_FUNCTION_DEF(commands)
@@ -419,8 +243,8 @@ E_LOOKUP_RANGE_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: Top-Level Config Eval Hooks
 
-typedef struct RD_TopLevelCfgLookupAccel RD_TopLevelCfgLookupAccel;
-struct RD_TopLevelCfgLookupAccel
+typedef struct RD_CfgLookupAccel RD_CfgLookupAccel;
+struct RD_CfgLookupAccel
 {
   String8Array cmds;
   RD_CfgArray cfgs;
@@ -428,15 +252,34 @@ struct RD_TopLevelCfgLookupAccel
   Rng1U64 cfgs_idx_range;
 };
 
-E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
+E_LOOKUP_INFO_FUNCTION_DEF(cfg)
 {
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
+    //- rjf: determine which cfg we'll use to scope the lookups
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    RD_Cfg *scoping_cfg = rd_cfg_from_eval_space(lhs_interp.space);
+    
+    //- rjf: determine which kind of child we'll be gathering
     E_TypeKey lhs_type_key = lhs->type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 cfg_name = rd_singular_from_code_name_plural(lhs_type->name);
-    RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);\
+    
+    //- rjf: gather cfgs
+    RD_CfgList cfgs_list = {0};
+    if(scoping_cfg == &rd_nil_cfg)
+    {
+      cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
+    }
+    else
+    {
+      cfgs_list = rd_cfg_child_list_from_string(scratch.arena, scoping_cfg, cfg_name);
+    }
+    
+    //- rjf: gather commands
     String8List cmds_list = {0};
     MD_Node *schema = rd_schema_from_name(scratch.arena, cfg_name);
     MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
@@ -444,7 +287,9 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
     {
       str8_list_push(arena, &cmds_list, cmd->string);
     }
-    RD_TopLevelCfgLookupAccel *accel = push_array(arena, RD_TopLevelCfgLookupAccel, 1);
+    
+    //- rjf: package & fill
+    RD_CfgLookupAccel *accel = push_array(arena, RD_CfgLookupAccel, 1);
     accel->cfgs = rd_cfg_array_from_list(arena, &cfgs_list);
     accel->cmds = str8_array_from_list(arena, &cmds_list);
     accel->cmds_idx_range = r1u64(0, accel->cmds.count);
@@ -456,13 +301,13 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
   return result;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
+E_LOOKUP_ACCESS_FUNCTION_DEF(cfg)
 {
   E_LookupAccess result = {{&e_irnode_nil}};
   if(kind == E_ExprKind_ArrayIndex)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+    RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
     E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
     E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
     String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
@@ -483,9 +328,9 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
   return result;
 }
 
-E_LOOKUP_RANGE_FUNCTION_DEF(top_level_cfg)
+E_LOOKUP_RANGE_FUNCTION_DEF(cfg)
 {
-  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
   Rng1U64 cmds_idx_range = accel->cmds_idx_range;
   Rng1U64 cfgs_idx_range = accel->cfgs_idx_range;
   U64 dst_idx = 0;
@@ -516,10 +361,10 @@ E_LOOKUP_RANGE_FUNCTION_DEF(top_level_cfg)
   }
 }
 
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(top_level_cfg)
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(cfg)
 {
   U64 id = 0;
-  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
   if(num != 0)
   {
     U64 idx = num-1;
@@ -537,10 +382,10 @@ E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(top_level_cfg)
   return id;
 }
 
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(top_level_cfg)
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(cfg)
 {
   U64 num = 0;
-  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
   if(id != 0)
   {
     if(id & (1ull<<63))
@@ -12663,11 +12508,11 @@ rd_frame(void)
         expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg),
-                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(top_level_cfg),
-                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(top_level_cfg),
-                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(top_level_cfg),
-                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(top_level_cfg));
+                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(cfg),
+                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(cfg),
+                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(cfg),
+                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(cfg),
+                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(cfg));
       }
       
       //- rjf: add macros for all ctrl entity collections
