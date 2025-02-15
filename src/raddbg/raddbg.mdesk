@@ -159,6 +159,7 @@ RD_VocabTable:
       'stderr_path':        path,
       'stdin_path':         path,
       'debug_subprocesses': bool,
+      'environment':        query,
     }
     ```,
   }
@@ -210,13 +211,13 @@ RD_VocabTable:
   //- rjf: machines
   {
     machine,
-    ```x:{'frozen':bool, 'label':code_string}```,
+    ```x:{'label':code_string, 'frozen':bool, 'processes':query}```,
   }
   
   //- rjf: processes
   {
     process,
-    ```x:{'frozen':bool, 'label':code_string, 'id':u64}```,
+    ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'modules':query, 'threads':query}```,
   }
   
   //- rjf: modules
@@ -228,7 +229,7 @@ RD_VocabTable:
   //- rjf: threads
   {
     thread,
-    ```x:{'frozen':bool, 'label':code_string, 'id':u64}```,
+    ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'call_stack':query}```,
   }
 }
 

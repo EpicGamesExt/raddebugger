@@ -501,7 +501,7 @@ e_type_key_cons_base(Type *type)
       for(U64 idx = 0; idx < type->count; idx += 1)
       {
         E_TypeKey member_type_key = e_type_key_cons_base(type->members[idx].type);
-        e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key, .pretty_name = type->members[idx].pretty_name);
+        e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key);
       }
       E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
       result = e_type_key_cons(.arch    = arch_from_context(),
@@ -1413,7 +1413,6 @@ e_type_member_copy(Arena *arena, E_Member *src)
   E_Member *dst = push_array(arena, E_Member, 1);
   MemoryCopyStruct(dst, src);
   dst->name = push_str8_copy(arena, src->name);
-  dst->pretty_name = push_str8_copy(arena, src->pretty_name);
   dst->inheritance_key_chain = e_type_key_list_copy(arena, &src->inheritance_key_chain);
   return dst;
 }

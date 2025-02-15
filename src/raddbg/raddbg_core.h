@@ -83,11 +83,8 @@ enum
 {
   RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaCfg,
-  RD_EvalSpaceKind_MetaCfgCollection,
   RD_EvalSpaceKind_MetaCmd,
-  RD_EvalSpaceKind_MetaCmdCollection,
   RD_EvalSpaceKind_MetaCtrlEntity,
-  RD_EvalSpaceKind_MetaCtrlEntityCollection,
 };
 
 ////////////////////////////////

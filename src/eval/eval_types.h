@@ -59,6 +59,7 @@ typedef enum E_MemberKind
   E_MemberKind_VirtualBase,
   E_MemberKind_NestedType,
   E_MemberKind_Padding,
+  E_MemberKind_Query,
   E_MemberKind_COUNT
 }
 E_MemberKind;
@@ -80,7 +81,6 @@ struct E_Member
   E_MemberKind kind;
   E_TypeKey type_key;
   String8 name;
-  String8 pretty_name;
   U64 off;
   E_TypeKeyList inheritance_key_chain;
 };

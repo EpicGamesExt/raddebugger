@@ -939,6 +939,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: interactions
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
+              rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, ctrl_string_from_handle(scratch.arena, thread->handle));
               RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
             }
             if(ui_right_clicked(thread_sig))

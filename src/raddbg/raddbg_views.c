@@ -944,12 +944,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: determine call stack info
-    if(block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && block_type_kind == E_TypeKind_Set)
+    if(block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && str8_match(str8_lit("call_stack"), block_type->name, 0))
     {
-      CTRL_Handle handle = {0};
-      handle.machine_id = (CTRL_MachineID)block_eval.value.u128.u64[0];
-      handle.dmn_handle.u64[0] = (U64)block_eval.value.u128.u64[1];
-      CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(block_eval.space);
       if(entity->kind == CTRL_EntityKind_Thread)
       {
         info.callstack_thread = entity;
@@ -967,15 +964,15 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: determine ctrl entity
-    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntityCollection)
+    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
     {
       info.group_entity = rd_ctrl_entity_from_eval_space(info.eval.space);
     }
     
     // rjf: determine cfg group name / parent
-    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection)
+    if(block_type_kind == E_TypeKind_Set && block_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
     {
-      info.group_cfg_parent = rd_cfg_from_id(block_eval.value.u64);
+      info.group_cfg_parent = rd_cfg_from_eval_space(block_eval.space);
       String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
       if(singular_name.size != 0)
       {
@@ -1094,8 +1091,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: singular button for commands
-      else if((block_eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection ||
-               block_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection) &&
+      else if((block_eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+               block_eval.space.kind == RD_EvalSpaceKind_MetaCfg) &&
               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd &&
               row_cfg_eval_matches_group)
       {
@@ -1118,11 +1115,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       
       // rjf: for meta-cfg evaluation spaces, only do expr/value
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection ||
               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCmdCollection ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntityCollection)
+              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
       {
         info.cell_style_key = str8_lit("expr_and_eval");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -1249,7 +1243,6 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             B32 is_non_code = 0;
             String8 string = push_str8f(arena, ".%S", member_name);
             if(row_eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-               row_eval.space.kind == RD_EvalSpaceKind_MetaCfgCollection ||
                row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
             {
               String8 fancy_name = rd_display_from_code_name(member_name);

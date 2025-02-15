@@ -561,204 +561,6 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(top_level_cfg)
 }
 
 ////////////////////////////////
-//~ rjf: Machine Eval Hooks
-
-E_LOOKUP_INFO_FUNCTION_DEF(machine)
-{
-  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
-  result.named_expr_count += 1;
-  return result;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(machine)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
-  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("processes"), 0))
-  {
-    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
-    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
-    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("machine_processes"));
-    result.irtree_and_type.mode     = E_Mode_Offset;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(machine)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-  String8 extras[] =
-  {
-    str8_lit("processes"),
-  };
-  Rng1U64 extras_idx_range = r1u64(lhs_type->count, lhs_type->count + ArrayCount(extras));
-  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
-  U64 extras_count = dim_1u64(extras_read_range);
-  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
-  {
-    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, extras[extras_idx]);
-  }
-  scratch_end(scratch);
-}
-
-////////////////////////////////
-//~ rjf: Process Eval Hooks
-
-E_LOOKUP_INFO_FUNCTION_DEF(process)
-{
-  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
-  result.named_expr_count += 1;
-  return result;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(process)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
-  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("modules"), 0))
-  {
-    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
-    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
-    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("process_modules"));
-    result.irtree_and_type.mode     = E_Mode_Offset;
-  }
-  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("threads"), 0))
-  {
-    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
-    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
-    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("process_threads"));
-    result.irtree_and_type.mode     = E_Mode_Offset;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(process)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-  String8 extras[] =
-  {
-    str8_lit("modules"),
-    //str8_lit("threads"),
-  };
-  Rng1U64 extras_idx_range = r1u64(lhs_type->count, lhs_type->count + ArrayCount(extras));
-  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
-  U64 extras_count = dim_1u64(extras_read_range);
-  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
-  {
-    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, extras[0]);
-  }
-  scratch_end(scratch);
-}
-
-typedef struct RD_ProcessLookupAccel RD_ProcessLookupAccel;
-struct RD_ProcessLookupAccel
-{
-  CTRL_EntityArray children;
-};
-
-E_LOOKUP_INFO_FUNCTION_DEF(process_modules)
-{
-  E_LookupInfo result = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  {
-    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
-    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
-    E_Interpretation interpret = e_interpret(bytecode);
-    CTRL_Entity *process = rd_ctrl_entity_from_eval_space(interpret.space);
-    CTRL_EntityList modules = {0};
-    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
-    {
-      if(child->kind == CTRL_EntityKind_Module)
-      {
-        ctrl_entity_list_push(scratch.arena, &modules, child);
-      }
-    }
-    RD_ProcessLookupAccel *accel = push_array(arena, RD_ProcessLookupAccel, 1);
-    accel->children = ctrl_entity_array_from_list(arena, &modules);
-    result.user_data = accel;
-    result.idxed_expr_count = modules.count;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(process_modules)
-{
-  E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    RD_ProcessLookupAccel *accel = (RD_ProcessLookupAccel *)user_data;
-    E_Value rhs_value = e_value_from_expr(rhs);
-    if(0 <= rhs_value.u64 && rhs_value.u64 < accel->children.count)
-    {
-      CTRL_Entity *entity = accel->children.v[rhs_value.u64];
-      result.irtree_and_type.root      = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key  = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
-      result.irtree_and_type.mode      = E_Mode_Offset;
-    }
-    scratch_end(scratch);
-  }
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Thread Eval Hooks
-
-E_LOOKUP_INFO_FUNCTION_DEF(thread)
-{
-  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
-  result.named_expr_count += 1;
-  return result;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(thread)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
-  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("call_stack"), 0))
-  {
-    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
-    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
-    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("call_stack"));
-    result.irtree_and_type.mode     = E_Mode_Offset;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(thread)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-  Rng1U64 extras_idx_range = r1u64(lhs_type->count, max_U64);
-  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
-  U64 extras_count = dim_1u64(extras_read_range);
-  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
-  {
-    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, str8_lit("call_stack"));
-  }
-  scratch_end(scratch);
-}
-
-////////////////////////////////
 //~ rjf: Call Stack Eval Hooks
 
 typedef struct RD_CallStackLookupAccel RD_CallStackLookupAccel;
@@ -779,9 +581,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(call_stack)
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interp = e_interpret(bytecode);
     U128 u128 = interp.value.u128;
-    CTRL_Handle handle = {0};
-    MemoryCopyStruct(&handle, &u128);
-    CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(interp.space);
     if(entity->kind == CTRL_EntityKind_Thread)
     {
       CTRL_Entity *process = ctrl_process_from_entity(entity);
@@ -826,46 +626,6 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(call_stack)
 ////////////////////////////////
 //~ rjf: Target / Environment Eval Hooks
 
-E_LOOKUP_INFO_FUNCTION_DEF(target)
-{
-  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
-  result.named_expr_count += 1;
-  return result;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(target)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
-  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("environment"), 0))
-  {
-    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
-    RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCfgCollection), e_irtree_const_u(arena, cfg->id));
-    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("environment"));
-    result.irtree_and_type.mode     = E_Mode_Offset;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(target)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-  Rng1U64 extras_idx_range = r1u64(lhs_type->count, max_U64);
-  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
-  U64 extras_count = dim_1u64(extras_read_range);
-  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
-  {
-    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
-    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, str8_lit("environment"));
-  }
-  scratch_end(scratch);
-}
-
 E_LOOKUP_INFO_FUNCTION_DEF(environment)
 {
   E_LookupInfo result = {0};
@@ -874,8 +634,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(environment)
     E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interpret = e_interpret(bytecode);
-    RD_CfgID id = interpret.value.u64;
-    RD_Cfg *target = rd_cfg_from_id(id);
+    RD_Cfg *target = rd_cfg_from_eval_space(interpret.space);
     RD_CfgList env_strings = {0};
     for(RD_Cfg *child = target->first; child != &rd_nil_cfg; child = child->next)
     {
@@ -980,6 +739,17 @@ E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
+    //- rjf: determine which entity we're looking under
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    CTRL_Entity *scoping_entity = &ctrl_entity_nil;
+    if(lhs_interp.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+    {
+      scoping_entity = rd_ctrl_entity_from_eval_space(lhs_interp.space);
+    }
+    
+    //- rjf: determine which type of child we're gathering
     E_TypeKey lhs_type_key = lhs->type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 name = rd_singular_from_code_name_plural(lhs_type->name);
@@ -992,7 +762,25 @@ E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
         break;
       }
     }
-    CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, entity_kind);
+    
+    //- rjf: gather list of all entities which fit the bill
+    CTRL_EntityList list = {0};
+    if(scoping_entity == &ctrl_entity_nil)
+    {
+      list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, entity_kind);
+    }
+    else
+    {
+      for(CTRL_Entity *child = scoping_entity->first; child != &ctrl_entity_nil; child = child->next)
+      {
+        if(child->kind == entity_kind)
+        {
+          ctrl_entity_list_push(scratch.arena, &list, child);
+        }
+      }
+    }
+    
+    //- rjf: filter the list
     CTRL_EntityList list__filtered = list;
     if(filter.size != 0)
     {
@@ -1007,6 +795,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
         }
       }
     }
+    
+    //- rjf: list -> array & fill
     CTRL_EntityArray *array = push_array(arena, CTRL_EntityArray, 1);
     *array = ctrl_entity_array_from_list(arena, &list__filtered);
     result.user_data = array;
@@ -3032,6 +2822,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
       if(process_name.size != 0)
       {
         dr_fstrs_push_new(arena, &result, &params, process_name, .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = process_color);
+        dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
         dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, "(PID: %I64u)", process->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = size*0.9f);
         dr_fstrs_push_new(arena, &result, &params, str8_lit(" / "), .color = secondary_color);
       }
@@ -6999,7 +6790,7 @@ rd_window_frame(void)
           if(can_play || !have_targets || processes.count == 0)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextPositive)))
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(can_play ? RD_ThemeColor_TextPositive : RD_ThemeColor_TextWeak)))
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Play]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -7062,7 +6853,7 @@ rd_window_frame(void)
           
           //- rjf: pause button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNeutral)))
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(can_pause ? RD_ThemeColor_TextNeutral : RD_ThemeColor_TextWeak)))
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Pause]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -7088,7 +6879,7 @@ rd_window_frame(void)
           
           //- rjf: stop button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(can_stop ? RD_ThemeColor_TextNegative : RD_ThemeColor_TextWeak)))
           {
             UI_Signal sig = {0};
             {
@@ -12659,23 +12450,30 @@ rd_frame(void)
         U64 off = 0;
         for MD_EachNode(child, schema->first)
         {
-          String8 member_name        = child->string;
-          String8 member_pretty_name = rd_display_from_code_name(member_name);
-          E_TypeKey member_type_key  = zero_struct;
-          for EachElement(schema_type_name_idx, schema_type_name_key_map)
+          if(str8_match(child->first->string, str8_lit("query"), 0))
           {
-            if(str8_match(child->first->string, schema_type_name_key_map[schema_type_name_idx].schema_type_name, 0))
-            {
-              member_type_key = schema_type_name_key_map[schema_type_name_idx].type_key;
-              break;
-            }
+            e_member_list_push_new(scratch.arena, &members_list,
+                                   .type_key    = e_type_key_cons(.kind = E_TypeKind_Set, .name = child->string),
+                                   .name        = child->string);
           }
-          e_member_list_push_new(scratch.arena, &members_list,
-                                 .type_key    = member_type_key,
-                                 .name        = member_name,
-                                 .pretty_name = member_pretty_name,
-                                 .off         = off);
-          off += e_type_byte_size_from_key(member_type_key);
+          else
+          {
+            String8 member_name        = child->string;
+            E_TypeKey member_type_key  = zero_struct;
+            for EachElement(schema_type_name_idx, schema_type_name_key_map)
+            {
+              if(str8_match(child->first->string, schema_type_name_key_map[schema_type_name_idx].schema_type_name, 0))
+              {
+                member_type_key = schema_type_name_key_map[schema_type_name_idx].type_key;
+                break;
+              }
+            }
+            e_member_list_push_new(scratch.arena, &members_list,
+                                   .type_key    = member_type_key,
+                                   .name        = member_name,
+                                   .off         = off);
+            off += e_type_byte_size_from_key(member_type_key);
+          }
         }
         E_MemberArray members = e_member_array_from_list(scratch.arena, &members_list);
         evallable_meta_types[idx] = e_type_key_cons(.name    = name,
@@ -12695,37 +12493,18 @@ rd_frame(void)
       }
       
       //- rjf: add macros for evallable config trees
-      struct
+      String8 evallable_cfg_names[] =
       {
-        String8 name;
-        E_LookupInfoFunctionType *info;
-        E_LookupAccessFunctionType *access;
-        E_LookupRangeFunctionType *range;
-        E_LookupIDFromNumFunctionType *id_from_num;
-        E_LookupNumFromIDFunctionType *num_from_id;
-      }
-      evallable_cfg_table[] =
-      {
-        { str8_lit("breakpoint") },
-        { str8_lit("watch_pin") },
-        { str8_lit("target"), .info = E_LOOKUP_INFO_FUNCTION_NAME(target), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(target), .range = E_LOOKUP_RANGE_FUNCTION_NAME(target) },
-        { str8_lit("file_path_map") },
-        { str8_lit("auto_view_rule") },
+        str8_lit("breakpoint"),
+        str8_lit("watch_pin"),
+        str8_lit("target"),
+        str8_lit("file_path_map"),
+        str8_lit("auto_view_rule"),
       };
-      for EachElement(idx, evallable_cfg_table)
+      for EachElement(idx, evallable_cfg_names)
       {
-        String8 name = evallable_cfg_table[idx].name;
+        String8 name = evallable_cfg_names[idx];
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-        if(evallable_cfg_table[idx].info != 0)
-        {
-          e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
-                                       .info        = evallable_cfg_table[idx].info,
-                                       .access      = evallable_cfg_table[idx].access,
-                                       .range       = evallable_cfg_table[idx].range,
-                                       .id_from_num = evallable_cfg_table[idx].id_from_num,
-                                       .num_from_id = evallable_cfg_table[idx].num_from_id);
-          e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
-        }
         RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
         for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
         {
@@ -12750,38 +12529,19 @@ rd_frame(void)
       }
       
       //- rjf: add macros for evallable control entities
-      struct
+      String8 evallable_ctrl_names[] =
       {
-        String8 name;
-        E_LookupInfoFunctionType *info;
-        E_LookupAccessFunctionType *access;
-        E_LookupRangeFunctionType *range;
-        E_LookupIDFromNumFunctionType *id_from_num;
-        E_LookupNumFromIDFunctionType *num_from_id;
-      }
-      evallable_ctrl_table[] =
-      {
-        { str8_lit("machine"), .info = E_LOOKUP_INFO_FUNCTION_NAME(machine), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(machine), .range = E_LOOKUP_RANGE_FUNCTION_NAME(machine) },
-        { str8_lit("process"), .info = E_LOOKUP_INFO_FUNCTION_NAME(process), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(process), .range = E_LOOKUP_RANGE_FUNCTION_NAME(process) },
-        { str8_lit("thread"), .info = E_LOOKUP_INFO_FUNCTION_NAME(thread), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(thread), .range = E_LOOKUP_RANGE_FUNCTION_NAME(thread) },
-        { str8_lit("module") },
+        str8_lit("machine"),
+        str8_lit("process"),
+        str8_lit("thread"),
+        str8_lit("module"),
       };
-      for EachElement(idx, evallable_ctrl_table)
+      for EachElement(idx, evallable_ctrl_names)
       {
-        String8 name = evallable_ctrl_table[idx].name;
+        String8 name = evallable_ctrl_names[idx];
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(name);
         CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, kind);
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-        if(evallable_ctrl_table[idx].info != 0)
-        {
-          e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
-                                       .info        = evallable_ctrl_table[idx].info,
-                                       .access      = evallable_ctrl_table[idx].access,
-                                       .range       = evallable_ctrl_table[idx].range,
-                                       .id_from_num = evallable_ctrl_table[idx].id_from_num,
-                                       .num_from_id = evallable_ctrl_table[idx].num_from_id);
-          e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
-        }
         for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
         {
           CTRL_Entity *entity = n->v;
@@ -12822,7 +12582,7 @@ rd_frame(void)
         String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfgCollection);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(watches),
@@ -12842,9 +12602,6 @@ rd_frame(void)
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("call_stack"),
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(call_stack),
                                      .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(call_stack));
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("process_modules"),
-                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(process_modules),
-                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(process_modules));
       }
       
       //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
@@ -12896,14 +12653,14 @@ rd_frame(void)
       }
       
       //- rjf: add macros for all config collections
-      for EachElement(cfg_name_idx, evallable_cfg_table)
+      for EachElement(cfg_name_idx, evallable_cfg_names)
       {
-        String8 cfg_name = evallable_cfg_table[cfg_name_idx].name;
+        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfgCollection);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg),
@@ -12914,14 +12671,14 @@ rd_frame(void)
       }
       
       //- rjf: add macros for all ctrl entity collections
-      for EachElement(ctrl_name_idx, evallable_ctrl_table)
+      for EachElement(ctrl_name_idx, evallable_ctrl_names)
       {
-        String8 kind_name = evallable_ctrl_table[ctrl_name_idx].name;
+        String8 kind_name = evallable_ctrl_names[ctrl_name_idx];
         String8 collection_name = rd_plural_from_code_name(kind_name);
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntityCollection);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
@@ -12934,7 +12691,7 @@ rd_frame(void)
         E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCmdCollection);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(commands),
