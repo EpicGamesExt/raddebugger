@@ -3398,7 +3398,12 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   DI_KeyList dbgi_keys = {0};
   if(!file_is_missing)
   {
-    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    RD_CodeViewBuildFlags flags = RD_CodeViewBuildFlag_All;
+    if(rd_regs()->file_path.size == 0)
+    {
+      flags &= ~RD_CodeViewBuildFlag_Margins;
+    }
+    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, flags, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
   }
   

@@ -561,6 +561,161 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(top_level_cfg)
 }
 
 ////////////////////////////////
+//~ rjf: Machine Eval Hooks
+
+E_LOOKUP_INFO_FUNCTION_DEF(machine)
+{
+  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
+  result.named_expr_count += 1;
+  return result;
+}
+
+E_LOOKUP_ACCESS_FUNCTION_DEF(machine)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
+  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("processes"), 0))
+  {
+    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
+    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
+    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("machine_processes"));
+    result.irtree_and_type.mode     = E_Mode_Offset;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(machine)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
+  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
+  String8 extras[] =
+  {
+    str8_lit("processes"),
+  };
+  Rng1U64 extras_idx_range = r1u64(lhs_type->count, lhs_type->count + ArrayCount(extras));
+  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
+  U64 extras_count = dim_1u64(extras_read_range);
+  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
+  {
+    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
+    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, extras[extras_idx]);
+  }
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Process Eval Hooks
+
+E_LOOKUP_INFO_FUNCTION_DEF(process)
+{
+  E_LookupInfo result = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
+  result.named_expr_count += 1;
+  return result;
+}
+
+E_LOOKUP_ACCESS_FUNCTION_DEF(process)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LookupAccess result = E_LOOKUP_ACCESS_FUNCTION_NAME(default)(arena, kind, lhs, rhs, user_data);
+  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("modules"), 0))
+  {
+    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
+    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+    result.irtree_and_type.root     = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
+    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("process_modules"));
+    result.irtree_and_type.mode     = E_Mode_Offset;
+  }
+  if(kind == E_ExprKind_MemberAccess && rhs->kind == E_ExprKind_LeafMember && str8_match(rhs->string, str8_lit("threads"), 0))
+  {
+    E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
+    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+    result.irtree_and_type.root     = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
+    result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("process_threads"));
+    result.irtree_and_type.mode     = E_Mode_Offset;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(process)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
+  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+  E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
+  String8 extras[] =
+  {
+    str8_lit("modules"),
+    //str8_lit("threads"),
+  };
+  Rng1U64 extras_idx_range = r1u64(lhs_type->count, lhs_type->count + ArrayCount(extras));
+  Rng1U64 extras_read_range = intersect_1u64(extras_idx_range, idx_range);
+  U64 extras_count = dim_1u64(extras_read_range);
+  for(U64 extras_idx = 0; extras_idx < extras_count; extras_idx += 1)
+  {
+    U64 out_idx = extras_idx_range.min - idx_range.min + extras_idx;
+    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, extras[0]);
+  }
+  scratch_end(scratch);
+}
+
+typedef struct RD_ProcessLookupAccel RD_ProcessLookupAccel;
+struct RD_ProcessLookupAccel
+{
+  CTRL_EntityArray children;
+};
+
+E_LOOKUP_INFO_FUNCTION_DEF(process_modules)
+{
+  E_LookupInfo result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation interpret = e_interpret(bytecode);
+    CTRL_Entity *process = rd_ctrl_entity_from_eval_space(interpret.space);
+    CTRL_EntityList modules = {0};
+    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+    {
+      if(child->kind == CTRL_EntityKind_Module)
+      {
+        ctrl_entity_list_push(scratch.arena, &modules, child);
+      }
+    }
+    RD_ProcessLookupAccel *accel = push_array(arena, RD_ProcessLookupAccel, 1);
+    accel->children = ctrl_entity_array_from_list(arena, &modules);
+    result.user_data = accel;
+    result.idxed_expr_count = modules.count;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+E_LOOKUP_ACCESS_FUNCTION_DEF(process_modules)
+{
+  E_LookupAccess result = {{&e_irnode_nil}};
+  if(kind == E_ExprKind_ArrayIndex)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_ProcessLookupAccel *accel = (RD_ProcessLookupAccel *)user_data;
+    E_Value rhs_value = e_value_from_expr(rhs);
+    if(0 <= rhs_value.u64 && rhs_value.u64 < accel->children.count)
+    {
+      CTRL_Entity *entity = accel->children.v[rhs_value.u64];
+      result.irtree_and_type.root      = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity), e_irtree_const_u(arena, 0));
+      result.irtree_and_type.type_key  = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
+      result.irtree_and_type.mode      = E_Mode_Offset;
+    }
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Thread Eval Hooks
 
 E_LOOKUP_INFO_FUNCTION_DEF(thread)
@@ -2854,6 +3009,16 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
   }
   
+  //- rjf: push frozen icon, if frozen
+  if((entity->kind == CTRL_EntityKind_Machine ||
+      entity->kind == CTRL_EntityKind_Process ||
+      entity->kind == CTRL_EntityKind_Thread) &&
+     ctrl_entity_tree_is_frozen(entity))
+  {
+    dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Locked], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative));
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+  }
+  
   //- rjf: push containing process prefix
   if(entity->kind == CTRL_EntityKind_Thread ||
      entity->kind == CTRL_EntityKind_Module)
@@ -2867,6 +3032,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
       if(process_name.size != 0)
       {
         dr_fstrs_push_new(arena, &result, &params, process_name, .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = process_color);
+        dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, "(PID: %I64u)", process->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = size*0.9f);
         dr_fstrs_push_new(arena, &result, &params, str8_lit(" / "), .color = secondary_color);
       }
     }
@@ -2877,6 +3043,13 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
                     .font         = rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main),
                     .raster_flags = rd_raster_flags_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main),
                     .color        = color);
+  
+  //- rjf: push PID
+  if(entity->kind == CTRL_EntityKind_Process)
+  {
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+    dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, " (PID: %I64u)", entity->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = size*0.85f);
+  }
   
   //- rjf: threads get callstack extras
   if(entity->kind == CTRL_EntityKind_Thread && include_extras)
@@ -12588,8 +12761,8 @@ rd_frame(void)
       }
       evallable_ctrl_table[] =
       {
-        { str8_lit("machine") },
-        { str8_lit("process") },
+        { str8_lit("machine"), .info = E_LOOKUP_INFO_FUNCTION_NAME(machine), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(machine), .range = E_LOOKUP_RANGE_FUNCTION_NAME(machine) },
+        { str8_lit("process"), .info = E_LOOKUP_INFO_FUNCTION_NAME(process), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(process), .range = E_LOOKUP_RANGE_FUNCTION_NAME(process) },
         { str8_lit("thread"), .info = E_LOOKUP_INFO_FUNCTION_NAME(thread), .access = E_LOOKUP_ACCESS_FUNCTION_NAME(thread), .range = E_LOOKUP_RANGE_FUNCTION_NAME(thread) },
         { str8_lit("module") },
       };
@@ -12669,6 +12842,9 @@ rd_frame(void)
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("call_stack"),
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(call_stack),
                                      .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(call_stack));
+        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("process_modules"),
+                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(process_modules),
+                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(process_modules));
       }
       
       //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
@@ -14127,7 +14303,9 @@ X(call_stack)\
 X(breakpoints)\
 X(watch_pins)\
 X(targets)\
-X(scheduler)\
+X(threads)\
+X(processes)\
+X(machines)\
 X(modules)\
 Y(output, text, "query:output")\
 Y(disasm, disasm, "")\
@@ -14222,9 +14400,11 @@ Z(getting_started)
                 RD_Cfg *root_1_0 = rd_cfg_new(root_1, str8_lit("0.50"));
                 RD_Cfg *root_1_1 = rd_cfg_new(root_1, str8_lit("0.50"));
                 rd_cfg_insert_child(root_1_0, root_1_0->last, targets);
-                rd_cfg_insert_child(root_1_1, root_1_1->last, scheduler);
+                rd_cfg_insert_child(root_1_1, root_1_1->last, threads);
+                rd_cfg_insert_child(root_1_1, root_1_1->last, processes);
+                rd_cfg_insert_child(root_1_1, root_1_1->last, machines);
                 rd_cfg_new(targets, str8_lit("selected"));
-                rd_cfg_new(scheduler, str8_lit("selected"));
+                rd_cfg_new(threads, str8_lit("selected"));
                 
                 // rjf: root 0_0 split
                 RD_Cfg *root_0_0_0 = rd_cfg_new(root_0_0, str8_lit("0.25"));
@@ -14294,11 +14474,11 @@ Z(getting_started)
                 rd_cfg_insert_child(root_0_0, root_0_0->last, watches);
                 rd_cfg_insert_child(root_0_0, root_0_0->last, types);
                 rd_cfg_new(watches, str8_lit("selected"));
-                rd_cfg_insert_child(root_0_1, root_0_1->last, scheduler);
+                rd_cfg_insert_child(root_0_1, root_0_1->last, threads);
                 rd_cfg_insert_child(root_0_1, root_0_1->last, targets);
                 rd_cfg_insert_child(root_0_1, root_0_1->last, breakpoints);
                 rd_cfg_insert_child(root_0_1, root_0_1->last, watch_pins);
-                rd_cfg_new(scheduler, str8_lit("selected"));
+                rd_cfg_new(threads, str8_lit("selected"));
                 rd_cfg_insert_child(root_0_2, root_0_2->last, disasm);
                 rd_cfg_insert_child(root_0_2, root_0_2->last, output);
                 rd_cfg_new(disasm, str8_lit("selected"));

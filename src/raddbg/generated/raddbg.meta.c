@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[283] =
+RD_VocabInfo rd_vocab_info_table[285] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -53,7 +53,9 @@ RD_VocabInfo rd_vocab_info_table[283] =
 {str8_lit_comp("vtx_size"), str8_lit_comp("vtx_sizes"), str8_lit_comp("Vertex Buffer Size"), str8_lit_comp("Vertex Buffer Sizes"), RD_IconKind_Null},
 {str8_lit_comp("label"), str8_lit_comp("labels"), str8_lit_comp("Label"), str8_lit_comp("Labels"), RD_IconKind_Null},
 {str8_lit_comp("thread"), str8_lit_comp("threads"), str8_lit_comp("Thread"), str8_lit_comp("Threads"), RD_IconKind_Thread},
-{str8_lit_comp("process"), str8_lit_comp("processes"), str8_lit_comp("Process"), str8_lit_comp("Processes"), RD_IconKind_Threads},
+{str8_lit_comp("threads"), str8_lit_comp(""), str8_lit_comp("Threads"), str8_lit_comp(""), RD_IconKind_Threads},
+{str8_lit_comp("process"), str8_lit_comp("processes"), str8_lit_comp("Process"), str8_lit_comp("Processes"), RD_IconKind_Scheduler},
+{str8_lit_comp("processes"), str8_lit_comp(""), str8_lit_comp("Processes"), str8_lit_comp(""), RD_IconKind_Scheduler},
 {str8_lit_comp("machine"), str8_lit_comp("machines"), str8_lit_comp("Machine"), str8_lit_comp("Machines"), RD_IconKind_Machine},
 {str8_lit_comp("module"), str8_lit_comp("modules"), str8_lit_comp("Module"), str8_lit_comp("Modules"), RD_IconKind_Module},
 {str8_lit_comp("getting_started"), str8_lit_comp(""), str8_lit_comp("Getting Started"), str8_lit_comp(""), RD_IconKind_QuestionMark},

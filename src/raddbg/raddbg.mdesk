@@ -65,7 +65,9 @@ RD_VocabTable:
   {vtx_size             _                           "Vertex Buffer Size"        _                     Null                                           }
   {label                _                           "Label"                     _                     Null                                           }
   {thread               _                           "Thread"                    _                     Thread                                         }
-  {process              processes                   "Process"                   "Processes"           Threads                                        }
+  {threads              ""                          "Threads"                   ""                    Threads                                        }
+  {process              processes                   "Process"                   "Processes"           Scheduler                                      }
+  {processes            ""                          "Processes"                 ""                    Scheduler                                      }
   {machine              _                           "Machine"                   _                     Machine                                        }
   {module               _                           "Module"                    _                     Module                                         }
   {getting_started      ""                          "Getting Started"           ""                    QuestionMark                                   }
