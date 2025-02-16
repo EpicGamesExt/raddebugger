@@ -2926,9 +2926,24 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   // rjf: build cell line edit
                   else
                   {
+                    // rjf: compute visual params
+                    B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
+                    String8 ghost_text = {0};
+                    if(cell->kind == RD_WatchCellKind_Expr && cell_info.string.size == 0)
+                    {
+                      ghost_text = str8_lit("Expression");
+                      is_non_code = !cell_selected || !ewv->text_editing;
+                    }
+                    else if(cell->kind == RD_WatchCellKind_Tag && cell_info.string.size == 0 && global_row_idx == 0)
+                    {
+                      ghost_text = str8_lit("View Rules");
+                      is_non_code = !cell_selected || !ewv->text_editing;
+                    }
+                    
+                    // rjf: build
                     RD_LineEditParams line_edit_params = {0};
                     {
-                      line_edit_params.flags                = (RD_LineEditFlag_CodeContents|
+                      line_edit_params.flags                = (RD_LineEditFlag_CodeContents*!is_non_code|
                                                                RD_LineEditFlag_NoBackground*!(cell_info.flags & RD_WatchCellFlag_Button)|
                                                                RD_LineEditFlag_Button*!!(cell_info.flags & RD_WatchCellFlag_Button)|
                                                                RD_LineEditFlag_SingleClickActivate*!!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick)|
@@ -2947,23 +2962,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       line_edit_params.fstrs                = cell_info.fstrs;
                     }
                     UI_TextAlignment(cell->px != 0 ? UI_TextAlign_Center : UI_TextAlign_Left)
-                    {
-                      B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
-                      String8 ghost_text = {0};
-                      if(cell->kind == RD_WatchCellKind_Expr && cell_info.string.size == 0)
-                      {
-                        ghost_text = str8_lit("Expression");
-                        is_non_code = !cell_selected || !ewv->text_editing;
-                      }
-                      else if(cell->kind == RD_WatchCellKind_Tag && cell_info.string.size == 0 && global_row_idx == 0)
-                      {
-                        ghost_text = str8_lit("View Rules");
-                        is_non_code = !cell_selected || !ewv->text_editing;
-                      }
                       RD_Font(is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
-                      {
-                        sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
-                      }
+                    {
+                      sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
                     }
 #if 0 // TODO(rjf): @cfg
                     if(ui_is_focus_active() &&
