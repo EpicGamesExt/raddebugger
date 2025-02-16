@@ -166,11 +166,15 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
     }
     else if(lhs_type_kind == E_TypeKind_Struct ||
             lhs_type_kind == E_TypeKind_Class ||
-            lhs_type_kind == E_TypeKind_Union ||
-            lhs_type_kind == E_TypeKind_Enum)
+            lhs_type_kind == E_TypeKind_Union)
     {
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      lookup_info.named_expr_count = lhs_type->count;
+      E_MemberArray data_members = e_type_data_members_from_key__cached(lhs_type_key);
+      lookup_info.named_expr_count = data_members.count;
+    }
+    else if(lhs_type_kind == E_TypeKind_Enum)
+    {
+      E_Type *direct_type = e_type_from_key__cached(lhs_type_key);
+      lookup_info.named_expr_count = direct_type->count;
     }
     else if(lhs_type_kind == E_TypeKind_Array)
     {
@@ -570,12 +574,10 @@ E_IRGEN_FUNCTION_DEF(array)
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   if(e_type_kind_is_pointer_or_ref(type_kind))
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_Eval count_eval = e_eval_from_expr(scratch.arena, tag->first->next);
+    E_Value count_value = e_value_from_expr(tag->first->next);
     E_TypeKey element_type_key = e_type_ptee_from_key(type_key);
-    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, element_type_key, count_eval.value.u64, 0);
+    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, element_type_key, count_value.u64, 0);
     irtree.type_key = ptr_type_key;
-    scratch_end(scratch);
   }
   return irtree;
 }
@@ -617,9 +619,8 @@ E_IRGEN_FUNCTION_DEF(slice)
     if(count_member != 0)
     {
       E_Expr *count_member_expr = e_expr_irext_member_access(arena, expr, &irtree, count_member->name);
-      E_Eval count_member_eval = e_eval_from_expr(scratch.arena, count_member_expr);
-      E_Eval count_member_value_eval = e_value_eval_from_eval(count_member_eval);
-      count = count_member_value_eval.value.u64;
+      E_Value count_member_value = e_value_from_expr(count_member_expr);
+      count = count_member_value.u64;
     }
     
     // rjf: generate new struct slice type
@@ -760,14 +761,14 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   {
     E_TokenArray tokens = e_token_array_from_text(scratch.arena, params->type_pattern);
     E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, params->type_pattern, &tokens);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.last_expr);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.last);
     type_key = irtree.type_key;
   }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
   node->type_key = type_key;
   U8 pattern_split = '?';
   node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, 0);
-  node->tag_expr = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string));
+  node->tag_exprs = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).exprs;
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
@@ -800,7 +801,10 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
       {
         if(e_type_key_match(n->type_key, type_key))
         {
-          e_expr_list_push(arena, &exprs, n->tag_expr);
+          for(E_Expr *e = n->tag_exprs.first; e != &e_expr_nil; e = e->next)
+          {
+            e_expr_list_push(arena, &exprs, e);
+          }
         }
       }
     }
@@ -829,7 +833,10 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
         }
         if(fits_this_type_string)
         {
-          e_expr_list_push(arena, &exprs, auto_hook_node->tag_expr);
+          for(E_Expr *e = auto_hook_node->tag_exprs.first; e != &e_expr_nil; e = e->next)
+          {
+            e_expr_list_push(arena, &exprs, e);
+          }
         }
       }
     }

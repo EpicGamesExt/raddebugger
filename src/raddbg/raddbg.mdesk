@@ -208,25 +208,19 @@ RD_VocabTable:
     ```@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}```,
   }
   
-  //- rjf: machines
+  //- rjf: control entities
   {
     machine,
     ```x:{'label':code_string, 'frozen':bool, 'processes':query}```,
   }
-  
-  //- rjf: processes
   {
     process,
     ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'modules':query, 'threads':query}```,
   }
-  
-  //- rjf: modules
   {
     module,
     ```x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
   }
-  
-  //- rjf: threads
   {
     thread,
     ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'call_stack':query}```,

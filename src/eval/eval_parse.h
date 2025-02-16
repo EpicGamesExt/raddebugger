@@ -68,6 +68,13 @@ struct E_Expr
   String8 bytecode;
 };
 
+typedef struct E_ExprChain E_ExprChain;
+struct E_ExprChain
+{
+  E_Expr *first;
+  E_Expr *last;
+};
+
 typedef struct E_ExprNode E_ExprNode;
 struct E_ExprNode
 {
@@ -153,8 +160,7 @@ typedef struct E_Parse E_Parse;
 struct E_Parse
 {
   E_Token *last_token;
-  E_Expr *first_expr;
-  E_Expr *last_expr;
+  E_ExprChain exprs;
   E_MsgList msgs;
 };
 
@@ -289,7 +295,7 @@ internal void e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String
 internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence, U64 max_chain_count);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
-internal E_Expr *e_parse_expr_from_text(Arena *arena, String8 text);
+internal E_Parse e_parse_expr_from_text(Arena *arena, String8 text);
 internal E_Parse e_parse_expr_from_text__cached(String8 text);
 
 #endif // EVAL_PARSE_H

@@ -1036,14 +1036,6 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 //- rjf: writing values back to child processes
 internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
 
-//- rjf: eval / view rule params tree info extraction
-internal E_Value rd_value_from_params_key(MD_Node *params, String8 key);
-internal Rng1U64 rd_range_from_eval_params(E_Eval eval, MD_Node *params);
-internal TXT_LangKind rd_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
-internal Arch rd_arch_from_eval_params(E_Eval eval, MD_Node *params);
-internal Vec2S32 rd_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
-internal R_Tex2DFormat rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
-
 //- rjf: eval <-> file path
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);

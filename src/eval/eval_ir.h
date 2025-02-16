@@ -189,7 +189,7 @@ struct E_AutoHookNode
   E_AutoHookNode *pattern_order_next;
   E_TypeKey type_key;
   String8List type_pattern_parts;
-  E_Expr *tag_expr;
+  E_ExprChain tag_exprs;
 };
 
 typedef struct E_AutoHookSlot E_AutoHookSlot;

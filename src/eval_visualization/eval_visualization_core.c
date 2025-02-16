@@ -485,7 +485,7 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
     String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, key));
     E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
     E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, &tag_expr_tokens);
-    for(E_Expr *tag = tag_expr_parse.first_expr, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
+    for(E_Expr *tag = tag_expr_parse.exprs.first, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
     {
       next = tag->next;
       e_expr_push_tag(expr, tag);
@@ -508,7 +508,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
     //- rjf: generate root expression
     EV_Key root_key = ev_key_root();
     EV_Key root_row_key = ev_key_make(ev_hash_from_key(root_key), 1);
-    E_Expr *root_expr = e_expr_copy(arena, eval.expr);
+    E_Expr *root_expr = e_expr_copy(arena, eval.exprs.last);
     ev_keyed_expr_push_tags(arena, view, &ev_nil_block, root_row_key, root_expr);
     
     //- rjf: generate root block

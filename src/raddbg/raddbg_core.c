@@ -102,7 +102,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(watches)
     if(cfg_idx < cfgs->count)
     {
       String8 expr_string = rd_cfg_child_from_string(cfgs->v[cfg_idx], str8_lit("expression"))->first->string;
-      exprs[idx] = e_parse_expr_from_text(arena, expr_string);
+      exprs[idx] = e_parse_expr_from_text(arena, expr_string).exprs.first;
       exprs_strings[idx] = push_str8_copy(arena, expr_string);
     }
   }
@@ -184,7 +184,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(locals)
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
     String8 expr_string = accel->v[read_range.min + idx];
-    exprs[idx] = e_parse_expr_from_text(arena, expr_string);
+    exprs[idx] = e_parse_expr_from_text(arena, expr_string).exprs.last;
     exprs_strings[idx] = push_str8_copy(arena, expr_string);
   }
 }
@@ -236,7 +236,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(registers)
     String8 register_name = accel->v[read_range.min + idx];
     String8 register_expr = push_str8f(arena, "reg:%S", register_name);
     exprs_strings[idx] = register_name;
-    exprs[idx] = e_parse_expr_from_text(arena, register_expr);
+    exprs[idx] = e_parse_expr_from_text(arena, register_expr).exprs.last;
   }
 }
 
@@ -340,7 +340,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(cfg)
   {
     Rng1U64 read_range = intersect_1u64(cmds_idx_range, idx_range);
     U64 read_count = dim_1u64(read_range);
-    E_Expr *commands = e_parse_expr_from_text(arena, str8_lit("query:commands"));
+    E_Expr *commands = e_parse_expr_from_text(arena, str8_lit("query:commands")).exprs.last;
     E_IRTreeAndType commands_irtree = e_irtree_and_type_from_expr(arena, commands);
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
@@ -425,7 +425,6 @@ E_LOOKUP_INFO_FUNCTION_DEF(call_stack)
     E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interp = e_interpret(bytecode);
-    U128 u128 = interp.value.u128;
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(interp.space);
     if(entity->kind == CTRL_EntityKind_Thread)
     {
@@ -3371,7 +3370,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
     if((E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic) ||
        type_kind == E_TypeKind_Enum)
     {
-      E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string);
+      E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
       E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
       E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
       commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
@@ -3462,113 +3461,6 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
   return result;
 }
 
-//- rjf: view rule config tree info extraction
-
-internal E_Value
-rd_value_from_params_key(MD_Node *params, String8 key)
-{
-  Temp scratch = scratch_begin(0, 0);
-  MD_Node *key_node = md_child_from_string(params, key, 0);
-  String8 expr = md_string_from_children(scratch.arena, key_node);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  scratch_end(scratch);
-  return value_eval.value;
-}
-
-internal Rng1U64
-rd_range_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Temp scratch = scratch_begin(0, 0);
-  U64 size = rd_value_from_params_key(params, str8_lit("size")).u64;
-  E_TypeKey type_key = e_type_unwrap(eval.type_key);
-  E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.type_key));
-  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
-                                                               direct_type_kind == E_TypeKind_Union ||
-                                                               direct_type_kind == E_TypeKind_Class ||
-                                                               direct_type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.type_key)));
-  }
-  if(size == 0 && eval.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
-                                                 type_kind == E_TypeKind_Union ||
-                                                 type_kind == E_TypeKind_Class ||
-                                                 type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_unwrap(eval.type_key));
-  }
-  if(size == 0)
-  {
-    size = KB(16);
-  }
-  Rng1U64 result = {0};
-  result.min = rd_base_offset_from_eval(eval);
-  result.max = result.min + size;
-  scratch_end(scratch);
-  return result;
-}
-
-internal TXT_LangKind
-rd_lang_kind_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  TXT_LangKind lang_kind = TXT_LangKind_Null;
-  if(eval.expr->kind == E_ExprKind_LeafFilePath)
-  {
-    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.expr->string));
-  }
-  else
-  {
-    MD_Node *lang_node = md_child_from_string(params, str8_lit("lang"), 0);
-    String8 lang_kind_string = lang_node->first->string;
-    lang_kind = txt_lang_kind_from_extension(lang_kind_string);
-  }
-  return lang_kind;
-}
-
-internal Arch
-rd_arch_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Arch arch = Arch_Null;
-  MD_Node *arch_node = md_child_from_string(params, str8_lit("arch"), 0);
-  String8 arch_kind_string = arch_node->first->string;
-  if(str8_match(arch_kind_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
-  {
-    arch = Arch_x64;
-  }
-  return arch;
-}
-
-internal Vec2S32
-rd_dim2s32_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Vec2S32 dim = v2s32(1, 1);
-  {
-    dim.x = rd_value_from_params_key(params, str8_lit("w")).s32;
-    dim.y = rd_value_from_params_key(params, str8_lit("h")).s32;
-  }
-  return dim;
-}
-
-internal R_Tex2DFormat
-rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  R_Tex2DFormat result = R_Tex2DFormat_RGBA8;
-  {
-    MD_Node *fmt_node = md_child_from_string(params, str8_lit("fmt"), 0);
-    for EachNonZeroEnumVal(R_Tex2DFormat, fmt)
-    {
-      if(str8_match(r_tex2d_format_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
-      {
-        result = fmt;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
 //- rjf: eval <-> file path
 
 internal String8
@@ -3577,7 +3469,7 @@ rd_file_path_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string);
+    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
     if(expr->kind == E_ExprKind_LeafFilePath)
     {
       result = raw_from_escaped_str8(arena, expr->string);
@@ -3605,7 +3497,7 @@ rd_query_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string);
+    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
     if(expr->kind == E_ExprKind_LeafIdent &&
        str8_match(expr->qualifier, str8_lit("query"), 0))
     {
@@ -3791,7 +3683,7 @@ rd_view_ui(Rng2F32 rect)
       {
         ui_labelf("use");
         UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
-        ui_labelf("to open the lister for commands and options");
+        ui_labelf("to search for commands and options");
       }
     }
     scratch_end(scratch);
@@ -4041,9 +3933,9 @@ internal TXT_LangKind
 rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
   TXT_LangKind lang_kind = TXT_LangKind_Null;
-  if(eval.expr->kind == E_ExprKind_LeafFilePath)
+  if(eval.exprs.last->kind == E_ExprKind_LeafFilePath)
   {
-    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.expr->string));
+    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.exprs.last->string));
   }
   else for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
   {
@@ -9100,9 +8992,9 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   }
   
   //- rjf: force no_string, if we are looking at padding members
-  if(eval.expr->kind == E_ExprKind_MemberAccess)
+  if(eval.exprs.last->kind == E_ExprKind_MemberAccess)
   {
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr->first);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last->first);
     E_TypeKey struct_type = irtree.type_key;
     for(B32 done = 0; !done;)
     {
@@ -9118,8 +9010,12 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       {
         struct_type = e_type_direct_from_key(struct_type);
       }
+      else
+      {
+        break;
+      }
     }
-    E_Member member = e_type_member_from_key_name__cached(struct_type, eval.expr->last->string);
+    E_Member member = e_type_member_from_key_name__cached(struct_type, eval.exprs.last->last->string);
     if(member.kind == E_MemberKind_Padding)
     {
       no_string = 1;
@@ -9288,7 +9184,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           {
             if(type->count == 1)
             {
-              E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
+              E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.exprs.last);
               E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
               space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, deref_eval, out);
             }
@@ -9305,8 +9201,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
               
               // rjf: contents
               {
-                E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr);
-                E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.expr, &irtree);
+                E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
+                E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
                 E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
                 E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
                 E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, str8_zero());
@@ -9316,7 +9212,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
                 {
                   E_Expr *expr = &e_expr_nil;
                   String8 expr_string = {0};
-                  lookup_rule->range(scratch.arena, eval.expr, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+                  lookup_rule->range(scratch.arena, eval.exprs.last, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
                   if(expr != &e_expr_nil)
                   {
                     if(!is_first)
@@ -9444,8 +9340,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         // rjf: build contents
         if(depth < 4)
         {
-          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr);
-          E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.expr, &irtree);
+          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
+          E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
           E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
           E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
           E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, str8_zero());
@@ -9455,7 +9351,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           {
             E_Expr *expr = &e_expr_nil;
             String8 expr_string = {0};
-            lookup_rule->range(scratch.arena, eval.expr, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+            lookup_rule->range(scratch.arena, eval.exprs.last, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
             if(expr != &e_expr_nil)
             {
               if(!is_first)
@@ -9502,7 +9398,7 @@ rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix,
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  rd_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval.expr, eval, &strs);
+  rd_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval.exprs.last, eval, &strs);
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
@@ -12418,7 +12314,7 @@ rd_frame(void)
       
       //- rjf: add macro for 'call_stack' -> 'current_thread.callstack'
       {
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("current_thread.call_stack"));
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("current_thread.call_stack")).exprs.first;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
       }
       
@@ -12568,7 +12464,7 @@ rd_frame(void)
         E_Parse parse = e_parse_expr_from_text__cached(expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
-          for(E_Expr *expr = parse.first_expr; expr != &e_expr_nil; expr = expr->next)
+          for(E_Expr *expr = parse.exprs.first; expr != &e_expr_nil; expr = expr->next)
           {
             e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, expr);
           }
@@ -14561,6 +14457,7 @@ Z(getting_started)
             
             // rjf: choose panel for source code
             RD_PanelNode *src_code_dst_panel = &rd_nil_panel_node;
+            if(file_path.size != 0)
             {
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = panel_w_this_src_code; }
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = panel_w_any_src_code; }
@@ -14570,6 +14467,7 @@ Z(getting_started)
             
             // rjf: choose panel for disassembly
             RD_PanelNode *disasm_dst_panel = &rd_nil_panel_node;
+            if(vaddr != 0)
             {
               if(disasm_dst_panel == &rd_nil_panel_node) { disasm_dst_panel = panel_w_disasm; }
               if(disasm_dst_panel == &rd_nil_panel_node) { disasm_dst_panel = biggest_empty_panel; }
@@ -14594,7 +14492,7 @@ Z(getting_started)
             // rjf: if disasm is not preferred, and we have no disassembly view
             // open at all, cancel disasm, so that it doesn't open if the user
             // doesn't want it.
-            if(!rd_regs()->prefer_disasm && panel_w_disasm == &rd_nil_panel_node)
+            if(!rd_regs()->prefer_disasm && panel_w_disasm == &rd_nil_panel_node && file_path.size != 0)
             {
               disasm_dst_panel = &rd_nil_panel_node;
             }
@@ -14602,7 +14500,8 @@ Z(getting_started)
             // rjf: if disasm is not preferred, and we have no disassembly view
             // *selected* at all, cancel disasm, so that it doesn't open if the user
             // doesn't want it.
-            if(!rd_regs()->prefer_disasm && view_w_disasm != &rd_nil_cfg && rd_cfg_child_from_string(view_w_disasm, str8_lit("selected")) == &rd_nil_cfg)
+            if(!rd_regs()->prefer_disasm && view_w_disasm != &rd_nil_cfg && rd_cfg_child_from_string(view_w_disasm, str8_lit("selected")) == &rd_nil_cfg &&
+               file_path.size != 0)
             {
               disasm_dst_panel = &rd_nil_panel_node;
             }
@@ -15773,7 +15672,7 @@ Z(getting_started)
             ExprWalkTask *next;
             E_Expr *expr;
           };
-          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd);
+          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd).exprs.last;
           ExprWalkTask start_task = {0, expr};
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)

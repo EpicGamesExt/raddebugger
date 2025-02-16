@@ -1108,7 +1108,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: for 'add-new' rows in meta-cfg evaluation spaces, only do expr
-      else if(info.eval.space.kind == E_SpaceKind_Null && info.group_cfg_parent != &rd_nil_cfg)
+      else if(info.eval.exprs.last == &e_expr_nil && info.group_cfg_name.size != 0)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
@@ -1269,7 +1269,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       E_Expr *root_expr = row->expr;
       if(wrap_string.size != 0)
       {
-        E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string);
+        E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string).exprs.last;
         root_expr = wrap_expr;
         typedef struct Task Task;
         struct Task
@@ -1308,8 +1308,23 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       
       //- rjf: evaluate wrapped expression
       result.eval     = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
-      result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
+      
+      //- rjf: determine default radix
+      U32 default_radix = 10;
+      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
+         rd_ctrl_entity_from_eval_space(result.eval.space)->kind == CTRL_EntityKind_Module)
+      {
+        default_radix = 16;
+      }
+      
+      //- rjf: generate strings/flags based on that expression & fill
+      result.string   = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
+      E_Type *type = e_type_from_key__cached(result.eval.type_key);
+      if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
+      {
+        result.flags |= RD_WatchCellFlag_IsNonCode;
+      }
       
       scratch_end(scratch);
     }break;
@@ -2061,22 +2076,22 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 if(cfg != &rd_nil_cfg)
                 {
                   rd_cfg_list_push(scratch.arena, &cfgs_to_remove, cfg);
-                  U64 deleted_num = ev_num_from_key(&block_ranges, row->key);
+                  U64 deleted_num = row->block->lookup_rule->num_from_id(row->key.child_id, row->block->lookup_rule_user_data);
                   if(deleted_num != 0)
                   {
                     EV_Key parent_key = row->block->parent->key;
                     EV_Key key = row->block->key;
-                    EV_Key fallback_key_prev = ev_key_from_num(&block_ranges, deleted_num-1);
-                    EV_Key fallback_key_next = ev_key_from_num(&block_ranges, deleted_num+1);
-                    if(fallback_key_next.child_id != 0)
+                    U64 fallback_id_prev = row->block->lookup_rule->id_from_num(deleted_num-1, row->block->lookup_rule_user_data);
+                    U64 fallback_id_next = row->block->lookup_rule->id_from_num(deleted_num+1, row->block->lookup_rule_user_data);
+                    if(fallback_id_next != 0)
                     {
                       parent_key = row->block->key;
-                      key = fallback_key_next;
+                      key = ev_key_make(row->key.parent_hash, fallback_id_next);
                     }
-                    else if(fallback_key_prev.child_id != 0)
+                    else if(fallback_id_prev != 0)
                     {
                       parent_key = row->block->key;
-                      key = fallback_key_prev;
+                      key = ev_key_make(row->key.parent_hash, fallback_id_prev);
                     }
                     RD_WatchPt new_pt = {parent_key, key, pt.cell_id};
                     next_cursor_pt = new_pt;
@@ -2694,16 +2709,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               {
                 row_flags |= UI_BoxFlag_DrawSideTop;
               }
-#if 0 // TODO(rjf): @cfg
-              switch(row_kind)
-              {
-                default:{}break;
-                case RD_WatchViewRowKind_Normal:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
-                case RD_WatchViewRowKind_Header:{row_flags |= UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DisableFocusOverlay;}break;
-                case RD_WatchViewRowKind_Canvas:{row_flags |= UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder;}break;
-                case RD_WatchViewRowKind_PrettyEntityControls:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
-              }
-#endif
             }
             ProfEnd();
             
@@ -2871,7 +2876,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       RD_Cfg *root = rd_immediate_cfg_from_keyf("view_%I64x_%I64x", rd_regs()->view, row_hash);
                       RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, cell_info.view_ui_rule->name);
                       RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-                      rd_cfg_new(expr, e_string_from_expr(scratch.arena, cell_info.eval.expr));
+                      rd_cfg_new(expr, e_string_from_expr(scratch.arena, cell_info.eval.exprs.last));
                       rd_cfg_new(view, str8_lit("selected"));
                       RD_RegsScope(.view = view->id)
                         UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
@@ -2945,10 +2950,15 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
                       String8 ghost_text = {0};
-                      if(cell->kind == RD_WatchCellKind_Tag && cell_info.string.size == 0 && global_row_idx == 0)
+                      if(cell->kind == RD_WatchCellKind_Expr && cell_info.string.size == 0)
+                      {
+                        ghost_text = str8_lit("Expression");
+                        is_non_code = !cell_selected || !ewv->text_editing;
+                      }
+                      else if(cell->kind == RD_WatchCellKind_Tag && cell_info.string.size == 0 && global_row_idx == 0)
                       {
                         ghost_text = str8_lit("View Rules");
-                        is_non_code = !ui_is_focus_active();
+                        is_non_code = !cell_selected || !ewv->text_editing;
                       }
                       RD_Font(is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                       {
@@ -3111,7 +3121,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
                   E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
                   E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
-                  E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.last_expr);
+                  E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.last);
                   E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
                   String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
                   UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
@@ -3133,7 +3143,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       E_Expr *expr;
                       S64 depth;
                     };
-                    Task start_task = {0, 0, parse.last_expr};
+                    Task start_task = {0, 0, parse.exprs.last};
                     Task *first_task = &start_task;
                     Task *last_task = first_task;
                     for(Task *t = first_task; t != 0; t = t->next)
@@ -3562,7 +3572,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   //
   B32 auto_selected = 0;
   E_Space auto_space = {0};
-  if(eval.expr == &e_expr_nil)
+  if(eval.exprs.last == &e_expr_nil)
   {
     if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
     {
