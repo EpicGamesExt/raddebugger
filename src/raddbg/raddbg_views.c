@@ -1108,7 +1108,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: for 'add-new' rows in meta-cfg evaluation spaces, only do expr
-      else if(info.eval.exprs.last == &e_expr_nil && info.group_cfg_name.size != 0)
+      else if(info.eval.exprs.last == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
@@ -1554,7 +1554,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
         {
           ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
         }
-        block_tree   = ev_block_tree_from_eval(scratch.arena, eval_view, filter, eval);
+        block_tree   = ev_block_tree_from_exprs(scratch.arena, eval_view, filter, eval.exprs);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
         if(implicit_root && block_ranges.first != 0)
         {
@@ -3438,7 +3438,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
   {
-    U64 file_timestamp = fs_timestamp_from_path(rd_regs()->file_path);
+    U64 file_timestamp = fs_properties_from_path(rd_regs()->file_path).modified;
     if(file_timestamp != 0)
     {
       for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)

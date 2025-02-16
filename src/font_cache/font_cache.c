@@ -555,8 +555,8 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
       hash2style_node = push_array(f_state->raster_arena, FNT_Hash2StyleRasterCacheNode, 1);
       DLLPushBack_NP(slot->first, slot->last, hash2style_node, hash_next, hash_prev);
       hash2style_node->style_hash = style_hash;
-      hash2style_node->ascent = metrics.ascent;
-      hash2style_node->descent= metrics.descent;
+      hash2style_node->ascent   = metrics.ascent;
+      hash2style_node->descent  = metrics.descent;
       hash2style_node->utf8_class1_direct_map = push_array_no_zero(f_state->raster_arena, F_RasterCacheInfo, 256);
       hash2style_node->hash2info_slots_count = 1024;
       hash2style_node->hash2info_slots = push_array(f_state->raster_arena, FNT_Hash2InfoRasterCacheSlot, hash2style_node->hash2info_slots_count);

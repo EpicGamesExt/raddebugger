@@ -337,7 +337,7 @@ internal void ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *blo
 ////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval);
+internal EV_BlockTree ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChain exprs);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////

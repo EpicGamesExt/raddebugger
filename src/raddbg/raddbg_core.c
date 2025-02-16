@@ -241,7 +241,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(registers)
 }
 
 ////////////////////////////////
-//~ rjf: Top-Level Config Eval Hooks
+//~ rjf: Config Eval Hooks
 
 typedef struct RD_CfgLookupAccel RD_CfgLookupAccel;
 struct RD_CfgLookupAccel
@@ -2057,7 +2057,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     //
     DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), rgba, size};
     B32 running_is_secondary = 0;
-#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = secondary_color; params.size = size*0.8f;}
+#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = secondary_color; params.size = size*0.95f;}
     
     //- rjf: push icon
     if(icon_kind != RD_IconKind_Null)
@@ -6941,7 +6941,7 @@ rd_window_frame(void)
         RD_RegsScope(.view = view->id)
         {
           rd_cfg_new_replace(expr, ws->hover_eval_string);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
           U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
           if(ws->hover_eval_focused)

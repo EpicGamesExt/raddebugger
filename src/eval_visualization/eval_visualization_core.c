@@ -498,7 +498,7 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
 //~ rjf: Block Building
 
 internal EV_BlockTree
-ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval)
+ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChain exprs)
 {
   ProfBeginFunction();
   EV_BlockTree tree = {&ev_nil_block};
@@ -508,7 +508,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
     //- rjf: generate root expression
     EV_Key root_key = ev_key_root();
     EV_Key root_row_key = ev_key_make(ev_hash_from_key(root_key), 1);
-    E_Expr *root_expr = e_expr_copy(arena, eval.exprs.last);
+    E_Expr *root_expr = e_expr_copy(arena, exprs.last);
     ev_keyed_expr_push_tags(arena, view, &ev_nil_block, root_row_key, root_expr);
     
     //- rjf: generate root block

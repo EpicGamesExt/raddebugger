@@ -432,10 +432,6 @@ e_type_key_cons_(E_ConsTypeParams *params)
       {
         node->byte_size = bit_size_from_arch(node->params.arch)/8;
       }break;
-      case E_TypeKind_SpacePtr:
-      {
-        node->byte_size = sizeof(U64) + sizeof(E_Space);
-      }break;
       case E_TypeKind_Array:
       {
         U64 ptee_size = e_type_byte_size_from_key(node->params.direct_key);
@@ -1691,12 +1687,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       {
         str8_list_pushf(arena, out, ".%I64u", type->count);
       }
-    }break;
-    
-    case E_TypeKind_SpacePtr:
-    {
-      E_TypeKey direct = e_type_direct_from_key(key);
-      e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
     }break;
     
     case E_TypeKind_LRef:

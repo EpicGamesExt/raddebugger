@@ -267,6 +267,34 @@ struct E_TypeAutoHookCacheMap
 };
 
 ////////////////////////////////
+//~ rjf: Evaluated String ID Map
+
+typedef struct E_StringIDNode E_StringIDNode;
+struct E_StringIDNode
+{
+  E_StringIDNode *hash_next;
+  E_StringIDNode *id_next;
+  U64 id;
+  String8 string;
+};
+
+typedef struct E_StringIDSlot E_StringIDSlot;
+struct E_StringIDSlot
+{
+  E_StringIDNode *first;
+  E_StringIDNode *last;
+};
+
+typedef struct E_StringIDMap E_StringIDMap;
+struct E_StringIDMap
+{
+  U64 id_slots_count;
+  E_StringIDSlot *id_slots;
+  U64 hash_slots_count;
+  E_StringIDSlot *hash_slots;
+};
+
+////////////////////////////////
 //~ rjf: IR Context
 
 typedef struct E_IRCtx E_IRCtx;
@@ -310,6 +338,8 @@ struct E_IRState
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
   U64 irtree_and_type_cache_slots_count;
   E_IRTreeAndTypeCacheSlot *irtree_and_type_cache_slots;
+  U64 string_id_gen;
+  E_StringIDMap *string_id_map;
 };
 
 ////////////////////////////////
@@ -379,6 +409,12 @@ internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_Au
 #define e_auto_hook_map_insert_new(arena, map, ...) e_auto_hook_map_insert_new_((arena), (map), &(E_AutoHookParams){.type_key = zero_struct, __VA_ARGS__})
 internal E_ExprList e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
 internal E_ExprList e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key);
+
+////////////////////////////////
+//~ rjf: Evaluated String IDs
+
+internal U64 e_id_from_string(String8 string);
+internal String8 e_string_from_id(U64 id);
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions
