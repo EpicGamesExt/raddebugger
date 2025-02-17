@@ -99,6 +99,14 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
     {
       result = 1;
     }
+    if(kind == E_TypeKind_Ptr)
+    {
+      E_Type *type = e_type_from_key__cached(t);
+      if(type->count > 1)
+      {
+        result = 1;
+      }
+    }
   }
   return result;
 }

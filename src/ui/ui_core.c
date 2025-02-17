@@ -3008,6 +3008,10 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   // rjf: touch node & update parameters - grab current
   node->last_touched_build_index = ui_state->build_index;
   DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
+  if(params->reset)
+  {
+    node->current = params->initial;
+  }
   MemoryCopyStruct(&node->params, params);
   if(node->params.epsilon == 0)
   {

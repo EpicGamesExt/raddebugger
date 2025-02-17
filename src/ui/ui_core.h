@@ -582,6 +582,7 @@ struct UI_AnimParams
   F32 target;
   F32 rate;
   F32 epsilon;
+  B32 reset;
 };
 
 typedef struct UI_AnimNode UI_AnimNode;

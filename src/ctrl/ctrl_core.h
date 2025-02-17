@@ -117,6 +117,18 @@ struct CTRL_EntityStringChunkNode
   U64 size;
 };
 
+read_only global U64 ctrl_entity_string_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
+
 typedef struct CTRL_EntityStore CTRL_EntityStore;
 struct CTRL_EntityStore
 {
@@ -126,7 +138,7 @@ struct CTRL_EntityStore
   CTRL_EntityHashSlot *hash_slots;
   CTRL_EntityHashNode *hash_node_free;
   U64 hash_slots_count;
-  CTRL_EntityStringChunkNode *free_string_chunks[8];
+  CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
   U64 entity_kind_counts[CTRL_EntityKind_COUNT];
   Arena *entity_kind_lists_arenas[CTRL_EntityKind_COUNT];
   U64 entity_kind_lists_gens[CTRL_EntityKind_COUNT];
@@ -782,7 +794,7 @@ internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
 internal void ctrl_entity_store_release(CTRL_EntityStore *store);
 
 //- rjf: string allocation/deletion
-internal U64 ctrl_name_bucket_idx_from_string_size(U64 size);
+internal U64 ctrl_name_bucket_num_from_string_size(U64 size);
 internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string);
 internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 

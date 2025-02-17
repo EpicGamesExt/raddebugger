@@ -670,6 +670,18 @@ struct RD_Entity2EvalBlobMap
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
+read_only global U64 rd_name_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
+
 typedef struct RD_NameChunkNode RD_NameChunkNode;
 struct RD_NameChunkNode
 {
@@ -796,7 +808,7 @@ struct RD_State
   RD_DragDropState drag_drop_state;
   
   // rjf: cfg state
-  RD_NameChunkNode *free_name_chunks[8];
+  RD_NameChunkNode *free_name_chunks[ArrayCount(rd_name_bucket_chunk_sizes)];
   RD_Cfg *free_cfg;
   RD_Cfg *root_cfg;
   U64 cfg_id_slots_count;
@@ -926,7 +938,7 @@ internal void rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD
 ////////////////////////////////
 //~ rjf: Name Allocation
 
-internal U64 rd_name_bucket_idx_from_string_size(U64 size);
+internal U64 rd_name_bucket_num_from_string_size(U64 size);
 internal String8 rd_name_alloc(String8 string);
 internal void rd_name_release(String8 string);
 

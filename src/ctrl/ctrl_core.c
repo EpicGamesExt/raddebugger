@@ -650,95 +650,100 @@ ctrl_entity_store_release(CTRL_EntityStore *cache)
 //- rjf: string allocation/deletion
 
 internal U64
-ctrl_name_bucket_idx_from_string_size(U64 size)
+ctrl_name_bucket_num_from_string_size(U64 size)
 {
-  U64 size_rounded = u64_up_to_pow2(size+1);
-  size_rounded = ClampBot((1<<4), size_rounded);
-  U64 bucket_idx = 0;
-  switch(size_rounded)
+  U64 bucket_num = 0;
+  if(size > 0)
   {
-    case 1<<4: {bucket_idx = 0;}break;
-    case 1<<5: {bucket_idx = 1;}break;
-    case 1<<6: {bucket_idx = 2;}break;
-    case 1<<7: {bucket_idx = 3;}break;
-    case 1<<8: {bucket_idx = 4;}break;
-    case 1<<9: {bucket_idx = 5;}break;
-    case 1<<10:{bucket_idx = 6;}break;
-    default:{bucket_idx = ArrayCount(((CTRL_EntityStore *)0)->free_string_chunks)-1;}break;
+    for EachElement(idx, ctrl_entity_string_bucket_chunk_sizes)
+    {
+      if(size <= ctrl_entity_string_bucket_chunk_sizes[idx])
+      {
+        bucket_num = idx+1;
+        break;
+      }
+    }
   }
-  return bucket_idx;
+  return bucket_num;
 }
 
 internal String8
 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
 {
-  if(string.size == 0) {return str8_zero();}
-  U64 bucket_idx = ctrl_name_bucket_idx_from_string_size(string.size);
-  CTRL_EntityStringChunkNode *node = store->free_string_chunks[bucket_idx];
-  
-  // rjf: pull from bucket free list
-  if(node != 0)
+  //- rjf: allocate node
+  CTRL_EntityStringChunkNode *node = 0;
   {
-    if(bucket_idx == ArrayCount(store->free_string_chunks)-1)
+    U64 bucket_num = ctrl_name_bucket_num_from_string_size(string.size);
+    if(bucket_num == ArrayCount(ctrl_entity_string_bucket_chunk_sizes))
     {
-      node = 0;
-      CTRL_EntityStringChunkNode *prev = 0;
-      for(CTRL_EntityStringChunkNode *n = store->free_string_chunks[bucket_idx];
-          n != 0;
-          prev = n, n = n->next)
+      CTRL_EntityStringChunkNode *best_node = 0;
+      CTRL_EntityStringChunkNode *best_node_prev = 0;
+      U64 best_node_size = max_U64;
       {
-        if(n->size >= string.size)
+        for(CTRL_EntityStringChunkNode *n = store->free_string_chunks[bucket_num-1], *prev = 0; n != 0; (prev = n, n = n->next))
         {
-          if(prev == 0)
+          if(n->size >= string.size && n->size < best_node_size)
           {
-            store->free_string_chunks[bucket_idx] = n->next;
+            best_node = n;
+            best_node_prev = prev;
+            best_node_size = n->size;
           }
-          else
-          {
-            prev->next = n->next;
-          }
-          node = n;
-          break;
         }
       }
+      if(best_node != 0)
+      {
+        node = best_node;
+        if(best_node_prev)
+        {
+          best_node_prev->next = best_node->next;
+        }
+        else
+        {
+          store->free_string_chunks[bucket_num-1] = best_node->next;
+        }
+      }
+      else
+      {
+        U64 chunk_size = u64_up_to_pow2(string.size);
+        node = (CTRL_EntityStringChunkNode *)push_array(store->arena, U8, chunk_size);
+      }
     }
-    else
+    else if(bucket_num != 0)
     {
-      SLLStackPop(store->free_string_chunks[bucket_idx]);
+      node = store->free_string_chunks[bucket_num-1];
+      if(node != 0)
+      {
+        SLLStackPop(store->free_string_chunks[bucket_num-1]);
+      }
+      else
+      {
+        node = (CTRL_EntityStringChunkNode *)push_array(store->arena, U8, ctrl_entity_string_bucket_chunk_sizes[bucket_num-1]);
+      }
     }
   }
   
-  // rjf: no found node -> allocate new
-  if(node == 0)
+  //- rjf: fill node
+  String8 result = {0};
+  if(node != 0)
   {
-    U64 chunk_size = 0;
-    if(bucket_idx < ArrayCount(store->free_string_chunks)-1)
-    {
-      chunk_size = 1<<(bucket_idx+4);
-    }
-    else
-    {
-      chunk_size = u64_up_to_pow2(string.size);
-    }
-    U8 *chunk_memory = push_array(store->arena, U8, chunk_size);
-    node = (CTRL_EntityStringChunkNode *)chunk_memory;
-    node->size = chunk_size;
+    result.str = (U8 *)node;
+    result.size = string.size;
+    MemoryCopy(result.str, string.str, result.size);
   }
-  
-  // rjf: fill string & return
-  String8 allocated_string = str8((U8 *)node, string.size);
-  MemoryCopy((U8 *)node, string.str, string.size);
-  return allocated_string;
+  return result;
 }
 
 internal void
 ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
 {
-  if(string.size == 0) {return;}
-  U64 bucket_idx = ctrl_name_bucket_idx_from_string_size(string.size);
-  CTRL_EntityStringChunkNode *node = (CTRL_EntityStringChunkNode *)string.str;
-  node->size = u64_up_to_pow2(string.size);
-  SLLStackPush(store->free_string_chunks[bucket_idx], node);
+  U64 bucket_num = ctrl_name_bucket_num_from_string_size(string.size);
+  if(1 <= bucket_num && bucket_num <= ArrayCount(rd_name_bucket_chunk_sizes))
+  {
+    U64 bucket_idx = bucket_num-1;
+    CTRL_EntityStringChunkNode *node = (CTRL_EntityStringChunkNode *)string.str;
+    SLLStackPush(store->free_string_chunks[bucket_idx], node);
+    node->size = u64_up_to_pow2(string.size);
+  }
 }
 
 //- rjf: entity construction/deletion

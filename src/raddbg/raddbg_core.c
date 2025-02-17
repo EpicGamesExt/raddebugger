@@ -1028,109 +1028,100 @@ rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot)
 //~ rjf: Name Allocation
 
 internal U64
-rd_name_bucket_idx_from_string_size(U64 size)
+rd_name_bucket_num_from_string_size(U64 size)
 {
-  U64 size_rounded = u64_up_to_pow2(size+1);
-  size_rounded = ClampBot((1<<4), size_rounded);
-  U64 bucket_idx = 0;
-  switch(size_rounded)
+  U64 bucket_num = 0;
+  if(size > 0)
   {
-    case 1<<4: {bucket_idx = 0;}break;
-    case 1<<5: {bucket_idx = 1;}break;
-    case 1<<6: {bucket_idx = 2;}break;
-    case 1<<7: {bucket_idx = 3;}break;
-    case 1<<8: {bucket_idx = 4;}break;
-    case 1<<9: {bucket_idx = 5;}break;
-    case 1<<10:{bucket_idx = 6;}break;
-    default:{bucket_idx = ArrayCount(rd_state->free_name_chunks)-1;}break;
+    for EachElement(idx, rd_name_bucket_chunk_sizes)
+    {
+      if(size <= rd_name_bucket_chunk_sizes[idx])
+      {
+        bucket_num = idx+1;
+        break;
+      }
+    }
   }
-  return bucket_idx;
+  return bucket_num;
 }
 
 internal String8
 rd_name_alloc(String8 string)
 {
-  if(string.size == 0) {return str8_zero();}
-  U64 bucket_idx = rd_name_bucket_idx_from_string_size(string.size);
-  
-  // rjf: loop -> find node, allocate if not there
-  //
-  // (we do a loop here so that all allocation logic goes through
-  // the same path, such that we *always* pull off a free list,
-  // rather than just using what was pushed onto an arena directly,
-  // which is not undoable; the free lists we control, and are thus
-  // trivially undoable)
-  //
+  //- rjf: allocate node
   RD_NameChunkNode *node = 0;
-  for(;node == 0;)
   {
-    node = rd_state->free_name_chunks[bucket_idx];
-    
-    // rjf: pull from bucket free list
-    if(node != 0)
+    U64 bucket_num = rd_name_bucket_num_from_string_size(string.size);
+    if(bucket_num == ArrayCount(rd_name_bucket_chunk_sizes))
     {
-      if(bucket_idx == ArrayCount(rd_state->free_name_chunks)-1)
+      RD_NameChunkNode *best_node = 0;
+      RD_NameChunkNode *best_node_prev = 0;
+      U64 best_node_size = max_U64;
       {
-        node = 0;
-        RD_NameChunkNode *prev = 0;
-        for(RD_NameChunkNode *n = rd_state->free_name_chunks[bucket_idx];
-            n != 0;
-            prev = n, n = n->next)
+        for(RD_NameChunkNode *n = rd_state->free_name_chunks[bucket_num-1], *prev = 0; n != 0; (prev = n, n = n->next))
         {
-          if(n->size >= string.size)
+          if(n->size >= string.size && n->size < best_node_size)
           {
-            if(prev == 0)
-            {
-              rd_state->free_name_chunks[bucket_idx] = n->next;
-            }
-            else
-            {
-              prev->next = n->next;
-            }
-            node = n;
-            break;
+            best_node = n;
+            best_node_prev = prev;
+            best_node_size = n->size;
           }
+        }
+      }
+      if(best_node != 0)
+      {
+        node = best_node;
+        if(best_node_prev)
+        {
+          best_node_prev->next = best_node->next;
+        }
+        else
+        {
+          rd_state->free_name_chunks[bucket_num-1] = best_node->next;
         }
       }
       else
       {
-        SLLStackPop(rd_state->free_name_chunks[bucket_idx]);
+        U64 chunk_size = u64_up_to_pow2(string.size);
+        node = (RD_NameChunkNode *)push_array(rd_state->arena, U8, chunk_size);
       }
     }
-    
-    // rjf: no found node -> allocate new, push onto associated free list
-    if(node == 0)
+    else if(bucket_num != 0)
     {
-      U64 chunk_size = 0;
-      if(bucket_idx < ArrayCount(rd_state->free_name_chunks)-1)
+      node = rd_state->free_name_chunks[bucket_num-1];
+      if(node != 0)
       {
-        chunk_size = 1<<(bucket_idx+4);
+        SLLStackPop(rd_state->free_name_chunks[bucket_num-1]);
       }
       else
       {
-        chunk_size = u64_up_to_pow2(string.size);
+        node = (RD_NameChunkNode *)push_array(rd_state->arena, U8, rd_name_bucket_chunk_sizes[bucket_num-1]);
       }
-      U8 *chunk_memory = push_array(rd_state->arena, U8, chunk_size);
-      RD_NameChunkNode *chunk = (RD_NameChunkNode *)chunk_memory;
-      chunk->size = chunk_size;
-      SLLStackPush(rd_state->free_name_chunks[bucket_idx], chunk);
     }
   }
   
-  // rjf: fill string & return
-  String8 allocated_string = str8((U8 *)node, string.size);
-  MemoryCopy((U8 *)node, string.str, string.size);
-  return allocated_string;
+  //- rjf: fill node
+  String8 result = {0};
+  if(node != 0)
+  {
+    result.str = (U8 *)node;
+    result.size = string.size;
+    MemoryCopy(result.str, string.str, result.size);
+  }
+  return result;
 }
 
 internal void
 rd_name_release(String8 string)
 {
-  if(string.size == 0) {return;}
-  U64 bucket_idx = rd_name_bucket_idx_from_string_size(string.size);
-  RD_NameChunkNode *node = (RD_NameChunkNode *)string.str;
-  node->size = u64_up_to_pow2(string.size);
-  SLLStackPush(rd_state->free_name_chunks[bucket_idx], node);
+  U64 bucket_num = rd_name_bucket_num_from_string_size(string.size);
+  if(1 <= bucket_num && bucket_num <= ArrayCount(rd_name_bucket_chunk_sizes))
+  {
+    U64 bucket_idx = bucket_num-1;
+    RD_NameChunkNode *node = (RD_NameChunkNode *)string.str;
+    SLLStackPush(rd_state->free_name_chunks[bucket_idx], node);
+    node->size = u64_up_to_pow2(string.size);
+  }
 }
 
 ////////////////////////////////
@@ -1323,10 +1314,7 @@ rd_cfg_deep_copy(RD_Cfg *src_root)
 internal void
 rd_cfg_equip_string(RD_Cfg *cfg, String8 string)
 {
-  if(cfg->string.size != 0)
-  {
-    rd_name_release(cfg->string);
-  }
+  rd_name_release(cfg->string);
   cfg->string = rd_name_alloc(string);
 }
 
@@ -7517,40 +7505,27 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: animate panels
     //
-#if 0 // TODO(rjf): @cfg_panels
     {
-      F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * rd_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
       if(content_rect_dim.x > 0 && content_rect_dim.y > 0)
       {
         for(RD_PanelNode *panel = panel_tree.root;
             panel != &rd_nil_panel_node;
-            panel = rd_panel_node_rec__depth_first_pre(panel).next)
+            panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
         {
           Rng2F32 target_rect_px = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
           Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
                                            target_rect_px.y0/content_rect_dim.y,
                                            target_rect_px.x1/content_rect_dim.x,
                                            target_rect_px.y1/content_rect_dim.y);
-          if(abs_f32(target_rect_pct.x0 - panel->animated_rect_pct.x0) > 0.005f ||
-             abs_f32(target_rect_pct.y0 - panel->animated_rect_pct.y0) > 0.005f ||
-             abs_f32(target_rect_pct.x1 - panel->animated_rect_pct.x1) > 0.005f ||
-             abs_f32(target_rect_pct.y1 - panel->animated_rect_pct.y1) > 0.005f)
-          {
-            rd_request_frame();
-          }
-          panel->animated_rect_pct.x0 += rate * (target_rect_pct.x0 - panel->animated_rect_pct.x0);
-          panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
-          panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
-          panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
-          if(ws->frames_alive < 5 || is_changing_panel_boundaries)
-          {
-            panel->animated_rect_pct = target_rect_pct;
-          }
+          B32 reset = (ws->frames_alive < 5 || is_changing_panel_boundaries);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0, .reset = reset);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0, .reset = reset);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1, .reset = reset);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1, .reset = reset);
         }
       }
     }
-#endif
     
     ////////////////////////////
     //- rjf: panel leaf UI
@@ -7582,8 +7557,10 @@ rd_window_frame(void)
                                          target_rect_px.y0 / content_rect_dim.y,
                                          target_rect_px.x1 / content_rect_dim.x,
                                          target_rect_px.y1 / content_rect_dim.y);
-        // TODO(rjf): @cfg_panels animate `target_rect_pct`
-        Rng2F32 panel_rect_pct = target_rect_pct;
+        Rng2F32 panel_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0),
+                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0),
+                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1),
+                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1));
         Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
                                     panel_rect_pct.y0*content_rect_dim.y,
                                     panel_rect_pct.x1*content_rect_dim.x,
@@ -13077,6 +13054,10 @@ rd_frame(void)
             // rjf: unpack
             Axis2 split_axis = axis2_from_dir2(split_dir);
             Side split_side = side_from_dir2(split_dir);
+            if(split_panel == &rd_nil_cfg)
+            {
+              split_panel = rd_cfg_from_id(rd_regs()->panel);
+            }
             RD_Cfg *new_panel_cfg = &rd_nil_cfg;
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, split_panel);
             RD_PanelNode *panel_root = panel_tree.root;
@@ -13090,7 +13071,7 @@ rd_frame(void)
               RD_Cfg *panel_cfg = panel->cfg;
               RD_Cfg *new_cfg = rd_cfg_alloc();
               rd_cfg_insert_child(parent_cfg, split_side == Side_Max ? panel_cfg : panel_cfg->prev, new_cfg);
-              rd_cfg_equip_stringf(new_cfg, "%f", 1.f/parent->child_count);
+              rd_cfg_equip_stringf(new_cfg, "%f", 1.f/(parent->child_count+1));
               for(RD_PanelNode *child = parent->first; child != &rd_nil_panel_node; child = child->next)
               {
                 F32 old_pct = child->pct_of_parent;
@@ -13159,10 +13140,22 @@ rd_frame(void)
               rd_cfg_insert_child(new_panel_cfg, new_panel_cfg->last, dragdrop_tab);
               RD_PanelTree origin_panel_tree = rd_panel_tree_from_cfg(scratch.arena, dragdrop_origin_panel_cfg);
               RD_PanelNode *origin_panel = rd_panel_node_from_tree_cfg(origin_panel_tree.root, dragdrop_origin_panel_cfg);
+              if(origin_panel->selected_tab == &rd_nil_cfg)
+              {
+                for(RD_CfgNode *n = origin_panel->tabs.first; n != 0; n = n->next)
+                {
+                  if(!rd_cfg_is_project_filtered(n->v))
+                  {
+                    rd_cmd(RD_CmdKind_FocusTab, .panel = origin_panel->cfg->id, .view = n->v->id);
+                    break;
+                  }
+                }
+              }
               if(origin_panel->tabs.count == 0)
               {
                 rd_cmd(RD_CmdKind_ClosePanel);
               }
+              rd_cmd(RD_CmdKind_FocusTab, .panel = new_panel_cfg->id, .view = dragdrop_tab->id);
             }
             
             // rjf: focus new panel
@@ -13206,7 +13199,7 @@ rd_frame(void)
                 p != &rd_nil_panel_node;
                 p = rd_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
             {
-              if(p->first == &rd_nil_panel_node)
+              if(p != panel_tree.focused && p->first == &rd_nil_panel_node)
               {
                 next_focused = p;
                 break;
@@ -13218,9 +13211,10 @@ rd_frame(void)
                   p != &rd_nil_panel_node;
                   p = rd_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
               {
-                if(p->first == &rd_nil_panel_node)
+                if(p != panel_tree.focused && p->first == &rd_nil_panel_node)
                 {
                   next_focused = p;
+                  break;
                 }
               }
             }
@@ -13395,11 +13389,11 @@ rd_frame(void)
           //- rjf: panel removal
           case RD_CmdKind_ClosePanel:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_Panel *parent = panel->parent;
-            if(!rd_panel_is_nil(parent))
+            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+            RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_tree.root, rd_cfg_from_id(rd_regs()->panel));
+            RD_PanelNode *parent = panel->parent;
+            if(parent != &rd_nil_panel_node)
             {
               Axis2 split_axis = parent->split_axis;
               
@@ -13407,88 +13401,105 @@ rd_frame(void)
               // we should just remove both children.
               if(parent->child_count == 2)
               {
-                RD_Panel *discard_child = panel;
-                RD_Panel *keep_child = panel == parent->first ? parent->last : parent->first;
-                RD_Panel *grandparent = parent->parent;
-                RD_Panel *parent_prev = parent->prev;
+                RD_PanelNode *discard_child = panel;
+                RD_PanelNode *keep_child = (panel == parent->first ? parent->last : parent->first);
+                RD_PanelNode *grandparent = parent->parent;
+                RD_PanelNode *parent_prev = parent->prev;
                 F32 pct_of_parent = parent->pct_of_parent;
                 
                 // rjf: unhook kept child
-                rd_panel_remove(parent, keep_child);
+                rd_cfg_unhook(parent->cfg, keep_child->cfg);
                 
                 // rjf: unhook this subtree
-                if(!rd_panel_is_nil(grandparent))
+                if(grandparent != &rd_nil_panel_node)
                 {
-                  rd_panel_remove(grandparent, parent);
+                  rd_cfg_unhook(grandparent->cfg, parent->cfg);
                 }
                 
-                // rjf: release the things we should discard
+                // rjf: release the containing tree
                 {
-                  rd_panel_release(ws, parent);
-                  rd_panel_release(ws, discard_child);
+                  rd_cfg_release(parent->cfg);
                 }
                 
                 // rjf: re-hook our kept child into the overall tree
-                if(rd_panel_is_nil(grandparent))
+                if(grandparent == &rd_nil_panel_node)
                 {
-                  ws->root_panel = keep_child;
+                  rd_cfg_equip_string(keep_child->cfg, str8_lit("panels"));
+                  rd_cfg_insert_child(window, window->last, keep_child->cfg);
                 }
                 else
                 {
-                  rd_panel_insert(grandparent, parent_prev, keep_child);
-                }
-                keep_child->pct_of_parent = pct_of_parent;
-                
-                // rjf: reset focus, if needed
-                if(ws->focused_panel == discard_child)
-                {
-                  ws->focused_panel = keep_child;
-                  for(RD_Panel *grandchild = ws->focused_panel; !rd_panel_is_nil(grandchild); grandchild = grandchild->first)
-                  {
-                    ws->focused_panel = grandchild;
-                  }
+                  rd_cfg_insert_child(grandparent->cfg, parent_prev->cfg, keep_child->cfg);
+                  rd_cfg_equip_stringf(keep_child->cfg, "%f", pct_of_parent);
                 }
                 
                 // rjf: keep-child split-axis == grandparent split-axis? bubble keep-child up into grandparent's children
-                if(!rd_panel_is_nil(grandparent) && grandparent->split_axis == keep_child->split_axis && !rd_panel_is_nil(keep_child->first))
+                if(grandparent != &rd_nil_panel_node && grandparent->split_axis == keep_child->split_axis && keep_child->first != &rd_nil_panel_node)
                 {
-                  rd_panel_remove(grandparent, keep_child);
-                  RD_Panel *prev = parent_prev;
-                  for(RD_Panel *child = keep_child->first, *next = 0; !rd_panel_is_nil(child); child = next)
+                  rd_cfg_unhook(grandparent->cfg, keep_child->cfg);
+                  RD_PanelNode *prev = parent_prev;
+                  for(RD_PanelNode *child = keep_child->first, *next = &rd_nil_panel_node; child != &rd_nil_panel_node; child = next)
                   {
                     next = child->next;
-                    rd_panel_remove(keep_child, child);
-                    rd_panel_insert(grandparent, prev, child);
+                    rd_cfg_unhook(keep_child->cfg, child->cfg);
+                    rd_cfg_insert_child(grandparent->cfg, prev->cfg, child->cfg);
                     prev = child;
-                    child->pct_of_parent *= keep_child->pct_of_parent;
+                    F32 old_pct = child->pct_of_parent;
+                    F32 new_pct = old_pct * keep_child->pct_of_parent;
+                    rd_cfg_equip_stringf(child->cfg, "%f", new_pct);
                   }
-                  rd_panel_release(ws, keep_child);
+                  rd_cfg_release(keep_child->cfg);
+                }
+                
+                // rjf: reset focus, if needed
+                if(panel_tree.focused == discard_child)
+                {
+                  RD_PanelTree new_panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+                  RD_PanelNode *new_focused = rd_panel_node_from_tree_cfg(panel_tree.root, keep_child->cfg);
+                  for(RD_PanelNode *grandchild = new_focused; grandchild != &rd_nil_panel_node; grandchild = grandchild->first)
+                  {
+                    new_focused = grandchild;
+                  }
+                  rd_cmd(RD_CmdKind_FocusPanel, .panel = new_focused->cfg->id);
                 }
               }
               // NOTE(rjf): Otherwise we can just remove this child.
               else
               {
-                RD_Panel *next = &rd_nil_panel;
+                // rjf: remove
+                RD_PanelNode *next = &rd_nil_panel_node;
                 F32 removed_size_pct = panel->pct_of_parent;
-                if(rd_panel_is_nil(next)) { next = panel->prev; }
-                if(rd_panel_is_nil(next)) { next = panel->next; }
-                rd_panel_remove(parent, panel);
-                rd_panel_release(ws, panel);
-                if(ws->focused_panel == panel)
+                if(next == &rd_nil_panel_node) { next = panel->prev; }
+                if(next == &rd_nil_panel_node) { next = panel->next; }
+                rd_cfg_unhook(parent->cfg, panel->cfg);
+                rd_cfg_release(panel->cfg);
+                
+                // rjf: resize siblings to this node
                 {
-                  ws->focused_panel = next;
-                  for(RD_Panel *grandchild = ws->focused_panel; !rd_panel_is_nil(grandchild); grandchild = grandchild->first)
+                  RD_PanelTree new_panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+                  RD_PanelNode *new_parent = rd_panel_node_from_tree_cfg(new_panel_tree.root, parent->cfg);
+                  for(RD_PanelNode *child = new_parent->first; child != &rd_nil_panel_node; child = child->next)
                   {
-                    ws->focused_panel = grandchild;
+                    RD_Cfg *cfg = child->cfg;
+                    F32 old_pct = child->pct_of_parent;
+                    F32 new_pct = old_pct / (1.f-removed_size_pct);
+                    rd_cfg_equip_stringf(cfg, "%f", new_pct);
                   }
                 }
-                for(RD_Panel *child = parent->first; !rd_panel_is_nil(child); child = child->next)
+                
+                // rjf: reset focus, if needed
+                if(panel_tree.focused == panel)
                 {
-                  child->pct_of_parent /= 1.f-removed_size_pct;
+                  RD_PanelTree new_panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+                  RD_PanelNode *new_focused = rd_panel_node_from_tree_cfg(panel_tree.root, next->cfg);
+                  for(RD_PanelNode *grandchild = new_focused; grandchild != &rd_nil_panel_node; grandchild = grandchild->first)
+                  {
+                    new_focused = grandchild;
+                  }
+                  rd_cmd(RD_CmdKind_FocusPanel, .panel = new_focused->cfg->id);
                 }
               }
             }
-#endif
           }break;
           
           //- rjf: panel tab controls
