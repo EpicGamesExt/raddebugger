@@ -1037,6 +1037,7 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
 
 //- rjf: eval <-> file path
+internal String8 rd_file_path_from_eval(Arena *arena, E_Eval eval);
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
 

@@ -584,6 +584,14 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
         expansion_row_count = expand_info.row_count;
       }
       
+      // rjf: determine if this expansion supports child expansions
+      B32 allow_child_expansions = 1;
+      if(expand_info.single_item)
+      {
+        // NOTE(rjf): for now, just plugging in the heuristic of "is this a single row (a.k.a. visualizer)?"
+        allow_child_expansions = 0;
+      }
+      
       // rjf: generate block for expansion
       EV_Block *expansion_block = &ev_nil_block;
       if(expansion_row_count != 0)
@@ -612,7 +620,7 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       U64 child_count = 0;
       EV_Key *child_keys = 0;
       U64 *child_nums = 0;
-      if(!child_count && !expand_info.rows_default_expanded && expand_node != 0 && expansion_row_count != 0)
+      if(allow_child_expansions && !child_count && !expand_info.rows_default_expanded && expand_node != 0 && expansion_row_count != 0)
       {
         // rjf: count children
         for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next, child_count += 1){}
@@ -659,7 +667,7 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       }
       
       // rjf: gather children expansions from inverse of expansion state
-      if(!child_count && (expand_info.rows_default_expanded || (expand_node == 0 && !expand_info.rows_default_expanded)))
+      if(allow_child_expansions && !child_count && (expand_info.rows_default_expanded || (expand_node == 0 && !expand_info.rows_default_expanded)))
       {
         child_count = expand_info.row_count;
         child_keys  = push_array(scratch.arena, EV_Key, child_count);

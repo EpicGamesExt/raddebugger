@@ -234,6 +234,43 @@ E_LOOKUP_INFO_FUNCTION_DEF(file)
   return info;
 }
 
+E_LOOKUP_ACCESS_FUNCTION_DEF(file)
+{
+  E_LookupAccess result = {{&e_irnode_nil}}; 
+  if(kind == E_ExprKind_MemberAccess)
+  {
+    E_FileAccel *accel = (E_FileAccel *)user_data;
+    String8 member_name = rhs->string;
+    if(str8_match(member_name, str8_lit("size"), 0))
+    {
+      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.size);
+      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.irtree_and_type.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("last_modified_time"), 0))
+    {
+      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.modified);
+      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.irtree_and_type.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("creation_time"), 0))
+    {
+      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.created);
+      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.irtree_and_type.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("data"), 0))
+    {
+      E_Space space = e_space_make(E_SpaceKind_File);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.irtree_and_type.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+      result.irtree_and_type.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size);
+      result.irtree_and_type.mode = E_Mode_Offset;
+    }
+  }
+  return result;
+}
+
 E_LOOKUP_RANGE_FUNCTION_DEF(file)
 {
   E_FileAccel *accel = (E_FileAccel *)user_data;
@@ -245,29 +282,11 @@ E_LOOKUP_RANGE_FUNCTION_DEF(file)
     if(0 <= idx && idx < accel->fields.count)
     {
       String8 name = accel->fields.v[idx];
-      if(str8_match(name, str8_lit("size"), 0))
-      {
-        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-        expr->value.u64 = accel->props.size;
-      }
-      else if(str8_match(name, str8_lit("last_modified_time"), 0))
-      {
-        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-        expr->value.u64 = accel->props.modified;
-      }
-      else if(str8_match(name, str8_lit("creation_time"), 0))
-      {
-        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-        expr->value.u64 = accel->props.created;
-      }
-      else if(str8_match(name, str8_lit("data"), 0))
-      {
-        expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
-        expr->space = e_space_make(E_SpaceKind_HashStoreKey);
-        expr->space.u128 = fs_key_from_path_range(accel->file_path, r1u64(0, max_U64));
-        expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size);
-      }
-      string = push_str8f(arena, ".%S", name);
+      expr = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
+      E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafMember, 0);
+      rhs->string = push_str8_copy(arena, name);
+      e_expr_push_child(expr, e_expr_ref(arena, lhs));
+      e_expr_push_child(expr, rhs);
     }
     exprs[out_idx] = expr;
     exprs_strings[out_idx] = string;
@@ -401,6 +420,7 @@ e_lookup_rule_map_make(Arena *arena, U64 slots_count)
                                .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
+                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file),
                                .range  = E_LOOKUP_RANGE_FUNCTION_NAME(file));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("slice"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(slice),
@@ -2203,7 +2223,7 @@ E_IRGEN_FUNCTION_DEF(default)
     //- rjf: leaf file paths
     case E_ExprKind_LeafFilePath:
     {
-      FileProperties props = fs_properties_from_path(expr->string);
+      FileProperties props = os_properties_from_file_path(expr->string);
       if(props.flags & FilePropertyFlag_IsFolder)
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
@@ -2213,6 +2233,11 @@ E_IRGEN_FUNCTION_DEF(default)
       }
       else
       {
+        E_Space space = e_space_make(E_SpaceKind_FileSystem);
+        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(expr->string)));
+        result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
+        result.mode     = E_Mode_Value;
+#if 0
         U128 key = fs_key_from_path_range(expr->string, r1u64(0, max_U64));
         E_Space space = {E_SpaceKind_HashStoreKey, .u128 = key};
         U64 size = props.size;
@@ -2222,6 +2247,7 @@ E_IRGEN_FUNCTION_DEF(default)
         result.root->string = push_str8_copy(arena, expr->string);
         result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), size);
         result.mode     = E_Mode_Offset;
+#endif
       }
     }break;
     

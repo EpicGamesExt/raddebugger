@@ -3010,10 +3010,31 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   B32 result = 0;
   switch(space.kind)
   {
-    //- rjf: filesystem reads
+    //- rjf: reads from hash store key
     case E_SpaceKind_HashStoreKey:
     {
       U128 key = space.u128;
+      U128 hash = hs_hash_from_key(key, 0);
+      HS_Scope *scope = hs_scope_open();
+      {
+        String8 data = hs_data_from_hash(scope, hash);
+        Rng1U64 legal_range = r1u64(0, data.size);
+        Rng1U64 read_range = intersect_1u64(range, legal_range);
+        if(read_range.min < read_range.max)
+        {
+          result = 1;
+          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
+        }
+      }
+      hs_scope_close(scope);
+    }break;
+    
+    //- rjf: file reads
+    case E_SpaceKind_File:
+    {
+      U64 file_path_string_id = space.u64_0;
+      String8 file_path = e_string_from_id(file_path_string_id);
+      U128 key = fs_key_from_path_range(file_path, range);
       U128 hash = hs_hash_from_key(key, 0);
       HS_Scope *scope = hs_scope_open();
       {
@@ -3301,6 +3322,12 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
     {
       result = space.u128;
     }break;
+    case E_SpaceKind_File:
+    {
+      U64 file_path_string_id = space.u64_0;
+      String8 file_path = e_string_from_id(file_path_string_id);
+      result  = fs_key_from_path_range(file_path, range);
+    }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
@@ -3323,19 +3350,21 @@ rd_whole_range_from_eval_space(E_Space space)
   {
     case E_SpaceKind_HashStoreKey:
     {
-      HS_Scope *scope = hs_scope_open();
-      U128 hash = {0};
-      for(U64 idx = 0; idx < 2; idx += 1)
+      U128 key = space.u128;
+      U128 hash = hs_hash_from_key(key, 0);
+      HS_Scope *hs_scope = hs_scope_open();
       {
-        hash = hs_hash_from_key(space.u128, idx);
-        if(!u128_match(hash, u128_zero()))
-        {
-          break;
-        }
+        String8 data = hs_data_from_hash(hs_scope, hash);
+        result = r1u64(0, data.size);
       }
-      String8 data = hs_data_from_hash(scope, hash);
-      result = r1u64(0, data.size);
-      hs_scope_close(scope);
+      hs_scope_close(hs_scope);
+    }break;
+    case E_SpaceKind_File:
+    {
+      U64 file_path_string_id = space.u64_0;
+      String8 file_path = e_string_from_id(file_path_string_id);
+      FileProperties props = os_properties_from_file_path(file_path);
+      result = r1u64(0, props.size);
     }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {
@@ -3464,16 +3493,32 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
 //- rjf: eval <-> file path
 
 internal String8
+rd_file_path_from_eval(Arena *arena, E_Eval eval)
+{
+  String8 result = {0};
+  switch(eval.space.kind)
+  {
+    default:{}break;
+    case E_SpaceKind_File:
+    {
+      result = push_str8_copy(arena, e_string_from_id(eval.space.u64_0));
+    }break;
+    case E_SpaceKind_FileSystem:
+    {
+      result = push_str8_copy(arena, e_string_from_id(eval.value.u64));
+    }break;
+  }
+  return result;
+}
+
+internal String8
 rd_file_path_from_eval_string(Arena *arena, String8 string)
 {
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
-    if(expr->kind == E_ExprKind_LeafFilePath)
-    {
-      result = raw_from_escaped_str8(arena, expr->string);
-    }
+    E_Eval eval = e_eval_from_string(scratch.arena, string);
+    result = rd_file_path_from_eval(arena, eval);
     scratch_end(scratch);
   }
   return result;
@@ -3484,7 +3529,7 @@ rd_eval_string_from_file_path(Arena *arena, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8 string_escaped = escaped_from_raw_str8(scratch.arena, string);
-  String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
+  String8 result = push_str8f(arena, "file:\"%S\".data", string_escaped);
   scratch_end(scratch);
   return result;
 }
@@ -3933,9 +3978,11 @@ internal TXT_LangKind
 rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
   TXT_LangKind lang_kind = TXT_LangKind_Null;
-  if(eval.exprs.last->kind == E_ExprKind_LeafFilePath)
+  Temp scratch = scratch_begin(0, 0);
+  String8 file_path = rd_file_path_from_eval(scratch.arena, eval);
+  if(file_path.size != 0)
   {
-    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.exprs.last->string));
+    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(file_path));
   }
   else for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
   {
@@ -3945,6 +3992,7 @@ rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
       break;
     }
   }
+  scratch_end(scratch);
   return lang_kind;
 }
 

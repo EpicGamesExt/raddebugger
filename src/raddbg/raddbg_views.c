@@ -2878,7 +2878,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
                       rd_cfg_new(expr, e_string_from_expr(scratch.arena, cell_info.eval.exprs.last));
                       rd_cfg_new(view, str8_lit("selected"));
-                      RD_RegsScope(.view = view->id)
+                      RD_RegsScope(.view = view->id, .file_path = rd_file_path_from_eval(scratch.arena, cell_info.eval))
                         UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
                         UI_Flags(0)
                       {

@@ -93,8 +93,9 @@ typedef U64 E_SpaceKind;
 enum
 {
   E_SpaceKind_Null,
-  E_SpaceKind_HashStoreKey,
+  E_SpaceKind_File,
   E_SpaceKind_FileSystem,
+  E_SpaceKind_HashStoreKey,
   E_SpaceKind_FirstUserDefined,
 };
 
