@@ -628,6 +628,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->direct_type_key  = node->params.direct_key;
             type->count            = node->params.count;
             type->depth            = node->params.depth;
+            type->arch             = node->params.arch;
             type->byte_size        = node->byte_size;
             switch(type->kind)
             {
@@ -706,6 +707,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name       = push_str8_copy(arena, name);
             type->byte_size  = (U64)rdi_type->byte_size;
             type->count      = members_count;
+            type->arch       = e_type_state->ctx->modules[rdi_idx].arch;
             type->members    = members;
           }
           
@@ -750,6 +752,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name            = push_str8_copy(arena, name);
             type->byte_size       = (U64)rdi_type->byte_size;
             type->count           = enum_vals_count;
+            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
             type->enum_vals       = enum_vals;
             type->direct_type_key = direct_type_key;
           }
@@ -789,6 +792,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->direct_type_key = direct_type_key;
                 type->byte_size       = direct_type_byte_size;
                 type->flags           = flags;
+                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
               }break;
               case RDI_TypeKind_Ptr:
               case RDI_TypeKind_LRef:
@@ -799,6 +803,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->direct_type_key = direct_type_key;
                 type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
                 type->count           = 1;
+                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
               }break;
               
               case RDI_TypeKind_Array:
@@ -808,6 +813,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->direct_type_key = direct_type_key;
                 type->count           = rdi_type->constructed.count;
                 type->byte_size       = direct_type_byte_size * type->count;
+                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
               }break;
               case RDI_TypeKind_Function:
               {
@@ -823,6 +829,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                   type->direct_type_key = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
+                  type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
                   for(U32 idx = 0; idx < type->count; idx += 1)
                   {
                     U32 param_type_idx = idx_run[idx];
@@ -856,6 +863,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                   type->owner_type_key  = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
+                  type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
                   for(U32 idx = 0; idx < type->count; idx += 1)
                   {
                     U32 param_type_idx = idx_run[idx];
@@ -893,6 +901,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
                 type->owner_type_key  = owner_type_key;
                 type->direct_type_key = direct_type_key;
+                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
               }break;
             }
           }
@@ -921,6 +930,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name            = push_str8_copy(arena, name);
             type->byte_size       = direct_type_byte_size;
             type->direct_type_key = direct_type_key;
+            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
           }
           
           //- rjf: bitfields
@@ -944,6 +954,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->direct_type_key = direct_type_key;
             type->off             = (U32)rdi_type->bitfield.off;
             type->count           = (U64)rdi_type->bitfield.size;
+            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
           }
           
           //- rjf: incomplete types
@@ -957,6 +968,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type = push_array(arena, E_Type, 1);
             type->kind            = kind;
             type->name            = push_str8_copy(arena, name);
+            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
           }
           
         }
@@ -984,6 +996,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
         type->kind       = E_TypeKind_Union;
         type->name       = push_str8f(arena, "reg_%I64u_bit", reg_byte_count*8);
         type->byte_size  = (U64)reg_byte_count;
+        type->arch       = (Arch)key.u32[0];
         
         // rjf: build register type members
         E_MemberList members = {0};

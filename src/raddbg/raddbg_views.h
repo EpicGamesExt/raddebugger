@@ -89,6 +89,7 @@ struct RD_WatchRowInfo
 {
   E_Eval eval;
   CTRL_Entity *module;
+  B32 expr_is_editable;
   String8 group_cfg_name;
   RD_Cfg *group_cfg_parent;
   RD_Cfg *group_cfg_child;

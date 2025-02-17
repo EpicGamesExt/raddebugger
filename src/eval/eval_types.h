@@ -67,12 +67,13 @@ E_MemberKind;
 typedef U32 E_TypeFlags;
 enum
 {
-  E_TypeFlag_Const      = (1<<0),
-  E_TypeFlag_Volatile   = (1<<1),
-  E_TypeFlag_External   = (1<<2),
-  E_TypeFlag_IsPlainText= (1<<3),
-  E_TypeFlag_IsCodeText = (1<<4),
-  E_TypeFlag_IsPathText = (1<<5),
+  E_TypeFlag_Const            = (1<<0),
+  E_TypeFlag_Volatile         = (1<<1),
+  E_TypeFlag_External         = (1<<2),
+  E_TypeFlag_IsPlainText      = (1<<3),
+  E_TypeFlag_IsCodeText       = (1<<4),
+  E_TypeFlag_IsPathText       = (1<<5),
+  E_TypeFlag_EditableChildren = (1<<6),
 };
 
 typedef struct E_Member E_Member;
@@ -131,6 +132,7 @@ struct E_Type
   U64 count;
   U64 depth;
   U32 off;
+  Arch arch;
   E_TypeKey direct_type_key;
   E_TypeKey owner_type_key;
   E_TypeKey *param_type_keys;

@@ -3996,12 +3996,15 @@ rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
   {
     lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(file_path));
   }
-  else for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  if(lang_kind == TXT_LangKind_Null)
   {
-    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("lang"), 0))
+    for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
     {
-      lang_kind = txt_lang_kind_from_extension(param->first->next->string);
-      break;
+      if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("lang"), 0))
+      {
+        lang_kind = txt_lang_kind_from_extension(param->first->next->string);
+        break;
+      }
     }
   }
   scratch_end(scratch);
@@ -12382,7 +12385,7 @@ rd_frame(void)
       {
         String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren);
         expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,

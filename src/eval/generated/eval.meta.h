@@ -134,6 +134,7 @@ E_ExprKind_LeafF64,
 E_ExprKind_LeafF32,
 E_ExprKind_LeafIdent,
 E_ExprKind_LeafOffset,
+E_ExprKind_LeafValue,
 E_ExprKind_LeafFilePath,
 E_ExprKind_TypeIdent,
 E_ExprKind_Ptr,
@@ -162,9 +163,9 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_expr_kind_strings[50];
+extern String8 e_expr_kind_strings[51];
 extern String8 e_interpretation_code_display_strings[11];
-extern E_OpInfo e_expr_kind_op_info_table[50];
+extern E_OpInfo e_expr_kind_op_info_table[51];
 extern U8 e_kind_basic_byte_size_table[56];
 extern String8 e_kind_basic_string_table[56];
 

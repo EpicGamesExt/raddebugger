@@ -170,7 +170,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
     {
       String8 folder_name = accel->folders.v[idx - 0];
       String8 folder_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, folder_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
       expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
       expr->value.u64 = e_id_from_string(folder_path);
@@ -180,7 +180,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
     {
       String8 file_name = accel->files.v[idx - accel->folders.count];
       String8 file_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, file_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
       expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
       expr->value.u64 = e_id_from_string(file_path);
@@ -305,6 +305,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(file)
 typedef struct E_SliceAccel E_SliceAccel;
 struct E_SliceAccel
 {
+  Arch arch;
   U64 count;
   U64 base_ptr_vaddr;
   E_TypeKey element_type_key;
@@ -343,6 +344,14 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
         }
       }
       
+      // rjf: determine architecture
+      Arch arch = e_type_state->ctx->primary_module->arch;
+      if(base_ptr_member != 0)
+      {
+        E_Type *type = e_type_from_key__cached(base_ptr_member->type_key);
+        arch = type->arch;
+      }
+      
       // rjf: evaluate count member, determine count
       U64 count = 0;
       if(count_member != 0)
@@ -372,6 +381,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
       if(count_member && base_ptr_member)
       {
         E_SliceAccel *accel = push_array(arena, E_SliceAccel, 1);
+        accel->arch = arch;
         accel->count = count;
         accel->base_ptr_vaddr = base_ptr_vaddr;
         accel->element_type_key = element_type_key;
@@ -2219,11 +2229,22 @@ E_IRGEN_FUNCTION_DEF(default)
     case E_ExprKind_LeafOffset:
     {
       E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
-      new_tree->value.u64 = expr->value.u64;
+      new_tree->value = expr->value;
       new_tree->space = expr->space;
       result.root     = new_tree;
       result.type_key = expr->type_key;
       result.mode     = E_Mode_Offset;
+    }break;
+    
+    //- rjf: leaf values
+    case E_ExprKind_LeafValue:
+    {
+      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
+      new_tree->value = expr->value;
+      new_tree->space = expr->space;
+      result.root     = new_tree;
+      result.type_key = expr->type_key;
+      result.mode     = E_Mode_Value;
     }break;
     
     //- rjf: leaf file paths
