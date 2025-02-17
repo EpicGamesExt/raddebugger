@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[285] =
+RD_VocabInfo rd_vocab_info_table[288] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -79,6 +79,9 @@ RD_VocabInfo rd_vocab_info_table[285] =
 {str8_lit_comp("environment"), str8_lit_comp("environments"), str8_lit_comp("Environment"), str8_lit_comp("Environments"), RD_IconKind_Null},
 {str8_lit_comp("frozen"), str8_lit_comp(""), str8_lit_comp("Frozen"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("id"), str8_lit_comp("ids"), str8_lit_comp("ID"), str8_lit_comp("IDs"), RD_IconKind_Null},
+{str8_lit_comp("last_modified_time"), str8_lit_comp("last_modified_times"), str8_lit_comp("Last Modified Time"), str8_lit_comp("Last Modified Times"), RD_IconKind_Null},
+{str8_lit_comp("creation_time"), str8_lit_comp("creation_times"), str8_lit_comp("Creation Time"), str8_lit_comp("Creation Times"), RD_IconKind_Null},
+{str8_lit_comp("data"), str8_lit_comp("datas"), str8_lit_comp("Data"), str8_lit_comp("Datas"), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_init"), str8_lit_comp(""), str8_lit_comp("Launch and Initialize"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},

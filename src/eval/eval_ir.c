@@ -243,19 +243,25 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(file)
     String8 member_name = rhs->string;
     if(str8_match(member_name, str8_lit("size"), 0))
     {
-      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.size);
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.size));
       result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
       result.irtree_and_type.mode = E_Mode_Value;
     }
     else if(str8_match(member_name, str8_lit("last_modified_time"), 0))
     {
-      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.modified);
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.modified));
       result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
       result.irtree_and_type.mode = E_Mode_Value;
     }
     else if(str8_match(member_name, str8_lit("creation_time"), 0))
     {
-      result.irtree_and_type.root = e_irtree_const_u(arena, accel->props.created);
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.created));
       result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
       result.irtree_and_type.mode = E_Mode_Value;
     }
@@ -2223,32 +2229,24 @@ E_IRGEN_FUNCTION_DEF(default)
     //- rjf: leaf file paths
     case E_ExprKind_LeafFilePath:
     {
-      FileProperties props = os_properties_from_file_path(expr->string);
+      Temp scratch = scratch_begin(&arena, 1);
+      String8 file_path = path_normalized_from_string(scratch.arena, expr->string);
+      FileProperties props = os_properties_from_file_path(file_path);
       if(props.flags & FilePropertyFlag_IsFolder)
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
-        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(expr->string)));
+        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
         result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
         result.mode     = E_Mode_Value;
       }
       else
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
-        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(expr->string)));
+        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
         result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
         result.mode     = E_Mode_Value;
-#if 0
-        U128 key = fs_key_from_path_range(expr->string, r1u64(0, max_U64));
-        E_Space space = {E_SpaceKind_HashStoreKey, .u128 = key};
-        U64 size = props.size;
-        E_IRNode *base_offset = e_irtree_const_u(arena, 0);
-        base_offset->space = space;
-        result.root     = base_offset;
-        result.root->string = push_str8_copy(arena, expr->string);
-        result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), size);
-        result.mode     = E_Mode_Offset;
-#endif
       }
+      scratch_end(scratch);
     }break;
     
     //- rjf: types
@@ -2266,54 +2264,6 @@ E_IRGEN_FUNCTION_DEF(default)
     case E_ExprKind_Func:
     {
       e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Type expression not expected.");
-    }break;
-    
-    //- rjf: textual line slicing
-    case E_ExprKind_Line:
-    {
-      E_Expr *lhs = expr->first;
-      E_Expr *rhs = expr->last;
-      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-      U64 line_num = rhs->value.u64;
-      B32 space_is_good = 1;
-      E_Space space = {0};
-      if(lhs_irtree.root->op != E_IRExtKind_SetSpace)
-      {
-        space_is_good = 0;
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, lhs->location, "Cannot take a line from a non-file.");
-      }
-      else
-      {
-        MemoryCopy(&space, &lhs_irtree.root->value, sizeof(space));
-      }
-      B32 line_num_is_good = 1;
-      if(rhs->kind != E_ExprKind_LeafU64)
-      {
-        line_num_is_good = 0;
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, rhs->location, "Line number must be specified as a constant number.");
-      }
-      if(space_is_good && line_num_is_good)
-      {
-        TXT_Scope *txt_scope = txt_scope_open();
-        U128 key = space.u128;
-        U128 hash = {0};
-        TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, TXT_LangKind_Null, &hash);
-        if(1 <= line_num && line_num <= text_info.lines_count)
-        {
-          Rng1U64 line_range = text_info.lines_ranges[line_num-1];
-          U64 line_size = dim_1u64(line_range);
-          E_IRNode *line_offset = e_irtree_const_u(arena, line_range.min);
-          result.root        = line_offset;
-          result.root->space = space;
-          result.type_key    = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), line_size);
-          result.mode        = E_Mode_Offset;
-        }
-        else
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, rhs->location, "Line %I64u is out of bounds.", line_num);
-        }
-        txt_scope_close(txt_scope);
-      }
     }break;
     
     //- rjf: definitions

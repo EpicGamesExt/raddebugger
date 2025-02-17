@@ -3032,19 +3032,31 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: file reads
     case E_SpaceKind_File:
     {
+      // rjf: unpack space/path
       U64 file_path_string_id = space.u64_0;
       String8 file_path = e_string_from_id(file_path_string_id);
-      U128 key = fs_key_from_path_range(file_path, range);
+      
+      // rjf: find containing chunk range
+      U64 chunk_size = KB(4);
+      Rng1U64 containing_range = range;
+      containing_range.min -= containing_range.min%chunk_size;
+      containing_range.max += chunk_size-1;
+      containing_range.max -= containing_range.max%chunk_size;
+      
+      // rjf: map to hash
+      U128 key = fs_key_from_path_range(file_path, containing_range);
       U128 hash = hs_hash_from_key(key, 0);
+      
+      // rjf: look up from hash store
       HS_Scope *scope = hs_scope_open();
       {
         String8 data = hs_data_from_hash(scope, hash);
-        Rng1U64 legal_range = r1u64(0, data.size);
+        Rng1U64 legal_range = r1u64(containing_range.min, containing_range.min + data.size);
         Rng1U64 read_range = intersect_1u64(range, legal_range);
         if(read_range.min < read_range.max)
         {
           result = 1;
-          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
+          MemoryCopy(out, data.str + read_range.min - containing_range.min, dim_1u64(read_range));
         }
       }
       hs_scope_close(scope);
@@ -8636,7 +8648,7 @@ rd_window_frame(void)
         {
           // rjf: brighten
           {
-            R_Rect2DInst *inst = dr_rect(box->rect, v4f32(0, 0, 0, 0), 0, 0, 1.f);
+            R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, 1.f);
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
             color.w *= t*0.2f;
             inst->colors[Corner_00] = color;

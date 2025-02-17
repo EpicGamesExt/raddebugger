@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[51] =
+String8 e_expr_kind_strings[50] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -64,7 +64,6 @@ str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
-str8_lit_comp("Line"),
 str8_lit_comp("Define"),
 str8_lit_comp("Tag"),
 };
@@ -84,7 +83,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[51] =
+E_OpInfo e_expr_kind_op_info_table[50] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -134,7 +133,6 @@ E_OpInfo e_expr_kind_op_info_table[51] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
-{ E_OpKind_Binary, 1, str8_lit_comp(""), str8_lit_comp(":"), str8_lit_comp("") },
 { E_OpKind_Binary, 13, str8_lit_comp(""), str8_lit_comp("="), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp("=>"), str8_lit_comp(","), str8_lit_comp("") },
 };

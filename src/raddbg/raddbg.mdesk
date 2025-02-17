@@ -91,6 +91,9 @@ RD_VocabTable:
   {environment          _                           "Environment"               _                     Null                                           }
   {frozen               ""                          "Frozen"                    ""                    Null                                           }
   {id                   _                           "ID"                        _                     Null                                           }
+  {last_modified_time   _                           "Last Modified Time"        _                     Null                                           }
+  {creation_time        _                           "Creation Time"             _                     Null                                           }
+  {data                 _                           "Data"                      _                     Null                                           }
 }
 
 @struct RD_VocabInfo:

@@ -1101,6 +1101,42 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
+      // rjf: singular button for folders & files
+      else if(info.eval.space.kind == E_SpaceKind_FileSystem)
+      {
+        DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_top_palette()->text, ui_top_font_size()};
+        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        String8 file_path = e_string_from_id(info.eval.value.u64);
+        String8 file_name = str8_skip_last_slash(file_path);
+        if(str8_match(type->name, str8_lit("folder"), 0))
+        {
+          DR_FStrList fstrs = {0};
+          dr_fstrs_push_new(arena, &fstrs, &params, file_name);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
+                                      .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
+                                      .pct = 1.f,
+                                      .fstrs = fstrs);
+        }
+        else
+        {
+          info.cell_style_key = str8_lit("expr_and_eval");
+          RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+          RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+          RD_Cfg *w_cfg = style->first;
+          F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+          DR_FStrList fstrs = {0};
+          dr_fstrs_push_new(arena, &fstrs, &params, file_name);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
+                                      .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
+                                      .default_pct = 0.35f,
+                                      .pct = take_pct(),
+                                      .fstrs = fstrs);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
+#undef take_pct
+        }
+      }
+      
       // rjf: singular cell for view ui
       else if(info.view_ui_rule != &rd_nil_view_ui_rule)
       {
@@ -1243,7 +1279,9 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             B32 is_non_code = 0;
             String8 string = push_str8f(arena, ".%S", member_name);
             if(row_eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-               row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+               row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+               row_eval.space.kind == E_SpaceKind_File ||
+               row_eval.space.kind == E_SpaceKind_FileSystem)
             {
               String8 fancy_name = rd_display_from_code_name(member_name);
               if(fancy_name.size != 0)
