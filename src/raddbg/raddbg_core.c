@@ -1953,6 +1953,14 @@ rd_expr_from_cfg(RD_Cfg *cfg)
   return result;
 }
 
+internal String8
+rd_view_rule_from_cfg(RD_Cfg *cfg)
+{
+  RD_Cfg *view_rule = rd_cfg_child_from_string(cfg, str8_lit("view_rule"));
+  String8 result = view_rule->first->string;
+  return result;
+}
+
 internal D_Target
 rd_target_from_cfg(Arena *arena, RD_Cfg *cfg)
 {
@@ -2088,12 +2096,12 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     //- rjf: push label
     if(label_string.size != 0)
     {
-      dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code));
+      dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
     
-    //- rjf: push expression
+    //- rjf: push collection name
     if(collection_name.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, collection_name);
@@ -2199,7 +2207,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     //- rjf: cfg has expression attached -> use that
     else if(expr_string.size != 0 && !str8_match(cfg->string, str8_lit("watch"), 0))
     {
-      dr_fstrs_push_new(arena, &result, &params, expr_string);
+      dr_fstrs_push_new(arena, &result, &params, expr_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();
     }
@@ -2233,7 +2241,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       String8 condition = rd_cfg_child_from_string(cfg, str8_lit("condition"))->first->string;
       if(condition.size != 0)
       {
-        dr_fstrs_push_new(arena, &result, &params, str8_lit("if "), .font = rd_font_from_slot(RD_FontSlot_Code));
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("if "), .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
         RD_Font(RD_FontSlot_Code)
         {
           DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, condition);
@@ -6962,7 +6970,8 @@ rd_window_frame(void)
       }
       
       // rjf: evaluate hover-evaluation expression - if it doesn't evaluate, then don't build anything
-      E_Eval hover_eval = e_eval_from_string(scratch.arena, ws->hover_eval_string);
+      String8 hover_eval_expr = push_str8f(scratch.arena, "%S%s%S", ws->hover_eval_string, ws->hover_eval_view_rules.size != 0 ? " => " : "", ws->hover_eval_view_rules);
+      E_Eval hover_eval = e_eval_from_string(scratch.arena, hover_eval_expr);
       if(hover_eval.msgs.max_kind > E_MsgKind_Null)
       {
         build_hover_eval = 0;
@@ -7003,7 +7012,7 @@ rd_window_frame(void)
         rd_cfg_new(explicit_root, str8_lit("1"));
         RD_RegsScope(.view = view->id)
         {
-          rd_cfg_new_replace(expr, ws->hover_eval_string);
+          rd_cfg_new_replace(expr, hover_eval_expr);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
           U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
@@ -9471,7 +9480,7 @@ rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix,
 //~ rjf: Hover Eval
 
 internal void
-rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string)
+rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string, String8 view_rules)
 {
   RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
@@ -9480,12 +9489,14 @@ rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 s
      ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
   {
-    B32 is_new_string = !str8_match(ws->hover_eval_string, string, 0);
+    B32 is_new_string = (!str8_match(ws->hover_eval_string, string, 0) ||
+                         !str8_match(ws->hover_eval_view_rules, view_rules, 0));
     if(is_new_string)
     {
       ws->hover_eval_first_frame_idx = ws->hover_eval_last_frame_idx = rd_state->frame_index;
       arena_clear(ws->hover_eval_arena);
       ws->hover_eval_string = push_str8_copy(ws->hover_eval_arena, string);
+      ws->hover_eval_view_rules = push_str8_copy(ws->hover_eval_arena, view_rules);
       ws->hover_eval_file_path = push_str8_copy(ws->hover_eval_arena, file_path);
       ws->hover_eval_file_pt = pt;
       ws->hover_eval_vaddr = vaddr;

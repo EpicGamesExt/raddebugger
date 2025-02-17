@@ -792,7 +792,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: interactions 
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
-              rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, ctrl_string_from_handle(scratch.arena, thread->handle));
+              rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, ctrl_string_from_handle(scratch.arena, thread->handle), str8_zero());
               RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
             }
             if(ui_right_clicked(thread_sig))
@@ -939,7 +939,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: interactions
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
-              rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, ctrl_string_from_handle(scratch.arena, thread->handle));
+              rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, ctrl_string_from_handle(scratch.arena, thread->handle), str8_zero());
               RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
             }
             if(ui_right_clicked(thread_sig))
@@ -1016,7 +1016,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              rd_set_hover_eval(v2f32(bp_box->rect.x0, bp_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, push_str8f(scratch.arena, "$%I64u", bp->id));
+              rd_set_hover_eval(v2f32(bp_box->rect.x0, bp_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, push_str8f(scratch.arena, "$%I64u", bp->id), str8_zero());
               RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
@@ -1078,6 +1078,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch hovering
             if(ui_hovering(pin_sig) && !rd_drag_is_active())
             {
+              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, push_str8f(scratch.arena, "$%I64u", pin->id), str8_zero());
               RD_RegsScope(.cfg = pin->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
@@ -1285,6 +1286,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           RD_Cfg *pin = n->v;
           String8 pin_expr = rd_expr_from_cfg(pin);
+          String8 pin_view_rule = rd_view_rule_from_cfg(pin);
           E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
           String8 eval_string = {0};
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
@@ -1332,7 +1334,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           UI_Signal pin_sig = ui_signal_from_box(pin_box);
           if(ui_key_match(pin_box_key, ui_hot_key()))
           {
-            rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), str8_zero(), txt_pt(1, 1), 0, pin_expr);
+            rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), str8_zero(), txt_pt(1, 1), 0, pin_expr, pin_view_rule);
           }
         }
       }
@@ -1627,7 +1629,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_idx = mouse_pt.line-params->line_num_range.min;
         line_vaddr = params->line_vaddrs[line_idx];
       }
-      rd_set_hover_eval(mouse_expr_baseline_pos, rd_regs()->file_path, mouse_pt, line_vaddr, mouse_expr);
+      rd_set_hover_eval(mouse_expr_baseline_pos, rd_regs()->file_path, mouse_pt, line_vaddr, mouse_expr, str8_zero());
     }
   }
   

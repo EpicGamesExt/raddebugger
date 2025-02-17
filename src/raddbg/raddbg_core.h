@@ -589,6 +589,7 @@ struct RD_WindowState
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
+  String8 hover_eval_view_rules;
   U64 hover_eval_first_frame_idx;
   U64 hover_eval_last_frame_idx;
   String8 hover_eval_file_path;
@@ -977,6 +978,7 @@ internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
 internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
 internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
+internal String8 rd_view_rule_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
 
@@ -1102,7 +1104,7 @@ internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
+internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string, String8 view_rules);
 
 ////////////////////////////////
 //~ rjf: Lister Functions
