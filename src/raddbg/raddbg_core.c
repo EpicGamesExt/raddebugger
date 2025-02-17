@@ -13113,21 +13113,55 @@ rd_frame(void)
             }
             
             // rjf: pre-emptively set up the animation rectangle, depending on where
-            // the new panel was inserted (?)
-#if 0 // TODO(rjf): @cfg
-            if(!rd_panel_is_nil(new_panel->prev))
+            // the new panel was inserted
             {
-              Rng2F32 prev_rect_pct = new_panel->prev->animated_rect_pct;
-              new_panel->animated_rect_pct = prev_rect_pct;
-              new_panel->animated_rect_pct.p0.v[split_axis] = new_panel->animated_rect_pct.p1.v[split_axis];
+              RD_WindowState *ws = rd_window_state_from_cfg(new_panel_cfg);
+              if(ws != &rd_nil_window_state)
+              {
+                ui_select_state(ws->ui);
+                RD_PanelTree new_panel_tree = rd_panel_tree_from_cfg(scratch.arena, new_panel_cfg);
+                RD_PanelNode *new_panel = rd_panel_node_from_tree_cfg(new_panel_tree.root, new_panel_cfg);
+                Rng2F32 stub_content_rect = r2f32p(0, 0, 1000, 1000);
+                Vec2F32 stub_content_rect_dim = dim_2f32(stub_content_rect);
+                Rng2F32 new_rect_px  = rd_target_rect_from_panel_node(stub_content_rect, new_panel_tree.root, new_panel);
+                Rng2F32 new_rect_pct = r2f32p(new_rect_px.x0/stub_content_rect_dim.x,
+                                              new_rect_px.y0/stub_content_rect_dim.y,
+                                              new_rect_px.x1/stub_content_rect_dim.x,
+                                              new_rect_px.y1/stub_content_rect_dim.y);
+                if(new_panel->prev != &rd_nil_panel_node)
+                {
+                  Rng2F32 target_prev_rect_px  = rd_target_rect_from_panel_node(stub_content_rect, panel_tree.root, rd_panel_node_from_tree_cfg(panel_tree.root, new_panel->prev->cfg));
+                  Rng2F32 target_prev_rect_pct = r2f32p(target_prev_rect_px.x0/stub_content_rect_dim.x,
+                                                        target_prev_rect_px.y0/stub_content_rect_dim.y,
+                                                        target_prev_rect_px.x1/stub_content_rect_dim.x,
+                                                        target_prev_rect_px.y1/stub_content_rect_dim.y);
+                  Rng2F32 prev_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->prev->cfg), target_prev_rect_pct.x0, .initial = target_prev_rect_pct.x0),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->prev->cfg), target_prev_rect_pct.y0, .initial = target_prev_rect_pct.y0),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->prev->cfg), target_prev_rect_pct.x1, .initial = target_prev_rect_pct.x1),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->prev->cfg), target_prev_rect_pct.y1, .initial = target_prev_rect_pct.y1));
+                  new_rect_pct = prev_rect_pct;
+                  new_rect_pct.p0.v[split_axis] = new_rect_pct.p1.v[split_axis];
+                }
+                if(new_panel->next != &rd_nil_panel_node)
+                {
+                  Rng2F32 target_next_rect_px  = rd_target_rect_from_panel_node(stub_content_rect, panel_tree.root, rd_panel_node_from_tree_cfg(panel_tree.root, new_panel->next->cfg));
+                  Rng2F32 target_next_rect_pct = r2f32p(target_next_rect_px.x0/stub_content_rect_dim.x,
+                                                        target_next_rect_px.y0/stub_content_rect_dim.y,
+                                                        target_next_rect_px.x1/stub_content_rect_dim.x,
+                                                        target_next_rect_px.y1/stub_content_rect_dim.y);
+                  Rng2F32 next_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->next->cfg), target_next_rect_pct.x0, .initial = target_next_rect_pct.x0),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->next->cfg), target_next_rect_pct.y0, .initial = target_next_rect_pct.y0),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->next->cfg), target_next_rect_pct.x1, .initial = target_next_rect_pct.x1),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->next->cfg), target_next_rect_pct.y1, .initial = target_next_rect_pct.y1));
+                  new_rect_pct = next_rect_pct;
+                  new_rect_pct.p1.v[split_axis] = new_rect_pct.p0.v[split_axis];
+                }
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->cfg), new_rect_pct.x0, .initial = new_rect_pct.x0, .reset = 1);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->cfg), new_rect_pct.x1, .initial = new_rect_pct.x1, .reset = 1);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->cfg), new_rect_pct.y0, .initial = new_rect_pct.y0, .reset = 1);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->cfg), new_rect_pct.y1, .initial = new_rect_pct.y1, .reset = 1);
+              }
             }
-            if(!rd_panel_is_nil(new_panel->next))
-            {
-              Rng2F32 next_rect_pct = new_panel->next->animated_rect_pct;
-              new_panel->animated_rect_pct = next_rect_pct;
-              new_panel->animated_rect_pct.p1.v[split_axis] = new_panel->animated_rect_pct.p0.v[split_axis];
-            }
-#endif
             
             // rjf: if this split was caused by drag/dropping a tab, and the originating panel
             // has no further tabs, then close the originating panel
@@ -13437,15 +13471,15 @@ rd_frame(void)
                 if(grandparent != &rd_nil_panel_node && grandparent->split_axis == keep_child->split_axis && keep_child->first != &rd_nil_panel_node)
                 {
                   rd_cfg_unhook(grandparent->cfg, keep_child->cfg);
-                  RD_PanelNode *prev = parent_prev;
+                  RD_Cfg *prev = parent_prev->cfg;
                   for(RD_PanelNode *child = keep_child->first, *next = &rd_nil_panel_node; child != &rd_nil_panel_node; child = next)
                   {
                     next = child->next;
                     rd_cfg_unhook(keep_child->cfg, child->cfg);
-                    rd_cfg_insert_child(grandparent->cfg, prev->cfg, child->cfg);
-                    prev = child;
+                    rd_cfg_insert_child(grandparent->cfg, prev, child->cfg);
+                    prev = child->cfg;
                     F32 old_pct = child->pct_of_parent;
-                    F32 new_pct = old_pct * keep_child->pct_of_parent;
+                    F32 new_pct = old_pct * pct_of_parent;
                     rd_cfg_equip_stringf(child->cfg, "%f", new_pct);
                   }
                   rd_cfg_release(keep_child->cfg);

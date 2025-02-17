@@ -804,7 +804,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node && n != 0; n = next)
     {
       next = n->lru_next;
-      if(n->last_touched_build_index+1 < ui_state->build_index)
+      if(n->last_touched_build_index+2 < ui_state->build_index)
       {
         U64 slot_idx = n->key.u64[0]%ui_state->anim_slots_count;
         UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
@@ -2971,6 +2971,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
 {
   // rjf: get animation cache node
   UI_AnimNode *node = &ui_nil_anim_node;
+  if(ui_state != 0)
   {
     U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
     UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
@@ -3006,20 +3007,23 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   }
   
   // rjf: touch node & update parameters - grab current
-  node->last_touched_build_index = ui_state->build_index;
-  DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
-  if(params->reset)
+  if(node != &ui_nil_anim_node)
   {
-    node->current = params->initial;
-  }
-  MemoryCopyStruct(&node->params, params);
-  if(node->params.epsilon == 0)
-  {
-    node->params.epsilon = 0.01f;
-  }
-  if(node->params.rate == 1)
-  {
-    node->current = node->params.target;
+    node->last_touched_build_index = ui_state->build_index;
+    DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
+    if(params->reset)
+    {
+      node->current = params->initial;
+    }
+    MemoryCopyStruct(&node->params, params);
+    if(node->params.epsilon == 0)
+    {
+      node->params.epsilon = 0.01f;
+    }
+    if(node->params.rate == 1)
+    {
+      node->current = node->params.target;
+    }
   }
   return node->current;
 }
