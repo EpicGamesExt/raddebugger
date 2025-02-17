@@ -157,47 +157,121 @@ E_LOOKUP_INFO_FUNCTION_DEF(folder)
   return info;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(folder)
+E_LOOKUP_RANGE_FUNCTION_DEF(folder)
 {
-  E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_FolderAccel *accel = (E_FolderAccel *)user_data;
-    U64 idx = e_value_from_expr(rhs).u64;
+    E_Expr *expr = &e_expr_nil;
+    String8 expr_string = {0};
     if(0 <= idx && idx < accel->folders.count)
     {
-      String8 folder_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, accel->folders.v[idx - 0]);
-      U64 string_id = e_id_from_string(folder_path);
-      E_Space space = e_space_make(E_SpaceKind_FileSystem);
-      result.irtree_and_type.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, string_id));
-      result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
-      result.irtree_and_type.mode     = E_Mode_Value;
+      String8 folder_name = accel->folders.v[idx - 0];
+      String8 folder_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, folder_name);
+      expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
+      expr->space = e_space_make(E_SpaceKind_FileSystem);
+      expr->value.u64 = e_id_from_string(folder_path);
+      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, folder_name));
     }
     else if(accel->folders.count <= idx && idx < accel->folders.count + accel->files.count)
     {
-      String8 file_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, accel->files.v[idx - accel->folders.count]);
-      U64 string_id = e_id_from_string(file_path);
-      E_Space space = e_space_make(E_SpaceKind_FileSystem);
-      result.irtree_and_type.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, string_id));
-      result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
-      result.irtree_and_type.mode     = E_Mode_Value;
+      String8 file_name = accel->files.v[idx - accel->folders.count];
+      String8 file_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, file_name);
+      expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
+      expr->space = e_space_make(E_SpaceKind_FileSystem);
+      expr->value.u64 = e_id_from_string(file_path);
+      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, file_name));
     }
+    exprs[out_idx] = expr;
+    exprs_strings[out_idx] = expr_string;
     scratch_end(scratch);
   }
-  return result;
 }
+
+typedef struct E_FileAccel E_FileAccel;
+struct E_FileAccel
+{
+  String8 file_path;
+  FileProperties props;
+  String8Array fields;
+};
 
 E_LOOKUP_INFO_FUNCTION_DEF(file)
 {
-  E_LookupInfo info = {0};
+  E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: evaluate lhs file path ID
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    E_Value lhs_value = lhs_interp.value;
+    U64 lhs_string_id = lhs_value.u64;
+    
+    //- rjf: get file path
+    String8 file_path = e_string_from_id(lhs_string_id);
+    
+    //- rjf: build field list
+    String8List fields = {0};
+    str8_list_pushf(arena, &fields, "size");
+    str8_list_pushf(arena, &fields, "last_modified_time");
+    str8_list_pushf(arena, &fields, "creation_time");
+    str8_list_pushf(arena, &fields, "data");
+    
+    //- rjf: fill accel
+    accel->file_path = push_str8_copy(arena, file_path);
+    accel->props = os_properties_from_file_path(file_path);
+    accel->fields = str8_array_from_list(arena, &fields);
+    
+    scratch_end(scratch);
+  }
+  E_LookupInfo info = {accel, accel->fields.count};
   return info;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(file)
+E_LOOKUP_RANGE_FUNCTION_DEF(file)
 {
-  E_LookupAccess result = {{&e_irnode_nil}};
-  return result;
+  E_FileAccel *accel = (E_FileAccel *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    E_Expr *expr = &e_expr_nil;
+    String8 string = {0};
+    if(0 <= idx && idx < accel->fields.count)
+    {
+      String8 name = accel->fields.v[idx];
+      if(str8_match(name, str8_lit("size"), 0))
+      {
+        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+        expr->value.u64 = accel->props.size;
+      }
+      else if(str8_match(name, str8_lit("last_modified_time"), 0))
+      {
+        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+        expr->value.u64 = accel->props.modified;
+      }
+      else if(str8_match(name, str8_lit("creation_time"), 0))
+      {
+        expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+        expr->value.u64 = accel->props.created;
+      }
+      else if(str8_match(name, str8_lit("data"), 0))
+      {
+        expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+        expr->space = e_space_make(E_SpaceKind_HashStoreKey);
+        expr->space.u128 = fs_key_from_path_range(accel->file_path, r1u64(0, max_U64));
+        expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size);
+      }
+      string = push_str8f(arena, ".%S", name);
+    }
+    exprs[out_idx] = expr;
+    exprs_strings[out_idx] = string;
+  }
 }
 
 ////////////////////////////////
@@ -324,10 +398,10 @@ e_lookup_rule_map_make(Arena *arena, U64 slots_count)
   map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
-                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(folder));
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
-                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file));
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(file));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("slice"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(slice),
                                .range  = E_LOOKUP_RANGE_FUNCTION_NAME(slice));
