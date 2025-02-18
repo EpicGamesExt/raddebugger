@@ -467,7 +467,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   if(u->hover_t > 0.001f)
   {
     Vec4F32 weak_thread_color = u->thread_color;
-    weak_thread_color.w *= 0.5f*u->hover_t;
+    weak_thread_color.w *= 0.15f*u->hover_t;
     R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
                                         box->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
@@ -481,7 +481,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   if(u->is_selected && u->do_glow)
   {
     Vec4F32 weak_thread_color = u->thread_color;
-    weak_thread_color.w *= 0.3f;
+    weak_thread_color.w *= 0.1f;
     R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
                                         box->rect.x0 + ui_top_font_size()*22.f*u->alive_t,

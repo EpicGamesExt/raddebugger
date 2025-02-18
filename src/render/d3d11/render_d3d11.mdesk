@@ -136,10 +136,10 @@ vs_main(CPU2Vertex cpu2vertex)
   };
   float4 src_color[] =
   {
-    linear_from_srgba(cpu2vertex.color01),
-    linear_from_srgba(cpu2vertex.color00),
-    linear_from_srgba(cpu2vertex.color11),
-    linear_from_srgba(cpu2vertex.color10),
+    cpu2vertex.color01,
+    cpu2vertex.color00,
+    cpu2vertex.color11,
+    cpu2vertex.color10,
   };
   float2 dst_verts_pct = float2((cpu2vertex.vertex_id >> 1) ? 1.f : 0.f,
                                 (cpu2vertex.vertex_id & 1)  ? 0.f : 1.f);

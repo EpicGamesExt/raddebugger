@@ -370,20 +370,28 @@ RD_ThemeColor_FloatingBackground,
 RD_ThemeColor_FloatingBackgroundAlt,
 RD_ThemeColor_FloatingBorder,
 RD_ThemeColor_ImplicitButtonBackground,
+RD_ThemeColor_ImplicitButtonHover,
 RD_ThemeColor_ImplicitButtonBorder,
 RD_ThemeColor_PlainButtonBackground,
+RD_ThemeColor_PlainButtonHover,
 RD_ThemeColor_PlainButtonBorder,
 RD_ThemeColor_PositivePopButtonBackground,
+RD_ThemeColor_PositivePopButtonHover,
 RD_ThemeColor_PositivePopButtonBorder,
 RD_ThemeColor_NegativePopButtonBackground,
+RD_ThemeColor_NegativePopButtonHover,
 RD_ThemeColor_NegativePopButtonBorder,
 RD_ThemeColor_NeutralPopButtonBackground,
+RD_ThemeColor_NeutralPopButtonHover,
 RD_ThemeColor_NeutralPopButtonBorder,
 RD_ThemeColor_ScrollBarButtonBackground,
+RD_ThemeColor_ScrollBarButtonHover,
 RD_ThemeColor_ScrollBarButtonBorder,
 RD_ThemeColor_TabBackground,
+RD_ThemeColor_TabHover,
 RD_ThemeColor_TabBorder,
 RD_ThemeColor_TabBackgroundInactive,
+RD_ThemeColor_TabHoverInactive,
 RD_ThemeColor_TabBorderInactive,
 RD_ThemeColor_CodeDefault,
 RD_ThemeColor_CodeSymbol,
@@ -565,18 +573,18 @@ extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
 extern String8 rd_theme_color_version_remap_old_name_table[22];
 extern String8 rd_theme_color_version_remap_new_name_table[22];
-extern Vec4F32 rd_theme_preset_colors__default_dark[76];
-extern Vec4F32 rd_theme_preset_colors__default_light[76];
-extern Vec4F32 rd_theme_preset_colors__vs_dark[76];
-extern Vec4F32 rd_theme_preset_colors__vs_light[76];
-extern Vec4F32 rd_theme_preset_colors__solarized_dark[76];
-extern Vec4F32 rd_theme_preset_colors__solarized_light[76];
-extern Vec4F32 rd_theme_preset_colors__handmade_hero[76];
-extern Vec4F32 rd_theme_preset_colors__four_coder[76];
-extern Vec4F32 rd_theme_preset_colors__far_manager[76];
+extern Vec4F32 rd_theme_preset_colors__default_dark[84];
+extern Vec4F32 rd_theme_preset_colors__default_light[84];
+extern Vec4F32 rd_theme_preset_colors__vs_dark[84];
+extern Vec4F32 rd_theme_preset_colors__vs_light[84];
+extern Vec4F32 rd_theme_preset_colors__solarized_dark[84];
+extern Vec4F32 rd_theme_preset_colors__solarized_light[84];
+extern Vec4F32 rd_theme_preset_colors__handmade_hero[84];
+extern Vec4F32 rd_theme_preset_colors__four_coder[84];
+extern Vec4F32 rd_theme_preset_colors__far_manager[84];
 extern Vec4F32* rd_theme_preset_colors_table[9];
-extern String8 rd_theme_color_display_string_table[76];
-extern String8 rd_theme_color_cfg_string_table[76];
+extern String8 rd_theme_color_display_string_table[84];
+extern String8 rd_theme_color_cfg_string_table[84];
 read_only global U8 rd_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,

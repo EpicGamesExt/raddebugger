@@ -223,10 +223,15 @@ typedef enum UI_ColorCode
 {
   UI_ColorCode_Null,
   UI_ColorCode_Background,
+  UI_ColorCode_BackgroundAlt,
+  UI_ColorCode_BackgroundGood,
+  UI_ColorCode_BackgroundBad,
+  UI_ColorCode_BackgroundPop,
+  UI_ColorCode_Border,
   UI_ColorCode_Text,
   UI_ColorCode_TextWeak,
-  UI_ColorCode_Border,
-  UI_ColorCode_Overlay,
+  UI_ColorCode_Hover,
+  UI_ColorCode_Focus,
   UI_ColorCode_Cursor,
   UI_ColorCode_Selection,
   UI_ColorCode_COUNT
@@ -243,10 +248,15 @@ struct UI_Palette
     {
       Vec4F32 null;
       Vec4F32 background;
+      Vec4F32 background_alt;
+      Vec4F32 background_good;
+      Vec4F32 background_bad;
+      Vec4F32 background_pop;
+      Vec4F32 border;
       Vec4F32 text;
       Vec4F32 text_weak;
-      Vec4F32 border;
-      Vec4F32 overlay;
+      Vec4F32 hover;
+      Vec4F32 focus;
       Vec4F32 cursor;
       Vec4F32 selection;
     };
@@ -356,28 +366,29 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_DrawDropShadow            (UI_BoxFlags)(1ull<<27)
 # define UI_BoxFlag_DrawBackgroundBlur        (UI_BoxFlags)(1ull<<28)
 # define UI_BoxFlag_DrawBackground            (UI_BoxFlags)(1ull<<29)
-# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<30)
-# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<31)
-# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<32)
-# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<33)
-# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<34)
-# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<35)
-# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<36)
-# define UI_BoxFlag_DrawTextWeak              (UI_BoxFlags)(1ull<<37)
-# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<38)
-# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<39)
-# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<40)
-# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<41)
-# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<42)
-# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<43)
-# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<44)
-# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<45)
-# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<46)
-# define UI_BoxFlag_DisableFocusBorder        (UI_BoxFlags)(1ull<<47)
-# define UI_BoxFlag_DisableFocusOverlay       (UI_BoxFlags)(1ull<<48)
-# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<49)
-# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<50)
-# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<51)
+# define UI_BoxFlag_DrawBackgroundAlt         (UI_BoxFlags)(1ull<<30)
+# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<31)
+# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<32)
+# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<33)
+# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<34)
+# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<35)
+# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<36)
+# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<37)
+# define UI_BoxFlag_DrawTextWeak              (UI_BoxFlags)(1ull<<38)
+# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<39)
+# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<40)
+# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<41)
+# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<42)
+# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<43)
+# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<44)
+# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<45)
+# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<46)
+# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_DisableFocusBorder        (UI_BoxFlags)(1ull<<48)
+# define UI_BoxFlag_DisableFocusOverlay       (UI_BoxFlags)(1ull<<49)
+# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<50)
+# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<51)
+# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<52)
 
 //- rjf: bundles
 # define UI_BoxFlag_Clickable           (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)

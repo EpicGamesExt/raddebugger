@@ -2759,8 +2759,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               }
               else if(global_row_idx & 1)
               {
-                palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundAlt));
-                row_flags |= UI_BoxFlag_DrawBackground;
+                row_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundAlt;
               }
               if(!row_matches_last_row_topology)
               {
@@ -2870,8 +2869,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       rgba.w *= 0.2f;
                     }
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
-                    palette = ui_build_palette(ui_top_palette(), .overlay = rgba);
-                    cell_flags |= UI_BoxFlag_DrawOverlay;
+                    palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
+                    cell_flags |= UI_BoxFlag_DrawBackground;
                   }
                   else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
                           rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
@@ -2887,8 +2886,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       rgba.w *= 0.2f;
                     }
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
-                    palette = ui_build_palette(ui_top_palette(), .overlay = rgba);
-                    cell_flags |= UI_BoxFlag_DrawOverlay;
+                    palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
+                    cell_flags |= UI_BoxFlag_DrawBackground;
                   }
                 }
                 ProfEnd();

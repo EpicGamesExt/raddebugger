@@ -4536,54 +4536,66 @@ rd_window_frame(void)
       ws->cfg_palettes[code].cursor     = current->colors[RD_ThemeColor_Cursor];
       ws->cfg_palettes[code].selection  = current->colors[RD_ThemeColor_SelectionOverlay];
     }
-    ws->cfg_palettes[RD_PaletteCode_Base].background = current->colors[RD_ThemeColor_BaseBackground];
-    ws->cfg_palettes[RD_PaletteCode_Base].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_Base].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_Base].border     = current->colors[RD_ThemeColor_BaseBorder];
-    ws->cfg_palettes[RD_PaletteCode_MenuBar].background = current->colors[RD_ThemeColor_MenuBarBackground];
-    ws->cfg_palettes[RD_PaletteCode_MenuBar].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_MenuBar].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_MenuBar].border     = current->colors[RD_ThemeColor_MenuBarBorder];
-    ws->cfg_palettes[RD_PaletteCode_Floating].background = current->colors[RD_ThemeColor_FloatingBackground];
-    ws->cfg_palettes[RD_PaletteCode_Floating].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_Floating].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_Floating].border     = current->colors[RD_ThemeColor_FloatingBorder];
-    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].background = current->colors[RD_ThemeColor_ImplicitButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].border     = current->colors[RD_ThemeColor_ImplicitButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_PlainButton].background = current->colors[RD_ThemeColor_PlainButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_PlainButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_PlainButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_PlainButton].border     = current->colors[RD_ThemeColor_PlainButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].background = current->colors[RD_ThemeColor_PositivePopButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].border     = current->colors[RD_ThemeColor_PositivePopButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].background = current->colors[RD_ThemeColor_NegativePopButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].border     = current->colors[RD_ThemeColor_NegativePopButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].background = current->colors[RD_ThemeColor_NeutralPopButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].border     = current->colors[RD_ThemeColor_NeutralPopButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].background = current->colors[RD_ThemeColor_ScrollBarButtonBackground];
-    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].border     = current->colors[RD_ThemeColor_ScrollBarButtonBorder];
-    ws->cfg_palettes[RD_PaletteCode_Tab].background = current->colors[RD_ThemeColor_TabBackground];
-    ws->cfg_palettes[RD_PaletteCode_Tab].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_Tab].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_Tab].border     = current->colors[RD_ThemeColor_TabBorder];
-    ws->cfg_palettes[RD_PaletteCode_TabInactive].background = current->colors[RD_ThemeColor_TabBackgroundInactive];
-    ws->cfg_palettes[RD_PaletteCode_TabInactive].text       = current->colors[RD_ThemeColor_Text];
-    ws->cfg_palettes[RD_PaletteCode_TabInactive].text_weak  = current->colors[RD_ThemeColor_TextWeak];
-    ws->cfg_palettes[RD_PaletteCode_TabInactive].border     = current->colors[RD_ThemeColor_TabBorderInactive];
-    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].background = current->colors[RD_ThemeColor_DropSiteOverlay];
-    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text       = current->colors[RD_ThemeColor_DropSiteOverlay];
-    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text_weak  = current->colors[RD_ThemeColor_DropSiteOverlay];
-    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border     = current->colors[RD_ThemeColor_BaseBorder];
+    ws->cfg_palettes[RD_PaletteCode_Base].background     = current->colors[RD_ThemeColor_BaseBackground];
+    ws->cfg_palettes[RD_PaletteCode_Base].background_alt = current->colors[RD_ThemeColor_BaseBackgroundAlt];
+    ws->cfg_palettes[RD_PaletteCode_Base].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_Base].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_Base].border         = current->colors[RD_ThemeColor_BaseBorder];
+    ws->cfg_palettes[RD_PaletteCode_MenuBar].background     = current->colors[RD_ThemeColor_MenuBarBackground];
+    ws->cfg_palettes[RD_PaletteCode_MenuBar].background_alt = current->colors[RD_ThemeColor_MenuBarBackgroundAlt];
+    ws->cfg_palettes[RD_PaletteCode_MenuBar].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_MenuBar].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_MenuBar].border         = current->colors[RD_ThemeColor_MenuBarBorder];
+    ws->cfg_palettes[RD_PaletteCode_Floating].background     = current->colors[RD_ThemeColor_FloatingBackground];
+    ws->cfg_palettes[RD_PaletteCode_Floating].background_alt = current->colors[RD_ThemeColor_FloatingBackgroundAlt];
+    ws->cfg_palettes[RD_PaletteCode_Floating].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_Floating].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_Floating].border         = current->colors[RD_ThemeColor_FloatingBorder];
+    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].background     = current->colors[RD_ThemeColor_ImplicitButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].background_alt = current->colors[RD_ThemeColor_ImplicitButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_ImplicitButton].border         = current->colors[RD_ThemeColor_ImplicitButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_PlainButton].background     = current->colors[RD_ThemeColor_PlainButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_PlainButton].background_alt = current->colors[RD_ThemeColor_PlainButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_PlainButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_PlainButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_PlainButton].border         = current->colors[RD_ThemeColor_PlainButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].background     = current->colors[RD_ThemeColor_PositivePopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].background_alt = current->colors[RD_ThemeColor_PositivePopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_PositivePopButton].border         = current->colors[RD_ThemeColor_PositivePopButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].background     = current->colors[RD_ThemeColor_NegativePopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].background_alt = current->colors[RD_ThemeColor_NegativePopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_NegativePopButton].border         = current->colors[RD_ThemeColor_NegativePopButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].background     = current->colors[RD_ThemeColor_NeutralPopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].background_alt = current->colors[RD_ThemeColor_NeutralPopButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_NeutralPopButton].border         = current->colors[RD_ThemeColor_NeutralPopButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].background     = current->colors[RD_ThemeColor_ScrollBarButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].background_alt = current->colors[RD_ThemeColor_ScrollBarButtonBackground];
+    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_ScrollBarButton].border         = current->colors[RD_ThemeColor_ScrollBarButtonBorder];
+    ws->cfg_palettes[RD_PaletteCode_Tab].background     = current->colors[RD_ThemeColor_TabBackground];
+    ws->cfg_palettes[RD_PaletteCode_Tab].background_alt = current->colors[RD_ThemeColor_TabBackground];
+    ws->cfg_palettes[RD_PaletteCode_Tab].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_Tab].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_Tab].border         = current->colors[RD_ThemeColor_TabBorder];
+    ws->cfg_palettes[RD_PaletteCode_TabInactive].background     = current->colors[RD_ThemeColor_TabBackgroundInactive];
+    ws->cfg_palettes[RD_PaletteCode_TabInactive].background_alt = current->colors[RD_ThemeColor_TabBackgroundInactive];
+    ws->cfg_palettes[RD_PaletteCode_TabInactive].text           = current->colors[RD_ThemeColor_Text];
+    ws->cfg_palettes[RD_PaletteCode_TabInactive].text_weak      = current->colors[RD_ThemeColor_TextWeak];
+    ws->cfg_palettes[RD_PaletteCode_TabInactive].border         = current->colors[RD_ThemeColor_TabBorderInactive];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].background     = current->colors[RD_ThemeColor_DropSiteOverlay];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].background_alt = current->colors[RD_ThemeColor_DropSiteOverlay];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text           = current->colors[RD_ThemeColor_DropSiteOverlay];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text_weak      = current->colors[RD_ThemeColor_DropSiteOverlay];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border         = current->colors[RD_ThemeColor_BaseBorder];
     if(rd_setting_b32_from_name(str8_lit("opaque_backgrounds")))
     {
       for EachEnumVal(RD_PaletteCode, code)
@@ -4593,6 +4605,12 @@ rd_window_frame(void)
            ws->cfg_palettes[code].background.z != 0)
         {
           ws->cfg_palettes[code].background.w = 1;
+        }
+        if(ws->cfg_palettes[code].background_alt.x != 0 ||
+           ws->cfg_palettes[code].background_alt.y != 0 ||
+           ws->cfg_palettes[code].background_alt.z != 0)
+        {
+          ws->cfg_palettes[code].background_alt.w = 1;
         }
       }
     }
@@ -7669,7 +7687,7 @@ rd_window_frame(void)
                                     panel_rect_pct.y0*content_rect_dim.y,
                                     panel_rect_pct.x1*content_rect_dim.x,
                                     panel_rect_pct.y1*content_rect_dim.y);
-        panel_rect = pad_2f32(panel_rect, -1.f);
+        panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
         F32 tab_bar_rheight = ui_top_font_size()*3.f;
         F32 tab_bar_vheight = ui_top_font_size()*2.6f;
         F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
@@ -7693,10 +7711,18 @@ rd_window_frame(void)
           content_rect.y0 += filter_bar_height*selected_tab_is_filtering_t;
           filter_rect.y1 = content_rect.y0;
         }
+        tab_bar_rect = intersect_2f32(tab_bar_rect, panel_rect);
+        content_rect = intersect_2f32(content_rect, panel_rect);
+        
+        //////////////////////////
+        //- rjf: decide to skip this panel (e.g. if it is too small
+        //
+        B32 build_panel = (content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0);
         
         //////////////////////////
         //- rjf: build combined split+movetab drag/drop sites
         //
+        if(build_panel)
         {
           RD_Cfg *view = rd_cfg_from_id(rd_state->drag_drop_regs->view);
           if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg && contains_2f32(panel_rect, ui_mouse()) && ui_key_match(ui_drop_hot_key(), ui_key_zero()))
@@ -7872,7 +7898,7 @@ rd_window_frame(void)
         //- rjf: build catch-all panel drop-site
         //
         UI_Key catchall_drop_site_key = ui_key_from_stringf(ui_key_zero(), "catchall_drop_site_%p", panel->cfg);
-        UI_Rect(panel_rect)
+        if(build_panel) UI_Rect(panel_rect)
         {
           UI_Box *catchall_drop_site = ui_build_box_from_key(UI_BoxFlag_DropSite, catchall_drop_site_key);
           ui_signal_from_box(catchall_drop_site);
@@ -7941,9 +7967,11 @@ rd_window_frame(void)
         //////////////////////////
         //- rjf: panel not selected? -> darken
         //
-        if(panel != panel_tree.focused)
+        if(build_panel) if(panel != panel_tree.focused)
         {
-          UI_Palette(ui_build_palette(0, .background = rd_rgba_from_theme_color(RD_ThemeColor_InactivePanelOverlay)))
+          Vec4F32 darken_color = rd_rgba_from_theme_color(RD_ThemeColor_InactivePanelOverlay);
+          darken_color.w *= 0.2f;
+          UI_Palette(ui_build_palette(0, .background = darken_color))
             UI_Rect(content_rect)
           {
             ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
@@ -7954,7 +7982,7 @@ rd_window_frame(void)
         //- rjf: build panel container box
         //
         UI_Box *panel_box = &ui_nil_box;
-        UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
+        if(build_panel) UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
         {
           UI_Key panel_key = ui_key_from_stringf(ui_key_zero(), "panel_box_%p", panel->cfg);
           panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
@@ -7969,7 +7997,7 @@ rd_window_frame(void)
         //- rjf: loading animation for stable view
         //
         UI_Box *loading_overlay_container = &ui_nil_box;
-        UI_Parent(panel_box) UI_WidthFill UI_HeightFill
+        if(build_panel) UI_Parent(panel_box) UI_WidthFill UI_HeightFill
         {
           loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
         }
@@ -7977,7 +8005,8 @@ rd_window_frame(void)
         //////////////////////////
         //- rjf: build selected tab view
         //
-        UI_Parent(panel_box)
+        if(build_panel)
+          UI_Parent(panel_box)
           UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
           UI_WidthFill
         {
@@ -8039,6 +8068,7 @@ rd_window_frame(void)
         ////////////////////////
         //- rjf: loading? -> fill loading overlay container
         //
+        if(build_panel)
         {
           F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target);
           if(selected_tab_loading_t > 0.01f) UI_Parent(loading_overlay_container)
@@ -8084,20 +8114,23 @@ rd_window_frame(void)
         //////////////////////////
         //- rjf: consume panel fallthrough interaction events
         //
-        UI_Signal panel_sig = ui_signal_from_box(panel_box);
-        if(ui_pressed(panel_sig))
+        if(build_panel)
         {
-          rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
-        }
-        if(ui_right_clicked(panel_sig))
-        {
-          rd_cmd(RD_CmdKind_PushQuery,
-                 .view         = panel->selected_tab->id,
-                 .file_path    = rd_file_path_from_eval_string(rd_frame_arena(), rd_expr_from_cfg(panel->selected_tab)),
-                 .ui_key       = panel_box->key,
-                 .off_px       = sub_2f32(ui_mouse(), panel_box->rect.p0),
-                 .reg_slot     = RD_RegSlot_View,
-                 .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
+          UI_Signal panel_sig = ui_signal_from_box(panel_box);
+          if(ui_pressed(panel_sig))
+          {
+            rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
+          }
+          if(ui_right_clicked(panel_sig))
+          {
+            rd_cmd(RD_CmdKind_PushQuery,
+                   .view         = panel->selected_tab->id,
+                   .file_path    = rd_file_path_from_eval_string(rd_frame_arena(), rd_expr_from_cfg(panel->selected_tab)),
+                   .ui_key       = panel_box->key,
+                   .off_px       = sub_2f32(ui_mouse(), panel_box->rect.p0),
+                   .reg_slot     = RD_RegSlot_View,
+                   .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
+          }
         }
         
         //////////////////////////
@@ -8115,6 +8148,7 @@ rd_window_frame(void)
         TabTask *last_tab_task = 0;
         U64 tab_task_count = 0;
         F32 tab_close_width_px = ui_top_font_size()*2.5f;
+        if(build_panel)
         {
           for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
           {
@@ -8136,7 +8170,7 @@ rd_window_frame(void)
         //- rjf: build tab bar container
         //
         UI_Box *tab_bar_box = &ui_nil_box;
-        UI_CornerRadius(0) UI_Rect(tab_bar_rect)
+        if(build_panel) UI_CornerRadius(0) UI_Rect(tab_bar_rect)
         {
           tab_bar_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
                                                   UI_BoxFlag_AllowOverflowY|
@@ -8159,6 +8193,7 @@ rd_window_frame(void)
         //
         B32 tab_drop_is_active = rd_drag_is_active() && ui_key_match(ui_drop_hot_key(), catchall_drop_site_key);
         RD_Cfg *tab_drop_prev = &rd_nil_cfg;
+        if(build_panel)
         {
           F32 best_prev_distance_px = 1000000.f;
           TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
@@ -8199,7 +8234,7 @@ rd_window_frame(void)
         //////////////////////////
         //- rjf: build tab bar contents
         //
-        UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0))
+        if(build_panel) UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0))
         {
           F32 corner_radius = ui_top_font_size()*0.6f;
           TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
@@ -8691,7 +8726,7 @@ rd_window_frame(void)
         
         // rjf: main rectangle
         {
-          R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
+          R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box->flags & UI_BoxFlag_DrawBackgroundAlt ? box->palette->colors[UI_ColorCode_BackgroundAlt] : box->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
           MemoryCopyArray(inst->corner_radii, box->corner_radii);
         }
         
@@ -8702,7 +8737,7 @@ rd_window_frame(void)
           {
             R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, 1.f);
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
-            color.w *= t*0.2f;
+            color.w *= t*0.1f;
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
             MemoryCopyArray(inst->corner_radii, box->corner_radii);
@@ -8714,7 +8749,7 @@ rd_window_frame(void)
             Vec2F32 center = ui_mouse();
             F32 radius = box->font_size*12.f;
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
-            color.w *= 0.1f*t;
+            color.w *= 0.05f*t;
             dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
           }
           
@@ -8759,7 +8794,7 @@ rd_window_frame(void)
           {
             R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0, box->rect.y1 - shadow_size.y, box->rect.x1, box->rect.y1), v4f32(0, 0, 0, 0), 0, 0, 1.f);
             inst->colors[Corner_00] = inst->colors[Corner_10] = v4f32(0, 0, 0, 0);
-            inst->colors[Corner_01] = inst->colors[Corner_11] = v4f32(0.4f, 0.4f, 0.4f, 0.4f*box->active_t);
+            inst->colors[Corner_01] = inst->colors[Corner_11] = v4f32(1.0f, 1.0f, 1.0f, 0.08f*box->active_t);
             MemoryCopyArray(inst->corner_radii, box->corner_radii);
           }
           
@@ -8901,7 +8936,7 @@ rd_window_frame(void)
           // rjf: draw overlay
           if(b->flags & UI_BoxFlag_DrawOverlay)
           {
-            R_Rect2DInst *inst = dr_rect(b->rect, b->palette->colors[UI_ColorCode_Overlay], 0, 0, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, b->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -8958,7 +8993,7 @@ rd_window_frame(void)
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
-            color.w *= 0.2f*b->focus_hot_t;
+            color.w *= 0.09f*b->focus_hot_t;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
@@ -8982,7 +9017,7 @@ rd_window_frame(void)
           if(b->disabled_t >= 0.005f)
           {
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_DisabledOverlay);
-            color.w *= b->disabled_t;
+            color.w *= b->disabled_t*0.5f;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
@@ -11909,15 +11944,14 @@ rd_frame(void)
   //
   ProfScope("build theme from config")
   {
-    rd_state->theme_target = push_array(rd_frame_arena(), RD_Theme, 1);
-    RD_Theme *theme = rd_state->theme_target;
+    RD_Theme *theme_srgba = push_array(scratch.arena, RD_Theme, 1);
     
     //- rjf: gather globally-applying config options
     RD_CfgList preset_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("color_preset"));
     RD_CfgList colors_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("colors"));
     
     //- rjf: assume default-dark
-    MemoryCopy(theme->colors, rd_theme_preset_colors_table[RD_ThemePreset_DefaultDark], sizeof(rd_theme_preset_colors__default_dark));
+    MemoryCopy(theme_srgba->colors, rd_theme_preset_colors_table[RD_ThemePreset_DefaultDark], sizeof(rd_theme_preset_colors__default_dark));
     
     //- rjf: apply explicitly-specified presets
     for(RD_CfgNode *n = preset_roots.first; n != 0; n = n->next)
@@ -11937,7 +11971,7 @@ rd_frame(void)
       }
       if(found_preset_kind)
       {
-        MemoryCopy(theme->colors, rd_theme_preset_colors_table[preset_kind], sizeof(rd_theme_preset_colors__default_dark));
+        MemoryCopy(theme_srgba->colors, rd_theme_preset_colors_table[preset_kind], sizeof(rd_theme_preset_colors__default_dark));
       }
     }
     
@@ -11963,10 +11997,18 @@ rd_frame(void)
           if(try_u64_from_str8_c_rules(color->first->string, &color_val))
           {
             Vec4F32 color_rgba = rgba_from_u32((U32)color_val);
-            theme->colors[color_code] = color_rgba;
+            theme_srgba->colors[color_code] = color_rgba;
           }
         }
       }
+    }
+    
+    //- rjf: srgba -> linear, compute final theme
+    rd_state->theme_target = push_array(rd_frame_arena(), RD_Theme, 1);
+    RD_Theme *theme = rd_state->theme_target;
+    for EachEnumVal(RD_ThemeColor, c)
+    {
+      theme->colors[c] = linear_from_srgba(theme_srgba->colors[c]);
     }
   }
   
