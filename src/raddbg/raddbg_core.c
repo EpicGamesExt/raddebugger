@@ -4640,6 +4640,21 @@ rd_window_frame(void)
         default:{}break;
         
         ////////////////////////
+        //- rjf: file path tooltips
+        //
+        case RD_RegSlot_FilePath:
+        UI_Tooltip
+        {
+          FileProperties props = os_properties_from_file_path(regs->file_path);
+          ui_set_next_pref_width(ui_children_sum(1));
+          UI_Row
+          {
+            RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[props.flags & FilePropertyFlag_IsFolder ? RD_IconKind_FolderClosedFilled : RD_IconKind_FileOutline]);
+            ui_label(regs->file_path);
+          }
+        }break;
+        
+        ////////////////////////
         //- rjf: cfg tooltips
         //
         case RD_RegSlot_Cfg:
@@ -8051,7 +8066,7 @@ rd_window_frame(void)
         //////////////////////////
         //- rjf: determine tab drop site
         //
-        B32 tab_drop_is_active = ui_key_match(ui_drop_hot_key(), catchall_drop_site_key);
+        B32 tab_drop_is_active = rd_drag_is_active() && ui_key_match(ui_drop_hot_key(), catchall_drop_site_key);
         RD_Cfg *tab_drop_prev = &rd_nil_cfg;
         {
           F32 best_prev_distance_px = 1000000.f;
@@ -13142,7 +13157,7 @@ rd_frame(void)
                   }
                 }
               }
-              if(origin_panel->tabs.count == 0)
+              if(origin_panel->cfg != split_panel && origin_panel->tabs.count == 0)
               {
                 rd_cmd(RD_CmdKind_ClosePanel);
               }

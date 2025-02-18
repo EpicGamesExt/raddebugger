@@ -3064,7 +3064,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   // rjf: dragging -> drag/drop
                   if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
                   {
-                    if(cell_info.cfg != &rd_nil_cfg)
+                    if(cell_info.eval.space.kind == E_SpaceKind_FileSystem)
+                    {
+                      String8 file_path = rd_file_path_from_eval(scratch.arena, cell_info.eval);
+                      RD_RegsScope(.file_path = file_path) rd_drag_begin(RD_RegSlot_FilePath);
+                    }
+                    else if(cell_info.cfg != &rd_nil_cfg)
                     {
                       RD_RegsScope(.cfg = cell_info.cfg->id) rd_drag_begin(RD_RegSlot_Cfg);
                     }
