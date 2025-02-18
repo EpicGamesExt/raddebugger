@@ -555,7 +555,7 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[288];
+extern RD_VocabInfo rd_vocab_info_table[289];
 extern RD_NameSchemaInfo rd_name_schema_info_table[10];
 extern Rng1U64 rd_reg_slot_range_table[38];
 extern String8 rd_binding_version_remap_old_name_table[8];

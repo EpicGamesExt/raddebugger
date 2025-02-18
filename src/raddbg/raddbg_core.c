@@ -576,6 +576,97 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(environment)
 }
 
 ////////////////////////////////
+//~ rjf: Unattached System Process List Eval Hooks
+
+typedef struct RD_UnattachedProcessesAccel RD_UnattachedProcessesAccel;
+struct RD_UnattachedProcessesAccel
+{
+  DMN_ProcessInfo *infos;
+  U64 infos_count;
+};
+
+E_LOOKUP_INFO_FUNCTION_DEF(unattached_processes)
+{
+  E_LookupInfo info = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: evaluate lhs machine
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    CTRL_Entity *lhs_entity = rd_ctrl_entity_from_eval_space(lhs_interp.space);
+    
+    //- rjf: gather system processes from this machine
+    typedef struct Node Node;
+    struct Node
+    {
+      Node *next;
+      DMN_ProcessInfo info;
+    };
+    Node *first = 0;
+    Node *last = 0;
+    if(lhs_entity->kind == CTRL_EntityKind_Machine)
+    {
+      DMN_ProcessIter iter = {0};
+      dmn_process_iter_begin(&iter);
+      for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
+      {
+        Node *node = push_array(scratch.arena, Node, 1);
+        SLLQueuePush(first, last, node);
+        node->info = info;
+      }
+      dmn_process_iter_end(&iter);
+    }
+    
+    //- rjf: list -> filtered list
+    Node *first_filtered = 0;
+    Node *last_filtered = 0;
+    U64 filtered_count = 0;
+    for(Node *n = first; n != 0; n = n->next)
+    {
+      Node *node = push_array(scratch.arena, Node, 1);
+      SLLQueuePush(first_filtered, last_filtered, node);
+      node->info = n->info;
+      filtered_count += 1;
+    }
+    
+    //- rjf: list -> array
+    U64 infos_count = filtered_count;
+    DMN_ProcessInfo *infos = push_array(arena, DMN_ProcessInfo, infos_count);
+    {
+      U64 idx = 0;
+      for(Node *n = first_filtered; n != 0; n = n->next, idx += 1)
+      {
+        infos[idx] = n->info;
+        infos[idx].name = push_str8_copy(arena, infos[idx].name);
+      }
+    }
+    
+    //- rjf: build accelerator
+    RD_UnattachedProcessesAccel *accel = push_array(arena, RD_UnattachedProcessesAccel, 1);
+    accel->infos       = infos;
+    accel->infos_count = infos_count;
+    info.user_data = accel;
+    info.idxed_expr_count = infos_count;
+    scratch_end(scratch);
+  }
+  return info;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(unattached_processes)
+{
+  RD_UnattachedProcessesAccel *accel = (RD_UnattachedProcessesAccel *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+    expr->value.u64 = accel->infos[idx].pid;
+    exprs[out_idx] = expr;
+  }
+}
+
+////////////////////////////////
 //~ rjf: Control Entity Eval Hooks
 
 E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
@@ -12319,6 +12410,10 @@ rd_frame(void)
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
           }
+          if(kind == CTRL_EntityKind_Machine && entity->handle.machine_id == CTRL_MachineID_Local)
+          {
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("local_machine"), expr);
+          }
           if(kind == CTRL_EntityKind_Thread && ctrl_handle_match(rd_base_regs()->thread, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_thread"), expr);
@@ -12447,6 +12542,13 @@ rd_frame(void)
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
                                      .access = E_LOOKUP_ACCESS_FUNCTION_NAME(ctrl_entities));
+      }
+      
+      //- rjf: add lookup rules for unattached processes on a machine
+      {
+        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("unattached_processes"),
+                                     .info   = E_LOOKUP_INFO_FUNCTION_NAME(unattached_processes),
+                                     .range  = E_LOOKUP_RANGE_FUNCTION_NAME(unattached_processes));
       }
       
       //- rjf: add macro for commands

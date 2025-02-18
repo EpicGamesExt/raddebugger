@@ -94,6 +94,7 @@ RD_VocabTable:
   {last_modified_time   _                           "Last Modified Time"        _                     Null                                           }
   {creation_time        _                           "Creation Time"             _                     Null                                           }
   {data                 _                           "Data"                      _                     Null                                           }
+  {unattached_processes ""                          "Unattached Processes"      ""                    Scheduler                                      }
 }
 
 @struct RD_VocabInfo:
@@ -214,7 +215,7 @@ RD_VocabTable:
   //- rjf: control entities
   {
     machine,
-    ```x:{'label':code_string, 'frozen':bool, 'processes':query}```,
+    ```x:{'label':code_string, 'frozen':bool, 'unattached_processes':query, 'processes':query}```,
   }
   {
     process,

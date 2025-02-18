@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[288] =
+RD_VocabInfo rd_vocab_info_table[289] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -82,6 +82,7 @@ RD_VocabInfo rd_vocab_info_table[288] =
 {str8_lit_comp("last_modified_time"), str8_lit_comp("last_modified_times"), str8_lit_comp("Last Modified Time"), str8_lit_comp("Last Modified Times"), RD_IconKind_Null},
 {str8_lit_comp("creation_time"), str8_lit_comp("creation_times"), str8_lit_comp("Creation Time"), str8_lit_comp("Creation Times"), RD_IconKind_Null},
 {str8_lit_comp("data"), str8_lit_comp("datas"), str8_lit_comp("Data"), str8_lit_comp("Datas"), RD_IconKind_Null},
+{str8_lit_comp("unattached_processes"), str8_lit_comp(""), str8_lit_comp("Unattached Processes"), str8_lit_comp(""), RD_IconKind_Scheduler},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_init"), str8_lit_comp(""), str8_lit_comp("Launch and Initialize"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -304,7 +305,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[10] =
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}")},
-{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, 'frozen':bool, 'processes':query}")},
+{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, 'frozen':bool, 'unattached_processes':query, 'processes':query}")},
 {str8_lit_comp("process"), str8_lit_comp("x:{'label':code_string, 'id':u64, 'frozen':bool, 'modules':query, 'threads':query}")},
 {str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}")},
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, 'frozen':bool, 'call_stack':query}")},
