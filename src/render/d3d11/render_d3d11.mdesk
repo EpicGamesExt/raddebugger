@@ -81,6 +81,20 @@ float rect_sdf(float2 sample_pos, float2 rect_half_size, float r)
   return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;
 }
 
+float linear_from_srgb_f32(float x)
+{
+  return x < 0.0404482362771082 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+}
+
+float4 linear_from_srgba(float4 v)
+{
+  float4 result = float4(linear_from_srgb_f32(v.x),
+                         linear_from_srgb_f32(v.y),
+                         linear_from_srgb_f32(v.z),
+                         v.w);
+  return result;
+}
+
 //- rjf: vertex shader
 
 Vertex2Pixel
@@ -120,11 +134,12 @@ vs_main(CPU2Vertex cpu2vertex)
     cpu2vertex.corner_radii_px.w,
     cpu2vertex.corner_radii_px.z,
   };
-  float4 src_color[] = {
-    cpu2vertex.color01,
-    cpu2vertex.color00,
-    cpu2vertex.color11,
-    cpu2vertex.color10,
+  float4 src_color[] =
+  {
+    linear_from_srgba(cpu2vertex.color01),
+    linear_from_srgba(cpu2vertex.color00),
+    linear_from_srgba(cpu2vertex.color11),
+    linear_from_srgba(cpu2vertex.color10),
   };
   float2 dst_verts_pct = float2((cpu2vertex.vertex_id >> 1) ? 1.f : 0.f,
                                 (cpu2vertex.vertex_id & 1)  ? 0.f : 1.f);
@@ -162,6 +177,7 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   if(vertex2pixel.omit_texture < 1)
   {
     albedo_sample = mul(main_t2d.Sample(main_sampler, vertex2pixel.texcoord_pct), texture_sample_channel_map);
+    albedo_sample = linear_from_srgba(albedo_sample);
   }
   
   // rjf: determine SDF sample position

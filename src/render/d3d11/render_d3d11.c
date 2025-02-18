@@ -520,7 +520,7 @@ r_window_equip(OS_Handle handle)
     {
       swapchain_desc.Width              = 0; // NOTE(rjf): use window width
       swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
+      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
       swapchain_desc.Stereo             = FALSE;
       swapchain_desc.SampleDesc.Count   = 1;
       swapchain_desc.SampleDesc.Quality = 0;
@@ -896,7 +896,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
         D3D11_TEXTURE2D_DESC color_desc = zero_struct;
         {
           wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
-          color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+          color_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
         D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = zero_struct;
@@ -906,7 +906,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
         }
         D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = zero_struct;
         {
-          srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
+          srv_desc.Format                    = DXGI_FORMAT_R16G16B16A16_FLOAT;
           srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           srv_desc.Texture2D.MipLevels       = -1;
         }
