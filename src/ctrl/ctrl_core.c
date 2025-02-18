@@ -2903,6 +2903,7 @@ ctrl_arm64_pdata_from_module_voff(Arena *arena, CTRL_Handle module_handle, U64 v
       {
         PE_Arm64Pdata *pdatas = n->arm64_pdatas;
         U64 pdatas_count = n->arm64_pdatas_count;
+
         if(n->arm64_pdatas_count != 0 && voff >= n->arm64_pdatas[0].voff_first)
         {
           // NOTE(rjf):
@@ -2942,12 +2943,15 @@ ctrl_arm64_pdata_from_module_voff(Arena *arena, CTRL_Handle module_handle, U64 v
             PE_Arm64Pdata *pdata = pdatas + index;
             U32 pdata_flag = pdata->combined & 0x3;
             B32 is_good = 1;
+            U32 function_size = max_U32;
 
-            if(pdata_flag != 0)
+            if (pdata_flag != 0)
             {
-              U32 function_size = 4 * ((pdata->combined >> 2) & 0x7ff);
+              //- antoniom: packed unwind data
+              function_size = 4 * ((pdata->combined >> 2) & 0x7ff);
               is_good = pdata->voff_first <= voff && voff < (pdata->voff_first + function_size);
             }
+            //- antoniom: xdata will be handled in its own path
 
             if(is_good)
             {
@@ -3041,9 +3045,9 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
   if(step > 0)
   {
     step -= parsed_data.regi & 1;
-    if(step == 0)
+    if (step == 0)
     {
-      if(parsed_data.regi == 1)
+      if (parsed_data.regi == 1)
       {
         result.op = PE_UnwindOpCodeArm64_save_regp_x;
         result.sp_off = int_size;
@@ -3227,7 +3231,7 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
     }
   }
   else if((parsed_data.cr == 2 || parsed_data.cr == 3) &&
-          (4080 < parsed_data.frame_size))
+          4080 < parsed_data.frame_size)
   {
     if(step > 0)
     {
@@ -3271,7 +3275,7 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
     }
   }
   else if((parsed_data.cr == 0 || parsed_data.cr == 1) &&
-          (parsed_data.frame_size <= 4080))
+          parsed_data.frame_size <= 4080)
   {
     if(step > 0)
     {
@@ -3284,7 +3288,7 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
     }
   }
   else if((parsed_data.cr == 0 || parsed_data.cr == 1) &&
-          (4080 < parsed_data.frame_size))
+          4080 < parsed_data.frame_size)
   {
     if(step > 0)
     {
@@ -3569,7 +3573,6 @@ internal CTRL_UnwindStepResult
 ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, CTRL_Handle module_handle, REGS_RegBlockARM64 *regs, U64 endt_us)
 {
   Temp scratch = scratch_begin(0, 0);
-  U64 missed_read_addr = 0;
 
   B32 is_stale = 0;
   B32 is_good = 1;
@@ -3671,7 +3674,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           keep_parsing = 0;
         }
       }
-      read_vaddr += 4;
     }
     has_pdata_and_in_epilog = is_epilog;
   }
@@ -3683,11 +3685,12 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     new_sp = regs->x31.u64;
     new_pc = regs->pc.u64;
 
-    for (B32 keep_parsing = 1; keep_parsing; keep_parsing = keep_parsing && is_good)
+    for (B32 keep_parsing = 1; keep_parsing;)
     {
       U32 inst = 0;
       is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
       is_good = is_good && !is_stale;
+      read_vaddr += 4;
 
       if(is_good)
       {
@@ -3698,7 +3701,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           U32 imm = (inst >> 10) & 0xFFF;
           new_sp += shift ? (imm << 12) : imm;
         }
-        else if((inst & 0xFF0003FF) == 0xCB0003FF)
+        else if((inst & 0xFFC003FF) == 0x910003FF)
         {
           // add sp, sp, lsl #imm
           // 0 LSL, 1 LSR, 2 ASR, 3 ROR
@@ -3727,13 +3730,13 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           // mov sp, x29
           new_sp = regs->x29.u64;
         }
-        else if((inst & 0xFFC003E0) == 0xA9C003E0)
+        else if((inst & 0xFEC003E0) == 0xA8C003E0)
         {
           // ldp reg0, reg1, [sp,#imm]
           REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
           REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1F);
 
-          S64 imm = 8 * ((inst >> 15) & 0x7F);
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 58) >> 58;
           U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
 
@@ -3744,13 +3747,13 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           is_good = is_good && !is_stale;
           keep_parsing = is_good;
         }
-        else if((inst & 0xFFC003E0) == 0xA8C003E0)
+        else if((inst & 0xFEC003E0) == 0xA8C003E0)
         {
           // ldp reg0, reg1, [sp], #imm (post-indexed load)
           REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
           REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1F);
 
-          S64 imm = 8 * ((inst >> 15) & 0x7F);
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 58) >> 58;
           U64 reg_read_vaddr = regs->x31.u64;
 
@@ -3763,30 +3766,30 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           new_sp += sign_extended_imm;
           keep_parsing = is_good;
         }
-        else if((inst & 0xFFE007E0) == 0xF94007E0)
+        else if((inst & 0xFFE007E0) == 0xF84007E0)
         {
           // ldr reg0, [sp,#imm]
-          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
+          REGS_Reg64 *reg = &regs->x0 + (inst & 0x1F);
 
           // TODO(antoniom): sign-extended? even right?
           S64 imm = 8 * ((inst >> 10) & 0xFFF);
           U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + imm);
 
-          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
           keep_parsing = is_good;
         }
         else if((inst & 0xFFE007E0) == 0xF84007E0)
         {
-          // ldr reg0, [sp], #imm (post-indexed_load)
-          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
+          // ldr reg0, [sp], #imm (post-indexed load)
+          REGS_Reg64 *reg = &regs->x0 + (inst & 0x1F);
 
           // TODO(antoniom): sign-extended?
           S64 imm = 8 * ((inst >> 12) & 0x1FF);
           S64 sign_extended_imm = (imm << 54) >> 54;
           U64 reg_read_vaddr = regs->x31.u64;
 
-          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
 
           new_sp += sign_extended_imm;
@@ -3810,7 +3813,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     U64 read_vaddr = regs->pc.u64;
     U64 inst_start = function_start_voff + module->vaddr_range.min;
 
-    for(B32 keep_parsing = 1; keep_parsing; read_vaddr -= 4)
+    for(B32 keep_parsing = 1; keep_parsing;)
     {
       U32 inst = 0;
 
@@ -3851,13 +3854,13 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           // go to prev instruction
           read_vaddr -= 4;
         }
-        else if(inst == 0x910003FD)
+        else if(inst == 0x910003fd)
         {
           // mov x29, sp
           keep_parsing = 0;
           is_prolog = 1;
         }
-        else if((inst & 0xFFC003E0) == 0xA90003E0)
+        else if((inst & 0xFFC003E0) == 0xA9000360)
         {
           // stp reg0, reg1, [sp,#imm]
           keep_parsing = 0;
@@ -3869,7 +3872,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           keep_parsing = 0;
           is_prolog = 1;
         }
-        else if((inst & 0xFFE083E0) == 0xF92083E0)
+        else if((inst & 0xFFE083E0) == 0xF82083E0)
         {
           // str reg0, [sp,#imm]
           keep_parsing = 0;
@@ -3902,11 +3905,12 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     new_sp = regs->x31.u64;
     new_pc = regs->pc.u64;
 
-    for(B32 keep_parsing = 1; keep_parsing; read_vaddr -= 4, keep_parsing = is_good && keep_parsing && (regs->pc.u64 != inst_start))
+    for(B32 keep_parsing = 1; keep_parsing;)
     {
       U32 inst = 0;
       is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, read_vaddr, &is_stale, &inst, endt_us);
       is_good = is_good && !is_stale;
+      read_vaddr -= 4;
 
       if(is_good)
       {
@@ -3943,7 +3947,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           // mov x29, sp -> mov sp, x29
           new_sp = regs->x29.u64;
         }
-        else if((inst & 0xFFC003E0) == 0xA90003E0)
+        else if((inst & 0xFFC003E0) == 0xA9000360)
         {
           // TODO(antoniom): 6 or e?
           // stp reg0, reg1, [sp,#imm] -> do load
@@ -3951,8 +3955,8 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1F);
 
           //- antoniom: multiply by 8 after?
-          S64 imm = ((inst >> 15) & 0x7F) * 8;
-          S64 sign_extended_imm = (imm << 57) >> 57;
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
+          S64 sign_extended_imm = (imm << 58) >> 58;
           U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
@@ -3965,11 +3969,11 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         }
         else if((inst & 0xFFC003E0) == 0xA98003E0)
         {
-          // stp reg0, reg1, [sp,#imm] (pre-indexed load) -> do post-index load
+          // stp reg0, reg1, [sp], #imm (pre-indexed load) -> do post-index load
           REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
           REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1F);
 
-          S64 imm = ((inst >> 15) & 0x7F) * 8;
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 57) >> 57;
           sign_extended_imm *= -1;
 
@@ -3984,7 +3988,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           new_sp += sign_extended_imm;
           keep_parsing = is_good;
         }
-        else if((inst & 0xFFE083E0) == 0xF92083E0)
+        else if((inst & 0xFFE083E0) == 0xF82083E0)
         {
           // str reg0, [sp,#imm] -> do load
           REGS_Reg64 *reg = &regs->x0 + (inst & 0x1F);
@@ -3999,10 +4003,10 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         }
         else if((inst & 0xFFE083E0) == 0xF82083E0)
         {
-          // str reg0, [sp], #imm (post-indexed_load) -> do pre-indexed ldr
+          // str reg0, [sp], #imm (post-indexed load) -> do pre-indexed ldr
           REGS_Reg64 *reg = &regs->x0 + (inst & 0x1F);
 
-          S64 imm = 8 * ((inst >> 10) & 0x1FF);
+          S64 imm = ((inst >> 10) & 0x1FF);
           S64 sign_extended_imm = (imm << 54) >> 54;
           U64 reg_read_vaddr = regs->x31.u64;
 
@@ -4010,6 +4014,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           is_good = is_good && !is_stale;
 
           new_sp += sign_extended_imm;
+
           keep_parsing = is_good;
         }
         else
@@ -4049,7 +4054,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     {
       is_packed_unwind_data = 1;
 
-      if(is_good)
+      if (is_good)
       {
         U32 packed_unwind_data = pdata->combined;
         PE_ParsedPackedUnwindDataArm64 parsed_data = {0};
@@ -4059,7 +4064,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         {
           parsed_data.regf += 1;
         }
-        parsed_data.regi = (packed_unwind_data >> 16) & 0xF;
+        parsed_data.regi = (packed_unwind_data >> 16) & 0xf;
         parsed_data.h = (packed_unwind_data >> 20) & 0x1;
         parsed_data.cr = (packed_unwind_data >> 21) & 0x3;
         parsed_data.frame_size =  16 * ((packed_unwind_data >> 23) & 0x1FF);
@@ -4071,7 +4076,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
         U32 regi_count = (parsed_data.regi / 2) + (parsed_data.regi & 0x1);
         packed_unwind_count += regi_count;
-        if(parsed_data.cr == 1 && ((parsed_data.regi % 2) == 0))
+        if(parsed_data.cr == 1 && (parsed_data.regi % 2 == 0))
         {
           packed_unwind_count += 1;
         }
@@ -4156,7 +4161,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
       {
         //- antoniom: epilog scope
         U64 epilog_scope_ptr = xdata_voff + xdata_off;
-        U32 min_epilog_offset = 0xffffffff;
+        U32 min_epilog_offset = max_U32;
         U32 min_unwind_code_offset = 0xffffffff;
         for(U32 epilog_scope_idx = 0; is_good && !is_stale && epilog_scope_idx < parsed_data.epilog_count; epilog_scope_idx += 1)
         {
@@ -4177,7 +4182,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           }
         }
 
-        if(min_epilog_offset < 0xffffffff)
+        if(min_epilog_offset == max_U32)
         {
           xdata_off += parsed_data.epilog_count;
         }
@@ -4186,7 +4191,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         xdata_code_words = parsed_data.code_words;
 
         U64 unwind_off = xdata_off;
-        B32 keep_parsing = unwind_off - xdata_off <= 4 * parsed_data.code_words;
+        B32 keep_parsing = (unwind_off - xdata_off) <= (4 * parsed_data.code_words);
         while(keep_parsing)
         {
           U32 unwind_header = 0;
