@@ -657,6 +657,7 @@ struct UI_State
   U64 build_box_count;
   U64 last_build_box_count;
   B32 ctx_menu_touched_this_frame;
+  B32 tooltip_can_overflow_window;
   B32 is_animating;
   
   //- rjf: build parameters

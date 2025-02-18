@@ -122,6 +122,7 @@ internal void dr_fstrs_concat_in_place(DR_FStrList *dst, DR_FStrList *to_push);
 internal DR_FStrList dr_fstrs_copy(Arena *arena, DR_FStrList *src);
 internal String8 dr_string_from_fstrs(Arena *arena, DR_FStrList *list);
 internal DR_FRunList dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs);
+internal Vec2F32 dr_dim_from_fstrs(DR_FStrList *fstrs);
 
 ////////////////////////////////
 //~ rjf: Top-Level API

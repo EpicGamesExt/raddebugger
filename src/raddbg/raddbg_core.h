@@ -540,6 +540,7 @@ struct RD_WindowState
   UI_State *ui;
   F32 last_dpi;
   B32 window_temporarily_focused_ipc;
+  B32 window_layout_reset;
   
   // rjf: config/settings
   UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme

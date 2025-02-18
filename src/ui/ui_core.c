@@ -796,6 +796,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
     ui_state->default_animation_rate = 1 - pow_f32(2, (-80.f * ui_state->animation_dt));
+    ui_state->tooltip_can_overflow_window = 0;
   }
   
   //- rjf: prune unused animation nodes
@@ -1234,9 +1235,7 @@ ui_end_build(void)
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
   B32 force_contain[] =
   {
-    (ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero())),
+    !ui_state->tooltip_can_overflow_window,
     1,
   };
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
@@ -1327,7 +1326,8 @@ ui_end_build(void)
           box = box->hash_next)
       {
         // rjf: grab states informing animation
-        B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
+        B32 is_hot            = (ui_key_match(box->key, ui_state->hot_box_key) ||
+                                 ui_key_match(box->key, ui_state->drop_hot_box_key));
         B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
         B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+2 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
@@ -1416,6 +1416,16 @@ ui_end_build(void)
           }
         }
       }
+    }
+  }
+  
+  //- rjf: use group keys for box animation data if possible
+  for(UI_Box *b = ui_state->root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, ui_state->root).next)
+  {
+    if(ui_key_match(b->key, ui_key_zero()) && !ui_key_match(b->group_key, ui_key_zero()))
+    {
+      UI_Box *group_box = ui_box_from_key(b->group_key);
+      b->hot_t = group_box->hot_t;
     }
   }
   
