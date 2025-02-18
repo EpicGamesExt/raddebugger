@@ -366,29 +366,32 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_DrawDropShadow            (UI_BoxFlags)(1ull<<27)
 # define UI_BoxFlag_DrawBackgroundBlur        (UI_BoxFlags)(1ull<<28)
 # define UI_BoxFlag_DrawBackground            (UI_BoxFlags)(1ull<<29)
-# define UI_BoxFlag_DrawBackgroundAlt         (UI_BoxFlags)(1ull<<30)
-# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<31)
-# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<32)
-# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<33)
-# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<34)
-# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<35)
-# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<36)
-# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<37)
-# define UI_BoxFlag_DrawTextWeak              (UI_BoxFlags)(1ull<<38)
-# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<39)
-# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<40)
-# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<41)
-# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<42)
-# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<43)
-# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<44)
-# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<45)
-# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<46)
-# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<47)
-# define UI_BoxFlag_DisableFocusBorder        (UI_BoxFlags)(1ull<<48)
-# define UI_BoxFlag_DisableFocusOverlay       (UI_BoxFlags)(1ull<<49)
-# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<50)
-# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<51)
-# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<52)
+# define UI_BoxFlag_DrawAlt                   (UI_BoxFlags)(1ull<<30)
+# define UI_BoxFlag_DrawGood                  (UI_BoxFlags)(1ull<<31)
+# define UI_BoxFlag_DrawBad                   (UI_BoxFlags)(1ull<<32)
+# define UI_BoxFlag_DrawPop                   (UI_BoxFlags)(1ull<<33)
+# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<34)
+# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<35)
+# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<36)
+# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<37)
+# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<38)
+# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<39)
+# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<40)
+# define UI_BoxFlag_DrawTextWeak              (UI_BoxFlags)(1ull<<41)
+# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<42)
+# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<43)
+# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<44)
+# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<45)
+# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<46)
+# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<48)
+# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<49)
+# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<50)
+# define UI_BoxFlag_DisableFocusBorder        (UI_BoxFlags)(1ull<<51)
+# define UI_BoxFlag_DisableFocusOverlay       (UI_BoxFlags)(1ull<<52)
+# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<53)
+# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<54)
+# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<55)
 
 //- rjf: bundles
 # define UI_BoxFlag_Clickable           (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
@@ -420,6 +423,7 @@ struct UI_Box
   //- rjf: per-build equipment
   UI_Key key;
   UI_BoxFlags flags;
+  String8Array tags;
   String8 string;
   UI_TextAlign text_align;
   Vec2F32 fixed_position;
@@ -659,6 +663,9 @@ struct UI_State
   
   //- rjf: build state machine state
   B32 is_in_open_ctx_menu;
+  B32 tooltip_can_overflow_window;
+  String8Array current_gen_tags;
+  U64 current_gen_tags_gen;
   
   //- rjf: build phase output
   UI_Box *root;
@@ -668,7 +675,6 @@ struct UI_State
   U64 build_box_count;
   U64 last_build_box_count;
   B32 ctx_menu_touched_this_frame;
-  B32 tooltip_can_overflow_window;
   B32 is_animating;
   
   //- rjf: build parameters

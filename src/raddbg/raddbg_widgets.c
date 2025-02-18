@@ -20,8 +20,8 @@ rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
     
     // rjf: colors
     Vec4F32 bg_color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackground);
-    Vec4F32 bd_color = rd_rgba_from_theme_color(RD_ThemeColor_FloatingBorder);
-    Vec4F32 hl_color = rd_rgba_from_theme_color(RD_ThemeColor_TextNeutral);
+    Vec4F32 bd_color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBorder);
+    Vec4F32 hl_color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundPop);
     bg_color.w *= loading_t;
     bd_color.w *= loading_t;
     hl_color.w *= loading_t;
@@ -140,21 +140,13 @@ rd_cmd_binding_buttons(String8 name)
     
     //- rjf: form color palette
     UI_Palette *palette = ui_top_palette();
-    if(has_conflicts || rebinding_active_for_this_binding)
+    if(has_conflicts)
     {
-      palette = push_array(ui_build_arena(), UI_Palette, 1);
-      MemoryCopyStruct(palette, ui_top_palette());
-      if(has_conflicts)
-      {
-        palette->colors[UI_ColorCode_Text] = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative);
-        palette->colors[UI_ColorCode_TextWeak] = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative);
-      }
-      if(rebinding_active_for_this_binding)
-      {
-        palette->colors[UI_ColorCode_Border] = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
-        palette->colors[UI_ColorCode_Background] = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
-        palette->colors[UI_ColorCode_Background].w *= 0.25f;
-      }
+      palette = rd_palette_from_code(RD_PaletteCode_Bad);
+    }
+    if(rebinding_active_for_this_binding)
+    {
+      palette = rd_palette_from_code(RD_PaletteCode_Pop);
     }
     
     //- rjf: build box
@@ -212,10 +204,7 @@ rd_cmd_binding_buttons(String8 name)
     //- rjf: delete button
     if(rebinding_active_for_this_binding)
       UI_PrefWidth(ui_em(2.5f, 1.f))
-      UI_Palette(ui_build_palette(ui_top_palette(),
-                                  .background = rd_rgba_from_theme_color(RD_ThemeColor_NegativePopButtonBackground),
-                                  .border = rd_rgba_from_theme_color(RD_ThemeColor_NegativePopButtonBorder),
-                                  .text = rd_rgba_from_theme_color(RD_ThemeColor_Text)))
+      RD_Palette(RD_PaletteCode_Bad)
     {
       ui_set_next_group_key(ui_key_zero());
       UI_Signal sig = rd_icon_button(RD_IconKind_X, 0, str8_lit("###delete_binding"));
@@ -231,20 +220,17 @@ rd_cmd_binding_buttons(String8 name)
   }
   
   //- rjf: build "add new binding" button
-  RD_Font(RD_FontSlot_Icons)
+  B32 adding_new_binding = (rd_state->bind_change_active &&
+                            str8_match(rd_state->bind_change_cmd_name, name, 0) &&
+                            rd_state->bind_change_binding.key == OS_Key_Null &&
+                            rd_state->bind_change_binding.modifiers == 0);
+  UI_Palette *palette = ui_top_palette();
+  if(adding_new_binding)
   {
-    UI_Palette *palette = ui_top_palette();
-    B32 adding_new_binding = (rd_state->bind_change_active &&
-                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
-                              rd_state->bind_change_binding.key == OS_Key_Null &&
-                              rd_state->bind_change_binding.modifiers == 0);
-    if(adding_new_binding)
-    {
-      palette = ui_build_palette(ui_top_palette());
-      palette->colors[UI_ColorCode_Border] = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
-      palette->colors[UI_ColorCode_Background] = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
-      palette->colors[UI_ColorCode_Background].w *= 0.25f;
-    }
+    palette = rd_palette_from_code(RD_PaletteCode_Pop);
+  }
+  RD_Font(RD_FontSlot_Icons) UI_Palette(palette)
+  {
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
@@ -495,7 +481,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   if(u->is_frozen)
   {
     F32 lock_icon_off = ui_top_font_size()*0.2f;
-    Vec4F32 lock_icon_color = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative);
+    Vec4F32 lock_icon_color = ui_top_palette()->background_bad;
     dr_text(rd_font_from_slot(RD_FontSlot_Icons),
             box->font_size, 0, 0, FNT_RasterFlag_Smooth,
             v2f32((box->rect.x0 + box->rect.x1)/2 + lock_icon_off/2,
@@ -609,9 +595,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground2),
     rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground3),
   };
-  UI_Palette *margin_palette = rd_palette_from_code(RD_PaletteCode_Floating);
-  UI_Palette *margin_contents_palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_Floating));
-  margin_contents_palette->background = v4f32(0, 0, 0, 0);
   F32 line_num_padding_px = ui_top_font_size()*1.f;
   F32 entity_alive_t_rate = (1 - pow_f32(2, (-30.f * rd_state->frame_dt)));
   F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
@@ -656,7 +639,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
         {
-          line_bg_colors[line_idx] = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlayError);
+          line_bg_colors[line_idx] = ui_top_palette()->background_bad;
         }
       }
     }
@@ -666,7 +649,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build priority margin
   //
   UI_Box *priority_margin_container_box = &ui_nil_box;
-  if(params->flags & RD_CodeSliceFlag_PriorityMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) UI_Palette(margin_palette) ProfScope("build priority margins")
+  if(params->flags & RD_CodeSliceFlag_PriorityMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build priority margins")
   {
     if(params->margin_float_off_px != 0)
     {
@@ -679,7 +662,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
     priority_margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable), str8_lit("priority_margin_container"));
-    UI_Parent(priority_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f)) UI_Palette(margin_contents_palette)
+    UI_Parent(priority_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
     {
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
@@ -708,8 +691,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = rd_rgba_from_ctrl_entity(thread);
+            Vec4F32 color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
             {
+              if(color.w == 0)
+              {
+                color = rd_rgba_from_theme_color(RD_ThemeColor_Thread1);
+              }
               if(unwind_count != 0)
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadUnwound);
@@ -727,7 +714,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               if(thread != selected_thread)
               {
-                color.w *= 0.8f;
+                color.w *= 0.5f;
               }
             }
             
@@ -813,7 +800,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build catchall margin
   //
   UI_Box *catchall_margin_container_box = &ui_nil_box;
-  if(params->flags & RD_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Palette(margin_palette) UI_Parent(top_container_box) ProfScope("build catchall margins")
+  if(params->flags & RD_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build catchall margins")
   {
     if(params->margin_float_off_px != 0)
     {
@@ -826,7 +813,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
     catchall_margin_container_box = ui_build_box_from_string(UI_BoxFlag_DrawSideLeft|UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable), str8_lit("catchall_margin_container"));
-    UI_Parent(catchall_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f)) UI_Palette(margin_contents_palette)
+    UI_Parent(catchall_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
     {
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
@@ -857,8 +844,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = rd_rgba_from_ctrl_entity(thread);
+            Vec4F32 color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
             {
+              if(color.w == 0)
+              {
+                color = rd_rgba_from_theme_color(RD_ThemeColor_Thread1);
+              }
               if(unwind_count != 0)
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadUnwound);
@@ -1182,7 +1173,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build background for line numbers & margins
   //
   {
-    UI_Parent(top_container_box) RD_Palette(RD_PaletteCode_Floating)
+    UI_Parent(top_container_box)
     {
       ui_set_next_pref_width(ui_px(params->priority_margin_width_px + params->catchall_margin_width_px + params->line_num_width_px, 1));
       ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -1255,7 +1246,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
+            RD_Palette(RD_PaletteCode_Bad)
           {
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###exception_info");
             ui_box_equip_display_fstrs(box, &explanation_fstrs);
@@ -1413,7 +1404,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 line_drag_drop = 0;
   RD_Cfg *line_drag_cfg = &rd_nil_cfg;
   CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
-  Vec4F32 line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
+  Vec4F32 line_drag_drop_color = ui_top_palette()->background_pop;
   {
     //- rjf: determine mouse drag range
     TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
@@ -1494,19 +1485,21 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         line_drag_drop = 1;
         line_drag_cfg = cfg;
-        line_drag_drop_color = rd_rgba_from_cfg(cfg);
-        line_drag_drop_color.w *= 0.5f;
+        line_drag_drop_color = linear_from_srgba(rd_rgba_from_cfg(cfg));
         if(line_drag_drop_color.w == 0)
         {
-          line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
+          line_drag_drop_color = ui_top_palette()->background_pop;
         }
       }
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
       {
         line_drag_drop = 1;
         line_drag_ctrl_entity = thread;
-        line_drag_drop_color = rd_rgba_from_ctrl_entity(thread);
-        line_drag_drop_color.w *= 0.5f;
+        line_drag_drop_color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
+        if(line_drag_drop_color.w == 0)
+        {
+          line_drag_drop_color = ui_top_palette()->background_pop;
+        }
       }
     }
     
@@ -1678,7 +1671,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     {
       TxtRngColorPairNode *n = push_array(scratch.arena, TxtRngColorPairNode, 1);
       n->rng = result.mouse_expr_rng;
-      n->color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+      n->color = ui_top_palette()->background_pop;
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
     }
   }
@@ -1816,7 +1809,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 line_box->rect.x0+line_num_padding_px+match_column_pixel_off_range.max+2.f,
                 line_box->rect.y1,
               };
-              Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+              Vec4F32 color = ui_top_palette()->background_pop;
               if(cursor->line == line_num && needle_pos+1 <= cursor->column && cursor->column < needle_pos+params->search_query.size+1)
               {
                 color.x += (1.f - color.x) * 0.5f;
@@ -1900,7 +1893,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness/2.f,
             line_box->rect.y1+params->font_size*0.25f,
           };
-          dr_rect(cursor_rect, rd_rgba_from_theme_color(is_focused ? RD_ThemeColor_Cursor : RD_ThemeColor_CursorInactive), 1.f, 0, 1.f);
+          Vec4F32 cursor_color = ui_top_palette()->cursor;
+          if(!is_focused)
+          {
+            cursor_color.w *= 0.5f;
+          }
+          dr_rect(cursor_rect, cursor_color, 1.f, 0, 1.f);
         }
         
         // rjf: extra rendering for lines with line-info that match the hovered
@@ -2212,7 +2210,7 @@ rd_error_label(String8 string)
 {
   UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
   UI_Signal sig = ui_signal_from_box(box);
-  UI_Parent(box) UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .text_weak = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
+  UI_Parent(box)
   {
     ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
     ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);

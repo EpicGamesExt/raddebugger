@@ -419,9 +419,18 @@ struct RD_RegsNode
 ////////////////////////////////
 //~ rjf: Structured Theme Types, Parsed From Config
 
+typedef struct RD_ThemePattern RD_ThemePattern;
+struct RD_ThemePattern
+{
+  String8Array tags;
+  Vec4F32 linear;
+};
+
 typedef struct RD_Theme RD_Theme;
 struct RD_Theme
 {
+  RD_ThemePattern *patterns;
+  U64 patterns_count;
   Vec4F32 colors[RD_ThemeColor_COUNT];
 };
 
@@ -438,16 +447,13 @@ typedef enum RD_PaletteCode
 {
   RD_PaletteCode_Base,
   RD_PaletteCode_MenuBar,
-  RD_PaletteCode_Floating,
-  RD_PaletteCode_ImplicitButton,
-  RD_PaletteCode_PlainButton,
-  RD_PaletteCode_PositivePopButton,
-  RD_PaletteCode_NegativePopButton,
-  RD_PaletteCode_NeutralPopButton,
-  RD_PaletteCode_ScrollBarButton,
+  RD_PaletteCode_Good,
+  RD_PaletteCode_Bad,
+  RD_PaletteCode_Pop,
+  RD_PaletteCode_ScrollBar,
   RD_PaletteCode_Tab,
   RD_PaletteCode_TabInactive,
-  RD_PaletteCode_DropSiteOverlay,
+  RD_PaletteCode_DropSite,
   RD_PaletteCode_COUNT
 }
 RD_PaletteCode;
@@ -541,6 +547,9 @@ struct RD_WindowState
   F32 last_dpi;
   B32 window_temporarily_focused_ipc;
   B32 window_layout_reset;
+  
+  // rjf: theme
+  RD_Theme *theme;
   
   // rjf: config/settings
   UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme
@@ -714,6 +723,9 @@ struct RD_State
   
   // rjf: schema table
   MD_Node **schemas;
+  
+  // rjf: default theme table
+  MD_Node *theme_preset_trees[RD_ThemePreset_COUNT];
   
   // rjf: vocab table
   RD_VocabInfoMap vocab_info_map;
@@ -961,6 +973,7 @@ internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *ne
 internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
 internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_child_from_string_or_alloc(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_child_from_string_or_parent(RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
 internal RD_CfgArray rd_cfg_array_from_list(Arena *arena, RD_CfgList *list);
@@ -968,6 +981,7 @@ internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
 internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
 internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
+internal void rd_cfg_list_push_front(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
 #define rd_cfg_list_first(list) ((list)->count ? (list)->first->v : &rd_nil_cfg)
 #define rd_cfg_list_last(list)  ((list)->count ? (list)->last->v  : &rd_nil_cfg)
 
@@ -993,7 +1007,7 @@ internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal String8 rd_view_rule_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
-internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
 
@@ -1014,7 +1028,7 @@ internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
-internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras);
+internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -1150,6 +1164,7 @@ internal String8 rd_push_search_string(Arena *arena);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
+internal Vec4F32 rd_color_from_tags(String8Array tags);
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
@@ -1178,7 +1193,7 @@ internal RD_VocabInfo *rd_vocab_info_from_code_name_plural(String8 code_name_plu
 #define rd_display_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name_plural)
 #define rd_icon_kind_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->icon_kind)
 #define rd_singular_from_code_name_plural(code_name_plural) (rd_vocab_info_from_code_name_plural(code_name_plural)->code_name)
-internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name, Vec4F32 secondary_color, F32 size);
+internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

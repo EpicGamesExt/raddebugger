@@ -20,6 +20,7 @@
 #define UI_GroupKey(v) DeferLoop(ui_push_group_key(v), ui_pop_group_key())
 #define UI_Transparency(v) DeferLoop(ui_push_transparency(v), ui_pop_transparency())
 #define UI_Palette(v) DeferLoop(ui_push_palette(v), ui_pop_palette())
+#define UI_Tag(v) DeferLoop(ui_push_tag(v), ui_pop_tag())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
@@ -50,6 +51,7 @@ internal U32 ui_top_fastpath_codepoint(void) { UI_StackTopImpl(ui_state, Fastpat
 internal UI_Key ui_top_group_key(void) { UI_StackTopImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_top_transparency(void) { UI_StackTopImpl(ui_state, Transparency, transparency) }
 internal UI_Palette*     ui_top_palette(void) { UI_StackTopImpl(ui_state, Palette, palette) }
+internal String8 ui_top_tag(void) { UI_StackTopImpl(ui_state, Tag, tag) }
 internal F32 ui_top_squish(void) { UI_StackTopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_top_hover_cursor(void) { UI_StackTopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_top_font(void) { UI_StackTopImpl(ui_state, Font, font) }
@@ -79,6 +81,7 @@ internal U32 ui_bottom_fastpath_codepoint(void) { UI_StackBottomImpl(ui_state, F
 internal UI_Key ui_bottom_group_key(void) { UI_StackBottomImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_bottom_transparency(void) { UI_StackBottomImpl(ui_state, Transparency, transparency) }
 internal UI_Palette*     ui_bottom_palette(void) { UI_StackBottomImpl(ui_state, Palette, palette) }
+internal String8 ui_bottom_tag(void) { UI_StackBottomImpl(ui_state, Tag, tag) }
 internal F32 ui_bottom_squish(void) { UI_StackBottomImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_bottom_hover_cursor(void) { UI_StackBottomImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_bottom_font(void) { UI_StackBottomImpl(ui_state, Font, font) }
@@ -108,6 +111,7 @@ internal U32 ui_push_fastpath_codepoint(U32 v) { UI_StackPushImpl(ui_state, Fast
 internal UI_Key ui_push_group_key(UI_Key v) { UI_StackPushImpl(ui_state, GroupKey, group_key, UI_Key, v) }
 internal F32 ui_push_transparency(F32 v) { UI_StackPushImpl(ui_state, Transparency, transparency, F32, v) }
 internal UI_Palette*     ui_push_palette(UI_Palette*     v) { UI_StackPushImpl(ui_state, Palette, palette, UI_Palette*    , v) }
+internal String8 ui_push_tag(String8 v) { UI_StackPushImpl(ui_state, Tag, tag, String8, v) }
 internal F32 ui_push_squish(F32 v) { UI_StackPushImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_push_hover_cursor(OS_Cursor v) { UI_StackPushImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_push_font(FNT_Tag v) { UI_StackPushImpl(ui_state, Font, font, FNT_Tag, v) }
@@ -137,6 +141,7 @@ internal U32 ui_pop_fastpath_codepoint(void) { UI_StackPopImpl(ui_state, Fastpat
 internal UI_Key ui_pop_group_key(void) { UI_StackPopImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_pop_transparency(void) { UI_StackPopImpl(ui_state, Transparency, transparency) }
 internal UI_Palette*     ui_pop_palette(void) { UI_StackPopImpl(ui_state, Palette, palette) }
+internal String8 ui_pop_tag(void) { UI_StackPopImpl(ui_state, Tag, tag) }
 internal F32 ui_pop_squish(void) { UI_StackPopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_pop_hover_cursor(void) { UI_StackPopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_pop_font(void) { UI_StackPopImpl(ui_state, Font, font) }
@@ -166,6 +171,7 @@ internal U32 ui_set_next_fastpath_codepoint(U32 v) { UI_StackSetNextImpl(ui_stat
 internal UI_Key ui_set_next_group_key(UI_Key v) { UI_StackSetNextImpl(ui_state, GroupKey, group_key, UI_Key, v) }
 internal F32 ui_set_next_transparency(F32 v) { UI_StackSetNextImpl(ui_state, Transparency, transparency, F32, v) }
 internal UI_Palette*     ui_set_next_palette(UI_Palette*     v) { UI_StackSetNextImpl(ui_state, Palette, palette, UI_Palette*    , v) }
+internal String8 ui_set_next_tag(String8 v) { UI_StackSetNextImpl(ui_state, Tag, tag, String8, v) }
 internal F32 ui_set_next_squish(F32 v) { UI_StackSetNextImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_set_next_hover_cursor(OS_Cursor v) { UI_StackSetNextImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_set_next_font(FNT_Tag v) { UI_StackSetNextImpl(ui_state, Font, font, FNT_Tag, v) }

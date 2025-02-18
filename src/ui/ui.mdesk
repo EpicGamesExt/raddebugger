@@ -33,6 +33,7 @@ UI_StackTable:
   //- rjf: colors
   { Transparency                       transparency                  F32                   0                                  }
   { Palette                            palette                      `UI_Palette*    `     `&ui_g_nil_palette`                 }
+  { Tag                                tag                           String8              `str8_lit("")`                      }
   
   //- rjf: squish
   { Squish                             squish                        F32                   0                                  }
@@ -94,7 +95,7 @@ UI_StackTable:
   `#define UI_DeclStacks \\`;
   `struct\\`;
   `{\\`;
-    @expand(UI_StackTable a) `struct { UI_$(a.name)Node *top; $(a.type) bottom_val; UI_$(a.name)Node *free; B32 auto_pop; } $(a.name_lower)_stack;\\`;
+    @expand(UI_StackTable a) `struct { UI_$(a.name)Node *top; $(a.type) bottom_val; UI_$(a.name)Node *free; U64 gen; B32 auto_pop; } $(a.name_lower)_stack;\\`;
     `}`;
 }
 

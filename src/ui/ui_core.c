@@ -2350,6 +2350,19 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
+    if(ui_state->current_gen_tags_gen != ui_state->tag_stack.gen)
+    {
+      ui_state->current_gen_tags_gen = ui_state->tag_stack.gen;
+      Temp scratch = scratch_begin(0, 0);
+      String8List tags = {0};
+      for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
+      {
+        str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
+      }
+      ui_state->current_gen_tags = str8_array_from_list(ui_build_arena(), &tags);
+      scratch_end(scratch);
+    }
+    box->tags = ui_state->current_gen_tags;
   }
   
   //- rjf: auto-pop all stacks
@@ -3147,6 +3160,7 @@ if(node->next == &state->name_lower##_nil_stack_top)\
 state->name_lower##_stack.bottom_val = (new_value);\
 }\
 state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
 return old_value;
 
 #define UI_StackPopImpl(state, name_upper, name_lower) \
@@ -3156,6 +3170,7 @@ if(popped != &state->name_lower##_nil_stack_top)\
 SLLStackPop(state->name_lower##_stack.top);\
 SLLStackPush(state->name_lower##_stack.free, popped);\
 state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
 }\
 return popped->v;\
 
@@ -3167,6 +3182,7 @@ type old_value = state->name_lower##_stack.top->v;\
 node->v = new_value;\
 SLLStackPush(state->name_lower##_stack.top, node);\
 state->name_lower##_stack.auto_pop = 1;\
+state->name_lower##_stack.gen += 1;\
 return old_value;
 
 #include "generated/ui.meta.c"

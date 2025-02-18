@@ -1034,7 +1034,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(is_top_level && evalled_cfg != &rd_nil_cfg)
       {
         RD_Cfg *cfg = evalled_cfg;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg));
         MD_Node *schema = rd_schema_from_name(arena, cfg->string);
         MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
         for MD_EachNode(cmd, cmds_root->first)
@@ -1088,7 +1088,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(is_top_level && evalled_entity != &ctrl_entity_nil)
       {
         CTRL_Entity *entity = evalled_entity;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, ui_top_palette()->text_weak, ui_top_font_size(), 1));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, 1));
         if(entity->kind == CTRL_EntityKind_Machine ||
            entity->kind == CTRL_EntityKind_Process ||
            entity->kind == CTRL_EntityKind_Thread)
@@ -1107,7 +1107,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
         RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string, ui_top_palette()->text_weak, ui_top_font_size()));
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
       }
       
       // rjf: folder / file rows
@@ -1445,7 +1445,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
         if(e_type_key_match(cfg_type, result.eval.type_key))
         {
-          result.fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
+          result.fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, 1);
           result.flags |= RD_WatchCellFlag_Button;
           result.entity = entity;
         }
@@ -1457,7 +1457,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
         if(e_type_key_match(cfg_type, result.eval.type_key))
         {
-          result.fstrs = rd_title_fstrs_from_cfg(arena, cfg, ui_top_palette()->text_weak, ui_top_font_size());
+          result.fstrs = rd_title_fstrs_from_cfg(arena, cfg);
           result.flags |= RD_WatchCellFlag_Button;
           result.cfg = cfg;
         }
@@ -1473,7 +1473,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         }
         else
         {
-          result.fstrs = rd_title_fstrs_from_code_name(arena, cmd_name, ui_top_palette()->text_weak, ui_top_font_size());
+          result.fstrs = rd_title_fstrs_from_code_name(arena, cmd_name);
         }
         result.flags |= RD_WatchCellFlag_Button;
         result.cmd_name = cmd_name;
@@ -2750,16 +2750,11 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               if(row_is_fresh)
               {
-                Vec4F32 start_color = rd_rgba_from_theme_color(RD_ThemeColor_NegativePopButtonBackground);
-                start_color.w *= 0.5f;
-                Vec4F32 end_color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
-                Vec4F32 color = mix_4f32(start_color, end_color, ui_anim(ui_key_from_stringf(ui_key_zero(), "row_fresh_%I64x", row_hash), 1.f));
-                palette = ui_build_palette(ui_top_palette(), .background = color);
-                row_flags |= UI_BoxFlag_DrawBackground;
+                row_flags |= UI_BoxFlag_DrawPop;
               }
-              else if(global_row_idx & 1)
+              if(global_row_idx & 1)
               {
-                row_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundAlt;
+                row_flags |= UI_BoxFlag_DrawAlt;
               }
               if(!row_matches_last_row_topology)
               {
@@ -2847,44 +2842,36 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 {
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored)
                   {
-                    palette = ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .text_weak = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlayError));
-                    cell_flags |= UI_BoxFlag_DrawBackground;
+                    cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBad;
                   }
                   else if(cell_info.inheritance_tooltip.size != 0)
                   {
-                    palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
-                    cell_flags |= UI_BoxFlag_DrawBackground;
+                    cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawPop;
                   }
                   else if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
                           rd_state->hover_regs_slot == RD_RegSlot_Cfg)
                   {
                     RD_Cfg *cfg = cell_info.cfg;
-                    Vec4F32 rgba = rd_rgba_from_cfg(cfg);
+                    Vec4F32 rgba = linear_from_srgba(rd_rgba_from_cfg(cfg));
                     if(rgba.w == 0)
                     {
-                      rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                      rgba = ui_top_palette()->background_pop;
                     }
-                    else
-                    {
-                      rgba.w *= 0.2f;
-                    }
+                    rgba.w *= 0.2f;
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                     palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
-                    cell_flags |= UI_BoxFlag_DrawBackground;
+                    cell_flags |= UI_BoxFlag_DrawPop|UI_BoxFlag_DrawBackground;
                   }
                   else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
                           rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
                   {
                     CTRL_Entity *entity = cell_info.entity;
-                    Vec4F32 rgba = rd_rgba_from_ctrl_entity(entity);
+                    Vec4F32 rgba = linear_from_srgba(rd_rgba_from_ctrl_entity(entity));
                     if(rgba.w == 0)
                     {
-                      rgba = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                      rgba = ui_top_palette()->background_pop;;
                     }
-                    else
-                    {
-                      rgba.w *= 0.2f;
-                    }
+                    rgba.w *= 0.2f;
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                     palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
                     cell_flags |= UI_BoxFlag_DrawBackground;
@@ -3440,7 +3427,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: build missing file interface
   //
-  if(file_is_missing && !u128_match(hash, u128_zero()))
+  if(file_is_missing)
   {
     UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_pct(1, 0))
     {
@@ -3448,7 +3435,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
-        UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
       {
         RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
         ui_labelf("Could not find \"%S\".", rd_regs()->file_path);
@@ -3459,7 +3445,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         UI_CornerRadius(ui_top_font_size()/3)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
-        RD_Palette(RD_PaletteCode_NeutralPopButton)
+        RD_Palette(RD_PaletteCode_Pop)
         UI_TextAlignment(UI_TextAlign_Center)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
@@ -3534,7 +3520,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     UI_Palette *palette = ui_top_palette();
     if(file_is_out_of_date)
     {
-      palette = rd_palette_from_code(RD_PaletteCode_NegativePopButton);
+      palette = rd_palette_from_code(RD_PaletteCode_Bad);
     }
     UI_Palette(palette)
       UI_Row
@@ -3545,8 +3531,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       if(file_is_out_of_date)
       {
         UI_Box *box = &ui_nil_box;
-        UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
-          RD_Font(RD_FontSlot_Icons)
+        RD_Font(RD_FontSlot_Icons)
         {
           box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###file_ood_warning", rd_icon_kind_text_table[RD_IconKind_WarningBig]);
         }
@@ -3556,7 +3541,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
           {
             ui_labelf("This file has changed since ", out_of_date_dbgi_name);
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNeutral))) ui_label(out_of_date_dbgi_name);
+            ui_label(out_of_date_dbgi_name);
             ui_labelf(" was produced.");
           }
         }
@@ -4062,8 +4047,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   DR_FStrList byte_fstrs[256] = {0};
   {
-    Vec4F32 full_color = rd_rgba_from_theme_color(RD_ThemeColor_TextPositive);
-    Vec4F32 zero_color = rd_rgba_from_theme_color(RD_ThemeColor_TextWeak);
+    Vec4F32 full_color = ui_top_palette()->text;
+    Vec4F32 zero_color = ui_top_palette()->text_weak;
     for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -4133,7 +4118,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");
-          annotation->color = symbol_name.size != 0 ? rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol) : rd_rgba_from_theme_color(RD_ThemeColor_TextWeak);
+          annotation->color = symbol_name.size != 0 ? rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol) : ui_top_palette()->text_weak;
           annotation->vaddr_range = frame_vaddr_range;
           for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
           {
@@ -4446,12 +4431,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               
               // rjf: unpack visual cell info
               UI_BoxFlags cell_flags = 0;
-              Vec4F32 cell_border_rgba = {0};
               Vec4F32 cell_bg_rgba = {0};
               if(global_byte_num == mouse_hover_byte_num)
               {
                 cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight;
-                cell_border_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
               }
               if(annotation != 0)
               {
@@ -4469,7 +4452,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
               {
                 cell_flags |= UI_BoxFlag_DrawBackground;
-                cell_bg_rgba = rd_rgba_from_theme_color(RD_ThemeColor_SelectionOverlay);
+                cell_bg_rgba = ui_top_palette()->selection;
               }
               
               // rjf: build
@@ -4551,7 +4534,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                              ascii_box->rect.y0,
                              text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                              ascii_box->rect.y1),
-                      rd_rgba_from_theme_color(RD_ThemeColor_SelectionOverlay),
+                      ui_top_palette()->selection,
                       0, 0, 1.f);
             }
             ui_box_equip_draw_bucket(ascii_box, bucket);
@@ -4562,7 +4545,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             DR_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
-              Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+              Vec4F32 color = ui_top_palette()->border;
               dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
                              ascii_box->rect.y0,
                              text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,
@@ -4726,7 +4709,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   Rng2F32 rect_cvs = rd_bitmap_canvas_from_screen_rect(draw_data->view_center_pos, draw_data->zoom, rect_scrn, rect_scrn);
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
-  Vec4F32 grid_line_color = rd_rgba_from_theme_color(RD_ThemeColor_TextWeak);
+  Vec4F32 grid_line_color = ui_top_palette()->background_alt;
   for EachEnumVal(Axis2, axis)
   {
     for(F32 v = rect_cvs.p0.v[axis] - mod_f32(rect_cvs.p0.v[axis], grid_cell_size_cvs);
