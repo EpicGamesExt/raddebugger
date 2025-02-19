@@ -7462,840 +7462,843 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     ////////////////////////////
     //- rjf: panel leaf UI
     //
-    ProfScope("leaf panel UI")
-      for(RD_PanelNode *panel = panel_tree.root;
-          panel != &rd_nil_panel_node;
-          panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
+    if(content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0)
     {
-      if(panel->first != &rd_nil_panel_node) {continue;}
-      B32 panel_is_focused = (window_is_focused &&
-                              !ws->menu_bar_focused &&
-                              !query_is_open &&
-                              !ui_any_ctx_menu_is_open() &&
-                              !ws->hover_eval_focused &&
-                              panel_tree.focused == panel);
-      RD_Cfg *selected_tab = panel->selected_tab;
-      RD_ViewState *selected_tab_view_state = rd_view_state_from_cfg(selected_tab);
-      F32 selected_tab_is_filtering_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_filtering_t_%p", selected_tab), (F32)!!selected_tab_view_state->is_filtering);
-      ProfScope("leaf panel UI work - %.*s", str8_varg(selected_tab->string))
-        UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+      ProfScope("leaf panel UI")
+        for(RD_PanelNode *panel = panel_tree.root;
+            panel != &rd_nil_panel_node;
+            panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
       {
-        //////////////////////////
-        //- rjf: calculate UI rectangles
-        //
-        Vec2F32 content_rect_dim = dim_2f32(content_rect);
-        Rng2F32 target_rect_px = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
-        Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0 / content_rect_dim.x,
-                                         target_rect_px.y0 / content_rect_dim.y,
-                                         target_rect_px.x1 / content_rect_dim.x,
-                                         target_rect_px.y1 / content_rect_dim.y);
-        Rng2F32 panel_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0),
-                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0),
-                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1),
-                                        ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1));
-        Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
-                                    panel_rect_pct.y0*content_rect_dim.y,
-                                    panel_rect_pct.x1*content_rect_dim.x,
-                                    panel_rect_pct.y1*content_rect_dim.y);
-        panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
-        F32 tab_bar_rheight = ui_top_font_size()*3.f;
-        F32 tab_bar_vheight = ui_top_font_size()*2.6f;
-        F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
-        F32 tab_spacing = ui_top_font_size()*0.4f;
-        F32 filter_bar_height = ui_top_font_size()*3.f;
-        Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
-        Rng2F32 content_rect = r2f32p(panel_rect.x0, panel_rect.y0+tab_bar_vheight, panel_rect.x1, panel_rect.y1);
-        Rng2F32 filter_rect = {0};
-        if(panel->tab_side == Side_Max)
+        if(panel->first != &rd_nil_panel_node) {continue;}
+        B32 panel_is_focused = (window_is_focused &&
+                                !ws->menu_bar_focused &&
+                                !query_is_open &&
+                                !ui_any_ctx_menu_is_open() &&
+                                !ws->hover_eval_focused &&
+                                panel_tree.focused == panel);
+        RD_Cfg *selected_tab = panel->selected_tab;
+        RD_ViewState *selected_tab_view_state = rd_view_state_from_cfg(selected_tab);
+        F32 selected_tab_is_filtering_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_filtering_t_%p", selected_tab), (F32)!!selected_tab_view_state->is_filtering);
+        ProfScope("leaf panel UI work - %.*s", str8_varg(selected_tab->string))
+          UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
-          tab_bar_rect.y0 = panel_rect.y1 - tab_bar_vheight;
-          tab_bar_rect.y1 = panel_rect.y1;
-          content_rect.y0 = panel_rect.y0;
-          content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
-        }
-        if(selected_tab_is_filtering_t > 0.01f)
-        {
-          filter_rect.x0 = content_rect.x0;
-          filter_rect.y0 = content_rect.y0;
-          filter_rect.x1 = content_rect.x1;
-          content_rect.y0 += filter_bar_height*selected_tab_is_filtering_t;
-          filter_rect.y1 = content_rect.y0;
-        }
-        tab_bar_rect = intersect_2f32(tab_bar_rect, panel_rect);
-        content_rect = intersect_2f32(content_rect, panel_rect);
-        
-        //////////////////////////
-        //- rjf: decide to skip this panel (e.g. if it is too small
-        //
-        B32 build_panel = (content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0);
-        
-        //////////////////////////
-        //- rjf: build combined split+movetab drag/drop sites
-        //
-        if(build_panel)
-        {
-          RD_Cfg *view = rd_cfg_from_id(rd_state->drag_drop_regs->view);
-          if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg && contains_2f32(panel_rect, ui_mouse()) && ui_key_match(ui_drop_hot_key(), ui_key_zero()))
+          //////////////////////////
+          //- rjf: calculate UI rectangles
+          //
+          Vec2F32 content_rect_dim = dim_2f32(content_rect);
+          Rng2F32 target_rect_px = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
+          Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0 / content_rect_dim.x,
+                                           target_rect_px.y0 / content_rect_dim.y,
+                                           target_rect_px.x1 / content_rect_dim.x,
+                                           target_rect_px.y1 / content_rect_dim.y);
+          Rng2F32 panel_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1));
+          Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
+                                      panel_rect_pct.y0*content_rect_dim.y,
+                                      panel_rect_pct.x1*content_rect_dim.x,
+                                      panel_rect_pct.y1*content_rect_dim.y);
+          panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
+          F32 tab_bar_rheight = ui_top_font_size()*3.f;
+          F32 tab_bar_vheight = ui_top_font_size()*2.6f;
+          F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
+          F32 tab_spacing = ui_top_font_size()*0.4f;
+          F32 filter_bar_height = ui_top_font_size()*3.f;
+          Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
+          Rng2F32 content_rect = r2f32p(panel_rect.x0, panel_rect.y0+tab_bar_vheight, panel_rect.x1, panel_rect.y1);
+          Rng2F32 filter_rect = {0};
+          if(panel->tab_side == Side_Max)
           {
-            F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
-            drop_site_dim_px = Min(drop_site_dim_px, dim_2f32(panel_rect).v[panel->split_axis]/4.f);
-            drop_site_dim_px = Max(drop_site_dim_px, ceil_f32(ui_top_font_size()*3.f));
-            Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
-            Vec2F32 panel_center = center_2f32(panel_rect);
-            F32 corner_radius = ui_top_font_size()*0.5f;
-            F32 padding = ceil_f32(ui_top_font_size()*0.5f);
-            struct
+            tab_bar_rect.y0 = panel_rect.y1 - tab_bar_vheight;
+            tab_bar_rect.y1 = panel_rect.y1;
+            content_rect.y0 = panel_rect.y0;
+            content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
+          }
+          if(selected_tab_is_filtering_t > 0.01f)
+          {
+            filter_rect.x0 = content_rect.x0;
+            filter_rect.y0 = content_rect.y0;
+            filter_rect.x1 = content_rect.x1;
+            content_rect.y0 += filter_bar_height*selected_tab_is_filtering_t;
+            filter_rect.y1 = content_rect.y0;
+          }
+          tab_bar_rect = intersect_2f32(tab_bar_rect, panel_rect);
+          content_rect = intersect_2f32(content_rect, panel_rect);
+          
+          //////////////////////////
+          //- rjf: decide to skip this panel (e.g. if it is too small
+          //
+          B32 build_panel = (content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0);
+          
+          //////////////////////////
+          //- rjf: build combined split+movetab drag/drop sites
+          //
+          if(build_panel)
+          {
+            RD_Cfg *view = rd_cfg_from_id(rd_state->drag_drop_regs->view);
+            if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg && contains_2f32(panel_rect, ui_mouse()) && ui_key_match(ui_drop_hot_key(), ui_key_zero()))
             {
-              UI_Key key;
-              Dir2 split_dir;
-              Rng2F32 rect;
-            }
-            sites[] =
-            {
+              F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
+              drop_site_dim_px = Min(drop_site_dim_px, dim_2f32(panel_rect).v[panel->split_axis]/4.f);
+              drop_site_dim_px = Max(drop_site_dim_px, ceil_f32(ui_top_font_size()*3.f));
+              Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
+              Vec2F32 panel_center = center_2f32(panel_rect);
+              F32 corner_radius = ui_top_font_size()*0.5f;
+              F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+              struct
               {
-                ui_key_from_stringf(ui_key_zero(), "drop_split_center_%p", panel->cfg),
-                Dir2_Invalid,
-                r2f32(sub_2f32(panel_center, drop_site_half_dim),
-                      add_2f32(panel_center, drop_site_half_dim))
-              },
+                UI_Key key;
+                Dir2 split_dir;
+                Rng2F32 rect;
+              }
+              sites[] =
               {
-                ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel->cfg),
-                Dir2_Up,
-                r2f32p(panel_center.x-drop_site_half_dim.x,
-                       panel_center.y-drop_site_half_dim.y - drop_site_half_dim.y*2,
-                       panel_center.x+drop_site_half_dim.x,
-                       panel_center.y+drop_site_half_dim.y - drop_site_half_dim.y*2),
-              },
+                {
+                  ui_key_from_stringf(ui_key_zero(), "drop_split_center_%p", panel->cfg),
+                  Dir2_Invalid,
+                  r2f32(sub_2f32(panel_center, drop_site_half_dim),
+                        add_2f32(panel_center, drop_site_half_dim))
+                },
+                {
+                  ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel->cfg),
+                  Dir2_Up,
+                  r2f32p(panel_center.x-drop_site_half_dim.x,
+                         panel_center.y-drop_site_half_dim.y - drop_site_half_dim.y*2,
+                         panel_center.x+drop_site_half_dim.x,
+                         panel_center.y+drop_site_half_dim.y - drop_site_half_dim.y*2),
+                },
+                {
+                  ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel->cfg),
+                  Dir2_Down,
+                  r2f32p(panel_center.x-drop_site_half_dim.x,
+                         panel_center.y-drop_site_half_dim.y + drop_site_half_dim.y*2,
+                         panel_center.x+drop_site_half_dim.x,
+                         panel_center.y+drop_site_half_dim.y + drop_site_half_dim.y*2),
+                },
+                {
+                  ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel->cfg),
+                  Dir2_Left,
+                  r2f32p(panel_center.x-drop_site_half_dim.x - drop_site_half_dim.x*2,
+                         panel_center.y-drop_site_half_dim.y,
+                         panel_center.x+drop_site_half_dim.x - drop_site_half_dim.x*2,
+                         panel_center.y+drop_site_half_dim.y),
+                },
+                {
+                  ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel->cfg),
+                  Dir2_Right,
+                  r2f32p(panel_center.x-drop_site_half_dim.x + drop_site_half_dim.x*2,
+                         panel_center.y-drop_site_half_dim.y,
+                         panel_center.x+drop_site_half_dim.x + drop_site_half_dim.x*2,
+                         panel_center.y+drop_site_half_dim.y),
+                },
+              };
+              UI_CornerRadius(corner_radius)
+                for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
               {
-                ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel->cfg),
-                Dir2_Down,
-                r2f32p(panel_center.x-drop_site_half_dim.x,
-                       panel_center.y-drop_site_half_dim.y + drop_site_half_dim.y*2,
-                       panel_center.x+drop_site_half_dim.x,
-                       panel_center.y+drop_site_half_dim.y + drop_site_half_dim.y*2),
-              },
-              {
-                ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel->cfg),
-                Dir2_Left,
-                r2f32p(panel_center.x-drop_site_half_dim.x - drop_site_half_dim.x*2,
-                       panel_center.y-drop_site_half_dim.y,
-                       panel_center.x+drop_site_half_dim.x - drop_site_half_dim.x*2,
-                       panel_center.y+drop_site_half_dim.y),
-              },
-              {
-                ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel->cfg),
-                Dir2_Right,
-                r2f32p(panel_center.x-drop_site_half_dim.x + drop_site_half_dim.x*2,
-                       panel_center.y-drop_site_half_dim.y,
-                       panel_center.x+drop_site_half_dim.x + drop_site_half_dim.x*2,
-                       panel_center.y+drop_site_half_dim.y),
-              },
-            };
-            UI_CornerRadius(corner_radius)
+                UI_Key key = sites[idx].key;
+                Dir2 dir = sites[idx].split_dir;
+                Rng2F32 rect = sites[idx].rect;
+                Axis2 split_axis = axis2_from_dir2(dir);
+                Side split_side = side_from_dir2(dir);
+                if(dir != Dir2_Invalid && split_axis == panel->parent->split_axis)
+                {
+                  continue;
+                }
+                UI_Box *site_box = &ui_nil_box;
+                {
+                  F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+                  UI_Rect(rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
+                  {
+                    site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
+                    ui_signal_from_box(site_box);
+                  }
+                  UI_Box *site_box_viz = &ui_nil_box;
+                  UI_GroupKey(key)
+                    UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                    UI_Padding(ui_px(padding, 1.f))
+                    UI_Column
+                    UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                    site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawDropShadow|
+                                                         UI_BoxFlag_DrawBackgroundBlur|
+                                                         UI_BoxFlag_DrawHotEffects, ui_key_zero());
+                  }
+                  if(dir != Dir2_Invalid)
+                  {
+                    UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_set_next_child_layout_axis(split_axis);
+                      UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
+                      UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
+                      {
+                        if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
+                        ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                        ui_spacer(ui_px(padding, 1.f));
+                        if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
+                        ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      }
+                    }
+                  }
+                  else
+                  {
+                    UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_set_next_child_layout_axis(split_axis);
+                      UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
+                      UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
+                      {
+                        ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
+                      }
+                    }
+                  }
+                }
+                if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
+                {
+                  if(dir != Dir2_Invalid)
+                  {
+                    rd_cmd(RD_CmdKind_SplitPanel,
+                           .dst_panel = panel->cfg->id,
+                           .panel = rd_state->drag_drop_regs->panel,
+                           .view = rd_state->drag_drop_regs->view,
+                           .dir2 = dir);
+                  }
+                  else
+                  {
+                    rd_cmd(RD_CmdKind_MoveTab,
+                           .dst_panel = panel->cfg->id,
+                           .panel = rd_state->drag_drop_regs->panel,
+                           .view = rd_state->drag_drop_regs->view,
+                           .prev_view = rd_cfg_list_last(&panel->tabs)->id);
+                  }
+                }
+              }
               for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+              {
+                B32 is_drop_hot = ui_key_match(ui_drop_hot_key(), sites[idx].key);
+                if(is_drop_hot)
+                {
+                  Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
+                  Side split_side = side_from_dir2(sites[idx].split_dir);
+                  Rng2F32 future_split_rect_target = panel_rect;
+                  if(sites[idx].split_dir != Dir2_Invalid)
+                  {
+                    Vec2F32 panel_center = center_2f32(panel_rect);
+                    future_split_rect_target.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
+                  }
+                  future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
+                  Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
+                  Rng2F32 future_split_rect =
+                  {
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                  };
+                  UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
+                  {
+                    ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                  }
+                }
+              }
+            }
+          }
+          
+          //////////////////////////
+          //- rjf: build catch-all panel drop-site
+          //
+          UI_Key catchall_drop_site_key = ui_key_from_stringf(ui_key_zero(), "catchall_drop_site_%p", panel->cfg);
+          if(build_panel) UI_Rect(panel_rect)
+          {
+            UI_Box *catchall_drop_site = ui_build_box_from_key(UI_BoxFlag_DropSite, catchall_drop_site_key);
+            ui_signal_from_box(catchall_drop_site);
+          }
+          
+          //////////////////////////
+          //- rjf: build filtering box
+          //
+#if 0 // TODO(rjf): @cfg
+          {
+            RD_Cfg *view = selected_tab;
+            RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
+            RD_ViewState *view_state = rd_view_state_from_cfg(view);
+            UI_Focus(UI_FocusKind_On) RD_RegsScope(.view = view->id)
             {
-              UI_Key key = sites[idx].key;
-              Dir2 dir = sites[idx].split_dir;
-              Rng2F32 rect = sites[idx].rect;
-              Axis2 split_axis = axis2_from_dir2(dir);
-              Side split_side = side_from_dir2(dir);
-              if(dir != Dir2_Invalid && split_axis == panel->parent->split_axis)
+              if(view_state->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
+              {
+                rd_cmd(RD_CmdKind_ApplyFilter);
+              }
+              if(view_state->is_filtering || selected_tab_is_filtering_t > 0.01f)
+              {
+                UI_Box *filter_box = &ui_nil_box;
+                UI_Rect(filter_rect)
+                {
+                  ui_set_next_child_layout_axis(Axis2_X);
+                  filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
+                }
+                UI_Parent(filter_box) UI_WidthFill UI_HeightFill
+                {
+                  UI_PrefWidth(ui_em(3.f, 1.f))
+                    UI_TagF("weak")
+                    RD_Font(RD_FontSlot_Icons)
+                    UI_TextAlignment(UI_TextAlign_Center)
+                    ui_label(rd_icon_kind_text_table[RD_IconKind_Find]);
+                  UI_PrefWidth(ui_text_dim(10, 1))
+                  {
+                    ui_label(str8_lit("Filter"));
+                  }
+                  ui_spacer(ui_em(0.5f, 1.f));
+                  RD_Font(view_rule_info->flags & RD_ViewRuleInfoFlag_FilterIsCode ? RD_FontSlot_Code : RD_FontSlot_Main)
+                    UI_Focus(view_state->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
+                    UI_TextPadding(ui_top_font_size()*0.5f)
+                  {
+                    UI_Signal sig = rd_line_edit(RD_LineEditFlag_CodeContents*!!(view_rule_info->flags & RD_ViewRuleInfoFlag_FilterIsCode),
+                                                 0,
+                                                 0,
+                                                 &view_state->filter_cursor,
+                                                 &view_state->filter_mark,
+                                                 view_state->filter_buffer,
+                                                 sizeof(view_state->filter_buffer),
+                                                 &view_state->filter_string_size,
+                                                 0,
+                                                 str8(view_state->filter_buffer, view_state->filter_string_size),
+                                                 str8_lit("###filter_text_input"));
+                    if(ui_pressed(sig))
+                    {
+                      rd_cmd(RD_CmdKind_FocusPanel);
+                    }
+                  }
+                }
+              }
+            }
+          }
+#endif
+          
+          //////////////////////////
+          //- rjf: panel not selected? -> darken
+          //
+          if(build_panel) if(panel != panel_tree.focused)
+          {
+            UI_Rect(content_rect) UI_TagF("inactive")
+              ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+          }
+          
+          //////////////////////////
+          //- rjf: build panel container box
+          //
+          UI_Box *panel_box = &ui_nil_box;
+          if(build_panel) UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
+          {
+            UI_Key panel_key = ui_key_from_stringf(ui_key_zero(), "panel_box_%p", panel->cfg);
+            panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
+                                              UI_BoxFlag_Clip|
+                                              UI_BoxFlag_DrawBorder|
+                                              UI_BoxFlag_DisableFocusOverlay|
+                                              ((panel_tree.focused != panel)*UI_BoxFlag_DisableFocusBorder),
+                                              panel_key);
+          }
+          
+          //////////////////////////
+          //- rjf: loading animation for stable view
+          //
+          UI_Box *loading_overlay_container = &ui_nil_box;
+          if(build_panel) UI_Parent(panel_box) UI_WidthFill UI_HeightFill
+          {
+            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+          }
+          
+          //////////////////////////
+          //- rjf: build selected tab view
+          //
+          if(build_panel)
+            UI_Parent(panel_box)
+            UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+            UI_WidthFill
+          {
+            //- rjf: push interaction registers, fill with per-view states
+            rd_push_regs(.panel = panel->cfg->id,
+                         .view  = selected_tab->id);
+            {
+              String8 view_expr = rd_expr_from_cfg(selected_tab);
+              String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
+              rd_regs()->file_path = view_file_path;
+            }
+            
+            //- rjf: build view container
+            UI_Box *view_container_box = &ui_nil_box;
+            UI_FixedWidth(dim_2f32(content_rect).x)
+              UI_FixedHeight(dim_2f32(content_rect).y)
+              UI_ChildLayoutAxis(Axis2_Y)
+            {
+              view_container_box = ui_build_box_from_key(0, ui_key_zero());
+            }
+            
+            //- rjf: build empty view
+            UI_Parent(view_container_box) if(selected_tab == &rd_nil_cfg)
+            {
+              ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
+              UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TagF("weak")
+                UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+              {
+                UI_PrefHeight(ui_em(3.f, 1.f))
+                  UI_Row
+                  UI_Padding(ui_pct(1, 0))
+                  UI_TextAlignment(UI_TextAlign_Center)
+                  UI_PrefWidth(ui_em(15.f, 1.f))
+                  UI_CornerRadius(ui_top_font_size()/2.f)
+                  UI_TagF("bad_pop")
+                {
+                  if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
+                  {
+                    rd_cmd(RD_CmdKind_ClosePanel);
+                  }
+                }
+              }
+            }
+            
+            //- rjf: build tab view
+            UI_Parent(view_container_box) if(selected_tab != &rd_nil_cfg) ProfScope("build tab view")
+            {
+              rd_view_ui(content_rect);
+            }
+            
+            //- rjf: pop interaction registers; commit if this is the selected view
+            RD_Regs *view_regs = rd_pop_regs();
+            if(panel_tree.focused == panel)
+            {
+              MemoryCopyStruct(rd_regs(), view_regs);
+            }
+          }
+          
+          ////////////////////////
+          //- rjf: loading? -> fill loading overlay container
+          //
+          if(build_panel)
+          {
+            F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target);
+            if(selected_tab_loading_t > 0.01f) UI_Parent(loading_overlay_container)
+            {
+              rd_loading_overlay(panel_rect, selected_tab_loading_t, selected_tab_view_state->loading_progress_v, selected_tab_view_state->loading_progress_v_target);
+            }
+          }
+          
+          //////////////////////////
+          //- rjf: take events to automatically start/end filtering, if applicable
+          //
+#if 0 // TODO(rjf): @cfg
+          UI_Focus(UI_FocusKind_On)
+          {
+            RD_Cfg *view = selected_tab;
+            RD_ViewState *view_state = selected_tab_view_state;
+            RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
+            if(ui_is_focus_active() && view_rule_info->flags & RD_ViewRuleInfoFlag_TypingAutomaticallyFilters && !view_state->is_filtering)
+            {
+              for(UI_Event *evt = 0; ui_next_event(&evt);)
+              {
+                if(evt->flags & UI_EventFlag_Paste)
+                {
+                  ui_eat_event(evt);
+                  rd_cmd(RD_CmdKind_Filter);
+                  rd_cmd(RD_CmdKind_Paste);
+                }
+                else if(evt->string.size != 0 && evt->kind == UI_EventKind_Text)
+                {
+                  ui_eat_event(evt);
+                  rd_cmd(RD_CmdKind_Filter);
+                  rd_cmd(RD_CmdKind_InsertText, .string = evt->string);
+                }
+              }
+            }
+            if(view_rule_info->flags & RD_ViewRuleInfoFlag_CanFilter && (view_state->filter_string_size != 0 || view_state->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+            {
+              rd_cmd(RD_CmdKind_ClearFilter);
+            }
+          }
+#endif
+          
+          //////////////////////////
+          //- rjf: consume panel fallthrough interaction events
+          //
+          if(build_panel)
+          {
+            UI_Signal panel_sig = ui_signal_from_box(panel_box);
+            if(ui_pressed(panel_sig))
+            {
+              rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
+            }
+            if(ui_right_clicked(panel_sig))
+            {
+              rd_cmd(RD_CmdKind_PushQuery,
+                     .view         = panel->selected_tab->id,
+                     .file_path    = rd_file_path_from_eval_string(rd_frame_arena(), rd_expr_from_cfg(panel->selected_tab)),
+                     .ui_key       = panel_box->key,
+                     .off_px       = sub_2f32(ui_mouse(), panel_box->rect.p0),
+                     .reg_slot     = RD_RegSlot_View,
+                     .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
+            }
+          }
+          
+          //////////////////////////
+          //- rjf: compute tab build tasks
+          //
+          typedef struct TabTask TabTask;
+          struct TabTask
+          {
+            TabTask *next;
+            RD_Cfg *tab;
+            DR_FStrList fstrs;
+            F32 tab_width;
+          };
+          TabTask *first_tab_task = 0;
+          TabTask *last_tab_task = 0;
+          U64 tab_task_count = 0;
+          F32 tab_close_width_px = ui_top_font_size()*2.5f;
+          if(build_panel)
+          {
+            for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
+            {
+              RD_Cfg *tab = n->v;
+              if(rd_cfg_is_project_filtered(tab))
               {
                 continue;
               }
-              UI_Box *site_box = &ui_nil_box;
-              {
-                F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
-                UI_Rect(rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
-                {
-                  site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
-                  ui_signal_from_box(site_box);
-                }
-                UI_Box *site_box_viz = &ui_nil_box;
-                UI_GroupKey(key)
-                  UI_Parent(site_box) UI_WidthFill UI_HeightFill
-                  UI_Padding(ui_px(padding, 1.f))
-                  UI_Column
-                  UI_Padding(ui_px(padding, 1.f))
-                {
-                  ui_set_next_child_layout_axis(axis2_flip(split_axis));
-                  site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
-                                                       UI_BoxFlag_DrawBorder|
-                                                       UI_BoxFlag_DrawDropShadow|
-                                                       UI_BoxFlag_DrawBackgroundBlur|
-                                                       UI_BoxFlag_DrawHotEffects, ui_key_zero());
-                }
-                if(dir != Dir2_Invalid)
-                {
-                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
-                  {
-                    ui_set_next_child_layout_axis(split_axis);
-                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
-                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
-                    {
-                      if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
-                      ui_spacer(ui_px(padding, 1.f));
-                      if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
-                    }
-                  }
-                }
-                else
-                {
-                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
-                  {
-                    ui_set_next_child_layout_axis(split_axis);
-                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
-                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
-                    {
-                      ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
-                    }
-                  }
-                }
-              }
-              if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
-              {
-                if(dir != Dir2_Invalid)
-                {
-                  rd_cmd(RD_CmdKind_SplitPanel,
-                         .dst_panel = panel->cfg->id,
-                         .panel = rd_state->drag_drop_regs->panel,
-                         .view = rd_state->drag_drop_regs->view,
-                         .dir2 = dir);
-                }
-                else
-                {
-                  rd_cmd(RD_CmdKind_MoveTab,
-                         .dst_panel = panel->cfg->id,
-                         .panel = rd_state->drag_drop_regs->panel,
-                         .view = rd_state->drag_drop_regs->view,
-                         .prev_view = rd_cfg_list_last(&panel->tabs)->id);
-                }
-              }
+              TabTask *t = push_array(scratch.arena, TabTask, 1);
+              t->tab = tab;
+              t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
+              t->tab_width = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+              SLLQueuePush(first_tab_task, last_tab_task, t);
+              tab_task_count += 1;
             }
-            for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
-            {
-              B32 is_drop_hot = ui_key_match(ui_drop_hot_key(), sites[idx].key);
-              if(is_drop_hot)
-              {
-                Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
-                Side split_side = side_from_dir2(sites[idx].split_dir);
-                Rng2F32 future_split_rect_target = panel_rect;
-                if(sites[idx].split_dir != Dir2_Invalid)
-                {
-                  Vec2F32 panel_center = center_2f32(panel_rect);
-                  future_split_rect_target.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
-                }
-                future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
-                Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
-                Rng2F32 future_split_rect =
-                {
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
-                };
-                UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
-                {
-                  ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
-                }
-              }
-            }
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: build catch-all panel drop-site
-        //
-        UI_Key catchall_drop_site_key = ui_key_from_stringf(ui_key_zero(), "catchall_drop_site_%p", panel->cfg);
-        if(build_panel) UI_Rect(panel_rect)
-        {
-          UI_Box *catchall_drop_site = ui_build_box_from_key(UI_BoxFlag_DropSite, catchall_drop_site_key);
-          ui_signal_from_box(catchall_drop_site);
-        }
-        
-        //////////////////////////
-        //- rjf: build filtering box
-        //
-#if 0 // TODO(rjf): @cfg
-        {
-          RD_Cfg *view = selected_tab;
-          RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
-          RD_ViewState *view_state = rd_view_state_from_cfg(view);
-          UI_Focus(UI_FocusKind_On) RD_RegsScope(.view = view->id)
-          {
-            if(view_state->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
-            {
-              rd_cmd(RD_CmdKind_ApplyFilter);
-            }
-            if(view_state->is_filtering || selected_tab_is_filtering_t > 0.01f)
-            {
-              UI_Box *filter_box = &ui_nil_box;
-              UI_Rect(filter_rect)
-              {
-                ui_set_next_child_layout_axis(Axis2_X);
-                filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
-              }
-              UI_Parent(filter_box) UI_WidthFill UI_HeightFill
-              {
-                UI_PrefWidth(ui_em(3.f, 1.f))
-                  UI_TagF("weak")
-                  RD_Font(RD_FontSlot_Icons)
-                  UI_TextAlignment(UI_TextAlign_Center)
-                  ui_label(rd_icon_kind_text_table[RD_IconKind_Find]);
-                UI_PrefWidth(ui_text_dim(10, 1))
-                {
-                  ui_label(str8_lit("Filter"));
-                }
-                ui_spacer(ui_em(0.5f, 1.f));
-                RD_Font(view_rule_info->flags & RD_ViewRuleInfoFlag_FilterIsCode ? RD_FontSlot_Code : RD_FontSlot_Main)
-                  UI_Focus(view_state->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
-                  UI_TextPadding(ui_top_font_size()*0.5f)
-                {
-                  UI_Signal sig = rd_line_edit(RD_LineEditFlag_CodeContents*!!(view_rule_info->flags & RD_ViewRuleInfoFlag_FilterIsCode),
-                                               0,
-                                               0,
-                                               &view_state->filter_cursor,
-                                               &view_state->filter_mark,
-                                               view_state->filter_buffer,
-                                               sizeof(view_state->filter_buffer),
-                                               &view_state->filter_string_size,
-                                               0,
-                                               str8(view_state->filter_buffer, view_state->filter_string_size),
-                                               str8_lit("###filter_text_input"));
-                  if(ui_pressed(sig))
-                  {
-                    rd_cmd(RD_CmdKind_FocusPanel);
-                  }
-                }
-              }
-            }
-          }
-        }
-#endif
-        
-        //////////////////////////
-        //- rjf: panel not selected? -> darken
-        //
-        if(build_panel) if(panel != panel_tree.focused)
-        {
-          UI_Rect(content_rect) UI_TagF("inactive")
-            ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
-        }
-        
-        //////////////////////////
-        //- rjf: build panel container box
-        //
-        UI_Box *panel_box = &ui_nil_box;
-        if(build_panel) UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
-        {
-          UI_Key panel_key = ui_key_from_stringf(ui_key_zero(), "panel_box_%p", panel->cfg);
-          panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
-                                            UI_BoxFlag_Clip|
-                                            UI_BoxFlag_DrawBorder|
-                                            UI_BoxFlag_DisableFocusOverlay|
-                                            ((panel_tree.focused != panel)*UI_BoxFlag_DisableFocusBorder),
-                                            panel_key);
-        }
-        
-        //////////////////////////
-        //- rjf: loading animation for stable view
-        //
-        UI_Box *loading_overlay_container = &ui_nil_box;
-        if(build_panel) UI_Parent(panel_box) UI_WidthFill UI_HeightFill
-        {
-          loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
-        }
-        
-        //////////////////////////
-        //- rjf: build selected tab view
-        //
-        if(build_panel)
-          UI_Parent(panel_box)
-          UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
-          UI_WidthFill
-        {
-          //- rjf: push interaction registers, fill with per-view states
-          rd_push_regs(.panel = panel->cfg->id,
-                       .view  = selected_tab->id);
-          {
-            String8 view_expr = rd_expr_from_cfg(selected_tab);
-            String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
-            rd_regs()->file_path = view_file_path;
           }
           
-          //- rjf: build view container
-          UI_Box *view_container_box = &ui_nil_box;
-          UI_FixedWidth(dim_2f32(content_rect).x)
-            UI_FixedHeight(dim_2f32(content_rect).y)
-            UI_ChildLayoutAxis(Axis2_Y)
+          //////////////////////////
+          //- rjf: build tab bar container
+          //
+          UI_Box *tab_bar_box = &ui_nil_box;
+          if(build_panel) UI_CornerRadius(0) UI_Rect(tab_bar_rect)
           {
-            view_container_box = ui_build_box_from_key(0, ui_key_zero());
+            tab_bar_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
+                                                    UI_BoxFlag_AllowOverflowY|
+                                                    UI_BoxFlag_ViewClampX|
+                                                    UI_BoxFlag_ViewScrollX|
+                                                    UI_BoxFlag_Clickable,
+                                                    "tab_bar_%p", panel->cfg);
+            if(panel->tab_side == Side_Max)
+            {
+              tab_bar_box->view_off.y = tab_bar_box->view_off_target.y = (tab_bar_rheight - tab_bar_vheight);
+            }
+            else
+            {
+              tab_bar_box->view_off.y = tab_bar_box->view_off_target.y = 0;
+            }
           }
           
-          //- rjf: build empty view
-          UI_Parent(view_container_box) if(selected_tab == &rd_nil_cfg)
+          //////////////////////////
+          //- rjf: determine tab drop site
+          //
+          B32 tab_drop_is_active = rd_drag_is_active() && ui_key_match(ui_drop_hot_key(), catchall_drop_site_key);
+          RD_Cfg *tab_drop_prev = &rd_nil_cfg;
+          if(build_panel)
           {
-            ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-            UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TagF("weak")
-              UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+            F32 best_prev_distance_px = 1000000.f;
+            TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
+            F32 off = 0;
+            for(TabTask *task = &start_boundary_tab_task; task != 0; task = task->next)
             {
-              UI_PrefHeight(ui_em(3.f, 1.f))
-                UI_Row
-                UI_Padding(ui_pct(1, 0))
-                UI_TextAlignment(UI_TextAlign_Center)
-                UI_PrefWidth(ui_em(15.f, 1.f))
-                UI_CornerRadius(ui_top_font_size()/2.f)
-                UI_TagF("bad_pop")
+              off += task->tab_width;
+              Vec2F32 anchor_pt = v2f32(tab_bar_box->rect.x0 + off, tab_bar_box->rect.y1);
+              F32 distance = length_2f32(sub_2f32(ui_mouse(), anchor_pt));
+              if(distance < best_prev_distance_px)
               {
-                if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
-                {
-                  rd_cmd(RD_CmdKind_ClosePanel);
-                }
+                best_prev_distance_px = distance;
+                tab_drop_prev = task->tab;
               }
             }
           }
           
-          //- rjf: build tab view
-          UI_Parent(view_container_box) if(selected_tab != &rd_nil_cfg) ProfScope("build tab view")
+          //////////////////////////
+          //- rjf: turn off drop visualization if this drag would be a no-op
+          //
+          if(tab_drop_is_active && rd_state->drag_drop_regs->panel == panel->cfg->id)
           {
-            rd_view_ui(content_rect);
-          }
-          
-          //- rjf: pop interaction registers; commit if this is the selected view
-          RD_Regs *view_regs = rd_pop_regs();
-          if(panel_tree.focused == panel)
-          {
-            MemoryCopyStruct(rd_regs(), view_regs);
-          }
-        }
-        
-        ////////////////////////
-        //- rjf: loading? -> fill loading overlay container
-        //
-        if(build_panel)
-        {
-          F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target);
-          if(selected_tab_loading_t > 0.01f) UI_Parent(loading_overlay_container)
-          {
-            rd_loading_overlay(panel_rect, selected_tab_loading_t, selected_tab_view_state->loading_progress_v, selected_tab_view_state->loading_progress_v_target);
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: take events to automatically start/end filtering, if applicable
-        //
-#if 0 // TODO(rjf): @cfg
-        UI_Focus(UI_FocusKind_On)
-        {
-          RD_Cfg *view = selected_tab;
-          RD_ViewState *view_state = selected_tab_view_state;
-          RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
-          if(ui_is_focus_active() && view_rule_info->flags & RD_ViewRuleInfoFlag_TypingAutomaticallyFilters && !view_state->is_filtering)
-          {
-            for(UI_Event *evt = 0; ui_next_event(&evt);)
-            {
-              if(evt->flags & UI_EventFlag_Paste)
-              {
-                ui_eat_event(evt);
-                rd_cmd(RD_CmdKind_Filter);
-                rd_cmd(RD_CmdKind_Paste);
-              }
-              else if(evt->string.size != 0 && evt->kind == UI_EventKind_Text)
-              {
-                ui_eat_event(evt);
-                rd_cmd(RD_CmdKind_Filter);
-                rd_cmd(RD_CmdKind_InsertText, .string = evt->string);
-              }
-            }
-          }
-          if(view_rule_info->flags & RD_ViewRuleInfoFlag_CanFilter && (view_state->filter_string_size != 0 || view_state->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
-          {
-            rd_cmd(RD_CmdKind_ClearFilter);
-          }
-        }
-#endif
-        
-        //////////////////////////
-        //- rjf: consume panel fallthrough interaction events
-        //
-        if(build_panel)
-        {
-          UI_Signal panel_sig = ui_signal_from_box(panel_box);
-          if(ui_pressed(panel_sig))
-          {
-            rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
-          }
-          if(ui_right_clicked(panel_sig))
-          {
-            rd_cmd(RD_CmdKind_PushQuery,
-                   .view         = panel->selected_tab->id,
-                   .file_path    = rd_file_path_from_eval_string(rd_frame_arena(), rd_expr_from_cfg(panel->selected_tab)),
-                   .ui_key       = panel_box->key,
-                   .off_px       = sub_2f32(ui_mouse(), panel_box->rect.p0),
-                   .reg_slot     = RD_RegSlot_View,
-                   .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: compute tab build tasks
-        //
-        typedef struct TabTask TabTask;
-        struct TabTask
-        {
-          TabTask *next;
-          RD_Cfg *tab;
-          DR_FStrList fstrs;
-          F32 tab_width;
-        };
-        TabTask *first_tab_task = 0;
-        TabTask *last_tab_task = 0;
-        U64 tab_task_count = 0;
-        F32 tab_close_width_px = ui_top_font_size()*2.5f;
-        if(build_panel)
-        {
-          for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
-          {
-            RD_Cfg *tab = n->v;
-            if(rd_cfg_is_project_filtered(tab))
-            {
-              continue;
-            }
-            TabTask *t = push_array(scratch.arena, TabTask, 1);
-            t->tab = tab;
-            t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
-            t->tab_width = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
-            SLLQueuePush(first_tab_task, last_tab_task, t);
-            tab_task_count += 1;
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: build tab bar container
-        //
-        UI_Box *tab_bar_box = &ui_nil_box;
-        if(build_panel) UI_CornerRadius(0) UI_Rect(tab_bar_rect)
-        {
-          tab_bar_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
-                                                  UI_BoxFlag_AllowOverflowY|
-                                                  UI_BoxFlag_ViewClampX|
-                                                  UI_BoxFlag_ViewScrollX|
-                                                  UI_BoxFlag_Clickable,
-                                                  "tab_bar_%p", panel->cfg);
-          if(panel->tab_side == Side_Max)
-          {
-            tab_bar_box->view_off.y = tab_bar_box->view_off_target.y = (tab_bar_rheight - tab_bar_vheight);
-          }
-          else
-          {
-            tab_bar_box->view_off.y = tab_bar_box->view_off_target.y = 0;
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: determine tab drop site
-        //
-        B32 tab_drop_is_active = rd_drag_is_active() && ui_key_match(ui_drop_hot_key(), catchall_drop_site_key);
-        RD_Cfg *tab_drop_prev = &rd_nil_cfg;
-        if(build_panel)
-        {
-          F32 best_prev_distance_px = 1000000.f;
-          TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
-          F32 off = 0;
-          for(TabTask *task = &start_boundary_tab_task; task != 0; task = task->next)
-          {
-            off += task->tab_width;
-            Vec2F32 anchor_pt = v2f32(tab_bar_box->rect.x0 + off, tab_bar_box->rect.y1);
-            F32 distance = length_2f32(sub_2f32(ui_mouse(), anchor_pt));
-            if(distance < best_prev_distance_px)
-            {
-              best_prev_distance_px = distance;
-              tab_drop_prev = task->tab;
-            }
-          }
-        }
-        
-        //////////////////////////
-        //- rjf: turn off drop visualization if this drag would be a no-op
-        //
-        if(tab_drop_is_active && rd_state->drag_drop_regs->panel == panel->cfg->id)
-        {
-          TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
-          if(tab_drop_prev->id == rd_state->drag_drop_regs->view)
-          {
-            tab_drop_is_active = 0;
-          }
-          if(tab_drop_is_active) for(TabTask *t = &start_boundary_tab_task; t != 0; t = t->next)
-          {
-            if(t->tab == tab_drop_prev && t->next != 0 && t->next->tab->id == rd_state->drag_drop_regs->view)
+            TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
+            if(tab_drop_prev->id == rd_state->drag_drop_regs->view)
             {
               tab_drop_is_active = 0;
-              break;
+            }
+            if(tab_drop_is_active) for(TabTask *t = &start_boundary_tab_task; t != 0; t = t->next)
+            {
+              if(t->tab == tab_drop_prev && t->next != 0 && t->next->tab->id == rd_state->drag_drop_regs->view)
+              {
+                tab_drop_is_active = 0;
+                break;
+              }
             }
           }
-        }
-        
-        //////////////////////////
-        //- rjf: build tab bar contents
-        //
-        if(build_panel) UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0)) UI_TagF("tab")
-        {
-          F32 corner_radius = ui_top_font_size()*0.6f;
-          TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
-          UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
-            UI_CornerRadius01(panel->tab_side == Side_Min ? 0 : corner_radius)
-            UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
-            UI_CornerRadius11(panel->tab_side == Side_Min ? 0 : corner_radius)
-            for(TabTask *tab_task = &start_boundary_tab_task; tab_task != 0; tab_task = tab_task->next)
+          
+          //////////////////////////
+          //- rjf: build tab bar contents
+          //
+          if(build_panel) UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0)) UI_TagF("tab")
           {
-            RD_Cfg *tab = tab_task->tab;
-            
-            //- rjf: build tab
-            DR_FStrList tab_fstrs = tab_task->fstrs;
-            F32 tab_width_px = tab_task->tab_width;
-            if(tab != &rd_nil_cfg) RD_RegsScope(.panel = panel->cfg->id, .view = tab->id)
+            F32 corner_radius = ui_top_font_size()*0.6f;
+            TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
+            UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
+              UI_CornerRadius01(panel->tab_side == Side_Min ? 0 : corner_radius)
+              UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
+              UI_CornerRadius11(panel->tab_side == Side_Min ? 0 : corner_radius)
+              for(TabTask *tab_task = &start_boundary_tab_task; tab_task != 0; tab_task = tab_task->next)
             {
-              // rjf: gather info for this tab
-              B32 tab_is_selected = (tab == panel->selected_tab);
+              RD_Cfg *tab = tab_task->tab;
               
-              // rjf: begin vertical region for this tab
-              ui_set_next_child_layout_axis(Axis2_Y);
-              ui_set_next_pref_width(ui_px(tab_width_px, 1));
-              UI_Box *tab_column_box = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "tab_column_%p", tab);
-              
-              // rjf: choose palette
-              B32 omit_name = 0;
-              if(rd_drag_is_active() && rd_state->drag_drop_regs->view == tab->id && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
+              //- rjf: build tab
+              DR_FStrList tab_fstrs = tab_task->fstrs;
+              F32 tab_width_px = tab_task->tab_width;
+              if(tab != &rd_nil_cfg) RD_RegsScope(.panel = panel->cfg->id, .view = tab->id)
               {
-                omit_name = 1;
-              }
-              
-              // rjf: build tab container box
-              UI_Parent(tab_column_box)
-                UI_PrefHeight(ui_px(tab_bar_vheight, 1))
-                UI_TagF(omit_name ? "hollow" : "")
-                UI_TagF(!tab_is_selected ? "inactive" : "")
-              {
-                if(panel->tab_side == Side_Max)
-                {
-                  ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
-                }
-                else
-                {
-                  ui_spacer(ui_px(1.f, 1.f));
-                }
-                ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                UI_Box *tab_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|
-                                                            UI_BoxFlag_DrawBackground|
-                                                            UI_BoxFlag_DrawBorder|
-                                                            (UI_BoxFlag_DrawDropShadow*tab_is_selected)|
-                                                            UI_BoxFlag_Clickable,
-                                                            "tab_%p", tab);
+                // rjf: gather info for this tab
+                B32 tab_is_selected = (tab == panel->selected_tab);
                 
-                // rjf: build tab contents
-                if(!omit_name) UI_Parent(tab_box)
+                // rjf: begin vertical region for this tab
+                ui_set_next_child_layout_axis(Axis2_Y);
+                ui_set_next_pref_width(ui_px(tab_width_px, 1));
+                UI_Box *tab_column_box = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "tab_column_%p", tab);
+                
+                // rjf: choose palette
+                B32 omit_name = 0;
+                if(rd_drag_is_active() && rd_state->drag_drop_regs->view == tab->id && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
                 {
-                  UI_WidthFill UI_Row
+                  omit_name = 1;
+                }
+                
+                // rjf: build tab container box
+                UI_Parent(tab_column_box)
+                  UI_PrefHeight(ui_px(tab_bar_vheight, 1))
+                  UI_TagF(omit_name ? "hollow" : "")
+                  UI_TagF(!tab_is_selected ? "inactive" : "")
+                {
+                  if(panel->tab_side == Side_Max)
                   {
-                    ui_spacer(ui_em(0.5f, 1.f));
-                    UI_PrefWidth(ui_text_dim(10, 0))
+                    ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
+                  }
+                  else
+                  {
+                    ui_spacer(ui_px(1.f, 1.f));
+                  }
+                  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                  UI_Box *tab_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|
+                                                              UI_BoxFlag_DrawBackground|
+                                                              UI_BoxFlag_DrawBorder|
+                                                              (UI_BoxFlag_DrawDropShadow*tab_is_selected)|
+                                                              UI_BoxFlag_Clickable,
+                                                              "tab_%p", tab);
+                  
+                  // rjf: build tab contents
+                  if(!omit_name) UI_Parent(tab_box)
+                  {
+                    UI_WidthFill UI_Row
                     {
-                      UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                      ui_box_equip_display_fstrs(name_box, &tab_fstrs);
+                      ui_spacer(ui_em(0.5f, 1.f));
+                      UI_PrefWidth(ui_text_dim(10, 0))
+                      {
+                        UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                        ui_box_equip_display_fstrs(name_box, &tab_fstrs);
+                      }
+                    }
+                    UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
+                      RD_Font(RD_FontSlot_Icons)
+                      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons)*0.75f)
+                      UI_TagF("weak")
+                      UI_CornerRadius00(0)
+                      UI_CornerRadius01(0)
+                    {
+                      UI_Palette *palette = ui_build_palette(ui_top_palette());
+                      palette->background = v4f32(0, 0, 0, 0);
+                      ui_set_next_palette(palette);
+                      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                      UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                                    UI_BoxFlag_DrawBorder|
+                                                                    UI_BoxFlag_DrawText|
+                                                                    UI_BoxFlag_DrawHotEffects|
+                                                                    UI_BoxFlag_DrawActiveEffects,
+                                                                    "%S###close_view_%p", rd_icon_kind_text_table[RD_IconKind_X], tab);
+                      UI_Signal sig = ui_signal_from_box(close_box);
+                      if(ui_clicked(sig) || ui_middle_clicked(sig))
+                      {
+                        rd_cmd(RD_CmdKind_CloseTab);
+                      }
                     }
                   }
-                  UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
-                    RD_Font(RD_FontSlot_Icons)
-                    UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons)*0.75f)
-                    UI_TagF("weak")
-                    UI_CornerRadius00(0)
-                    UI_CornerRadius01(0)
+                  
+                  // rjf: consume events for tab clicking
                   {
-                    UI_Palette *palette = ui_build_palette(ui_top_palette());
-                    palette->background = v4f32(0, 0, 0, 0);
-                    ui_set_next_palette(palette);
-                    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                    UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                                  UI_BoxFlag_DrawBorder|
-                                                                  UI_BoxFlag_DrawText|
-                                                                  UI_BoxFlag_DrawHotEffects|
-                                                                  UI_BoxFlag_DrawActiveEffects,
-                                                                  "%S###close_view_%p", rd_icon_kind_text_table[RD_IconKind_X], tab);
-                    UI_Signal sig = ui_signal_from_box(close_box);
-                    if(ui_clicked(sig) || ui_middle_clicked(sig))
+                    UI_Signal sig = ui_signal_from_box(tab_box);
+                    if(ui_pressed(sig))
+                    {
+                      rd_cmd(RD_CmdKind_FocusTab);
+                      rd_cmd(RD_CmdKind_FocusPanel);
+                    }
+                    else if(ui_dragging(sig) && !rd_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
+                    {
+                      rd_drag_begin(RD_RegSlot_View);
+                    }
+                    else if(ui_right_clicked(sig))
+                    {
+                      rd_cmd(RD_CmdKind_PushQuery,
+                             .reg_slot     = RD_RegSlot_View,
+                             .ui_key       = sig.box->key,
+                             .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
+                             .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
+                    }
+                    else if(ui_middle_clicked(sig))
                     {
                       rd_cmd(RD_CmdKind_CloseTab);
                     }
                   }
                 }
                 
-                // rjf: consume events for tab clicking
+                // rjf: space for next tab
                 {
-                  UI_Signal sig = ui_signal_from_box(tab_box);
-                  if(ui_pressed(sig))
-                  {
-                    rd_cmd(RD_CmdKind_FocusTab);
-                    rd_cmd(RD_CmdKind_FocusPanel);
-                  }
-                  else if(ui_dragging(sig) && !rd_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
-                  {
-                    rd_drag_begin(RD_RegSlot_View);
-                  }
-                  else if(ui_right_clicked(sig))
-                  {
-                    rd_cmd(RD_CmdKind_PushQuery,
-                           .reg_slot     = RD_RegSlot_View,
-                           .ui_key       = sig.box->key,
-                           .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
-                           .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
-                  }
-                  else if(ui_middle_clicked(sig))
-                  {
-                    rd_cmd(RD_CmdKind_CloseTab);
-                  }
+                  ui_spacer(ui_px(floor_f32(ui_top_font_size()*0.4f), 1.f));
                 }
               }
               
-              // rjf: space for next tab
+              //- rjf: if this is the currently active drop site's previous tab, then build empty space
+              // to visualize where tab will be moved once dropped
+              if(tab_drop_is_active &&
+                 rd_drag_is_active() &&
+                 rd_state->drag_drop_regs_slot == RD_RegSlot_View &&
+                 tab == tab_drop_prev)
               {
-                ui_spacer(ui_px(floor_f32(ui_top_font_size()*0.4f), 1.f));
+                // rjf: begin vertical region for this spot
+                ui_set_next_child_layout_axis(Axis2_Y);
+                ui_set_next_pref_width(ui_px(ui_top_font_size()*4.f, 1));
+                UI_Box *tab_column_box = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "tab_column_%p", tab);
+                
+                // rjf: build spot container box
+                UI_Parent(tab_column_box)
+                  UI_PrefHeight(ui_px(tab_bar_vheight, 1))
+                  UI_TagF("hollow")
+                {
+                  if(panel->tab_side == Side_Max)
+                  {
+                    ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
+                  }
+                  else
+                  {
+                    ui_spacer(ui_px(1.f, 1.f));
+                  }
+                  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                  ui_set_next_group_key(catchall_drop_site_key);
+                  UI_Box *tab_box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|
+                                                          UI_BoxFlag_DrawBackground|
+                                                          UI_BoxFlag_DrawBorder|
+                                                          UI_BoxFlag_Clickable,
+                                                          ui_key_zero());
+                }
+                
+                // rjf: space for next tab
+                {
+                  ui_spacer(ui_px(floor_f32(ui_top_font_size()*0.4f), 1.f));
+                }
               }
             }
             
-            //- rjf: if this is the currently active drop site's previous tab, then build empty space
-            // to visualize where tab will be moved once dropped
-            if(tab_drop_is_active &&
-               rd_drag_is_active() &&
-               rd_state->drag_drop_regs_slot == RD_RegSlot_View &&
-               tab == tab_drop_prev)
+            // rjf: build add-new-tab button
+            UI_TextAlignment(UI_TextAlign_Center)
+              UI_PrefWidth(ui_px(tab_bar_vheight, 1.f))
+              UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
+              UI_Column
             {
-              // rjf: begin vertical region for this spot
-              ui_set_next_child_layout_axis(Axis2_Y);
-              ui_set_next_pref_width(ui_px(ui_top_font_size()*4.f, 1));
-              UI_Box *tab_column_box = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "tab_column_%p", tab);
-              
-              // rjf: build spot container box
-              UI_Parent(tab_column_box)
-                UI_PrefHeight(ui_px(tab_bar_vheight, 1))
-                UI_TagF("hollow")
+              if(panel->tab_side == Side_Max)
               {
-                if(panel->tab_side == Side_Max)
-                {
-                  ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
-                }
-                else
-                {
-                  ui_spacer(ui_px(1.f, 1.f));
-                }
-                ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                ui_set_next_group_key(catchall_drop_site_key);
-                UI_Box *tab_box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|
-                                                        UI_BoxFlag_DrawBackground|
-                                                        UI_BoxFlag_DrawBorder|
-                                                        UI_BoxFlag_Clickable,
-                                                        ui_key_zero());
+                ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
               }
-              
-              // rjf: space for next tab
+              else
               {
-                ui_spacer(ui_px(floor_f32(ui_top_font_size()*0.4f), 1.f));
+                ui_spacer(ui_px(1.f, 1.f));
+              }
+              UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
+                UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
+                UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
+                UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
+                RD_Font(RD_FontSlot_Icons)
+                UI_FontSize(ui_top_font_size())
+                UI_TagF("implicit")
+                UI_TagF("weak")
+                UI_HoverCursor(OS_Cursor_HandPoint)
+              {
+                UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                                UI_BoxFlag_DrawBorder|
+                                                                UI_BoxFlag_DrawBackground|
+                                                                UI_BoxFlag_DrawHotEffects|
+                                                                UI_BoxFlag_DrawActiveEffects|
+                                                                UI_BoxFlag_Clickable|
+                                                                UI_BoxFlag_DisableTextTrunc,
+                                                                "%S##add_new_tab_button_%p",
+                                                                rd_icon_kind_text_table[RD_IconKind_Add],
+                                                                panel->cfg);
+                UI_Signal sig = ui_signal_from_box(add_new_box);
+                if(ui_clicked(sig))
+                {
+                  rd_cmd(RD_CmdKind_FocusPanel);
+                  UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
+                  ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                }
               }
             }
+            
+            // rjf: interact with tab bar
+            ui_signal_from_box(tab_bar_box);
           }
           
-          // rjf: build add-new-tab button
-          UI_TextAlignment(UI_TextAlign_Center)
-            UI_PrefWidth(ui_px(tab_bar_vheight, 1.f))
-            UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
-            UI_Column
+          //////////////////////////
+          //- rjf: accept tab drops
+          //
+          if(tab_drop_is_active && rd_drag_drop() && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
           {
-            if(panel->tab_side == Side_Max)
-            {
-              ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
-            }
-            else
-            {
-              ui_spacer(ui_px(1.f, 1.f));
-            }
-            UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
-              UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
-              UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
-              UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
-              RD_Font(RD_FontSlot_Icons)
-              UI_FontSize(ui_top_font_size())
-              UI_TagF("implicit")
-              UI_TagF("weak")
-              UI_HoverCursor(OS_Cursor_HandPoint)
-            {
-              UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                              UI_BoxFlag_DrawBorder|
-                                                              UI_BoxFlag_DrawBackground|
-                                                              UI_BoxFlag_DrawHotEffects|
-                                                              UI_BoxFlag_DrawActiveEffects|
-                                                              UI_BoxFlag_Clickable|
-                                                              UI_BoxFlag_DisableTextTrunc,
-                                                              "%S##add_new_tab_button_%p",
-                                                              rd_icon_kind_text_table[RD_IconKind_Add],
-                                                              panel->cfg);
-              UI_Signal sig = ui_signal_from_box(add_new_box);
-              if(ui_clicked(sig))
-              {
-                rd_cmd(RD_CmdKind_FocusPanel);
-                UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-                ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
-              }
-            }
+            rd_cmd(RD_CmdKind_MoveTab,
+                   .dst_panel = panel->cfg->id,
+                   .panel     = rd_state->drag_drop_regs->panel,
+                   .view      = rd_state->drag_drop_regs->view,
+                   .prev_view = tab_drop_prev->id);
           }
           
-          // rjf: interact with tab bar
-          ui_signal_from_box(tab_bar_box);
-        }
-        
-        //////////////////////////
-        //- rjf: accept tab drops
-        //
-        if(tab_drop_is_active && rd_drag_drop() && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
-        {
-          rd_cmd(RD_CmdKind_MoveTab,
-                 .dst_panel = panel->cfg->id,
-                 .panel     = rd_state->drag_drop_regs->panel,
-                 .view      = rd_state->drag_drop_regs->view,
-                 .prev_view = tab_drop_prev->id);
-        }
-        
-        //////////////////////////
-        //- rjf: accept file drops
-        //
-        {
-          for(UI_Event *evt = 0; ui_next_event(&evt);)
+          //////////////////////////
+          //- rjf: accept file drops
+          //
           {
-            if(evt->kind == UI_EventKind_FileDrop && contains_2f32(content_rect, evt->pos))
+            for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
-              B32 need_drop_completion = 0;
-              arena_clear(ws->drop_completion_arena);
-              MemoryZeroStruct(&ws->drop_completion_paths);
-              for(String8Node *n = evt->paths.first; n != 0; n = n->next)
+              if(evt->kind == UI_EventKind_FileDrop && contains_2f32(content_rect, evt->pos))
               {
-                Temp scratch = scratch_begin(0, 0);
-                String8 path = path_normalized_from_string(scratch.arena, n->string);
-                if(str8_match(str8_skip_last_dot(path), str8_lit("exe"), StringMatchFlag_CaseInsensitive))
+                B32 need_drop_completion = 0;
+                arena_clear(ws->drop_completion_arena);
+                MemoryZeroStruct(&ws->drop_completion_paths);
+                for(String8Node *n = evt->paths.first; n != 0; n = n->next)
                 {
-                  str8_list_push(ws->drop_completion_arena, &ws->drop_completion_paths, push_str8_copy(ws->drop_completion_arena, path));
-                  need_drop_completion = 1;
+                  Temp scratch = scratch_begin(0, 0);
+                  String8 path = path_normalized_from_string(scratch.arena, n->string);
+                  if(str8_match(str8_skip_last_dot(path), str8_lit("exe"), StringMatchFlag_CaseInsensitive))
+                  {
+                    str8_list_push(ws->drop_completion_arena, &ws->drop_completion_paths, push_str8_copy(ws->drop_completion_arena, path));
+                    need_drop_completion = 1;
+                  }
+                  else
+                  {
+                    rd_cmd(RD_CmdKind_Open, .file_path = path);
+                  }
+                  scratch_end(scratch);
                 }
-                else
+                if(need_drop_completion)
                 {
-                  rd_cmd(RD_CmdKind_Open, .file_path = path);
+                  ui_ctx_menu_open(rd_state->drop_completion_key, ui_key_zero(), evt->pos);
                 }
-                scratch_end(scratch);
+                ui_eat_event(evt);
               }
-              if(need_drop_completion)
-              {
-                ui_ctx_menu_open(rd_state->drop_completion_key, ui_key_zero(), evt->pos);
-              }
-              ui_eat_event(evt);
             }
           }
         }
@@ -10794,14 +10797,12 @@ rd_title_fstrs_from_code_name(Arena *arena, String8 code_name)
     // more faded/smaller, but only after a primary title is pushed,
     // which could be caused by many different potential parts of a cfg.
     //
-    DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_top_palette()->text, ui_top_font_size()};
-    B32 running_is_secondary = 0;
-#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = secondary_color; params.size = ui_top_font_size()*0.95f;}
+    DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
     
     //- rjf: push icon
-    if(info->icon_kind != RD_IconKind_Null)
+    if(info->icon_kind != RD_IconKind_Null) UI_Tag(str8_lit("weak"))
     {
-      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[info->icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[info->icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_color_from_name(str8_lit("text")));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
@@ -10816,8 +10817,6 @@ rd_title_fstrs_from_code_name(Arena *arena, String8 code_name)
     {
       dr_fstrs_push_new(arena, &result, &params, code_name, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
     }
-    
-#undef start_secondary
   }
   return result;
 }
