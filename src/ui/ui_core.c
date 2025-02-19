@@ -795,7 +795,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-80.f * ui_state->animation_dt));
+    ui_state->default_animation_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
     ui_state->tooltip_can_overflow_window = 0;
     ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
     ui_state->tags_cache_slots_count = 512;
@@ -2550,11 +2550,11 @@ internal void
 ui_box_equip_display_string(UI_Box *box, String8 string)
 {
   ProfBeginFunction();
-  Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
+    Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
     String8 display_string = ui_box_display_string(box);
     DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
     DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
@@ -2564,6 +2564,7 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
     Temp scratch = scratch_begin(0, 0);
+    Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
     String8 display_string = ui_box_display_string(box);
     String32 fpcp32 = str32(&box->fastpath_codepoint, 1);
     String8 fpcp = str8_from_32(scratch.arena, fpcp32);

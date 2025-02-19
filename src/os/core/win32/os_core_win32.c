@@ -552,7 +552,8 @@ os_properties_from_file_path(String8 path)
     Temp scratch = scratch_begin(0, 0);
     WCHAR buffer[512] = {0};
     DWORD length = GetLogicalDriveStringsW(sizeof(buffer), buffer);
-    U64 last_slash_pos = str8_find_needle(path, 0, str8_lit("/"), StringMatchFlag_SlashInsensitive);
+    U64 last_slash_pos = 0;
+    for(;last_slash_pos < path.size; last_slash_pos = str8_find_needle(path, last_slash_pos+1, str8_lit("/"), StringMatchFlag_SlashInsensitive));
     String8 path_trimmed = str8_prefix(path, last_slash_pos);
     for(U64 off = 0; off < (U64)length;)
     {

@@ -3250,262 +3250,332 @@ rd_view_ui(Rng2F32 rect)
 {
   ProfBeginFunction();
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+  RD_ViewState *vs = rd_view_state_from_cfg(view);
   String8 view_name = view->string;
   String8 expr_string = rd_expr_from_cfg(view);
   
   //////////////////////////////
-  //- rjf: special-case view: "getting started"
+  //- rjf: searching extension
   //
-  if(0){}
-  else if(str8_match(view_name, str8_lit("getting_started"), 0))
+  F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), !!vs->is_searching);
+  if(search_row_open_t > 0.001f) RD_Font(RD_FontSlot_Code)
   {
-    Temp scratch = scratch_begin(0, 0);
-    ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-    UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view"))
-      UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+    //- rjf: clamp cursor
+    if(vs->search_cursor.column == 0)
     {
-      RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-      CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-      
-      //- rjf: icon & info
-      UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
+      vs->search_mark = txt_pt(1, 1);
+      vs->search_cursor = txt_pt(1, vs->search_string_size+1);
+    }
+    
+    //- rjf: determine dimensions
+    F32 search_row_height_target = floor_f32(ui_top_font_size()*2.5f);
+    F32 search_row_height = search_row_open_t*search_row_height_target;
+    search_row_height = Min(search_row_height, dim_2f32(rect).y);
+    rect.y0 += search_row_height;
+    rect.y0 = floor_f32(rect.y0);
+    
+    //- rjf: build container
+    UI_Box *search_row = &ui_nil_box;
+    UI_PrefHeight(ui_px(search_row_height, 1.f))
+    {
+      search_row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawDropShadow, "###search");
+    }
+    
+    //- rjf: build contents
+    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->is_searching ? UI_FocusKind_On : UI_FocusKind_Off)
+    {
+      UI_TextAlignment(UI_TextAlign_Center)
+        UI_Transparency(1-search_row_open_t)
+        UI_PrefWidth(ui_em(2.5f, 1.f))
+        UI_TagF("weak")
+        RD_Font(RD_FontSlot_Icons)
+        ui_label(rd_icon_kind_text_table[RD_IconKind_Find]);
+      RD_LineEditParams params = {0};
       {
-        //- rjf: icon
+        params.flags |= RD_LineEditFlag_CodeContents;
+        params.flags |= RD_LineEditFlag_Border;
+        params.cursor               = &vs->search_cursor;
+        params.mark                 = &vs->search_mark;
+        params.edit_buffer          = vs->search_buffer;
+        params.edit_string_size_out = &vs->search_string_size;
+        params.edit_buffer_size     = sizeof(vs->search_buffer);
+      }
+      rd_line_editf(&params, "###search");
+    }
+    
+    //- rjf: commit string to view
+    RD_Cfg *search = rd_cfg_child_from_string_or_alloc(view, str8_lit("search"));
+    rd_cfg_new_replace(search, str8(vs->search_buffer, vs->search_string_size));
+  }
+  
+  //////////////////////////////
+  //- rjf: build main view container
+  //
+  UI_Box *view_container = &ui_nil_box;
+  UI_WidthFill UI_HeightFill
+  {
+    view_container = ui_build_box_from_key(0, ui_key_zero());
+  }
+  
+  //////////////////////////////
+  //- rjf: fill view container
+  //
+  UI_Parent(view_container)
+  {
+    ////////////////////////////
+    //- rjf: special-case view: "getting started"
+    //
+    if(0){}
+    else if(str8_match(view_name, str8_lit("getting_started"), 0))
+    {
+      Temp scratch = scratch_begin(0, 0);
+      ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
+      UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view"))
+        UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+      {
+        RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
+        CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+        
+        //- rjf: icon & info
+        UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
         {
-          F32 icon_dim = ui_top_font_size()*10.f;
-          UI_PrefHeight(ui_px(icon_dim, 1.f))
+          //- rjf: icon
+          {
+            F32 icon_dim = ui_top_font_size()*10.f;
+            UI_PrefHeight(ui_px(icon_dim, 1.f))
+              UI_Row
+              UI_Padding(ui_pct(1, 0))
+              UI_PrefWidth(ui_px(icon_dim, 1.f))
+            {
+              R_Handle texture = rd_state->icon_texture;
+              Vec2S32 texture_dim = r_size_from_tex2d(texture);
+              ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+            }
+          }
+          
+          //- rjf: info
+          UI_Padding(ui_em(2.f, 1.f))
+            UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
             UI_Row
             UI_Padding(ui_pct(1, 0))
-            UI_PrefWidth(ui_px(icon_dim, 1.f))
+            UI_TextAlignment(UI_TextAlign_Center)
+            UI_PrefWidth(ui_text_dim(10, 1))
           {
-            R_Handle texture = rd_state->icon_texture;
-            Vec2S32 texture_dim = r_size_from_tex2d(texture);
-            ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+            ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
           }
         }
         
-        //- rjf: info
-        UI_Padding(ui_em(2.f, 1.f))
-          UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
-          UI_Row
-          UI_Padding(ui_pct(1, 0))
-          UI_TextAlignment(UI_TextAlign_Center)
-          UI_PrefWidth(ui_text_dim(10, 1))
+        //- rjf: targets state dependent helper
+        B32 helper_built = 0;
+        if(processes.count == 0)
         {
-          ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+          helper_built = 1;
+          switch(targets.count)
+          {
+            //- rjf: user has no targets. build helper for adding them
+            case 0:
+            {
+              UI_PrefHeight(ui_em(3.75f, 1.f))
+                UI_Row
+                UI_Padding(ui_pct(1, 0))
+                UI_TextAlignment(UI_TextAlign_Center)
+                UI_PrefWidth(ui_em(22.f, 1.f))
+                UI_CornerRadius(ui_top_font_size()/2.f)
+                UI_TagF("pop")
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
+              {
+                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+              }
+            }break;
+            
+            //- rjf: user has 1 target. build helper for launching it
+            case 1:
+            {
+              RD_Cfg *target_cfg = rd_cfg_list_first(&targets);
+              D_Target target = rd_target_from_cfg(scratch.arena, target_cfg);
+              String8 target_full_path = target.exe;
+              String8 target_name = str8_skip_last_slash(target_full_path);
+              UI_PrefHeight(ui_em(3.75f, 1.f))
+                UI_Row
+                UI_Padding(ui_pct(1, 0))
+                UI_TextAlignment(UI_TextAlign_Center)
+                UI_PrefWidth(ui_em(22.f, 1.f))
+                UI_CornerRadius(ui_top_font_size()/2.f)
+                UI_TagF("good_pop")
+              {
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
+                {
+                  rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = target_cfg->id);
+                }
+                ui_spacer(ui_em(1.5f, 1));
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Step Into %S", target_name)))
+                {
+                  rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = target_cfg->id);
+                }
+              }
+            }break;
+            
+            //- rjf: user has N targets.
+            default:
+            {
+              helper_built = 0;
+            }break;
+          }
         }
-      }
-      
-      //- rjf: targets state dependent helper
-      B32 helper_built = 0;
-      if(processes.count == 0)
-      {
-        helper_built = 1;
-        switch(targets.count)
+        
+        //- rjf: or text
+        if(helper_built)
         {
-          //- rjf: user has no targets. build helper for adding them
-          case 0:
-          {
-            UI_PrefHeight(ui_em(3.75f, 1.f))
-              UI_Row
-              UI_Padding(ui_pct(1, 0))
-              UI_TextAlignment(UI_TextAlign_Center)
-              UI_PrefWidth(ui_em(22.f, 1.f))
-              UI_CornerRadius(ui_top_font_size()/2.f)
-              UI_TagF("pop")
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
-            {
-              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
-            }
-          }break;
-          
-          //- rjf: user has 1 target. build helper for launching it
-          case 1:
-          {
-            RD_Cfg *target_cfg = rd_cfg_list_first(&targets);
-            D_Target target = rd_target_from_cfg(scratch.arena, target_cfg);
-            String8 target_full_path = target.exe;
-            String8 target_name = str8_skip_last_slash(target_full_path);
-            UI_PrefHeight(ui_em(3.75f, 1.f))
-              UI_Row
-              UI_Padding(ui_pct(1, 0))
-              UI_TextAlignment(UI_TextAlign_Center)
-              UI_PrefWidth(ui_em(22.f, 1.f))
-              UI_CornerRadius(ui_top_font_size()/2.f)
-              UI_TagF("good_pop")
-            {
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
-              {
-                rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = target_cfg->id);
-              }
-              ui_spacer(ui_em(1.5f, 1));
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Step Into %S", target_name)))
-              {
-                rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = target_cfg->id);
-              }
-            }
-          }break;
-          
-          //- rjf: user has N targets.
-          default:
-          {
-            helper_built = 0;
-          }break;
+          UI_TagF("weak")
+            UI_PrefHeight(ui_em(2.25f, 1.f))
+            UI_Row
+            UI_Padding(ui_pct(1, 0))
+            UI_TextAlignment(UI_TextAlign_Center)
+            UI_WidthFill
+            ui_labelf("- or -");
         }
-      }
-      
-      //- rjf: or text
-      if(helper_built)
-      {
+        
+        //- rjf: helper text for command lister activation
         UI_TagF("weak")
-          UI_PrefHeight(ui_em(2.25f, 1.f))
-          UI_Row
-          UI_Padding(ui_pct(1, 0))
+          UI_PrefHeight(ui_em(2.25f, 1.f)) UI_Row
+          UI_PrefWidth(ui_text_dim(10, 1))
           UI_TextAlignment(UI_TextAlign_Center)
-          UI_WidthFill
-          ui_labelf("- or -");
+          UI_Padding(ui_pct(1, 0))
+        {
+          ui_labelf("use");
+          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
+          ui_labelf("to search for commands and options");
+        }
+      }
+      scratch_end(scratch);
+    }
+    
+    ////////////////////////////
+    //- rjf: special-case view: pending
+    //
+    else if(str8_match(view_name, str8_lit("pending"), 0))
+    {
+      Temp scratch = scratch_begin(0, 0);
+      typedef struct State State;
+      struct State
+      {
+        Arena *deferred_cmd_arena;
+        RD_CmdList deferred_cmds;
+      };
+      State *state = rd_view_state(State);
+      if(state->deferred_cmd_arena == 0)
+      {
+        state->deferred_cmd_arena = rd_push_view_arena();
+      }
+      rd_store_view_loading_info(1, 0, 0);
+      
+      // rjf: any commands sent to this view need to be deferred until loading is complete
+      for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
+      {
+        RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
+        switch(kind)
+        {
+          default:{}break;
+          case RD_CmdKind_GoToLine:
+          case RD_CmdKind_GoToAddress:
+          case RD_CmdKind_CenterCursor:
+          case RD_CmdKind_ContainCursor:
+          {
+            rd_cmd_list_push_new(state->deferred_cmd_arena, &state->deferred_cmds, cmd->name, cmd->regs);
+          }break;
+        }
       }
       
-      //- rjf: helper text for command lister activation
-      UI_TagF("weak")
-        UI_PrefHeight(ui_em(2.25f, 1.f)) UI_Row
-        UI_PrefWidth(ui_text_dim(10, 1))
-        UI_TextAlignment(UI_TextAlign_Center)
-        UI_Padding(ui_pct(1, 0))
+      // rjf: unpack view's target expression & hash
+      String8 expr_string = rd_expr_from_cfg(view);
+      E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
+      Rng1U64 range = r1u64(0, 1024);
+      U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
+      U128 hash = hs_hash_from_key(key, 0);
+      
+      // rjf: determine if hash's blob is ready, and which viewer to use
+      B32 data_is_ready = 0;
+      String8 new_view_name = {0};
       {
-        ui_labelf("use");
-        UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
-        ui_labelf("to search for commands and options");
-      }
-    }
-    scratch_end(scratch);
-  }
-  
-  //////////////////////////////
-  //- rjf: special-case view: pending
-  //
-  else if(str8_match(view_name, str8_lit("pending"), 0))
-  {
-    Temp scratch = scratch_begin(0, 0);
-    typedef struct State State;
-    struct State
-    {
-      Arena *deferred_cmd_arena;
-      RD_CmdList deferred_cmds;
-    };
-    State *state = rd_view_state(State);
-    if(state->deferred_cmd_arena == 0)
-    {
-      state->deferred_cmd_arena = rd_push_view_arena();
-    }
-    rd_store_view_loading_info(1, 0, 0);
-    
-    // rjf: any commands sent to this view need to be deferred until loading is complete
-    for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
-    {
-      RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
-      switch(kind)
-      {
-        default:{}break;
-        case RD_CmdKind_GoToLine:
-        case RD_CmdKind_GoToAddress:
-        case RD_CmdKind_CenterCursor:
-        case RD_CmdKind_ContainCursor:
+        HS_Scope *hs_scope = hs_scope_open();
+        if(!u128_match(hash, u128_zero()))
         {
-          rd_cmd_list_push_new(state->deferred_cmd_arena, &state->deferred_cmds, cmd->name, cmd->regs);
-        }break;
-      }
-    }
-    
-    // rjf: unpack view's target expression & hash
-    String8 expr_string = rd_expr_from_cfg(view);
-    E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
-    Rng1U64 range = r1u64(0, 1024);
-    U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
-    U128 hash = hs_hash_from_key(key, 0);
-    
-    // rjf: determine if hash's blob is ready, and which viewer to use
-    B32 data_is_ready = 0;
-    String8 new_view_name = {0};
-    {
-      HS_Scope *hs_scope = hs_scope_open();
-      if(!u128_match(hash, u128_zero()))
-      {
-        String8 data = hs_data_from_hash(hs_scope, hash);
-        U64 num_utf8_bytes = 0;
-        U64 num_unknown_bytes = 0;
-        for(U64 idx = 0; idx < data.size && idx < range.max;)
-        {
-          UnicodeDecode decode = utf8_decode(data.str+idx, data.size-idx);
-          if(decode.codepoint != max_U32 && (decode.inc > 1 ||
-                                             (10 <= decode.codepoint && decode.codepoint <= 13) ||
-                                             (32 <= decode.codepoint && decode.codepoint <= 126)))
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          U64 num_utf8_bytes = 0;
+          U64 num_unknown_bytes = 0;
+          for(U64 idx = 0; idx < data.size && idx < range.max;)
           {
-            num_utf8_bytes += decode.inc;
-            idx += decode.inc;
+            UnicodeDecode decode = utf8_decode(data.str+idx, data.size-idx);
+            if(decode.codepoint != max_U32 && (decode.inc > 1 ||
+                                               (10 <= decode.codepoint && decode.codepoint <= 13) ||
+                                               (32 <= decode.codepoint && decode.codepoint <= 126)))
+            {
+              num_utf8_bytes += decode.inc;
+              idx += decode.inc;
+            }
+            else
+            {
+              num_unknown_bytes += 1;
+              idx += 1;
+            }
+          }
+          data_is_ready = 1;
+          if(num_utf8_bytes > num_unknown_bytes*4 || num_unknown_bytes == 0)
+          {
+            new_view_name = str8_lit("text");
           }
           else
           {
-            num_unknown_bytes += 1;
-            idx += 1;
+            new_view_name = str8_lit("memory");
           }
         }
-        data_is_ready = 1;
-        if(num_utf8_bytes > num_unknown_bytes*4 || num_unknown_bytes == 0)
-        {
-          new_view_name = str8_lit("text");
-        }
-        else
-        {
-          new_view_name = str8_lit("memory");
-        }
+        hs_scope_close(hs_scope);
       }
-      hs_scope_close(hs_scope);
-    }
-    
-    // rjf: if we don't have a viewer, just use the memory viewer.
-    if(new_view_name.size != 0)
-    {
-      new_view_name = str8_lit("memory");
-    }
-    
-    // rjf: if data is ready and we have the name of a new visualizer,
-    // dispatch deferred commands & change this view's string to be
-    // that of the new visualizer.
-    if(data_is_ready && new_view_name.size != 0)
-    {
-      for(RD_CmdNode *cmd_node = state->deferred_cmds.first;
-          cmd_node != 0;
-          cmd_node = cmd_node->next)
+      
+      // rjf: if we don't have a viewer, just use the memory viewer.
+      if(new_view_name.size != 0)
       {
-        RD_Cmd *cmd = &cmd_node->cmd;
-        rd_push_cmd(cmd->name, cmd->regs);
+        new_view_name = str8_lit("memory");
       }
-      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-      rd_cfg_equip_string(view, new_view_name);
+      
+      // rjf: if data is ready and we have the name of a new visualizer,
+      // dispatch deferred commands & change this view's string to be
+      // that of the new visualizer.
+      if(data_is_ready && new_view_name.size != 0)
+      {
+        for(RD_CmdNode *cmd_node = state->deferred_cmds.first;
+            cmd_node != 0;
+            cmd_node = cmd_node->next)
+        {
+          RD_Cmd *cmd = &cmd_node->cmd;
+          rd_push_cmd(cmd->name, cmd->regs);
+        }
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        rd_cfg_equip_string(view, new_view_name);
+      }
+      
+      // rjf: if we don't have a viewer, for whatever reason, then just
+      // close the tab.
+      if(data_is_ready && new_view_name.size == 0)
+      {
+        rd_cmd(RD_CmdKind_CloseTab);
+      }
+      
+      scratch_end(scratch);
     }
     
-    // rjf: if we don't have a viewer, for whatever reason, then just
-    // close the tab.
-    if(data_is_ready && new_view_name.size == 0)
+    ////////////////////////////
+    //- rjf: visualizer hook
+    //
+    else
     {
-      rd_cmd(RD_CmdKind_CloseTab);
+      Temp scratch = scratch_begin(0, 0);
+      RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
+      E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
+      E_Expr *tag = rd_tag_from_cfg(scratch.arena, view);
+      view_ui_rule->ui(expr_eval, tag, rect);
+      scratch_end(scratch);
     }
-    
-    scratch_end(scratch);
-  }
-  
-  //////////////////////////////
-  //- rjf: visualizer hook
-  //
-  else
-  {
-    Temp scratch = scratch_begin(0, 0);
-    RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
-    E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
-    E_Expr *tag = rd_tag_from_cfg(scratch.arena, view);
-    view_ui_rule->ui(expr_eval, tag, rect);
-    scratch_end(scratch);
   }
   
   ProfEnd();
@@ -3541,12 +3611,12 @@ rd_view_eval_view(void)
 }
 
 internal String8
-rd_view_filter(void)
+rd_view_search(void)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-  RD_Cfg *filter = rd_cfg_child_from_string(view, str8_lit("filter"));
-  String8 filter_string = filter->first->string;
-  return filter_string;
+  RD_Cfg *search = rd_cfg_child_from_string(view, str8_lit("search"));
+  String8 search_string = search->first->string;
+  return search_string;
 }
 
 internal RD_Cfg *
@@ -5631,9 +5701,11 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         //- rjf: unpack query parameters
         RD_Cfg *root = query;
         RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
-        rd_cfg_new(view, str8_lit("lister"));
+        rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
+        vs->is_searching = 1;
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        String8 query_expression = str8_lit("query:procedures");
+        String8 query_expression = str8_lit("procedures");
         rd_cfg_new_replace(expr, query_expression);
         E_Eval query_eval = e_eval_from_string(scratch.arena, query_expression);
         F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
@@ -5643,7 +5715,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         {
           Vec2F32 content_rect_center = center_2f32(content_rect);
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), query_eval.exprs);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_search(), query_eval.exprs);
           F32 query_open_t = ui_anim(ui_key_from_string(ui_key_zero(), str8_lit("query_open_t")), 1.f);
           F32 query_width_px = floor_f32(dim_2f32(content_rect).x * 0.35f);
           F32 max_query_height_px = content_rect_dim.y*0.8f;
@@ -7070,7 +7142,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                                 panel_tree.focused == panel);
         RD_Cfg *selected_tab = panel->selected_tab;
         RD_ViewState *selected_tab_view_state = rd_view_state_from_cfg(selected_tab);
-        F32 selected_tab_is_filtering_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_filtering_t_%p", selected_tab), (F32)!!selected_tab_view_state->is_filtering);
         ProfScope("leaf panel UI work - %.*s", str8_varg(selected_tab->string))
           UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
@@ -7106,14 +7177,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             tab_bar_rect.y1 = panel_rect.y1;
             content_rect.y0 = panel_rect.y0;
             content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
-          }
-          if(selected_tab_is_filtering_t > 0.01f)
-          {
-            filter_rect.x0 = content_rect.x0;
-            filter_rect.y0 = content_rect.y0;
-            filter_rect.x1 = content_rect.x1;
-            content_rect.y0 += filter_bar_height*selected_tab_is_filtering_t;
-            filter_rect.y1 = content_rect.y0;
           }
           tab_bar_rect = intersect_2f32(tab_bar_rect, panel_rect);
           content_rect = intersect_2f32(content_rect, panel_rect);
@@ -7399,7 +7462,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           UI_Box *loading_overlay_container = &ui_nil_box;
           if(build_panel) UI_Parent(panel_box) UI_WidthFill UI_HeightFill
           {
-            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
           }
           
           //////////////////////////
@@ -7454,7 +7517,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             //- rjf: build tab view
             UI_Parent(view_container_box) if(selected_tab != &rd_nil_cfg) ProfScope("build tab view")
             {
-              rd_view_ui(content_rect);
+              rd_view_ui(pad_2f32(content_rect, -1.f));
             }
             
             //- rjf: pop interaction registers; commit if this is the selected view
@@ -7470,7 +7533,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           //
           if(build_panel)
           {
-            F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target);
+            F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target, .initial = selected_tab_view_state->loading_t_target);
             if(selected_tab_loading_t > 0.01f) UI_Parent(loading_overlay_container)
             {
               rd_loading_overlay(panel_rect, selected_tab_loading_t, selected_tab_view_state->loading_progress_v, selected_tab_view_state->loading_progress_v_target);
@@ -7548,6 +7611,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           TabTask *last_tab_task = 0;
           U64 tab_task_count = 0;
           F32 tab_close_width_px = ui_top_font_size()*2.5f;
+          F32 max_tab_width_px = ui_top_font_size()*20.f;
           if(build_panel)
           {
             for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
@@ -7561,6 +7625,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               t->tab = tab;
               t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
               t->tab_width = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+              t->tab_width = Min(max_tab_width_px, t->tab_width);
               SLLQueuePush(first_tab_task, last_tab_task, t);
               tab_task_count += 1;
             }
@@ -7703,7 +7768,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                     UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                       RD_Font(RD_FontSlot_Icons)
                       UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons)*0.75f)
-                      UI_TagF("weak")
+                      UI_TagF(".") UI_TagF("weak") UI_TagF("implicit")
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
                     {
@@ -7713,6 +7778,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                       UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                     UI_BoxFlag_DrawBorder|
+                                                                    UI_BoxFlag_DrawBackground|
                                                                     UI_BoxFlag_DrawText|
                                                                     UI_BoxFlag_DrawHotEffects|
                                                                     UI_BoxFlag_DrawActiveEffects,
@@ -8157,9 +8223,12 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           if(box->hot_t > 0.01f) DR_ClipScope(box->rect)
           {
             Vec4F32 color = hover_color;
-            color.w *= 0.015f*t;
+            color.w *= 0.02f*t;
             Vec2F32 center = ui_mouse();
+            Vec2F32 box_dim = dim_2f32(box->rect);
+            F32 max_dim = Max(box_dim.x, box_dim.y);
             F32 radius = box->font_size*12.f;
+            radius = Min(max_dim, radius);
             dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
           }
         }
@@ -14207,26 +14276,14 @@ Z(getting_started)
           //- rjf: filtering
           case RD_CmdKind_Filter:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_View *view = rd_view_from_handle(rd_regs()->view);
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            B32 view_is_tab = 0;
-            for(RD_View *tab = panel->first_tab_view; !rd_view_is_nil(tab); tab = tab->order_next)
+            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            if(!vs->is_searching)
             {
-              if(rd_view_is_project_filtered(tab)) { continue; }
-              if(tab == view)
-              {
-                view_is_tab = 1;
-                break;
-              }
+              vs->search_cursor = txt_pt(1, 1+vs->search_string_size);
+              vs->search_mark = txt_pt(1, 1);
             }
-            if(view_is_tab && view->spec->flags & RD_ViewRuleInfoFlag_CanFilter)
-            {
-              view->is_filtering ^= 1;
-              view->query_cursor = txt_pt(1, 1+(S64)view->query_string_size);
-              view->query_mark = txt_pt(1, 1);
-            }
-#endif
+            vs->is_searching ^= 1;
           }break;
           case RD_CmdKind_ClearFilter:
           {

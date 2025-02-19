@@ -990,6 +990,7 @@ RD_ThemePresetTable:
       background: 0x1b1b1bff,
       alt: background: 0x222222ff,
       pop: background: 0x355b6eff,
+      fresh: background: 0x446142ff,
       border: 0x404040ff,
       text: 0xe5e5e5ff,
       weak: text: 0xa4a4a4ff,
@@ -1052,6 +1053,7 @@ RD_ThemePresetTable:
       {
         background: 0x1b1b1baf,
         background: alt: 0x0000005f,
+        background: fresh: 0x4461425f,
         border: 0xbfbfbf1f,
         scroll_bar:
         {

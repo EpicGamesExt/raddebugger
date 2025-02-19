@@ -844,7 +844,7 @@ rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
   RD_WatchPt pt = zero_struct;
   {
     Temp scratch = scratch_begin(0, 0);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_filter(), block_ranges, (U64)tbl.y);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_search(), block_ranges, (U64)tbl.y);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     {
       S64 x = 0;
@@ -871,7 +871,7 @@ rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt)
   {
     Temp scratch = scratch_begin(0, 0);
     U64 num = ev_num_from_key(block_ranges, pt.key);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_filter(), block_ranges, num);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_search(), block_ranges, num);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     tbl.x = 0;
     {
@@ -1119,10 +1119,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: folder / file rows
       else if(info.eval.space.kind == E_SpaceKind_FileSystem)
       {
-        DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_top_palette()->text, ui_top_font_size()};
-        E_Type *type = e_type_from_key__cached(info.eval.type_key);
         String8 file_path = e_string_from_id(info.eval.value.u64);
         DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+        E_Type *type = e_type_from_key__cached(info.eval.type_key);
         if(str8_match(type->name, str8_lit("folder"), 0))
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
@@ -1476,6 +1475,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         result.flags |= RD_WatchCellFlag_Button;
         result.cmd_name = cmd_name;
       }
+      else if(result.eval.space.kind == E_SpaceKind_FileSystem)
+      {
+        String8 file_path = e_string_from_id(result.eval.value.u64);
+        result.fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+        result.flags |= RD_WatchCellFlag_Button;
+      }
     }break;
   }
   
@@ -1544,7 +1549,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
     ewv->initialized = 1;
     ewv->text_edit_arena = rd_push_view_arena();
   }
-  B32 is_query = (rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("query")) != &rd_nil_cfg);
   
   //////////////////////////////
   //- rjf: unpack arguments
@@ -1554,7 +1558,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
-  String8 filter = rd_view_filter();
+  String8 filter = rd_view_search();
   
   //////////////////////////////
   //- rjf: decide if root should be implicit
@@ -2748,7 +2752,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               if(row_is_fresh)
               {
-                ui_set_next_tag(str8_lit("pop"));
+                ui_set_next_tag(str8_lit("fresh"));
                 row_flags |= UI_BoxFlag_DrawBackground;
               }
               else if(global_row_idx & 1)
@@ -2842,12 +2846,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 {
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored)
                   {
-                    cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBad;
+                    cell_flags |= UI_BoxFlag_DrawBackground;
                     cell_tag = str8_lit("bad");
                   }
                   else if(cell_info.inheritance_tooltip.size != 0)
                   {
-                    cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawPop;
+                    cell_flags |= UI_BoxFlag_DrawBackground;
                     cell_tag = str8_lit("pop");
                   }
                   else if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
@@ -2862,7 +2866,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     rgba.w *= 0.2f;
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                     palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
-                    cell_flags |= UI_BoxFlag_DrawPop|UI_BoxFlag_DrawBackground;
+                    cell_flags |= UI_BoxFlag_DrawBackground;
                   }
                   else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
                           rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)

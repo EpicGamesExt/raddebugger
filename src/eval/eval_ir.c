@@ -2253,7 +2253,7 @@ E_IRGEN_FUNCTION_DEF(default)
       Temp scratch = scratch_begin(&arena, 1);
       String8 file_path = path_normalized_from_string(scratch.arena, expr->string);
       FileProperties props = os_properties_from_file_path(file_path);
-      if(props.flags & FilePropertyFlag_IsFolder || props.modified == 0)
+      if(props.flags & FilePropertyFlag_IsFolder || file_path.size == 0 || str8_match(file_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
         result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
