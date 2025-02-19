@@ -16,6 +16,7 @@ typedef struct UI_PrefWidthNode UI_PrefWidthNode; struct UI_PrefWidthNode{UI_Pre
 typedef struct UI_PrefHeightNode UI_PrefHeightNode; struct UI_PrefHeightNode{UI_PrefHeightNode *next; UI_Size v;};
 typedef struct UI_PermissionFlagsNode UI_PermissionFlagsNode; struct UI_PermissionFlagsNode{UI_PermissionFlagsNode *next; UI_PermissionFlags v;};
 typedef struct UI_FlagsNode UI_FlagsNode; struct UI_FlagsNode{UI_FlagsNode *next; UI_BoxFlags v;};
+typedef struct UI_OmitFlagsNode UI_OmitFlagsNode; struct UI_OmitFlagsNode{UI_OmitFlagsNode *next; UI_BoxFlags v;};
 typedef struct UI_FocusHotNode UI_FocusHotNode; struct UI_FocusHotNode{UI_FocusHotNode *next; UI_FocusKind v;};
 typedef struct UI_FocusActiveNode UI_FocusActiveNode; struct UI_FocusActiveNode{UI_FocusActiveNode *next; UI_FocusKind v;};
 typedef struct UI_FastpathCodepointNode UI_FastpathCodepointNode; struct UI_FastpathCodepointNode{UI_FastpathCodepointNode *next; U32 v;};
@@ -49,6 +50,7 @@ UI_PrefWidthNode pref_width_nil_stack_top;\
 UI_PrefHeightNode pref_height_nil_stack_top;\
 UI_PermissionFlagsNode permission_flags_nil_stack_top;\
 UI_FlagsNode flags_nil_stack_top;\
+UI_OmitFlagsNode omit_flags_nil_stack_top;\
 UI_FocusHotNode focus_hot_nil_stack_top;\
 UI_FocusActiveNode focus_active_nil_stack_top;\
 UI_FastpathCodepointNode fastpath_codepoint_nil_stack_top;\
@@ -81,6 +83,7 @@ state->pref_width_nil_stack_top.v = ui_px(250.f, 1.f);\
 state->pref_height_nil_stack_top.v = ui_px(30.f, 1.f);\
 state->permission_flags_nil_stack_top.v = UI_PermissionFlag_All;\
 state->flags_nil_stack_top.v = 0;\
+state->omit_flags_nil_stack_top.v = 0;\
 state->focus_hot_nil_stack_top.v = UI_FocusKind_Null;\
 state->focus_active_nil_stack_top.v = UI_FocusKind_Null;\
 state->fastpath_codepoint_nil_stack_top.v = 0;\
@@ -115,6 +118,7 @@ struct { UI_PrefWidthNode *top; UI_Size bottom_val; UI_PrefWidthNode *free; U64 
 struct { UI_PrefHeightNode *top; UI_Size bottom_val; UI_PrefHeightNode *free; U64 gen; B32 auto_pop; } pref_height_stack;\
 struct { UI_PermissionFlagsNode *top; UI_PermissionFlags bottom_val; UI_PermissionFlagsNode *free; U64 gen; B32 auto_pop; } permission_flags_stack;\
 struct { UI_FlagsNode *top; UI_BoxFlags bottom_val; UI_FlagsNode *free; U64 gen; B32 auto_pop; } flags_stack;\
+struct { UI_OmitFlagsNode *top; UI_BoxFlags bottom_val; UI_OmitFlagsNode *free; U64 gen; B32 auto_pop; } omit_flags_stack;\
 struct { UI_FocusHotNode *top; UI_FocusKind bottom_val; UI_FocusHotNode *free; U64 gen; B32 auto_pop; } focus_hot_stack;\
 struct { UI_FocusActiveNode *top; UI_FocusKind bottom_val; UI_FocusActiveNode *free; U64 gen; B32 auto_pop; } focus_active_stack;\
 struct { UI_FastpathCodepointNode *top; U32 bottom_val; UI_FastpathCodepointNode *free; U64 gen; B32 auto_pop; } fastpath_codepoint_stack;\
@@ -147,6 +151,7 @@ state->pref_width_stack.top = &state->pref_width_nil_stack_top; state->pref_widt
 state->pref_height_stack.top = &state->pref_height_nil_stack_top; state->pref_height_stack.bottom_val = ui_px(30.f, 1.f); state->pref_height_stack.free = 0; state->pref_height_stack.auto_pop = 0;\
 state->permission_flags_stack.top = &state->permission_flags_nil_stack_top; state->permission_flags_stack.bottom_val = UI_PermissionFlag_All; state->permission_flags_stack.free = 0; state->permission_flags_stack.auto_pop = 0;\
 state->flags_stack.top = &state->flags_nil_stack_top; state->flags_stack.bottom_val = 0; state->flags_stack.free = 0; state->flags_stack.auto_pop = 0;\
+state->omit_flags_stack.top = &state->omit_flags_nil_stack_top; state->omit_flags_stack.bottom_val = 0; state->omit_flags_stack.free = 0; state->omit_flags_stack.auto_pop = 0;\
 state->focus_hot_stack.top = &state->focus_hot_nil_stack_top; state->focus_hot_stack.bottom_val = UI_FocusKind_Null; state->focus_hot_stack.free = 0; state->focus_hot_stack.auto_pop = 0;\
 state->focus_active_stack.top = &state->focus_active_nil_stack_top; state->focus_active_stack.bottom_val = UI_FocusKind_Null; state->focus_active_stack.free = 0; state->focus_active_stack.auto_pop = 0;\
 state->fastpath_codepoint_stack.top = &state->fastpath_codepoint_nil_stack_top; state->fastpath_codepoint_stack.bottom_val = 0; state->fastpath_codepoint_stack.free = 0; state->fastpath_codepoint_stack.auto_pop = 0;\
@@ -179,6 +184,7 @@ if(state->pref_width_stack.auto_pop) { ui_pop_pref_width(); state->pref_width_st
 if(state->pref_height_stack.auto_pop) { ui_pop_pref_height(); state->pref_height_stack.auto_pop = 0; }\
 if(state->permission_flags_stack.auto_pop) { ui_pop_permission_flags(); state->permission_flags_stack.auto_pop = 0; }\
 if(state->flags_stack.auto_pop) { ui_pop_flags(); state->flags_stack.auto_pop = 0; }\
+if(state->omit_flags_stack.auto_pop) { ui_pop_omit_flags(); state->omit_flags_stack.auto_pop = 0; }\
 if(state->focus_hot_stack.auto_pop) { ui_pop_focus_hot(); state->focus_hot_stack.auto_pop = 0; }\
 if(state->focus_active_stack.auto_pop) { ui_pop_focus_active(); state->focus_active_stack.auto_pop = 0; }\
 if(state->fastpath_codepoint_stack.auto_pop) { ui_pop_fastpath_codepoint(); state->fastpath_codepoint_stack.auto_pop = 0; }\
@@ -210,6 +216,7 @@ internal UI_Size                    ui_top_pref_width(void);
 internal UI_Size                    ui_top_pref_height(void);
 internal UI_PermissionFlags         ui_top_permission_flags(void);
 internal UI_BoxFlags                ui_top_flags(void);
+internal UI_BoxFlags                ui_top_omit_flags(void);
 internal UI_FocusKind               ui_top_focus_hot(void);
 internal UI_FocusKind               ui_top_focus_active(void);
 internal U32                        ui_top_fastpath_codepoint(void);
@@ -240,6 +247,7 @@ internal UI_Size                    ui_bottom_pref_width(void);
 internal UI_Size                    ui_bottom_pref_height(void);
 internal UI_PermissionFlags         ui_bottom_permission_flags(void);
 internal UI_BoxFlags                ui_bottom_flags(void);
+internal UI_BoxFlags                ui_bottom_omit_flags(void);
 internal UI_FocusKind               ui_bottom_focus_hot(void);
 internal UI_FocusKind               ui_bottom_focus_active(void);
 internal U32                        ui_bottom_fastpath_codepoint(void);
@@ -270,6 +278,7 @@ internal UI_Size                    ui_push_pref_width(UI_Size v);
 internal UI_Size                    ui_push_pref_height(UI_Size v);
 internal UI_PermissionFlags         ui_push_permission_flags(UI_PermissionFlags v);
 internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
+internal UI_BoxFlags                ui_push_omit_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_push_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_push_focus_active(UI_FocusKind v);
 internal U32                        ui_push_fastpath_codepoint(U32 v);
@@ -300,6 +309,7 @@ internal UI_Size                    ui_pop_pref_width(void);
 internal UI_Size                    ui_pop_pref_height(void);
 internal UI_PermissionFlags         ui_pop_permission_flags(void);
 internal UI_BoxFlags                ui_pop_flags(void);
+internal UI_BoxFlags                ui_pop_omit_flags(void);
 internal UI_FocusKind               ui_pop_focus_hot(void);
 internal UI_FocusKind               ui_pop_focus_active(void);
 internal U32                        ui_pop_fastpath_codepoint(void);
@@ -330,6 +340,7 @@ internal UI_Size                    ui_set_next_pref_width(UI_Size v);
 internal UI_Size                    ui_set_next_pref_height(UI_Size v);
 internal UI_PermissionFlags         ui_set_next_permission_flags(UI_PermissionFlags v);
 internal UI_BoxFlags                ui_set_next_flags(UI_BoxFlags v);
+internal UI_BoxFlags                ui_set_next_omit_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_set_next_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_set_next_focus_active(UI_FocusKind v);
 internal U32                        ui_set_next_fastpath_codepoint(U32 v);

@@ -284,6 +284,7 @@ internal void         str8_list_from_flags(Arena *arena, String8List *list, U32 
 ////////////////////////////////
 //~ rjf; String Arrays
 
+internal String8Array str8_array_zero(void);
 internal String8Array str8_array_from_list(Arena *arena, String8List *list);
 internal String8Array str8_array_reserve(Arena *arena, U64 count);
 

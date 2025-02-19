@@ -2750,11 +2750,13 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               if(row_is_fresh)
               {
-                row_flags |= UI_BoxFlag_DrawPop;
+                ui_set_next_tag(str8_lit("pop"));
+                row_flags |= UI_BoxFlag_DrawBackground;
               }
-              if(global_row_idx & 1)
+              else if(global_row_idx & 1)
               {
-                row_flags |= UI_BoxFlag_DrawAlt;
+                ui_set_next_tag(str8_lit("alt"));
+                row_flags |= UI_BoxFlag_DrawBackground;
               }
               if(!row_matches_last_row_topology)
               {
@@ -2852,7 +2854,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                           rd_state->hover_regs_slot == RD_RegSlot_Cfg)
                   {
                     RD_Cfg *cfg = cell_info.cfg;
-                    Vec4F32 rgba = linear_from_srgba(rd_rgba_from_cfg(cfg));
+                    Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
                     if(rgba.w == 0)
                     {
                       rgba = ui_top_palette()->background_pop;
@@ -2866,7 +2868,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                           rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
                   {
                     CTRL_Entity *entity = cell_info.entity;
-                    Vec4F32 rgba = linear_from_srgba(rd_rgba_from_ctrl_entity(entity));
+                    Vec4F32 rgba = rd_color_from_ctrl_entity(entity);
                     if(rgba.w == 0)
                     {
                       rgba = ui_top_palette()->background_pop;;
@@ -2894,7 +2896,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                   RD_Font(RD_FontSlot_Code)
-                  UI_FlagsAdd(row_depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
                 {
                   // rjf: cell has errors? -> build error box
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
@@ -2960,7 +2961,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       {
                         RD_Font(RD_FontSlot_Icons)
                           UI_Flags(UI_BoxFlag_DisableTextTrunc)
-                          UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_ctrl_entity(row_info->callstack_thread)))
+                          UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_color_from_ctrl_entity(row_info->callstack_thread)))
                           ui_label(rd_icon_kind_text_table[RD_IconKind_RightArrow]);
                       }
                     }
@@ -3181,16 +3182,16 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.last);
                   E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
                   String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
+                  ui_labelf("Text:");
                   ui_label(string);
                   ui_spacer(ui_em(2.f, 1.f));
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Tokens:");
+                  ui_labelf("Tokens:");
                   for(U64 idx = 0; idx < tokens.count; idx += 1)
                   {
                     ui_labelf("%S: '%S'", e_token_kind_strings[tokens.v[idx].kind], str8_substr(string, tokens.v[idx].range));
                   }
                   ui_spacer(ui_em(2.f, 1.f));
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Expression:");
+                  ui_labelf("Expression:");
                   {
                     typedef struct Task Task;
                     struct Task
@@ -3243,7 +3244,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     }
                   }
                   ui_spacer(ui_em(2.f, 1.f));
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("IR Tree:");
+                  ui_labelf("IR Tree:");
                   {
                     typedef struct Task Task;
                     struct Task
@@ -3280,7 +3281,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     }
                   }
                   ui_spacer(ui_em(2.f, 1.f));
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Op List:");
+                  ui_labelf("Op List:");
                   {
                     for(E_Op *op = oplist.first; op != 0; op = op->next)
                     {
@@ -3307,7 +3308,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     }
                   }
                   ui_spacer(ui_em(2.f, 1.f));
-                  UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Bytecode:");
+                  ui_labelf("Bytecode:");
                   {
                     for(U64 idx = 0; idx < bytecode.size; idx += 1)
                     {
@@ -3526,7 +3527,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_TagF("weak")
     {
       if(file_is_out_of_date)
       {
@@ -3773,7 +3774,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_TagF("weak")
       RD_Font(RD_FontSlot_Code)
     {
       U64 cursor_vaddr = (1 <= rd_regs()->cursor.line && rd_regs()->cursor.line <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[rd_regs()->cursor.line-1].code_off) : 0;
@@ -4141,7 +4142,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         Annotation *annotation = push_array(scratch.arena, Annotation, 1);
         annotation->name_string = thread->string.size ? thread->string : push_str8f(scratch.arena, "TID: %I64u", thread->id);
         annotation->kind_string = str8_lit("Stack");
-        annotation->color = rd_rgba_from_ctrl_entity(thread);
+        annotation->color = rd_color_from_ctrl_entity(thread);
         annotation->vaddr_range = stack_vaddr_range;
         for(U64 vaddr = stack_vaddr_range_in_viz.min; vaddr < stack_vaddr_range_in_viz.max; vaddr += 1)
         {
@@ -4220,7 +4221,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     UI_Parent(header_box)
       RD_Font(RD_FontSlot_Code)
       UI_FontSize(font_size)
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_TagF("weak")
     {
       UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
@@ -4229,10 +4230,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         Rng1U64 col_selection_rng = r1u64(cursor%num_columns, mark%num_columns);
         for(U64 row_off = 0; row_off < num_columns*bytes_per_cell; row_off += bytes_per_cell)
         {
-          if(!(col_selection_rng.min <= row_off && row_off <= col_selection_rng.max))
-          {
-            ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
-          }
           ui_labelf("%I64X", row_off);
         }
       }
@@ -4401,7 +4398,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         {
           if(!(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max))
           {
-            ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
+            ui_set_next_tag(str8_lit("weak"));
           }
           ui_labelf("0x%016I64X", row_range_bytes.min);
         }
@@ -4573,7 +4570,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     footer_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, "footer");
     UI_Parent(footer_box) RD_Font(RD_FontSlot_Code) UI_FontSize(font_size)
     {
-      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TagF("weak")
         UI_PrefHeight(ui_px(row_height_px, 0.f))
       {
         ui_labelf("Address:");
@@ -5049,7 +5046,8 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
       {
         UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
       }
-      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
+        UI_TagF("weak")
       {
         ui_labelf("Hex");
         ui_labelf("R");

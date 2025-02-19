@@ -948,6 +948,7 @@ internal U32                        ui_top_fastpath_codepoint(void);
 internal UI_Key                     ui_top_group_key(void);
 internal F32                        ui_top_transparency(void);
 internal UI_Palette*                ui_top_palette(void);
+internal String8                    ui_top_tag(void);
 internal F32                        ui_top_squish(void);
 internal OS_Cursor                  ui_top_hover_cursor(void);
 internal FNT_Tag                    ui_top_font(void);
@@ -977,6 +978,7 @@ internal U32                        ui_bottom_fastpath_codepoint(void);
 internal UI_Key                     ui_bottom_group_key(void);
 internal F32                        ui_bottom_transparency(void);
 internal UI_Palette*                ui_bottom_palette(void);
+internal String8                    ui_bottom_tag(void);
 internal F32                        ui_bottom_squish(void);
 internal OS_Cursor                  ui_bottom_hover_cursor(void);
 internal FNT_Tag                    ui_bottom_font(void);
@@ -1006,6 +1008,7 @@ internal U32                        ui_push_fastpath_codepoint(U32 v);
 internal UI_Key                     ui_push_group_key(UI_Key v);
 internal F32                        ui_push_transparency(F32 v);
 internal UI_Palette*                ui_push_palette(UI_Palette*     v);
+internal String8                    ui_push_tag(String8 v);
 internal F32                        ui_push_squish(F32 v);
 internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
 internal FNT_Tag                    ui_push_font(FNT_Tag v);
@@ -1035,6 +1038,7 @@ internal U32                        ui_pop_fastpath_codepoint(void);
 internal UI_Key                     ui_pop_group_key(void);
 internal F32                        ui_pop_transparency(void);
 internal UI_Palette*                ui_pop_palette(void);
+internal String8                    ui_pop_tag(void);
 internal F32                        ui_pop_squish(void);
 internal OS_Cursor                  ui_pop_hover_cursor(void);
 internal FNT_Tag                    ui_pop_font(void);
@@ -1064,6 +1068,7 @@ internal U32                        ui_set_next_fastpath_codepoint(U32 v);
 internal UI_Key                     ui_set_next_group_key(UI_Key v);
 internal F32                        ui_set_next_transparency(F32 v);
 internal UI_Palette*                ui_set_next_palette(UI_Palette*     v);
+internal String8                    ui_set_next_tag(String8 v);
 internal F32                        ui_set_next_squish(F32 v);
 internal OS_Cursor                  ui_set_next_hover_cursor(OS_Cursor v);
 internal FNT_Tag                    ui_set_next_font(FNT_Tag v);
@@ -1087,6 +1092,7 @@ internal UI_Size  ui_pop_pref_size(Axis2 axis);
 internal UI_Size  ui_set_next_pref_size(Axis2 axis, UI_Size v);
 internal void     ui_push_corner_radius(F32 v);
 internal void     ui_pop_corner_radius(void);
+internal void     ui_push_tagf(char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Macro Loop Wrappers
@@ -1102,12 +1108,14 @@ internal void     ui_pop_corner_radius(void);
 #define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
 #define UI_PermissionFlags(v) DeferLoop(ui_push_permission_flags(v), ui_pop_permission_flags())
 #define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
+#define UI_OmitFlags(v) DeferLoop(ui_push_omit_flags(v), ui_pop_omit_flags())
 #define UI_FocusHot(v) DeferLoop(ui_push_focus_hot(v), ui_pop_focus_hot())
 #define UI_FocusActive(v) DeferLoop(ui_push_focus_active(v), ui_pop_focus_active())
 #define UI_FastpathCodepoint(v) DeferLoop(ui_push_fastpath_codepoint(v), ui_pop_fastpath_codepoint())
 #define UI_GroupKey(v) DeferLoop(ui_push_group_key(v), ui_pop_group_key())
 #define UI_Transparency(v) DeferLoop(ui_push_transparency(v), ui_pop_transparency())
 #define UI_Palette(v) DeferLoop(ui_push_palette(v), ui_pop_palette())
+#define UI_Tag(v) DeferLoop(ui_push_tag(v), ui_pop_tag())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
@@ -1132,6 +1140,7 @@ internal void     ui_pop_corner_radius(void);
 #define UI_CornerRadius(v)   DeferLoop(ui_push_corner_radius(v), ui_pop_corner_radius())
 #define UI_Focus(kind)       DeferLoop((ui_push_focus_hot(kind), ui_push_focus_active(kind)), (ui_pop_focus_hot(), ui_pop_focus_active()))
 #define UI_FlagsAdd(v)       DeferLoop(ui_push_flags(ui_top_flags()|(v)), ui_pop_flags())
+#define UI_TagF(...)         DeferLoop(ui_push_tagf(__VA_ARGS__), ui_pop_tag())
 
 //- rjf: tooltip
 #define UI_TooltipBase DeferLoop(ui_tooltip_begin_base(), ui_tooltip_end_base())

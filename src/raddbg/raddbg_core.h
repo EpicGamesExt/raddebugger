@@ -999,7 +999,7 @@ internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, S
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
 
 internal Vec4F32 rd_hsva_from_cfg(RD_Cfg *cfg);
-internal Vec4F32 rd_rgba_from_cfg(RD_Cfg *cfg);
+internal Vec4F32 rd_color_from_cfg(RD_Cfg *cfg);
 
 internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
 internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
@@ -1026,7 +1026,7 @@ internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
-internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
+internal Vec4F32 rd_color_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
 internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
 
@@ -1164,7 +1164,7 @@ internal String8 rd_push_search_string(Arena *arena);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal Vec4F32 rd_color_from_tags(String8Array tags);
+internal Vec4F32 rd_color_from_tags(String8Array tags, String8 name);
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);

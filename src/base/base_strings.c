@@ -242,7 +242,7 @@ str8_cstring_capped_reverse(void *raw_start, void *raw_cap)
   for(; ptr > start; )
   {
     ptr -= 1;
-
+    
     if (*ptr == '\0')
     {
       break;
@@ -619,7 +619,7 @@ internal String8
 str8_from_memory_size(Arena *arena, U64 size)
 {
   String8 result;
-
+  
   if(size < KB(1))
   {
     result = push_str8f(arena, "%llu Bytes", size);
@@ -640,7 +640,7 @@ str8_from_memory_size(Arena *arena, U64 size)
   {
     result = push_str8f(arena, "%llu.%02llu TiB", size / TB(1), ((size * 100) / TB(1)) % 100);
   }
-
+  
   return result;
 }
 
@@ -648,7 +648,7 @@ internal String8
 str8_from_count(Arena *arena, U64 count)
 {
   String8 result;
-
+  
   if(count < 1 * 1000)
   {
     result = push_str8f(arena, "%llu", count);
@@ -689,7 +689,7 @@ str8_from_count(Arena *arena, U64 count)
       result = push_str8f(arena, "%lluB", count / 1000000000, frac);
     }
   }
-
+  
   return result;
 }
 
@@ -1113,6 +1113,13 @@ str8_list_from_flags(Arena *arena, String8List *list,
 
 ////////////////////////////////
 //~ rjf; String Arrays
+
+internal String8Array
+str8_array_zero(void)
+{
+  String8Array result = {0};
+  return result;
+}
 
 internal String8Array
 str8_array_from_list(Arena *arena, String8List *list)
@@ -1827,10 +1834,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
     String8 data4_hi_str = list.first->next->next->next->string;
     String8 data4_lo_str = list.first->next->next->next->next->string;
     if(str8_is_integer(data1_str, 16) && 
-        str8_is_integer(data2_str, 16) &&
-        str8_is_integer(data3_str, 16) &&
-        str8_is_integer(data4_hi_str, 16) &&
-        str8_is_integer(data4_lo_str, 16))
+       str8_is_integer(data2_str, 16) &&
+       str8_is_integer(data3_str, 16) &&
+       str8_is_integer(data4_hi_str, 16) &&
+       str8_is_integer(data4_lo_str, 16))
     {
       U64 data1    = u64_from_str8(data1_str, 16);
       U64 data2    = u64_from_str8(data2_str, 16);
@@ -1838,10 +1845,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
       U64 data4_hi = u64_from_str8(data4_hi_str, 16);
       U64 data4_lo = u64_from_str8(data4_lo_str, 16);
       if(data1 <= max_U32 &&
-          data2 <= max_U16 &&
-          data3 <= max_U16 &&
-          data4_hi <= max_U16 &&
-          data4_lo <= 0xffffffffffff)
+         data2 <= max_U16 &&
+         data3 <= max_U16 &&
+         data4_hi <= max_U16 &&
+         data4_lo <= 0xffffffffffff)
       {
         guid_out->data1 = (U32)data1;
         guid_out->data2 = (U16)data2;
@@ -2381,18 +2388,18 @@ str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
   {
     U8  byte       = 0;
     U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-
+    
     if(bytes_read != sizeof(byte))
     {
       break;
     }
-
+    
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
-
+    
     cursor += bytes_read;
     shift += 7u;
-
+    
     if((byte & 0x80u) == 0)
     {
       break;
@@ -2420,13 +2427,13 @@ str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
     {
       break;
     }
-
+    
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
-
+    
     cursor += bytes_read;
     shift += 7u;
-
+    
     if((byte & 0x80u) == 0)
     {
       if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)

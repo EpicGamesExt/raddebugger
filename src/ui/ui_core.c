@@ -1918,11 +1918,13 @@ ui_tooltip_begin_base(void)
   ui_push_flags(0);
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
   ui_push_palette(ui_bottom_palette());
+  ui_push_tag(str8_lit("."));
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
+  ui_pop_tag();
   ui_pop_palette();
   ui_pop_text_raster_flags();
   ui_pop_flags();
@@ -2005,6 +2007,7 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_focus_hot(UI_FocusKind_Root);
   ui_push_focus_active(UI_FocusKind_Root);
   ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
+  ui_push_tag(str8_lit("."));
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
   if(is_open != 0)
   {
@@ -2033,6 +2036,7 @@ ui_end_ctx_menu(void)
     ui_state->is_in_open_ctx_menu = 0;
     ui_spacer(ui_em(1.f, 1.f));
   }
+  ui_pop_tag();
   ui_pop_palette();
   ui_pop_focus_active();
   ui_pop_focus_hot();
@@ -2262,7 +2266,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: fill box
   {
     box->key = key;
-    box->flags = flags|ui_state->flags_stack.top->v;
+    box->flags = (flags | ui_state->flags_stack.top->v) & ~ui_state->omit_flags_stack.top->v;
     box->fastpath_codepoint = ui_state->fastpath_codepoint_stack.top->v;
     box->group_key = ui_state->group_key_stack.top->v;
     
@@ -2357,7 +2361,14 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
       String8List tags = {0};
       for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
       {
-        str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
+        if(n->v.size == 1 && n->v.str[0] == '.')
+        {
+          break;
+        }
+        if(n->v.size != 0)
+        {
+          str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
+        }
       }
       ui_state->current_gen_tags = str8_array_from_list(ui_build_arena(), &tags);
       scratch_end(scratch);
@@ -3054,6 +3065,57 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
 ////////////////////////////////
 //~ rjf: Stacks
 
+#define UI_StackTopImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.top->v;
+
+#define UI_StackBottomImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.bottom_val;
+
+#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+if(node->next == &state->name_lower##_nil_stack_top)\
+{\
+state->name_lower##_stack.bottom_val = (new_value);\
+}\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+#define UI_StackPopImpl(state, name_upper, name_lower) \
+UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
+if(popped != &state->name_lower##_nil_stack_top)\
+{\
+SLLStackPop(state->name_lower##_stack.top);\
+SLLStackPush(state->name_lower##_stack.free, popped);\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+}\
+return popped->v;\
+
+#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+state->name_lower##_stack.auto_pop = 1;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+//- rjf: manual implementations
+
+internal String8 ui_top_tag(void)           { UI_StackTopImpl(ui_state, Tag, tag) }
+internal String8 ui_bottom_tag(void)        { UI_StackBottomImpl(ui_state, Tag, tag) }
+internal String8 ui_push_tag(String8 v)     { UI_StackPushImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v)) }
+internal String8 ui_pop_tag(void)           { UI_StackPopImpl(ui_state, Tag, tag) }
+internal String8 ui_set_next_tag(String8 v) { UI_StackSetNextImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v)) }
+
 //- rjf: helpers
 
 internal Rng2F32
@@ -3139,50 +3201,19 @@ ui_pop_corner_radius(void)
   ui_pop_corner_radius_11();
 }
 
+internal void
+ui_push_tagf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  ui_push_tag(string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
 ////////////////////////////////
 //~ rjf: Generated Code
-
-#define UI_StackTopImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.top->v;
-
-#define UI_StackBottomImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.bottom_val;
-
-#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-if(node->next == &state->name_lower##_nil_stack_top)\
-{\
-state->name_lower##_stack.bottom_val = (new_value);\
-}\
-state->name_lower##_stack.auto_pop = 0;\
-state->name_lower##_stack.gen += 1;\
-return old_value;
-
-#define UI_StackPopImpl(state, name_upper, name_lower) \
-UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
-if(popped != &state->name_lower##_nil_stack_top)\
-{\
-SLLStackPop(state->name_lower##_stack.top);\
-SLLStackPush(state->name_lower##_stack.free, popped);\
-state->name_lower##_stack.auto_pop = 0;\
-state->name_lower##_stack.gen += 1;\
-}\
-return popped->v;\
-
-#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-state->name_lower##_stack.auto_pop = 1;\
-state->name_lower##_stack.gen += 1;\
-return old_value;
 
 #include "generated/ui.meta.c"

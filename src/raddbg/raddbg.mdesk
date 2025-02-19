@@ -989,9 +989,11 @@ RD_ThemePresetTable:
     {
       background: 0x1b1b1bff,
       alt: background: 0x222222ff,
-      good: background: 0x222222ff,
-      bad: background: 0x222222ff,
-      pop: background: 0x222222ff,
+      good_pop: background: 0x2c5b36ff,
+      bad_pop: background: 0x803425ff,
+      good: text: 0x32a852ff,
+      bad: text: 0xcf5242ff,
+      pop: background: 0x355b6eff,
       border: 0x404040ff,
       text: 0xe5e5e5ff,
       weak: text: 0xe5e5e5ff,
@@ -999,6 +1001,47 @@ RD_ThemePresetTable:
       focus: 0xfda200ff,
       cursor: 0x8aff00ff,
       selection: 0x99ccffff,
+      inactive: background: 0x0000002f,
+      drop_shadow: 0x0000007f,
+      
+      code_default: 0xcbcbcbff,
+      code_symbol: 0x42a2cfff,
+      code_type: 0xfec746ff,
+      code_local: 0x98bc80ff,
+      code_register: 0xb7afd5ff,
+      code_keyword: 0xb38d4cff,
+      code_delimiter_or_operator: 0x767676ff,
+      code_numeric: 0x98abb1ff,
+      code_numeric_alt_digit_group: 0x738287ff,
+      code_string: 0x98abb1ff,
+      code_meta: 0xd96759ff,
+      code_comment: 0x717171ff,
+      line_info_0: 0x99503dff,
+      line_info_1: 0xfe8249ff,
+      line_info_2: 0xffba17ff,
+      line_info_3: 0xcefd69ff,
+      line_info_4: 0x99503dff,
+      line_info_5: 0xfe8249ff,
+      line_info_6: 0xcefd69ff,
+      line_info_7: 0x99503dff,
+      thread_0: 0xffcb7fff,
+      thread_1: 0xb2ff65ff,
+      thread_2: 0xff99e5ff,
+      thread_3: 0x6598ffff,
+      thread_4: 0x65ffcbff,
+      thread_5: 0xff9819ff,
+      thread_6: 0x9932ffff,
+      thread_7: 0x65ff4cff,
+      thread_unwound: 0xb2ccd8ff,
+      thread_error: 0xb23219ff,
+      breakpoint: 0xa72911ff,
+      
+      floating:
+      {
+        background: 0x2222225f,
+        background: alt: 0x2222225f,
+        border: 0xbfbfbf1f,
+      }
       
       menu_bar:
       {
@@ -1030,6 +1073,18 @@ RD_ThemePresetTable:
         border: 0x3f3f3fff,
       }
       
+      implicit:
+      {
+        background: 0x00000000,
+        border: 0x00000000,
+      }
+      
+      hollow:
+      {
+        background: 0x00000000,
+        border: 0xffffff1f,
+      }
+      
       tab:
       {
         background: 0x6f5135ff,
@@ -1043,47 +1098,8 @@ RD_ThemePresetTable:
       
       drop_site:
       {
-        background: 0xffffffff,
-        border: 0xffffffff,
-      }
-      
-      code:
-      {
-        default: text: 0xcbcbcbff,
-        symbol: text: 0x42a2cfff,
-        type: text: 0xfec746ff,
-        local: text: 0x98bc80ff,
-        register: text: 0xb7afd5ff,
-        keyword: text: 0xb38d4cff,
-        delimiter_or_operator: text: 0x767676ff,
-        numeric: text: 0x98abb1ff,
-        numeric_alt_digit_group: text: 0x738287ff,
-        string: text: 0x98abb1ff,
-        meta: text: 0xd96759ff,
-        comment: text: 0x717171ff,
-        line_info_0: background: 0x99503dff,
-        line_info_1: background: 0xfe8249ff,
-        line_info_2: background: 0xffba17ff,
-        line_info_3: background: 0xcefd69ff,
-        line_info_4: background: 0x99503dff,
-        line_info_5: background: 0xfe8249ff,
-        line_info_6: background: 0xcefd69ff,
-        line_info_7: background: 0x99503dff,
-      }
-      
-      debug_state:
-      {
-        thread_0: 0xffcb7fff,
-        thread_1: 0xb2ff65ff,
-        thread_2: 0xff99e5ff,
-        thread_3: 0x6598ffff,
-        thread_4: 0x65ffcbff,
-        thread_5: 0xff9819ff,
-        thread_6: 0x9932ffff,
-        thread_7: 0x65ff4cff,
-        thread_unwound: 0xb2ccd8ff,
-        thread_error: 0xb23219ff,
-        breakpoint: 0xa72911ff,
+        background: 0xffffff05,
+        border: 0xffffff0f,
       }
     }
     ```

@@ -1997,10 +1997,10 @@ rd_hsva_from_cfg(RD_Cfg *cfg)
 }
 
 internal Vec4F32
-rd_rgba_from_cfg(RD_Cfg *cfg)
+rd_color_from_cfg(RD_Cfg *cfg)
 {
   Vec4F32 hsva = rd_hsva_from_cfg(cfg);
-  Vec4F32 rgba = rgba_from_hsva(hsva);
+  Vec4F32 rgba = linear_from_srgba(rgba_from_hsva(hsva));
   return rgba;
 }
 
@@ -2105,7 +2105,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     String8 expr_string = rd_expr_from_cfg(cfg);
     String8 collection_name = {0};
     String8 file_path = {0};
-    Vec4F32 rgba = linear_from_srgba(rd_rgba_from_cfg(cfg));
+    Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
     if(rgba.w == 0)
     {
       rgba = ui_top_palette()->text;
@@ -2686,12 +2686,12 @@ rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg)
 //~ rjf: Control Entity Info Extraction
 
 internal Vec4F32
-rd_rgba_from_ctrl_entity(CTRL_Entity *entity)
+rd_color_from_ctrl_entity(CTRL_Entity *entity)
 {
   Vec4F32 result = {0};
   if(entity->rgba != 0)
   {
-    result = rgba_from_u32(entity->rgba);
+    result = linear_from_srgba(rgba_from_u32(entity->rgba));
   }
   if(entity->rgba == 0) switch(entity->kind)
   {
@@ -2702,11 +2702,11 @@ rd_rgba_from_ctrl_entity(CTRL_Entity *entity)
       CTRL_Entity *main_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
       if(main_thread != entity)
       {
-        result = srgba_from_linear(rd_rgba_from_theme_color(RD_ThemeColor_Thread1));
+        result = rd_color_from_tags(str8_array_zero(), str8_lit("thread_1"));
       }
       else
       {
-        result = srgba_from_linear(rd_rgba_from_theme_color(RD_ThemeColor_Thread0));
+        result = rd_color_from_tags(str8_array_zero(), str8_lit("thread_0"));
       }
     }break;
   }
@@ -2735,7 +2735,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   
   //- rjf: unpack entity info
   F32 extras_size = ui_top_font_size()*0.95f;
-  Vec4F32 color = linear_from_srgba(rd_rgba_from_ctrl_entity(entity));
+  Vec4F32 color = rd_color_from_ctrl_entity(entity);
   if(color.w == 0)
   {
     color = ui_top_palette()->text;
@@ -2782,7 +2782,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
     {
       CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
       String8 process_name = rd_name_from_ctrl_entity(arena, process);
-      Vec4F32 process_color = rd_rgba_from_ctrl_entity(process);
+      Vec4F32 process_color = rd_color_from_ctrl_entity(process);
       if(process_color.w == 0)
       {
         process_color = color;
@@ -2813,6 +2813,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   //- rjf: threads get callstack extras
   if(entity->kind == CTRL_EntityKind_Thread && include_extras)
   {
+    Vec4F32 symbol_color = rd_color_from_tags(str8_array_zero(), str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
@@ -2834,7 +2835,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
         name = push_str8_copy(arena, name);
         if(name.size != 0)
         {
-          dr_fstrs_push_new(arena, &result, &params, name, .size = extras_size, .color = rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol));
+          dr_fstrs_push_new(arena, &result, &params, name, .size = extras_size, .color = symbol_color);
           if(idx+1 < unwind.frames.count)
           {
             dr_fstrs_push_new(arena, &result, &params, str8_lit(" > "), .color = secondary_color, .size = extras_size);
@@ -3756,7 +3757,7 @@ rd_view_ui(Rng2F32 rect)
       CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
       
       //- rjf: icon & info
-      UI_Padding(ui_em(2.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
       {
         //- rjf: icon
         {
@@ -3800,7 +3801,7 @@ rd_view_ui(Rng2F32 rect)
               UI_TextAlignment(UI_TextAlign_Center)
               UI_PrefWidth(ui_em(22.f, 1.f))
               UI_CornerRadius(ui_top_font_size()/2.f)
-              RD_Palette(RD_PaletteCode_Pop)
+              UI_TagF("pop")
               if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
             {
               rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
@@ -3820,7 +3821,7 @@ rd_view_ui(Rng2F32 rect)
               UI_TextAlignment(UI_TextAlign_Center)
               UI_PrefWidth(ui_em(22.f, 1.f))
               UI_CornerRadius(ui_top_font_size()/2.f)
-              RD_Palette(RD_PaletteCode_Good)
+              UI_TagF("good_pop")
             {
               if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
               {
@@ -3845,7 +3846,7 @@ rd_view_ui(Rng2F32 rect)
       //- rjf: or text
       if(helper_built)
       {
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+        UI_TagF("weak")
           UI_PrefHeight(ui_em(2.25f, 1.f))
           UI_Row
           UI_Padding(ui_pct(1, 0))
@@ -3855,7 +3856,7 @@ rd_view_ui(Rng2F32 rect)
       }
       
       //- rjf: helper text for command lister activation
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_TagF("weak")
         UI_PrefHeight(ui_em(2.25f, 1.f)) UI_Row
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_TextAlignment(UI_TextAlign_Center)
@@ -4510,6 +4511,124 @@ rd_window_frame(void)
   ui_select_state(ws->ui);
   
   //////////////////////////////
+  //- rjf: compute window's theme
+  //
+  {
+    //- rjf: for this window, scan upwards, and then try the project, then the user, until we
+    // find explicit preset / colors trees in the config. we will prefer the tightest ones, so
+    // that windows can have their own colors, and have those override higher-up settings.
+    RD_Cfg *preset_cfg = &rd_nil_cfg;
+    RD_CfgList colors_cfgs = {0};
+    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
+    for EachElement(idx, scan_parents)
+    {
+      for(RD_Cfg *parent_cfg = scan_parents[idx]; parent_cfg != &rd_nil_cfg; parent_cfg = parent_cfg->parent)
+      {
+        if(preset_cfg != &rd_nil_cfg)
+        {
+          RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));
+          if(possible_preset_cfg != &rd_nil_cfg)
+          {
+            preset_cfg = possible_preset_cfg;
+          }
+        }
+        RD_Cfg *colors_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("colors"));
+        if(colors_cfg != &rd_nil_cfg)
+        {
+          rd_cfg_list_push_front(scratch.arena, &colors_cfgs, colors_cfg);
+        }
+        if(preset_cfg != &rd_nil_cfg && colors_cfg != &rd_nil_cfg)
+        {
+          break;
+        }
+      }
+    }
+    
+    //- rjf: map the preset config to the associated preset tree
+    MD_Node *preset_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
+    if(preset_cfg != &rd_nil_cfg)
+    {
+      String8 preset_name = preset_cfg->first->string;
+      for EachEnumVal(RD_ThemePreset, p)
+      {
+        if(str8_match(preset_name, rd_theme_preset_code_string_table[p], 0))
+        {
+          preset_tree = rd_state->theme_preset_trees[p];
+          break;
+        }
+      }
+    }
+    
+    //- rjf: build tasks for color applications - each task comprises of a metadesk
+    // tree, describing the color patterns
+    typedef struct ThemeTask ThemeTask;
+    struct ThemeTask
+    {
+      ThemeTask *next;
+      MD_Node *tree;
+    };
+    ThemeTask start_task = {0, preset_tree};
+    ThemeTask *first_task = &start_task;
+    ThemeTask *last_task = first_task;
+    {
+      for(RD_CfgNode *n = colors_cfgs.first; n != 0; n = n->next)
+      {
+        ThemeTask *t = push_array(scratch.arena, ThemeTask, 1);
+        SLLQueuePush(first_task, last_task, t);
+        t->tree = md_tree_from_string(scratch.arena, rd_string_from_cfg_tree(scratch.arena, n->v));
+      }
+    }
+    
+    //- rjf: apply theme tasks, build each color pattern for this window's
+    // structured theme
+    typedef struct ThemePatternNode ThemePatternNode;
+    struct ThemePatternNode
+    {
+      ThemePatternNode *next;
+      RD_ThemePattern pattern;
+    };
+    ThemePatternNode *first_pattern = 0;
+    ThemePatternNode *last_pattern = 0;
+    U64 pattern_count = 0;
+    for(ThemeTask *t = first_task; t != 0; t = t->next)
+    {
+      MD_Node *tree_root = t->tree;
+      for(MD_Node *n = tree_root; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, tree_root).next)
+      {
+        if(n->flags & MD_NodeFlag_Numeric && md_node_is_nil(n->first))
+        {
+          U64 color_srgba_u64 = 0;
+          try_u64_from_str8_c_rules(n->string, &color_srgba_u64);
+          Vec4F32 color_srgba = rgba_from_u32((U32)color_srgba_u64);
+          Vec4F32 color_linear = linear_from_srgba(color_srgba);
+          String8List tags = {0};
+          for(MD_Node *parent = n->parent; parent != tree_root && !md_node_is_nil(parent); parent = parent->parent)
+          {
+            str8_list_push(scratch.arena, &tags, push_str8_copy(rd_frame_arena(), parent->string));
+          }
+          ThemePatternNode *node = push_array(scratch.arena, ThemePatternNode, 1);
+          node->pattern.tags = str8_array_from_list(rd_frame_arena(), &tags);
+          node->pattern.linear = color_linear;
+          SLLQueuePush(first_pattern, last_pattern, node);
+          pattern_count += 1;
+        }
+      }
+    }
+    
+    //- rjf: convert to final pattern array
+    ws->theme = push_array(rd_frame_arena(), RD_Theme, 1);
+    ws->theme->patterns_count = pattern_count;
+    ws->theme->patterns = push_array(rd_frame_arena(), RD_ThemePattern, ws->theme->patterns_count);
+    {
+      U64 idx = 0;
+      for(ThemePatternNode *n = first_pattern; n != 0; n = n->next, idx += 1)
+      {
+        ws->theme->patterns[idx] = n->pattern;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: pre-emptively rasterize common glyphs on the first frame
   //
   if(rd_state->first_window_state == ws && rd_state->last_window_state == ws && ws->frames_alive == 0)
@@ -4787,18 +4906,18 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             UI_FontSize(ui_top_font_size() - 1.f)
               UI_CornerRadius(ui_top_font_size()*0.5f)
             {
-              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(arch_str);
+              UI_TagF("weak") UI_FlagsAdd(UI_BoxFlag_DrawBorder) ui_label(arch_str);
               ui_spacer(ui_em(0.5f, 1.f));
               if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
                  ctrl_entity->kind == CTRL_EntityKind_Process)
               {
-                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("ID: %i", (U32)ctrl_entity->id);
+                UI_TagF("weak") UI_FlagsAdd(UI_BoxFlag_DrawBorder) ui_labelf("ID: %i", (U32)ctrl_entity->id);
               }
             }
           }
           
           // rjf: debug info status
-          if(ctrl_entity->kind == CTRL_EntityKind_Module) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+          if(ctrl_entity->kind == CTRL_EntityKind_Module) UI_TagF("weak")
           {
             DI_Scope *di_scope = di_scope_open();
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
@@ -4821,6 +4940,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: unwind
           if(ctrl_entity->kind == CTRL_EntityKind_Thread)
           {
+            Vec4F32 symbol_color = rd_color_from_tags(str8_array_zero(), str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
             CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
@@ -4849,21 +4969,21 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
                   name.size = Min(512, name.size);
                 }
-                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
                 if(f->parent_num != 0)
                 {
-                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+                  RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
                 }
                 if(name.size != 0)
                 {
                   RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
                   {
-                    rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                    rd_code_label(1.f, 0, symbol_color, name);
                   }
                 }
                 else
                 {
-                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+                  RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
                 }
               }
             }
@@ -4892,8 +5012,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           UI_Size main_width = ui_top_pref_width();
           UI_Size main_height = ui_top_pref_height();
           UI_TextAlign main_text_align = ui_top_text_alignment();
-          RD_Palette(RD_PaletteCode_Tab)
-            UI_Tooltip
+          UI_Tooltip
             UI_PrefWidth(main_width)
             UI_PrefHeight(main_height)
             UI_TextAlignment(main_text_align)
@@ -5287,9 +5406,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                     {
                       ui_set_next_pref_width(ui_children_sum(1));
                       ui_set_next_flags(UI_BoxFlag_DrawBorder);
-                      UI_Row UI_Padding(ui_em(0.5f, 1.f))
+                      UI_Row UI_Padding(ui_em(0.5f, 1.f)) UI_TagF("weak")
                       {
-                        UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_DrawTextWeak, ui_key_zero());
+                        UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
                         ui_box_equip_display_string(box, item->kind_name);
                       }
                     }
@@ -5299,7 +5418,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                 // rjf: description
                 if(flags & RD_ListerFlag_Descriptions)
                 {
-                  if(item->description.size != 0) UI_WidthFill UI_Row UI_PrefWidth(ui_text_dim(1, 0)) UI_Flags(UI_BoxFlag_DrawTextWeak)
+                  if(item->description.size != 0) UI_WidthFill UI_Row UI_PrefWidth(ui_text_dim(1, 0)) UI_TagF("weak")
                   {
                     UI_Box *box = ui_label(item->description).box;
                     ui_box_equip_fuzzy_match_ranges(box, &item->description__matches);
@@ -6117,9 +6236,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     //
     if(ws->drop_completion_paths.node_count != 0)
     {
-      UI_CtxMenu(rd_state->drop_completion_key) UI_PrefWidth(ui_em(40.f, 1.f))
+      UI_CtxMenu(rd_state->drop_completion_key) UI_PrefWidth(ui_em(40.f, 1.f)) UI_TagF("implicit")
       {
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+        UI_TagF("weak")
           for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
         {
           UI_Row UI_Padding(ui_em(1.f, 1.f))
@@ -6217,11 +6336,11 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
           {
             UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
-            UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(rd_state->popup_desc);
+            UI_PrefHeight(ui_em(3.f, 1.f)) UI_TagF("weak") ui_label(rd_state->popup_desc);
             ui_spacer(ui_em(1.5f, 1.f));
             UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_PrefHeight(ui_em(3.5f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
             {
-              RD_Palette(RD_PaletteCode_Pop)
+              UI_TagF("pop")
                 if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
                 rd_cmd(RD_CmdKind_PopupAccept);
@@ -6248,8 +6367,8 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       os_window_push_custom_edges(ws->os, window_edge_px);
       os_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
       ui_set_next_flags(UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DisableFocusOverlay);
-      RD_Palette(RD_PaletteCode_MenuBar)
-        UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open() && !ws->hover_eval_focused) ? UI_FocusKind_On : UI_FocusKind_Null)
+      UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open() && !ws->hover_eval_focused) ? UI_FocusKind_On : UI_FocusKind_Null)
+        UI_TagF("menu_bar")
         UI_Pane(top_bar_rect, str8_lit("###top_bar"))
         UI_WidthFill UI_Row
         UI_Focus(UI_FocusKind_Null)
@@ -6281,7 +6400,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           {
             // rjf: file menu
             UI_Key file_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_file_menu_key_"));
-            UI_CtxMenu(file_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(file_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               String8 cmds[] =
               {
@@ -6305,7 +6424,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: window menu
             UI_Key window_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_window_menu_key_"));
-            UI_CtxMenu(window_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(window_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               String8 cmds[] =
               {
@@ -6325,7 +6444,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: panel menu
             UI_Key panel_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_panel_menu_key_"));
-            UI_CtxMenu(panel_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(panel_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               String8 cmds[] =
               {
@@ -6369,7 +6488,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: view menu
             UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-            UI_CtxMenu(view_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(view_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               String8 cmds[] =
               {
@@ -6423,7 +6542,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: targets menu
             UI_Key targets_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_targets_menu_key_"));
-            UI_CtxMenu(targets_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(targets_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               Temp scratch = scratch_begin(0, 0);
               String8 cmds[] =
@@ -6441,7 +6560,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: ctrl menu
             UI_Key ctrl_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_ctrl_menu_key_"));
-            UI_CtxMenu(ctrl_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(ctrl_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
               String8 cmds[] =
               {
@@ -6471,9 +6590,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             
             // rjf: help menu
             UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
-            UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
+            UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
             {
-              UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+              UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TagF("weak")
                 ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
               ui_spacer(ui_em(1.f, 1.f));
               UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1, 0))
@@ -6496,7 +6615,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
               }
               ui_spacer(ui_em(1.f, 1.f));
-              RD_Palette(RD_PaletteCode_Pop)
+              UI_TagF("pop")
                 UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(10, 1))
                 UI_CornerRadius(ui_top_font_size()*0.5f)
               {
@@ -6610,7 +6729,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           ui_spacer(ui_em(0.75f, 1));
           
           // rjf: conversion task visualization
-          UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill RD_Palette(RD_PaletteCode_Pop)
+          UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill UI_TagF("pop")
           {
             Temp scratch = scratch_begin(0, 0);
             RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
@@ -6658,7 +6777,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           if(can_play || !have_targets || processes.count == 0)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            RD_Palette(can_play ? RD_PaletteCode_Good : RD_PaletteCode_MenuBar)
+            UI_TagF(can_play ? "good" : "")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Play]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6700,7 +6819,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: restart button
           else UI_TextAlignment(UI_TextAlign_Center)
-            RD_Palette(RD_PaletteCode_Good)
+            UI_TagF("good")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Redo]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6721,7 +6840,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: pause button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
-            RD_Palette(can_pause ? RD_PaletteCode_Pop : RD_PaletteCode_MenuBar)
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Pause]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6747,7 +6865,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: stop button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            RD_Palette(can_stop ? RD_PaletteCode_Bad : RD_PaletteCode_MenuBar)
+            UI_TagF(can_stop ? "bad" : "")
           {
             UI_Signal sig = {0};
             {
@@ -6873,7 +6991,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           ui_spacer(ui_pct(1, 0));
           
           // rjf: loaded user viz
-          if(do_user_prof) RD_Palette(RD_PaletteCode_Pop)
+          if(do_user_prof) UI_TagF("pop")
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
@@ -6907,7 +7025,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           }
           
           // rjf: loaded project viz
-          if(do_user_prof) RD_Palette(RD_PaletteCode_Pop)
+          if(do_user_prof) UI_TagF("pop")
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
@@ -6966,7 +7084,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               max_sig = rd_icon_buttonf(RD_IconKind_Window, 0, "##maximize");
             }
             UI_PrefWidth(ui_px(button_dim, 1.f))
-              RD_Palette(RD_PaletteCode_Bad)
+              UI_TagF("bad_pop")
             {
               cls_sig = rd_icon_buttonf(RD_IconKind_X,      0, "##close");
             }
@@ -7062,6 +7180,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       if(build_hover_eval && ws->hover_eval_string.size != 0 && hover_eval_is_open)
         RD_Font(RD_FontSlot_Code)
         UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+        UI_TagF("floating")
       {
         F32 hover_eval_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_open_t"), 1.f);
         RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_%p", ws);
@@ -7241,7 +7360,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             UI_Flags(UI_BoxFlag_DrawBackground)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_CornerRadius(4)
-            RD_Palette(RD_PaletteCode_Pop)
+            UI_TagF("pop")
             ui_labelf("Currently rebinding \"%S\" hotkey", display_name);
         }
         
@@ -7374,7 +7493,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
                   ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
                 };
-                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSite) UI_CornerRadius(ui_top_font_size()*2.f)
+                UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
                 {
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                 }
@@ -7465,7 +7584,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                 ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
                 ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
               };
-              UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSite) UI_CornerRadius(ui_top_font_size()*2.f)
+              UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
               {
                 ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
               }
@@ -7766,13 +7885,14 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
                   {
                     ui_set_next_child_layout_axis(split_axis);
-                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
+                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
                     {
                       if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      RD_Palette(RD_PaletteCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                       ui_spacer(ui_px(padding, 1.f));
                       if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      RD_Palette(RD_PaletteCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                     }
                   }
                 }
@@ -7782,7 +7902,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   {
                     ui_set_next_child_layout_axis(split_axis);
                     UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
-                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) RD_Palette(RD_PaletteCode_DropSite)
+                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) UI_TagF("drop_site")
                     {
                       ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
                     }
@@ -7831,7 +7951,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
                   ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
                 };
-                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSite) UI_CornerRadius(ui_top_font_size()*2.f)
+                UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
                 {
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                 }
@@ -7875,7 +7995,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               UI_Parent(filter_box) UI_WidthFill UI_HeightFill
               {
                 UI_PrefWidth(ui_em(3.f, 1.f))
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+                  UI_TagF("weak")
                   RD_Font(RD_FontSlot_Icons)
                   UI_TextAlignment(UI_TextAlign_Center)
                   ui_label(rd_icon_kind_text_table[RD_IconKind_Find]);
@@ -7915,13 +8035,8 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         //
         if(build_panel) if(panel != panel_tree.focused)
         {
-          Vec4F32 darken_color = rd_rgba_from_theme_color(RD_ThemeColor_InactivePanelOverlay);
-          darken_color.w *= 0.2f;
-          UI_Palette(ui_build_palette(0, .background = darken_color))
-            UI_Rect(content_rect)
-          {
+          UI_Rect(content_rect) UI_TagF("inactive")
             ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
-          }
         }
         
         //////////////////////////
@@ -7978,7 +8093,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           UI_Parent(view_container_box) if(selected_tab == &rd_nil_cfg)
           {
             ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-            UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+            UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TagF("weak")
               UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
             {
               UI_PrefHeight(ui_em(3.f, 1.f))
@@ -7987,7 +8102,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                 UI_TextAlignment(UI_TextAlign_Center)
                 UI_PrefWidth(ui_em(15.f, 1.f))
                 UI_CornerRadius(ui_top_font_size()/2.f)
-                RD_Palette(RD_PaletteCode_Bad)
+                UI_TagF("bad_pop")
               {
                 if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
                 {
@@ -8180,7 +8295,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         //////////////////////////
         //- rjf: build tab bar contents
         //
-        if(build_panel) UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0))
+        if(build_panel) UI_Focus(UI_FocusKind_Off) UI_Parent(tab_bar_box) UI_Padding(ui_em(0.5f, 1.f)) UI_PrefHeight(ui_pct(1, 0)) UI_TagF("tab")
         {
           F32 corner_radius = ui_top_font_size()*0.6f;
           TabTask start_boundary_tab_task = {first_tab_task, &rd_nil_cfg};
@@ -8207,21 +8322,16 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               
               // rjf: choose palette
               B32 omit_name = 0;
-              RD_PaletteCode palette_code = RD_PaletteCode_TabInactive;
-              if(tab_is_selected)
-              {
-                palette_code = RD_PaletteCode_Tab;
-              }
               if(rd_drag_is_active() && rd_state->drag_drop_regs->view == tab->id && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
               {
-                palette_code = RD_PaletteCode_DropSite;
                 omit_name = 1;
               }
               
               // rjf: build tab container box
               UI_Parent(tab_column_box)
                 UI_PrefHeight(ui_px(tab_bar_vheight, 1))
-                RD_Palette(palette_code)
+                UI_TagF(omit_name ? "hollow" : "")
+                UI_TagF(!tab_is_selected ? "inactive" : "")
               {
                 if(panel->tab_side == Side_Max)
                 {
@@ -8254,14 +8364,21 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                   UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                     RD_Font(RD_FontSlot_Icons)
                     UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons)*0.75f)
-                    UI_Flags(UI_BoxFlag_DrawTextWeak)
+                    UI_TagF("weak")
                     UI_CornerRadius00(0)
                     UI_CornerRadius01(0)
                   {
                     UI_Palette *palette = ui_build_palette(ui_top_palette());
                     palette->background = v4f32(0, 0, 0, 0);
                     ui_set_next_palette(palette);
-                    UI_Signal sig = ui_buttonf("%S###close_view_%p", rd_icon_kind_text_table[RD_IconKind_X], tab);
+                    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                    UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                                  UI_BoxFlag_DrawBorder|
+                                                                  UI_BoxFlag_DrawText|
+                                                                  UI_BoxFlag_DrawHotEffects|
+                                                                  UI_BoxFlag_DrawActiveEffects,
+                                                                  "%S###close_view_%p", rd_icon_kind_text_table[RD_IconKind_X], tab);
+                    UI_Signal sig = ui_signal_from_box(close_box);
                     if(ui_clicked(sig) || ui_middle_clicked(sig))
                     {
                       rd_cmd(RD_CmdKind_CloseTab);
@@ -8317,7 +8434,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               // rjf: build spot container box
               UI_Parent(tab_column_box)
                 UI_PrefHeight(ui_px(tab_bar_vheight, 1))
-                RD_Palette(RD_PaletteCode_DropSite)
+                UI_TagF("hollow")
               {
                 if(panel->tab_side == Side_Max)
                 {
@@ -8363,12 +8480,13 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
               RD_Font(RD_FontSlot_Icons)
               UI_FontSize(ui_top_font_size())
-              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+              UI_TagF("implicit")
+              UI_TagF("weak")
               UI_HoverCursor(OS_Cursor_HandPoint)
             {
-              UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
-                                                              UI_BoxFlag_DrawText|
+              UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                               UI_BoxFlag_DrawBorder|
+                                                              UI_BoxFlag_DrawBackground|
                                                               UI_BoxFlag_DrawHotEffects|
                                                               UI_BoxFlag_DrawActiveEffects|
                                                               UI_BoxFlag_Clickable|
@@ -8568,6 +8686,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     
     //- rjf: unpack settings
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
+    Vec4F32 base_background_color = rd_color_from_tags(str8_array_zero(), str8_lit("background"));
+    Vec4F32 base_border_color = rd_color_from_tags(str8_array_zero(), str8_lit("border"));
+    Vec4F32 drop_shadow_color = rd_color_from_tags(str8_array_zero(), str8_lit("drop_shadow"));
     
     //- rjf: set up heatmap buckets
     F32 heatmap_bucket_size = 32.f;
@@ -8586,14 +8707,12 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     
     //- rjf: draw background color
     {
-      Vec4F32 bg_color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackground);
-      dr_rect(os_client_rect_from_window(ws->os), bg_color, 0, 0, 0);
+      dr_rect(os_client_rect_from_window(ws->os), base_background_color, 0, 0, 0);
     }
     
     //- rjf: draw window border
     {
-      Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBorder);
-      dr_rect(os_client_rect_from_window(ws->os), color, 0, 1.f, 0.5f);
+      dr_rect(os_client_rect_from_window(ws->os), base_border_color, 0, 1.f, 0.5f);
     }
     
     //- rjf: recurse & draw
@@ -8638,7 +8757,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       if(box->flags & UI_BoxFlag_DrawDropShadow)
       {
         Rng2F32 drop_shadow_rect = shift_2f32(pad_2f32(box->rect, 8), v2f32(4, 4));
-        Vec4F32 drop_shadow_color = rd_rgba_from_theme_color(RD_ThemeColor_DropShadow);
         dr_rect(drop_shadow_rect, drop_shadow_color, 0.8f, 0, 8.f);
       }
       
@@ -8649,53 +8767,47 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         MemoryCopyArray(params->corner_radii, box->corner_radii);
       }
       
+      // rjf: compute effective active t
+      F32 effective_active_t = box->active_t;
+      if(!(box->flags & UI_BoxFlag_DrawActiveEffects))
+      {
+        effective_active_t = 0;
+      }
+      F32 t = box->hot_t*(1-effective_active_t);
+      
+      // rjf: compute background color
+      Vec4F32 box_background_color = {0};
+      if(box->flags & UI_BoxFlag_DrawBackground)
+      {
+        box_background_color = rd_color_from_tags(box->tags, str8_lit("background"));
+      }
+      
       // rjf: draw background
       if(box->flags & UI_BoxFlag_DrawBackground)
       {
-        F32 effective_active_t = box->active_t;
-        if(!(box->flags & UI_BoxFlag_DrawActiveEffects))
-        {
-          effective_active_t = 0;
-        }
-        F32 t = box->hot_t*(1-effective_active_t);
-        
         // rjf: hot effect extension (drop shadow)
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
           Rng2F32 drop_shadow_rect = shift_2f32(pad_2f32(box->rect, 8), v2f32(4, 4));
-          Vec4F32 drop_shadow_color = rd_rgba_from_theme_color(RD_ThemeColor_DropShadow);
-          drop_shadow_color.w *= t;
-          drop_shadow_color.w *= box->palette->colors[UI_ColorCode_Background].w;
-          dr_rect(drop_shadow_rect, drop_shadow_color, 0.8f, 0, 8.f);
+          Vec4F32 color = drop_shadow_color;
+          color.w *= t*box_background_color.w;
+          dr_rect(drop_shadow_rect, color, 0.8f, 0, 8.f);
         }
         
-        // rjf: main rectangle
-        {
-          Vec4F32 color = box->palette->colors[UI_ColorCode_Background];
-          if(box->flags & UI_BoxFlag_DrawBad)
-          {
-            color = box->palette->colors[UI_ColorCode_BackgroundBad];
-          }
-          else if(box->flags & UI_BoxFlag_DrawGood)
-          {
-            color = box->palette->colors[UI_ColorCode_BackgroundGood];
-          }
-          else if(box->flags & UI_BoxFlag_DrawPop)
-          {
-            color = box->palette->colors[UI_ColorCode_BackgroundPop];
-          }
-          R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), color, 0, 0, 1.f);
-          MemoryCopyArray(inst->corner_radii, box->corner_radii);
-        }
+        // rjf: draw background
+        R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box_background_color, 0, 0, 1.f);
+        MemoryCopyArray(inst->corner_radii, box->corner_radii);
         
         // rjf: hot effect extension
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
+          Vec4F32 hover_color = rd_color_from_tags(box->tags, str8_lit("hover"));
+          
           // rjf: brighten
           {
+            Vec4F32 color = hover_color;
+            color.w *= t*0.05f;
             R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, 1.f);
-            Vec4F32 color = box->palette->hover;
-            color.w *= t*0.1f;
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
             MemoryCopyArray(inst->corner_radii, box->corner_radii);
@@ -8704,33 +8816,18 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: soft circle around mouse
           if(box->hot_t > 0.01f) DR_ClipScope(box->rect)
           {
+            Vec4F32 color = hover_color;
+            color.w *= 0.015f*t;
             Vec2F32 center = ui_mouse();
             F32 radius = box->font_size*12.f;
-            Vec4F32 color = box->palette->hover;
-            color.w *= 0.05f*t;
             dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
-          }
-          
-          // rjf: slight emboss fadeoff
-          if(0)
-          {
-            Rng2F32 rect = r2f32p(box->rect.x0,
-                                  box->rect.y0,
-                                  box->rect.x1,
-                                  box->rect.y1);
-            R_Rect2DInst *inst = dr_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 1.f);
-            inst->colors[Corner_00] = v4f32(0.f, 0.f, 0.f, 0.0f*t);
-            inst->colors[Corner_01] = v4f32(0.f, 0.f, 0.f, 0.3f*t);
-            inst->colors[Corner_10] = v4f32(0.f, 0.f, 0.f, 0.0f*t);
-            inst->colors[Corner_11] = v4f32(0.f, 0.f, 0.f, 0.3f*t);
-            MemoryCopyArray(inst->corner_radii, box->corner_radii);
           }
         }
         
         // rjf: active effect extension
         if(box->flags & UI_BoxFlag_DrawActiveEffects)
         {
-          Vec4F32 shadow_color = rd_rgba_from_theme_color(RD_ThemeColor_DropShadow);
+          Vec4F32 shadow_color = drop_shadow_color;
           shadow_color.w *= 0.5f*box->active_t;
           Vec2F32 shadow_size =
           {
@@ -8901,14 +8998,15 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
+            Vec4F32 border_color = rd_color_from_tags(box->tags, str8_lit("border"));
             Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
-            R_Rect2DInst *inst = dr_rect(b_border_rect, b->palette->colors[UI_ColorCode_Border], 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
             
             // rjf: hover effect
             if(b->flags & UI_BoxFlag_DrawHotEffects)
             {
-              Vec4F32 color = box->palette->hover;
+              Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("hover"));
               color.w *= b->hot_t;
               R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
               inst->colors[Corner_01].w *= 0.2f;
@@ -8950,7 +9048,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: draw focus overlay
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
-            Vec4F32 color = box->palette->focus;
+            Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("focus"));
             color.w *= 0.09f*b->focus_hot_t;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8965,7 +9063,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               rect = pad_2f32(rect, 1.f);
               rect = intersect_2f32(window_rect, rect);
             }
-            Vec4F32 color = box->palette->focus;
+            Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("focus"));
             color.w *= b->focus_active_t;
             R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8974,7 +9072,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: disabled overlay
           if(b->disabled_t >= 0.005f)
           {
-            Vec4F32 disabled_overlay_color = v4f32(0, 0, 0, b->disabled_t*0.5f);
+            Vec4F32 disabled_overlay_color = v4f32(base_background_color.x, base_background_color.y, base_background_color.z, b->disabled_t*0.3f);
             R_Rect2DInst *inst = dr_rect(b->rect, disabled_overlay_color, 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
@@ -9020,7 +9118,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     //- rjf: draw border/overlay color to signify error
     if(ws->error_t > 0.01f)
     {
-      Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundBad);
+      String8 tags[] = {str8_lit("bad")};
+      String8Array tags_array = {tags, ArrayCount(tags)};
+      Vec4F32 color = rd_color_from_tags(tags_array, str8_lit("text"));
       color.w *= ws->error_t;
       Rng2F32 rect = os_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
@@ -10492,7 +10592,7 @@ rd_push_search_string(Arena *arena)
 //- rjf: colors
 
 internal Vec4F32
-rd_color_from_tags(String8Array tags)
+rd_color_from_tags(String8Array tags, String8 name)
 {
   Vec4F32 result = {0};
   {
@@ -10505,23 +10605,26 @@ rd_color_from_tags(String8Array tags)
     {
       RD_ThemePattern *p = &theme->patterns[idx];
       U64 match_count = 0;
-      for EachIndex(key_tags_idx, tags.count)
+      B32 name_matches = 0;
+      for EachIndex(key_tags_idx, tags.count+1)
       {
+        String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
         for EachIndex(p_tags_idx, p->tags.count)
         {
-          if(str8_match(p->tags.v[p_tags_idx], tags.v[key_tags_idx], 0))
+          if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
           {
+            name_matches = (key_tags_idx == tags.count);
             match_count += 1;
             break;
           }
         }
       }
-      if(match_count > best_match_count)
+      if(name_matches && match_count > best_match_count)
       {
         pattern = p;
         best_match_count = match_count;
       }
-      if(match_count == tags.count)
+      if(match_count == tags.count+1)
       {
         break;
       }
@@ -11945,125 +12048,6 @@ rd_frame(void)
         SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
       }
     }
-  }
-  
-  //////////////////////////////
-  //- rjf: compute all window themes
-  //
-  ProfScope("compute window themes")
-  {
-    Temp scratch = scratch_begin(0, 0);
-    for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
-    {
-      //- rjf: for each window, scan upwards, and then try the project, then the user, until we
-      // find explicit preset / colors trees in the config. we will prefer the tightest ones, so
-      // that windows can have their own colors, and have those override higher-up settings.
-      RD_Cfg *preset_cfg = &rd_nil_cfg;
-      RD_CfgList colors_cfgs = {0};
-      RD_Cfg *window_cfg = rd_cfg_from_id(ws->cfg_id);
-      RD_Cfg *scan_parents[] = {window_cfg, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
-      for EachElement(idx, scan_parents)
-      {
-        for(RD_Cfg *parent_cfg = scan_parents[idx]; parent_cfg != &rd_nil_cfg; parent_cfg = parent_cfg->parent)
-        {
-          if(preset_cfg == &rd_nil_cfg)
-          {
-            preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));
-          }
-          RD_Cfg *colors_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("colors"));
-          if(colors_cfg != &rd_nil_cfg)
-          {
-            rd_cfg_list_push_front(scratch.arena, &colors_cfgs, colors_cfg);
-          }
-          if(preset_cfg != &rd_nil_cfg && colors_cfg != &rd_nil_cfg)
-          {
-            break;
-          }
-        }
-      }
-      
-      //- rjf: map the preset config to the associated preset tree
-      MD_Node *preset_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
-      if(preset_cfg != &rd_nil_cfg)
-      {
-        String8 preset_name = preset_cfg->first->string;
-        for EachEnumVal(RD_ThemePreset, p)
-        {
-          if(str8_match(preset_name, rd_theme_preset_code_string_table[p], 0))
-          {
-            preset_tree = rd_state->theme_preset_trees[p];
-            break;
-          }
-        }
-      }
-      
-      //- rjf: build tasks for color applications - each task comprises of a metadesk
-      // tree, describing the color patterns
-      typedef struct ThemeTask ThemeTask;
-      struct ThemeTask
-      {
-        ThemeTask *next;
-        MD_Node *tree;
-      };
-      ThemeTask start_task = {0, preset_tree};
-      ThemeTask *first_task = &start_task;
-      ThemeTask *last_task = first_task;
-      {
-        for(RD_CfgNode *n = colors_cfgs.first; n != 0; n = n->next)
-        {
-          ThemeTask *t = push_array(scratch.arena, ThemeTask, 1);
-          SLLQueuePush(first_task, last_task, t);
-          t->tree = md_tree_from_string(scratch.arena, rd_string_from_cfg_tree(scratch.arena, n->v));
-        }
-      }
-      
-      //- rjf: apply theme tasks, build each color pattern for this window's
-      // structured theme
-      typedef struct ThemePatternNode ThemePatternNode;
-      struct ThemePatternNode
-      {
-        ThemePatternNode *next;
-        RD_ThemePattern pattern;
-      };
-      ThemePatternNode *first_pattern = 0;
-      ThemePatternNode *last_pattern = 0;
-      U64 pattern_count = 0;
-      for(ThemeTask *t = first_task; t != 0; t = t->next)
-      {
-        MD_Node *tree_root = t->tree;
-        for(MD_Node *n = tree_root; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, tree_root).next)
-        {
-          if(n->flags & MD_NodeFlag_Numeric && md_node_is_nil(n))
-          {
-            Vec4F32 color_srgba = rgba_from_hex_string_4f32(n->string);
-            Vec4F32 color_linear = linear_from_srgba(color_srgba);
-            String8List tags = {0};
-            for(MD_Node *parent = n->parent; parent != tree_root && !md_node_is_nil(parent); parent = parent->parent)
-            {
-              str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), parent->string));
-            }
-            ThemePatternNode *node = push_array(scratch.arena, ThemePatternNode, 1);
-            node->pattern.tags = str8_array_from_list(ui_build_arena(), &tags);
-            node->pattern.linear = color_linear;
-            SLLQueuePush(first_pattern, last_pattern, node);
-            pattern_count += 1;
-          }
-        }
-      }
-      
-      //- rjf: convert to final pattern array
-      ws->theme = push_array(ui_build_arena(), RD_Theme, 1);
-      ws->theme->patterns_count = pattern_count;
-      ws->theme->patterns = push_array(ui_build_arena(), RD_ThemePattern, ws->theme->patterns_count);
-      {
-        U64 idx = 0;
-        for(ThemePatternNode *n = first_pattern; n != 0; n = n->next, idx += 1)
-        {
-          ws->theme->patterns[idx] = n->pattern;
-        }
-      }
-    }
-    scratch_end(scratch);
   }
   
   //////////////////////////////

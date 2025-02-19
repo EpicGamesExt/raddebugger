@@ -292,7 +292,7 @@ rd_cmd_spec_button(String8 name)
       RD_Font(RD_FontSlot_Icons)
         UI_PrefWidth(ui_em(2.f, 1.f))
         UI_TextAlignment(UI_TextAlign_Center)
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+        UI_TagF("weak")
       {
         ui_label(rd_icon_kind_text_table[canonical_icon]);
       }
@@ -308,7 +308,7 @@ rd_cmd_spec_button(String8 name)
       UI_PrefWidth(ui_children_sum(1))
         UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
         UI_NamedRow(str8_lit("###bindings"))
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+        UI_TagF("weak")
         UI_FastpathCodepoint(0)
       {
         rd_cmd_binding_buttons(name);
@@ -365,7 +365,8 @@ rd_icon_button(RD_IconKind kind, FuzzyMatchRangeList *matches, String8 string)
       RD_Font(RD_FontSlot_Icons)
       UI_PrefWidth(ui_em(2.f, 1.f))
       UI_PrefHeight(ui_pct(1, 0))
-      UI_FlagsAdd(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawTextWeak)
+      UI_FlagsAdd(UI_BoxFlag_DisableTextTrunc)
+      UI_TagF("weak")
       ui_label(rd_icon_kind_text_table[kind]);
     if(display_string.size != 0)
     {
@@ -481,12 +482,14 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   if(u->is_frozen)
   {
     F32 lock_icon_off = ui_top_font_size()*0.2f;
-    Vec4F32 lock_icon_color = ui_top_palette()->background_bad;
+    String8 tags[] = {str8_lit("bad")};
+    String8Array tags_array = {tags, ArrayCount(tags)};
+    Vec4F32 color = rd_color_from_tags(tags_array, str8_lit("text"));
     dr_text(rd_font_from_slot(RD_FontSlot_Icons),
             box->font_size, 0, 0, FNT_RasterFlag_Smooth,
             v2f32((box->rect.x0 + box->rect.x1)/2 + lock_icon_off/2,
                   box->rect.y0 + lock_icon_off/2),
-            lock_icon_color,
+            color,
             rd_icon_kind_text_table[RD_IconKind_Locked]);
   }
 }
@@ -590,10 +593,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 ctrlified = (os_get_modifiers() & OS_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
   {
-    rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground0),
-    rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground1),
-    rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground2),
-    rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground3),
+    rd_color_from_tags(str8_array_zero(), str8_lit("line_info_0")),
+    rd_color_from_tags(str8_array_zero(), str8_lit("line_info_1")),
+    rd_color_from_tags(str8_array_zero(), str8_lit("line_info_2")),
+    rd_color_from_tags(str8_array_zero(), str8_lit("line_info_3")),
   };
   F32 line_num_padding_px = ui_top_font_size()*1.f;
   F32 entity_alive_t_rate = (1 - pow_f32(2, (-30.f * rd_state->frame_dt)));
@@ -671,7 +674,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         CTRL_EntityList line_ips  = params->line_ips[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
+        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
@@ -691,7 +694,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
+            Vec4F32 color = rd_color_from_ctrl_entity(thread);
             {
               if(color.w == 0)
               {
@@ -801,6 +804,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   UI_Box *catchall_margin_container_box = &ui_nil_box;
   if(params->flags & RD_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build catchall margins")
+    UI_TagF("implicit")
   {
     if(params->margin_float_off_px != 0)
     {
@@ -844,7 +848,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
+            Vec4F32 color = rd_color_from_ctrl_entity(thread);
             {
               if(color.w == 0)
               {
@@ -952,7 +956,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           for(RD_CfgNode *n = line_bps.first; n != 0; n = n->next)
           {
             RD_Cfg *bp = n->v;
-            Vec4F32 bp_rgba = rd_rgba_from_cfg(bp);
+            Vec4F32 bp_rgba = rd_color_from_cfg(bp);
             if(bp_rgba.w == 0)
             {
               bp_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Breakpoint);
@@ -1045,7 +1049,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           for(RD_CfgNode *n = line_pins.first; n != 0; n = n->next)
           {
             RD_Cfg *pin = n->v;
-            Vec4F32 color = rd_rgba_from_cfg(pin);
+            Vec4F32 color = rd_color_from_cfg(pin);
             if(color.w == 0)
             {
               color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
@@ -1115,6 +1119,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build line numbers
   //
   if(params->flags & RD_CodeSliceFlag_LineNums) UI_Parent(top_container_box) ProfScope("build line numbers") UI_Focus(UI_FocusKind_Off)
+    UI_TagF("implicit")
   {
     TxtRng select_rng = txt_rng(*cursor, *mark);
     Vec4F32 active_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeLineNumbersSelected);
@@ -1173,7 +1178,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build background for line numbers & margins
   //
   {
-    UI_Parent(top_container_box)
+    UI_Parent(top_container_box) UI_TagF("floating")
     {
       ui_set_next_pref_width(ui_px(params->priority_margin_width_px + params->catchall_margin_width_px + params->line_num_width_px, 1));
       ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -1293,7 +1298,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                                   UI_BoxFlag_DrawBorder, pin_box_key);
           UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
           {
-            Vec4F32 pin_color = rd_rgba_from_cfg(pin);
+            Vec4F32 pin_color = rd_color_from_cfg(pin);
             if(pin_color.w == 0)
             {
               pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
@@ -1485,7 +1490,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         line_drag_drop = 1;
         line_drag_cfg = cfg;
-        line_drag_drop_color = linear_from_srgba(rd_rgba_from_cfg(cfg));
+        line_drag_drop_color = linear_from_srgba(rd_color_from_cfg(cfg));
         if(line_drag_drop_color.w == 0)
         {
           line_drag_drop_color = ui_top_palette()->background_pop;
@@ -1495,7 +1500,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         line_drag_drop = 1;
         line_drag_ctrl_entity = thread;
-        line_drag_drop_color = linear_from_srgba(rd_rgba_from_ctrl_entity(thread));
+        line_drag_drop_color = rd_color_from_ctrl_entity(thread);
         if(line_drag_drop_color.w == 0)
         {
           line_drag_drop_color = ui_top_palette()->background_pop;
@@ -2215,8 +2220,7 @@ rd_error_label(String8 string)
     ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
     ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
     ui_set_next_text_alignment(UI_TextAlign_Center);
-    ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
-    UI_PrefWidth(ui_em(2.25f, 1.f)) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+    UI_TagF("weak") UI_PrefWidth(ui_em(2.25f, 1.f)) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
     UI_PrefWidth(ui_text_dim(10, 0)) rd_label(string);
   }
   return sig;
@@ -2500,7 +2504,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   //- rjf: build expander placeholder
   else if(params->flags & RD_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
   {
-    UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+    UI_TagF("weak")
       UI_Flags(UI_BoxFlag_DrawSideLeft)
       RD_Font(RD_FontSlot_Icons)
       UI_TextAlignment(UI_TextAlign_Center)
@@ -2696,9 +2700,8 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
           ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
         }
       }
-      else
+      else UI_TagF("weak")
       {
-        ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
         UI_Box *box = ui_label(display_string).box;
         if(params->fuzzy_matches != 0)
         {
@@ -2715,7 +2718,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       }
       else
       {
-        ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
+        ui_set_next_tag(str8_lit("weak"));
       }
       UI_Box *box = ui_label(display_string).box;
       if(params->fuzzy_matches != 0)
