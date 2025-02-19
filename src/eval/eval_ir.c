@@ -169,7 +169,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
     if(0 <= idx && idx < accel->folders.count)
     {
       String8 folder_name = accel->folders.v[idx - 0];
-      String8 folder_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, folder_name);
+      String8 folder_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", folder_name);
       expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
       expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
@@ -179,7 +179,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
     else if(accel->folders.count <= idx && idx < accel->folders.count + accel->files.count)
     {
       String8 file_name = accel->files.v[idx - accel->folders.count];
-      String8 file_path = push_str8f(scratch.arena, "%S/%S", accel->folder_path, file_name);
+      String8 file_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", file_name);
       expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
       expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
@@ -2253,7 +2253,7 @@ E_IRGEN_FUNCTION_DEF(default)
       Temp scratch = scratch_begin(&arena, 1);
       String8 file_path = path_normalized_from_string(scratch.arena, expr->string);
       FileProperties props = os_properties_from_file_path(file_path);
-      if(props.flags & FilePropertyFlag_IsFolder)
+      if(props.flags & FilePropertyFlag_IsFolder || props.modified == 0)
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
         result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));

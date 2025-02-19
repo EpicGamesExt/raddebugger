@@ -998,7 +998,6 @@ internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal String8 rd_view_rule_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
-internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
 
@@ -1019,7 +1018,6 @@ internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal Vec4F32 rd_color_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
-internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -1183,7 +1181,6 @@ internal RD_VocabInfo *rd_vocab_info_from_code_name_plural(String8 code_name_plu
 #define rd_display_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name_plural)
 #define rd_icon_kind_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->icon_kind)
 #define rd_singular_from_code_name_plural(code_name_plural) (rd_vocab_info_from_code_name_plural(code_name_plural)->code_name)
-internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

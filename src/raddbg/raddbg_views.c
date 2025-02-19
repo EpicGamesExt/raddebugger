@@ -1030,6 +1030,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       if(0){}
       
+      // rjf: lister rows
+      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
+      }
+      
       // rjf: top-level cfg rows
       else if(is_top_level && evalled_cfg != &rd_nil_cfg)
       {
@@ -1116,16 +1122,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_top_palette()->text, ui_top_font_size()};
         E_Type *type = e_type_from_key__cached(info.eval.type_key);
         String8 file_path = e_string_from_id(info.eval.value.u64);
-        String8 file_name = str8_skip_last_slash(file_path);
+        DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
         if(str8_match(type->name, str8_lit("folder"), 0))
         {
-          DR_FStrList fstrs = {0};
-          if(file_name.size)
-          {
-            dr_fstrs_push_new(arena, &fstrs, &params, rd_icon_kind_text_table[RD_IconKind_FolderClosedFilled], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-            dr_fstrs_push_new(arena, &fstrs, &params, file_name);
-          }
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
                                       .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
                                       .pct = 1.f,
@@ -1139,13 +1138,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           RD_Cfg *w_cfg = style->first;
           F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-          DR_FStrList fstrs = {0};
-          if(file_name.size)
-          {
-            dr_fstrs_push_new(arena, &fstrs, &params, rd_icon_kind_text_table[RD_IconKind_FileOutline], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-            dr_fstrs_push_new(arena, &fstrs, &params, file_name);
-          }
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
                                       .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
                                       .default_pct = 0.35f,
@@ -1434,6 +1426,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         RD_CmdKind cmd_kind = (RD_CmdKind)result.eval.value.u64;
         String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
         result.cmd_name = cmd_name;
+      }
+      else if(result.eval.space.kind == E_SpaceKind_FileSystem)
+      {
+        String8 file_path = e_string_from_id(result.eval.value.u64);
+        result.fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+        result.flags |= RD_WatchCellFlag_Button;
       }
     }break;
     case RD_WatchCellKind_Eval:

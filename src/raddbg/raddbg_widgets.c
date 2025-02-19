@@ -2,6 +2,573 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: UI Widgets: Fancy Title Strings
+
+internal DR_FStrList
+rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
+{
+  DR_FStrList result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: unpack config
+    B32 is_disabled = rd_disabled_from_cfg(cfg);
+    RD_Location loc = rd_location_from_cfg(cfg);
+    D_Target target = rd_target_from_cfg(scratch.arena, cfg);
+    String8 label_string = rd_label_from_cfg(cfg);
+    String8 expr_string = rd_expr_from_cfg(cfg);
+    String8 collection_name = {0};
+    String8 file_path = {0};
+    Vec4F32 rgba = rd_color_from_cfg(cfg);
+    if(rgba.w == 0)
+    {
+      rgba = ui_color_from_name(str8_lit("text"));
+    }
+    Vec4F32 rgba_secondary = rgba;
+    UI_TagF("weak")
+    {
+      rgba_secondary = ui_color_from_name(str8_lit("text"));
+    }
+    RD_IconKind icon_kind = rd_icon_kind_from_code_name(cfg->string);
+    B32 is_from_command_line = 0;
+    {
+      RD_Cfg *cmd_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+      for(RD_Cfg *p = cfg->parent; p != &rd_nil_cfg; p = p->parent)
+      {
+        if(p == cmd_line_root)
+        {
+          is_from_command_line = 1;
+          break;
+        }
+      }
+    }
+    B32 is_within_window = 0;
+    {
+      for(RD_Cfg *p = cfg->parent; p != &rd_nil_cfg; p = p->parent)
+      {
+        if(str8_match(p->string, str8_lit("window"), 0))
+        {
+          is_within_window = 1;
+          break;
+        }
+      }
+    }
+    if(expr_string.size != 0)
+    {
+      String8 query_name = rd_query_from_eval_string(arena, expr_string);
+      if(query_name.size != 0 && !str8_match(query_name, str8_lit("watches"), 0))
+      {
+        String8 query_code_name = query_name;
+        String8 query_display_name = rd_display_from_code_name(query_code_name);
+        collection_name = query_display_name;
+        if(query_display_name.size == 0)
+        {
+          query_code_name = rd_singular_from_code_name_plural(query_name);
+          collection_name = rd_display_plural_from_code_name(query_code_name);
+        }
+        RD_IconKind query_icon_kind = rd_icon_kind_from_code_name(query_code_name);
+        if(query_icon_kind != RD_IconKind_Null)
+        {
+          icon_kind = query_icon_kind;
+        }
+      }
+      else
+      {
+        file_path = rd_file_path_from_eval_string(arena, expr_string);
+        if(file_path.size != 0)
+        {
+          icon_kind = RD_IconKind_FileOutline;
+        }
+      }
+    }
+    
+    //- rjf: set up color/size for all parts of the title
+    //
+    // the "running" part implies that it changes as things are added - 
+    // so if a primary title is pushed, we can make the rest of the title
+    // more faded/smaller, but only after a primary title is pushed,
+    // which could be caused by many different potential parts of a cfg.
+    //
+    DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), rgba, ui_top_font_size()};
+    B32 running_is_secondary = 0;
+#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = rgba_secondary; params.size = ui_top_font_size()*0.95f;}
+    
+    //- rjf: push icon
+    if(icon_kind != RD_IconKind_Null)
+    {
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+    }
+    
+    //- rjf: push warning icon for command-line entities
+    if(is_from_command_line)
+    {
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Info], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+    }
+    
+    //- rjf: push view title, if from window, and no file path
+    if(is_within_window && file_path.size == 0 && collection_name.size == 0)
+    {
+      String8 view_display_name = rd_display_from_code_name(cfg->string);
+      if(view_display_name.size != 0)
+      {
+        dr_fstrs_push_new(arena, &result, &params, view_display_name);
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+        start_secondary();
+      }
+    }
+    
+    //- rjf: push label
+    if(label_string.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, label_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: push collection name
+    if(collection_name.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, collection_name);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: query is file path - do specific file name strings
+    else if(file_path.size != 0)
+    {
+      // rjf: compute disambiguated file name
+      String8List qualifiers = {0};
+      String8 file_name = str8_skip_last_slash(file_path);
+      if(rd_state->ambiguous_path_slots_count != 0)
+      {
+        U64 hash = d_hash_from_string__case_insensitive(file_name);
+        U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+        RD_AmbiguousPathNode *node = 0;
+        {
+          for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
+              n != 0;
+              n = n->next)
+          {
+            if(str8_match(n->name, file_name, StringMatchFlag_CaseInsensitive))
+            {
+              node = n;
+              break;
+            }
+          }
+        }
+        if(node != 0 && node->paths.node_count > 1)
+        {
+          // rjf: get all colliding paths
+          String8Array collisions = str8_array_from_list(scratch.arena, &node->paths);
+          
+          // rjf: get all reversed path parts for each collision
+          String8List *collision_parts_reversed = push_array(scratch.arena, String8List, collisions.count);
+          for EachIndex(idx, collisions.count)
+          {
+            String8List parts = str8_split_path(scratch.arena, collisions.v[idx]);
+            for(String8Node *n = parts.first; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &collision_parts_reversed[idx], n->string);
+            }
+          }
+          
+          // rjf: get the search path & its reversed parts
+          String8List parts = str8_split_path(scratch.arena, file_path);
+          String8List parts_reversed = {0};
+          for(String8Node *n = parts.first; n != 0; n = n->next)
+          {
+            str8_list_push_front(scratch.arena, &parts_reversed, n->string);
+          }
+          
+          // rjf: iterate all collision part reversed lists, in lock-step with
+          // search path; disqualify until we only have one path remaining; gather
+          // qualifiers
+          {
+            U64 num_collisions_left = collisions.count;
+            String8Node **collision_nodes = push_array(scratch.arena, String8Node *, collisions.count);
+            for EachIndex(idx, collisions.count)
+            {
+              collision_nodes[idx] = collision_parts_reversed[idx].first;
+            }
+            for(String8Node *n = parts_reversed.first; num_collisions_left > 1 && n != 0; n = n->next)
+            {
+              B32 part_is_qualifier = 0;
+              for EachIndex(idx, collisions.count)
+              {
+                if(collision_nodes[idx] != 0 && !str8_match(collision_nodes[idx]->string, n->string, StringMatchFlag_CaseInsensitive))
+                {
+                  collision_nodes[idx] = 0;
+                  num_collisions_left -= 1;
+                  part_is_qualifier = 1;
+                }
+                else if(collision_nodes[idx] != 0)
+                {
+                  collision_nodes[idx] = collision_nodes[idx]->next;
+                }
+              }
+              if(part_is_qualifier)
+              {
+                str8_list_push_front(scratch.arena, &qualifiers, n->string);
+              }
+            }
+          }
+        }
+      }
+      
+      // rjf: push qualifiers
+      for(String8Node *n = qualifiers.first; n != 0; n = n->next)
+      {
+        String8 string = push_str8f(arena, "<%S> ", n->string);
+        dr_fstrs_push_new(arena, &result, &params, string, .color = ui_top_palette()->text_weak);
+      }
+      
+      // rjf: push file name
+      dr_fstrs_push_new(arena, &result, &params, push_str8_copy(arena, str8_skip_last_slash(file_path)));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: cfg has expression attached -> use that
+    else if(expr_string.size != 0 && !str8_match(cfg->string, str8_lit("watch"), 0))
+    {
+      dr_fstrs_push_new(arena, &result, &params, expr_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: push text location
+    if(loc.file_path.size != 0)
+    {
+      String8 location_string = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc.file_path), loc.pt.line, loc.pt.column);
+      dr_fstrs_push_new(arena, &result, &params, location_string);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: push target executable name
+    if(target.exe.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, str8_skip_last_slash(target.exe));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
+    //- rjf: push target arguments
+    if(target.args.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, target.args);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+    }
+    
+    //- rjf: push conditions
+    {
+      String8 condition = rd_cfg_child_from_string(cfg, str8_lit("condition"))->first->string;
+      if(condition.size != 0)
+      {
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("if "), .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+        RD_Font(RD_FontSlot_Code)
+        {
+          DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, condition);
+          dr_fstrs_concat_in_place(&result, &fstrs);
+        }
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      }
+    }
+    
+    //- rjf: push disabled marker
+    if(is_disabled)
+    {
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Disabled)"));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+    }
+    
+    //- rjf: push hit count
+    {
+      String8 hit_count_value_string = rd_cfg_child_from_string(cfg, str8_lit("hit_count"))->first->string;
+      U64 hit_count = 0;
+      if(try_u64_from_str8_c_rules(hit_count_value_string, &hit_count))
+      {
+        String8 hit_count_text = push_str8f(arena, "(%I64u hit%s)", hit_count, hit_count == 1 ? "" : "s");
+        dr_fstrs_push_new(arena, &result, &params, hit_count_text);
+      }
+    }
+    
+    //- rjf: special case: auto view rule
+    if(str8_match(cfg->string, str8_lit("auto_view_rule"), 0))
+    {
+      String8 src_string = rd_cfg_child_from_string(cfg, str8_lit("source"))->first->string;
+      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("dest"))->first->string;
+      Vec4F32 src_color = rgba;
+      Vec4F32 dst_color = rgba;
+      DR_FStrList src_fstrs = {0};
+      DR_FStrList dst_fstrs = {0};
+      if(src_string.size == 0)
+      {
+        src_string = str8_lit("(type)");
+        src_color = ui_top_palette()->text_weak;
+        dr_fstrs_push_new(arena, &src_fstrs, &params, src_string, .color = src_color);
+      }
+      else RD_Font(RD_FontSlot_Code)
+      {
+        src_fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, src_color, src_string);
+      }
+      if(dst_string.size == 0)
+      {
+        dst_string = str8_lit("(view rule)");
+        dst_color = ui_top_palette()->text_weak;
+        dr_fstrs_push_new(arena, &dst_fstrs, &params, dst_string, .color = dst_color);
+      }
+      else RD_Font(RD_FontSlot_Code)
+      {
+        dst_fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, dst_color, dst_string);
+      }
+      dr_fstrs_concat_in_place(&result, &src_fstrs);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_concat_in_place(&result, &dst_fstrs);
+    }
+    
+    //- rjf: special case: file path maps
+    if(str8_match(cfg->string, str8_lit("file_path_map"), 0))
+    {
+      String8 src_string = rd_cfg_child_from_string(cfg, str8_lit("source"))->first->string;
+      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("dest"))->first->string;
+      Vec4F32 src_color = rgba;
+      Vec4F32 dst_color = rgba;
+      if(src_string.size == 0)
+      {
+        src_string = str8_lit("(source path)");
+        src_color = ui_top_palette()->text_weak;
+      }
+      if(dst_string.size == 0)
+      {
+        dst_string = str8_lit("(destination path)");
+        dst_color = ui_top_palette()->text_weak;
+      }
+      dr_fstrs_push_new(arena, &result, &params, src_string, .color = src_color);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, dst_string, .color = dst_color);
+    }
+    
+#undef start_secondary
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+internal DR_FStrList
+rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras)
+{
+  DR_FStrList result = {0};
+  
+  //- rjf: unpack entity info
+  F32 extras_size = ui_top_font_size()*0.95f;
+  Vec4F32 color = rd_color_from_ctrl_entity(entity);
+  if(color.w == 0)
+  {
+    color = ui_top_palette()->text;
+  }
+  Vec4F32 secondary_color = ui_top_palette()->text_weak;
+  String8 name = rd_name_from_ctrl_entity(arena, entity);
+  RD_IconKind icon_kind = RD_IconKind_Null;
+  B32 name_is_code = 0;
+  switch(entity->kind)
+  {
+    default:{}break;
+    case CTRL_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
+    case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
+    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
+    case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
+  }
+  
+  //- rjf: set up drawing params
+  DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Code), rd_raster_flags_from_slot(RD_FontSlot_Code), color, ui_top_font_size()};
+  
+  //- rjf: push icon
+  if(icon_kind != RD_IconKind_Null)
+  {
+    dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = secondary_color);
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+  }
+  
+  //- rjf: push frozen icon, if frozen
+  if((entity->kind == CTRL_EntityKind_Machine ||
+      entity->kind == CTRL_EntityKind_Process ||
+      entity->kind == CTRL_EntityKind_Thread) &&
+     ctrl_entity_tree_is_frozen(entity))
+  {
+    dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Locked], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->background_bad);
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+  }
+  
+  //- rjf: push containing process prefix
+  if(entity->kind == CTRL_EntityKind_Thread ||
+     entity->kind == CTRL_EntityKind_Module)
+  {
+    CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+    if(processes.count > 1)
+    {
+      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      String8 process_name = rd_name_from_ctrl_entity(arena, process);
+      Vec4F32 process_color = rd_color_from_ctrl_entity(process);
+      if(process_color.w == 0)
+      {
+        process_color = color;
+      }
+      if(process_name.size != 0)
+      {
+        dr_fstrs_push_new(arena, &result, &params, process_name, .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = process_color);
+        dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+        dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, "(PID: %I64u)", process->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = ui_top_font_size()*0.9f);
+        dr_fstrs_push_new(arena, &result, &params, str8_lit(" / "), .color = secondary_color);
+      }
+    }
+  }
+  
+  //- rjf: push name
+  dr_fstrs_push_new(arena, &result, &params, name,
+                    .font         = rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main),
+                    .raster_flags = rd_raster_flags_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main),
+                    .color        = color);
+  
+  //- rjf: push PID
+  if(entity->kind == CTRL_EntityKind_Process)
+  {
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+    dr_fstrs_push_new(arena, &result, &params, push_str8f(arena, " (PID: %I64u)", entity->id), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .color = secondary_color, .size = ui_top_font_size()*0.85f);
+  }
+  
+  //- rjf: threads get callstack extras
+  if(entity->kind == CTRL_EntityKind_Thread && include_extras)
+  {
+    Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
+    dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+    DI_Scope *di_scope = di_scope_open();
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+    Arch arch = entity->arch;
+    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
+    for(U64 idx = 0, limit = 6; idx < unwind.frames.count && idx < limit; idx += 1)
+    {
+      CTRL_UnwindFrame *f = &unwind.frames.v[unwind.frames.count - 1 - idx];
+      U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      if(rdi != &di_rdi_parsed_nil)
+      {
+        RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
+        String8 name = {0};
+        name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+        name = push_str8_copy(arena, name);
+        if(name.size != 0)
+        {
+          dr_fstrs_push_new(arena, &result, &params, name, .size = extras_size, .color = symbol_color);
+          if(idx+1 < unwind.frames.count)
+          {
+            dr_fstrs_push_new(arena, &result, &params, str8_lit(" > "), .color = secondary_color, .size = extras_size);
+            if(idx+1 == limit)
+            {
+              dr_fstrs_push_new(arena, &result, &params, str8_lit("..."), .color = secondary_color, .size = extras_size);
+            }
+          }
+        }
+      }
+    }
+    di_scope_close(di_scope);
+  }
+  
+  //- rjf: modules get debug info status extras
+  if(entity->kind == CTRL_EntityKind_Module && include_extras)
+  {
+    DI_Scope *di_scope = di_scope_open();
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+    if(rdi->raw_data_size == 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Symbols not found)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+    }
+    di_scope_close(di_scope);
+  }
+  
+  return result;
+}
+
+internal DR_FStrList
+rd_title_fstrs_from_code_name(Arena *arena, String8 code_name)
+{
+  DR_FStrList result = {0};
+  {
+    RD_VocabInfo *info = rd_vocab_info_from_code_name(code_name);
+    
+    //- rjf: set up color/size for all parts of the title
+    //
+    // the "running" part implies that it changes as things are added - 
+    // so if a primary title is pushed, we can make the rest of the title
+    // more faded/smaller, but only after a primary title is pushed,
+    // which could be caused by many different potential parts of a cfg.
+    //
+    DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+    
+    //- rjf: push icon
+    if(info->icon_kind != RD_IconKind_Null) UI_Tag(str8_lit("weak"))
+    {
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[info->icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_color_from_name(str8_lit("text")));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+    }
+    
+    //- rjf: push display name
+    if(info->display_name.size != 0)
+    {
+      dr_fstrs_push_new(arena, &result, &params, info->display_name);
+    }
+    
+    //- rjf: push code name as a fallback
+    else
+    {
+      dr_fstrs_push_new(arena, &result, &params, code_name, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+    }
+  }
+  return result;
+}
+
+internal DR_FStrList
+rd_title_fstrs_from_file_path(Arena *arena, String8 file_path)
+{
+  DR_FStrList fstrs = {0};
+  String8 file_name = str8_skip_last_slash(file_path);
+  FileProperties props = os_properties_from_file_path(file_path);
+  RD_IconKind icon_kind = RD_IconKind_FileOutline;
+  if(props.flags & FilePropertyFlag_IsFolder)
+  {
+    icon_kind = RD_IconKind_FolderClosedFilled;
+  }
+  if(file_path.size == 0 || str8_match(file_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+  {
+    icon_kind = RD_IconKind_Machine;
+    file_name = str8_lit("File System");
+  }
+  DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+  UI_TagF("weak")
+  {
+    dr_fstrs_push_new(arena, &fstrs, &params,
+                      rd_icon_kind_text_table[icon_kind],
+                      .font = rd_font_from_slot(RD_FontSlot_Icons),
+                      .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                      .color = ui_color_from_name(str8_lit("text")));
+  }
+  dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+  dr_fstrs_push_new(arena, &fstrs, &params, file_name);
+  return fstrs;
+}
+
+////////////////////////////////
 //~ rjf: UI Widgets: Loading Overlay
 
 internal void

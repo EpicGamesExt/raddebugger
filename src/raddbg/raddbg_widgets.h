@@ -96,6 +96,14 @@ struct RD_CodeSliceSignal
 #define RD_Font(slot) UI_Font(rd_font_from_slot(slot)) UI_TextRasterFlags(rd_raster_flags_from_slot((slot)))
 
 ////////////////////////////////
+//~ rjf: UI Widgets: Fancy Title Strings
+
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
+internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
+internal DR_FStrList rd_title_fstrs_from_file_path(Arena *arena, String8 file_path);
+
+////////////////////////////////
 //~ rjf: UI Widgets: Loading Overlay
 
 internal void rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target);
