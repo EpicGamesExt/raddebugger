@@ -797,6 +797,11 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->ctx_menu_changed = 0;
     ui_state->default_animation_rate = 1 - pow_f32(2, (-80.f * ui_state->animation_dt));
     ui_state->tooltip_can_overflow_window = 0;
+    ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
+    ui_state->tags_cache_slots_count = 512;
+    ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
+    ui_state->theme_pattern_cache_slots_count = 512;
+    ui_state->theme_pattern_cache_slots = push_array(ui_build_arena(), UI_ThemePatternCacheSlot, ui_state->theme_pattern_cache_slots_count);
   }
   
   //- rjf: prune unused animation nodes
@@ -2023,7 +2028,7 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
-    ui_state->ctx_menu_root->tags = ui_top_tags();
+    ui_state->ctx_menu_root->tags_key = ui_top_tags_key();
     ui_state->ctx_menu_root->palette = ui_top_palette();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
     ui_spacer(ui_em(1.f, 1.f));
@@ -2198,31 +2203,17 @@ ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
   return palette;
 }
 
-//- rjf: tag gathering
+//- rjf: current style tags key
 
-internal String8Array
-ui_top_tags(void)
+internal UI_Key
+ui_top_tags_key(void)
 {
-  if(ui_state->current_gen_tags_gen != ui_state->tag_stack.gen)
+  UI_Key key = ui_key_zero();
+  if(ui_state->tags_key_stack_top != 0)
   {
-    ui_state->current_gen_tags_gen = ui_state->tag_stack.gen;
-    Temp scratch = scratch_begin(0, 0);
-    String8List tags = {0};
-    for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
-    {
-      if(n->v.size == 1 && n->v.str[0] == '.')
-      {
-        break;
-      }
-      if(n->v.size != 0)
-      {
-        str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
-      }
-    }
-    ui_state->current_gen_tags = str8_array_from_list(ui_build_arena(), &tags);
-    scratch_end(scratch);
+    key = ui_state->tags_key_stack_top->key;
   }
-  return ui_state->current_gen_tags;
+  return key;
 }
 
 //- rjf: theme color lookups
@@ -2230,49 +2221,94 @@ ui_top_tags(void)
 internal Vec4F32
 ui_color_from_name(String8 name)
 {
-  Vec4F32 result = ui_color_from_tags_name(ui_top_tags(), name);
+  Vec4F32 result = ui_color_from_tags_key_name(ui_top_tags_key(), name);
   return result;
 }
 
 internal Vec4F32
-ui_color_from_tags_name(String8Array tags, String8 name)
+ui_color_from_tags_key_name(UI_Key key, String8 name)
 {
   Vec4F32 result = {0};
   {
-    UI_Theme *theme = ui_state->theme;
-    UI_ThemePattern *pattern = 0;
-    U64 best_match_count = 0;
-    for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
+    //- rjf: compute final key, mixing (tags_key, name)
+    UI_Key final_key = ui_key_from_string(key, name);
+    
+    //- rjf: map to existing node
+    U64 slot_idx = final_key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+    UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
+    UI_ThemePatternCacheNode *node = 0;
+    for(UI_ThemePatternCacheNode *n = slot->first;
+        n != 0;
+        n = n->next)
     {
-      UI_ThemePattern *p = &theme->patterns[idx];
-      U64 match_count = 0;
-      B32 name_matches = 0;
-      for EachIndex(key_tags_idx, tags.count+1)
+      if(ui_key_match(n->key, final_key))
       {
-        String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
-        for EachIndex(p_tags_idx, p->tags.count)
+        node = n;
+      }
+    }
+    
+    //- rjf: no node? create
+    if(node == 0)
+    {
+      // rjf: map tags_key (without name) -> full list of tags
+      String8Array tags = {0};
+      {
+        U64 tags_cache_slot_idx = key.u64[0]%ui_state->tags_cache_slots_count;
+        UI_TagsCacheSlot *tags_cache_slot = &ui_state->tags_cache_slots[tags_cache_slot_idx];
+        for(UI_TagsCacheNode *n = tags_cache_slot->first; n != 0; n = n->next)
         {
-          if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
+          if(ui_key_match(n->key, key))
           {
-            name_matches = (key_tags_idx == tags.count);
-            match_count += 1;
+            tags = n->tags;
             break;
           }
         }
       }
-      if(name_matches && match_count > best_match_count)
+      
+      // rjf: map tags to theme pattern
+      UI_Theme *theme = ui_state->theme;
+      UI_ThemePattern *pattern = 0;
+      U64 best_match_count = 0;
+      for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
       {
-        pattern = p;
-        best_match_count = match_count;
+        UI_ThemePattern *p = &theme->patterns[idx];
+        U64 match_count = 0;
+        B32 name_matches = 0;
+        for EachIndex(key_tags_idx, tags.count+1)
+        {
+          String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
+          for EachIndex(p_tags_idx, p->tags.count)
+          {
+            if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
+            {
+              name_matches = (key_tags_idx == tags.count);
+              match_count += 1;
+              break;
+            }
+          }
+        }
+        if(name_matches && match_count > best_match_count)
+        {
+          pattern = p;
+          best_match_count = match_count;
+        }
+        if(match_count == tags.count+1)
+        {
+          break;
+        }
       }
-      if(match_count == tags.count+1)
-      {
-        break;
-      }
+      
+      // rjf: store in (key, name) -> (pattern) cache
+      node = push_array(ui_build_arena(), UI_ThemePatternCacheNode, 1);
+      SLLQueuePush(slot->first, slot->last, node);
+      node->key = final_key;
+      node->pattern = pattern;
     }
-    if(pattern != 0)
+    
+    //- rjf: grab resultant color
+    if(node != 0 && node->pattern != 0)
     {
-      result = pattern->linear;
+      result = node->pattern->linear;
     }
   }
   return result;
@@ -2438,7 +2474,11 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
-    box->tags = ui_top_tags();
+    box->tags_key = ui_key_zero();
+    if(ui_state->tags_key_stack_top != 0)
+    {
+      box->tags_key = ui_state->tags_key_stack_top->key;
+    }
   }
   
   //- rjf: auto-pop all stacks
@@ -3145,7 +3185,7 @@ node->v = new_value;\
 SLLStackPush(state->name_lower##_stack.top, node);\
 if(node->next == &state->name_lower##_nil_stack_top)\
 {\
-state->name_lower##_stack.bottom_val = (new_value);\
+state->name_lower##_stack.bottom_val = (node->v);\
 }\
 state->name_lower##_stack.auto_pop = 0;\
 state->name_lower##_stack.gen += 1;\
@@ -3173,13 +3213,124 @@ state->name_lower##_stack.auto_pop = 1;\
 state->name_lower##_stack.gen += 1;\
 return old_value;
 
+internal void
+ui__push_tags_key_from_appended_string(String8 string)
+{
+  // rjf: generate new key, by combining hash of this new string with the top
+  // of the tags key stack
+  UI_Key seed_key = {0};
+  if(ui_state->tags_key_stack_top != 0)
+  {
+    seed_key = ui_state->tags_key_stack_top->key;
+  }
+  UI_Key key = seed_key;
+  if(!str8_match(str8_lit("."), string, 0) && string.size > 0)
+  {
+    key = ui_key_from_string(seed_key, string);
+  }
+  
+  // rjf: push this new key onto the stack
+  {
+    UI_TagsKeyStackNode *node = ui_state->tags_key_stack_free;
+    if(node != 0)
+    {
+      SLLStackPop(ui_state->tags_key_stack_free);
+    }
+    else
+    {
+      node = push_array(ui_build_arena(), UI_TagsKeyStackNode, 1);
+    }
+    SLLStackPush(ui_state->tags_key_stack_top, node);
+    node->key = key;
+  }
+  
+  // rjf: store in tags cache
+  U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
+  UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
+  UI_TagsCacheNode *node = 0;
+  for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(ui_key_match(n->key, key))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8List tags = {0};
+    if(!str8_match(string, str8_lit("."), 0))
+    {
+      if(string.size != 0)
+      {
+        str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), string));
+      }
+      for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
+      {
+        if(n->v.size == 1 && n->v.str[0] == '.')
+        {
+          break;
+        }
+        if(n->v.size != 0)
+        {
+          str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), n->v));
+        }
+      }
+    }
+    node = push_array(ui_build_arena(), UI_TagsCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->key = key;
+    node->tags = str8_array_from_list(ui_build_arena(), &tags);
+    scratch_end(scratch);
+  }
+}
+
+internal void
+ui__pop_tags_key(void)
+{
+  if(ui_state->tags_key_stack_top != 0)
+  {
+    UI_TagsKeyStackNode *popped = ui_state->tags_key_stack_top;
+    SLLStackPop(ui_state->tags_key_stack_top);
+    SLLStackPush(ui_state->tags_key_stack_free, popped);
+  }
+}
+
 //- rjf: manual implementations
 
-internal String8 ui_top_tag(void)           { UI_StackTopImpl(ui_state, Tag, tag) }
-internal String8 ui_bottom_tag(void)        { UI_StackBottomImpl(ui_state, Tag, tag) }
-internal String8 ui_push_tag(String8 v)     { UI_StackPushImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v)) }
-internal String8 ui_pop_tag(void)           { UI_StackPopImpl(ui_state, Tag, tag) }
-internal String8 ui_set_next_tag(String8 v) { UI_StackSetNextImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v)) }
+internal String8
+ui_top_tag(void)
+{
+  UI_StackTopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_bottom_tag(void)
+{
+  UI_StackBottomImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_push_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackPushImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
+
+internal String8
+ui_pop_tag(void)
+{
+  ui__pop_tags_key();
+  UI_StackPopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_set_next_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackSetNextImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
 
 //- rjf: helpers
 

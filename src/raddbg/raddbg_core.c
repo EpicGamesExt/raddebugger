@@ -8119,7 +8119,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       Vec4F32 box_background_color = {0};
       if(box->flags & UI_BoxFlag_DrawBackground)
       {
-        box_background_color = ui_color_from_tags_name(box->tags, str8_lit("background"));
+        box_background_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("background"));
       }
       
       // rjf: draw background
@@ -8141,7 +8141,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         // rjf: hot effect extension
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
-          Vec4F32 hover_color = ui_color_from_tags_name(box->tags, str8_lit("hover"));
+          Vec4F32 hover_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
           
           // rjf: brighten
           {
@@ -8239,11 +8239,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           ellipses_run = fnt_push_run_from_string(scratch.arena, ellipses_font, ellipses_size, 0, box->tab_size, ellipses_raster_flags, str8_lit("..."));
         }
         dr_truncated_fancy_run_list(text_position, &box->display_fruns, max_x, ellipses_run);
-        if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
+        if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges) UI_TagF("pop")
         {
-          String8 tags[] = {str8_lit("pop")};
-          String8Array tags_array = {tags, ArrayCount(tags)};
-          Vec4F32 match_color = ui_color_from_tags_name(tags_array, str8_lit("background"));
+          Vec4F32 match_color = ui_color_from_tags_key_name(ui_top_tags_key(), str8_lit("background"));
           dr_truncated_fancy_run_fuzzy_matches(text_position, &box->display_fruns, max_x, &box->fuzzy_match_ranges, match_color);
         }
       }
@@ -8333,7 +8331,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
-            Vec4F32 border_color = ui_color_from_tags_name(box->tags, str8_lit("border"));
+            Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
             Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
             R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8341,7 +8339,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             // rjf: hover effect
             if(b->flags & UI_BoxFlag_DrawHotEffects)
             {
-              Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("hover"));
+              Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
               color.w *= b->hot_t;
               R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
               inst->colors[Corner_01].w *= 0.2f;
@@ -8360,7 +8358,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: draw sides
           if(b->flags & UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight)
           {
-            Vec4F32 border_color = ui_color_from_tags_name(box->tags, str8_lit("border"));
+            Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
             Rng2F32 r = b->rect;
             F32 half_thickness = 1.f;
             F32 softness = 0.f;
@@ -8385,7 +8383,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: draw focus overlay
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
-            Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("focus"));
+            Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("focus"));
             color.w *= 0.09f*b->focus_hot_t;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8400,7 +8398,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               rect = pad_2f32(rect, 1.f);
               rect = intersect_2f32(window_rect, rect);
             }
-            Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("focus"));
+            Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("focus"));
             color.w *= b->focus_active_t;
             R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8453,11 +8451,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     }
     
     //- rjf: draw border/overlay color to signify error
-    if(ws->error_t > 0.01f)
+    if(ws->error_t > 0.01f) UI_TagF("bad")
     {
-      String8 tags[] = {str8_lit("bad")};
-      String8Array tags_array = {tags, ArrayCount(tags)};
-      Vec4F32 color = ui_color_from_tags_name(tags_array, str8_lit("text"));
+      Vec4F32 color = ui_color_from_name(str8_lit("text"));
       color.w *= ws->error_t;
       Rng2F32 rect = os_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);

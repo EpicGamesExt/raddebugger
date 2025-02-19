@@ -134,9 +134,9 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   F32 tab_size = box->tab_size;
-  Vec4F32 cursor_color = ui_color_from_tags_name(box->tags, str8_lit("cursor"));
+  Vec4F32 cursor_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("cursor"));
   cursor_color.w *= box->parent->parent->focus_active_t;
-  Vec4F32 select_color = ui_color_from_tags_name(box->tags, str8_lit("selection"));
+  Vec4F32 select_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("selection"));
   select_color.w *= 0.1f*(box->parent->parent->focus_active_t*0.2f + 0.8f);
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;

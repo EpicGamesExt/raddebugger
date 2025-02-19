@@ -1046,12 +1046,10 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   }
   
   // rjf: locked icon on frozen threads
-  if(u->is_frozen)
+  if(u->is_frozen) UI_TagF("bad")
   {
     F32 lock_icon_off = ui_top_font_size()*0.2f;
-    String8 tags[] = {str8_lit("bad")};
-    String8Array tags_array = {tags, ArrayCount(tags)};
-    Vec4F32 color = ui_color_from_tags_name(tags_array, str8_lit("text"));
+    Vec4F32 color = ui_color_from_name(str8_lit("text"));
     dr_text(rd_font_from_slot(RD_FontSlot_Icons),
             box->font_size, 0, 0, FNT_RasterFlag_Smooth,
             v2f32((box->rect.x0 + box->rect.x1)/2 + lock_icon_off/2,

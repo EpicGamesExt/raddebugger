@@ -440,7 +440,7 @@ struct UI_Box
   //- rjf: per-build equipment
   UI_Key key;
   UI_BoxFlags flags;
-  String8Array tags;
+  UI_Key tags_key;
   String8 string;
   UI_TextAlign text_align;
   Vec2F32 fixed_position;
@@ -646,12 +646,57 @@ struct UI_AnimSlot
 ////////////////////////////////
 //~ rjf: State Types
 
+//- rjf: cache for mapping 64-bit key -> array of tags
+
+typedef struct UI_TagsCacheNode UI_TagsCacheNode;
+struct UI_TagsCacheNode
+{
+  UI_TagsCacheNode *next;
+  UI_Key key;
+  String8Array tags;
+};
+
+typedef struct UI_TagsCacheSlot UI_TagsCacheSlot;
+struct UI_TagsCacheSlot
+{
+  UI_TagsCacheNode *first;
+  UI_TagsCacheNode *last;
+};
+
+typedef struct UI_TagsKeyStackNode UI_TagsKeyStackNode;
+struct UI_TagsKeyStackNode
+{
+  UI_TagsKeyStackNode *next;
+  UI_Key key;
+};
+
+//- rjf: cache for mapping 64-bit key * string -> theme pattern
+
+typedef struct UI_ThemePatternCacheNode UI_ThemePatternCacheNode;
+struct UI_ThemePatternCacheNode
+{
+  UI_ThemePatternCacheNode *next;
+  UI_Key key;
+  UI_ThemePattern *pattern;
+};
+
+typedef struct UI_ThemePatternCacheSlot UI_ThemePatternCacheSlot;
+struct UI_ThemePatternCacheSlot
+{
+  UI_ThemePatternCacheNode *first;
+  UI_ThemePatternCacheNode *last;
+};
+
+//- rjf: cache for mapping 64-bit key -> box
+
 typedef struct UI_BoxHashSlot UI_BoxHashSlot;
 struct UI_BoxHashSlot
 {
   UI_Box *hash_first;
   UI_Box *hash_last;
 };
+
+//- rjf: main state bundle
 
 typedef struct UI_State UI_State;
 struct UI_State
@@ -683,6 +728,12 @@ struct UI_State
   B32 tooltip_can_overflow_window;
   String8Array current_gen_tags;
   U64 current_gen_tags_gen;
+  UI_TagsKeyStackNode *tags_key_stack_top;
+  UI_TagsKeyStackNode *tags_key_stack_free;
+  U64 tags_cache_slots_count;
+  UI_TagsCacheSlot *tags_cache_slots;
+  U64 theme_pattern_cache_slots_count;
+  UI_ThemePatternCacheSlot *theme_pattern_cache_slots;
   
   //- rjf: build phase output
   UI_Box *root;
@@ -911,12 +962,12 @@ internal void              ui_set_auto_focus_hot_key(UI_Key key);
 internal UI_Palette *      ui_build_palette_(UI_Palette *base, UI_Palette *overrides);
 #define ui_build_palette(base, ...) ui_build_palette_((base), &(UI_Palette){.text = v4f32(0, 0, 0, 0), __VA_ARGS__})
 
-//- rjf: tag gathering
-internal String8Array      ui_top_tags(void);
+//- rjf: current style tags key
+internal UI_Key            ui_top_tags_key(void);
 
 //- rjf: theme color lookups
 internal Vec4F32           ui_color_from_name(String8 name);
-internal Vec4F32           ui_color_from_tags_name(String8Array tags, String8 name);
+internal Vec4F32           ui_color_from_tags_key_name(UI_Key key, String8 name);
 
 //- rjf: box node construction
 internal UI_Box *          ui_build_box_from_key(UI_BoxFlags flags, UI_Key key);
