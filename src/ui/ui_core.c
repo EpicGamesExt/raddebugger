@@ -1920,11 +1920,13 @@ ui_tooltip_begin_base(void)
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
   ui_push_palette(ui_bottom_palette());
   ui_push_tag(str8_lit("."));
+  ui_push_tag(str8_lit("floating"));
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
+  ui_pop_tag();
   ui_pop_tag();
   ui_pop_palette();
   ui_pop_text_raster_flags();
@@ -2010,7 +2012,7 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
   ui_push_tag(str8_lit("."));
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
-  if(is_open != 0)
+  if(is_open != 0) UI_TagF("floating")
   {
     ui_state->ctx_menu_touched_this_frame = 1;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_RoundChildrenByParent;
@@ -2021,6 +2023,7 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
+    ui_state->ctx_menu_root->tags = ui_top_tags();
     ui_state->ctx_menu_root->palette = ui_top_palette();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
     ui_spacer(ui_em(1.f, 1.f));

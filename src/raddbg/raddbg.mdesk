@@ -1050,7 +1050,7 @@ RD_ThemePresetTable:
       
       floating:
       {
-        background: 0x2222225f,
+        background: 0x1b1b1baf,
         background: alt: 0x0000005f,
         border: 0xbfbfbf1f,
         scroll_bar:

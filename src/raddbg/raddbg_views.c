@@ -2898,7 +2898,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                   RD_Font(RD_FontSlot_Code)
-                  UI_TagF(cell->kind == RD_WatchCellKind_Expr ? "weak" : "")
+                  UI_TagF("weak")
                 {
                   // rjf: cell has errors? -> build error box
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
