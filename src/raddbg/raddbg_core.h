@@ -419,18 +419,9 @@ struct RD_RegsNode
 ////////////////////////////////
 //~ rjf: Structured Theme Types, Parsed From Config
 
-typedef struct RD_ThemePattern RD_ThemePattern;
-struct RD_ThemePattern
-{
-  String8Array tags;
-  Vec4F32 linear;
-};
-
 typedef struct RD_Theme RD_Theme;
 struct RD_Theme
 {
-  RD_ThemePattern *patterns;
-  U64 patterns_count;
   Vec4F32 colors[RD_ThemeColor_COUNT];
 };
 
@@ -548,8 +539,8 @@ struct RD_WindowState
   B32 window_temporarily_focused_ipc;
   B32 window_layout_reset;
   
-  // rjf: theme
-  RD_Theme *theme;
+  // rjf: theme (recomputed each frame)
+  UI_Theme *theme;
   
   // rjf: config/settings
   UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme
@@ -1164,7 +1155,6 @@ internal String8 rd_push_search_string(Arena *arena);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal Vec4F32 rd_color_from_tags(String8Array tags, String8 name);
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);

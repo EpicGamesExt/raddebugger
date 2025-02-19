@@ -782,7 +782,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -844,6 +844,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   
   //- rjf: fill build phase parameters
   {
+    ui_state->theme = theme;
     ui_state->events = events;
     ui_state->window = window;
     ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= os_now_microseconds()) ? os_mouse_from_window(window) : v2f32(-100, -100);
@@ -2194,6 +2195,86 @@ ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
   return palette;
 }
 
+//- rjf: tag gathering
+
+internal String8Array
+ui_top_tags(void)
+{
+  if(ui_state->current_gen_tags_gen != ui_state->tag_stack.gen)
+  {
+    ui_state->current_gen_tags_gen = ui_state->tag_stack.gen;
+    Temp scratch = scratch_begin(0, 0);
+    String8List tags = {0};
+    for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
+    {
+      if(n->v.size == 1 && n->v.str[0] == '.')
+      {
+        break;
+      }
+      if(n->v.size != 0)
+      {
+        str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
+      }
+    }
+    ui_state->current_gen_tags = str8_array_from_list(ui_build_arena(), &tags);
+    scratch_end(scratch);
+  }
+  return ui_state->current_gen_tags;
+}
+
+//- rjf: theme color lookups
+
+internal Vec4F32
+ui_color_from_name(String8 name)
+{
+  Vec4F32 result = ui_color_from_tags_name(ui_top_tags(), name);
+  return result;
+}
+
+internal Vec4F32
+ui_color_from_tags_name(String8Array tags, String8 name)
+{
+  Vec4F32 result = {0};
+  {
+    UI_Theme *theme = ui_state->theme;
+    UI_ThemePattern *pattern = 0;
+    U64 best_match_count = 0;
+    for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
+    {
+      UI_ThemePattern *p = &theme->patterns[idx];
+      U64 match_count = 0;
+      B32 name_matches = 0;
+      for EachIndex(key_tags_idx, tags.count+1)
+      {
+        String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
+        for EachIndex(p_tags_idx, p->tags.count)
+        {
+          if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
+          {
+            name_matches = (key_tags_idx == tags.count);
+            match_count += 1;
+            break;
+          }
+        }
+      }
+      if(name_matches && match_count > best_match_count)
+      {
+        pattern = p;
+        best_match_count = match_count;
+      }
+      if(match_count == tags.count+1)
+      {
+        break;
+      }
+    }
+    if(pattern != 0)
+    {
+      result = pattern->linear;
+    }
+  }
+  return result;
+}
+
 //- rjf: box node construction
 
 internal UI_Box *
@@ -2354,26 +2435,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
-    if(ui_state->current_gen_tags_gen != ui_state->tag_stack.gen)
-    {
-      ui_state->current_gen_tags_gen = ui_state->tag_stack.gen;
-      Temp scratch = scratch_begin(0, 0);
-      String8List tags = {0};
-      for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
-      {
-        if(n->v.size == 1 && n->v.str[0] == '.')
-        {
-          break;
-        }
-        if(n->v.size != 0)
-        {
-          str8_list_push(ui_build_arena(), &tags, push_str8_copy(ui_build_arena(), n->v));
-        }
-      }
-      ui_state->current_gen_tags = str8_array_from_list(ui_build_arena(), &tags);
-      scratch_end(scratch);
-    }
-    box->tags = ui_state->current_gen_tags;
+    box->tags = ui_top_tags();
   }
   
   //- rjf: auto-pop all stacks
@@ -2445,13 +2507,13 @@ internal void
 ui_box_equip_display_string(UI_Box *box, String8 string)
 {
   ProfBeginFunction();
+  Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
-  UI_ColorCode text_color_code = (box->flags & UI_BoxFlag_DrawTextWeak ? UI_ColorCode_TextWeak : UI_ColorCode_Text);
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
+    DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
     DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
     box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
     box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
@@ -2465,16 +2527,16 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      DR_FStrNode pst_fstr_n = {0,                   {str8_skip(display_string, fpcp_pos+fpcp.size), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
-      DR_FStrNode cdp_fstr_n = {&pst_fstr_n, {str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 3.f, 0}}};
-      DR_FStrNode pre_fstr_n = {&cdp_fstr_n, {str8_prefix(display_string, fpcp_pos), {box->font, box->text_raster_flags, box->palette->colors[text_color_code], box->font_size, 0, 0}}};
+      DR_FStrNode pst_fstr_n = {0,                   {str8_skip(display_string, fpcp_pos+fpcp.size), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrNode cdp_fstr_n = {&pst_fstr_n, {str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), {box->font, box->text_raster_flags, text_color, box->font_size, 3.f, 0}}};
+      DR_FStrNode pre_fstr_n = {&cdp_fstr_n, {str8_prefix(display_string, fpcp_pos), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
       DR_FStrList fstrs = {&pre_fstr_n, &pst_fstr_n, 3};
       box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
       box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     else
     {
-      DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}}};
+      DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
       DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
       box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
       box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);

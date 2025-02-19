@@ -126,13 +126,13 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
+  F32 line_num_width_px = floor_f32(big_glyph_advance * (log10(visible_line_num_range.max) + 3));
   F32 priority_margin_width_px = 0;
   F32 catchall_margin_width_px = 0;
   if(flags & RD_CodeViewBuildFlag_Margins)
   {
-    priority_margin_width_px = big_glyph_advance*3.5f;
-    catchall_margin_width_px = big_glyph_advance*3.5f;
+    priority_margin_width_px = floor_f32(big_glyph_advance*3.5f);
+    catchall_margin_width_px = floor_f32(big_glyph_advance*3.5f);
   }
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, text_info, text_data, visible_line_num_range);
   
@@ -185,7 +185,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.margin_float_off_px       = scroll_pos.x.idx + scroll_pos.x.off;
+    code_slice_params.margin_float_off_px       = scroll_pos.x.idx + floor_f32(scroll_pos.x.off);
     
     // rjf: fill text info
     {
@@ -2792,7 +2792,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   ui_set_next_fixed_x(0);
                   ui_set_next_fixed_y(0);
                   ui_set_next_fixed_height(ui_top_font_size()*0.2f);
-                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary)));
+                  ui_set_next_tag(str8_lit("pop"));
                   ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
                 }
               }
@@ -2813,9 +2813,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     ui_set_next_fixed_x(0);
                     ui_set_next_fixed_y(row_height_px - ui_top_font_size()*0.5f);
                     ui_set_next_fixed_height(ui_top_font_size()*1.f);
-                    Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
-                    boundary_color.w *= 0.5f;
-                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
+                    ui_set_next_tag(str8_lit("pop"));
+                    ui_set_next_transparency(0.5f);
                     ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
                   }
                 }
@@ -2841,14 +2840,17 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 ProfBegin("determine cell's palette");
                 UI_BoxFlags cell_flags = 0;
                 UI_Palette *palette = ui_top_palette();
+                String8 cell_tag = {0};
                 {
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored)
                   {
                     cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBad;
+                    cell_tag = str8_lit("bad");
                   }
                   else if(cell_info.inheritance_tooltip.size != 0)
                   {
                     cell_flags |= UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawPop;
+                    cell_tag = str8_lit("pop");
                   }
                   else if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
                           rd_state->hover_regs_slot == RD_RegSlot_Cfg)
@@ -2896,6 +2898,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                   RD_Font(RD_FontSlot_Code)
+                  UI_TagF(cell->kind == RD_WatchCellKind_Expr ? "weak" : "")
                 {
                   // rjf: cell has errors? -> build error box
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
@@ -3148,7 +3151,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1)) UI_TextPadding(0)
                     {
                       ui_labelf("Inherited from ");
-                      RD_Font(RD_FontSlot_Code) rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), cell_info.inheritance_tooltip);
+                      RD_Font(RD_FontSlot_Code) rd_code_label(1.f, 0, ui_color_from_name(str8_lit("code_default")), cell_info.inheritance_tooltip);
                     }
                   }
                   
@@ -4099,7 +4102,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
     
     //- rjf: fill unwind frame annotations
-    if(unwind.frames.count != 0)
+    if(unwind.frames.count != 0) UI_Tag(str8_lit("weak"))
     {
       U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, unwind.frames.v[0].regs);
       for(U64 idx = 1; idx < unwind.frames.count; idx += 1)
@@ -4119,7 +4122,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");
-          annotation->color = symbol_name.size != 0 ? rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol) : ui_top_palette()->text_weak;
+          annotation->color = symbol_name.size != 0 ? ui_color_from_name(str8_lit("code_symbol")) : ui_color_from_name(str8_lit("text"));
           annotation->vaddr_range = frame_vaddr_range;
           for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
           {
@@ -4157,14 +4160,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       DI_Scope *scope = di_scope_open();
       Vec4F32 color_gen_table[] =
       {
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread0),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread1),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread2),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread3),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread4),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread5),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread6),
-        rd_rgba_from_theme_color(RD_ThemeColor_Thread7),
+        ui_color_from_name(str8_lit("code_local")),
       };
       U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
       for(E_String2NumMapNode *n = e_parse_state->ctx->locals_map->first; n != 0; n = n->order_next)
@@ -4388,8 +4384,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       if(row_range_bytes.min%64 == 0)
       {
         row_is_boundary = 1;
-        Vec4F32 row_boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
-        ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = row_boundary_color));
+        ui_set_next_tag(str8_lit("pop"));
       }
       UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop*!!row_is_boundary, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
@@ -4487,7 +4482,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                   }
                   if(a->type_string.size != 0)
                   {
-                    rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeType), a->type_string);
+                    rd_code_label(1.f, 1, ui_color_from_name(str8_lit("code_type")), a->type_string);
                   }
                   UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
                   if(a->next != 0)

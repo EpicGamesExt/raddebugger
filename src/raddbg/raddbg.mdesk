@@ -989,20 +989,32 @@ RD_ThemePresetTable:
     {
       background: 0x1b1b1bff,
       alt: background: 0x222222ff,
-      good_pop: background: 0x2c5b36ff,
-      bad_pop: background: 0x803425ff,
-      good: text: 0x32a852ff,
-      bad: text: 0xcf5242ff,
       pop: background: 0x355b6eff,
       border: 0x404040ff,
       text: 0xe5e5e5ff,
-      weak: text: 0xe5e5e5ff,
+      weak: text: 0xa4a4a4ff,
+      good: text: 0x32a852ff,
+      bad: text: 0xcf5242ff,
       hover: 0xffffffff,
       focus: 0xfda200ff,
       cursor: 0x8aff00ff,
       selection: 0x99ccffff,
       inactive: background: 0x0000002f,
       drop_shadow: 0x0000007f,
+      
+      good_pop:
+      {
+        background: 0x2c5b36ff,
+        border: 0x568761ff,
+        hover: 0xe3f5d3ff,
+        weak: text: 0xe3f5d3ff,
+      }
+      
+      bad_pop:
+      {
+        background: 0x803425ff,
+        hover: 0xff825cff,
+      }
       
       code_default: 0xcbcbcbff,
       code_symbol: 0x42a2cfff,
@@ -1039,32 +1051,19 @@ RD_ThemePresetTable:
       floating:
       {
         background: 0x2222225f,
-        background: alt: 0x2222225f,
+        background: alt: 0x0000005f,
         border: 0xbfbfbf1f,
+        scroll_bar:
+        {
+          background: 0x3b3b3b5f,
+          border: 0x5f5f5f5f,
+        }
       }
       
       menu_bar:
       {
         background: 0x2b3740ff,
         border: 0x3e4c57ff,
-      }
-      
-      good:
-      {
-        background: 0x2c5b36ff,
-        border: 0x3f3f3fff,
-      }
-      
-      bad:
-      {
-        background: 0x803425ff,
-        border: 0xe88774ff,
-      }
-      
-      pop:
-      {
-        background: 0x355b6eff,
-        border: 0x355b6eff,
       }
       
       scroll_bar:

@@ -2105,10 +2105,15 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     String8 expr_string = rd_expr_from_cfg(cfg);
     String8 collection_name = {0};
     String8 file_path = {0};
-    Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
+    Vec4F32 rgba = rd_color_from_cfg(cfg);
     if(rgba.w == 0)
     {
-      rgba = ui_top_palette()->text;
+      rgba = ui_color_from_name(str8_lit("text"));
+    }
+    Vec4F32 rgba_secondary = rgba;
+    UI_TagF("weak")
+    {
+      rgba_secondary = ui_color_from_name(str8_lit("text"));
     }
     RD_IconKind icon_kind = rd_icon_kind_from_code_name(cfg->string);
     B32 is_from_command_line = 0;
@@ -2172,19 +2177,19 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     //
     DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), rgba, ui_top_font_size()};
     B32 running_is_secondary = 0;
-#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = ui_top_palette()->text_weak; params.size = ui_top_font_size()*0.95f;}
+#define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = rgba_secondary; params.size = ui_top_font_size()*0.95f;}
     
     //- rjf: push icon
     if(icon_kind != RD_IconKind_Null)
     {
-      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[icon_kind], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
     //- rjf: push warning icon for command-line entities
     if(is_from_command_line)
     {
-      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Info], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Info], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
@@ -2702,11 +2707,11 @@ rd_color_from_ctrl_entity(CTRL_Entity *entity)
       CTRL_Entity *main_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
       if(main_thread != entity)
       {
-        result = rd_color_from_tags(str8_array_zero(), str8_lit("thread_1"));
+        result = ui_color_from_name(str8_lit("thread_1"));
       }
       else
       {
-        result = rd_color_from_tags(str8_array_zero(), str8_lit("thread_0"));
+        result = ui_color_from_name(str8_lit("thread_0"));
       }
     }break;
   }
@@ -2813,7 +2818,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   //- rjf: threads get callstack extras
   if(entity->kind == CTRL_EntityKind_Thread && include_extras)
   {
-    Vec4F32 symbol_color = rd_color_from_tags(str8_array_zero(), str8_lit("code_symbol"));
+    Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
@@ -4585,7 +4590,7 @@ rd_window_frame(void)
     struct ThemePatternNode
     {
       ThemePatternNode *next;
-      RD_ThemePattern pattern;
+      UI_ThemePattern pattern;
     };
     ThemePatternNode *first_pattern = 0;
     ThemePatternNode *last_pattern = 0;
@@ -4616,9 +4621,9 @@ rd_window_frame(void)
     }
     
     //- rjf: convert to final pattern array
-    ws->theme = push_array(rd_frame_arena(), RD_Theme, 1);
+    ws->theme = push_array(rd_frame_arena(), UI_Theme, 1);
     ws->theme->patterns_count = pattern_count;
-    ws->theme->patterns = push_array(rd_frame_arena(), RD_ThemePattern, ws->theme->patterns_count);
+    ws->theme->patterns = push_array(rd_frame_arena(), UI_ThemePattern, ws->theme->patterns_count);
     {
       U64 idx = 0;
       for(ThemePatternNode *n = first_pattern; n != 0; n = n->next, idx += 1)
@@ -4797,7 +4802,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       }
       
       // rjf: begin & push initial stack values
-      ui_begin_build(ws->os, &ws->ui_events, &icon_info, &widget_palette_info, &animation_info, rd_state->frame_dt, rd_state->frame_dt);
+      ui_begin_build(ws->os, &ws->ui_events, &icon_info, ws->theme, &widget_palette_info, &animation_info, rd_state->frame_dt, rd_state->frame_dt);
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_text_padding(main_font_size*0.3f);
@@ -4940,7 +4945,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           // rjf: unwind
           if(ctrl_entity->kind == CTRL_EntityKind_Thread)
           {
-            Vec4F32 symbol_color = rd_color_from_tags(str8_array_zero(), str8_lit("code_symbol"));
+            Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
             CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
@@ -5977,254 +5982,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             }
 #endif
           }break;
-          
-          //////////////////////
-          //- rjf: ctrl entities
-          //
-          case RD_RegSlot_Machine:     ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine);     goto ctrl_entity_title;
-          case RD_RegSlot_Process:     ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->process);     goto ctrl_entity_title;
-          case RD_RegSlot_Module:      ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->module);      goto ctrl_entity_title;
-          case RD_RegSlot_Thread:      ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);      goto ctrl_entity_title;
-          case RD_RegSlot_CtrlEntity:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->ctrl_entity); goto ctrl_entity_title;
-          ctrl_entity_title:;
-          {
-#if 0 // TODO(rjf): @cfg
-            //- rjf: title
-            UI_Row
-              UI_PrefWidth(ui_text_dim(5, 1))
-              UI_TextAlignment(UI_TextAlign_Center)
-              UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-              DR_FStrList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, 0);
-              UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-              ui_box_equip_display_fstrs(title_box, &fstrs);
-              if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-              {
-                ui_spacer(ui_em(0.5f, 1.f));
-                UI_FontSize(ui_top_font_size() - 1.f)
-                  UI_CornerRadius(ui_top_font_size()*0.5f)
-                  UI_TextPadding(ui_top_font_size()*0.5f)
-                {
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(string_from_arch(ctrl_entity->arch));
-                  ui_spacer(ui_em(0.5f, 1.f));
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)ctrl_entity->id);
-                }
-              }
-            }
-            
-            ui_divider(ui_em(1.f, 1.f));
-            
-            //- rjf: name editor
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-#if 0 // TODO(rjf): @cfg
-              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, ctrl_entity->string, "Name###ctrl_entity_string_edit_%p", ctrl_entity);
-              if(ui_committed(sig))
-              {
-                rd_cmd(RD_CmdKind_SetEntityName, .ctrl_entity = ctrl_entity->handle, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
-              }
-#endif
-            }
-            
-            // rjf: copy full path
-            if(ctrl_entity->kind == CTRL_EntityKind_Module) if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Full Path")))
-            {
-              os_set_clipboard_text(ctrl_entity->string);
-              ui_ctx_menu_close();
-            }
-            
-            // rjf: copy ID
-            if((ctrl_entity->kind == CTRL_EntityKind_Thread ||
-                ctrl_entity->kind == CTRL_EntityKind_Process) &&
-               ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy ID")))
-            {
-              String8 string = str8_from_u64(scratch.arena, ctrl_entity->id, 10, 0, 0);
-              os_set_clipboard_text(string);
-              ui_ctx_menu_close();
-            }
-            
-            // rjf: find
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-            {
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Find")))
-              {
-                rd_cmd(RD_CmdKind_FindThread, .thread = ctrl_entity->handle);
-                ui_ctx_menu_close();
-              }
-            }
-            
-            // rjf: selection
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-            {
-              B32 is_selected = ctrl_handle_match(rd_base_regs()->thread, ctrl_entity->handle);
-              if(is_selected)
-              {
-                rd_icon_buttonf(RD_IconKind_Thread, 0, "[Selected]###select_entity");
-              }
-              else if(ui_clicked(rd_icon_buttonf(RD_IconKind_Thread, 0, "Select###select_entity")))
-              {
-                rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
-                ui_ctx_menu_close();
-              }
-            }
-            
-            // rjf: freezing
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
-               ctrl_entity->kind == CTRL_EntityKind_Process ||
-               ctrl_entity->kind == CTRL_EntityKind_Machine)
-            {
-              B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
-              ui_set_next_palette(rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton));
-              if(is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Locked, 0, "Thaw###freeze_thaw")))
-              {
-                rd_cmd(RD_CmdKind_ThawThread, .ctrl_entity = ctrl_entity->handle);
-              }
-              if(!is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
-              {
-                rd_cmd(RD_CmdKind_FreezeThread, .ctrl_entity = ctrl_entity->handle);
-              }
-            }
-            
-            // rjf: callstack
-#if 0
-            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread) UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-              DI_Scope *di_scope = di_scope_open();
-              CTRL_Entity *thread = ctrl_entity;
-              CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-              CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-              CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
-              for(U64 idx = 0; idx < rich_unwind.concrete_frame_count; idx += 1)
-              {
-                CTRL_CallStackFrame *f = &rich_unwind.frames[idx];
-                RDI_Parsed *rdi = f->rdi;
-                RDI_Procedure *procedure = f->procedure;
-                U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, f->regs);
-                CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-                String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
-                
-                // rjf: inline frames
-                for(CTRL_CallStackInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
-                {
-                  UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_ClickToFocus, "###callstack_row_%I64x", idx);
-                  UI_Signal sig = ui_signal_from_box(row);
-                  ui_push_parent(row);
-                  String8 name = {0};
-                  name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
-                  UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(16.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
-                  if(name.size != 0)
-                  {
-                    RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
-                    {
-                      rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
-                    }
-                  }
-                  else
-                  {
-                    RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
-                  }
-                  ui_pop_parent();
-                }
-                
-                // rjf: concrete frame
-                {
-                  UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_ClickToFocus, "###callstack_row_%I64x", idx);
-                  UI_Signal sig = ui_signal_from_box(row);
-                  ui_push_parent(row);
-                  String8 name = {0};
-                  name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                  UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(16.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-                  if(name.size != 0)
-                  {
-                    RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
-                    {
-                      rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
-                    }
-                  }
-                  else
-                  {
-                    RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
-                  }
-                  ui_pop_parent();
-                }
-              }
-              di_scope_close(di_scope);
-            }
-#endif
-            
-            // rjf: color editor
-#if 0
-            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-            {
-              UI_Padding(ui_em(1.5f, 1.f))
-              {
-                ui_set_next_pref_height(ui_em(9.f, 1.f));
-                UI_Row UI_Padding(ui_pct(1, 0))
-                {
-                  UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f)) UI_Column UI_PrefHeight(ui_em(1.5f, 0.f))
-                  {
-                    Vec4F32 presets[] =
-                    {
-                      v4f32(1.0f, 0.2f, 0.1f, 1.0f),
-                      v4f32(1.0f, 0.8f, 0.2f, 1.0f),
-                      v4f32(0.3f, 0.8f, 0.2f, 1.0f),
-                      v4f32(0.1f, 0.8f, 0.4f, 1.0f),
-                      v4f32(0.1f, 0.6f, 0.8f, 1.0f),
-                      v4f32(0.5f, 0.3f, 0.8f, 1.0f),
-                      v4f32(0.8f, 0.3f, 0.5f, 1.0f),
-                    };
-                    UI_CornerRadius(ui_em(0.3f, 1.f).value)
-                      for(U64 preset_idx = 0; preset_idx < ArrayCount(presets); preset_idx += 1)
-                    {
-                      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = presets[preset_idx]));
-                      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
-                                                              UI_BoxFlag_DrawBorder|
-                                                              UI_BoxFlag_Clickable|
-                                                              UI_BoxFlag_DrawHotEffects|
-                                                              UI_BoxFlag_DrawActiveEffects,
-                                                              "###color_preset_%i", (int)preset_idx);
-                      UI_Signal sig = ui_signal_from_box(box);
-                      if(ui_clicked(sig))
-                      {
-                        Vec3F32 hsv = hsv_from_rgb(v3f32(presets[preset_idx].x, presets[preset_idx].y, presets[preset_idx].z));
-                        Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, 1);
-                        entity->color_hsva = hsva;
-                      }
-                      ui_spacer(ui_em(0.3f, 1.f));
-                    }
-                  }
-                  
-                  ui_spacer(ui_em(0.75f, 1.f));
-                  
-                  UI_PrefWidth(ui_em(9.f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f))
-                  {
-                    ui_sat_val_pickerf(entity->color_hsva.x, &entity->color_hsva.y, &entity->color_hsva.z, "###ent_satval_picker");
-                  }
-                  
-                  ui_spacer(ui_em(0.75f, 1.f));
-                  
-                  UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f))
-                    ui_hue_pickerf(&entity->color_hsva.x, entity->color_hsva.y, entity->color_hsva.z, "###ent_hue_picker");
-                }
-              }
-              
-              UI_Row UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_CornerRadius(8.f) UI_TextAlignment(UI_TextAlign_Center)
-                RD_Palette(RD_PaletteCode_Floating)
-              {
-                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Trash, 0, "Remove Color###color_toggle")))
-                {
-                  entity->flags &= ~RD_EntityFlag_HasColor;
-                }
-              }
-              
-              ui_spacer(ui_em(1.5f, 1.f));
-            }
-#endif
-#endif
-          }break;
         }
       }
       
@@ -6777,7 +6534,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           if(can_play || !have_targets || processes.count == 0)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            UI_TagF(can_play ? "good" : "")
+            UI_TagF(can_play ? "good" : "weak")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Play]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6840,6 +6597,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: pause button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
+            UI_TagF("weak")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Pause]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6865,7 +6623,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: stop button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            UI_TagF(can_stop ? "bad" : "")
+            UI_TagF(can_stop ? "bad" : "weak")
           {
             UI_Signal sig = {0};
             {
@@ -6894,6 +6652,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: step over button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
+            UI_TagF("weak")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOver]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6922,6 +6681,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: step into button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
+            UI_TagF("weak")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepInto]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -6950,6 +6710,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           
           //- rjf: step out button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+            UI_TagF("weak")
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOut]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -7282,10 +7043,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     {
       B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
       CTRL_Event stop_event = d_ctrl_last_stop_event();
-      UI_Palette *positive_scheme = rd_palette_from_code(RD_PaletteCode_Good);
-      UI_Palette *running_scheme  = rd_palette_from_code(RD_PaletteCode_Pop);
-      UI_Palette *negative_scheme = rd_palette_from_code(RD_PaletteCode_Bad);
-      UI_Palette *palette = running_scheme;
+      String8 tag = str8_lit("pop");
       if(!is_running)
       {
         switch(stop_event.cause)
@@ -7293,32 +7051,19 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           default:
           case CTRL_EventCause_Finished:
           {
-            palette = positive_scheme;
+            tag = str8_lit("good_pop");
           }break;
           case CTRL_EventCause_UserBreakpoint:
           case CTRL_EventCause_InterruptedByException:
           case CTRL_EventCause_InterruptedByTrap:
           case CTRL_EventCause_InterruptedByHalt:
           {
-            palette = negative_scheme;
+            tag = str8_lit("bad_pop");
           }break;
         }
       }
-      if(ws->error_t > 0.01f)
-      {
-        UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
-        MemoryCopyStruct(blended_scheme, palette);
-        for EachEnumVal(UI_ColorCode, code)
-        {
-          for(U64 idx = 0; idx < 4; idx += 1)
-          {
-            blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * ws->error_t;
-          }
-        }
-        palette = blended_scheme;
-      }
       UI_Flags(UI_BoxFlag_DrawBackground) UI_CornerRadius(0)
-        UI_Palette(palette)
+        UI_Tag(tag)
         UI_Pane(bottom_bar_rect, str8_lit("###bottom_bar")) UI_WidthFill UI_Row
         UI_Flags(0)
       {
@@ -8686,9 +8431,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     
     //- rjf: unpack settings
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
-    Vec4F32 base_background_color = rd_color_from_tags(str8_array_zero(), str8_lit("background"));
-    Vec4F32 base_border_color = rd_color_from_tags(str8_array_zero(), str8_lit("border"));
-    Vec4F32 drop_shadow_color = rd_color_from_tags(str8_array_zero(), str8_lit("drop_shadow"));
+    Vec4F32 base_background_color = ui_color_from_name(str8_lit("background"));
+    Vec4F32 base_border_color = ui_color_from_name(str8_lit("border"));
+    Vec4F32 drop_shadow_color = ui_color_from_name(str8_lit("drop_shadow"));
     
     //- rjf: set up heatmap buckets
     F32 heatmap_bucket_size = 32.f;
@@ -8779,7 +8524,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       Vec4F32 box_background_color = {0};
       if(box->flags & UI_BoxFlag_DrawBackground)
       {
-        box_background_color = rd_color_from_tags(box->tags, str8_lit("background"));
+        box_background_color = ui_color_from_tags_name(box->tags, str8_lit("background"));
       }
       
       // rjf: draw background
@@ -8801,7 +8546,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         // rjf: hot effect extension
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
-          Vec4F32 hover_color = rd_color_from_tags(box->tags, str8_lit("hover"));
+          Vec4F32 hover_color = ui_color_from_tags_name(box->tags, str8_lit("hover"));
           
           // rjf: brighten
           {
@@ -8901,7 +8646,9 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         dr_truncated_fancy_run_list(text_position, &box->display_fruns, max_x, ellipses_run);
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
         {
-          Vec4F32 match_color = box->palette->background_pop;
+          String8 tags[] = {str8_lit("pop")};
+          String8Array tags_array = {tags, ArrayCount(tags)};
+          Vec4F32 match_color = ui_color_from_tags_name(tags_array, str8_lit("background"));
           dr_truncated_fancy_run_fuzzy_matches(text_position, &box->display_fruns, max_x, &box->fuzzy_match_ranges, match_color);
         }
       }
@@ -8988,17 +8735,10 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             dr_pop_clip();
           }
           
-          // rjf: draw overlay
-          if(b->flags & UI_BoxFlag_DrawOverlay)
-          {
-            R_Rect2DInst *inst = dr_rect(b->rect, b->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
-            MemoryCopyArray(inst->corner_radii, b->corner_radii);
-          }
-          
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
-            Vec4F32 border_color = rd_color_from_tags(box->tags, str8_lit("border"));
+            Vec4F32 border_color = ui_color_from_tags_name(box->tags, str8_lit("border"));
             Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
             R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -9006,7 +8746,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
             // rjf: hover effect
             if(b->flags & UI_BoxFlag_DrawHotEffects)
             {
-              Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("hover"));
+              Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("hover"));
               color.w *= b->hot_t;
               R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
               inst->colors[Corner_01].w *= 0.2f;
@@ -9023,32 +8763,34 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
           }
           
           // rjf: draw sides
+          if(b->flags & UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight)
           {
+            Vec4F32 border_color = ui_color_from_tags_name(box->tags, str8_lit("border"));
             Rng2F32 r = b->rect;
             F32 half_thickness = 1.f;
             F32 softness = 0.f;
             if(b->flags & UI_BoxFlag_DrawSideTop)
             {
-              dr_rect(r2f32p(r.x0, r.y0, r.x1, r.y0+2*half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y0, r.x1, r.y0+2*half_thickness), border_color, 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideBottom)
             {
-              dr_rect(r2f32p(r.x0, r.y1-2*half_thickness, r.x1, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y1-2*half_thickness, r.x1, r.y1), border_color, 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideLeft)
             {
-              dr_rect(r2f32p(r.x0, r.y0, r.x0+2*half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y0, r.x0+2*half_thickness, r.y1), border_color, 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideRight)
             {
-              dr_rect(r2f32p(r.x1-2*half_thickness, r.y0, r.x1, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x1-2*half_thickness, r.y0, r.x1, r.y1), border_color, 0, 0, softness);
             }
           }
           
           // rjf: draw focus overlay
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
-            Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("focus"));
+            Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("focus"));
             color.w *= 0.09f*b->focus_hot_t;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -9063,7 +8805,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
               rect = pad_2f32(rect, 1.f);
               rect = intersect_2f32(window_rect, rect);
             }
-            Vec4F32 color = rd_color_from_tags(box->tags, str8_lit("focus"));
+            Vec4F32 color = ui_color_from_tags_name(box->tags, str8_lit("focus"));
             color.w *= b->focus_active_t;
             R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -9120,7 +8862,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
     {
       String8 tags[] = {str8_lit("bad")};
       String8Array tags_array = {tags, ArrayCount(tags)};
-      Vec4F32 color = rd_color_from_tags(tags_array, str8_lit("text"));
+      Vec4F32 color = ui_color_from_tags_name(tags_array, str8_lit("text"));
       color.w *= ws->error_t;
       Rng2F32 rect = os_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
@@ -10590,52 +10332,6 @@ rd_push_search_string(Arena *arena)
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-
-internal Vec4F32
-rd_color_from_tags(String8Array tags, String8 name)
-{
-  Vec4F32 result = {0};
-  {
-    RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-    RD_WindowState *ws = rd_window_state_from_cfg(window);
-    RD_Theme *theme = ws->theme;
-    RD_ThemePattern *pattern = 0;
-    U64 best_match_count = 0;
-    for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
-    {
-      RD_ThemePattern *p = &theme->patterns[idx];
-      U64 match_count = 0;
-      B32 name_matches = 0;
-      for EachIndex(key_tags_idx, tags.count+1)
-      {
-        String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
-        for EachIndex(p_tags_idx, p->tags.count)
-        {
-          if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
-          {
-            name_matches = (key_tags_idx == tags.count);
-            match_count += 1;
-            break;
-          }
-        }
-      }
-      if(name_matches && match_count > best_match_count)
-      {
-        pattern = p;
-        best_match_count = match_count;
-      }
-      if(match_count == tags.count+1)
-      {
-        break;
-      }
-    }
-    if(pattern != 0)
-    {
-      result = pattern->linear;
-    }
-  }
-  return result;
-}
 
 internal Vec4F32
 rd_rgba_from_theme_color(RD_ThemeColor color)

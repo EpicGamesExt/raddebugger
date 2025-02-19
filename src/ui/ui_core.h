@@ -217,6 +217,23 @@ struct UI_Size
 };
 
 ////////////////////////////////
+//~ rjf: Themes
+
+typedef struct UI_ThemePattern UI_ThemePattern;
+struct UI_ThemePattern
+{
+  String8Array tags;
+  Vec4F32 linear;
+};
+
+typedef struct UI_Theme UI_Theme;
+struct UI_Theme
+{
+  UI_ThemePattern *patterns;
+  U64 patterns_count;
+};
+
+////////////////////////////////
 //~ rjf: Palettes
 
 typedef enum UI_ColorCode
@@ -679,6 +696,7 @@ struct UI_State
   
   //- rjf: build parameters
   UI_IconInfo icon_info;
+  UI_Theme *theme;
   UI_WidgetPaletteInfo widget_palette_info;
   UI_AnimationInfo animation_info;
   OS_Handle window;
@@ -850,7 +868,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis);
@@ -892,6 +910,13 @@ internal void              ui_set_auto_focus_hot_key(UI_Key key);
 //- rjf: palette forming
 internal UI_Palette *      ui_build_palette_(UI_Palette *base, UI_Palette *overrides);
 #define ui_build_palette(base, ...) ui_build_palette_((base), &(UI_Palette){.text = v4f32(0, 0, 0, 0), __VA_ARGS__})
+
+//- rjf: tag gathering
+internal String8Array      ui_top_tags(void);
+
+//- rjf: theme color lookups
+internal Vec4F32           ui_color_from_name(String8 name);
+internal Vec4F32           ui_color_from_tags_name(String8Array tags, String8 name);
 
 //- rjf: box node construction
 internal UI_Box *          ui_build_box_from_key(UI_BoxFlags flags, UI_Key key);

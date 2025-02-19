@@ -134,10 +134,10 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   F32 tab_size = box->tab_size;
-  Vec4F32 cursor_color = box->palette->colors[UI_ColorCode_Cursor];
+  Vec4F32 cursor_color = ui_color_from_tags_name(box->tags, str8_lit("cursor"));
   cursor_color.w *= box->parent->parent->focus_active_t;
-  Vec4F32 select_color = box->palette->colors[UI_ColorCode_Selection];
-  select_color.w *= (box->parent->parent->focus_active_t*0.2f + 0.8f);
+  Vec4F32 select_color = ui_color_from_tags_name(box->tags, str8_lit("selection"));
+  select_color.w *= 0.1f*(box->parent->parent->focus_active_t*0.2f + 0.8f);
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
   TxtPt cursor = draw_data->cursor;
@@ -1213,6 +1213,7 @@ internal UI_ScrollPt
 ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices)
 {
   ui_push_palette(ui_state->widget_palette_info.scrollbar_palette);
+  ui_push_tag(str8_lit("scroll_bar"));
   
   //- rjf: unpack
   S64 idx_range_dim = Max(dim_1s64(idx_range), 1);
@@ -1332,6 +1333,7 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
     }
   }
   
+  ui_pop_tag();
   ui_pop_palette();
   return new_pt;
 }
