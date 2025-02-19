@@ -218,10 +218,13 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
       
       // rjf: push qualifiers
-      for(String8Node *n = qualifiers.first; n != 0; n = n->next)
+      if(qualifiers.node_count != 0) UI_TagF("weak")
       {
-        String8 string = push_str8f(arena, "<%S> ", n->string);
-        dr_fstrs_push_new(arena, &result, &params, string, .color = ui_top_palette()->text_weak);
+        for(String8Node *n = qualifiers.first; n != 0; n = n->next)
+        {
+          String8 string = push_str8f(arena, "<%S> ", n->string);
+          dr_fstrs_push_new(arena, &result, &params, string, .color = ui_color_from_name(str8_lit("text")));
+        }
       }
       
       // rjf: push file name
@@ -307,7 +310,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       if(src_string.size == 0)
       {
         src_string = str8_lit("(type)");
-        src_color = ui_top_palette()->text_weak;
+        src_color = rgba_secondary;
         dr_fstrs_push_new(arena, &src_fstrs, &params, src_string, .color = src_color);
       }
       else RD_Font(RD_FontSlot_Code)
@@ -317,7 +320,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       if(dst_string.size == 0)
       {
         dst_string = str8_lit("(view rule)");
-        dst_color = ui_top_palette()->text_weak;
+        dst_color = rgba_secondary;
         dr_fstrs_push_new(arena, &dst_fstrs, &params, dst_string, .color = dst_color);
       }
       else RD_Font(RD_FontSlot_Code)
@@ -326,7 +329,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
       dr_fstrs_concat_in_place(&result, &src_fstrs);
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
       dr_fstrs_concat_in_place(&result, &dst_fstrs);
     }
@@ -341,16 +344,16 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       if(src_string.size == 0)
       {
         src_string = str8_lit("(source path)");
-        src_color = ui_top_palette()->text_weak;
+        src_color = rgba_secondary;
       }
       if(dst_string.size == 0)
       {
         dst_string = str8_lit("(destination path)");
-        dst_color = ui_top_palette()->text_weak;
+        dst_color = rgba_secondary;
       }
       dr_fstrs_push_new(arena, &result, &params, src_string, .color = src_color);
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_top_palette()->text_weak);
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
       dr_fstrs_push_new(arena, &result, &params, dst_string, .color = dst_color);
     }
@@ -373,7 +376,11 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   {
     color = ui_color_from_name(str8_lit("text"));
   }
-  Vec4F32 secondary_color = ui_top_palette()->text_weak;
+  Vec4F32 secondary_color = color;
+  UI_TagF("weak")
+  {
+    secondary_color = ui_color_from_name(str8_lit("text"));
+  }
   String8 name = rd_name_from_ctrl_entity(arena, entity);
   RD_IconKind icon_kind = RD_IconKind_Null;
   B32 name_is_code = 0;
@@ -688,21 +695,10 @@ rd_cmd_binding_buttons(String8 name)
       }
     }
     
-    //- rjf: form color palette
-    UI_Palette *palette = ui_top_palette();
-    if(has_conflicts)
-    {
-      palette = rd_palette_from_code(RD_PaletteCode_Bad);
-    }
-    if(rebinding_active_for_this_binding)
-    {
-      palette = rd_palette_from_code(RD_PaletteCode_Pop);
-    }
-    
     //- rjf: build box
+    ui_set_next_tag(has_conflicts ? str8_lit("bad_pop") : rebinding_active_for_this_binding ? str8_lit("pop") : str8_zero());
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
-    ui_set_next_palette(palette);
     ui_set_next_group_key(ui_key_zero());
     ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
@@ -754,7 +750,7 @@ rd_cmd_binding_buttons(String8 name)
     //- rjf: delete button
     if(rebinding_active_for_this_binding)
       UI_PrefWidth(ui_em(2.5f, 1.f))
-      RD_Palette(RD_PaletteCode_Bad)
+      UI_TagF("bad_pop")
     {
       ui_set_next_group_key(ui_key_zero());
       UI_Signal sig = rd_icon_button(RD_IconKind_X, 0, str8_lit("###delete_binding"));
@@ -774,18 +770,12 @@ rd_cmd_binding_buttons(String8 name)
                             str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                             rd_state->bind_change_binding.key == OS_Key_Null &&
                             rd_state->bind_change_binding.modifiers == 0);
-  UI_Palette *palette = ui_top_palette();
-  if(adding_new_binding)
-  {
-    palette = rd_palette_from_code(RD_PaletteCode_Pop);
-  }
-  RD_Font(RD_FontSlot_Icons) UI_Palette(palette)
+  RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "")
   {
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
     ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
-    ui_set_next_palette(palette);
     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                             UI_BoxFlag_Clickable|
                                             UI_BoxFlag_DrawActiveEffects|
@@ -1153,6 +1143,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 do_thread_glow = rd_setting_b32_from_name(str8_lit("thread_glow"));
   B32 do_bp_lines = rd_setting_b32_from_name(str8_lit("breakpoint_lines"));
   B32 do_bp_glow = rd_setting_b32_from_name(str8_lit("breakpoint_glow"));
+  Vec4F32 pop_color = {0};
+  UI_TagF("pop")
+  {
+    pop_color = ui_color_from_name(str8_lit("background"));
+  }
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -1180,17 +1175,20 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   Vec4F32 *line_bg_colors = push_array(scratch.arena, Vec4F32, dim_1s64(params->line_num_range)+1);
   {
     //- rjf: color line with stopper-thread red
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
-        line_num += 1, line_idx += 1)
+    UI_TagF("bad_pop")
     {
-      CTRL_EntityList threads = params->line_ips[line_idx];
-      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+      U64 line_idx = 0;
+      for(S64 line_num = params->line_num_range.min;
+          line_num < params->line_num_range.max;
+          line_num += 1, line_idx += 1)
       {
-        if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+        CTRL_EntityList threads = params->line_ips[line_idx];
+        for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
         {
-          line_bg_colors[line_idx] = ui_top_palette()->background_bad;
+          if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+          {
+            line_bg_colors[line_idx] = ui_color_from_name(str8_lit("background"));
+          }
         }
       }
     }
@@ -1276,8 +1274,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
+            ui_set_next_text_color(color);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
@@ -1430,8 +1428,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
+            ui_set_next_text_color(color);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_catchall_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
@@ -1545,8 +1543,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_rgba));
             ui_set_next_text_alignment(UI_TextAlign_Center);
+            ui_set_next_text_color(bp_rgba);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DisableTextTrunc,
@@ -1608,8 +1606,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
+            ui_set_next_text_color(color);
             UI_Box *pin_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                         UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                         UI_BoxFlag_DisableTextTrunc,
@@ -1716,8 +1714,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         }
         
         // rjf: build line num box
-        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = text_color, .background = bg_color));
-        ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
+        UI_TextColor(text_color) UI_BackgroundColor(bg_color)
+          ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
       }
     }
   }
@@ -1799,7 +1797,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
-            RD_Palette(RD_PaletteCode_Bad)
+            UI_TagF("bad_pop")
           {
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###exception_info");
             ui_box_equip_display_fstrs(box, &explanation_fstrs);
@@ -1853,9 +1851,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             UI_PrefWidth(ui_em(1.5f, 1.f))
               RD_Font(RD_FontSlot_Icons)
-              UI_Palette(ui_build_palette(ui_top_palette(), .text = pin_color))
               UI_TextAlignment(UI_TextAlign_Center)
               UI_Flags(UI_BoxFlag_DisableTextTrunc)
+              UI_TextColor(pin_color)
             {
               UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
               if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
@@ -1957,7 +1955,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 line_drag_drop = 0;
   RD_Cfg *line_drag_cfg = &rd_nil_cfg;
   CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
-  Vec4F32 line_drag_drop_color = ui_top_palette()->background_pop;
+  Vec4F32 line_drag_drop_color = pop_color;
   {
     //- rjf: determine mouse drag range
     TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
@@ -2041,7 +2039,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_drag_drop_color = linear_from_srgba(rd_color_from_cfg(cfg));
         if(line_drag_drop_color.w == 0)
         {
-          line_drag_drop_color = ui_top_palette()->background_pop;
+          line_drag_drop_color = pop_color;
         }
       }
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
@@ -2051,7 +2049,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_drag_drop_color = rd_color_from_ctrl_entity(thread);
         if(line_drag_drop_color.w == 0)
         {
-          line_drag_drop_color = ui_top_palette()->background_pop;
+          line_drag_drop_color = pop_color;
         }
       }
     }
@@ -2272,7 +2270,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         if(line_bg_color.w != 0)
         {
           ui_set_next_flags(UI_BoxFlag_DrawBackground);
-          ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = line_bg_color));
+          ui_set_next_background_color(line_bg_color);
         }
         ui_set_next_tab_size(params->tab_size);
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
@@ -2362,7 +2360,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 line_box->rect.x0+line_num_padding_px+match_column_pixel_off_range.max+2.f,
                 line_box->rect.y1,
               };
-              Vec4F32 color = ui_top_palette()->background_pop;
+              Vec4F32 color = pop_color;
               if(cursor->line == line_num && needle_pos+1 <= cursor->column && cursor->column < needle_pos+params->search_query.size+1)
               {
                 color.x += (1.f - color.x) * 0.5f;
@@ -3243,7 +3241,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       }
       else if(params->flags & RD_LineEditFlag_DisplayStringIsCode)
       {
-        UI_Box *box = rd_code_label(1.f, 1, ui_top_palette()->text, display_string);
+        UI_Box *box = rd_code_label(1.f, 1, ui_color_from_name(str8_lit("text")), display_string);
         if(params->fuzzy_matches != 0)
         {
           ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
@@ -3283,7 +3281,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
+      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
       if(autocomplete_hint_string.size != 0)
       {
         String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
@@ -3305,7 +3303,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
           DR_FStr *fstr = &autocomp_fstr_n->v;
           fstr->string = autocomplete_append_string;
           fstr->params.font = ui_top_font();
-          fstr->params.color = ui_top_palette()->text;
+          fstr->params.color = ui_color_from_name(str8_lit("text"));
           fstr->params.color.w *= 0.5f;
           fstr->params.size = ui_top_font_size();
           autocomp_fstr_n->next = prev_n ? prev_n->next : 0;

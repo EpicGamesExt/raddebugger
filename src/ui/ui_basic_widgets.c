@@ -480,7 +480,7 @@ ui_do_color_tooltip_hsv(Vec3F32 hsv)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
+      UI_BackgroundColor(v4f32(rgb.x, rgb.y, rgb.z, 1.f))
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -519,7 +519,7 @@ ui_do_color_tooltip_hsva(Vec4F32 hsva)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba))
+      UI_BackgroundColor(rgba)
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -1212,7 +1212,6 @@ ui_scroll_list_item_from_row(UI_ScrollListRowBlockArray *blocks, U64 row)
 internal UI_ScrollPt
 ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices)
 {
-  ui_push_palette(ui_state->widget_palette_info.scrollbar_palette);
   ui_push_tag(str8_lit("scroll_bar"));
   
   //- rjf: unpack
@@ -1334,7 +1333,6 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
   }
   
   ui_pop_tag();
-  ui_pop_palette();
   return new_pt;
 }
 

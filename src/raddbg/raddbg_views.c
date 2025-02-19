@@ -1463,9 +1463,9 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         RD_CmdKind cmd_kind = (RD_CmdKind)result.eval.value.u64;
         String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-        if(cell->px != 0)
+        if(cell->px != 0) UI_TagF("weak")
         {
-          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Icons), rd_raster_flags_from_slot(RD_FontSlot_Icons), ui_top_palette()->text_weak, ui_top_font_size()};
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Icons), rd_raster_flags_from_slot(RD_FontSlot_Icons), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
           dr_fstrs_push_new(arena, &result.fstrs, &params, rd_icon_kind_text_table[rd_icon_kind_from_code_name(cmd_name)]);
         }
         else
@@ -1559,6 +1559,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
   String8 filter = rd_view_search();
+  Vec4F32 pop_background_rgba = {0};
+  UI_TagF("pop") pop_background_rgba = ui_color_from_name(str8_lit("background"));
   
   //////////////////////////////
   //- rjf: decide if root should be implicit
@@ -2748,7 +2750,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             //
             ProfBegin("determine row's flags & color palette");
             UI_BoxFlags row_flags = UI_BoxFlag_DisableFocusOverlay;
-            UI_Palette *palette = ui_top_palette();
             {
               if(row_is_fresh)
               {
@@ -2770,7 +2771,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             ////////////////////////
             //- rjf: build row box
             //
-            ui_set_next_palette(palette);
             ui_set_next_flags(disabled_flags);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_px(row_height_px*row->visual_size, 1.f));
@@ -2841,7 +2841,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 //- rjf: determine cell's palette
                 ProfBegin("determine cell's palette");
                 UI_BoxFlags cell_flags = 0;
-                UI_Palette *palette = ui_top_palette();
+                Vec4F32 cell_background_color_override = {0};
                 String8 cell_tag = {0};
                 {
                   if(cell_info.flags & RD_WatchCellFlag_IsErrored)
@@ -2861,11 +2861,11 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
                     if(rgba.w == 0)
                     {
-                      rgba = ui_top_palette()->background_pop;
+                      rgba = pop_background_rgba;
                     }
                     rgba.w *= 0.2f;
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
-                    palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
+                    cell_background_color_override = rgba;
                     cell_flags |= UI_BoxFlag_DrawBackground;
                   }
                   else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
@@ -2875,11 +2875,11 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     Vec4F32 rgba = rd_color_from_ctrl_entity(entity);
                     if(rgba.w == 0)
                     {
-                      rgba = ui_top_palette()->background_pop;;
+                      rgba = pop_background_rgba;
                     }
                     rgba.w *= 0.2f;
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
-                    palette = ui_build_palette(ui_top_palette(), .background_pop = rgba);
+                    cell_background_color_override = rgba;
                     cell_flags |= UI_BoxFlag_DrawBackground;
                   }
                 }
@@ -2887,7 +2887,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 
                 //- rjf: build cell
                 UI_Box *cell_box = &ui_nil_box;
-                UI_Palette(palette) UI_PrefWidth(ui_px(cell_width_px, 0.f))
+                UI_PrefWidth(ui_px(cell_width_px, 0.f))
                 {
                   ui_set_next_fixed_height(floor_f32(row->visual_size * row_height_px));
                   cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft|cell_flags, "cell_%I64x_%I64x", row_hash, cell_id);
@@ -2964,9 +2964,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       UI_Parent(box) UI_Flags(0) UI_TextAlignment(UI_TextAlign_Center)
                       {
+                        Vec4F32 color = rd_color_from_ctrl_entity(row_info->callstack_thread);
                         RD_Font(RD_FontSlot_Icons)
                           UI_Flags(UI_BoxFlag_DisableTextTrunc)
-                          UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_color_from_ctrl_entity(row_info->callstack_thread)))
+                          UI_TextColor(color)
                           ui_label(rd_icon_kind_text_table[RD_IconKind_RightArrow]);
                       }
                     }
@@ -3451,8 +3452,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         UI_CornerRadius(ui_top_font_size()/3)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
-        RD_Palette(RD_PaletteCode_Pop)
         UI_TextAlignment(UI_TextAlign_Center)
+        UI_TagF("pop")
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
         rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFile].string);
@@ -3523,18 +3524,12 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
-    UI_Palette *palette = ui_top_palette();
-    if(file_is_out_of_date)
-    {
-      palette = rd_palette_from_code(RD_PaletteCode_Bad);
-    }
-    UI_Palette(palette)
-      UI_Row
+    UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_TagF("weak")
     {
-      if(file_is_out_of_date)
+      if(file_is_out_of_date) UI_TagF("bad_pop")
       {
         UI_Box *box = &ui_nil_box;
         RD_Font(RD_FontSlot_Icons)
@@ -3856,6 +3851,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   num_columns = ClampBot(1, num_columns);
   bytes_per_cell = ClampBot(1, bytes_per_cell);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  Vec4F32 selection_color = ui_color_from_name(str8_lit("selection"));
+  Vec4F32 border_color = ui_color_from_name(str8_lit("border"));
   
   //////////////////////////////
   //- rjf: process commands
@@ -4053,8 +4050,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   DR_FStrList byte_fstrs[256] = {0};
   {
-    Vec4F32 full_color = ui_top_palette()->text;
-    Vec4F32 zero_color = ui_top_palette()->text_weak;
+    Vec4F32 full_color = ui_color_from_name(str8_lit("text"));
+    Vec4F32 zero_color = full_color;
+    UI_TagF("weak") zero_color = ui_color_from_name(str8_lit("text"));
     for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -4446,11 +4444,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
               {
                 cell_flags |= UI_BoxFlag_DrawBackground;
-                cell_bg_rgba = ui_top_palette()->selection;
+                cell_bg_rgba = selection_color;
               }
               
               // rjf: build
-              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = cell_bg_rgba));
+              ui_set_next_background_color(cell_bg_rgba);
               UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
               ui_box_equip_display_fstrs(cell_box, &byte_fstrs[byte_value]);
               {
@@ -4459,7 +4457,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 {
                   if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
                   {
-                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = annotation->color));
+                    ui_set_next_background_color(annotation->color);
                     ui_set_next_fixed_x(big_glyph_advance*20.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
                     ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
                     ui_set_next_fixed_width(cell_width_px/4.f);
@@ -4528,7 +4526,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                              ascii_box->rect.y0,
                              text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                              ascii_box->rect.y1),
-                      ui_top_palette()->selection,
+                      selection_color,
                       0, 0, 1.f);
             }
             ui_box_equip_draw_bucket(ascii_box, bucket);
@@ -4539,7 +4537,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             DR_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
-              Vec4F32 color = ui_top_palette()->border;
+              Vec4F32 color = border_color;
               dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
                              ascii_box->rect.y0,
                              text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,
@@ -4703,7 +4701,11 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   Rng2F32 rect_cvs = rd_bitmap_canvas_from_screen_rect(draw_data->view_center_pos, draw_data->zoom, rect_scrn, rect_scrn);
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
-  Vec4F32 grid_line_color = ui_top_palette()->background_alt;
+  Vec4F32 grid_line_color = {0};
+  UI_TagF("alt")
+  {
+    grid_line_color = ui_color_from_name(str8_lit("background"));
+  }
   for EachEnumVal(Axis2, axis)
   {
     for(F32 v = rect_cvs.p0.v[axis] - mod_f32(rect_cvs.p0.v[axis], grid_cell_size_cvs);
@@ -4993,7 +4995,7 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
       text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
       DR_FStrList fstrs = {0};
       {
-        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_top_palette()->text, ui_top_font_size()};
+        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("));
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.x), .color = v4f32(1.f, 0.25f, 0.25f, 1.f), .underline_thickness = 4.f);
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
@@ -5014,7 +5016,7 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
       color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
       UI_Parent(color_box) UI_PrefHeight(ui_em(1.875f, 1.f)) UI_Padding(ui_pct(1, 0))
       {
-        UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba)) UI_CornerRadius(ui_top_font_size()*0.5f)
+        UI_BackgroundColor(rgba) UI_CornerRadius(ui_top_font_size()*0.5f)
           ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
       }
     }
@@ -5241,709 +5243,3 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   geo_scope_close(geo_scope);
   scratch_end(scratch);
 }
-
-////////////////////////////////
-//~ rjf: settings @view_hook_impl
-
-#if 0 // TODO(rjf): @cfg
-typedef enum RD_SettingsItemKind
-{
-  RD_SettingsItemKind_CategoryHeader,
-  RD_SettingsItemKind_GlobalSetting,
-  RD_SettingsItemKind_WindowSetting,
-  RD_SettingsItemKind_ThemeColor,
-  RD_SettingsItemKind_ThemePreset,
-  RD_SettingsItemKind_COUNT
-}
-RD_SettingsItemKind;
-
-typedef struct RD_SettingsItem RD_SettingsItem;
-struct RD_SettingsItem
-{
-  RD_SettingsItemKind kind;
-  String8 kind_string;
-  String8 string;
-  FuzzyMatchRangeList kind_string_matches;
-  FuzzyMatchRangeList string_matches;
-  RD_IconKind icon_kind;
-  RD_SettingCode code;
-  RD_ThemeColor color;
-  RD_ThemePreset preset;
-  RD_SettingsItemKind category;
-};
-
-typedef struct RD_SettingsItemNode RD_SettingsItemNode;
-struct RD_SettingsItemNode
-{
-  RD_SettingsItemNode *next;
-  RD_SettingsItem v;
-};
-
-typedef struct RD_SettingsItemList RD_SettingsItemList;
-struct RD_SettingsItemList
-{
-  RD_SettingsItemNode *first;
-  RD_SettingsItemNode *last;
-  U64 count;
-};
-
-typedef struct RD_SettingsItemArray RD_SettingsItemArray;
-struct RD_SettingsItemArray
-{
-  RD_SettingsItem *v;
-  U64 count;
-};
-
-internal int
-rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
-{
-  int result = 0;
-  if(a->string_matches.count > b->string_matches.count)
-  {
-    result = -1;
-  }
-  else if(a->string_matches.count < b->string_matches.count)
-  {
-    result = +1;
-  }
-  else if(a->kind_string_matches.count > b->kind_string_matches.count)
-  {
-    result = -1;
-  }
-  else if(a->kind_string_matches.count < b->kind_string_matches.count)
-  {
-    result = +1;
-  }
-  return result;
-}
-#endif
-
-#if 0 // TODO(rjf): @cfg
-RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-  String8 query = string;
-  RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
-  
-  //////////////////////////////
-  //- rjf: get state
-  //
-  typedef struct RD_SettingsViewState RD_SettingsViewState;
-  struct RD_SettingsViewState
-  {
-    B32 initialized;
-    Vec2S64 cursor;
-    TxtPt txt_cursor;
-    TxtPt txt_mark;
-    U8 txt_buffer[1024];
-    U64 txt_size;
-    RD_ThemeColor color_ctx_menu_color;
-    Vec4F32 color_ctx_menu_color_hsva;
-    RD_ThemePreset preset_apply_confirm;
-    B32 category_opened[RD_SettingsItemKind_COUNT];
-  };
-  RD_SettingsViewState *sv = rd_view_state(RD_SettingsViewState);
-  if(!sv->initialized)
-  {
-    sv->initialized = 1;
-    sv->preset_apply_confirm = RD_ThemePreset_COUNT;
-  }
-  
-  //////////////////////////////
-  //- rjf: gather all filtered settings items
-  //
-  RD_SettingsItemArray items = {0};
-  {
-    RD_SettingsItemList items_list = {0};
-    
-    //- rjf: global settings header
-    if(query.size == 0)
-    {
-      RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-      SLLQueuePush(items_list.first, items_list.last, n);
-      items_list.count += 1;
-      n->v.kind = RD_SettingsItemKind_CategoryHeader;
-      n->v.string = str8_lit("Global Interface Settings");
-      n->v.icon_kind = sv->category_opened[RD_SettingsItemKind_GlobalSetting] ? RD_IconKind_DownCaret : RD_IconKind_RightCaret;
-      n->v.category = RD_SettingsItemKind_GlobalSetting;
-    }
-    
-    //- rjf: gather all global settings
-    if(sv->category_opened[RD_SettingsItemKind_GlobalSetting] || query.size != 0)
-    {
-      for EachEnumVal(RD_SettingCode, code)
-      {
-        if(rd_setting_code_default_is_per_window_table[code])
-        {
-          continue;
-        }
-        String8 kind_string = str8_lit("Global Interface Setting");
-        String8 string = rd_setting_code_display_string_table[code];
-        FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
-        FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
-        if(string_matches.count == string_matches.needle_part_count ||
-           kind_string_matches.count == kind_string_matches.needle_part_count)
-        {
-          RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-          SLLQueuePush(items_list.first, items_list.last, n);
-          items_list.count += 1;
-          n->v.kind = RD_SettingsItemKind_GlobalSetting;
-          n->v.kind_string = kind_string;
-          n->v.string = string;
-          n->v.kind_string_matches = kind_string_matches;
-          n->v.string_matches = string_matches;
-          n->v.icon_kind = RD_IconKind_Window;
-          n->v.code = code;
-        }
-      }
-    }
-    
-    //- rjf: window settings header
-    if(query.size == 0)
-    {
-      RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-      SLLQueuePush(items_list.first, items_list.last, n);
-      items_list.count += 1;
-      n->v.kind = RD_SettingsItemKind_CategoryHeader;
-      n->v.string = str8_lit("Window Interface Settings");
-      n->v.icon_kind = sv->category_opened[RD_SettingsItemKind_WindowSetting] ? RD_IconKind_DownCaret : RD_IconKind_RightCaret;
-      n->v.category = RD_SettingsItemKind_WindowSetting;
-    }
-    
-    //- rjf: gather all window settings
-    if(sv->category_opened[RD_SettingsItemKind_WindowSetting] || query.size != 0)
-    {
-      for EachEnumVal(RD_SettingCode, code)
-      {
-        if(!rd_setting_code_default_is_per_window_table[code])
-        {
-          continue;
-        }
-        String8 kind_string = str8_lit("Window Interface Setting");
-        String8 string = rd_setting_code_display_string_table[code];
-        FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
-        FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
-        if(string_matches.count == string_matches.needle_part_count ||
-           kind_string_matches.count == kind_string_matches.needle_part_count)
-        {
-          RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-          SLLQueuePush(items_list.first, items_list.last, n);
-          items_list.count += 1;
-          n->v.kind = RD_SettingsItemKind_WindowSetting;
-          n->v.kind_string = kind_string;
-          n->v.string = string;
-          n->v.kind_string_matches = kind_string_matches;
-          n->v.string_matches = string_matches;
-          n->v.icon_kind = RD_IconKind_Window;
-          n->v.code = code;
-        }
-      }
-    }
-    
-    //- rjf: theme presets header
-    if(query.size == 0)
-    {
-      RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-      SLLQueuePush(items_list.first, items_list.last, n);
-      items_list.count += 1;
-      n->v.kind = RD_SettingsItemKind_CategoryHeader;
-      n->v.string = str8_lit("Theme Presets");
-      n->v.icon_kind = sv->category_opened[RD_SettingsItemKind_ThemePreset] ? RD_IconKind_DownCaret : RD_IconKind_RightCaret;
-      n->v.category = RD_SettingsItemKind_ThemePreset;
-    }
-    
-    //- rjf: gather theme presets
-    if(sv->category_opened[RD_SettingsItemKind_ThemePreset] || query.size != 0)
-    {
-      for EachEnumVal(RD_ThemePreset, preset)
-      {
-        String8 kind_string = str8_lit("Theme Preset");
-        String8 string = rd_theme_preset_display_string_table[preset];
-        FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
-        FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
-        if(string_matches.count == string_matches.needle_part_count ||
-           kind_string_matches.count == kind_string_matches.needle_part_count)
-        {
-          RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-          SLLQueuePush(items_list.first, items_list.last, n);
-          items_list.count += 1;
-          n->v.kind = RD_SettingsItemKind_ThemePreset;
-          n->v.kind_string = kind_string;
-          n->v.string = string;
-          n->v.kind_string_matches = kind_string_matches;
-          n->v.string_matches = string_matches;
-          n->v.icon_kind = RD_IconKind_Palette;
-          n->v.preset = preset;
-        }
-      }
-    }
-    
-    //- rjf: theme colors header
-    if(query.size == 0)
-    {
-      RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-      SLLQueuePush(items_list.first, items_list.last, n);
-      items_list.count += 1;
-      n->v.kind = RD_SettingsItemKind_CategoryHeader;
-      n->v.string = str8_lit("Theme Colors");
-      n->v.icon_kind = sv->category_opened[RD_SettingsItemKind_ThemeColor] ? RD_IconKind_DownCaret : RD_IconKind_RightCaret;
-      n->v.category = RD_SettingsItemKind_ThemeColor;
-    }
-    
-    //- rjf: gather all theme colors
-    if(sv->category_opened[RD_SettingsItemKind_ThemeColor] || query.size != 0)
-    {
-      for EachNonZeroEnumVal(RD_ThemeColor, color)
-      {
-        String8 kind_string = str8_lit("Theme Color");
-        String8 string = rd_theme_color_display_string_table[color];
-        FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
-        FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
-        if(string_matches.count == string_matches.needle_part_count ||
-           kind_string_matches.count == kind_string_matches.needle_part_count)
-        {
-          RD_SettingsItemNode *n = push_array(scratch.arena, RD_SettingsItemNode, 1);
-          SLLQueuePush(items_list.first, items_list.last, n);
-          items_list.count += 1;
-          n->v.kind = RD_SettingsItemKind_ThemeColor;
-          n->v.kind_string = kind_string;
-          n->v.string = string;
-          n->v.kind_string_matches = kind_string_matches;
-          n->v.string_matches = string_matches;
-          n->v.icon_kind = RD_IconKind_Palette;
-          n->v.color = color;
-        }
-      }
-    }
-    
-    //- rjf: convert to array
-    items.count = items_list.count;
-    items.v = push_array(scratch.arena, RD_SettingsItem, items.count);
-    {
-      U64 idx = 0;
-      for(RD_SettingsItemNode *n = items_list.first; n != 0; n = n->next, idx += 1)
-      {
-        items.v[idx] = n->v;
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: sort filtered settings item list
-  //
-  if(query.size != 0)
-  {
-    quick_sort(items.v, items.count, sizeof(items.v[0]), rd_qsort_compare_settings_item);
-  }
-  
-  //////////////////////////////
-  //- rjf: produce per-color context menu keys
-  //
-  UI_Key *color_ctx_menu_keys = push_array(scratch.arena, UI_Key, RD_ThemeColor_COUNT);
-  {
-    for(RD_ThemeColor color = (RD_ThemeColor)(RD_ThemeColor_Null+1);
-        color < RD_ThemeColor_COUNT;
-        color = (RD_ThemeColor)(color+1))
-    {
-      color_ctx_menu_keys[color] = ui_key_from_stringf(ui_key_zero(), "###settings_color_ctx_menu_%I64x", (U64)color);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: build color context menus
-  //
-  for(RD_ThemeColor color = (RD_ThemeColor)(RD_ThemeColor_Null+1);
-      color < RD_ThemeColor_COUNT;
-      color = (RD_ThemeColor)(color+1))
-  {
-    RD_Palette(RD_PaletteCode_Floating)
-      UI_CtxMenu(color_ctx_menu_keys[color])
-      UI_Padding(ui_em(1.5f, 1.f))
-      UI_PrefWidth(ui_em(28.5f, 1)) UI_PrefHeight(ui_children_sum(1.f))
-    {
-      // rjf: build title
-      UI_Row
-      {
-        ui_spacer(ui_em(1.5f, 1.f));
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(rd_theme_color_display_string_table[color]);
-      }
-      
-      ui_spacer(ui_em(1.5f, 1.f));
-      
-      // rjf: build picker
-      {
-        ui_set_next_pref_height(ui_em(22.f, 1.f));
-        UI_Row UI_Padding(ui_pct(1, 0))
-        {
-          UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
-          {
-            ui_sat_val_pickerf(sv->color_ctx_menu_color_hsva.x, &sv->color_ctx_menu_color_hsva.y, &sv->color_ctx_menu_color_hsva.z, "###settings_satval_picker");
-          }
-          
-          ui_spacer(ui_em(0.75f, 1.f));
-          
-          UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
-            ui_hue_pickerf(&sv->color_ctx_menu_color_hsva.x, sv->color_ctx_menu_color_hsva.y, sv->color_ctx_menu_color_hsva.z, "###settings_hue_picker");
-          
-          UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
-            ui_alpha_pickerf(&sv->color_ctx_menu_color_hsva.w, "###settings_alpha_picker");
-        }
-      }
-      
-      ui_spacer(ui_em(1.5f, 1.f));
-      
-      // rjf: build line edits
-      UI_Row
-        UI_WidthFill
-        UI_Padding(ui_em(1.5f, 1.f))
-        UI_PrefHeight(ui_children_sum(1.f))
-        UI_Column
-        UI_PrefHeight(ui_em(2.25f, 1.f))
-      {
-        Vec4F32 hsva = sv->color_ctx_menu_color_hsva;
-        Vec3F32 hsv = v3f32(hsva.x, hsva.y, hsva.z);
-        Vec3F32 rgb = rgb_from_hsv(hsv);
-        Vec4F32 rgba = v4f32(rgb.x, rgb.y, rgb.z, sv->color_ctx_menu_color_hsva.w);
-        String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
-        hex_string = push_str8f(scratch.arena, "#%S", hex_string);
-        String8 r_string = push_str8f(scratch.arena, "%.2f", rgba.x);
-        String8 g_string = push_str8f(scratch.arena, "%.2f", rgba.y);
-        String8 b_string = push_str8f(scratch.arena, "%.2f", rgba.z);
-        String8 h_string = push_str8f(scratch.arena, "%.2f", hsva.x);
-        String8 s_string = push_str8f(scratch.arena, "%.2f", hsva.y);
-        String8 v_string = push_str8f(scratch.arena, "%.2f", hsva.z);
-        String8 a_string = push_str8f(scratch.arena, "%.2f", rgba.w);
-        UI_Row RD_Font(RD_FontSlot_Code)
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("Hex");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, hex_string, "###hex_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_rgba = rgba_from_hex_string_4f32(string);
-            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        ui_spacer(ui_em(0.75f, 1.f));
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("R");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, r_string, "###r_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_rgba = v4f32((F32)f64_from_str8(string), rgba.y, rgba.z, rgba.w);
-            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("G");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, g_string, "###g_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_rgba = v4f32(rgba.x, (F32)f64_from_str8(string), rgba.z, rgba.w);
-            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("B");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, b_string, "###b_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_rgba = v4f32(rgba.x, rgba.y, (F32)f64_from_str8(string), rgba.w);
-            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        ui_spacer(ui_em(0.75f, 1.f));
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("H");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, h_string, "###h_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_hsva = v4f32((F32)f64_from_str8(string), hsva.y, hsva.z, hsva.w);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("S");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, s_string, "###s_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_hsva = v4f32(hsva.x, (F32)f64_from_str8(string), hsva.z, hsva.w);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("V");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, v_string, "###v_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_hsva = v4f32(hsva.x, hsva.y, (F32)f64_from_str8(string), hsva.w);
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-        ui_spacer(ui_em(0.75f, 1.f));
-        UI_Row
-        {
-          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("A");
-          UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, a_string, "###a_edit");
-          if(ui_committed(sig))
-          {
-            String8 string = str8(sv->txt_buffer, sv->txt_size);
-            Vec4F32 new_hsva = v4f32(hsva.x, hsva.y, hsva.z, (F32)f64_from_str8(string));
-            sv->color_ctx_menu_color_hsva = new_hsva;
-          }
-        }
-      }
-      
-      // rjf: commit state to theme
-      Vec4F32 hsva = sv->color_ctx_menu_color_hsva;
-      Vec3F32 hsv = v3f32(hsva.x, hsva.y, hsva.z);
-      Vec3F32 rgb = rgb_from_hsv(hsv);
-      Vec4F32 rgba = v4f32(rgb.x, rgb.y, rgb.z, sv->color_ctx_menu_color_hsva.w);
-      rd_state->cfg_theme_target.colors[sv->color_ctx_menu_color] = rgba;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: cancels
-  //
-  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && sv->preset_apply_confirm < RD_ThemePreset_COUNT && ui_slot_press(UI_EventActionSlot_Cancel))
-  {
-    sv->preset_apply_confirm = RD_ThemePreset_COUNT;
-  }
-  
-  //////////////////////////////
-  //- rjf: build items list
-  //
-  Rng1S64 visible_row_range = {0};
-  UI_ScrollListParams scroll_list_params = {0};
-  {
-    Vec2F32 rect_dim = dim_2f32(rect);
-    scroll_list_params.flags         = UI_ScrollListFlag_All;
-    scroll_list_params.row_height_px = row_height_px;
-    scroll_list_params.dim_px        = v2f32(rect_dim.x, rect_dim.y);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, items.count));
-    scroll_list_params.item_range    = r1s64(0, items.count);
-    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
-  }
-  UI_ScrollListSignal scroll_list_sig = {0};
-  UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
-    UI_Focus(UI_FocusKind_Null)
-  {
-    for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num < items.count; row_num += 1)
-    {
-      //- rjf: unpack item
-      RD_SettingsItem *item = &items.v[row_num];
-      UI_Palette *palette = ui_top_palette();
-      Vec4F32 rgba = ui_top_palette()->text_weak;
-      OS_Cursor cursor = OS_Cursor_HandPoint;
-      Rng1S32 s32_range = {0};
-      B32 is_toggler = 0;
-      B32 is_toggled = 0;
-      B32 is_slider = 0;
-      S32 slider_s32_val = 0;
-      F32 slider_pct = 0.f;
-      UI_BoxFlags flags = UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects;
-      RD_SettingVal *val_table = &rd_state->cfg_setting_vals[RD_CfgSrc_User][0];
-      switch(item->kind)
-      {
-        case RD_SettingsItemKind_COUNT:{}break;
-        case RD_SettingsItemKind_CategoryHeader:
-        {
-          cursor = OS_Cursor_HandPoint;
-          flags = UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects;
-        }break;
-        case RD_SettingsItemKind_ThemePreset:
-        {
-          Vec4F32 *colors = rd_theme_preset_colors_table[item->preset];
-          Vec4F32 bg_color = colors[RD_ThemeColor_BaseBackground];
-          Vec4F32 tx_color = colors[RD_ThemeColor_Text];
-          Vec4F32 tw_color = colors[RD_ThemeColor_TextWeak];
-          Vec4F32 bd_color = colors[RD_ThemeColor_BaseBorder];
-          palette = ui_build_palette(ui_top_palette(),
-                                     .text = tx_color,
-                                     .text_weak = tw_color,
-                                     .border = bd_color,
-                                     .background = bg_color);
-        }break;
-        case RD_SettingsItemKind_ThemeColor:
-        {
-          rgba = rd_rgba_from_theme_color(item->color);
-        }break;
-        case RD_SettingsItemKind_WindowSetting:
-        {
-          val_table = &window->setting_vals[0];
-        }goto setting;
-        case RD_SettingsItemKind_GlobalSetting:{}goto setting;
-        setting:;
-        {
-          s32_range = rd_setting_code_s32_range_table[item->code];
-          if(s32_range.min != 0 || s32_range.max != 1)
-          {
-            cursor = OS_Cursor_LeftRight;
-            is_slider = 1;
-            slider_s32_val = val_table[item->code].s32;
-            slider_pct = (F32)(slider_s32_val - s32_range.min) / dim_1s32(s32_range);
-          }
-          else
-          {
-            is_toggler = 1;
-            is_toggled = !!val_table[item->code].s32;
-          }
-        }break;
-      }
-      
-      //- rjf: build item widget
-      UI_Box *item_box = &ui_nil_box;
-      UI_Row
-      {
-        if(query.size == 0 && item->kind != RD_SettingsItemKind_CategoryHeader)
-        {
-          ui_set_next_flags(UI_BoxFlag_DrawSideLeft);
-          ui_spacer(ui_em(2.f, 1.f));
-        }
-        UI_Focus(row_num+1 == sv->cursor.y ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
-        {
-          ui_set_next_hover_cursor(cursor);
-          item_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|flags, "###option_%S_%S", item->kind_string, item->string);
-          UI_Parent(item_box)
-          {
-            if(item->icon_kind != RD_IconKind_Null)
-            {
-              UI_PrefWidth(ui_em(3.f, 1.f))
-                RD_Font(RD_FontSlot_Icons)
-                UI_Palette(ui_build_palette(ui_top_palette(), .text = rgba))
-                UI_TextAlignment(UI_TextAlign_Center)
-                ui_label(rd_icon_kind_text_table[item->icon_kind]);
-            }
-            if(query.size != 0 && item->kind_string.size != 0) UI_PrefWidth(ui_text_dim(10, 1))
-            {
-              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawTextWeak, "%S", item->kind_string);
-              ui_box_equip_fuzzy_match_ranges(box, &item->kind_string_matches);
-            }
-            UI_PrefWidth(ui_text_dim(10, 1))
-            {
-              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S", item->string);
-              ui_box_equip_fuzzy_match_ranges(box, &item->string_matches);
-            }
-            if(is_slider) UI_PrefWidth(ui_text_dim(10, 1))
-            {
-              UI_Flags(UI_BoxFlag_DrawTextWeak)
-                ui_labelf("(%i)", slider_s32_val);
-              UI_PrefWidth(ui_pct(slider_pct, 1.f)) UI_HeightFill UI_FixedX(0) UI_FixedY(0)
-                UI_Palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay)))
-                ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
-            }
-            if(is_toggler)
-            {
-              ui_spacer(ui_pct(1, 0));
-              UI_PrefWidth(ui_em(2.5f, 1.f))
-                RD_Font(RD_FontSlot_Icons)
-                UI_Flags(UI_BoxFlag_DrawTextWeak)
-                ui_label(rd_icon_kind_text_table[is_toggled ? RD_IconKind_CheckFilled : RD_IconKind_CheckHollow]);
-            }
-            if(item->kind == RD_SettingsItemKind_ThemePreset && sv->preset_apply_confirm == item->preset)
-            {
-              ui_spacer(ui_pct(1, 0));
-              UI_PrefWidth(ui_text_dim(10, 1))
-                RD_Palette(RD_PaletteCode_NegativePopButton)
-                UI_CornerRadius(ui_top_font_size()*0.5f)
-                UI_FontSize(ui_top_font_size()*0.9f)
-                UI_TextAlignment(UI_TextAlign_Center)
-                ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBackground, "Click Again To Apply");
-            }
-          }
-        }
-      }
-      
-      //- rjf: interact
-      UI_Signal sig = ui_signal_from_box(item_box);
-      if(item->kind == RD_SettingsItemKind_ThemeColor && ui_pressed(sig))
-      {
-        Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
-        Vec3F32 hsv = hsv_from_rgb(rgb);
-        Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        if(ui_ctx_menu_is_open(color_ctx_menu_keys[item->color]))
-        {
-          ui_ctx_menu_close();
-        }
-        else
-        {
-          ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
-        }
-        sv->color_ctx_menu_color = item->color;
-        sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        rd_cmd(RD_CmdKind_FocusPanel);
-      }
-      if((item->kind == RD_SettingsItemKind_GlobalSetting || item->kind == RD_SettingsItemKind_WindowSetting) &&
-         is_toggler && ui_clicked(sig))
-      {
-        val_table[item->code].s32 ^= 1;
-        val_table[item->code].set = 1;
-      }
-      if((item->kind == RD_SettingsItemKind_GlobalSetting || item->kind == RD_SettingsItemKind_WindowSetting) &&
-         is_slider && ui_dragging(sig))
-      {
-        if(ui_pressed(sig))
-        {
-          ui_store_drag_struct(&slider_s32_val);
-        }
-        S32 pre_drag_val = *ui_get_drag_struct(S32);
-        Vec2F32 delta = ui_drag_delta();
-        S32 pst_drag_val = pre_drag_val + (S32)(delta.x/(ui_top_font_size()*2.f));
-        pst_drag_val = clamp_1s32(s32_range, pst_drag_val);
-        val_table[item->code].s32 = pst_drag_val;
-        val_table[item->code].set = 1;
-      }
-      if(item->kind == RD_SettingsItemKind_ThemePreset && ui_clicked(sig))
-      {
-        if(sv->preset_apply_confirm == item->preset)
-        {
-          Vec4F32 *colors = rd_theme_preset_colors_table[item->preset];
-          MemoryCopy(rd_state->cfg_theme_target.colors, colors, sizeof(rd_state->cfg_theme_target.colors));
-          sv->preset_apply_confirm = RD_ThemePreset_COUNT;
-        }
-        else
-        {
-          sv->preset_apply_confirm = item->preset;
-        }
-      }
-      if(item->kind != RD_SettingsItemKind_ThemePreset && ui_pressed(sig))
-      {
-        sv->preset_apply_confirm = RD_ThemePreset_COUNT;
-      }
-      if(item->kind != RD_SettingsItemKind_ThemePreset && ui_pressed(sig))
-      {
-        sv->preset_apply_confirm = RD_ThemePreset_COUNT;
-      }
-      if(item->kind == RD_SettingsItemKind_CategoryHeader && ui_pressed(sig))
-      {
-        sv->category_opened[item->category] ^= 1;
-      }
-    }
-  }
-  
-  rd_store_view_scroll_pos(scroll_pos);
-  scratch_end(scratch);
-  ProfEnd();
-}
-#endif

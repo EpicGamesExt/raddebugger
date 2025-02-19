@@ -4263,41 +4263,6 @@ rd_window_frame(void)
   rd_regs()->view  = panel_tree.focused->selected_tab->id;
   
   //////////////////////////////
-  //- rjf: compute ui palettes from theme
-  //
-  {
-    RD_Theme *current = rd_state->theme;
-    for EachEnumVal(RD_PaletteCode, code)
-    {
-      ws->cfg_palettes[code].null = v4f32(1, 0, 1, 1);
-    }
-#define fill_palette(name) \
-{\
-ws->cfg_palettes[RD_PaletteCode_##name].background      = current->colors[RD_ThemeColor_##name##Background];\
-ws->cfg_palettes[RD_PaletteCode_##name].background_alt  = current->colors[RD_ThemeColor_##name##BackgroundAlt];\
-ws->cfg_palettes[RD_PaletteCode_##name].background_good = current->colors[RD_ThemeColor_##name##BackgroundGood];\
-ws->cfg_palettes[RD_PaletteCode_##name].background_bad  = current->colors[RD_ThemeColor_##name##BackgroundBad];\
-ws->cfg_palettes[RD_PaletteCode_##name].background_pop  = current->colors[RD_ThemeColor_##name##BackgroundPop];\
-ws->cfg_palettes[RD_PaletteCode_##name].border          = current->colors[RD_ThemeColor_##name##Border];\
-ws->cfg_palettes[RD_PaletteCode_##name].text            = current->colors[RD_ThemeColor_##name##Text];\
-ws->cfg_palettes[RD_PaletteCode_##name].text_weak       = current->colors[RD_ThemeColor_##name##TextWeak];\
-ws->cfg_palettes[RD_PaletteCode_##name].hover           = current->colors[RD_ThemeColor_##name##Hover];\
-ws->cfg_palettes[RD_PaletteCode_##name].focus           = current->colors[RD_ThemeColor_##name##Focus];\
-ws->cfg_palettes[RD_PaletteCode_##name].cursor          = current->colors[RD_ThemeColor_##name##Cursor];\
-ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_ThemeColor_##name##Selection];\
-}
-    fill_palette(Base);
-    fill_palette(MenuBar);
-    fill_palette(Good);
-    fill_palette(Bad);
-    fill_palette(Pop);
-    fill_palette(ScrollBar);
-    fill_palette(Tab);
-    fill_palette(TabInactive);
-    fill_palette(DropSite);
-  }
-  
-  //////////////////////////////
   //- rjf: gather listers
   //
   typedef struct ListerTask ListerTask;
@@ -4359,14 +4324,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
         icon_info.icon_kind_text_map[UI_IconKind_CheckFilled]    = rd_icon_kind_text_table[RD_IconKind_CheckFilled];
       }
       
-      // rjf: build widget palette info
-      UI_WidgetPaletteInfo widget_palette_info = {0};
-      {
-        widget_palette_info.tooltip_palette   = rd_palette_from_code(RD_PaletteCode_Base);
-        widget_palette_info.ctx_menu_palette  = rd_palette_from_code(RD_PaletteCode_Base);
-        widget_palette_info.scrollbar_palette = rd_palette_from_code(RD_PaletteCode_ScrollBar);
-      }
-      
       // rjf: build animation info
       UI_AnimationInfo animation_info = {0};
       {
@@ -4379,13 +4336,12 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       }
       
       // rjf: begin & push initial stack values
-      ui_begin_build(ws->os, &ws->ui_events, &icon_info, ws->theme, &widget_palette_info, &animation_info, rd_state->frame_dt, rd_state->frame_dt);
+      ui_begin_build(ws->os, &ws->ui_events, &icon_info, ws->theme, &animation_info, rd_state->frame_dt, rd_state->frame_dt);
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_text_padding(main_font_size*0.3f);
       ui_push_pref_width(ui_em(20.f, 1));
       ui_push_pref_height(ui_em(2.75f, 1.f));
-      ui_push_palette(rd_palette_from_code(RD_PaletteCode_Base));
       ui_push_blur_size(10.f);
       FNT_RasterFlags text_raster_flags = 0;
       if(rd_setting_b32_from_name(str8_lit("smooth_main_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
@@ -7125,9 +7081,6 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
                     {
-                      UI_Palette *palette = ui_build_palette(ui_top_palette());
-                      palette->background = v4f32(0, 0, 0, 0);
-                      ui_set_next_palette(palette);
                       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                       UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                     UI_BoxFlag_DrawBorder|
@@ -7535,11 +7488,7 @@ ws->cfg_palettes[RD_PaletteCode_##name].selection       = current->colors[RD_The
       F32 t = box->hot_t*(1-effective_active_t);
       
       // rjf: compute background color
-      Vec4F32 box_background_color = {0};
-      if(box->flags & UI_BoxFlag_DrawBackground)
-      {
-        box_background_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("background"));
-      }
+      Vec4F32 box_background_color = box->background_color;
       
       // rjf: draw background
       if(box->flags & UI_BoxFlag_DrawBackground)
@@ -9471,17 +9420,6 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
   return color;
 }
 
-//- rjf: code -> palette
-
-internal UI_Palette *
-rd_palette_from_code(RD_PaletteCode code)
-{
-  RD_Cfg *wcfg = rd_cfg_from_id(rd_regs()->window);
-  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
-  UI_Palette *result = &ws->cfg_palettes[code];
-  return result;
-}
-
 //- rjf: fonts/sizes
 
 internal FNT_Tag
@@ -9608,7 +9546,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
   CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, event->entity);
   DR_FStrList thread_fstrs = rd_title_fstrs_from_ctrl_entity(arena, thread, 0);
   DR_FStrList fstrs = {0};
-  DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_top_palette()->text, ui_top_font_size()};
+  DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
   switch(event->cause)
   {
     default:{}break;

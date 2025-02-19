@@ -542,9 +542,6 @@ struct RD_WindowState
   // rjf: theme (recomputed each frame)
   UI_Theme *theme;
   
-  // rjf: config/settings
-  UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme
-  
   // rjf: dev interface state
   B32 dev_menu_is_open;
   
@@ -1156,9 +1153,6 @@ internal String8 rd_push_search_string(Arena *arena);
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
-
-//- rjf: code -> palette
-internal UI_Palette *rd_palette_from_code(RD_PaletteCode code);
 
 //- rjf: fonts/sizes
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);

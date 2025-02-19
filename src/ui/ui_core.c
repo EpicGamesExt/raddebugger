@@ -782,7 +782,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -862,7 +862,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     {
       ui_state->icon_info.icon_kind_text_map[icon_kind] = push_str8_copy(ui_build_arena(), icon_info->icon_kind_text_map[icon_kind]);
     }
-    MemoryCopyStruct(&ui_state->widget_palette_info, widget_palette_info);
     MemoryCopyStruct(&ui_state->animation_info, animation_info);
   }
   
@@ -1923,7 +1922,6 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
-  ui_push_palette(ui_bottom_palette());
   ui_push_tag(str8_lit("."));
   ui_push_tag(str8_lit("floating"));
 }
@@ -1933,7 +1931,6 @@ ui_tooltip_end_base(void)
 {
   ui_pop_tag();
   ui_pop_tag();
-  ui_pop_palette();
   ui_pop_text_raster_flags();
   ui_pop_flags();
   ui_pop_parent();
@@ -1944,7 +1941,6 @@ internal void
 ui_tooltip_begin(void)
 {
   ui_tooltip_begin_base();
-  ui_push_palette(ui_state->widget_palette_info.tooltip_palette);
   ui_set_next_squish(0.25f-ui_state->tooltip_open_t*0.25f);
   ui_set_next_transparency(1-ui_state->tooltip_open_t);
   UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow)
@@ -1976,7 +1972,6 @@ ui_tooltip_end(void)
   ui_row_end();
   UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_column_end();
-  ui_pop_palette();
   ui_tooltip_end_base();
 }
 
@@ -2014,7 +2009,6 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_pref_height(ui_bottom_pref_height());
   ui_push_focus_hot(UI_FocusKind_Root);
   ui_push_focus_active(UI_FocusKind_Root);
-  ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
   ui_push_tag(str8_lit("."));
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
   if(is_open != 0) UI_TagF("floating")
@@ -2029,7 +2023,6 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
     ui_state->ctx_menu_root->tags_key = ui_top_tags_key();
-    ui_state->ctx_menu_root->palette = ui_top_palette();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
     ui_spacer(ui_em(1.f, 1.f));
   }
@@ -2046,7 +2039,6 @@ ui_end_ctx_menu(void)
     ui_spacer(ui_em(1.f, 1.f));
   }
   ui_pop_tag();
-  ui_pop_palette();
   ui_pop_focus_active();
   ui_pop_focus_hot();
   ui_pop_pref_width();
@@ -2178,29 +2170,6 @@ ui_set_auto_focus_hot_key(UI_Key key)
       break;
     }
   }
-}
-
-//- rjf: palette forming
-
-internal UI_Palette *
-ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
-{
-  UI_Palette *palette = push_array(ui_build_arena(), UI_Palette, 1);
-  if(base != 0)
-  {
-    MemoryCopyStruct(palette, base);
-  }
-  for EachEnumVal(UI_ColorCode, code)
-  {
-    if(overrides->colors[code].x != 0 ||
-       overrides->colors[code].y != 0 ||
-       overrides->colors[code].z != 0 ||
-       overrides->colors[code].w != 0)
-    {
-      palette->colors[code] = overrides->colors[code];
-    }
-  }
-  return palette;
 }
 
 //- rjf: current style tags key
@@ -2459,7 +2428,6 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     
     box->text_align = ui_state->text_alignment_stack.top->v;
     box->child_layout_axis = ui_state->child_layout_axis_stack.top->v;
-    box->palette = ui_state->palette_stack.top->v;
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
@@ -2478,6 +2446,22 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     if(ui_state->tags_key_stack_top != 0)
     {
       box->tags_key = ui_state->tags_key_stack_top->key;
+    }
+    if(ui_state->background_color_stack.top != &ui_state->background_color_nil_stack_top)
+    {
+      box->background_color = ui_state->background_color_stack.top->v;
+    }
+    else
+    {
+      box->background_color = ui_color_from_name(str8_lit("background"));
+    }
+    if(ui_state->text_color_stack.top != &ui_state->text_color_nil_stack_top)
+    {
+      box->text_color = ui_state->text_color_stack.top->v;
+    }
+    else
+    {
+      box->text_color = ui_color_from_name(str8_lit("text"));
     }
   }
   
@@ -2552,9 +2536,9 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
+  Vec4F32 text_color = box->text_color;
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
-    Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
     String8 display_string = ui_box_display_string(box);
     DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
     DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
@@ -2564,7 +2548,6 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    Vec4F32 text_color = ui_color_from_name(str8_lit("text"));
     String8 display_string = ui_box_display_string(box);
     String32 fpcp32 = str32(&box->fastpath_codepoint, 1);
     String8 fpcp = str8_from_32(scratch.arena, fpcp32);
