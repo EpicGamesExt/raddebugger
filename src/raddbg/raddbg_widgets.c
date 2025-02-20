@@ -2186,6 +2186,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     DR_BucketScope(bucket)
     {
       Vec4F32 color = line_drag_drop_color;
+      color.w *= 0.2f;
       Rng2F32 drop_line_rect = r2f32p(top_container_box->rect.x0,
                                       top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min) * params->line_height_px,
                                       top_container_box->rect.x1,

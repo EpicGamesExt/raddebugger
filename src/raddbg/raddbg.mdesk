@@ -1112,6 +1112,16 @@ RD_ThemePresetTable:
           background: 0x2b3740ff,
           border: 0x3e4c57ff,
         }
+        auto:
+        {
+          background: 0x693847ff,
+          border: 0x9e6274ff,
+          inactive:
+          {
+            background: 0x442f4dff,
+            border: 0x685073ff,
+          }
+        }
       }
       
       drop_site:

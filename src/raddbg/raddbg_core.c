@@ -6051,7 +6051,7 @@ rd_window_frame(void)
     //
     ProfScope("build hover eval")
     {
-      B32 build_hover_eval = hover_eval_is_open;
+      B32 build_hover_eval = hover_eval_is_open && !rd_drag_is_active();
       
       // rjf: disable hover eval if hovered view is actively scrolling
       if(hover_eval_is_open)
@@ -7129,6 +7129,7 @@ rd_window_frame(void)
               {
                 // rjf: gather info for this tab
                 B32 tab_is_selected = (tab == panel->selected_tab);
+                B32 tab_is_auto = (rd_cfg_child_from_string(tab, str8_lit("auto")) != &rd_nil_cfg);
                 
                 // rjf: begin vertical region for this tab
                 ui_set_next_child_layout_axis(Axis2_Y);
@@ -7147,6 +7148,7 @@ rd_window_frame(void)
                   UI_PrefHeight(ui_px(tab_bar_vheight, 1))
                   UI_TagF(omit_name ? "hollow" : "")
                   UI_TagF(!tab_is_selected ? "inactive" : "")
+                  UI_TagF(tab_is_auto ? "auto" : "")
                 {
                   if(panel->tab_side == Side_Max)
                   {
@@ -7930,7 +7932,7 @@ rd_window_frame(void)
       color.w *= ws->error_t;
       Rng2F32 rect = os_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
-      dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.05f), 0, 0, 0);
+      dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.025f), 0, 0, 0);
     }
     
     scratch_end(scratch);
@@ -11877,7 +11879,7 @@ rd_frame(void)
               RD_Cfg *recent_project = &rd_nil_cfg;
               for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
               {
-                if(path_match_normalized(n->v->string, file_path))
+                if(path_match_normalized(rd_path_from_cfg(n->v), file_path))
                 {
                   recent_project = n->v;
                   break;
@@ -12817,11 +12819,11 @@ rd_frame(void)
           {
             String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-            RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+            RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_file"));
             RD_Cfg *recent_file = &rd_nil_cfg;
             for(RD_CfgNode *n = recent_files.first; n != 0; n = n->next)
             {
-              if(path_match_normalized(n->v->string, path))
+              if(path_match_normalized(rd_path_from_cfg(n->v), path))
               {
                 recent_file = n->v;
                 break;
@@ -12835,7 +12837,7 @@ rd_frame(void)
             }
             rd_cfg_unhook(project, recent_file);
             rd_cfg_insert_child(project, &rd_nil_cfg, recent_file);
-            recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+            recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_file"));
             if(recent_files.count > 256)
             {
               rd_cfg_release(recent_files.last->v);
@@ -13412,20 +13414,41 @@ Z(getting_started)
               {
                 RD_Cfg *tab = tab_n->v;
                 if(rd_cfg_is_project_filtered(tab)) { continue; }
-                RD_RegsScope(.view = tab->id)
+                String8 tab_expr = rd_expr_from_cfg(tab);
+                String8 tab_file_path = rd_file_path_from_eval_string(scratch.arena, tab_expr);
+                if((str8_match(tab->string, str8_lit("text"), 0) || str8_match(tab->string, str8_lit("pending"), 0)) && 
+                   path_match_normalized(tab_file_path, file_path))
                 {
-                  String8 tab_expr = rd_expr_from_cfg(tab);
-                  String8 tab_file_path = rd_file_path_from_eval_string(scratch.arena, tab_expr);
-                  if((str8_match(tab->string, str8_lit("text"), 0) || str8_match(tab->string, str8_lit("pending"), 0)) && 
-                     path_match_normalized(tab_file_path, file_path))
+                  panel_w_this_src_code = panel;
+                  view_w_this_src_code = tab;
+                  if(tab == panel->selected_tab)
                   {
-                    panel_w_this_src_code = panel;
-                    view_w_this_src_code = tab;
-                    if(tab == panel->selected_tab)
-                    {
-                      break;
-                    }
+                    break;
                   }
+                }
+              }
+            }
+            
+            // rjf: try to find panel/view pair that has any *auto* source code tab open
+            RD_PanelNode *panel_w_auto = &rd_nil_panel_node;
+            RD_Cfg *view_w_auto = &rd_nil_cfg;
+            for(RD_PanelNode *panel = panel_tree.root;
+                panel != &rd_nil_panel_node;
+                panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
+            {
+              if(panel->first != &rd_nil_panel_node)
+              {
+                continue;
+              }
+              for(RD_CfgNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
+              {
+                RD_Cfg *tab = tab_n->v;
+                if(rd_cfg_is_project_filtered(tab)) { continue; }
+                if(str8_match(tab->string, str8_lit("text"), 0) &&
+                   rd_cfg_child_from_string(tab, str8_lit("auto")) != &rd_nil_cfg)
+                {
+                  panel_w_auto = panel;
+                  view_w_auto = tab;
                 }
               }
             }
@@ -13565,6 +13588,7 @@ Z(getting_started)
             if(file_path.size != 0)
             {
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = panel_w_this_src_code; }
+              if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = panel_w_auto; }
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = panel_w_any_src_code; }
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = biggest_empty_panel; }
               if(src_code_dst_panel == &rd_nil_panel_node) { src_code_dst_panel = biggest_panel; }
@@ -13618,11 +13642,18 @@ Z(getting_started)
               
               // rjf: construct new view if needed
               RD_Cfg *dst_tab = view_w_this_src_code;
-              if(dst_panel != &rd_nil_panel_node && dst_tab == &rd_nil_cfg)
+              if(dst_tab == &rd_nil_cfg && dst_panel == panel_w_auto && view_w_auto != &rd_nil_cfg)
+              {
+                dst_tab = view_w_auto;
+                RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("expression"));
+                rd_cfg_new_replace(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
+              }
+              else if(dst_panel != &rd_nil_panel_node && dst_tab == &rd_nil_cfg)
               {
                 dst_tab = rd_cfg_new(dst_panel->cfg, str8_lit("text"));
                 RD_Cfg *expr = rd_cfg_new(dst_tab, str8_lit("expression"));
                 rd_cfg_new(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
+                rd_cfg_new(dst_tab, str8_lit("auto"));
               }
               
               // rjf: determine if we need a contain or center
