@@ -124,8 +124,11 @@ dr_string_from_fstrs(Arena *arena, DR_FStrList *list)
   U64 idx = 0;
   for(DR_FStrNode *n = list->first; n != 0; n = n->next)
   {
-    MemoryCopy(result.str+idx, n->v.string.str, n->v.string.size);
-    idx += n->v.string.size;
+    if(!fnt_tag_match(n->v.params.font, dr_thread_ctx->icon_font))
+    {
+      MemoryCopy(result.str+idx, n->v.string.str, n->v.string.size);
+      idx += n->v.string.size;
+    }
   }
   return result;
 }
@@ -143,6 +146,7 @@ dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
     dst_n->v.color = n->v.params.color;
     dst_n->v.underline_thickness = n->v.params.underline_thickness;
     dst_n->v.strikethrough_thickness = n->v.params.strikethrough_thickness;
+    dst_n->v.icon = (fnt_tag_match(n->v.params.font, dr_thread_ctx->icon_font));
     SLLQueuePush(run_list.first, run_list.last, dst_n);
     run_list.node_count += 1;
     run_list.dim.x += dst_n->v.run.dim.x;
@@ -169,7 +173,7 @@ dr_dim_from_fstrs(DR_FStrList *fstrs)
 // (Frame boundaries)
 
 internal void
-dr_begin_frame(void)
+dr_begin_frame(FNT_Tag icon_font)
 {
   if(dr_thread_ctx == 0)
   {
@@ -181,6 +185,7 @@ dr_begin_frame(void)
   arena_pop_to(dr_thread_ctx->arena, dr_thread_ctx->arena_frame_start_pos);
   dr_thread_ctx->free_bucket_selection = 0;
   dr_thread_ctx->top_bucket = 0;
+  dr_thread_ctx->icon_font = icon_font;
 }
 
 internal void
@@ -627,7 +632,10 @@ dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FRunList *list, F32 max_x, Fu
           pixel_range.min = Min(pre_advance,  pixel_range.min);
           pixel_range.max = Max(post_advance, pixel_range.max);
         }
-        byte_off += piece->decode_size;
+        if(!fr->icon)
+        {
+          byte_off += piece->decode_size;
+        }
         advance += piece->advance;
       }
     }

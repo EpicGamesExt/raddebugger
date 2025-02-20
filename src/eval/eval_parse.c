@@ -747,6 +747,7 @@ e_expr_copy(Arena *arena, E_Expr *src)
       dst->value     = t->src->value;
       dst->string    = push_str8_copy(arena, t->src->string);
       dst->bytecode  = push_str8_copy(arena, t->src->bytecode);
+      dst->qualifier = push_str8_copy(arena, t->src->qualifier);
       if(t->dst_parent == &e_expr_nil)
       {
         result = dst;
@@ -1920,7 +1921,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: string => leaf string literal, or file path
           case E_TokenKind_StringLiteral:
           {
-            if(str8_match(resolution_qualifier, str8_lit("file"), 0))
+            if(str8_match(resolution_qualifier, str8_lit("file"), 0) ||
+               str8_match(resolution_qualifier, str8_lit("folder"), 0))
             {
               String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
               String8 string_value_raw = raw_from_escaped_str8(arena, string_value_escaped);

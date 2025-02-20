@@ -115,41 +115,51 @@ E_LOOKUP_INFO_FUNCTION_DEF(folder)
     E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
     E_Value lhs_value = lhs_interp.value;
     U64 lhs_string_id = lhs_value.u64;
-    
-    //- rjf: gather files in this folder
     String8 folder_path = e_string_from_id(lhs_string_id);
+    
+    //- rjf: compute filter - omit common prefixes (common parent paths)
+    String8 local_filter = filter;
+    {
+      U64 folder_pos_in_filter = str8_find_needle(filter, 0, folder_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
+      if(folder_pos_in_filter < filter.size)
+      {
+        local_filter = str8_skip(local_filter, folder_pos_in_filter+folder_path.size);
+        local_filter = str8_skip_chop_slashes(local_filter);
+      }
+      else
+      {
+        MemoryZeroStruct(&local_filter);
+      }
+    }
+    
+    //- rjf: gather & filter files in this folder
     String8List folder_paths = {0};
     String8List file_paths = {0};
     {
       OS_FileIter *iter = os_file_iter_begin(scratch.arena, folder_path, 0);
       for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, iter, &info);)
       {
-        if(info.props.flags & FilePropertyFlag_IsFolder)
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, local_filter, info.name);
+        if(matches.count == matches.needle_part_count)
         {
-          str8_list_push(scratch.arena, &folder_paths, push_str8_copy(arena, info.name));
-        }
-        else
-        {
-          str8_list_push(scratch.arena, &file_paths, push_str8_copy(arena, info.name));
+          if(info.props.flags & FilePropertyFlag_IsFolder)
+          {
+            str8_list_push(scratch.arena, &folder_paths, push_str8_copy(arena, info.name));
+          }
+          else
+          {
+            str8_list_push(scratch.arena, &file_paths, push_str8_copy(arena, info.name));
+          }
         }
       }
       os_file_iter_end(iter);
     }
     
-    //- rjf: build filtered paths
-    String8List folder_paths__filtered = {0};
-    String8List file_paths__filtered = {0};
-    {
-      // TODO(rjf)
-      folder_paths__filtered = folder_paths;
-      file_paths__filtered = file_paths;
-    }
-    
     //- rjf: build accelerator
     E_FolderAccel *accel = push_array(arena, E_FolderAccel, 1);
     accel->folder_path = push_str8_copy(arena, folder_path);
-    accel->folders = str8_array_from_list(arena, &folder_paths__filtered);
-    accel->files = str8_array_from_list(arena, &file_paths__filtered);
+    accel->folders = str8_array_from_list(arena, &folder_paths);
+    accel->files = str8_array_from_list(arena, &file_paths);
     info.user_data = accel;
     info.idxed_expr_count = accel->folders.count + accel->files.count;
     scratch_end(scratch);
@@ -190,6 +200,48 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
     exprs_strings[out_idx] = expr_string;
     scratch_end(scratch);
   }
+}
+
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(folder)
+{
+  U64 id = 0;
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  String8 name = {0};
+  if(0 < num && num <= accel->folders.count)
+  {
+    name = accel->folders.v[num-1];
+  }
+  else if(accel->folders.count < num && num <= accel->folders.count+accel->files.count)
+  {
+    name = accel->files.v[num-accel->folders.count-1];
+  }
+  id = e_hash_from_string(5381, name);
+  return id;
+}
+
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(folder)
+{
+  U64 num = 0;
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  for(U64 idx = 0; idx < accel->folders.count+accel->files.count; idx += 1)
+  {
+    String8 name = {0};
+    if(0 <= idx && idx < accel->folders.count)
+    {
+      name = accel->folders.v[idx];
+    }
+    else if(accel->folders.count <= idx && idx < accel->folders.count+accel->files.count)
+    {
+      name = accel->files.v[idx-accel->folders.count];
+    }
+    U64 hash = e_hash_from_string(5381, name);
+    if(hash == id)
+    {
+      num = idx+1;
+      break;
+    }
+  }
+  return num;
 }
 
 typedef struct E_FileAccel E_FileAccel;
@@ -433,7 +485,9 @@ e_lookup_rule_map_make(Arena *arena, U64 slots_count)
   map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder));
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder),
+                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(folder),
+                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(folder));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
                                .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file),
@@ -2253,21 +2307,26 @@ E_IRGEN_FUNCTION_DEF(default)
     case E_ExprKind_LeafFilePath:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      String8 file_path = path_normalized_from_string(scratch.arena, expr->string);
+      String8 file_path = expr->string;
       FileProperties props = os_properties_from_file_path(file_path);
-      if(props.flags & FilePropertyFlag_IsFolder || file_path.size == 0 || str8_match(file_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
-      {
-        E_Space space = e_space_make(E_SpaceKind_FileSystem);
-        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
-        result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
-        result.mode     = E_Mode_Value;
-      }
-      else
+      if(!str8_match(expr->qualifier, str8_lit("folder"), 0) && !(props.flags & FilePropertyFlag_IsFolder) && file_path.size != 0)
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
         result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
         result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
         result.mode     = E_Mode_Value;
+      }
+      else
+      {
+        String8 folder_path = str8_chop_last_slash(file_path);
+        props = os_properties_from_file_path(folder_path);
+        if(props.flags & FilePropertyFlag_IsFolder || folder_path.size == 0 || str8_match(folder_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+        {
+          E_Space space = e_space_make(E_SpaceKind_FileSystem);
+          result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(folder_path)));
+          result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
+          result.mode     = E_Mode_Value;
+        }
       }
       scratch_end(scratch);
     }break;
@@ -2637,6 +2696,7 @@ e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtre
   E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
   lhs_bytecode->string = e_string_from_expr(arena, lhs);
+  lhs_bytecode->qualifier = lhs->qualifier;
   lhs_bytecode->space = lhs->space;
   lhs_bytecode->mode = lhs_irtree->mode;
   lhs_bytecode->type_key = lhs_irtree->type_key;
@@ -2655,6 +2715,7 @@ e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree,
   E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
   lhs_bytecode->string = e_string_from_expr(arena, lhs);
+  lhs_bytecode->qualifier = lhs->qualifier;
   lhs_bytecode->space = lhs->space;
   lhs_bytecode->mode = lhs_irtree->mode;
   lhs_bytecode->type_key = lhs_irtree->type_key;

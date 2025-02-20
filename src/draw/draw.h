@@ -48,6 +48,7 @@ struct DR_FRun
   Vec4F32 color;
   F32 underline_thickness;
   F32 strikethrough_thickness;
+  B32 icon;
 };
 
 typedef struct DR_FRunNode DR_FRunNode;
@@ -98,6 +99,7 @@ struct DR_ThreadCtx
 {
   Arena *arena;
   U64 arena_frame_start_pos;
+  FNT_Tag icon_font;
   DR_BucketSelectionNode *top_bucket;
   DR_BucketSelectionNode *free_bucket_selection;
 };
@@ -129,7 +131,7 @@ internal Vec2F32 dr_dim_from_fstrs(DR_FStrList *fstrs);
 //
 // (Frame boundaries & bucket submission)
 
-internal void dr_begin_frame(void);
+internal void dr_begin_frame(FNT_Tag icon_font);
 internal void dr_submit_bucket(OS_Handle os_window, R_Handle r_window, DR_Bucket *bucket);
 
 ////////////////////////////////

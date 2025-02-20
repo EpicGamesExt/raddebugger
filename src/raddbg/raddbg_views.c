@@ -3044,7 +3044,16 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       searched_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
                     }
-                    FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, rd_view_search(), searched_string);
+                    String8 search_query = rd_view_search();
+                    FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, search_query, searched_string);
+                    if(fuzzy_matches.count == 0)
+                    {
+                      String8 path_needle = str8_skip_last_slash(search_query);
+                      if(0 < path_needle.size && path_needle.size < search_query.size)
+                      {
+                        fuzzy_matches = fuzzy_match_find(scratch.arena, path_needle, searched_string);
+                      }
+                    }
                     
                     // rjf: build
                     RD_LineEditParams line_edit_params = {0};

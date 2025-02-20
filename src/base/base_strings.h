@@ -220,6 +220,7 @@ internal String8 str8_skip(String8 str, U64 amt);
 internal String8 str8_postfix(String8 str, U64 size);
 internal String8 str8_chop(String8 str, U64 amt);
 internal String8 str8_skip_chop_whitespace(String8 string);
+internal String8 str8_skip_chop_slashes(String8 string);
 
 ////////////////////////////////
 //~ rjf: String Formatting & Copying

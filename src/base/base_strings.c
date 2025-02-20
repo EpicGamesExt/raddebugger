@@ -427,23 +427,53 @@ str8_chop(String8 str, U64 amt){
 }
 
 internal String8
-str8_skip_chop_whitespace(String8 string){
+str8_skip_chop_whitespace(String8 string)
+{
   U8 *first = string.str;
   U8 *opl = first + string.size;
-  for (;first < opl; first += 1){
-    if (!char_is_space(*first)){
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_space(*first))
+    {
       break;
     }
   }
-  for (;opl > first;){
+  for(;opl > first;)
+  {
     opl -= 1;
-    if (!char_is_space(*opl)){
+    if(!char_is_space(*opl))
+    {
       opl += 1;
       break;
     }
   }
   String8 result = str8_range(first, opl);
-  return(result);
+  return result;
+}
+
+internal String8
+str8_skip_chop_slashes(String8 string)
+{
+  U8 *first = string.str;
+  U8 *opl = first + string.size;
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_slash(*first))
+    {
+      break;
+    }
+  }
+  for(;opl > first;)
+  {
+    opl -= 1;
+    if(!char_is_slash(*opl))
+    {
+      opl += 1;
+      break;
+    }
+  }
+  String8 result = str8_range(first, opl);
+  return result;
 }
 
 ////////////////////////////////

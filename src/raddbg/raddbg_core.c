@@ -5223,24 +5223,32 @@ rd_window_frame(void)
       String8 cmd_name = ws->query_cmd_name;
       RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
       RD_Cfg *view = rd_cfg_child_from_string_or_alloc(query, str8_lit("watch"));
+      RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+      RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(view, str8_lit("cmd"));
+      rd_cfg_new_replace(cmd, cmd_name);
       rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+      B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
       RD_ViewState *vs = rd_view_state_from_cfg(view);
       vs->is_searching = 1;
       arena_clear(vs->search_arena);
       vs->search_cmd_name = push_str8_copy(vs->search_arena, ws->query_cmd_name);
       vs->search_regs = rd_regs_copy(vs->search_arena, ws->query_regs);
-      RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
       String8 query_expression = cmd_kind_info->query.expr;
-      B32 size_query_by_expr_eval = 0;
       if(query_expression.size == 0)
       {
         query_expression = str8(vs->search_buffer, vs->search_string_size);
         RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
         rd_cfg_new(explicit_root, str8_lit("1"));
-        size_query_by_expr_eval = 1;
       }
       else
       {
+        U64 input_insertion_pos = str8_find_needle(query_expression, 0, str8_lit("$input"), 0);
+        if(input_insertion_pos < query_expression.size)
+        {
+          String8 pre_insertion  = str8_prefix(query_expression, input_insertion_pos);
+          String8 post_insertion = str8_skip(query_expression, input_insertion_pos + 6);
+          query_expression = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->search_buffer, vs->search_string_size), post_insertion);
+        }
         rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
       }
       rd_cfg_new_replace(expr, query_expression);
@@ -11344,15 +11352,6 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
       }
       
-      //- rjf: add macro for 'search path'
-      {
-        String8 search_path = rd_state->current_path;
-        String8 search_path_escaped = escaped_from_raw_str8(scratch.arena, search_path);
-        String8 search_path_eval_string = push_str8f(scratch.arena, "file:\"%S\"", search_path_escaped);
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, search_path_eval_string).exprs.first;
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("search_path"), expr);
-      }
-      
       //- rjf: add macro for watches group
       {
         String8 collection_name = str8_lit("watches");
@@ -15264,7 +15263,7 @@ Z(getting_started)
   //- rjf: update/render all windows
   //
   {
-    dr_begin_frame();
+    dr_begin_frame(rd_font_from_slot(RD_FontSlot_Icons));
     RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
     for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
     {
