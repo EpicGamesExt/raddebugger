@@ -3320,6 +3320,7 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
     view_state->arena = arena_alloc();
     view_state->ev_view = ev_view_alloc();
     view_state->loading_t = 1.f;
+    view_state->search_arena = arena_alloc();
   }
   if(view_state != &rd_nil_view_state)
   {
@@ -3342,8 +3343,12 @@ rd_view_ui(Rng2F32 rect)
   //
   B32 search_row_is_open = (vs->is_searching || vs->search_string_size != 0);
   F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open);
-  if(search_row_open_t > 0.001f) RD_Font(RD_FontSlot_Code)
+  if(search_row_open_t > 0.001f)
   {
+    String8 cmd_name = vs->search_cmd_name;
+    RD_IconKind icon = rd_icon_kind_from_code_name(cmd_name);
+    RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+    
     //- rjf: clamp cursor
     if(vs->search_cursor.column == 0)
     {
@@ -3367,21 +3372,21 @@ rd_view_ui(Rng2F32 rect)
     
     //- rjf: build contents
     UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->is_searching ? UI_FocusKind_On : UI_FocusKind_Off)
+      RD_Font(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput ? RD_FontSlot_Code : RD_FontSlot_Main)
     {
-      if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
-      {
-        vs->is_searching = 0;
-        vs->search_string_size = 0;
-      }
       UI_TextAlignment(UI_TextAlign_Center)
         UI_Transparency(1-search_row_open_t)
         UI_PrefWidth(ui_em(2.5f, 1.f))
         UI_TagF("weak")
         RD_Font(RD_FontSlot_Icons)
-        ui_label(rd_icon_kind_text_table[RD_IconKind_Find]);
+        ui_label(rd_icon_kind_text_table[icon == RD_IconKind_Null ? RD_IconKind_Find : icon]);
+      UI_Transparency(1-search_row_open_t)
+        RD_Font(RD_FontSlot_Main) UI_PrefWidth(ui_text_dim(1, 1))
+        ui_label(rd_display_from_code_name(cmd_name));
+      ui_spacer(ui_em(0.5f, 1.f));
       RD_LineEditParams params = {0};
       {
-        params.flags |= RD_LineEditFlag_CodeContents;
+        params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_LineEditFlag_CodeContents;
         params.flags |= RD_LineEditFlag_Border;
         params.cursor               = &vs->search_cursor;
         params.mark                 = &vs->search_mark;
@@ -3394,6 +3399,25 @@ rd_view_ui(Rng2F32 rect)
       if(ui_pressed(sig))
       {
         vs->is_searching = 1;
+      }
+      if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+      {
+        vs->is_searching = 0;
+        vs->search_string_size = 0;
+      }
+      if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
+      {
+        RD_RegsScope()
+        {
+          rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
+          rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
+          rd_push_cmd(cmd_name, rd_regs());
+        }
+        if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
+        {
+          vs->is_searching = 0;
+          vs->search_string_size = 0;
+        }
       }
     }
     
@@ -4105,6 +4129,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->ctx_menu_input_buffer = push_array(ws->arena, U8, ws->ctx_menu_input_buffer_size);
     ws->drop_completion_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
+    ws->query_arena = arena_alloc();
     ws->last_dpi = os_dpi_from_window(ws->os);
     OS_Handle zero_monitor = {0};
     if(!os_handle_match(zero_monitor, preferred_monitor))
@@ -4173,7 +4198,7 @@ rd_window_frame(void)
   RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
   B32 window_is_focused   = (os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc);
   B32 popup_is_open       = (rd_state->popup_active);
-  B32 query_is_open       = (rd_cfg_child_from_string(window, str8_lit("query")) != &rd_nil_cfg);
+  B32 query_is_open       = (ws->query_is_active);
   B32 hover_eval_is_open  = (!popup_is_open &&
                              !query_is_open &&
                              ws->hover_eval_string.size != 0 &&
@@ -5191,96 +5216,112 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: build query
     //
+    if(query_is_open)
     {
-      RD_Cfg *query = rd_cfg_child_from_string(window, str8_lit("query"));
-      if(query != &rd_nil_cfg)
+      //- rjf: unpack query parameters
+      RD_Cfg *query = rd_immediate_cfg_from_keyf("window_query_%p", window);
+      String8 cmd_name = ws->query_cmd_name;
+      RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+      RD_Cfg *view = rd_cfg_child_from_string_or_alloc(query, str8_lit("watch"));
+      rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+      RD_ViewState *vs = rd_view_state_from_cfg(view);
+      vs->is_searching = 1;
+      arena_clear(vs->search_arena);
+      vs->search_cmd_name = push_str8_copy(vs->search_arena, ws->query_cmd_name);
+      vs->search_regs = rd_regs_copy(vs->search_arena, ws->query_regs);
+      RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+      String8 query_expression = cmd_kind_info->query.expr;
+      B32 size_query_by_expr_eval = 0;
+      if(query_expression.size == 0)
       {
-        //- rjf: unpack query parameters
-        RD_Cfg *root = query;
-        RD_Cfg *cmd = rd_cfg_child_from_string(root, str8_lit("cmd"));
-        String8 cmd_name = cmd->first->string;
-        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
-        rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
-        RD_ViewState *vs = rd_view_state_from_cfg(view);
-        vs->is_searching = 1;
-        RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        String8 query_expression = cmd_kind_info->query.expr;
-        rd_cfg_new_replace(expr, query_expression);
-        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expression);
-        F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-        
-        //- rjf: cancel
-        if(ui_slot_press(UI_EventActionSlot_Cancel))
+        query_expression = str8(vs->search_buffer, vs->search_string_size);
+        RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+        rd_cfg_new(explicit_root, str8_lit("1"));
+        size_query_by_expr_eval = 1;
+      }
+      else
+      {
+        rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
+      }
+      rd_cfg_new_replace(expr, query_expression);
+      E_Eval query_eval = e_eval_from_string(scratch.arena, query_expression);
+      F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+      
+      //- rjf: cancel
+      if(ui_slot_press(UI_EventActionSlot_Cancel))
+      {
+        rd_cmd(RD_CmdKind_CancelQuery);
+      }
+      
+      //- rjf: build
+      RD_RegsScope(.view = view->id)
+      {
+        Vec2F32 content_rect_center = center_2f32(content_rect);
+        Vec2F32 content_rect_dim = dim_2f32(content_rect);
+        EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_search(), query_eval.exprs);
+        F32 query_open_t = ui_anim(ui_key_from_string(ui_key_zero(), str8_lit("query_open_t")), 1.f);
+        F32 query_width_px = floor_f32(dim_2f32(content_rect).x * 0.35f);
+        F32 max_query_height_px = content_rect_dim.y*0.8f;
+        F32 query_height_px = max_query_height_px;
+        if(size_query_by_expr_eval)
         {
-          rd_cmd(RD_CmdKind_CancelQuery);
+          query_height_px = row_height_px*predicted_block_tree.total_row_count;
+          query_height_px = Min(query_height_px, max_query_height_px);
         }
+        Rng2F32 query_rect = r2f32p(content_rect_center.x - query_width_px/2,
+                                    content_rect_center.y - max_query_height_px/2.f,
+                                    content_rect_center.x + query_width_px/2,
+                                    content_rect_center.y - max_query_height_px/2.f + query_height_px*query_open_t);
         
-        //- rjf: build
-        RD_RegsScope(.view = view->id)
+        RD_Font(RD_FontSlot_Code)
+          UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+          UI_TagF("floating")
+          UI_Focus(UI_FocusKind_On)
+          UI_PrefHeight(ui_px(row_height_px, 1.f))
         {
-          Vec2F32 content_rect_center = center_2f32(content_rect);
-          Vec2F32 content_rect_dim = dim_2f32(content_rect);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_search(), query_eval.exprs);
-          F32 query_open_t = ui_anim(ui_key_from_string(ui_key_zero(), str8_lit("query_open_t")), 1.f);
-          F32 query_width_px = floor_f32(dim_2f32(content_rect).x * 0.35f);
-          F32 max_query_height_px = content_rect_dim.y*0.8f;
-          F32 query_height_px = max_query_height_px;
-          Rng2F32 query_rect = r2f32p(content_rect_center.x - query_width_px/2,
-                                      content_rect_center.y - max_query_height_px/2.f,
-                                      content_rect_center.x + query_width_px/2,
-                                      content_rect_center.y - max_query_height_px/2.f + query_height_px*query_open_t);
-          
-          RD_Font(RD_FontSlot_Code)
-            UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-            UI_TagF("floating")
-            UI_Focus(UI_FocusKind_On)
-            UI_PrefHeight(ui_px(row_height_px, 1.f))
+          //- rjf: build top-level container
+          UI_Box *container = &ui_nil_box;
+          UI_Rect(query_rect)
+            UI_Squish(0.25f-0.25f*query_open_t)
+            UI_Transparency(1.f-query_open_t)
+            UI_ChildLayoutAxis(Axis2_Y)
           {
-            //- rjf: build top-level container
-            UI_Box *container = &ui_nil_box;
-            UI_Rect(query_rect)
-              UI_Squish(0.25f-0.25f*query_open_t)
-              UI_Transparency(1.f-query_open_t)
-              UI_ChildLayoutAxis(Axis2_Y)
-            {
-              container = ui_build_box_from_string(UI_BoxFlag_Clickable|
-                                                   UI_BoxFlag_DrawBorder|
-                                                   UI_BoxFlag_DrawBackground|
-                                                   UI_BoxFlag_DrawBackgroundBlur|
-                                                   UI_BoxFlag_DisableFocusOverlay|
-                                                   UI_BoxFlag_DrawDropShadow,
-                                                   str8_lit("query_container"));
-            }
-            
-            //- rjf: fill container
-            UI_Parent(container) UI_Focus(UI_FocusKind_Null)
-            {
-              ui_set_next_pref_width(ui_pct(1, 0));
-              ui_set_next_pref_height(ui_pct(1, 0));
-              ui_set_next_child_layout_axis(Axis2_Y);
-              UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
-              UI_Parent(view_contents_container) UI_WidthFill
-              {
-                rd_view_ui(view_contents_container->rect);
-              }
-            }
-            
-            //- rjf: fallthrough interactions on container
-            UI_Signal sig = ui_signal_from_box(container);
+            container = ui_build_box_from_string(UI_BoxFlag_Clickable|
+                                                 UI_BoxFlag_DrawBorder|
+                                                 UI_BoxFlag_DrawBackground|
+                                                 UI_BoxFlag_DrawBackgroundBlur|
+                                                 UI_BoxFlag_DisableFocusOverlay|
+                                                 UI_BoxFlag_DrawDropShadow,
+                                                 str8_lit("query_container"));
           }
+          
+          //- rjf: fill container
+          UI_Parent(container) UI_Focus(UI_FocusKind_Null)
+          {
+            ui_set_next_pref_width(ui_pct(1, 0));
+            ui_set_next_pref_height(ui_pct(1, 0));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
+            UI_Parent(view_contents_container) UI_WidthFill
+            {
+              rd_view_ui(view_contents_container->rect);
+            }
+          }
+          
+          //- rjf: fallthrough interactions on container
+          UI_Signal sig = ui_signal_from_box(container);
         }
-        
-        //- rjf: accept
-        if(ui_slot_press(UI_EventActionSlot_Accept))
-        {
-        }
-        
-        //- rjf: build darkening rectangle over rest of screen
-        UI_Rect(window_rect) UI_TagF("inactive")
-        {
-          ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
-        }
+      }
+      
+      //- rjf: accept
+      if(ui_slot_press(UI_EventActionSlot_Accept))
+      {
+      }
+      
+      //- rjf: build darkening rectangle over rest of screen
+      UI_Rect(window_rect) UI_TagF("inactive")
+      {
+        ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
       }
     }
     
@@ -10434,6 +10475,7 @@ rd_frame(void)
           arena_release(ws->ctx_menu_arena);
           arena_release(ws->drop_completion_arena);
           arena_release(ws->hover_eval_arena);
+          arena_release(ws->query_arena);
           arena_release(ws->arena);
           DLLRemove_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
           DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
@@ -10460,6 +10502,7 @@ rd_frame(void)
           {
             arena_release(ext->arena);
           }
+          arena_release(vs->search_arena);
           arena_release(vs->arena);
           DLLRemove_NP(rd_state->view_state_slots[slot_idx].first, rd_state->view_state_slots[slot_idx].last, vs, hash_next, hash_prev);
           SLLStackPush_N(rd_state->free_view_state, vs, hash_next);
@@ -11714,8 +11757,7 @@ rd_frame(void)
             for(RD_Cfg *old_child = old_window->first; old_child != &rd_nil_cfg; old_child = old_child->next)
             {
               if(!str8_match(old_child->string, str8_lit("panels"), 0) &&
-                 !str8_match(old_child->string, str8_lit("size"), 0) &&
-                 !str8_match(old_child->string, str8_lit("query"), 0))
+                 !str8_match(old_child->string, str8_lit("size"), 0))
               {
                 RD_Cfg *new_child = rd_cfg_deep_copy(old_child);
                 rd_cfg_insert_child(new_window, new_window->last, new_child);
@@ -13707,17 +13749,6 @@ Z(getting_started)
           }break;
           
           //- rjf: search operations
-          case RD_CmdKind_Search:
-          {
-            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-            RD_ViewState *vs = rd_view_state_from_cfg(view);
-            if(!vs->is_searching)
-            {
-              vs->search_cursor = txt_pt(1, 1+vs->search_string_size);
-              vs->search_mark = txt_pt(1, 1);
-            }
-            vs->is_searching ^= 1;
-          }break;
 #if 0 // TODO(rjf): @cfg
           case RD_CmdKind_ClearFilter:
           {
@@ -13742,12 +13773,41 @@ Z(getting_started)
           //- rjf: query stack
           case RD_CmdKind_PushQuery:
           {
-            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *current_query = rd_cfg_child_from_string(window, str8_lit("query"));
-            rd_cfg_release(current_query);
-            RD_Cfg *new_query = rd_cfg_new(window, str8_lit("query"));
-            RD_Cfg *cmd = rd_cfg_new(new_query, str8_lit("cmd"));
-            rd_cfg_new(cmd, rd_regs()->cmd_name);
+            String8 cmd_name = rd_regs()->cmd_name;
+            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+            if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
+            {
+              RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+              RD_WindowState *ws = rd_window_state_from_cfg(window);
+              if(ws != &rd_nil_window_state)
+              {
+                ws->query_is_active = 1;
+                arena_clear(ws->query_arena);
+                ws->query_cmd_name = push_str8_copy(ws->query_arena, cmd_name);
+                ws->query_regs = rd_regs_copy(ws->query_arena, rd_regs());
+              }
+            }
+            else
+            {
+              RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+              RD_ViewState *vs = rd_view_state_from_cfg(view);
+              if(!str8_match(vs->search_cmd_name, cmd_name, 0))
+              {
+                arena_clear(vs->search_arena);
+                vs->search_regs = rd_regs_copy(vs->search_arena, rd_regs());
+                vs->search_cmd_name = push_str8_copy(vs->search_arena, cmd_name);
+                if(!vs->is_searching)
+                {
+                  vs->search_cursor = txt_pt(1, 1+vs->search_string_size);
+                  vs->search_mark = txt_pt(1, 1);
+                }
+                vs->is_searching = 1;
+              }
+              else
+              {
+                vs->is_searching ^= 1;
+              }
+            }
           }break;
           case RD_CmdKind_CompleteQuery:
           {
@@ -13798,7 +13858,13 @@ Z(getting_started)
           case RD_CmdKind_CancelQuery:
           {
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            rd_cfg_release(rd_cfg_child_from_string(window, str8_lit("query")));
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            if(ws != &rd_nil_window_state)
+            {
+              ws->query_is_active = 0;
+              arena_clear(ws->query_arena);
+              ws->query_cmd_name = str8_zero();
+            }
           }break;
           
           //- rjf: developer commands

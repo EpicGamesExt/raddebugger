@@ -3073,6 +3073,10 @@ ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *proce
       {
         inline_frame->v.parent_num = frame_count;
         inline_frame->v.inline_depth = inline_frame_count - inline_frame_idx;
+        if(inline_frame == last_inline_frame)
+        {
+          break;
+        }
       }
     }
     

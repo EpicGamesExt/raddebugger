@@ -125,60 +125,6 @@ struct RD_ViewUIRuleMap
 };
 
 ////////////////////////////////
-//~ rjf: View State Types
-
-typedef struct RD_ArenaExt RD_ArenaExt;
-struct RD_ArenaExt
-{
-  RD_ArenaExt *next;
-  Arena *arena;
-};
-
-typedef struct RD_ViewState RD_ViewState;
-struct RD_ViewState
-{
-  // rjf: hash links & key
-  RD_ViewState *hash_next;
-  RD_ViewState *hash_prev;
-  RD_CfgID cfg_id;
-  
-  // rjf: touch info
-  U64 last_frame_index_touched;
-  
-  // rjf: loading indicator info
-  F32 loading_t;
-  F32 loading_t_target;
-  U64 loading_progress_v;
-  U64 loading_progress_v_target;
-  
-  // rjf: scroll position
-  UI_ScrollPt2 scroll_pos;
-  
-  // rjf: eval visualization view state
-  EV_View *ev_view;
-  
-  // rjf: view-lifetime allocation & user data extensions
-  Arena *arena;
-  RD_ArenaExt *first_arena_ext;
-  RD_ArenaExt *last_arena_ext;
-  void *user_data;
-  
-  // rjf: search editing controls
-  B32 is_searching;
-  TxtPt search_cursor;
-  TxtPt search_mark;
-  U8 search_buffer[KB(1)];
-  U64 search_string_size;
-};
-
-typedef struct RD_ViewStateSlot RD_ViewStateSlot;
-struct RD_ViewStateSlot
-{
-  RD_ViewState *first;
-  RD_ViewState *last;
-};
-
-////////////////////////////////
 //~ rjf: Drag/Drop Types
 
 typedef enum RD_DragDropState
@@ -201,7 +147,8 @@ enum
   RD_QueryFlag_CodeInput        = (1<<2),
   RD_QueryFlag_KeepOldInput     = (1<<3),
   RD_QueryFlag_SelectOldInput   = (1<<4),
-  RD_QueryFlag_Required         = (1<<5),
+  RD_QueryFlag_Floating         = (1<<5),
+  RD_QueryFlag_Required         = (1<<6),
 };
 
 typedef U32 RD_CmdKindFlags;
@@ -246,6 +193,63 @@ enum
 //~ rjf: Generated Code
 
 #include "generated/raddbg.meta.h"
+
+////////////////////////////////
+//~ rjf: View State Types
+
+typedef struct RD_ArenaExt RD_ArenaExt;
+struct RD_ArenaExt
+{
+  RD_ArenaExt *next;
+  Arena *arena;
+};
+
+typedef struct RD_ViewState RD_ViewState;
+struct RD_ViewState
+{
+  // rjf: hash links & key
+  RD_ViewState *hash_next;
+  RD_ViewState *hash_prev;
+  RD_CfgID cfg_id;
+  
+  // rjf: touch info
+  U64 last_frame_index_touched;
+  
+  // rjf: loading indicator info
+  F32 loading_t;
+  F32 loading_t_target;
+  U64 loading_progress_v;
+  U64 loading_progress_v_target;
+  
+  // rjf: scroll position
+  UI_ScrollPt2 scroll_pos;
+  
+  // rjf: eval visualization view state
+  EV_View *ev_view;
+  
+  // rjf: view-lifetime allocation & user data extensions
+  Arena *arena;
+  RD_ArenaExt *first_arena_ext;
+  RD_ArenaExt *last_arena_ext;
+  void *user_data;
+  
+  // rjf: search editing controls
+  B32 is_searching;
+  Arena *search_arena;
+  RD_Regs *search_regs;
+  String8 search_cmd_name;
+  TxtPt search_cursor;
+  TxtPt search_mark;
+  U8 search_buffer[KB(1)];
+  U64 search_string_size;
+};
+
+typedef struct RD_ViewStateSlot RD_ViewStateSlot;
+struct RD_ViewStateSlot
+{
+  RD_ViewState *first;
+  RD_ViewState *last;
+};
 
 ////////////////////////////////
 //~ rjf: Vocabulary Map
@@ -570,6 +574,12 @@ struct RD_WindowState
   // rjf: drop-completion state
   Arena *drop_completion_arena;
   String8List drop_completion_paths;
+  
+  // rjf: query state
+  B32 query_is_active;
+  Arena *query_arena;
+  String8 query_cmd_name;
+  RD_Regs *query_regs;
   
   // rjf: query view stack
 #if 0

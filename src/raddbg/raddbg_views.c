@@ -73,12 +73,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         cv->contain_cursor = 1;
       }break;
-      case RD_CmdKind_FindTextForward:
+      case RD_CmdKind_Search:
       {
         arena_clear(cv->find_text_arena);
         cv->find_text_fwd = push_str8_copy(cv->find_text_arena, cmd->regs->string);
       }break;
-      case RD_CmdKind_FindTextBackward:
+      case RD_CmdKind_SearchBackwards:
       {
         arena_clear(cv->find_text_arena);
         cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->regs->string);
@@ -3158,8 +3158,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_info->eval.space);
                       RD_Cfg *cfg = rd_cfg_from_eval_space(row_info->eval.space);
-                      RD_CmdKind kind = rd_cmd_kind_from_string(cell_info.cmd_name);
-                      rd_cmd(kind, .cfg = cfg->id, .ctrl_entity = entity->handle);
+                      rd_cmd(RD_CmdKind_RunCommand, .cfg = cfg->id, .ctrl_entity = entity->handle, .cmd_name = cell_info.cmd_name);
                     }
                     
                     // rjf: row has callstack info? -> select unwind
