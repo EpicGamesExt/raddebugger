@@ -10301,9 +10301,8 @@ rd_init(CmdLine *cmdln)
   {
     Temp scratch = scratch_begin(0, 0);
     String8 current_path = os_get_current_path(scratch.arena);
-    String8 current_path_with_slash = push_str8f(scratch.arena, "%S/", current_path);
     rd_state->current_path_arena = arena_alloc();
-    rd_state->current_path = push_str8_copy(rd_state->current_path_arena, current_path_with_slash);
+    rd_state->current_path = push_str8_copy(rd_state->current_path_arena, current_path);
     scratch_end(scratch);
   }
   
@@ -11298,6 +11297,15 @@ rd_frame(void)
       {
         E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("current_thread.call_stack")).exprs.first;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
+      }
+      
+      //- rjf: add macro for 'search path'
+      {
+        String8 search_path = rd_state->current_path;
+        String8 search_path_escaped = escaped_from_raw_str8(scratch.arena, search_path);
+        String8 search_path_eval_string = push_str8f(scratch.arena, "file:\"%S\"", search_path_escaped);
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, search_path_eval_string).exprs.first;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("search_path"), expr);
       }
       
       //- rjf: add macro for watches group
