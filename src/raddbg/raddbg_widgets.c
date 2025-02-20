@@ -18,7 +18,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     String8 label_string = rd_label_from_cfg(cfg);
     String8 expr_string = rd_expr_from_cfg(cfg);
     String8 collection_name = {0};
-    String8 file_path = {0};
+    String8 file_path = rd_path_from_cfg(cfg);
     Vec4F32 rgba = rd_color_from_cfg(cfg);
     if(rgba.w == 0)
     {
@@ -1350,7 +1350,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   UI_Box *catchall_margin_container_box = &ui_nil_box;
   if(params->flags & RD_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build catchall margins")
-    UI_TagF("implicit")
+    UI_TagF("floating")
   {
     if(params->margin_float_off_px != 0)
     {
@@ -1510,7 +1510,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             B32 bp_is_disabled = rd_disabled_from_cfg(bp);
             if(bp_is_disabled)
             {
-              bp_rgba = v4f32(bp_rgba.x * 0.6f, bp_rgba.y * 0.6f, bp_rgba.z * 0.6f, bp_rgba.w * 0.6f);
+              bp_rgba = v4f32(bp_rgba.x*0.45f, bp_rgba.y*0.45f, bp_rgba.z*0.45f, bp_rgba.w*0.45f);
             }
             
             // rjf: prep custom rendering data
@@ -1665,7 +1665,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //- rjf: build line numbers
   //
   if(params->flags & RD_CodeSliceFlag_LineNums) UI_Parent(top_container_box) ProfScope("build line numbers") UI_Focus(UI_FocusKind_Off)
-    UI_TagF("implicit")
+    UI_TagF("floating")
   {
     TxtRng select_rng = txt_rng(*cursor, *mark);
     Vec4F32 active_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeLineNumbersSelected);
@@ -1708,7 +1708,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           if(has_line_info)
           {
             Vec4F32 color = code_line_bgs[line_info_line_num % ArrayCount(code_line_bgs)];
-            color.w *= line_info_t;
+            color.w *= line_info_t*0.2f;
             bg_color = color;
           }
         }
@@ -1833,7 +1833,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           String8 eval_string = {0};
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
           {
-            eval_string = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval);
+            eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval);
           }
           ui_spacer(ui_em(1.5f, 1.f));
           ui_set_next_pref_width(ui_children_sum(1));
@@ -2372,6 +2372,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color.w *= 0.5f;
               }
+              color.w *= 0.2f;
               dr_rect(match_rect, color, 4.f, 0, 1.f);
               needle_pos += 1;
             }
@@ -2475,7 +2476,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           if(matches)
           {
             Vec4F32 highlight_color = code_line_bgs[line_info_line_num % ArrayCount(code_line_bgs)];
-            highlight_color.w *= 0.25f;
+            highlight_color.w *= 0.05f;
             dr_rect(line_box->rect, highlight_color, 0, 0, 0);
           }
         }
@@ -3226,6 +3227,10 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       }
       UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
       ui_box_equip_display_fstrs(label, &params->fstrs);
+      if(params->fuzzy_matches != 0)
+      {
+        ui_box_equip_fuzzy_match_ranges(label, params->fuzzy_matches);
+      }
     }
     else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
     {

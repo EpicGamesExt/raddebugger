@@ -223,6 +223,7 @@ RD_CmdKind_EnableBreakpoint,
 RD_CmdKind_DisableBreakpoint,
 RD_CmdKind_AddWatchPin,
 RD_CmdKind_ToggleWatchPin,
+RD_CmdKind_AddAutoViewRule,
 RD_CmdKind_SetNextStatement,
 RD_CmdKind_AddTarget,
 RD_CmdKind_SelectTarget,
@@ -230,9 +231,7 @@ RD_CmdKind_EnableTarget,
 RD_CmdKind_DisableTarget,
 RD_CmdKind_RegisterAsJITDebugger,
 RD_CmdKind_FindCodeLocation,
-RD_CmdKind_Filter,
-RD_CmdKind_ApplyFilter,
-RD_CmdKind_ClearFilter,
+RD_CmdKind_Search,
 RD_CmdKind_GettingStarted,
 RD_CmdKind_Commands,
 RD_CmdKind_Target,
@@ -569,6 +568,7 @@ struct RD_Query
 {
 RD_QueryFlags flags;
 RD_RegSlot slot;
+String8 expr;
 String8 view_name;
 CTRL_EntityKind ctrl_entity_kind;
 };
@@ -624,8 +624,8 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[289];
-extern RD_NameSchemaInfo rd_name_schema_info_table[10];
+extern RD_VocabInfo rd_vocab_info_table[292];
+extern RD_NameSchemaInfo rd_name_schema_info_table[12];
 extern Rng1U64 rd_reg_slot_range_table[38];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];

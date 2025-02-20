@@ -1043,7 +1043,7 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
   node->type_key = type_key;
   U8 pattern_split = '?';
-  node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, 0);
+  node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
   node->tag_exprs = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).exprs;
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
@@ -1089,12 +1089,18 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
     if(map != 0 && map->first_pattern != 0)
     {
       String8 type_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, type_key));
-      for(E_AutoHookNode *auto_hook_node = map->first_pattern; auto_hook_node != 0; auto_hook_node = auto_hook_node->pattern_order_next)
+      for(E_AutoHookNode *auto_hook_node = map->first_pattern;
+          auto_hook_node != 0;
+          auto_hook_node = auto_hook_node->pattern_order_next)
       {
         B32 fits_this_type_string = 1;
         U64 scan_pos = 0;
         for(String8Node *n = auto_hook_node->type_pattern_parts.first; n != 0; n = n->next)
         {
+          if(n->string.size == 0)
+          {
+            continue;
+          }
           U64 pattern_part_pos = str8_find_needle(type_string, scan_pos, n->string, 0);
           if(pattern_part_pos >= type_string.size)
           {
@@ -1102,10 +1108,6 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
             break;
           }
           scan_pos = pattern_part_pos + n->string.size;
-        }
-        if(scan_pos < type_string.size)
-        {
-          fits_this_type_string = 0;
         }
         if(fits_this_type_string)
         {
@@ -2239,7 +2241,7 @@ E_IRGEN_FUNCTION_DEF(default)
     //- rjf: leaf values
     case E_ExprKind_LeafValue:
     {
-      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
+      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU128);
       new_tree->value = expr->value;
       new_tree->space = expr->space;
       result.root     = new_tree;

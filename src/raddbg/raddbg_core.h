@@ -85,6 +85,7 @@ enum
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
   RD_EvalSpaceKind_MetaCtrlEntity,
+  RD_EvalSpaceKind_MetaUnattachedProcess,
 };
 
 ////////////////////////////////
@@ -994,6 +995,7 @@ internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
 internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal String8 rd_view_rule_from_cfg(RD_Cfg *cfg);
+internal String8 rd_path_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
@@ -1111,8 +1113,8 @@ internal void rd_window_frame(void);
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
-internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Expr *root_expr, E_Eval eval, String8List *out);
-internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval);
+internal F32 rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Expr *root_expr, E_Eval eval, String8List *out);
+internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Hover Eval

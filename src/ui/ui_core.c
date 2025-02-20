@@ -2024,6 +2024,8 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
     ui_state->ctx_menu_root->tags_key = ui_top_tags_key();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
+    ui_state->ctx_menu_root->text_color = ui_color_from_name(str8_lit("text"));
+    ui_state->ctx_menu_root->background_color = ui_color_from_name(str8_lit("background"));
     ui_spacer(ui_em(1.f, 1.f));
   }
   ui_state->is_in_open_ctx_menu = is_open;

@@ -139,22 +139,8 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: get active search query
   //
-  String8 search_query = {0};
-  Side search_query_side = Side_Invalid;
+  String8 search_query = rd_view_search();
   B32 search_query_is_active = 0;
-  {
-#if 0 // TODO(rjf): @cfg
-    RD_Window *window = rd_window_from_handle(rd_regs()->window);
-    RD_CmdKind query_cmd_kind = rd_cmd_kind_from_string(window->query_cmd_name);
-    if(query_cmd_kind == RD_CmdKind_FindTextForward ||
-       query_cmd_kind == RD_CmdKind_FindTextBackward)
-    {
-      search_query = str8(window->query_view_stack_top->query_buffer, window->query_view_stack_top->query_string_size);
-      search_query_is_active = 1;
-      search_query_side = (query_cmd_kind == RD_CmdKind_FindTextForward) ? Side_Max : Side_Min;
-    }
-#endif
-  }
   
   //////////////////////////////
   //- rjf: prepare code slice info bundle, for the viewable region of text
@@ -1030,12 +1016,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       if(0){}
       
-      // rjf: lister rows
-      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
-      }
-      
       // rjf: top-level cfg rows
       else if(is_top_level && evalled_cfg != &rd_nil_cfg)
       {
@@ -1085,7 +1065,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           }
           if(cmd_kind != RD_CmdKind_Null)
           {
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands[%I64u]", (U64)cmd_kind-1));
+            String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
           }
         }
       }
@@ -1104,16 +1085,51 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           {
             cmd_kind = RD_CmdKind_ThawEntity;
           }
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands[%I64u]", (U64)cmd_kind-1));
+          String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+        }
+      }
+      
+      // rjf: singular button for unattached processes
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
+      {
+        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        if(str8_match(type->name, str8_lit("unattached_process"), 0))
+        {
+          U64 pid = info.eval.value.u128.u64[0];
+          String8 name = e_string_from_id(info.eval.value.u128.u64[1]);
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          DR_FStrList fstrs = {0};
+          UI_TagF("weak")
+          {
+            dr_fstrs_push_new(arena, &fstrs, &params,
+                              rd_icon_kind_text_table[RD_IconKind_Scheduler],
+                              .font = rd_font_from_slot(RD_FontSlot_Icons),
+                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                              .color = ui_color_from_name(str8_lit("text")));
+          }
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+          dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+          dr_fstrs_push_new(arena, &fstrs, &params, name);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = fstrs);
         }
       }
       
       // rjf: singular button for commands
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        RD_CmdKind cmd_kind = e_value_eval_from_eval(info.eval).value.u64;
-        RD_CmdKindInfo *cmd_kind_info = &rd_cmd_kind_info_table[cmd_kind];
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
+        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        if(type->kind == E_TypeKind_Set)
+        {
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = 0, .pct = 1.f);
+        }
+        else
+        {
+          String8 cmd_name = e_string_from_id(e_value_eval_from_eval(info.eval).value.u64);
+          RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
+        }
       }
       
       // rjf: folder / file rows
@@ -1147,6 +1163,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         }
       }
       
+      // rjf: lister rows
+      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
+      }
+      
       // rjf: singular cell for view ui
       else if(info.view_ui_rule != &rd_nil_view_ui_rule)
       {
@@ -1157,6 +1179,21 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.eval.exprs.last == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
+      }
+      
+      // rjf: procedures collections get only expr/value/view-rule
+      else if(block_type->kind == E_TypeKind_Set && str8_match(block_type->name, str8_lit("procedures"), 0))
+      {
+        info.cell_style_key = str8_lit("expr_value_viewrule");
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+        RD_Cfg *w_cfg = style->first;
+        F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                               .default_pct = 0.65f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),    .default_pct = 0.20f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                                .default_pct = 0.15f, .pct = take_pct());
+#undef take_pct
       }
       
       // rjf: for meta-cfg evaluation spaces, only do expr/value
@@ -1366,7 +1403,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: generate strings/flags based on that expression & fill
-      result.string   = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, result.eval);
+      result.string   = rd_value_string_from_eval(arena, rd_view_search(), string_flags, default_radix, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       E_Type *type = e_type_from_key__cached(result.eval.type_key);
       if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
@@ -1422,9 +1459,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        RD_CmdKind cmd_kind = (RD_CmdKind)result.eval.value.u64;
-        String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-        result.cmd_name = cmd_name;
+        result.cmd_name = e_string_from_id(result.eval.value.u64);
       }
       else if(result.eval.space.kind == E_SpaceKind_FileSystem)
       {
@@ -1461,8 +1496,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        RD_CmdKind cmd_kind = (RD_CmdKind)result.eval.value.u64;
-        String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+        String8 cmd_name = e_string_from_id(result.eval.value.u64);
         if(cell->px != 0) UI_TagF("weak")
         {
           DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Icons), rd_raster_flags_from_slot(RD_FontSlot_Icons), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
@@ -2862,8 +2896,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     if(rgba.w == 0)
                     {
                       rgba = pop_background_rgba;
+                      rgba.w *= 0.5f;
                     }
-                    rgba.w *= 0.2f;
+                    else
+                    {
+                      rgba.w *= 0.15f;
+                    }
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                     cell_background_color_override = rgba;
                     cell_flags |= UI_BoxFlag_DrawBackground;
@@ -2876,8 +2914,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     if(rgba.w == 0)
                     {
                       rgba = pop_background_rgba;
+                      rgba.w *= 0.5f;
                     }
-                    rgba.w *= 0.2f;
+                    else
+                    {
+                      rgba.w *= 0.15f;
+                    }
                     rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                     cell_background_color_override = rgba;
                     cell_flags |= UI_BoxFlag_DrawBackground;
@@ -2997,6 +3039,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       is_button = 0;
                       is_activated_on_single_click = 0;
                     }
+                    String8 searched_string = cell_info.string;
+                    if(cell->fstrs.node_count != 0)
+                    {
+                      searched_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
+                    }
+                    FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, rd_view_search(), searched_string);
                     
                     // rjf: build
                     RD_LineEditParams line_edit_params = {0};
@@ -3018,11 +3066,20 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       line_edit_params.expanded_out         = &next_row_expanded;
                       line_edit_params.pre_edit_value       = cell_info.string;
                       line_edit_params.fstrs                = cell_info.fstrs;
+                      line_edit_params.fuzzy_matches        = &fuzzy_matches;
+                    }
+                    if(cell_background_color_override.w != 0)
+                    {
+                      ui_push_background_color(cell_background_color_override);
                     }
                     UI_TextAlignment(cell->px != 0 ? UI_TextAlign_Center : UI_TextAlign_Left)
                       RD_Font(is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                     {
                       sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
+                    }
+                    if(cell_background_color_override.w != 0)
+                    {
+                      ui_pop_background_color();
                     }
 #if 0 // TODO(rjf): @cfg
                     if(ui_is_focus_active() &&
@@ -4445,6 +4502,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               {
                 cell_flags |= UI_BoxFlag_DrawBackground;
                 cell_bg_rgba = selection_color;
+                cell_bg_rgba.w *= 0.2f;
               }
               
               // rjf: build
@@ -4522,11 +4580,13 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             DR_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
+              Vec4F32 color = selection_color;
+              color.w *= 0.2f;
               dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - font_size/8.f,
                              ascii_box->rect.y0,
                              text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                              ascii_box->rect.y1),
-                      selection_color,
+                      color,
                       0, 0, 1.f);
             }
             ui_box_equip_draw_bucket(ascii_box, bucket);

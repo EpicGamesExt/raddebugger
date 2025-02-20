@@ -1940,7 +1940,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         }
         
         //- rjf: upgrade atom w/ qualifier
-        if(resolution_qualifier.size != 0)
+        if(atom != &e_expr_nil && resolution_qualifier.size != 0)
         {
           atom->qualifier = resolution_qualifier;
         }
