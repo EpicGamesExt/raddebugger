@@ -2644,7 +2644,8 @@ rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity)
         if(0){}
         else if(str8_match(member_name, str8_lit("frozen"), 0))
         {
-          str8_list_push(scratch.arena, &fixed_width_parts, str8((U8 *)&entity->is_frozen, 1));
+          B32 is_frozen = ctrl_entity_tree_is_frozen(entity);
+          str8_list_push(scratch.arena, &fixed_width_parts, str8((U8 *)&is_frozen, 1));
         }
         else if(str8_match(member_name, str8_lit("vaddr_range"), 0))
         {
@@ -3402,25 +3403,6 @@ rd_view_ui(Rng2F32 rect)
       {
         vs->is_searching = 1;
       }
-      if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
-      {
-        vs->is_searching = 0;
-        vs->search_string_size = 0;
-      }
-      if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
-      {
-        RD_RegsScope()
-        {
-          rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
-          rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
-          rd_push_cmd(cmd_name, rd_regs());
-        }
-        if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
-        {
-          vs->is_searching = 0;
-          vs->search_string_size = 0;
-        }
-      }
     }
     
     //- rjf: commit string to view
@@ -3944,7 +3926,7 @@ rd_view_ui(Rng2F32 rect)
               evt->flags & UI_EventFlag_Paste ||
               (evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Edit)) &&
              selection_tbl.min.x == selection_tbl.max.x &&
-             (selection_tbl.min.y != 0 || selection_tbl.min.y != 0))
+             (selection_tbl.min.y != 0 || selection_tbl.max.y != 0))
           {
             Vec2S64 selection_dim = dim_2s64(selection_tbl);
             arena_clear(ewv->text_edit_arena);
@@ -3993,60 +3975,65 @@ rd_view_ui(Rng2F32 rect)
           //- rjf: [table] do cell-granularity multi-cursor 'accept' operations (expansions / etc.); if
           // cannot apply to multi-cursor, then just don't take the event
           //
-          if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept)
+          if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept &&
+             (selection_tbl.min.y != 0 || selection_tbl.max.y != 0) &&
+             (selection_tbl.max.y - selection_tbl.min.y > 0))
           {
-            taken = 1;
             EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
             EV_WindowedRowNode *row_node = rows.first;
-            for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
+            if(row_node != 0)
             {
-              // rjf: unpack row info
-              EV_Row *row = &row_node->row;
-              RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
-              
-              // rjf: loop through X selections and perform operations for each
-              for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
+              taken = 1;
+              for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
               {
-#if 0 // TODO(rjf): @cfg
-                //- rjf: determine operation for this cell
-                typedef enum OpKind
-                {
-                  OpKind_Null,
-                  OpKind_DoExpand,
-                }
-                OpKind;
-                OpKind kind = OpKind_Null;
-                switch(row_kind)
-                {
-                  default:{}break;
-                  case RD_WatchViewRowKind_Normal:
-                  {
-                    RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-                    switch(col->kind)
-                    {
-                      default:{}break;
-                      case RD_WatchViewColumnKind_Expr: {kind = OpKind_DoExpand;}break;
-                    }
-                  }break;
-                  case RD_WatchViewRowKind_PrettyEntityControls:
-                  if((!rd_entity_is_nil(row_info.collection_entity) || row_info.collection_ctrl_entity != &ctrl_entity_nil) && selection_tbl.min.x == 1 && selection_tbl.max.x == 1)
-                  {
-                    kind = OpKind_DoExpand;
-                  }break;
-                }
+                // rjf: unpack row info
+                EV_Row *row = &row_node->row;
+                RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
                 
-                //- rjf: perform operation
-                switch(kind)
+                // rjf: loop through X selections and perform operations for each
+                for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
                 {
-                  default:{taken = 0;}break;
-                  case OpKind_DoExpand:
-                  if(ev_row_is_expandable(row))
+#if 0 // TODO(rjf): @cfg
+                  //- rjf: determine operation for this cell
+                  typedef enum OpKind
                   {
-                    B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
-                    ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
-                  }break;
-                }
+                    OpKind_Null,
+                    OpKind_DoExpand,
+                  }
+                  OpKind;
+                  OpKind kind = OpKind_Null;
+                  switch(row_kind)
+                  {
+                    default:{}break;
+                    case RD_WatchViewRowKind_Normal:
+                    {
+                      RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
+                      switch(col->kind)
+                      {
+                        default:{}break;
+                        case RD_WatchViewColumnKind_Expr: {kind = OpKind_DoExpand;}break;
+                      }
+                    }break;
+                    case RD_WatchViewRowKind_PrettyEntityControls:
+                    if((!rd_entity_is_nil(row_info.collection_entity) || row_info.collection_ctrl_entity != &ctrl_entity_nil) && selection_tbl.min.x == 1 && selection_tbl.max.x == 1)
+                    {
+                      kind = OpKind_DoExpand;
+                    }break;
+                  }
+                  
+                  //- rjf: perform operation
+                  switch(kind)
+                  {
+                    default:{taken = 0;}break;
+                    case OpKind_DoExpand:
+                    if(ev_row_is_expandable(row))
+                    {
+                      B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
+                      ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
+                    }break;
+                  }
 #endif
+                }
               }
             }
           }
@@ -5278,7 +5265,8 @@ rd_view_ui(Rng2F32 rect)
                       
                       // rjf: activation (double-click normally, or single-clicks with special buttons)
                       if((!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_double_clicked(sig)) ||
-                         ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)))
+                         ((cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick) && ui_clicked(sig)) ||
+                         sig.f & UI_SignalFlag_KeyboardPressed)
                       {
                         // rjf: kill if a double-clickable cell
                         if(!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick))
@@ -5553,6 +5541,34 @@ rd_view_ui(Rng2F32 rect)
       E_Expr *tag = rd_tag_from_cfg(scratch.arena, view);
       view_ui_rule->ui(expr_eval, tag, rect);
       scratch_end(scratch);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: catchall query completion controls
+  //
+  if(vs->is_searching) UI_Focus(UI_FocusKind_On)
+  {
+    String8 cmd_name = vs->search_cmd_name;
+    RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+    {
+      vs->is_searching = 0;
+      vs->search_string_size = 0;
+    }
+    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
+    {
+      RD_RegsScope()
+      {
+        rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
+        rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
+        rd_push_cmd(cmd_name, rd_regs());
+      }
+      if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
+      {
+        vs->is_searching = 0;
+        vs->search_string_size = 0;
+      }
     }
   }
   
@@ -7198,11 +7214,6 @@ rd_window_frame(void)
           //- rjf: fallthrough interactions on container
           UI_Signal sig = ui_signal_from_box(container);
         }
-      }
-      
-      //- rjf: accept
-      if(ui_slot_press(UI_EventActionSlot_Accept))
-      {
       }
       
       //- rjf: build darkening rectangle over rest of screen
