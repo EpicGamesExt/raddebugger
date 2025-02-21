@@ -5554,8 +5554,6 @@ rd_view_ui(Rng2F32 rect)
   //
   if(vs->is_searching) UI_Focus(UI_FocusKind_On)
   {
-    String8 cmd_name = vs->search_cmd_name;
-    RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       vs->is_searching = 0;
@@ -5563,17 +5561,7 @@ rd_view_ui(Rng2F32 rect)
     }
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
     {
-      RD_RegsScope()
-      {
-        rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
-        rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
-        rd_push_cmd(cmd_name, rd_regs());
-      }
-      if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
-      {
-        vs->is_searching = 0;
-        vs->search_string_size = 0;
-      }
+      rd_cmd(RD_CmdKind_CompleteQuery);
     }
   }
   
@@ -7139,19 +7127,19 @@ rd_window_frame(void)
     if(query_is_open)
     {
       //- rjf: unpack query parameters
-      RD_Cfg *query = rd_immediate_cfg_from_keyf("window_query_%p", window);
       String8 cmd_name = ws->query_cmd_name;
       RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+      B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
+      
+      //- rjf: build & prepare view for query ui
+      RD_Cfg *query = rd_immediate_cfg_from_keyf("window_query_%p", window);
       RD_Cfg *view = rd_cfg_child_from_string_or_alloc(query, str8_lit("watch"));
       RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-      RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(view, str8_lit("cmd"));
-      rd_cfg_new_replace(cmd, cmd_name);
       rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
-      B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
       RD_ViewState *vs = rd_view_state_from_cfg(view);
       vs->is_searching = 1;
       arena_clear(vs->search_arena);
-      vs->search_cmd_name = push_str8_copy(vs->search_arena, ws->query_cmd_name);
+      vs->search_cmd_name = push_str8_copy(vs->search_arena, cmd_name);
       vs->search_regs = rd_regs_copy(vs->search_arena, ws->query_regs);
       String8 query_expression = cmd_kind_info->query.expr;
       if(query_expression.size == 0)
@@ -15687,6 +15675,28 @@ Z(getting_started)
           }break;
           case RD_CmdKind_CompleteQuery:
           {
+            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            String8 cmd_name = vs->search_cmd_name;
+            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+            RD_RegsScope()
+            {
+              rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
+              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
+              rd_push_cmd(cmd_name, rd_regs());
+            }
+            if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
+            {
+              RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+              RD_WindowState *ws = rd_window_state_from_cfg(window);
+              ws->query_is_active = 0;
+            }
+            else if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
+            {
+              vs->is_searching = 0;
+              vs->search_string_size = 0;
+            }
+            
 #if 0 // TODO(rjf): @cfg (query completion)
             RD_Window *ws = rd_window_from_handle(rd_regs()->window);
             String8 query_cmd_name = ws->query_cmd_name;
@@ -16046,7 +16056,7 @@ Z(getting_started)
               RD_Cfg *wdir = rd_cfg_new(target, str8_lit("working_directory"));
               rd_cfg_newf(wdir, "%S/", working_directory);
             }
-            rd_cmd(RD_CmdKind_SelectCfg, .cfg = target->id);
+            rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
           }break;
           
           //- rjf: jit-debugger registration

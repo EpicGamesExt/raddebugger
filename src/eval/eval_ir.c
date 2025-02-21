@@ -376,6 +376,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
       
       // rjf: choose base pointer & count members
       E_Member *base_ptr_member = 0;
+      E_Member *opl_ptr_member = 0;
       E_Member *count_member = 0;
       for(U64 idx = 0; idx < members.count; idx += 1)
       {
@@ -390,7 +391,15 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
         {
           base_ptr_member = &members.v[idx];
         }
+        if(opl_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
+        {
+          opl_ptr_member = &members.v[idx];
+        }
         if(count_member != 0 && base_ptr_member != 0)
+        {
+          break;
+        }
+        else if(base_ptr_member != 0 && opl_ptr_member != 0)
         {
           break;
         }
@@ -422,11 +431,30 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
         base_ptr_vaddr = base_ptr_member_value.u64;
       }
       
+      // rjf: evaluate opl ptr member, determine opl address
+      U64 opl_ptr_vaddr = 0;
+      if(count_member == 0 && opl_ptr_member != 0)
+      {
+        E_Expr *opl_ptr_member_expr = e_expr_irext_member_access(arena, &e_expr_nil, lhs, opl_ptr_member->name);
+        E_Value opl_ptr_member_value = e_value_from_expr(opl_ptr_member_expr);
+        opl_ptr_vaddr = opl_ptr_member_value.u64;
+      }
+      
       // rjf: determine element type
       E_TypeKey element_type_key = zero_struct;
       if(base_ptr_member != 0)
       {
         element_type_key = e_type_direct_from_key(base_ptr_member->type_key);
+      }
+      
+      // rjf: if no count, but base/opl, swap base/opl if needed, and measure count
+      if(count_member == 0 && opl_ptr_member != 0 && base_ptr_member != 0)
+      {
+        U64 min_vaddr = Min(base_ptr_vaddr, opl_ptr_vaddr);
+        U64 max_vaddr = Max(base_ptr_vaddr, opl_ptr_vaddr);
+        base_ptr_vaddr = min_vaddr;
+        opl_ptr_vaddr = max_vaddr;
+        count = (opl_ptr_vaddr - base_ptr_vaddr) / e_type_byte_size_from_key(element_type_key);
       }
       
       // rjf: fill
