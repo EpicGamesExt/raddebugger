@@ -1341,7 +1341,7 @@ internal String8
 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval)
 {
   String8 result = {0};
-  E_TypeKey type_key = e_type_unwrap(eval.type_key);
+  E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   U64 type_byte_size = e_type_byte_size_from_key(type_key);
   U8 digit_group_separator = 0;

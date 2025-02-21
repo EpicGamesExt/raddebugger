@@ -1832,7 +1832,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           String8 full_pin_expr = push_str8f(scratch.arena, "%S => %S", pin_expr, pin_view_rule);
           E_Eval eval = e_eval_from_string(scratch.arena, full_pin_expr);
           String8 eval_string = {0};
-          if(!e_type_key_match(e_type_key_zero(), eval.type_key))
+          if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
           {
             eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval);
           }
@@ -2185,7 +2185,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0)
   {
     E_Eval eval = e_eval_from_string(scratch.arena, mouse_expr);
-    if(eval.msgs.max_kind == E_MsgKind_Null && (eval.mode != E_Mode_Null || mouse_expr_is_explicit))
+    if(eval.msgs.max_kind == E_MsgKind_Null && (eval.irtree.mode != E_Mode_Null || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
       if(contains_1s64(params->line_num_range, mouse_pt.line))

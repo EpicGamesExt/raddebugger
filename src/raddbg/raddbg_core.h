@@ -1123,7 +1123,7 @@ internal void rd_window_frame(void);
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
-internal F32 rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Expr *root_expr, E_Eval eval, String8List *out);
+internal F32 rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval root_eval, E_Eval eval, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval);
 
 ////////////////////////////////

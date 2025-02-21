@@ -85,7 +85,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(watches)
         if(filter.size != 0)
         {
           E_Eval eval = e_eval_from_string(scratch.arena, expr);
-          E_Type *type = e_type_from_key__cached(eval.type_key);
+          E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
           if(type->kind != E_TypeKind_Set)
           {
             passes_filter = 0;
@@ -3120,12 +3120,12 @@ internal B32
 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping)
 {
   B32 result = 0;
-  if(dst_eval.mode == E_Mode_Offset)
+  if(dst_eval.irtree.mode == E_Mode_Offset)
   {
     Temp scratch = scratch_begin(0, 0);
-    E_TypeKey type_key = e_type_unwrap(dst_eval.type_key);
+    E_TypeKey type_key = e_type_unwrap(dst_eval.irtree.type_key);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.type_key)));
+    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.irtree.type_key)));
     E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
     String8 commit_data = {0};
     B32 commit_at_ptr_dest = 0;
@@ -3142,7 +3142,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
     {
       E_Eval src_eval = e_eval_from_string(scratch.arena, string);
       E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
-      E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.type_key);
+      E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.irtree.type_key);
       if(direct_type_kind == E_TypeKind_Char8 ||
          direct_type_kind == E_TypeKind_Char16 ||
          direct_type_kind == E_TypeKind_Char32 ||
@@ -3201,17 +3201,17 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
       else if(type_kind == E_TypeKind_Ptr &&
               (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
                e_type_kind_is_integer(src_eval_value_type_kind)) &&
-              src_eval_value.mode == E_Mode_Value)
+              src_eval_value.irtree.mode == E_Mode_Value)
       {
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.type_key));
+        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.irtree.type_key));
         commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
       }
     }
     if(commit_data.size != 0 && e_type_byte_size_from_key(type_key) != 0)
     {
       U64 dst_offset = dst_eval.value.u64;
-      if(dst_eval.mode == E_Mode_Offset && commit_at_ptr_dest)
+      if(dst_eval.irtree.mode == E_Mode_Offset && commit_at_ptr_dest)
       {
         E_Eval dst_value_eval = e_value_eval_from_eval(dst_eval);
         dst_offset = dst_value_eval.value.u64;
@@ -4177,7 +4177,7 @@ rd_view_ui(Rng2F32 rect)
                     case RD_WatchCellKind_Eval:
                     {
                       RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-                      if(cell_info.eval.mode == E_Mode_Offset)
+                      if(cell_info.eval.irtree.mode == E_Mode_Offset)
                       {
                         B32 should_commit_asap = editing_complete;
                         if(cell_info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
@@ -4870,7 +4870,7 @@ rd_view_ui(Rng2F32 rect)
                 ProfBegin("determine if row's data is fresh and/or bad");
                 B32 row_is_fresh = 0;
                 B32 row_is_bad = 0;
-                switch(row_info->eval.mode)
+                switch(row_info->eval.irtree.mode)
                 {
                   default:{}break;
                   case E_Mode_Offset:
@@ -4878,7 +4878,7 @@ rd_view_ui(Rng2F32 rect)
                     CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row_info->eval.space);
                     if(row_info->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
                     {
-                      U64 size = e_type_byte_size_from_key(row_info->eval.type_key);
+                      U64 size = e_type_byte_size_from_key(row_info->eval.irtree.type_key);
                       size = Min(size, 64);
                       Rng1U64 vaddr_rng = r1u64(row_info->eval.value.u64, row_info->eval.value.u64+size);
                       CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, d_state->frame_eval_memread_endt_us);
@@ -4940,7 +4940,7 @@ rd_view_ui(Rng2F32 rect)
                   if(row_info->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
                   {
                     U64 row_offset = row_info->eval.value.u64;
-                    if((row_info->eval.mode == E_Mode_Offset || row_info->eval.mode == E_Mode_Null) &&
+                    if((row_info->eval.irtree.mode == E_Mode_Offset || row_info->eval.irtree.mode == E_Mode_Null) &&
                        row_offset%64 == 0 && row_depth > 0)
                     {
                       ui_set_next_fixed_x(0);
@@ -4956,12 +4956,12 @@ rd_view_ui(Rng2F32 rect)
                   //
                   if(row_info->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
                   {
-                    if((row_info->eval.mode == E_Mode_Offset || row_info->eval.mode == E_Mode_Null) &&
+                    if((row_info->eval.irtree.mode == E_Mode_Offset || row_info->eval.irtree.mode == E_Mode_Null) &&
                        row_info->eval.value.u64%64 != 0 &&
                        row_depth > 0 &&
                        !row_expanded)
                     {
-                      U64 next_off = (row_info->eval.value.u64 + e_type_byte_size_from_key(row_info->eval.type_key));
+                      U64 next_off = (row_info->eval.value.u64 + e_type_byte_size_from_key(row_info->eval.irtree.type_key));
                       if(next_off%64 != 0 && row_info->eval.value.u64/64 < next_off/64)
                       {
                         ui_set_next_fixed_x(0);
@@ -5622,7 +5622,7 @@ rd_view_cfg_value_from_string(String8 string)
 internal U64
 rd_base_offset_from_eval(E_Eval eval)
 {
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(eval.type_key)))
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(eval.irtree.type_key)))
   {
     eval = e_value_eval_from_eval(eval);
   }
@@ -5641,23 +5641,23 @@ rd_range_from_eval_tag(E_Eval eval, E_Expr *tag)
       break;
     }
   }
-  E_TypeKey type_key = e_type_unwrap(eval.type_key);
+  E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.type_key));
+  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.irtree.type_key));
   E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
   if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
                                                                direct_type_kind == E_TypeKind_Union ||
                                                                direct_type_kind == E_TypeKind_Class ||
                                                                direct_type_kind == E_TypeKind_Array))
   {
-    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.type_key)));
+    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.irtree.type_key)));
   }
-  if(size == 0 && eval.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
-                                                 type_kind == E_TypeKind_Union ||
-                                                 type_kind == E_TypeKind_Class ||
-                                                 type_kind == E_TypeKind_Array))
+  if(size == 0 && eval.irtree.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
+                                                        type_kind == E_TypeKind_Union ||
+                                                        type_kind == E_TypeKind_Class ||
+                                                        type_kind == E_TypeKind_Array))
   {
-    size = e_type_byte_size_from_key(e_type_unwrap(eval.type_key));
+    size = e_type_byte_size_from_key(e_type_unwrap(eval.irtree.type_key));
   }
   if(size == 0)
   {
@@ -6520,7 +6520,7 @@ rd_window_frame(void)
             rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), rd_state->drag_drop_regs->expr);
             ui_spacer(ui_em(2.f, 1.f));
             E_Eval eval = e_eval_from_string(scratch.arena, rd_state->drag_drop_regs->expr);
-            if(eval.mode != E_Mode_Null)
+            if(eval.irtree.mode != E_Mode_Null)
             {
               String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
               rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
@@ -9858,7 +9858,7 @@ rd_window_frame(void)
 //~ rjf: Eval Visualization
 
 internal F32
-rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Expr *root_expr, E_Eval eval, String8List *out)
+rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval root_eval, E_Eval eval, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -9870,7 +9870,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   B32 no_addr = 0;
   B32 no_string = 0;
   B32 has_array = 0;
-  for(E_Expr *tag = root_expr->first_tag; tag != &e_expr_nil; tag = tag->next)
+  for(E_Expr *tag = root_eval.exprs.last->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     if(0){}
     else if(str8_match(tag->string, str8_lit("dec"), 0)) {radix = 10;}
@@ -9891,14 +9891,14 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCfg)
   {
-    E_TypeKind kind = e_type_kind_from_key(eval.type_key);
+    E_TypeKind kind = e_type_kind_from_key(eval.irtree.type_key);
     if(kind != E_TypeKind_Ptr)
     {
       no_addr = 1;
     }
     else
     {
-      E_Type *type = e_type_from_key__cached(eval.type_key);
+      E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
       if(!(type->flags & E_TypeFlag_External))
       {
         no_addr = 1;
@@ -9938,16 +9938,16 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   }
   
   //- rjf: type evaluations -> display type string
-  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key))
+  if(eval.irtree.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
   {
-    String8 string = e_type_string_from_key(arena, eval.type_key);
+    String8 string = e_type_string_from_key(arena, eval.irtree.type_key);
     str8_list_push(arena, out, string);
   }
   
   //- rjf: value/offset evaluations
   else if(max_size > 0)
   {
-    E_TypeKey type_key = e_type_unwrap(eval.type_key);
+    E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
     E_TypeKind kind = e_type_kind_from_key(type_key);
     switch(kind)
     {
@@ -9967,7 +9967,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       case E_TypeKind_RRef:
       {
         // rjf: unpack type info
-        E_TypeKey type_key = e_type_unwrap(eval.type_key);
+        E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
         E_Type *type = e_type_from_key__cached(type_key);
         E_TypeKind type_kind = type->kind;
         E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(type_key));
@@ -10101,15 +10101,19 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
             {
               E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.exprs.last);
               E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-              space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, deref_eval, out);
+              space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_eval, deref_eval, out);
             }
             else
             {
               // rjf: unpack
-              E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
-              E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
-              E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-              E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+              E_IRTreeAndType irtree = eval.irtree;
+              E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
+              E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
+              if(lookup_rule == &e_lookup_rule__default)
+              {
+                lookup_rule = root_eval.lookup_rule_tag.rule;
+                lookup_rule_tag = root_eval.lookup_rule_tag.tag;
+              }
               E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
               U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
               String8 opener_string = str8_lit("[");
@@ -10139,7 +10143,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
                     }
                     is_first = 0;
                     E_Eval child_eval = e_eval_from_expr(scratch.arena, expr);
-                    space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, child_eval, out);
+                    space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_eval, child_eval, out);
                     if(space_taken > max_size && idx+1 < total_possible_child_count)
                     {
                       String8 ellipses = str8_lit(", ...");
@@ -10170,7 +10174,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       case E_TypeKind_Array:
       {
         // rjf: unpack type info
-        E_Type *eval_type = e_type_from_key__cached(e_type_unwrap(eval.type_key));
+        E_Type *eval_type = e_type_from_key__cached(e_type_unwrap(eval.irtree.type_key));
         E_TypeKey direct_type_key = e_type_unwrap(eval_type->direct_type_key);
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         U64 array_count = eval_type->count;
@@ -10188,7 +10192,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
           did_content = 1;
           U64 string_buffer_size = Clamp(1, array_count, 1024);
           U8 *string_buffer = push_array(arena, U8, string_buffer_size);
-          switch(eval.mode)
+          switch(eval.irtree.mode)
           {
             default:{}break;
             case E_Mode_Offset:
@@ -10240,10 +10244,14 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       arrays_and_sets_and_structs:
       {
         // rjf: unpack
-        E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
-        E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
-        E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-        E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+        E_IRTreeAndType irtree = eval.irtree;
+        E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
+        E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
+        if(lookup_rule == &e_lookup_rule__default)
+        {
+          lookup_rule = root_eval.lookup_rule_tag.rule;
+          lookup_rule_tag = root_eval.lookup_rule_tag.tag;
+        }
         E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
         U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
         String8 opener_string = str8_lit("{");
@@ -10279,7 +10287,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
               }
               is_first = 0;
               E_Eval child_eval = e_eval_from_expr(scratch.arena, expr);
-              space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, child_eval, out);
+              space_taken += rd_append_value_strings_from_eval(arena, filter, flags, radix, font, font_size, max_size-space_taken, depth+1, root_eval, child_eval, out);
               if(space_taken > max_size && idx+1 < total_possible_child_count)
               {
                 String8 ellipses = str8_lit(", ...");
@@ -10315,7 +10323,7 @@ rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U3
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  rd_append_value_strings_from_eval(scratch.arena, filter, flags, default_radix, font, font_size, max_size, 0, eval.exprs.last, eval, &strs);
+  rd_append_value_strings_from_eval(scratch.arena, filter, flags, default_radix, font, font_size, max_size, 0, eval, eval, &strs);
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
@@ -11843,7 +11851,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
       E_Eval eval = e_eval_from_string(scratch.arena, string);
       if(eval.msgs.max_kind == E_MsgKind_Null)
       {
-        E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
+        E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key));
         if(eval_type_kind == E_TypeKind_Ptr ||
            eval_type_kind == E_TypeKind_LRef ||
            eval_type_kind == E_TypeKind_RRef)

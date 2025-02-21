@@ -782,7 +782,7 @@ rd_id_from_watch_cell(RD_WatchCell *cell)
   result = e_hash_from_string(result, str8_struct(&cell->kind));
   if(cell->kind != RD_WatchCellKind_Expr)
   {
-    result = e_hash_from_string(result, str8_struct(&cell->eval.mode));
+    result = e_hash_from_string(result, str8_struct(&cell->eval.irtree.mode));
     result = e_hash_from_string(result, str8_struct(&cell->index));
     result = e_hash_from_string(result, str8_struct(&cell->default_pct));
   }
@@ -903,7 +903,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     E_IRTreeAndType parent_irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
     E_Type *parent_type = e_type_from_key__cached(parent_irtree.type_key);
     E_Eval block_eval = e_eval_from_expr(scratch.arena, row->block->expr);
-    E_TypeKey block_type_key = block_eval.type_key;
+    E_TypeKey block_type_key = block_eval.irtree.type_key;
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key__cached(block_type_key);
     
@@ -925,12 +925,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         default:
         case CTRL_EntityKind_Process:
-        if(info.eval.mode == E_Mode_Offset)
+        if(info.eval.irtree.mode == E_Mode_Offset)
         {
           info.module = ctrl_module_from_process_vaddr(row_ctrl_entity, info.eval.value.u64);
         }break;
         case CTRL_EntityKind_Thread:
-        if(info.eval.mode == E_Mode_Value)
+        if(info.eval.irtree.mode == E_Mode_Value)
         {
           CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
           info.module = ctrl_module_from_process_vaddr(process, d_query_cached_rip_from_thread(row_ctrl_entity));
@@ -996,13 +996,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     if(evalled_cfg != &rd_nil_cfg)
     {
       E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, evalled_cfg->string);
-      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.type_key));
+      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.irtree.type_key));
     }
     if(evalled_entity != &ctrl_entity_nil)
     {
       String8 top_level_name = ctrl_entity_kind_code_name_table[evalled_entity->kind];
       E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, top_level_name);
-      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.type_key));
+      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.irtree.type_key));
     }
     
     // rjf: determine view ui rule
@@ -1093,7 +1093,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: singular button for unattached processes
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
       {
-        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
         if(str8_match(type->name, str8_lit("unattached_process"), 0))
         {
           U64 pid = info.eval.value.u128.u64[0];
@@ -1119,7 +1119,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: singular button for commands
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
         if(type->kind == E_TypeKind_Set)
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = 0, .pct = 1.f);
@@ -1137,7 +1137,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         String8 file_path = e_string_from_id(info.eval.value.u64);
         DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
-        E_Type *type = e_type_from_key__cached(info.eval.type_key);
+        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
         if(str8_match(type->name, str8_lit("folder"), 0))
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
@@ -1287,7 +1287,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         result.flags |= RD_WatchCellFlag_CanEdit;
       }
-      result.eval = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
+      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
       result.string = row->string;
       if(result.string.size == 0)
       {
@@ -1392,7 +1392,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: evaluate wrapped expression
-      result.eval     = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
+      result.eval     = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
       
       //- rjf: determine default radix
       U32 default_radix = 10;
@@ -1404,8 +1404,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       
       //- rjf: generate strings/flags based on that expression & fill
       result.string   = rd_value_string_from_eval(arena, rd_view_search(), string_flags, default_radix, font, font_size, max_size_px, result.eval);
-      result.flags   |= !!(ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
-      E_Type *type = e_type_from_key__cached(result.eval.type_key);
+      result.flags   |= !!(ev_type_key_is_editable(result.eval.irtree.type_key) && result.eval.irtree.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
+      E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
       if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
       {
         result.flags |= RD_WatchCellFlag_IsNonCode;
@@ -1425,7 +1425,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     //- rjf: view ui cells
     case RD_WatchCellKind_ViewUI:
     {
-      result.eval = (cell->eval.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
+      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
       result.view_ui_rule = row_info->view_ui_rule;
       result.view_ui_tag = row_info->view_ui_tag;
     }break;
@@ -1442,7 +1442,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
-        if(e_type_key_match(cfg_type, result.eval.type_key))
+        if(e_type_key_match(cfg_type, result.eval.irtree.type_key))
         {
           result.entity = entity;
         }
@@ -1452,7 +1452,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         RD_Cfg *cfg = rd_cfg_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
-        if(e_type_key_match(cfg_type, result.eval.type_key))
+        if(e_type_key_match(cfg_type, result.eval.irtree.type_key))
         {
           result.cfg = cfg;
         }
@@ -1475,7 +1475,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
-        if(e_type_key_match(cfg_type, result.eval.type_key))
+        if(e_type_key_match(cfg_type, result.eval.irtree.type_key))
         {
           result.fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, 1);
           result.flags |= RD_WatchCellFlag_Button;
@@ -1487,7 +1487,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         RD_Cfg *cfg = rd_cfg_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
-        if(e_type_key_match(cfg_type, result.eval.type_key))
+        if(e_type_key_match(cfg_type, result.eval.irtree.type_key))
         {
           result.fstrs = rd_title_fstrs_from_cfg(arena, cfg);
           result.flags |= RD_WatchCellFlag_Button;
@@ -2361,10 +2361,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         String8 local_name = n->string;
         E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);
-        if(local_eval.mode == E_Mode_Offset)
+        if(local_eval.irtree.mode == E_Mode_Offset)
         {
-          E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.type_key);
-          U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.type_key);
+          E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.irtree.type_key);
+          U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.irtree.type_key);
           Rng1U64 vaddr_rng = r1u64(local_eval.value.u64, local_eval.value.u64+local_eval_type_size);
           Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
           if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
@@ -2373,7 +2373,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             {
               annotation->name_string = push_str8_copy(scratch.arena, local_name);
               annotation->kind_string = str8_lit("Local");
-              annotation->type_string = e_type_string_from_key(scratch.arena, local_eval.type_key);
+              annotation->type_string = e_type_string_from_key(scratch.arena, local_eval.irtree.type_key);
               annotation->color = color_gen_table[(vaddr_rng.min/8)%ArrayCount(color_gen_table)];
               annotation->vaddr_range = vaddr_rng;
             }
@@ -3150,7 +3150,7 @@ rd_rgba_from_eval_params(E_Eval eval, MD_Node *params)
   Vec4F32 rgba = {0};
   {
     E_Eval value_eval = e_value_eval_from_eval(eval);
-    E_TypeKey type_key = eval.type_key;
+    E_TypeKey type_key = eval.irtree.type_key;
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
     U64 type_size = e_type_byte_size_from_key(type_key);
     if(16 <= type_size)
