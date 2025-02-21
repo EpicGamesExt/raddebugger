@@ -448,6 +448,11 @@ internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key)
 internal E_IRNode *e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in);
 internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
 
+//- rjf: rule tag poison checking
+internal B32 e_tag_is_poisoned(E_Expr *tag);
+internal void e_tag_poison(E_Expr *tag);
+internal void e_tag_unpoison(E_Expr *tag);
+
 //- rjf: top-level irtree/type extraction
 internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
 

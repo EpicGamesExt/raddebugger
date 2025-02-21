@@ -498,6 +498,16 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
       next = tag->next;
       e_expr_push_tag(expr, tag);
     }
+    
+    // rjf: push tags inferred from the type
+    {
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree.type_key);
+      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
+      {
+        e_expr_push_tag(expr, e_expr_copy(arena, n->v));
+      }
+    }
   }
   scratch_end(scratch);
 }

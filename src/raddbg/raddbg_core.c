@@ -7196,8 +7196,8 @@ rd_window_frame(void)
                 UI_Parent(tab_column_box)
                   UI_PrefHeight(ui_px(tab_bar_vheight, 1))
                   UI_TagF(omit_name ? "hollow" : "")
-                  UI_TagF(!tab_is_selected ? "inactive" : "")
-                  UI_TagF(tab_is_auto ? "auto" : "")
+                  UI_TagF(!omit_name && !tab_is_selected ? "inactive" : "")
+                  UI_TagF(!omit_name && tab_is_auto ? "auto" : "")
                 {
                   if(panel->tab_side == Side_Max)
                   {
@@ -8251,6 +8251,13 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
             }
             else
             {
+              // rjf: unpack
+              E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
+              E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
+              E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+              E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+              E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
+              U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
               String8 opener_string = str8_lit("[");
               String8 closer_string = str8_lit("]");
               
@@ -8262,12 +8269,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
               
               // rjf: contents
               {
-                E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
-                E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
-                E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-                E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
-                E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
-                U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
                 B32 is_first = 1;
                 for(U64 idx = 0; idx < total_possible_child_count && max_size > space_taken; idx += 1)
                 {
@@ -8384,9 +8385,16 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       case E_TypeKind_Set:
       arrays_and_sets_and_structs:
       {
+        // rjf: unpack
+        E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
+        E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
+        E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+        E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+        E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
+        U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
         String8 opener_string = str8_lit("{");
         String8 closer_string = str8_lit("}");
-        if(kind == E_TypeKind_Array)
+        if(lookup_info.idxed_expr_count > lookup_info.named_expr_count)
         {
           opener_string = str8_lit("[");
           closer_string = str8_lit("]");
@@ -8401,12 +8409,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
         // rjf: build contents
         if(depth < 4)
         {
-          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.exprs.last);
-          E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
-          E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-          E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
-          E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
-          U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
           B32 is_first = 1;
           for(U64 idx = 0; idx < total_possible_child_count && max_size > space_taken; idx += 1)
           {
@@ -11969,6 +11971,8 @@ rd_frame(void)
           }break;
           
           //- rjf: code navigation
+          case RD_CmdKind_Search:
+          case RD_CmdKind_SearchBackwards:
           case RD_CmdKind_FindTextForward:
           case RD_CmdKind_FindTextBackward:
           {
@@ -11978,11 +11982,11 @@ rd_frame(void)
           //- rjf: find next and find prev
           case RD_CmdKind_FindNext:
           {
-            rd_cmd(RD_CmdKind_FindTextForward, .string = rd_push_search_string(scratch.arena));
+            rd_cmd(RD_CmdKind_Search, .string = rd_push_search_string(scratch.arena));
           }break;
           case RD_CmdKind_FindPrev:
           {
-            rd_cmd(RD_CmdKind_FindTextBackward, .string = rd_push_search_string(scratch.arena));
+            rd_cmd(RD_CmdKind_SearchBackwards, .string = rd_push_search_string(scratch.arena));
           }break;
           
           //- rjf: font sizes
@@ -13769,7 +13773,7 @@ Z(getting_started)
           }break;
 #endif
           
-          //- rjf: query stack
+          //- rjf: queries
           case RD_CmdKind_PushQuery:
           {
             String8 cmd_name = rd_regs()->cmd_name;

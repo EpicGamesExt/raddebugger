@@ -1565,6 +1565,50 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
   return result;
 }
 
+//- rjf: rule tag poison checking
+
+internal B32
+e_tag_is_poisoned(E_Expr *tag)
+{
+  B32 tag_is_poisoned = 0;
+  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
+  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+  for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(n->tag == tag)
+    {
+      tag_is_poisoned = 1;
+      break;
+    }
+  }
+  return tag_is_poisoned;
+}
+
+internal void
+e_tag_poison(E_Expr *tag)
+{
+  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
+  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+  E_UsedTagNode *n = push_array(e_ir_state->arena, E_UsedTagNode, 1);
+  n->tag = tag;
+  DLLPushBack(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
+}
+
+internal void
+e_tag_unpoison(E_Expr *tag)
+{
+  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
+  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+  for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(n->tag == tag)
+    {
+      DLLRemove(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
+      break;
+    }
+  }
+}
+
 //- rjf: top-level irtree/type extraction
 
 E_IRGEN_FUNCTION_DEF(default)
@@ -1583,55 +1627,14 @@ E_IRGEN_FUNCTION_DEF(default)
       E_Expr *lhs = expr->first;
       E_Expr *rhs = lhs->next;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-      
-      // rjf: determine lookup rule - first check explicitly-specified tags
-      E_LookupRule *lookup_rule = &e_lookup_rule__default;
-      for(E_Expr *tag = lhs->first_tag; tag != &e_expr_nil; tag = tag->next)
+      E_LookupRuleTagPair lhs_lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(lhs, &lhs_irtree);
+      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule_and_tag.rule->name))
       {
-        E_LookupRule *candidate = e_lookup_rule_from_string(tag->string);
-        if(candidate != &e_lookup_rule__nil)
-        {
-          lookup_rule = candidate;
-          break;
-        }
-      }
-      
-      // rjf: if the lookup rule is the default, try to (a) apply set-name hooks, or (b) apply auto-hooks
-      if(lookup_rule == &e_lookup_rule__default)
-      {
-        // rjf: try set name
-        E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-        if(lhs_type->kind == E_TypeKind_Set)
-        {
-          E_LookupRule *candidate = e_lookup_rule_from_string(lhs_type->name);
-          if(candidate != &e_lookup_rule__nil)
-          {
-            lookup_rule = candidate;
-          }
-        }
-        
-        // rjf: try auto tags
-        if(lookup_rule == &e_lookup_rule__default)
-        {
-          E_ExprList auto_tags = e_auto_hook_tag_exprs_from_type_key__cached(lhs_irtree.type_key);
-          for(E_ExprNode *n = auto_tags.first; n != 0; n = n->next)
-          {
-            E_LookupRule *candidate = e_lookup_rule_from_string(n->v->string);
-            if(candidate != &e_lookup_rule__nil)
-            {
-              lookup_rule = candidate;
-              break;
-            }
-          }
-        }
-      }
-      
-      // rjf: use lookup rule to actually do the access
-      ProfScope("lookup via rule '%.*s'", str8_varg(lookup_rule->name))
-      {
-        E_LookupInfo lookup_info = lookup_rule->info(arena, &lhs_irtree, str8_zero());
-        E_LookupAccess lookup_access = lookup_rule->access(arena, expr->kind, lhs, rhs, lookup_info.user_data);
+        e_tag_poison(lhs_lookup_rule_and_tag.tag);
+        E_LookupInfo lookup_info = lhs_lookup_rule_and_tag.rule->info(arena, &lhs_irtree, str8_zero());
+        E_LookupAccess lookup_access = lhs_lookup_rule_and_tag.rule->access(arena, expr->kind, lhs, rhs, lookup_info.user_data);
         result = lookup_access.irtree_and_type;
+        e_tag_unpoison(lhs_lookup_rule_and_tag.tag);
       }
       scratch_end(scratch);
     }break;
@@ -2383,17 +2386,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     E_IRGenRule *irgen_rule_candidate = e_irgen_rule_from_string(name);
     if(irgen_rule_candidate != &e_irgen_rule__default)
     {
-      B32 tag_is_poisoned = 0;
-      U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-      for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
-      {
-        if(n->tag == tag)
-        {
-          tag_is_poisoned = 1;
-          break;
-        }
-      }
+      B32 tag_is_poisoned = e_tag_is_poisoned(tag);
       if(!tag_is_poisoned)
       {
         explicit_irgen_rule = irgen_rule_candidate;
@@ -2417,14 +2410,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   for(Task *t = first_task; t != 0; t = t->next)
   {
     // rjf: poison the tag we are about to use, so we don't recursively use it
-    if(t->tag != &e_expr_nil)
-    {
-      U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
-      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-      E_UsedTagNode *n = push_array(arena, E_UsedTagNode, 1);
-      n->tag = t->tag;
-      DLLPushBack(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
-    }
+    e_tag_poison(t->tag);
     
     // rjf: do this rule's generation
     ProfScope("irgen rule '%.*s'", str8_varg(t->rule->name))
@@ -2443,17 +2429,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       {
         for(E_Expr *tag = n->v; tag != &e_expr_nil; tag = tag->next)
         {
-          B32 tag_is_poisoned = 0;
-          U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-          U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-          for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
-          {
-            if(n->tag == tag)
-            {
-              tag_is_poisoned = 1;
-              break;
-            }
-          }
+          B32 tag_is_poisoned = e_tag_is_poisoned(tag);
           if(!tag_is_poisoned)
           {
             E_IRGenRule *rule = e_irgen_rule_from_string(tag->string);
@@ -2474,19 +2450,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   //- rjf: unpoison the tags we used
   for(Task *t = first_task; t != 0; t = t->next)
   {
-    if(t->tag != &e_expr_nil)
-    {
-      U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
-      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-      for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
-      {
-        if(n->tag == t->tag)
-        {
-          DLLRemove(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
-          break;
-        }
-      }
-    }
+    e_tag_unpoison(t->tag);
   }
   
   scratch_end(scratch);
@@ -2806,6 +2770,7 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     {
       for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
       {
+        if(e_tag_is_poisoned(tag)) { continue; }
         E_LookupRule *candidate = e_lookup_rule_from_string(tag->string);
         if(candidate != &e_lookup_rule__nil)
         {
@@ -2838,6 +2803,7 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
       E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
       for(E_ExprNode *n = tags.first; n != 0; n = n->next)
       {
+        if(e_tag_is_poisoned(n->v)) { continue; }
         E_LookupRule *candidate = e_lookup_rule_from_string(n->v->string);
         if(candidate != &e_lookup_rule__nil)
         {

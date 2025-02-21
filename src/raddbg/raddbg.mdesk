@@ -1118,7 +1118,7 @@ RD_ThemePresetTable:
           border: 0x9e6274ff,
           inactive:
           {
-            background: 0x341f3dff,
+            background: 0x2f2633ff,
             border: 0x685073ff,
           }
         }
