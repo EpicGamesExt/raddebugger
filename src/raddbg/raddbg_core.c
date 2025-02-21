@@ -3312,8 +3312,8 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
     DLLPushBack_NP(slot->first, slot->last, view_state, hash_next, hash_prev);
     view_state->cfg_id = id;
     view_state->arena = arena_alloc();
+    view_state->arena_reset_pos = arena_pos(view_state->arena);
     view_state->ev_view = ev_view_alloc();
-    view_state->loading_t = 1.f;
     view_state->search_arena = arena_alloc();
   }
   if(view_state != &rd_nil_view_state)
@@ -3626,7 +3626,7 @@ rd_view_ui(Rng2F32 rect)
       }
       
       // rjf: if we don't have a viewer, just use the memory viewer.
-      if(new_view_name.size != 0)
+      if(new_view_name.size == 0)
       {
         new_view_name = str8_lit("memory");
       }
@@ -3645,6 +3645,14 @@ rd_view_ui(Rng2F32 rect)
         }
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
         rd_cfg_equip_string(view, new_view_name);
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
+        for(RD_ArenaExt *ext = vs->first_arena_ext; ext != 0; ext = ext->next)
+        {
+          arena_release(ext->arena);
+        }
+        arena_pop_to(vs->arena, vs->arena_reset_pos);
+        vs->user_data = 0;
+        vs->first_arena_ext = vs->last_arena_ext = 0;
       }
       
       // rjf: if we don't have a viewer, for whatever reason, then just
@@ -5569,6 +5577,7 @@ rd_view_ui(Rng2F32 rect)
     }
   }
   
+  vs->last_frame_index_built = rd_state->frame_index;
   ProfEnd();
 }
 
@@ -5896,6 +5905,10 @@ rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_ta
   view_state->loading_t_target = (F32)!!is_loading;
   view_state->loading_progress_v = progress_u64;
   view_state->loading_progress_v_target = progress_u64_target;
+  if(view_state->last_frame_index_built+1 < rd_state->frame_index)
+  {
+    view_state->loading_t = view_state->loading_t_target;
+  }
 }
 
 internal void
@@ -8931,7 +8944,7 @@ rd_window_frame(void)
           //
           if(build_panel)
           {
-            F32 selected_tab_loading_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_view_loading_%p", selected_tab), selected_tab_view_state->loading_t_target, .initial = selected_tab_view_state->loading_t_target);
+            F32 selected_tab_loading_t = selected_tab_view_state->loading_t;
             if(selected_tab_loading_t > 0.01f) UI_Parent(loading_overlay_container)
             {
               rd_loading_overlay(panel_rect, selected_tab_loading_t, selected_tab_view_state->loading_progress_v, selected_tab_view_state->loading_progress_v_target);
@@ -14548,6 +14561,11 @@ rd_frame(void)
           }break;
           case RD_CmdKind_OpenTab:
           {
+            RD_Cfg *panel = rd_cfg_from_id(rd_regs()->panel);
+            RD_Cfg *tab = rd_cfg_new(panel, rd_regs()->string);
+            RD_Cfg *expr = rd_cfg_new(tab, str8_lit("expression"));
+            rd_cfg_new(expr, rd_regs()->expr);
+            rd_cmd(RD_CmdKind_FocusTab, .view = tab->id);
 #if 0 // TODO(rjf): @cfg (tab opening)
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
             RD_View *view = rd_view_alloc();
@@ -14635,11 +14653,7 @@ rd_frame(void)
             if(props.created != 0)
             {
               rd_cmd(RD_CmdKind_RecordFileInProject);
-#if 0 // TODO(rjf): @cfg (opening file)
-              rd_cmd(RD_CmdKind_OpenTab,
-                     .string = rd_eval_string_from_file_path(scratch.arena, path),
-                     .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
-#endif
+              rd_cmd(RD_CmdKind_OpenTab, .string = str8_lit("pending"), .expr = rd_eval_string_from_file_path(scratch.arena, path));
             }
             else
             {

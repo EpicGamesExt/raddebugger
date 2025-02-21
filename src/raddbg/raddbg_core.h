@@ -214,6 +214,7 @@ struct RD_ViewState
   
   // rjf: touch info
   U64 last_frame_index_touched;
+  U64 last_frame_index_built;
   
   // rjf: loading indicator info
   F32 loading_t;
@@ -229,6 +230,7 @@ struct RD_ViewState
   
   // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
+  U64 arena_reset_pos;
   RD_ArenaExt *first_arena_ext;
   RD_ArenaExt *last_arena_ext;
   void *user_data;
