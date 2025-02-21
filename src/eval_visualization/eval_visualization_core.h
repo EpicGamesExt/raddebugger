@@ -325,7 +325,7 @@ internal EV_ExpandRule *ev_expand_rule_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (dynamic type resolution)
 internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
 #endif
 

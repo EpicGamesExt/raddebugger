@@ -451,7 +451,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       cv->center_cursor = found;
       if(found == 0)
       {
-        log_user_errorf("Could not find \"%S\"", cv->find_text_fwd);
+        log_user_errorf("Could not find `%S`", cv->find_text_fwd);
       }
     }
     
@@ -507,7 +507,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       cv->center_cursor = found;
       if(found == 0)
       {
-        log_user_errorf("Could not find \"%S\"", cv->find_text_bwd);
+        log_user_errorf("Could not find `%S`", cv->find_text_bwd);
       }
     }
     
@@ -3340,12 +3340,12 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 count        = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("count")).u64;
-  U64 vtx_base_off = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("vtx")).u64;
-  U64 vtx_size     = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("vtx_size")).u64;
-  F32 yaw_target   = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("yaw")).f32;
-  F32 pitch_target = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("pitch")).f32;
-  F32 zoom_target  = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("zoom")).f32;
+  U64 count        = rd_value_from_eval_tag_key(eval, tag, str8_lit("count")).u64;
+  U64 vtx_base_off = rd_value_from_eval_tag_key(eval, tag, str8_lit("vtx")).u64;
+  U64 vtx_size     = rd_value_from_eval_tag_key(eval, tag, str8_lit("vtx_size")).u64;
+  F32 yaw_target   = rd_view_cfg_value_from_string(str8_lit("yaw")).f32;
+  F32 pitch_target = rd_view_cfg_value_from_string(str8_lit("pitch")).f32;
+  F32 zoom_target  = rd_view_cfg_value_from_string(str8_lit("zoom")).f32;
   
   //////////////////////////////
   //- rjf: evaluate & unpack expression

@@ -3984,7 +3984,7 @@ rd_view_ui(Rng2F32 rect)
                 // rjf: loop through X selections and perform operations for each
                 for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
                 {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (multicursor watch window press operations)
                   //- rjf: determine operation for this cell
                   typedef enum OpKind
                   {
@@ -5186,7 +5186,7 @@ rd_view_ui(Rng2F32 rect)
                         {
                           ui_pop_background_color();
                         }
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (autocompletion)
                         if(ui_is_focus_active() &&
                            selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
                            txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
@@ -5828,6 +5828,21 @@ rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag)
   }
   
   return fmt;
+}
+
+internal E_Value
+rd_value_from_eval_tag_key(E_Eval eval, E_Expr *tag, String8 key)
+{
+  E_Value value = zero_struct;
+  for(E_Expr *arg = tag->first->next; arg != &e_expr_nil; arg = arg->next)
+  {
+    if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, key, 0))
+    {
+      value = e_value_from_expr(arg->first->next);
+      break;
+    }
+  }
+  return value;
 }
 
 //- rjf: pushing/attaching view resources
@@ -6847,7 +6862,7 @@ rd_window_frame(void)
           //
           case RD_RegSlot_View:
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (context menus)
             RD_Cfg *tab = rd_cfg_from_id(regs->view);
             RD_RegsScope(.view = regs->view)
             {
@@ -10471,7 +10486,7 @@ rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, St
   DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
   DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
   
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (lister)
   
   //////////////////////////
   //- rjf: determine all ctx filters
@@ -10836,7 +10851,7 @@ rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, St
   }
   
   //- rjf: gather view rule params
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (lister)
   if(flags & RD_ListerFlag_ViewRuleParams)
   {
     for(String8Node *n = strings.first; n != 0; n = n->next)
@@ -10979,7 +10994,7 @@ rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, St
   //- rjf: gather settings
   if(flags & RD_ListerFlag_Settings)
   {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (lister)
     String8List schema_strings = {0};
     
     // rjf: push schema for view
@@ -11112,7 +11127,7 @@ rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off)
   return path;
 }
 
-#if 0 // TODO(rjf): @cfg_lister
+#if 0 // TODO(rjf): @cfg (lister)
 
 internal RD_ListerParams
 rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
@@ -12539,7 +12554,7 @@ rd_frame(void)
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
       rd_request_frame();
-      // TODO(rjf): @cfg_bindchange rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
+      rd_cfg_release(rd_cfg_from_id(rd_state->bind_change_binding_id));
       rd_state->bind_change_active = 0;
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
@@ -12557,13 +12572,19 @@ rd_frame(void)
          event->key != OS_Key_Shift)
       {
         rd_state->bind_change_active = 0;
-        RD_Binding binding = zero_struct;
+        RD_Cfg *binding = rd_cfg_from_id(rd_state->bind_change_binding_id);
+        if(binding == &rd_nil_cfg)
         {
-          binding.key = event->key;
-          binding.modifiers = event->modifiers;
+          RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+          RD_Cfg *keybindings = rd_cfg_child_from_string_or_alloc(user, str8_lit("keybindings"));
+          binding = rd_cfg_new(keybindings, str8_lit(""));
         }
-        // TODO(rjf): @cfg_bindchange rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
-        // TODO(rjf): @cfg_bindchange rd_bind_name(rd_state->bind_change_cmd_name, binding);
+        rd_cfg_release_all_children(binding);
+        rd_cfg_new(binding, rd_state->bind_change_cmd_name);
+        rd_cfg_new(binding, os_g_key_cfg_string_table[event->key]);
+        if(event->modifiers & OS_Modifier_Ctrl)  { rd_cfg_new(binding, str8_lit("ctrl")); }
+        if(event->modifiers & OS_Modifier_Shift) { rd_cfg_new(binding, str8_lit("shift")); }
+        if(event->modifiers & OS_Modifier_Alt)   { rd_cfg_new(binding, str8_lit("alt")); }
         U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
         os_text(&events, event->window, codepoint);
         os_eat_event(&events, event);
@@ -12636,45 +12657,12 @@ rd_frame(void)
           U64 name_slot_idx = name_hash%key_map->name_slots_count;
           U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
           RD_KeyMapNode *n = push_array(rd_frame_arena(), RD_KeyMapNode, 1);
-          n->cfg = keybinding;
+          n->cfg_id = keybinding->id;
           n->name = push_str8_copy(rd_frame_arena(), name);
           n->binding = binding;
           SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
           SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
         }
-      }
-    }
-    
-    //- rjf: iterate default bindings - if their commands are not found in the
-    // map, then use the default binding.
-    //
-    // TODO(rjf): @dynamic_cmds
-    //
-    for EachElement(idx, rd_default_binding_table)
-    {
-      String8 name = rd_default_binding_table[idx].string;
-      B32 name_was_mapped = 0;
-      U64 name_hash = d_hash_from_string(name);
-      U64 name_slot_idx = name_hash%key_map->name_slots_count;
-      for(RD_KeyMapNode *n = key_map->name_slots[name_slot_idx].first; n != 0; n = n->name_hash_next)
-      {
-        if(str8_match(n->name, name, 0))
-        {
-          name_was_mapped = 1;
-          break;
-        }
-      }
-      if(!name_was_mapped)
-      {
-        RD_Binding binding = rd_default_binding_table[idx].binding;
-        U64 binding_hash = d_hash_from_string(str8_struct(&binding));
-        U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
-        RD_KeyMapNode *n = push_array(rd_frame_arena(), RD_KeyMapNode, 1);
-        n->cfg = &rd_nil_cfg;
-        n->name = push_str8_copy(rd_frame_arena(), name);
-        n->binding = binding;
-        SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
-        SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
       }
     }
   }
@@ -13539,7 +13527,7 @@ rd_frame(void)
             }
             
             // rjf: try to open tabs for "view driver" commands
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (tab opening)
             RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(cmd->name);
             if(view_rule_info != &rd_nil_view_rule_info)
             {
@@ -13779,6 +13767,27 @@ rd_frame(void)
                 else
                 {
                   rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = new_window->id);
+                }
+              }
+            }
+            
+            //- rjf: if config did not define any keybindings for the user, then we need to build a sensible default
+            if(file_is_okay && kind == RD_CmdKind_OpenUser)
+            {
+              RD_CfgList all_keybindings = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("keybindings"));
+              if(all_keybindings.count == 0)
+              {
+                RD_Cfg *keybindings = rd_cfg_new(file_root, str8_lit("keybindings"));
+                for EachElement(idx, rd_default_binding_table)
+                {
+                  String8 name = rd_default_binding_table[idx].string;
+                  RD_Binding binding = rd_default_binding_table[idx].binding;
+                  RD_Cfg *binding_root = rd_cfg_new(keybindings, str8_zero());
+                  rd_cfg_new(binding_root, name);
+                  rd_cfg_new(binding_root, os_g_key_cfg_string_table[binding.key]);
+                  if(binding.modifiers & OS_Modifier_Ctrl)  {rd_cfg_newf(binding_root, "ctrl");}
+                  if(binding.modifiers & OS_Modifier_Shift) {rd_cfg_newf(binding_root, "shift");}
+                  if(binding.modifiers & OS_Modifier_Alt)   {rd_cfg_newf(binding_root, "alt");}
                 }
               }
             }
@@ -14539,7 +14548,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_OpenTab:
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (tab opening)
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
             RD_View *view = rd_view_alloc();
             String8 query = rd_regs()->string;
@@ -14626,7 +14635,7 @@ rd_frame(void)
             if(props.created != 0)
             {
               rd_cmd(RD_CmdKind_RecordFileInProject);
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (opening file)
               rd_cmd(RD_CmdKind_OpenTab,
                      .string = rd_eval_string_from_file_path(scratch.arena, path),
                      .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
@@ -14639,7 +14648,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Switch:
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (opening recent files)
             RD_Window *ws = rd_window_from_handle(rd_regs()->window);
             RD_Panel *src_panel = rd_panel_from_handle(rd_regs()->panel);
             RD_View *src_view = rd_view_from_handle(rd_regs()->view);
@@ -14686,7 +14695,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (opening partner files)
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
             RD_View *view = rd_selected_tab_from_panel(panel);
             {
@@ -15623,28 +15632,6 @@ Z(getting_started)
             }
           }break;
           
-          //- rjf: search operations
-#if 0 // TODO(rjf): @cfg
-          case RD_CmdKind_ClearFilter:
-          {
-            RD_View *view = rd_view_from_handle(rd_regs()->view);
-            if(!rd_view_is_nil(view))
-            {
-              view->query_string_size = 0;
-              view->is_filtering = 0;
-              view->query_cursor = view->query_mark = txt_pt(1, 1);
-            }
-          }break;
-          case RD_CmdKind_ApplyFilter:
-          {
-            RD_View *view = rd_view_from_handle(rd_regs()->view);
-            if(!rd_view_is_nil(view))
-            {
-              view->is_filtering = 0;
-            }
-          }break;
-#endif
-          
           //- rjf: queries
           case RD_CmdKind_PushQuery:
           {
@@ -15686,7 +15673,7 @@ Z(getting_started)
           }break;
           case RD_CmdKind_CompleteQuery:
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (query completion)
             RD_Window *ws = rd_window_from_handle(rd_regs()->window);
             String8 query_cmd_name = ws->query_cmd_name;
             RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(query_cmd_name);
@@ -15939,7 +15926,7 @@ Z(getting_started)
               RD_Cfg *view_rule = rd_cfg_new(wp, str8_lit("view_rule"));
               rd_cfg_new(expr, expr_string);
               rd_cfg_new(view_rule, view_rule_string);
-              rd_cmd(RD_CmdKind_RelocateCfg, .cfg = wp->id);
+              rd_cmd(RD_CmdKind_RelocateCfg, .cfg = wp->id, .expr = str8_zero());
             }
           }break;
           

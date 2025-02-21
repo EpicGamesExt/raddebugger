@@ -235,7 +235,7 @@ internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_Wat
 ////////////////////////////////
 //~ rjf: View Hooks
 
-// TODO(rjf): @cfg eliminate once we are predeclaring these with metacode
+// TODO(rjf): eliminate once we are predeclaring these with metacode
 
 RD_VIEW_UI_FUNCTION_DEF(null);
 

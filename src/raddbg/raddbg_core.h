@@ -39,7 +39,7 @@ struct RD_KeyMapNode
 {
   RD_KeyMapNode *name_hash_next;
   RD_KeyMapNode *binding_hash_next;
-  struct RD_Cfg *cfg;
+  RD_CfgID cfg_id;
   String8 name;
   RD_Binding binding;
 };
@@ -840,19 +840,11 @@ struct RD_State
   RD_ViewStateSlot *view_state_slots;
   RD_ViewState *free_view_state;
   
-  //-
-  // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
-  //-
-  
   // rjf: bind change
   Arena *bind_change_arena;
   B32 bind_change_active;
+  RD_CfgID bind_change_binding_id;
   String8 bind_change_cmd_name;
-  RD_Binding bind_change_binding;
-  
-  //-
-  // TODO(rjf): TO BE ELIMINATED OR REPLACED ^^^^^^^^^^^^^^^^^^
-  //-
 };
 
 ////////////////////////////////
@@ -1094,6 +1086,7 @@ internal TXT_LangKind rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag);
 internal Arch rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag);
 internal Vec2S32 rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag);
 internal R_Tex2DFormat rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag);
+internal E_Value rd_value_from_eval_tag_key(E_Eval eval, E_Expr *tag, String8 key);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);
@@ -1143,7 +1136,7 @@ internal U64 rd_hash_from_lister_item(RD_ListerItem *item);
 
 internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg (lister)
 internal RD_ListerParams rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
 internal void rd_set_autocomp_lister_query_(RD_ListerParams *params);
 #define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})

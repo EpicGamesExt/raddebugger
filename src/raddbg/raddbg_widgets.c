@@ -672,8 +672,7 @@ rd_cmd_binding_buttons(String8 name)
     RD_Binding binding = n->v->binding;
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
                                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
-                                             rd_state->bind_change_binding.key == binding.key &&
-                                             rd_state->bind_change_binding.modifiers == binding.modifiers);
+                                             n->v->cfg_id == rd_state->bind_change_binding_id);
     
     //- rjf: grab all conflicts
     B32 has_conflicts = 0;
@@ -736,7 +735,7 @@ rd_cmd_binding_buttons(String8 name)
           arena_clear(rd_state->bind_change_arena);
           rd_state->bind_change_active = 1;
           rd_state->bind_change_cmd_name = push_str8_copy(rd_state->bind_change_arena, name);
-          rd_state->bind_change_binding = binding;
+          rd_state->bind_change_binding_id = n->v->cfg_id;
         }
       }
       else if(rd_state->bind_change_active && ui_clicked(sig))
@@ -768,7 +767,7 @@ rd_cmd_binding_buttons(String8 name)
       UI_Signal sig = rd_icon_button(RD_IconKind_X, 0, str8_lit("###delete_binding"));
       if(ui_clicked(sig))
       {
-        // TODO(rjf): @cfg rd_unbind_name(name, binding);
+        rd_cfg_release(rd_cfg_from_id(rd_state->bind_change_binding_id));
         rd_state->bind_change_active = 0;
       }
     }
@@ -780,8 +779,7 @@ rd_cmd_binding_buttons(String8 name)
   //- rjf: build "add new binding" button
   B32 adding_new_binding = (rd_state->bind_change_active &&
                             str8_match(rd_state->bind_change_cmd_name, name, 0) &&
-                            rd_state->bind_change_binding.key == OS_Key_Null &&
-                            rd_state->bind_change_binding.modifiers == 0);
+                            rd_state->bind_change_binding_id == 0);
   RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "")
   {
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -803,7 +801,7 @@ rd_cmd_binding_buttons(String8 name)
         arena_clear(rd_state->bind_change_arena);
         rd_state->bind_change_active = 1;
         rd_state->bind_change_cmd_name = push_str8_copy(rd_state->bind_change_arena, name);
-        MemoryZeroStruct(&rd_state->bind_change_binding);
+        rd_state->bind_change_binding_id = 0;
       }
       else if(rd_state->bind_change_active && ui_clicked(sig))
       {
