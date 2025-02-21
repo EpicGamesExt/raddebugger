@@ -490,6 +490,17 @@ os_copy_file_path(String8 dst, String8 src)
   return result;
 }
 
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 dst16 = str16_from_8(scratch.arena, dst);
+  String16 src16 = str16_from_8(scratch.arena, src);
+  B32 result = MoveFileW((WCHAR*)src16.str, (WCHAR*)dst16.str);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {

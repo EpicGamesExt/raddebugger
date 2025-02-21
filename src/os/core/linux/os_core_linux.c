@@ -443,6 +443,12 @@ os_copy_file_path(String8 dst, String8 src)
   return result;
 }
 
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  // TODO(rjf)
+}
+
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {

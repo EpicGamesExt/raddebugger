@@ -1052,10 +1052,13 @@ if(work_top == 0) {work_top = &broken_work;}\
       goto end_consume;
     }
     
-    //- rjf: [main_implicit] newline -> pop
+    //- rjf: [main_implicit] newline -> pop *all* current implicit work tasks
     if(work_top->kind == MD_ParseWorkKind_MainImplicit && token->flags & MD_TokenFlag_Newline)
     {
-      MD_ParseWorkPop();
+      for(;work_top->kind == MD_ParseWorkKind_MainImplicit;)
+      {
+        MD_ParseWorkPop();
+      }
       token += 1;
       goto end_consume;
     }
