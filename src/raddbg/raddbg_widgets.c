@@ -1765,8 +1765,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num += 1, line_idx += 1)
     {
       String8 line_text = params->line_text[line_idx];
-      F32 line_text_dim = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px;
-      line_extras_off[line_idx] = Max(line_text_dim, params->font_size*50);
+      F32 line_text_dim = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
+      line_extras_off[line_idx] = Max(line_text_dim, params->font_size*30);
     }
   }
   
@@ -1806,7 +1806,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             stop_event.cause == CTRL_EventCause_InterruptedByTrap))
         {
           DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
-          UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+          UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_text_dim(10, 1)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
             UI_TagF("bad_pop")
           {
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###exception_info");

@@ -11758,13 +11758,14 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
       if(thread != &ctrl_entity_nil)
       {
         dr_fstrs_push_new(arena, &fstrs, &params, rd_icon_kind_text_table[RD_IconKind_WarningBig], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons));
+        dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
         switch(event->exception_kind)
         {
           default:
           {
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
             dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception - "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception: "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
             String8 exception_explanation_string = rd_string_from_exception_code(event->exception_code);
             String8 exception_info_string = push_str8f(arena, "%S%s%S%s",
@@ -11776,37 +11777,35 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
           }break;
           case CTRL_ExceptionKind_CppThrow:
           {
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
             dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit a C++ exception - "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit a C++ exception: "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
             dr_fstrs_push_new(arena, &fstrs, &params, exception_code_string);
           }break;
           case CTRL_ExceptionKind_MemoryRead:
           {
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
             dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception - "));
-            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
-            String8 exception_info_string = push_str8f(arena, "%S (Access violation reading 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception: "));
+            String8 exception_info_string = push_str8f(arena, "Access violation reading from address 0x%I64x", event->vaddr_rng.min);
             dr_fstrs_push_new(arena, &fstrs, &params, exception_info_string);
           }break;
           case CTRL_ExceptionKind_MemoryWrite:
           {
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
             dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception - "));
-            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
-            String8 exception_info_string = push_str8f(arena, "%S (Access violation writing 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception: "));
+            String8 exception_info_string = push_str8f(arena, "Access violation writing to address 0x%I64x", event->vaddr_rng.min);
             dr_fstrs_push_new(arena, &fstrs, &params, exception_info_string);
           }break;
           case CTRL_ExceptionKind_MemoryExecute:
           {
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
             dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
-            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception - "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit an exception: "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
-            String8 exception_info_string = push_str8f(arena, "%S (Access violation executing 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            String8 exception_info_string = push_str8f(arena, "Access violation executing at address 0x%I64x", event->vaddr_rng.min);
             dr_fstrs_push_new(arena, &fstrs, &params, exception_info_string);
           }break;
         }
@@ -11814,7 +11813,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
       else
       {
         dr_fstrs_push_new(arena, &fstrs, &params, rd_icon_kind_text_table[RD_IconKind_WarningBig], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons));
-        dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("Hit an exception - "));
+        dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("Hit an exception: "));
         String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
         String8 exception_explanation_string = rd_string_from_exception_code(event->exception_code);
         String8 exception_info_string = push_str8f(arena, "%S%s%S%s",

@@ -43,6 +43,21 @@ ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind)
   return cause;
 }
 
+internal CTRL_ExceptionKind
+ctrl_exception_kind_from_dmn(DMN_ExceptionKind kind)
+{
+  CTRL_ExceptionKind result = CTRL_ExceptionKind_Null;
+  switch(kind)
+  {
+    default:{}break;
+    case DMN_ExceptionKind_MemoryRead:    {result = CTRL_ExceptionKind_MemoryRead;}break;
+    case DMN_ExceptionKind_MemoryWrite:   {result = CTRL_ExceptionKind_MemoryWrite;}break;
+    case DMN_ExceptionKind_MemoryExecute: {result = CTRL_ExceptionKind_MemoryExecute;}break;
+    case DMN_ExceptionKind_CppThrow:      {result = CTRL_ExceptionKind_CppThrow;}break;
+  }
+  return result;
+}
+
 internal String8
 ctrl_string_from_event_kind(CTRL_EventKind kind)
 {
@@ -5924,6 +5939,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     event->entity = ctrl_handle_make(CTRL_MachineID_Local, stop_event->thread);
     event->parent = ctrl_handle_make(CTRL_MachineID_Local, stop_event->process);
     event->exception_code = stop_event->code;
+    event->exception_kind = ctrl_exception_kind_from_dmn(stop_event->exception_kind);
     event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
     event->rip_vaddr = stop_event->instruction_pointer;
     ctrl_c2u_push_events(&evts);
@@ -5998,6 +6014,7 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       event->entity = ctrl_handle_make(CTRL_MachineID_Local, stop_event->thread);
       event->parent = ctrl_handle_make(CTRL_MachineID_Local, stop_event->process);
       event->exception_code = stop_event->code;
+      event->exception_kind = ctrl_exception_kind_from_dmn(stop_event->exception_kind);
       event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
       event->rip_vaddr = stop_event->instruction_pointer;
     }
