@@ -10110,7 +10110,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
               E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
               E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
               E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
-              E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
+              E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
               U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
               String8 opener_string = str8_lit("[");
               String8 closer_string = str8_lit("]");
@@ -10128,7 +10128,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
                 {
                   E_Expr *expr = &e_expr_nil;
                   String8 expr_string = {0};
-                  lookup_rule->range(scratch.arena, eval.exprs.last, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+                  lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
                   if(expr != &e_expr_nil)
                   {
                     if(!is_first)
@@ -10244,7 +10244,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
         E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.exprs.last, &irtree);
         E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
         E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
-        E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, filter);
+        E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
         U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
         String8 opener_string = str8_lit("{");
         String8 closer_string = str8_lit("}");
@@ -10268,7 +10268,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
           {
             E_Expr *expr = &e_expr_nil;
             String8 expr_string = {0};
-            lookup_rule->range(scratch.arena, eval.exprs.last, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+            lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
             if(expr != &e_expr_nil)
             {
               if(!is_first)

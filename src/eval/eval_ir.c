@@ -444,7 +444,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
       // rjf: fall back to default
       else
       {
-        info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, filter);
+        info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, tag, filter);
       }
     }
     scratch_end(scratch);
@@ -456,7 +456,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(slice)
 {
   if(user_data == 0)
   {
-    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, idx_range, exprs, exprs_strings, user_data);
+    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, idx_range, exprs, exprs_strings, user_data);
   }
   else
   {
@@ -472,73 +472,6 @@ E_LOOKUP_RANGE_FUNCTION_DEF(slice)
       exprs_strings[out_idx] = push_str8f(arena, "[%I64u]", idx);
     }
   }
-}
-
-////////////////////////////////
-//~ rjf: Lookups
-
-internal E_LookupRuleMap
-e_lookup_rule_map_make(Arena *arena, U64 slots_count)
-{
-  E_LookupRuleMap map = {0};
-  map.slots_count = slots_count;
-  map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("default"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(default),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(default),
-                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
-                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder),
-                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(folder),
-                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(folder));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
-                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(file));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("slice"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(slice),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(slice));
-  return map;
-}
-
-internal void
-e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
-{
-  U64 hash = e_hash_from_string(5381, rule->name);
-  U64 slot_idx = hash%map->slots_count;
-  E_LookupRuleNode *n = push_array(arena, E_LookupRuleNode, 1);
-  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
-  MemoryCopyStruct(&n->v, rule);
-  if(n->v.info == 0)       { n->v.info = E_LOOKUP_INFO_FUNCTION_NAME(default); }
-  if(n->v.access == 0)     { n->v.access = E_LOOKUP_ACCESS_FUNCTION_NAME(default); }
-  if(n->v.range == 0)      { n->v.range = E_LOOKUP_RANGE_FUNCTION_NAME(default); }
-  if(n->v.id_from_num == 0){ n->v.id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default); }
-  if(n->v.num_from_id == 0){ n->v.num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default); }
-  n->v.name = push_str8_copy(arena, n->v.name);
-}
-
-internal E_LookupRule *
-e_lookup_rule_from_string(String8 string)
-{
-  E_LookupRule *result = &e_lookup_rule__nil;
-  if(e_ir_state->ctx->lookup_rule_map != 0 && e_ir_state->ctx->lookup_rule_map->slots_count != 0)
-  {
-    U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%e_ir_state->ctx->lookup_rule_map->slots_count;
-    for(E_LookupRuleNode *n = e_ir_state->ctx->lookup_rule_map->slots[slot_idx].first;
-        n != 0;
-        n = n->next)
-    {
-      if(str8_match(n->v.name, string, 0))
-      {
-        result = &n->v;
-        break;
-      }
-    }
-  }
-  return result;
 }
 
 E_LOOKUP_INFO_FUNCTION_DEF(default)
@@ -949,6 +882,252 @@ E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default)
 E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default)
 {
   return id;
+}
+
+////////////////////////////////
+//~ rjf: Member Filtering Lookup Rules
+
+typedef struct E_MemberFilterAccel E_MemberFilterAccel;
+struct E_MemberFilterAccel
+{
+  E_MemberArray members;
+};
+
+E_LOOKUP_INFO_FUNCTION_DEF(only)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LookupInfo lookup_info = {0};
+  {
+    //- rjf: extract struct type
+    E_TypeKey struct_type_key = zero_struct;
+    {
+      E_TypeKey lhs_type_key = e_type_unwrap(lhs->type_key);
+      E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
+      if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
+      {
+        E_Type *type = e_type_from_key__cached(lhs_type_key);
+        if(type->count == 1)
+        {
+          E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
+          E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+          if(direct_type_kind == E_TypeKind_Struct ||
+             direct_type_kind == E_TypeKind_Class ||
+             direct_type_kind == E_TypeKind_Union)
+          {
+            struct_type_key = direct_type_key;
+          }
+        }
+      }
+      else if(lhs_type_kind == E_TypeKind_Struct ||
+              lhs_type_kind == E_TypeKind_Class ||
+              lhs_type_kind == E_TypeKind_Union)
+      {
+        struct_type_key = lhs_type_key;
+      }
+    }
+    
+    //- rjf: not struct -> fall back on default
+    if(e_type_key_match(struct_type_key, e_type_key_zero()))
+    {
+      lookup_info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, tag, filter);
+    }
+    
+    //- struct -> filter
+    else
+    {
+      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
+      E_MemberList data_members_list__filtered = {0};
+      for EachIndex(idx, data_members.count)
+      {
+        B32 fits_filter = 0;
+        for(E_Expr *name = tag->first->next; name != &e_expr_nil; name = name->next)
+        {
+          if(str8_match(name->string, data_members.v[idx].name, 0))
+          {
+            fits_filter = 1;
+            break;
+          }
+        }
+        if(fits_filter)
+        {
+          e_member_list_push(scratch.arena, &data_members_list__filtered, &data_members.v[idx]);
+        }
+      }
+      E_MemberFilterAccel *accel = push_array(arena, E_MemberFilterAccel, 1);
+      accel->members = e_member_array_from_list(arena, &data_members_list__filtered);
+      lookup_info.user_data = accel;
+      lookup_info.named_expr_count = accel->members.count;
+    }
+  }
+  scratch_end(scratch);
+  return lookup_info;
+}
+
+E_LOOKUP_INFO_FUNCTION_DEF(omit)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_LookupInfo lookup_info = {0};
+  {
+    //- rjf: extract struct type
+    E_TypeKey struct_type_key = zero_struct;
+    {
+      E_TypeKey lhs_type_key = e_type_unwrap(lhs->type_key);
+      E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
+      if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
+      {
+        E_Type *type = e_type_from_key__cached(lhs_type_key);
+        if(type->count == 1)
+        {
+          E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
+          E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+          if(direct_type_kind == E_TypeKind_Struct ||
+             direct_type_kind == E_TypeKind_Class ||
+             direct_type_kind == E_TypeKind_Union)
+          {
+            struct_type_key = direct_type_key;
+          }
+        }
+      }
+      else if(lhs_type_kind == E_TypeKind_Struct ||
+              lhs_type_kind == E_TypeKind_Class ||
+              lhs_type_kind == E_TypeKind_Union)
+      {
+        struct_type_key = lhs_type_key;
+      }
+    }
+    
+    //- rjf: not struct -> fall back on default
+    if(e_type_key_match(struct_type_key, e_type_key_zero()))
+    {
+      lookup_info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, tag, filter);
+    }
+    
+    //- struct -> filter
+    else
+    {
+      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
+      E_MemberList data_members_list__filtered = {0};
+      for EachIndex(idx, data_members.count)
+      {
+        B32 fits_filter = 1;
+        for(E_Expr *name = tag->first->next; name != &e_expr_nil; name = name->next)
+        {
+          if(str8_match(name->string, data_members.v[idx].name, 0))
+          {
+            fits_filter = 0;
+            break;
+          }
+        }
+        if(fits_filter)
+        {
+          e_member_list_push(scratch.arena, &data_members_list__filtered, &data_members.v[idx]);
+        }
+      }
+      E_MemberFilterAccel *accel = push_array(arena, E_MemberFilterAccel, 1);
+      accel->members = e_member_array_from_list(arena, &data_members_list__filtered);
+      lookup_info.user_data = accel;
+      lookup_info.named_expr_count = accel->members.count;
+    }
+  }
+  scratch_end(scratch);
+  return lookup_info;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(only_and_omit)
+{
+  if(user_data == 0)
+  {
+    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, idx_range, exprs, exprs_strings, user_data);
+  }
+  else
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+    E_MemberFilterAccel *accel = (E_MemberFilterAccel *)user_data;
+    Rng1U64 legal_idx_range = r1u64(0, accel->members.count);
+    Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
+    U64 read_range_count = dim_1u64(read_range);
+    for(U64 idx = 0; idx < read_range_count; idx += 1)
+    {
+      U64 member_idx = idx + read_range.min;
+      String8 member_name = accel->members.v[member_idx].name;
+      exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
+    }
+    scratch_end(scratch);
+  }
+}
+
+////////////////////////////////
+//~ rjf: Lookups
+
+internal E_LookupRuleMap
+e_lookup_rule_map_make(Arena *arena, U64 slots_count)
+{
+  E_LookupRuleMap map = {0};
+  map.slots_count = slots_count;
+  map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("default"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(default),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(default),
+                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
+                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default));
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder),
+                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(folder),
+                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(folder));
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
+                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(file));
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("slice"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(slice),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(slice));
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("only"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(only),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(only_and_omit));
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("omit"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(omit),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(only_and_omit));
+  return map;
+}
+
+internal void
+e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
+{
+  U64 hash = e_hash_from_string(5381, rule->name);
+  U64 slot_idx = hash%map->slots_count;
+  E_LookupRuleNode *n = push_array(arena, E_LookupRuleNode, 1);
+  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
+  MemoryCopyStruct(&n->v, rule);
+  if(n->v.info == 0)       { n->v.info = E_LOOKUP_INFO_FUNCTION_NAME(default); }
+  if(n->v.access == 0)     { n->v.access = E_LOOKUP_ACCESS_FUNCTION_NAME(default); }
+  if(n->v.range == 0)      { n->v.range = E_LOOKUP_RANGE_FUNCTION_NAME(default); }
+  if(n->v.id_from_num == 0){ n->v.id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default); }
+  if(n->v.num_from_id == 0){ n->v.num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default); }
+  n->v.name = push_str8_copy(arena, n->v.name);
+}
+
+internal E_LookupRule *
+e_lookup_rule_from_string(String8 string)
+{
+  E_LookupRule *result = &e_lookup_rule__nil;
+  if(e_ir_state->ctx->lookup_rule_map != 0 && e_ir_state->ctx->lookup_rule_map->slots_count != 0)
+  {
+    U64 hash = e_hash_from_string(5381, string);
+    U64 slot_idx = hash%e_ir_state->ctx->lookup_rule_map->slots_count;
+    for(E_LookupRuleNode *n = e_ir_state->ctx->lookup_rule_map->slots[slot_idx].first;
+        n != 0;
+        n = n->next)
+    {
+      if(str8_match(n->v.name, string, 0))
+      {
+        result = &n->v;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -1637,8 +1816,8 @@ E_IRGEN_FUNCTION_DEF(default)
       ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule_and_tag.rule->name))
       {
         e_tag_poison(lhs_lookup_rule_and_tag.tag);
-        E_LookupInfo lookup_info = lhs_lookup_rule_and_tag.rule->info(arena, &lhs_irtree, str8_zero());
-        E_LookupAccess lookup_access = lhs_lookup_rule_and_tag.rule->access(arena, expr->kind, lhs, rhs, lookup_info.user_data);
+        E_LookupInfo lookup_info = lhs_lookup_rule_and_tag.rule->info(arena, &lhs_irtree, lhs_lookup_rule_and_tag.tag, str8_zero());
+        E_LookupAccess lookup_access = lhs_lookup_rule_and_tag.rule->access(arena, expr->kind, lhs, rhs, lhs_lookup_rule_and_tag.tag, lookup_info.user_data);
         result = lookup_access.irtree_and_type;
         e_tag_unpoison(lhs_lookup_rule_and_tag.tag);
       }
