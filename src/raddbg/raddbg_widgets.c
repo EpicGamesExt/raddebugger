@@ -438,7 +438,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       Vec4F32 process_color = rd_color_from_ctrl_entity(process);
       if(process_color.w == 0)
       {
-        process_color = color;
+        process_color = ui_color_from_name(str8_lit("text"));
       }
       if(process_name.size != 0)
       {

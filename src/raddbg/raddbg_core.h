@@ -235,15 +235,12 @@ struct RD_ViewState
   RD_ArenaExt *last_arena_ext;
   void *user_data;
   
-  // rjf: search editing controls
-  B32 is_searching;
-  Arena *search_arena;
-  RD_Regs *search_regs;
-  String8 search_cmd_name;
-  TxtPt search_cursor;
-  TxtPt search_mark;
-  U8 search_buffer[KB(1)];
-  U64 search_string_size;
+  // rjf: query state
+  B32 query_is_selected;
+  TxtPt query_cursor;
+  TxtPt query_mark;
+  U8 query_buffer[KB(1)];
+  U64 query_string_size;
 };
 
 typedef struct RD_ViewStateSlot RD_ViewStateSlot;
@@ -1079,7 +1076,8 @@ internal void rd_view_ui(Rng2F32 rect);
 internal Arena *rd_view_arena(void);
 internal UI_ScrollPt2 rd_view_scroll_pos(void);
 internal EV_View *rd_view_eval_view(void);
-internal String8 rd_view_search(void);
+internal String8 rd_view_query_cmd(void);
+internal String8 rd_view_query_input(void);
 internal RD_Cfg *rd_view_cfg_from_string(String8 string);
 internal E_Value rd_view_cfg_value_from_string(String8 string);
 

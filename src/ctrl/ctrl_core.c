@@ -1400,6 +1400,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
     
     //- rjf: try to read from cache
     B32 is_good = 0;
+    B32 process_node_exists = 0;
     B32 is_stale = 1;
     OS_MutexScopeR(process_stripe->rw_mutex)
     {
@@ -1407,6 +1408,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
       {
         if(ctrl_handle_match(n->handle, process))
         {
+          process_node_exists = 1;
           U64 range_slot_idx = range_hash%n->range_hash_slots_count;
           CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
           for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
@@ -1425,7 +1427,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
     }
     
     //- rjf: not good -> create process cache node if necessary
-    if(!is_good)
+    if(!is_good && !process_node_exists)
     {
       OS_MutexScopeW(process_stripe->rw_mutex)
       {

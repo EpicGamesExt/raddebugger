@@ -396,7 +396,9 @@ E_LOOKUP_RANGE_FUNCTION_DEF(cfg)
     U64 read_count = dim_1u64(read_range);
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
-      exprs[dst_idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, idx + read_range.min - cfgs_idx_range.min);
+      RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
+      exprs[dst_idx] = e_push_expr(arena, E_ExprKind_LeafIdent, 0);
+      exprs[dst_idx]->string = push_str8f(arena, "$%I64d", cfg->id);
     }
   }
 }
@@ -834,6 +836,20 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(ctrl_entities)
     scratch_end(scratch);
   }
   return result;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(ctrl_entities)
+{
+  CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
+  Rng1U64 legal_range = r1u64(0, entities->count);
+  Rng1U64 read_range = intersect_1u64(legal_range, idx_range);
+  U64 read_count = dim_1u64(read_range);
+  for(U64 out_idx = 0; out_idx < read_count; out_idx += 1)
+  {
+    CTRL_Entity *entity = entities->v[out_idx + read_range.min];
+    exprs[out_idx] = e_push_expr(arena, E_ExprKind_LeafIdent, 0);
+    exprs[out_idx]->string = ctrl_string_from_handle(arena, entity->handle);
+  }
 }
 
 ////////////////////////////////
@@ -3314,7 +3330,6 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
     view_state->arena = arena_alloc();
     view_state->arena_reset_pos = arena_pos(view_state->arena);
     view_state->ev_view = ev_view_alloc();
-    view_state->search_arena = arena_alloc();
   }
   if(view_state != &rd_nil_view_state)
   {
@@ -3333,21 +3348,29 @@ rd_view_ui(Rng2F32 rect)
   String8 expr_string = rd_expr_from_cfg(view);
   
   //////////////////////////////
-  //- rjf: searching extension
+  //- rjf: query extension
   //
-  B32 search_row_is_open = (vs->is_searching || vs->search_string_size != 0);
+  RD_Cfg *query_root = rd_cfg_child_from_string(view, str8_lit("query"));
+  RD_Cfg *input_root = rd_cfg_child_from_string(query_root, str8_lit("input"));
+  RD_Cfg *cmd_root = rd_cfg_child_from_string(query_root, str8_lit("cmd"));
+  String8 current_input = input_root->first->string;
+  B32 search_row_is_open = (vs->query_is_selected || current_input.size != 0);
   F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open);
   if(search_row_open_t > 0.001f)
   {
-    String8 cmd_name = vs->search_cmd_name;
+    String8 cmd_name = cmd_root->first->string;
     RD_IconKind icon = rd_icon_kind_from_code_name(cmd_name);
     RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
     
+    //- rjf: store cfg's string into view's
+    vs->query_string_size = Min(sizeof(vs->query_buffer), current_input.size);
+    MemoryCopy(vs->query_buffer, current_input.str, vs->query_string_size);
+    
     //- rjf: clamp cursor
-    if(vs->search_cursor.column == 0)
+    if(vs->query_cursor.column == 0)
     {
-      vs->search_mark = txt_pt(1, 1);
-      vs->search_cursor = txt_pt(1, vs->search_string_size+1);
+      vs->query_mark = txt_pt(1, 1);
+      vs->query_cursor = txt_pt(1, vs->query_string_size+1);
     }
     
     //- rjf: determine dimensions
@@ -3365,7 +3388,7 @@ rd_view_ui(Rng2F32 rect)
     }
     
     //- rjf: build contents
-    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->is_searching ? UI_FocusKind_On : UI_FocusKind_Off)
+    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_selected ? UI_FocusKind_On : UI_FocusKind_Off)
       RD_Font(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput ? RD_FontSlot_Code : RD_FontSlot_Main)
     {
       UI_TextAlignment(UI_TextAlign_Center)
@@ -3382,23 +3405,27 @@ rd_view_ui(Rng2F32 rect)
       {
         params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_LineEditFlag_CodeContents;
         params.flags |= RD_LineEditFlag_Border;
-        params.cursor               = &vs->search_cursor;
-        params.mark                 = &vs->search_mark;
-        params.edit_buffer          = vs->search_buffer;
-        params.edit_string_size_out = &vs->search_string_size;
-        params.edit_buffer_size     = sizeof(vs->search_buffer);
-        params.pre_edit_value       = str8(vs->search_buffer, vs->search_string_size);
+        params.cursor               = &vs->query_cursor;
+        params.mark                 = &vs->query_mark;
+        params.edit_buffer          = vs->query_buffer;
+        params.edit_string_size_out = &vs->query_string_size;
+        params.edit_buffer_size     = sizeof(vs->query_buffer);
+        params.pre_edit_value       = current_input;
       }
       UI_Signal sig = rd_line_editf(&params, "###search");
       if(ui_pressed(sig))
       {
-        vs->is_searching = 1;
+        vs->query_is_selected = 1;
+        rd_cmd(RD_CmdKind_FocusPanel);
       }
     }
     
     //- rjf: commit string to view
-    RD_Cfg *search = rd_cfg_child_from_string_or_alloc(view, str8_lit("search"));
-    rd_cfg_new_replace(search, str8(vs->search_buffer, vs->search_string_size));
+    if(input_root == &rd_nil_cfg)
+    {
+      input_root = rd_cfg_child_from_string_or_alloc(query_root, str8_lit("input"));
+    }
+    rd_cfg_new_replace(input_root, str8(vs->query_buffer, vs->query_string_size));
   }
   
   //////////////////////////////
@@ -3691,7 +3718,7 @@ rd_view_ui(Rng2F32 rect)
       S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
       F32 row_string_max_size_px = dim_2f32(rect).x;
       EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
-      String8 filter = rd_view_search();
+      String8 filter = rd_view_query_input();
       Vec4F32 pop_background_rgba = {0};
       UI_TagF("pop") pop_background_rgba = ui_color_from_name(str8_lit("background"));
       
@@ -3721,15 +3748,34 @@ rd_view_ui(Rng2F32 rect)
       }
       
       //////////////////////////////
+      //- rjf: process commands
+      //
+      for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
+      {
+        RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
+        switch(kind)
+        {
+          default:{}break;
+          case RD_CmdKind_Search:
+          case RD_CmdKind_SearchBackwards:
+          {
+            vs->query_is_selected = 0;
+          }break;
+        }
+      }
+      
+      //////////////////////////////
       //- rjf: consume query-completion events, if this view is being used as a query
       //
-      if(vs->is_searching &&
+#if 0
+      if(vs->query_is_selected &&
          ui_is_focus_active() &&
          ui_slot_press(UI_EventActionSlot_Accept))
       {
         // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
         // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
       }
+#endif
       
       //////////////////////////////
       //- rjf: consume events & perform navigations/edits - calculate state
@@ -5159,7 +5205,7 @@ rd_view_ui(Rng2F32 rect)
                         {
                           searched_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
                         }
-                        String8 search_query = rd_view_search();
+                        String8 search_query = rd_view_query_input();
                         FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, search_query, searched_string);
                         if(fuzzy_matches.count == 0)
                         {
@@ -5582,12 +5628,12 @@ rd_view_ui(Rng2F32 rect)
   ////////////////////////////
   //- rjf: catchall query completion controls
   //
-  if(vs->is_searching) UI_Focus(UI_FocusKind_On)
+  if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
   {
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
-      vs->is_searching = 0;
-      vs->search_string_size = 0;
+      vs->query_is_selected = 0;
+      vs->query_string_size = 0;
     }
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
     {
@@ -5629,12 +5675,23 @@ rd_view_eval_view(void)
 }
 
 internal String8
-rd_view_search(void)
+rd_view_query_cmd(void)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-  RD_Cfg *search = rd_cfg_child_from_string(view, str8_lit("search"));
-  String8 search_string = search->first->string;
-  return search_string;
+  RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
+  RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
+  String8 string = cmd->first->string;
+  return string;
+}
+
+internal String8
+rd_view_query_input(void)
+{
+  RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+  RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
+  RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
+  String8 string = input->first->string;
+  return string;
 }
 
 internal RD_Cfg *
@@ -7258,19 +7315,19 @@ rd_window_frame(void)
       B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
       
       //- rjf: build & prepare view for query ui
-      RD_Cfg *query = rd_immediate_cfg_from_keyf("window_query_%p", window);
-      RD_Cfg *view = rd_cfg_child_from_string_or_alloc(query, str8_lit("watch"));
+      RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
+      RD_Cfg *view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
       RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+      RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+      RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
+      rd_cfg_new_replace(cmd, cmd_name);
       rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
       RD_ViewState *vs = rd_view_state_from_cfg(view);
-      vs->is_searching = 1;
-      arena_clear(vs->search_arena);
-      vs->search_cmd_name = push_str8_copy(vs->search_arena, cmd_name);
-      vs->search_regs = rd_regs_copy(vs->search_arena, ws->query_regs);
+      vs->query_is_selected = 1;
       String8 query_expression = cmd_kind_info->query.expr;
       if(query_expression.size == 0)
       {
-        query_expression = str8(vs->search_buffer, vs->search_string_size);
+        query_expression = str8(vs->query_buffer, vs->query_string_size);
         RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
         rd_cfg_new(explicit_root, str8_lit("1"));
       }
@@ -7281,7 +7338,7 @@ rd_window_frame(void)
         {
           String8 pre_insertion  = str8_prefix(query_expression, input_insertion_pos);
           String8 post_insertion = str8_skip(query_expression, input_insertion_pos + 6);
-          query_expression = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->search_buffer, vs->search_string_size), post_insertion);
+          query_expression = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
         }
         rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
       }
@@ -7300,7 +7357,7 @@ rd_window_frame(void)
       {
         Vec2F32 content_rect_center = center_2f32(content_rect);
         Vec2F32 content_rect_dim = dim_2f32(content_rect);
-        EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_search(), query_eval.exprs);
+        EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval.exprs);
         F32 query_open_t = ui_anim(ui_key_from_string(ui_key_zero(), str8_lit("query_open_t")), 1.f);
         F32 query_width_px = floor_f32(dim_2f32(content_rect).x * 0.35f);
         F32 max_query_height_px = content_rect_dim.y*0.8f;
@@ -12535,7 +12592,6 @@ rd_frame(void)
           {
             arena_release(ext->arena);
           }
-          arena_release(vs->search_arena);
           arena_release(vs->arena);
           DLLRemove_NP(rd_state->view_state_slots[slot_idx].first, rd_state->view_state_slots[slot_idx].last, vs, hash_next, hash_prev);
           SLLStackPush_N(rd_state->free_view_state, vs, hash_next);
@@ -13462,7 +13518,8 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
-                                     .access = E_LOOKUP_ACCESS_FUNCTION_NAME(ctrl_entities));
+                                     .access = E_LOOKUP_ACCESS_FUNCTION_NAME(ctrl_entities),
+                                     .range  = E_LOOKUP_RANGE_FUNCTION_NAME(ctrl_entities));
       }
       
       //- rjf: add macro / lookup rules for unattached processes
@@ -15795,6 +15852,8 @@ Z(getting_started)
           {
             String8 cmd_name = rd_regs()->cmd_name;
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+            
+            // rjf: floating queries -> set up window to build immediate-mode top-level query
             if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
@@ -15807,38 +15866,40 @@ Z(getting_started)
                 ws->query_regs = rd_regs_copy(ws->query_arena, rd_regs());
               }
             }
+            
+            // rjf: non-floating -> embed in tab parameter
             else
             {
               RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+              RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+              RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
+              RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+              String8 current_query_cmd_name = cmd->first->string;
               RD_ViewState *vs = rd_view_state_from_cfg(view);
-              if(!str8_match(vs->search_cmd_name, cmd_name, 0))
+              if(!str8_match(current_query_cmd_name, cmd_name, 0))
               {
-                arena_clear(vs->search_arena);
-                vs->search_regs = rd_regs_copy(vs->search_arena, rd_regs());
-                vs->search_cmd_name = push_str8_copy(vs->search_arena, cmd_name);
-                if(!vs->is_searching)
+                rd_cfg_new_replace(cmd, cmd_name);
+                if(!vs->query_is_selected)
                 {
-                  vs->search_cursor = txt_pt(1, 1+vs->search_string_size);
-                  vs->search_mark = txt_pt(1, 1);
+                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                  vs->query_mark = txt_pt(1, 1);
                 }
-                vs->is_searching = 1;
+                vs->query_is_selected = 1;
               }
               else
               {
-                vs->is_searching ^= 1;
+                vs->query_is_selected ^= 1;
               }
             }
           }break;
           case RD_CmdKind_CompleteQuery:
           {
-            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-            RD_ViewState *vs = rd_view_state_from_cfg(view);
-            String8 cmd_name = vs->search_cmd_name;
+            String8 cmd_name = rd_view_query_cmd();
+            String8 input = rd_view_query_input();
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
             RD_RegsScope()
             {
-              rd_regs_copy_contents(vs->search_arena, rd_regs(), vs->search_regs);
-              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8(vs->search_buffer, vs->search_string_size));
+              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, input);
               rd_push_cmd(cmd_name, rd_regs());
             }
             if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
@@ -15849,53 +15910,12 @@ Z(getting_started)
             }
             else if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
             {
-              vs->is_searching = 0;
-              vs->search_string_size = 0;
+              RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+              RD_ViewState *vs = rd_view_state_from_cfg(view);
+              vs->query_is_selected = 0;
+              vs->query_string_size = 0;
+              rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("query")));
             }
-            
-#if 0 // TODO(rjf): @cfg (query completion)
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            String8 query_cmd_name = ws->query_cmd_name;
-            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(query_cmd_name);
-            RD_RegSlot slot = info->query.slot;
-            
-            // rjf: compound command parameters
-            if(slot != RD_RegSlot_Null && !(ws->query_cmd_regs_mask[slot/64] & (1ull<<(slot%64))))
-            {
-              RD_Regs *regs_copy = rd_regs_copy(ws->query_cmd_arena, rd_regs());
-              Rng1U64 offset_range_in_regs = rd_reg_slot_range_table[slot];
-              MemoryCopy((U8 *)(ws->query_cmd_regs) + offset_range_in_regs.min,
-                         (U8 *)(regs_copy) + offset_range_in_regs.min,
-                         dim_1u64(offset_range_in_regs));
-              ws->query_cmd_regs_mask[slot/64] |= (1ull<<(slot%64));
-            }
-            
-            // rjf: determine if command is ready to run
-            B32 command_ready = 1;
-            if(slot != RD_RegSlot_Null && !(ws->query_cmd_regs_mask[slot/64] & (1ull<<(slot%64))))
-            {
-              command_ready = 0;
-            }
-            
-            // rjf: end this query
-            if(!(info->query.flags & RD_QueryFlag_KeepOldInput))
-            {
-              rd_cmd(RD_CmdKind_CancelQuery);
-            }
-            
-            // rjf: unset command register slot, if we keep old input (and thus need
-            // to re-query user)
-            if(info->query.flags & RD_QueryFlag_KeepOldInput)
-            {
-              ws->query_cmd_regs_mask[slot/64] &= ~(1ull<<(slot%64));
-            }
-            
-            // rjf: push command if possible
-            if(command_ready)
-            {
-              rd_push_cmd(ws->query_cmd_name, ws->query_cmd_regs);
-            }
-#endif
           }break;
           case RD_CmdKind_CancelQuery:
           {
@@ -16068,7 +16088,7 @@ Z(getting_started)
           case RD_CmdKind_AddAddressBreakpoint:
           case RD_CmdKind_AddFunctionBreakpoint:
           {
-            rd_cmd(RD_CmdKind_AddBreakpoint);
+            rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero());
           }break;
           
           //- rjf: watch pins
@@ -16293,6 +16313,10 @@ Z(getting_started)
           }break;
           
           //- rjf: debug control context management operations
+          case RD_CmdKind_SelectEntity:
+          {
+            rd_cmd(RD_CmdKind_SelectThread, .thread = rd_regs()->ctrl_entity);
+          }break;
           case RD_CmdKind_SelectThread:
           {
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);

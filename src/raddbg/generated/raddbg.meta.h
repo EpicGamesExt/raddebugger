@@ -94,6 +94,8 @@ RD_CmdKind_SelectThread,
 RD_CmdKind_SelectUnwind,
 RD_CmdKind_UpOneFrame,
 RD_CmdKind_DownOneFrame,
+RD_CmdKind_SelectEntity,
+RD_CmdKind_DeselectEntity,
 RD_CmdKind_IncUIFontScale,
 RD_CmdKind_DecUIFontScale,
 RD_CmdKind_IncCodeFontScale,
@@ -630,7 +632,7 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[294];
+extern RD_VocabInfo rd_vocab_info_table[296];
 extern RD_NameSchemaInfo rd_name_schema_info_table[12];
 extern Rng1U64 rd_reg_slot_range_table[40];
 extern String8 rd_binding_version_remap_old_name_table[8];

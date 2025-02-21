@@ -139,7 +139,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: get active search query
   //
-  String8 search_query = rd_view_search();
+  String8 search_query = rd_view_query_input();
   B32 search_query_is_active = 0;
   
   //////////////////////////////
@@ -832,7 +832,7 @@ rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
   RD_WatchPt pt = zero_struct;
   {
     Temp scratch = scratch_begin(0, 0);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_search(), block_ranges, (U64)tbl.y);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), block_ranges, (U64)tbl.y);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     {
       S64 x = 0;
@@ -859,7 +859,7 @@ rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt)
   {
     Temp scratch = scratch_begin(0, 0);
     U64 num = ev_num_from_key(block_ranges, pt.key);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_search(), block_ranges, num);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), block_ranges, num);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     tbl.x = 0;
     {
@@ -1087,6 +1087,16 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           if(ctrl_entity_tree_is_frozen(entity))
           {
             cmd_kind = RD_CmdKind_ThawEntity;
+          }
+          String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+        }
+        if(entity->kind == CTRL_EntityKind_Thread)
+        {
+          RD_CmdKind cmd_kind = RD_CmdKind_SelectEntity;
+          if(ctrl_handle_match(entity->handle, rd_base_regs()->thread))
+          {
+            cmd_kind = RD_CmdKind_DeselectEntity;
           }
           String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
@@ -1408,7 +1418,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: generate strings/flags based on that expression & fill
-      result.string   = rd_value_string_from_eval(arena, rd_view_search(), string_flags, default_radix, font, font_size, max_size_px, result.eval);
+      result.string   = rd_value_string_from_eval(arena, rd_view_query_input(), string_flags, default_radix, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.irtree.type_key) && result.eval.irtree.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
       if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
