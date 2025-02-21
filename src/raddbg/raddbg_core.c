@@ -12243,12 +12243,6 @@ rd_frame(void)
   local_persist S32 depth = 0;
   log_scope_begin();
   
-  //- TODO(rjf): @cfg debugging: stringify the current cfg tree
-  {
-    String8 string = rd_string_from_cfg_tree(scratch.arena, rd_state->root_cfg);
-    int x = 0;
-  }
-  
   //////////////////////////////
   //- rjf: do per-frame resets
   //
@@ -16773,6 +16767,7 @@ Z(getting_started)
         // we can evaluate this condition early, and decide whether or not to send this
         // breakpoint.
         B32 is_statically_disqualified = 0;
+        String8 non_ctrl_thread_static_condition = src_bp_cnd;
         if(is_static_for_ctrl_thread)
         {
           E_Eval eval = e_eval_from_string(scratch.arena, src_bp_cnd);
@@ -16781,6 +16776,7 @@ Z(getting_started)
           {
             is_statically_disqualified = 1;
           }
+          MemoryZeroStruct(&non_ctrl_thread_static_condition);
         }
         
         //- rjf: statically disqualified? -> skip
@@ -16796,7 +16792,7 @@ Z(getting_started)
         dst_bp->pt          = src_bp_loc.pt;
         dst_bp->symbol_name = src_bp_loc.name;
         dst_bp->vaddr       = src_bp_loc.vaddr;
-        dst_bp->condition   = src_bp_cnd;
+        dst_bp->condition   = non_ctrl_thread_static_condition;
         idx += 1;
       }
     }
