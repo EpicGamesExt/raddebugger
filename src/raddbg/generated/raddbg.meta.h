@@ -34,6 +34,8 @@ RD_RegSlot_Vaddr,
 RD_RegSlot_Voff,
 RD_RegSlot_VaddrRange,
 RD_RegSlot_VoffRange,
+RD_RegSlot_Expr,
+RD_RegSlot_ViewRule,
 RD_RegSlot_UIKey,
 RD_RegSlot_OffPx,
 RD_RegSlot_ListerFlags,
@@ -550,6 +552,8 @@ U64 vaddr;
 U64 voff;
 Rng1U64 vaddr_range;
 Rng1U64 voff_range;
+String8 expr;
+String8 view_rule;
 UI_Key ui_key;
 Vec2F32 off_px;
 RD_ListerFlags lister_flags;
@@ -611,6 +615,8 @@ RD_Query query;
 .voff = rd_regs()->voff,\
 .vaddr_range = rd_regs()->vaddr_range,\
 .voff_range = rd_regs()->voff_range,\
+.expr = rd_regs()->expr,\
+.view_rule = rd_regs()->view_rule,\
 .ui_key = rd_regs()->ui_key,\
 .off_px = rd_regs()->off_px,\
 .lister_flags = rd_regs()->lister_flags,\
@@ -627,7 +633,7 @@ RD_Query query;
 C_LINKAGE_BEGIN
 extern RD_VocabInfo rd_vocab_info_table[293];
 extern RD_NameSchemaInfo rd_name_schema_info_table[12];
-extern Rng1U64 rd_reg_slot_range_table[38];
+extern Rng1U64 rd_reg_slot_range_table[40];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[69];

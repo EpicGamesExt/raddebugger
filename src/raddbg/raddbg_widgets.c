@@ -234,7 +234,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     }
     
     //- rjf: cfg has expression attached -> use that
-    else if(expr_string.size != 0 && !str8_match(cfg->string, str8_lit("watch"), 0))
+    else if(expr_string.size != 0 && !is_within_window)
     {
       dr_fstrs_push_new(arena, &result, &params, expr_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
@@ -1829,7 +1829,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           RD_Cfg *pin = n->v;
           String8 pin_expr = rd_expr_from_cfg(pin);
           String8 pin_view_rule = rd_view_rule_from_cfg(pin);
-          E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
+          String8 full_pin_expr = push_str8f(scratch.arena, "%S => %S", pin_expr, pin_view_rule);
+          E_Eval eval = e_eval_from_string(scratch.arena, full_pin_expr);
           String8 eval_string = {0};
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
           {
@@ -2042,6 +2043,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_drag_drop_color = pop_color;
         }
       }
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
+      {
+        line_drag_drop = 1;
+        line_drag_cfg = cfg;
+        line_drag_drop_color = pop_color;
+      }
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
       {
         line_drag_drop = 1;
@@ -2055,8 +2062,21 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     }
     
     //- rjf: drop target is dropped -> process
+    if(contains_1s64(params->line_num_range, mouse_pt.line) && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
-      if(line_drag_cfg != &rd_nil_cfg && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr && rd_drag_drop())
+      {
+        S64 line_num = mouse_pt.line;
+        U64 line_idx = line_num - params->line_num_range.min;
+        U64 line_vaddr = params->line_vaddrs[line_idx];
+        rd_cmd(RD_CmdKind_AddWatchPin,
+               .expr       = rd_state->drag_drop_regs->expr,
+               .view_rule  = rd_state->drag_drop_regs->view_rule,
+               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
+               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
+               .vaddr      = line_vaddr);
+      }
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && line_drag_cfg != &rd_nil_cfg && rd_drag_drop())
       {
         RD_Cfg *dropped_cfg = line_drag_cfg;
         S64 line_num = mouse_pt.line;
@@ -2068,7 +2088,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
-      if(line_drag_ctrl_entity != &ctrl_entity_nil && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
+      if(line_drag_ctrl_entity != &ctrl_entity_nil && rd_drag_drop())
       {
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;

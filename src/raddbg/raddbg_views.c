@@ -1543,16 +1543,6 @@ rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt)
   return result;
 }
 
-//- rjf: watch view main hooks
-
-internal void
-rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
-{
-  ProfBeginFunction();
-  
-  ProfEnd();
-}
-
 ////////////////////////////////
 //~ rjf: null @view_hook_impl
 

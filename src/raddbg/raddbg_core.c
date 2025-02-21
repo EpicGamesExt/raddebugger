@@ -1051,6 +1051,8 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
   dst->file_path   = push_str8_copy(arena, src->file_path);
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
+  dst->expr        = push_str8_copy(arena, src->expr);
+  dst->view_rule   = push_str8_copy(arena, src->view_rule);
   dst->string      = push_str8_copy(arena, src->string);
   dst->cmd_name    = push_str8_copy(arena, src->cmd_name);
   dst->params_tree = md_tree_copy(arena, src->params_tree);
@@ -5259,6 +5261,12 @@ rd_view_ui(Rng2F32 rect)
                             case CTRL_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
                           }
                         }
+                        else
+                        {
+                          RD_RegsScope(.expr = e_string_from_expr(scratch.arena, row_info->eval.exprs.last),
+                                       .view_rule = ev_view_rule_from_key(rd_view_eval_view(), row->key))
+                            rd_drag_begin(RD_RegSlot_Expr);
+                        }
                       }
                       
                       // rjf: (normally) single-click -> move selection here
@@ -6267,7 +6275,6 @@ rd_window_frame(void)
   //- rjf: build UI
   //
   UI_Box *lister_box = &ui_nil_box;
-  UI_Box *hover_eval_box = &ui_nil_box;
   ProfScope("build UI")
   {
     ////////////////////////////
@@ -6499,6 +6506,26 @@ rd_window_frame(void)
           }
           
           di_scope_close(di_scope);
+        }break;
+        
+        ////////////////////////
+        //- rjf: expression tooltips
+        //
+        case RD_RegSlot_Expr:
+        UI_Tooltip RD_Font(RD_FontSlot_Code)
+        {
+          ui_set_next_pref_width(ui_children_sum(1));
+          UI_Row
+          {
+            rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), rd_state->drag_drop_regs->expr);
+            ui_spacer(ui_em(2.f, 1.f));
+            E_Eval eval = e_eval_from_string(scratch.arena, rd_state->drag_drop_regs->expr);
+            if(eval.mode != E_Mode_Null)
+            {
+              String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
+              rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+            }
+          }
         }break;
       }
       scratch_end(scratch);
@@ -8031,6 +8058,8 @@ rd_window_frame(void)
           }
           U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
           F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
+          
+          // rjf: build container
           UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
             UI_PrefHeight(ui_px(row_height_px, 1.f))
           {
@@ -9303,33 +9332,6 @@ rd_window_frame(void)
     }
     
     ui_end_build();
-  }
-  
-  //////////////////////////////
-  //- rjf: ensure hover eval is in-bounds
-  //
-  if(!ui_box_is_nil(hover_eval_box))
-  {
-    UI_Box *root = hover_eval_box;
-    Rng2F32 window_rect = os_client_rect_from_window(ui_window());
-    Rng2F32 root_rect = root->rect;
-    Vec2F32 shift =
-    {
-      -ClampBot(0, root_rect.x1 - window_rect.x1),
-      -ClampBot(0, root_rect.y1 - window_rect.y1),
-    };
-    Rng2F32 new_root_rect = shift_2f32(root_rect, shift);
-    root->fixed_position = new_root_rect.p0;
-    root->fixed_size = dim_2f32(new_root_rect);
-    root->rect = new_root_rect;
-    for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis + 1))
-    {
-      ui_calc_sizes_standalone__in_place_rec(root, axis);
-      ui_calc_sizes_upwards_dependent__in_place_rec(root, axis);
-      ui_calc_sizes_downwards_dependent__in_place_rec(root, axis);
-      ui_layout_enforce_constraints__in_place_rec(root, axis);
-      ui_layout_position__in_place_rec(root, axis);
-    }
   }
   
   //////////////////////////////
@@ -15896,7 +15898,8 @@ Z(getting_started)
           {
             String8 file_path = rd_regs()->file_path;
             TxtPt pt = rd_regs()->cursor;
-            String8 string = rd_regs()->string;
+            String8 expr_string = rd_regs()->expr;
+            String8 view_rule_string = rd_regs()->view_rule;
             U64 vaddr = rd_regs()->vaddr;
             B32 removed_already_existing = 0;
             if(kind == RD_CmdKind_ToggleWatchPin)
@@ -15911,7 +15914,7 @@ Z(getting_started)
                 U64 loc_vaddr = 0;
                 B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
                 B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                B32 loc_matches_expr    = (string.size != 0 && str8_match(expr->first->string, string, 0));
+                B32 loc_matches_expr    = (expr_string.size != 0 && str8_match(expr->first->string, expr_string, 0));
                 if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
                 {
                   rd_cfg_release(wp);
@@ -15925,8 +15928,10 @@ Z(getting_started)
               RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
               RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
               RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
+              RD_Cfg *view_rule = rd_cfg_new(wp, str8_lit("view_rule"));
               RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
-              rd_cfg_new(expr, string);
+              rd_cfg_new(expr, expr_string);
+              rd_cfg_new(view_rule, view_rule_string);
               if(vaddr != 0)
               {
                 rd_cfg_newf(loc, "0x%I64x", vaddr);
