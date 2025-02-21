@@ -263,8 +263,7 @@ typedef enum CTRL_UserBreakpointKind
 {
   CTRL_UserBreakpointKind_Null,
   CTRL_UserBreakpointKind_FileNameAndLineColNumber,
-  CTRL_UserBreakpointKind_SymbolNameAndOffset,
-  CTRL_UserBreakpointKind_VirtualAddress,
+  CTRL_UserBreakpointKind_Expression,
   CTRL_UserBreakpointKind_COUNT
 }
 CTRL_UserBreakpointKind;
@@ -637,6 +636,19 @@ struct CTRL_DbgDirNode
 };
 
 ////////////////////////////////
+//~ rjf: Control Thread Evaluation Scopes
+
+typedef struct CTRL_EvalScope CTRL_EvalScope;
+struct CTRL_EvalScope
+{
+  DI_Scope *di_scope;
+  E_TypeCtx type_ctx;
+  E_ParseCtx parse_ctx;
+  E_IRCtx ir_ctx;
+  E_InterpretCtx interpret_ctx;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -933,8 +945,8 @@ internal CTRL_EventList ctrl_c2u_pop_events(Arena *arena);
 internal void ctrl_thread__entry_point(void *p);
 
 //- rjf: breakpoint resolution
-internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
-internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
 internal void ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path);
@@ -945,6 +957,10 @@ internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_
 
 //- rjf: eval helpers
 internal B32 ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
+
+//- rjf: control thread eval scopes
+internal CTRL_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread);
+internal void ctrl_thread__eval_scope_end(CTRL_EvalScope *scope);
 
 //- rjf: log flusher
 internal void ctrl_thread__flush_info_log(String8 string);

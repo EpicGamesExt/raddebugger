@@ -3418,11 +3418,11 @@ ctrl_thread__entry_point(void *p)
 //- rjf: breakpoint resolution
 
 internal void
-ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
+ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
   if(user_bps->first == 0) { return; }
   Temp scratch = scratch_begin(&arena, 1);
-  DI_Scope *di_scope = di_scope_open();
+  DI_Scope *di_scope = eval_scope->di_scope;
   CTRL_Entity *module_entity = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
   DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
@@ -3486,45 +3486,37 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_Handle proc
         }
       }break;
       
-      //- rjf: symbol:voff-based breakpoints
-      case CTRL_UserBreakpointKind_SymbolNameAndOffset:
+      //- rjf: expression-based breakpoints
+      case CTRL_UserBreakpointKind_Expression:
       {
-        String8 symbol_name = bp->string;
-        U64 voff = bp->u64;
-        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
-        RDI_ParsedNameMap map = {0};
-        rdi_parsed_from_name_map(rdi, mapptr, &map);
-        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, symbol_name.str, symbol_name.size);
-        if(node != 0)
+        String8 expr = bp->string;
+        E_Value value = e_value_from_string(expr);
+        if(value.u64 != 0)
         {
-          U32 id_count = 0;
-          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-          for(U32 match_i = 0; match_i < id_count; match_i += 1)
-          {
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, ids[match_i]);
-            U64 proc_voff = rdi_first_voff_from_procedure(rdi, procedure);
-            U64 proc_vaddr = proc_voff + base_vaddr;
-            DMN_Trap trap = {process.dmn_handle, proc_vaddr + voff, (U64)bp};
-            dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
-          }
+          DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
+          dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
         }
       }break;
     }
   }
-  di_scope_close(di_scope);
   scratch_end(scratch);
 }
 
 internal void
-ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
+ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
     CTRL_UserBreakpoint *bp = &n->v;
-    if(bp->kind == CTRL_UserBreakpointKind_VirtualAddress)
+    if(bp->kind == CTRL_UserBreakpointKind_Expression)
     {
-      DMN_Trap trap = {process.dmn_handle, bp->u64, (U64)bp};
-      dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
+      String8 expr = bp->string;
+      E_Value value = e_value_from_string(expr);
+      if(value.u64 != 0)
+      {
+        DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
+        dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
+      }
     }
   }
 }
@@ -4497,6 +4489,128 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   return result;
 }
 
+//- rjf: control thread eval scopes
+
+internal CTRL_EvalScope *
+ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
+{
+  CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
+  scope->di_scope = di_scope_open();
+  
+  // rjf: unpack thread
+  Arch arch = thread->arch;
+  U64 thread_rip_vaddr = dmn_rip_from_thread(thread->handle.dmn_handle);
+  CTRL_Entity *process = ctrl_process_from_entity(thread);
+  CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+  U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
+  
+  // rjf: gather evaluation modules
+  U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
+  E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
+  E_Module *eval_modules_primary = &eval_modules[0];
+  eval_modules_primary->rdi = &di_rdi_parsed_nil;
+  eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+  {
+    U64 eval_module_idx = 0;
+    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+        machine != &ctrl_entity_nil;
+        machine = machine->next)
+    {
+      if(machine->kind != CTRL_EntityKind_Machine) { continue; }
+      for(CTRL_Entity *process = machine->first;
+          process != &ctrl_entity_nil;
+          process = process->next)
+      {
+        if(process->kind != CTRL_EntityKind_Process) { continue; }
+        for(CTRL_Entity *mod = process->first;
+            mod != &ctrl_entity_nil;
+            mod = mod->next)
+        {
+          if(mod->kind != CTRL_EntityKind_Module) { continue; }
+          CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
+          DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+          eval_modules[eval_module_idx].arch        = arch;
+          eval_modules[eval_module_idx].rdi         = di_rdi_from_key(scope->di_scope, &dbgi_key, max_U64);
+          eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
+          eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
+          eval_modules[eval_module_idx].space.u64_0 = (U64)process;
+          if(mod == module)
+          {
+            eval_modules_primary = &eval_modules[eval_module_idx];
+          }
+          eval_module_idx += 1;
+        }
+      }
+    }
+  }
+  
+  // rjf: build eval type context
+  {
+    E_TypeCtx *ctx = &scope->type_ctx;
+    ctx->ip_vaddr          = thread_rip_vaddr;
+    ctx->ip_voff           = thread_rip_voff;
+    ctx->modules           = eval_modules;
+    ctx->modules_count     = eval_modules_count;
+    ctx->primary_module    = eval_modules_primary;
+  }
+  e_select_type_ctx(&scope->type_ctx);
+  
+  // rjf: build eval parse context
+  ProfScope("build eval parse context")
+  {
+    E_ParseCtx *ctx = &scope->parse_ctx;
+    ctx->ip_vaddr          = thread_rip_vaddr;
+    ctx->ip_voff           = thread_rip_voff;
+    ctx->ip_thread_space   = e_space_make(CTRL_EvalSpaceKind_Entity);
+    ctx->ip_thread_space.u64_0 = (U64)thread;
+    ctx->modules           = eval_modules;
+    ctx->modules_count     = eval_modules_count;
+    ctx->primary_module    = eval_modules_primary;
+    ctx->regs_map      = ctrl_string2reg_from_arch(arch);
+    ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
+    ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
+    ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
+  }
+  e_select_parse_ctx(&scope->parse_ctx);
+  
+  // rjf: build eval IR context
+  {
+    E_IRCtx *ctx = &scope->ir_ctx;
+    ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
+    ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
+    ctx->lookup_rule_map = push_array(arena, E_LookupRuleMap, 1);
+    ctx->lookup_rule_map[0] = e_lookup_rule_map_make(arena, 512);
+    ctx->irgen_rule_map = push_array(arena, E_IRGenRuleMap, 1);
+    ctx->irgen_rule_map[0] = e_irgen_rule_map_make(arena, 512);
+    ctx->auto_hook_map = push_array(arena, E_AutoHookMap, 1);
+    ctx->auto_hook_map[0] = e_auto_hook_map_make(arena, 512);
+  }
+  e_select_ir_ctx(&scope->ir_ctx);
+  
+  // rjf: build eval interpretation context
+  {
+    E_InterpretCtx *ctx = &scope->interpret_ctx;
+    ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
+    ctx->space_read    = ctrl_eval_space_read;
+    ctx->primary_space = eval_modules_primary->space;
+    ctx->reg_arch      = eval_modules_primary->arch;
+    ctx->reg_space     = e_space_make(CTRL_EvalSpaceKind_Entity);
+    ctx->reg_space.u64_0 = (U64)thread;
+    ctx->module_base   = push_array(arena, U64, 1);
+    ctx->module_base[0]= module->vaddr_range.min;
+    ctx->tls_base      = push_array(arena, U64, 1);
+  }
+  e_select_interpret_ctx(&scope->interpret_ctx);
+  
+  return scope;
+}
+
+internal void
+ctrl_thread__eval_scope_end(CTRL_EvalScope *scope)
+{
+  di_scope_close(scope->di_scope);
+}
+
 //- rjf: log flusher
 
 internal void
@@ -4828,25 +4942,30 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   //- rjf: gather all initial breakpoints
   //
   DMN_TrapChunkList user_traps = {0};
-  for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
-      machine != &ctrl_entity_nil;
-      machine = machine->next)
   {
-    if(machine->kind != CTRL_EntityKind_Machine) { continue; }
-    for(CTRL_Entity *process = machine->first; process != &ctrl_entity_nil; process = process->next)
+    CTRL_Entity *thread = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, target_thread);
+    CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
+    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+        machine != &ctrl_entity_nil;
+        machine = machine->next)
     {
-      if(process->kind != CTRL_EntityKind_Process) { continue; }
-      
-      // rjf: resolve module-dependent user bps
-      for(CTRL_Entity *module = process->first; module != &ctrl_entity_nil; module = module->next)
+      if(machine->kind != CTRL_EntityKind_Machine) { continue; }
+      for(CTRL_Entity *process = machine->first; process != &ctrl_entity_nil; process = process->next)
       {
-        if(module->kind != CTRL_EntityKind_Module) { continue; }
-        ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, process->handle, module->handle, &msg->user_bps, &user_traps);
+        if(process->kind != CTRL_EntityKind_Process) { continue; }
+        
+        // rjf: resolve module-dependent user bps
+        for(CTRL_Entity *module = process->first; module != &ctrl_entity_nil; module = module->next)
+        {
+          if(module->kind != CTRL_EntityKind_Module) { continue; }
+          ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, process->handle, module->handle, &msg->user_bps, &user_traps);
+        }
+        
+        // rjf: push virtual-address user breakpoints per-process
+        ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, process->handle, &msg->user_bps, &user_traps);
       }
-      
-      // rjf: push virtual-address user breakpoints per-process
-      ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, process->handle, &msg->user_bps, &user_traps);
     }
+    ctrl_thread__eval_scope_end(eval_scope);
   }
   
   //////////////////////////////
@@ -5110,39 +5229,48 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }break;
         case DMN_EventKind_CreateProcess:
         {
-          DMN_TrapChunkList new_traps = {0};
-          ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, ctrl_handle_make(CTRL_MachineID_Local, event->process), &msg->user_bps, &new_traps);
-          log_infof("step_rule: create_process -> resolve traps\n");
-          log_infof("new_traps:\n{\n");
-          for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, &ctrl_entity_nil);
           {
-            for(U64 idx = 0; idx < n->count; idx += 1)
+            DMN_TrapChunkList new_traps = {0};
+            ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, ctrl_handle_make(CTRL_MachineID_Local, event->process), &msg->user_bps, &new_traps);
+            log_infof("step_rule: create_process -> resolve traps\n");
+            log_infof("new_traps:\n{\n");
+            for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
             {
-              DMN_Trap *trap = &n->v[idx];
-              log_infof("{process:[0x%I64x], vaddr:0x%I64x}\n", trap->process.u64[0], trap->vaddr);
+              for(U64 idx = 0; idx < n->count; idx += 1)
+              {
+                DMN_Trap *trap = &n->v[idx];
+                log_infof("{process:[0x%I64x], vaddr:0x%I64x}\n", trap->process.u64[0], trap->vaddr);
+              }
             }
+            log_infof("}\n\n");
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
           }
-          log_infof("}\n\n");
-          dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
-          dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
+          ctrl_thread__eval_scope_end(eval_scope);
         }break;
         case DMN_EventKind_LoadModule:
         {
-          DMN_TrapChunkList new_traps = {0};
-          ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, ctrl_handle_make(CTRL_MachineID_Local, event->process), ctrl_handle_make(CTRL_MachineID_Local, event->module), &msg->user_bps, &new_traps);
-          log_infof("step_rule: load_module -> resolve traps\n");
-          log_infof("new_traps:\n{\n");
-          for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
+          CTRL_Entity *thread = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
           {
-            for(U64 idx = 0; idx < n->count; idx += 1)
+            DMN_TrapChunkList new_traps = {0};
+            ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, ctrl_handle_make(CTRL_MachineID_Local, event->process), ctrl_handle_make(CTRL_MachineID_Local, event->module), &msg->user_bps, &new_traps);
+            log_infof("step_rule: load_module -> resolve traps\n");
+            log_infof("new_traps:\n{\n");
+            for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
             {
-              DMN_Trap *trap = &n->v[idx];
-              log_infof("{process:[0x%I64x], vaddr:0x%I64x}\n", trap->process.u64[0], trap->vaddr);
+              for(U64 idx = 0; idx < n->count; idx += 1)
+              {
+                DMN_Trap *trap = &n->v[idx];
+                log_infof("{process:[0x%I64x], vaddr:0x%I64x}\n", trap->process.u64[0], trap->vaddr);
+              }
             }
+            log_infof("}\n\n");
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
           }
-          log_infof("}\n\n");
-          dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
-          dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
+          ctrl_thread__eval_scope_end(eval_scope);
         }break;
       }
       
@@ -5463,107 +5591,9 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         // rjf: evaluate hit stop conditions
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
-          DI_Scope *di_scope = di_scope_open();
-          
-          // rjf: gather evaluation modules
-          U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
-          E_Module *eval_modules = push_array(temp.arena, E_Module, eval_modules_count);
-          E_Module *eval_modules_primary = &eval_modules[0];
-          eval_modules_primary->rdi = &di_rdi_parsed_nil;
-          eval_modules_primary->vaddr_range = r1u64(0, max_U64);
-          {
-            U64 eval_module_idx = 0;
-            for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
-                machine != &ctrl_entity_nil;
-                machine = machine->next)
-            {
-              if(machine->kind != CTRL_EntityKind_Machine) { continue; }
-              for(CTRL_Entity *process = machine->first;
-                  process != &ctrl_entity_nil;
-                  process = process->next)
-              {
-                if(process->kind != CTRL_EntityKind_Process) { continue; }
-                for(CTRL_Entity *mod = process->first;
-                    mod != &ctrl_entity_nil;
-                    mod = mod->next)
-                {
-                  if(mod->kind != CTRL_EntityKind_Module) { continue; }
-                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
-                  DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-                  eval_modules[eval_module_idx].arch        = arch;
-                  eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-                  eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
-                  eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
-                  eval_modules[eval_module_idx].space.u64_0 = (U64)process;
-                  if(mod == module)
-                  {
-                    eval_modules_primary = &eval_modules[eval_module_idx];
-                  }
-                  eval_module_idx += 1;
-                }
-              }
-            }
-          }
-          
-          // rjf: loop through all conditions, check all
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(temp.arena, thread);
           for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
           {
-            // rjf: build eval type context
-            E_TypeCtx type_ctx = zero_struct;
-            {
-              E_TypeCtx *ctx = &type_ctx;
-              ctx->ip_vaddr          = thread_rip_vaddr;
-              ctx->ip_voff           = thread_rip_voff;
-              ctx->modules           = eval_modules;
-              ctx->modules_count     = eval_modules_count;
-              ctx->primary_module    = eval_modules_primary;
-            }
-            e_select_type_ctx(&type_ctx);
-            
-            // rjf: build eval parse context
-            E_ParseCtx parse_ctx = zero_struct;
-            ProfScope("build eval parse context")
-            {
-              E_ParseCtx *ctx = &parse_ctx;
-              ctx->ip_vaddr          = thread_rip_vaddr;
-              ctx->ip_voff           = thread_rip_voff;
-              ctx->ip_thread_space   = e_space_make(CTRL_EvalSpaceKind_Entity);
-              ctx->ip_thread_space.u64_0 = (U64)thread;
-              ctx->modules           = eval_modules;
-              ctx->modules_count     = eval_modules_count;
-              ctx->primary_module    = eval_modules_primary;
-              ctx->regs_map      = ctrl_string2reg_from_arch(arch);
-              ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
-              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
-              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
-            }
-            e_select_parse_ctx(&parse_ctx);
-            
-            // rjf: build eval IR context
-            E_IRCtx ir_ctx = zero_struct;
-            {
-              E_IRCtx *ctx = &ir_ctx;
-              ctx->macro_map     = push_array(temp.arena, E_String2ExprMap, 1);
-              ctx->macro_map[0]  = e_string2expr_map_make(temp.arena, 512);
-            }
-            e_select_ir_ctx(&ir_ctx);
-            
-            // rjf: build eval interpretation context
-            E_InterpretCtx interpret_ctx = zero_struct;
-            {
-              E_InterpretCtx *ctx = &interpret_ctx;
-              ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
-              ctx->space_read    = ctrl_eval_space_read;
-              ctx->primary_space = eval_modules_primary->space;
-              ctx->reg_arch      = eval_modules_primary->arch;
-              ctx->reg_space     = e_space_make(CTRL_EvalSpaceKind_Entity);
-              ctx->reg_space.u64_0 = (U64)thread;
-              ctx->module_base   = push_array(temp.arena, U64, 1);
-              ctx->module_base[0]= module->vaddr_range.min;
-              ctx->tls_base      = push_array(temp.arena, U64, 1);
-            }
-            e_select_interpret_ctx(&interpret_ctx);
-            
             // rjf: evaluate
             E_Eval eval = zero_struct;
             ProfScope("evaluate expression")
@@ -5586,7 +5616,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               break;
             }
           }
-          di_scope_close(di_scope);
+          ctrl_thread__eval_scope_end(eval_scope);
         }
         
         // rjf: gather trap net hits

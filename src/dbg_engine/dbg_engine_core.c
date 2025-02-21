@@ -61,7 +61,7 @@ d_breakpoint_array_copy(Arena *arena, D_BreakpointArray *src)
   for(U64 idx = 0; idx < dst.count; idx += 1)
   {
     dst.v[idx].file_path   = push_str8_copy(arena, dst.v[idx].file_path);
-    dst.v[idx].symbol_name = push_str8_copy(arena, dst.v[idx].symbol_name);
+    dst.v[idx].vaddr_expr  = push_str8_copy(arena, dst.v[idx].vaddr_expr);
     dst.v[idx].condition   = push_str8_copy(arena, dst.v[idx].condition);
   }
   return dst;
@@ -1902,8 +1902,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         D_Breakpoint *bp = &breakpoints->v[idx];
         str8_list_push(scratch.arena, &strings, bp->file_path);
         str8_list_push(scratch.arena, &strings, str8_struct(&bp->pt));
-        str8_list_push(scratch.arena, &strings, bp->symbol_name);
-        str8_list_push(scratch.arena, &strings, str8_struct(&bp->vaddr));
+        str8_list_push(scratch.arena, &strings, bp->vaddr_expr);
         str8_list_push(scratch.arena, &strings, bp->condition);
       }
     }
@@ -2248,7 +2247,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           else if(params->vaddr != 0)
           {
-            run_extra_bps.v[0].vaddr = params->vaddr;
+            run_extra_bps.v[0].vaddr_expr = push_str8f(scratch.arena, "0x%I64x", params->vaddr);
           }
           d_cmd(D_CmdKind_Run);
         }break;
@@ -2418,20 +2417,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 }
               }
               
-              // rjf: virtual address location -> add breakpoint for address
-              else if(bp->vaddr != 0)
+              // rjf: virtual address expression -> add expression breakpoint
+              else if(bp->vaddr_expr.size != 0)
               {
-                CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
-                ctrl_user_bp.u64       = bp->vaddr;
-                ctrl_user_bp.condition = bp->condition;
-                ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
-              }
-              
-              // rjf: symbol name location -> add breakpoint for symbol name
-              else if(bp->symbol_name.size != 0)
-              {
-                CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
-                ctrl_user_bp.string    = bp->symbol_name;
+                CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_Expression};
+                ctrl_user_bp.string    = bp->vaddr_expr;
                 ctrl_user_bp.condition = bp->condition;
                 ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
               }

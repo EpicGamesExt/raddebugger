@@ -339,8 +339,7 @@ struct RD_Location
 {
   String8 file_path;
   TxtPt pt;
-  U64 vaddr;
-  String8 name;
+  String8 expr;
 };
 
 ////////////////////////////////

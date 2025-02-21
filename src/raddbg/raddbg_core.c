@@ -1627,12 +1627,12 @@ rd_cfg_tree_list_from_string(Arena *arena, String8 string)
         rd_cfg_insert_child(dst_active_parent_n, dst_active_parent_n->last, dst_n);
       }
       rec = md_node_rec_depth_first_pre(src_n, tln);
+      if(dst_active_parent_n == &rd_nil_cfg)
+      {
+        dst_root_n = dst_n;
+      }
       if(rec.push_count > 0)
       {
-        if(dst_active_parent_n == &rd_nil_cfg)
-        {
-          dst_root_n = dst_n;
-        }
         dst_active_parent_n = dst_n;
       }
       else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
@@ -2094,8 +2094,9 @@ rd_location_from_cfg(RD_Cfg *cfg)
 {
   RD_Location dst_loc = {0};
   {
-    RD_Cfg *src_loc = rd_cfg_child_from_string(cfg, str8_lit("location"));
-    if(src_loc->first != &rd_nil_cfg && src_loc->first->first != &rd_nil_cfg)
+    RD_Cfg *src_loc = rd_cfg_child_from_string(cfg, str8_lit("source_location"));
+    RD_Cfg *addr_loc = rd_cfg_child_from_string(cfg, str8_lit("address_location"));
+    if(src_loc != &rd_nil_cfg)
     {
       dst_loc.file_path = src_loc->first->string;
       try_s64_from_str8_c_rules(src_loc->first->first->string, &dst_loc.pt.line);
@@ -2104,19 +2105,9 @@ rd_location_from_cfg(RD_Cfg *cfg)
         dst_loc.pt.column = 1;
       }
     }
-    else
+    else if(addr_loc != &rd_nil_cfg)
     {
-      Temp scratch = scratch_begin(0, 0);
-      MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src_loc->first->string);
-      if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
-      {
-        dst_loc.name = src_loc->first->string;
-      }
-      else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
-      {
-        try_u64_from_str8_c_rules(src_loc->first->string, &dst_loc.vaddr);
-      }
-      scratch_end(scratch);
+      dst_loc.expr = addr_loc->first->string;
     }
   }
   return dst_loc;
@@ -2547,7 +2538,7 @@ rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
         MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
         String8 member_type_name = member_schema->first->string;
         RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
-        if(str8_match(member_type_name, str8_lit("location"), 0))
+        if(str8_match(member_type_name, str8_lit("path_pt"), 0))
         {
           U64 off = type->byte_size + variable_width_parts.total_size;
           str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
@@ -5292,9 +5283,15 @@ rd_view_ui(Rng2F32 rect)
                         }
                         
                         // rjf: can edit? -> begin editing
-                        else if(cell_info.flags & RD_WatchCellFlag_CanEdit)
+                        else if(!(sig.f & UI_SignalFlag_KeyboardPressed) && cell_info.flags & RD_WatchCellFlag_CanEdit)
                         {
                           rd_cmd(RD_CmdKind_Edit);
+                        }
+                        
+                        // rjf: can expand? -> expand
+                        else if(sig.f & UI_SignalFlag_KeyboardPressed && row_is_expandable)
+                        {
+                          next_row_expanded = !row_expanded;
                         }
                         
                         // rjf: can't edit, but has address info? -> go to address
@@ -11838,6 +11835,10 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
         rd_regs()->cursor = pair.pt;
       }
     }break;
+    case RD_RegSlot_Expr:
+    {
+      rd_regs()->expr = push_str8_copy(rd_frame_arena(), string);
+    }break;
     case RD_RegSlot_Cursor:
     {
       U64 v = 0;
@@ -13048,7 +13049,7 @@ rd_frame(void)
       E_TypeKey code_string_type_key = {0};
       E_TypeKey path_type_key = {0};
       E_TypeKey string_type_key = {0};
-      E_TypeKey location_type_key = {0};
+      E_TypeKey path_pt_type_key = {0};
       {
         E_MemberList vaddr_range_members_list = {0};
         e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("min"), .off = 0);
@@ -13060,7 +13061,7 @@ rd_frame(void)
         code_string_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
         path_type_key        = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPathText);
         string_type_key      = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPlainText);
-        location_type_key    = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPlainText|E_TypeFlag_IsCodeText|E_TypeFlag_IsPathText);
+        path_pt_type_key     = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPathText);
       }
       
       //- rjf: build types for each evallable meta name
@@ -13077,7 +13078,7 @@ rd_frame(void)
         { str8_lit("code_string"), code_string_type_key },
         { str8_lit("path"), path_type_key },
         { str8_lit("string"), string_type_key },
-        { str8_lit("location"), location_type_key },
+        { str8_lit("path_pt"), path_pt_type_key },
       };
       E_TypeKey evallable_meta_types[ArrayCount(evallable_meta_names)] = {0};
       for EachElement(idx, evallable_meta_names)
@@ -15822,25 +15823,38 @@ Z(getting_started)
           case RD_CmdKind_RelocateCfg:
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
-            RD_Cfg *loc = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("location"));
-            for(RD_Cfg *child = loc->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
+            
+            // rjf: release old location info
             {
-              next = child->next;
-              rd_cfg_release(child);
+              RD_Cfg *src_loc = rd_cfg_child_from_string(cfg, str8_lit("source_location"));
+              RD_Cfg *addr_loc = rd_cfg_child_from_string(cfg, str8_lit("address_location"));
+              rd_cfg_release(src_loc);
+              rd_cfg_release(addr_loc);
             }
-            if(rd_regs()->cursor.line != 0)
+            
+            // rjf: attach new location info
             {
-              RD_Cfg *file = rd_cfg_new(loc, rd_regs()->file_path);
-              RD_Cfg *line = rd_cfg_newf(file, "%I64d", rd_regs()->cursor.line);
-              rd_cfg_newf(line, "%I64d", rd_regs()->cursor.column);
-            }
-            else if(rd_regs()->vaddr != 0)
-            {
-              rd_cfg_newf(loc, "0x%I64x", rd_regs()->vaddr);
-            }
-            else if(rd_regs()->string.size != 0)
-            {
-              rd_cfg_new(loc, rd_regs()->string);
+              String8 file_path = rd_regs()->file_path;
+              TxtPt pt = rd_regs()->cursor;
+              String8 expr_string = rd_regs()->expr;
+              U64 vaddr = rd_regs()->vaddr;
+              if(expr_string.size == 0 && vaddr != 0)
+              {
+                expr_string = push_str8f(scratch.arena, "0x%I64x", vaddr);
+              }
+              if(file_path.size != 0 && pt.line != 0)
+              {
+                RD_Cfg *src_loc = rd_cfg_new(cfg, str8_lit("source_location"));
+                RD_Cfg *file = rd_cfg_new(src_loc, file_path);
+                RD_Cfg *line = rd_cfg_newf(file, "%I64d", pt.line);
+                RD_Cfg *col  = rd_cfg_newf(line, "%I64d", pt.column);
+                (void)col;
+              }
+              else if(expr_string.size != 0)
+              {
+                RD_Cfg *vaddr_loc = rd_cfg_new(cfg, str8_lit("address_location"));
+                rd_cfg_new(vaddr_loc, expr_string);
+              }
             }
           }break;
           
@@ -15850,9 +15864,13 @@ Z(getting_started)
           {
             String8 file_path = rd_regs()->file_path;
             TxtPt pt = rd_regs()->cursor;
-            String8 string = rd_regs()->string;
             U64 vaddr = rd_regs()->vaddr;
-            if(file_path.size != 0 || string.size != 0 || vaddr != 0)
+            String8 expr = rd_regs()->expr;
+            if(expr.size == 0 && vaddr != 0)
+            {
+              expr = push_str8f(scratch.arena, "0x%I64x", vaddr);
+            }
+            if(file_path.size != 0 || expr.size != 0)
             {
               B32 removed_already_existing = 0;
               if(kind == RD_CmdKind_ToggleBreakpoint)
@@ -15861,13 +15879,10 @@ Z(getting_started)
                 for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
                 {
                   RD_Cfg *bp = n->v;
-                  RD_Cfg *loc = rd_cfg_child_from_string(bp, str8_lit("location"));
-                  S64 loc_line = 0;
-                  U64 loc_vaddr = 0;
-                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
-                  B32 loc_matches_string  = (string.size != 0 && str8_match(loc->first->string, string, 0));
-                  B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                  if(loc_matches_file_pt || loc_matches_string || loc_matches_vaddr)
+                  RD_Location loc = rd_location_from_cfg(bp);
+                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                  B32 loc_matches_expr    = (expr.size != 0 && str8_match(expr, loc.expr, 0));
+                  if(loc_matches_file_pt || loc_matches_expr)
                   {
                     rd_cfg_release(bp);
                     removed_already_existing = 1;
@@ -15879,30 +15894,14 @@ Z(getting_started)
               {
                 RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
                 RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
-                RD_Cfg *loc = rd_cfg_new(bp, str8_lit("location"));
-                if(vaddr != 0)
-                {
-                  rd_cfg_newf(loc, "0x%I64x", vaddr);
-                }
-                else if(string.size != 0)
-                {
-                  rd_cfg_new(loc, string);
-                }
-                else if(file_path.size != 0)
-                {
-                  RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
-                  rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
-                }
+                rd_cmd(RD_CmdKind_RelocateCfg, .cfg = bp->id);
               }
             }
           }break;
           case RD_CmdKind_AddAddressBreakpoint:
-          {
-            rd_cmd(RD_CmdKind_AddBreakpoint, .string = str8_zero());
-          }break;
           case RD_CmdKind_AddFunctionBreakpoint:
           {
-            rd_cmd(RD_CmdKind_AddBreakpoint, .vaddr = 0);
+            rd_cmd(RD_CmdKind_AddBreakpoint);
           }break;
           
           //- rjf: watch pins
@@ -15922,17 +15921,13 @@ Z(getting_started)
               {
                 RD_Cfg *wp = n->v;
                 RD_Cfg *expr = rd_cfg_child_from_string(wp, str8_lit("expression"));
-                RD_Cfg *loc = rd_cfg_child_from_string(wp, str8_lit("location"));
-                S64 loc_line = 0;
-                U64 loc_vaddr = 0;
-                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
-                B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                B32 loc_matches_expr    = (expr_string.size != 0 && str8_match(expr->first->string, expr_string, 0));
-                if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
+                RD_Location loc = rd_location_from_cfg(wp);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_expr    = (expr_string.size != 0 && str8_match(expr_string, loc.expr, 0));
+                if((loc_matches_file_pt || loc_matches_expr) && str8_match(expr->first->string, expr_string, 0))
                 {
                   rd_cfg_release(wp);
                   removed_already_existing = 1;
-                  break;
                 }
               }
             }
@@ -15942,18 +15937,9 @@ Z(getting_started)
               RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
               RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
               RD_Cfg *view_rule = rd_cfg_new(wp, str8_lit("view_rule"));
-              RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
               rd_cfg_new(expr, expr_string);
               rd_cfg_new(view_rule, view_rule_string);
-              if(vaddr != 0)
-              {
-                rd_cfg_newf(loc, "0x%I64x", vaddr);
-              }
-              else if(file_path.size != 0)
-              {
-                RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
-                rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
-              }
+              rd_cmd(RD_CmdKind_RelocateCfg, .cfg = wp->id);
             }
           }break;
           
@@ -16790,8 +16776,7 @@ Z(getting_started)
         D_Breakpoint *dst_bp = &breakpoints.v[idx];
         dst_bp->file_path   = src_bp_loc.file_path;
         dst_bp->pt          = src_bp_loc.pt;
-        dst_bp->symbol_name = src_bp_loc.name;
-        dst_bp->vaddr       = src_bp_loc.vaddr;
+        dst_bp->vaddr_expr  = src_bp_loc.expr;
         dst_bp->condition   = non_ctrl_thread_static_condition;
         idx += 1;
       }
@@ -16937,6 +16922,7 @@ Z(getting_started)
               try_u64_from_str8_c_rules(hit_count_root->first->string, &hit_count);
               RD_Location loc = rd_location_from_cfg(bp);
               D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc.file_path, loc.pt.line);
+              E_Value loc_value = e_value_from_string(loc.expr);
               if(loc_lines.first != 0)
               {
                 for(D_LineNode *n = loc_lines.first; n != 0; n = n->next)
@@ -16948,17 +16934,9 @@ Z(getting_started)
                   }
                 }
               }
-              else if(loc.vaddr != 0 && vaddr == loc.vaddr)
+              else if(loc_value.u64 != 0 && vaddr == loc_value.u64)
               {
                 hit_count += 1;
-              }
-              else if(loc.name.size != 0)
-              {
-                U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc.name);
-                if(symb_voff == voff)
-                {
-                  hit_count += 1;
-                }
               }
               rd_cfg_new_replacef(hit_count_root, "%I64u", hit_count);
             }

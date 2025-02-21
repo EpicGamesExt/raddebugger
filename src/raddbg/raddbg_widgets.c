@@ -250,6 +250,18 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       start_secondary();
     }
     
+    //- rjf: push address location
+    if(loc.expr.size != 0)
+    {
+      RD_Font(RD_FontSlot_Code)
+      {
+        DR_FStrList fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, params.color, loc.expr);
+        dr_fstrs_concat_in_place(&result, &fstrs);
+      }
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+      start_secondary();
+    }
+    
     //- rjf: push target executable name
     if(target.exe.size != 0)
     {
@@ -291,7 +303,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     {
       String8 hit_count_value_string = rd_cfg_child_from_string(cfg, str8_lit("hit_count"))->first->string;
       U64 hit_count = 0;
-      if(try_u64_from_str8_c_rules(hit_count_value_string, &hit_count))
+      if(try_u64_from_str8_c_rules(hit_count_value_string, &hit_count) && hit_count != 0)
       {
         String8 hit_count_text = push_str8f(arena, "(%I64u hit%s)", hit_count, hit_count == 1 ? "" : "s");
         dr_fstrs_push_new(arena, &result, &params, hit_count_text);

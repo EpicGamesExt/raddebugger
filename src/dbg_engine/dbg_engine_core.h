@@ -33,8 +33,7 @@ struct D_Breakpoint
 {
   String8 file_path;
   TxtPt pt;
-  String8 symbol_name;
-  U64 vaddr;
+  String8 vaddr_expr;
   String8 condition;
 };
 

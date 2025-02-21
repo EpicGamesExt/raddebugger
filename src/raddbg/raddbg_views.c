@@ -319,9 +319,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         RD_Cfg *bp = n->v;
         RD_Location loc = rd_location_from_cfg(bp);
-        if(contains_1u64(dasm_vaddr_range, loc.vaddr))
+        E_Value loc_value = e_value_from_string(loc.expr);
+        if(contains_1u64(dasm_vaddr_range, loc_value.u64))
         {
-          U64 off = loc.vaddr - dasm_vaddr_range.min;
+          U64 off = loc_value.u64 - dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)idx+1;
           if(contains_1s64(visible_line_num_range, line_num))
@@ -341,9 +342,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         RD_Cfg *wp = n->v;
         RD_Location loc = rd_location_from_cfg(wp);
-        if(contains_1u64(dasm_vaddr_range, loc.vaddr))
+        E_Value loc_value = e_value_from_string(loc.expr);
+        if(contains_1u64(dasm_vaddr_range, loc_value.u64))
         {
-          U64 off = loc.vaddr - dasm_vaddr_range.min;
+          U64 off = loc_value.u64 - dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)idx+1;
           if(contains_1s64(visible_line_num_range, line_num))

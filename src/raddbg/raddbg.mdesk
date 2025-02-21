@@ -26,6 +26,8 @@ RD_VocabTable:
   {breakpoint           _                           "Breakpoint"                _                     CircleFilled                                   }
   {condition            _                           "Condition"                 _                     Null                                           }
   {location             _                           "Location"                  _                     Null                                           }
+  {source_location      _                           "Source Location"           _                     Null                                           }
+  {address_location     _                           "Address Location"          _                     Null                                           }
   {target               _                           "Target"                    _                     Target                                         }
   {executable           _                           "Executable"                _                     Module                                         }
   {arguments            arguments                   "Arguments"                 "Arguments"           Null                                           }
@@ -180,11 +182,12 @@ RD_VocabTable:
       @collection_commands(add_breakpoint, add_address_breakpoint, add_function_breakpoint)
       x:
     {
-      'label':         code_string,
-      'condition':     code_string,
-      'location':      location,
-      'hit_count':     u64,
-      'disabled':      bool,
+      'label':            code_string,
+      'condition':        code_string,
+      'source_location':  path_pt,
+      'address_location': code_string,
+      'hit_count':        u64,
+      'disabled':         bool,
     }
     ```,
   }
@@ -197,9 +200,10 @@ RD_VocabTable:
       @collection_commands(add_watch_pin)
       x:
     {
-      'expression': code_string,
-      'view_rule':  code_string,
-      'location':   location,
+      'expression':       code_string,
+      'view_rule':        code_string,
+      'source_location':  path_pt,
+      'address_location': code_string,
     }
     ```,
   }
@@ -542,8 +546,8 @@ RD_CmdTable:    //               |        |              |               |      
   
   //- rjf: breakpoints
   {AddBreakpoint                  1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CircleFilled          "add_breakpoint"              "Add Breakpoint"                              "Places a breakpoint at a given location (file path and line number, address, or symbol name)."                    ""                               ""                                                               }
-  {AddAddressBreakpoint           1        0              ""                                               Vaddr              null              Nil                     Null       0  0  0  0  1  1  1                                                           CircleFilled          "add_address_breakpoint"      "Add Address Breakpoint"                      "Places a breakpoint on the specified address."                                                                    ""                               "$breakpoints,"                                                  }
-  {AddFunctionBreakpoint          1        0              "query:procedures"                               String             symbol_lister     Nil                     Null       0  0  0  0  1  1  1                                                           CircleFilled          "add_function_breakpoint"     "Add Function Breakpoint"                     "Places a breakpoint on the first address(es) of the specified function."                                          ""                               "$breakpoints,"                                                  }
+  {AddAddressBreakpoint           1        0              ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           CircleFilled          "add_address_breakpoint"      "Add Address Breakpoint"                      "Places a breakpoint on the specified address."                                                                    ""                               "$breakpoints,"                                                  }
+  {AddFunctionBreakpoint          1        0              "query:procedures"                               Expr               symbol_lister     Nil                     Null       0  0  0  0  1  1  1                                                           CircleFilled          "add_function_breakpoint"     "Add Function Breakpoint"                     "Places a breakpoint on the first address(es) of the specified function."                                          ""                               "$breakpoints,"                                                  }
   {ToggleBreakpoint               1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CircleFilled          "toggle_breakpoint"           "Toggle Breakpoint"                           "Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."         ""                               "$text_pt,"                                                      }
   {EnableBreakpoint               1        1              "query:breakpoints"                              Cfg                null              Breakpoint              Null       0  0  0  0  0  0  1                                                           CheckFilled           "enable_breakpoint"           "Enable Breakpoint"                           "Enables a breakpoint."                                                                                            ""                               ""                                                               }
   {DisableBreakpoint              1        1              "query:breakpoints"                              Cfg                null              Breakpoint              Null       0  0  0  0  0  0  1                                                           CheckHollow           "disable_breakpoint"          "Disable Breakpoint"                          "Disables a breakpoint."                                                                                           ""                               ""                                                               }
