@@ -21,7 +21,8 @@ struct OS_GfxInfo
 typedef U32 OS_WindowFlags;
 enum
 {
-  OS_WindowFlag_CustomBorder = (1<<0),
+  OS_WindowFlag_CustomBorder       = (1<<0),
+  OS_WindowFlag_UseDefaultPosition = (1<<1),
 };
 
 ////////////////////////////////
@@ -139,7 +140,7 @@ internal String8 os_get_clipboard_text(Arena *arena);
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle      os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title);
+internal OS_Handle      os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title);
 internal void           os_window_close(OS_Handle window);
 internal void           os_window_first_paint(OS_Handle window);
 internal void           os_window_focus(OS_Handle window);

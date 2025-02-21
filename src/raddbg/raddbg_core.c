@@ -5972,11 +5972,17 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     Temp scratch = scratch_begin(0, 0);
     
     // rjf: unpack configuration options
+    B32 has_pos = 0;
+    Vec2F32 pos = {0};
     Vec2F32 size = {0};
     OS_Handle preferred_monitor = {0};
     {
+      RD_Cfg *pos_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("pos"));
+      has_pos = (pos_cfg != &rd_nil_cfg);
       RD_Cfg *size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("size"));
       RD_Cfg *monitor_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("monitor"));
+      pos.x = (F32)f64_from_str8(pos_cfg->first->string);
+      pos.y = (F32)f64_from_str8(pos_cfg->first->next->string);
       size.x = (F32)f64_from_str8(size_cfg->first->string);
       size.y = (F32)f64_from_str8(size_cfg->first->next->string);
       OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
@@ -6008,7 +6014,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->arena = arena_alloc();
     {
       String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
-      ws->os = os_window_open(size, OS_WindowFlag_CustomBorder, title);
+      ws->os = os_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*OS_WindowFlag_UseDefaultPosition)|OS_WindowFlag_CustomBorder, title);
     }
     ws->r = r_window_equip(ws->os);
     ws->ui = ui_state_alloc();
@@ -6262,6 +6268,94 @@ rd_window_frame(void)
                                rd_icon_kind_text_table[icon_kind]);
       scratch_end(scratch);
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: commit window's position/status to underlying cfg tree
+  //
+  {
+    Temp scratch = scratch_begin(0, 0);
+    B32 is_fullscreen = os_window_is_fullscreen(ws->os);
+    B32 is_maximized = os_window_is_maximized(ws->os);
+    if(is_fullscreen)
+    {
+      rd_cfg_child_from_string_or_alloc(window, str8_lit("fullscreen"));
+    }
+    else
+    {
+      rd_cfg_release(rd_cfg_child_from_string(window, str8_lit("fullscreen")));
+    }
+    if(is_maximized)
+    {
+      rd_cfg_child_from_string_or_alloc(window, str8_lit("maximized"));
+    }
+    else
+    {
+      rd_cfg_release(rd_cfg_child_from_string(window, str8_lit("maximized")));
+    }
+    
+    //- rjf: commit position
+    Rng2F32 window_rect = os_rect_from_window(ws->os);
+    if(!is_fullscreen && !is_maximized)
+    {
+      Vec2F32 pos = window_rect.p0;
+      RD_Cfg *pos_root = rd_cfg_child_from_string_or_alloc(window, str8_lit("pos"));
+      if((S32)pos.x != (S32)f64_from_str8(pos_root->first->string) ||
+         (S32)pos.y != (S32)f64_from_str8(pos_root->last->string))
+      {
+        RD_Cfg *x = pos_root->first;
+        if(x == &rd_nil_cfg)
+        {
+          x= rd_cfg_alloc();
+          rd_cfg_insert_child(pos_root, &rd_nil_cfg, x);
+        }
+        RD_Cfg *y = x->next;
+        if(y == &rd_nil_cfg)
+        {
+          y = rd_cfg_alloc();
+          rd_cfg_insert_child(pos_root, x, y);
+        }
+        rd_cfg_equip_stringf(x, "%i", (S32)pos.x);
+        rd_cfg_equip_stringf(y, "%i", (S32)pos.y);
+      }
+    }
+    
+    //- rjf: commit size
+    if(!is_fullscreen && !is_maximized)
+    {
+      Vec2F32 size = dim_2f32(window_rect);
+      RD_Cfg *size_root = rd_cfg_child_from_string_or_alloc(window, str8_lit("size"));
+      if((S32)size.x != (S32)f64_from_str8(size_root->first->string) ||
+         (S32)size.y != (S32)f64_from_str8(size_root->last->string))
+      {
+        RD_Cfg *width = size_root->first;
+        if(width == &rd_nil_cfg)
+        {
+          width = rd_cfg_alloc();
+          rd_cfg_insert_child(size_root, &rd_nil_cfg, width);
+        }
+        RD_Cfg *height = width->next;
+        if(height == &rd_nil_cfg)
+        {
+          height = rd_cfg_alloc();
+          rd_cfg_insert_child(size_root, width, height);
+        }
+        rd_cfg_equip_stringf(width, "%i", (S32)size.x);
+        rd_cfg_equip_stringf(height, "%i", (S32)size.y);
+      }
+    }
+    
+    //- rjf: commit monitor
+    {
+      OS_Handle monitor = os_monitor_from_window(ws->os);
+      String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
+      RD_Cfg *monitor_root = rd_cfg_child_from_string_or_alloc(window, str8_lit("monitor"));
+      if(!str8_match(monitor_root->first->string, monitor_name, 0))
+      {
+        rd_cfg_new_replace(monitor_root, monitor_name);
+      }
+    }
+    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -13616,7 +13710,11 @@ rd_frame(void)
             for(RD_Cfg *old_child = old_window->first; old_child != &rd_nil_cfg; old_child = old_child->next)
             {
               if(!str8_match(old_child->string, str8_lit("panels"), 0) &&
-                 !str8_match(old_child->string, str8_lit("size"), 0))
+                 !str8_match(old_child->string, str8_lit("size"), 0) &&
+                 !str8_match(old_child->string, str8_lit("pos"), 0) &&
+                 !str8_match(old_child->string, str8_lit("monitor"), 0) &&
+                 !str8_match(old_child->string, str8_lit("fullscreen"), 0) &&
+                 !str8_match(old_child->string, str8_lit("maximized"), 0))
               {
                 RD_Cfg *new_child = rd_cfg_deep_copy(old_child);
                 rd_cfg_insert_child(new_window, new_window->last, new_child);
@@ -16048,6 +16146,7 @@ Z(getting_started)
             String8 file_path = rd_regs()->file_path;
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
             RD_Cfg *target = rd_cfg_new(project, str8_lit("target"));
+            rd_cfg_new(target, str8_lit("disabled"));
             RD_Cfg *exe = rd_cfg_new(target, str8_lit("executable"));
             rd_cfg_new(exe, file_path);
             String8 working_directory = str8_chop_last_slash(file_path);

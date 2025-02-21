@@ -1015,9 +1015,12 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
+os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
   B32 custom_border = !!(flags & OS_WindowFlag_CustomBorder);
+  B32 use_default_position = !!(flags & OS_WindowFlag_UseDefaultPosition);
+  Vec2F32 pos = rect.p0;
+  Vec2F32 dim = dim_2f32(rect);
   
   //- rjf: make hwnd
   HWND hwnd = 0;
@@ -1029,9 +1032,10 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
                            L"graphical-window",
                            (WCHAR*)title16.str,
                            WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
-                           CW_USEDEFAULT, CW_USEDEFAULT,
-                           (int)resolution.x,
-                           (int)resolution.y,
+                           use_default_position ? CW_USEDEFAULT : (S32)pos.x,
+                           use_default_position ? CW_USEDEFAULT : (S32)pos.y,
+                           (S32)dim.x,
+                           (S32)dim.y,
                            0, 0,
                            os_w32_gfx_state->hInstance,
                            0);

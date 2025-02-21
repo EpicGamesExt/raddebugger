@@ -71,8 +71,10 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
+os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
+  Vec2F32 resolution = dim_2f32(rect);
+  
   //- rjf: allocate window
   OS_LNX_Window *w = os_lnx_gfx_state->free_window;
   if(w)
