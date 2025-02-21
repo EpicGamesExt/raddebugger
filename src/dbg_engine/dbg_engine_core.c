@@ -1705,7 +1705,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   Temp scratch = scratch_begin(&arena, 1);
   D_EventList result = {0};
   d_state->frame_index += 1;
-  d_state->frame_eval_memread_endt_us = os_now_microseconds() + 1000;
   
   //////////////////////////////
   //- rjf: sync with ctrl thread

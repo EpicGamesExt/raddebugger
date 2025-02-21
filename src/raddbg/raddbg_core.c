@@ -868,7 +868,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(debug_info_table)
   RD_DebugInfoTableLookupAccel *accel = push_array(arena, RD_DebugInfoTableLookupAccel, 1);
   if(section != RDI_SectionKind_NULL)
   {
-    U64 endt_us = d_state->frame_eval_memread_endt_us;
+    U64 endt_us = rd_state->frame_eval_memread_endt_us;
     
     //- rjf: unpack context
     DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
@@ -2784,7 +2784,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         default:{}break;
         case CTRL_EntityKind_Process:
         {
-          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, entity->handle, range, d_state->frame_eval_memread_endt_us);
+          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, entity->handle, range, rd_state->frame_eval_memread_endt_us);
           String8 data = slice.data;
           if(data.size == dim_1u64(range))
           {
@@ -4878,7 +4878,7 @@ rd_view_ui(Rng2F32 rect)
                       U64 size = e_type_byte_size_from_key(row_info->eval.irtree.type_key);
                       size = Min(size, 64);
                       Rng1U64 vaddr_rng = r1u64(row_info->eval.value.u64, row_info->eval.value.u64+size);
-                      CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, d_state->frame_eval_memread_endt_us);
+                      CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
                       for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                       {
                         if(slice.byte_changed_flags[idx] != 0)
@@ -6000,6 +6000,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
   if(window_cfg != &rd_nil_cfg && ws == &rd_nil_window_state)
   {
     Temp scratch = scratch_begin(0, 0);
+    rd_state->frame_depth += 1;
     
     // rjf: unpack configuration options
     B32 has_pos = 0;
@@ -6074,6 +6075,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
     DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
     
+    rd_state->frame_depth -= 1;
     scratch_end(scratch);
   }
   
@@ -12398,7 +12400,6 @@ rd_frame(void)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  local_persist S32 depth = 0;
   log_scope_begin();
   
   //////////////////////////////
@@ -12418,10 +12419,6 @@ rd_frame(void)
     rd_state->hover_regs = push_array(rd_frame_arena(), RD_Regs, 1);
     rd_state->hover_regs_slot = RD_RegSlot_Null;
   }
-  if(depth == 0)
-  {
-    rd_state->frame_di_scope = di_scope_open();
-  }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
   rd_state->cfg2evalblob_map = push_array(rd_frame_arena(), RD_Cfg2EvalBlobMap, 1);
@@ -12430,11 +12427,12 @@ rd_frame(void)
   rd_state->entity2evalblob_map = push_array(rd_frame_arena(), RD_Entity2EvalBlobMap, 1);
   rd_state->entity2evalblob_map->slots_count = 256;
   rd_state->entity2evalblob_map->slots = push_array(rd_frame_arena(), RD_Entity2EvalBlobSlot, rd_state->entity2evalblob_map->slots_count);
+  rd_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   
   //////////////////////////////
   //- rjf: iterate all tabs, touch their view-states
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     Temp scratch = scratch_begin(0, 0);
     RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
@@ -12461,7 +12459,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: garbage collect untouched immediate cfg trees
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     RD_Cfg *transient = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
     for(RD_Cfg *tln = transient->first, *next = &rd_nil_cfg; tln != &rd_nil_cfg; tln = next)
@@ -12487,7 +12485,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: garbage collect untouched window states
   //
-  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
+  if(rd_state->frame_depth == 0) DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1)
   {
     for EachIndex(slot_idx, rd_state->window_state_slots_count)
     {
@@ -12523,7 +12521,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: garbage collect untouched view states
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     for EachIndex(slot_idx, rd_state->view_state_slots_count)
     {
@@ -12583,7 +12581,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: animate all views
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     F32 slow_rate = 1 - pow_f32(2, (-10.f * rd_state->frame_dt));
     F32 fast_rate = 1 - pow_f32(2, (-40.f * rd_state->frame_dt));
@@ -12630,9 +12628,16 @@ rd_frame(void)
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
-  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
+  if(rd_state->frame_depth == 0) DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1)
   {
     events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0);
+  }
+  
+  //////////////////////////////
+  //- rjf: open frame debug info scope
+  //
+  {
+    rd_state->frame_di_scope = di_scope_open();
   }
   
   //////////////////////////////
@@ -13606,7 +13611,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: process top-level graphical commands
     //
-    if(depth == 0)
+    if(rd_state->frame_depth == 0)
     {
       for(;rd_next_cmd(&cmd);) RD_RegsScope()
       {
@@ -17187,7 +17192,7 @@ Z(getting_started)
   // the commands pushed by the view will be in the queue, and the core can
   // treat that queue as r/w again.
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     // rjf: rotate
     {
@@ -17332,9 +17337,8 @@ Z(getting_started)
   }
   
   //////////////////////////////
-  //- rjf: close scopes
+  //- rjf: close frame debug info scope
   //
-  if(depth == 0)
   {
     di_scope_close(rd_state->frame_di_scope);
   }
@@ -17357,7 +17361,7 @@ Z(getting_started)
   //////////////////////////////
   //- rjf: show windows after first frame
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     RD_CfgIDList windows_to_show = {0};
     for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
@@ -17371,7 +17375,7 @@ Z(getting_started)
     {
       RD_Cfg *window = rd_cfg_from_id(n->v);
       RD_WindowState *ws = rd_window_state_from_cfg(window);
-      DeferLoop(depth += 1, depth -= 1) os_window_first_paint(ws->os);
+      DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1) os_window_first_paint(ws->os);
     }
   }
   
@@ -17391,7 +17395,7 @@ Z(getting_started)
   //////////////////////////////
   //- rjf: bump command batch ring buffer generation
   //
-  if(depth == 0)
+  if(rd_state->frame_depth == 0)
   {
     rd_state->cmds_gen += 1;
   }

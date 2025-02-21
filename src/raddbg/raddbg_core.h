@@ -714,6 +714,8 @@ struct RD_State
   Arena *arena;
   B32 quit;
   B32 quit_after_success;
+  S32 frame_depth;
+  U64 frame_eval_memread_endt_us;
   
   // rjf: config bucket paths
   Arena *user_path_arena;

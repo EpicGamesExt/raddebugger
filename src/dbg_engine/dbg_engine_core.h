@@ -330,7 +330,6 @@ struct D_State
   // rjf: top-level state
   Arena *arena;
   U64 frame_index;
-  U64 frame_eval_memread_endt_us;
   
   // rjf: commands
   Arena *cmds_arena;
