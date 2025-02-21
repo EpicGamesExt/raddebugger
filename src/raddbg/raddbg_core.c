@@ -13472,6 +13472,8 @@ rd_frame(void)
         rd_request_frame();
         
         // rjf: process command
+        String8 dst_path = {0};
+        String8 bucket_name = {0};
         Dir2 split_dir = Dir2_Invalid;
         RD_Cfg *split_panel = &rd_nil_cfg;
         U64 panel_sib_off = 0;
@@ -13796,10 +13798,10 @@ rd_frame(void)
           }break;
           
           //- rjf: writing config changes
-          case RD_CmdKind_WriteUserData:
+          case RD_CmdKind_WriteUserData:    dst_path = rd_state->user_path; bucket_name = str8_lit("user"); goto write;
+          case RD_CmdKind_WriteProjectData: dst_path = rd_state->project_path; bucket_name = str8_lit("project"); goto write;
+          write:;
           {
-            String8 dst_path = rd_state->user_path;
-            String8 bucket_name = str8_lit("user");
             B32 dst_exists = (os_properties_from_file_path(dst_path).created != 0);
             String8 temp_path = push_str8f(scratch.arena, "%S.temp", dst_path);
             String8 overwritten_path = push_str8f(scratch.arena, "%S.old", dst_path);
@@ -13822,29 +13824,6 @@ rd_frame(void)
             {
               os_move_file_path(dst_path, overwritten_path);
             }
-          }break;
-          case RD_CmdKind_WriteProjectData:
-          {
-#if 0 // TODO(rjf): @cfg
-            RD_CfgSrc src = RD_CfgSrc_User;
-            for(RD_CfgSrc s = (RD_CfgSrc)0; s < RD_CfgSrc_COUNT; s = (RD_CfgSrc)(s+1))
-            {
-              if(kind == rd_cfg_src_write_cmd_kind_table[s])
-              {
-                src = s;
-                break;
-              }
-            }
-            String8 path = rd_cfg_path_from_src(src);
-            String8List rd_strs = rd_cfg_strings_from_gfx(scratch.arena, path, src);
-            String8 header = push_str8f(scratch.arena, "// raddbg %s file\n\n", rd_cfg_src_string_table[src].str);
-            String8List strs = {0};
-            str8_list_push(scratch.arena, &strs, header);
-            str8_list_concat_in_place(&strs, &rd_strs);
-            String8 data = str8_list_join(scratch.arena, &strs, 0);
-            String8 data_indented = indented_from_string(scratch.arena, data);
-            os_write_data_to_file_path(path, data_indented);
-#endif
           }break;
           
           //- rjf: code navigation
