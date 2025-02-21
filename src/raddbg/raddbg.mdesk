@@ -179,7 +179,7 @@ RD_VocabTable:
     breakpoint,
     ```
       @commands(enable_cfg, remove_cfg)
-      @collection_commands(add_breakpoint, add_address_breakpoint, add_function_breakpoint)
+      @collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint)
       x:
     {
       'label':            code_string,

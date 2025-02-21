@@ -1607,6 +1607,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //- rjf: unpack parameterization info
   //
   ProfBegin("unpack parameterization info");
+  rd_regs()->file_path     = rd_file_path_from_eval(rd_frame_arena(), eval);
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
   rd_regs()->cursor.line   = rd_view_cfg_value_from_string(str8_lit("cursor_line")).s64;

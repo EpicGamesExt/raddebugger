@@ -5247,7 +5247,10 @@ rd_view_ui(Rng2F32 rect)
                             case CTRL_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
                           }
                         }
-                        else
+                        else if(row_info->eval.space.kind == RD_EvalSpaceKind_CtrlEntity ||
+                                row_info->eval.space.kind == E_SpaceKind_FileSystem ||
+                                row_info->eval.space.kind == E_SpaceKind_File ||
+                                row_info->eval.space.kind == E_SpaceKind_Null)
                         {
                           RD_RegsScope(.expr = e_string_from_expr(scratch.arena, row_info->eval.exprs.last),
                                        .view_rule = ev_view_rule_from_key(rd_view_eval_view(), row->key))
@@ -5326,6 +5329,22 @@ rd_view_ui(Rng2F32 rect)
                                      .file_path  = file_path,
                                      .cursor     = pt);
                             }
+                          }
+                        }
+                        
+                        // rjf: can't edit, but has cfg location info? -> find
+                        else if(cell_info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+                        {
+                          RD_Cfg *cfg = rd_cfg_from_eval_space(cell_info.eval.space);
+                          RD_Location loc = rd_location_from_cfg(cfg);
+                          if(loc.file_path.size != 0)
+                          {
+                            rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = 0, .file_path = loc.file_path, .cursor = loc.pt);
+                          }
+                          else if(loc.expr.size != 0)
+                          {
+                            U64 value = e_value_from_string(loc.expr).u64;
+                            rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = value);
                           }
                         }
                       }
@@ -8972,7 +8991,14 @@ rd_window_frame(void)
             {
               String8 view_expr = rd_expr_from_cfg(selected_tab);
               String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
-              rd_regs()->file_path = view_file_path;
+              // NOTE(rjf): we want to only fill out this view's file path slot if it
+              // evaluates one - this way, a view can use the slot to know the selected
+              // file path (if there is one). this is useful when pushing commandas which
+              // apply to a cursor, for example.
+              if(view_file_path.size != 0)
+              {
+                rd_regs()->file_path = view_file_path;
+              }
             }
             
             //- rjf: build view container
@@ -14647,10 +14673,16 @@ rd_frame(void)
           }break;
           case RD_CmdKind_OpenTab:
           {
+            String8 expr_file_path = rd_file_path_from_eval_string(scratch.arena, rd_regs()->expr);
             RD_Cfg *panel = rd_cfg_from_id(rd_regs()->panel);
             RD_Cfg *tab = rd_cfg_new(panel, rd_regs()->string);
             RD_Cfg *expr = rd_cfg_new(tab, str8_lit("expression"));
             rd_cfg_new(expr, rd_regs()->expr);
+            if(expr_file_path.size != 0)
+            {
+              RD_Cfg *project = rd_cfg_new(tab, str8_lit("project"));
+              rd_cfg_new(project, rd_state->project_path);
+            }
             rd_cmd(RD_CmdKind_FocusTab, .view = tab->id);
 #if 0 // TODO(rjf): @cfg (tab opening)
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
