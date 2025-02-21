@@ -2012,7 +2012,7 @@ internal B32
 rd_cfg_is_project_filtered(RD_Cfg *cfg)
 {
   RD_Cfg *project = rd_cfg_child_from_string(cfg, str8_lit("project"));
-  B32 result = path_match_normalized(rd_state->project_path, project->first->string);
+  B32 result = (project != &rd_nil_cfg && !path_match_normalized(rd_state->project_path, project->first->string));
   return result;
 }
 
@@ -3721,6 +3721,17 @@ rd_view_ui(Rng2F32 rect)
       }
       
       //////////////////////////////
+      //- rjf: consume query-completion events, if this view is being used as a query
+      //
+      if(vs->is_searching &&
+         ui_is_focus_active() &&
+         ui_slot_press(UI_EventActionSlot_Accept))
+      {
+        // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
+        // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
+      }
+      
+      //////////////////////////////
       //- rjf: consume events & perform navigations/edits - calculate state
       //
       EV_BlockTree block_tree = {0};
@@ -4812,7 +4823,7 @@ rd_view_ui(Rng2F32 rect)
                 B32 row_selected = (selection_tbl.min.y <= global_row_idx+1 && global_row_idx+1 <= selection_tbl.max.y);
                 B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
                 B32 next_row_expanded = row_expanded;
-                B32 row_is_expandable = ev_row_is_expandable(row);
+                B32 row_is_expandable = row_info->can_expand;
                 if(implicit_root && row_depth > 0)
                 {
                   row_depth -= 1;
@@ -8146,6 +8157,17 @@ rd_window_frame(void)
       String8 hover_eval_expr = push_str8f(scratch.arena, "%S%s%S", ws->hover_eval_string, ws->hover_eval_view_rules.size != 0 ? " => " : "", ws->hover_eval_view_rules);
       E_Eval hover_eval = e_eval_from_string(scratch.arena, hover_eval_expr);
       if(hover_eval.msgs.max_kind > E_MsgKind_Null)
+      {
+        build_hover_eval = 0;
+      }
+      else if(hover_eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+              rd_cfg_from_eval_space(hover_eval.space) == &rd_nil_cfg)
+      {
+        build_hover_eval = 0;
+      }
+      else if((hover_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+               hover_eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
+              rd_ctrl_entity_from_eval_space(hover_eval.space) == &ctrl_entity_nil)
       {
         build_hover_eval = 0;
       }

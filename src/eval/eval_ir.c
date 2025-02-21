@@ -391,7 +391,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
         {
           base_ptr_member = &members.v[idx];
         }
-        if(opl_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
+        else if(base_ptr_member != 0 && opl_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
         {
           opl_ptr_member = &members.v[idx];
         }
@@ -458,7 +458,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
       }
       
       // rjf: fill
-      if(count_member && base_ptr_member)
+      if((count_member || opl_ptr_member) && base_ptr_member)
       {
         E_SliceAccel *accel = push_array(arena, E_SliceAccel, 1);
         accel->arch = arch;
