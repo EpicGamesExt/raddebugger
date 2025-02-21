@@ -308,7 +308,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[12] =
 {str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':         code_string,\n  'condition':     code_string,\n  'location':      location,\n  'hit_count':     u64,\n  'disabled':      bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}")},
-{str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}")},
+{str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},
 {str8_lit_comp("recent_file"), str8_lit_comp("x:{'path':path}")},
 {str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, 'frozen':bool, 'unattached_processes':query, 'processes':query}")},

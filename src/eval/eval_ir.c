@@ -483,6 +483,11 @@ e_lookup_rule_map_make(Arena *arena, U64 slots_count)
   E_LookupRuleMap map = {0};
   map.slots_count = slots_count;
   map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
+  e_lookup_rule_map_insert_new(arena, &map, str8_lit("default"),
+                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(default),
+                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(default),
+                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
+                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default));
   e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
                                .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
                                .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder),
@@ -1031,10 +1036,11 @@ e_irgen_rule_map_make(Arena *arena, U64 slots_count)
   E_IRGenRuleMap map = {0};
   map.slots_count = slots_count;
   map.slots = push_array(arena, E_IRGenRuleSlot, map.slots_count);
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("cast"),  .irgen = E_IRGEN_FUNCTION_NAME(cast));
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("bswap"), .irgen = E_IRGEN_FUNCTION_NAME(bswap));
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("array"), .irgen = E_IRGEN_FUNCTION_NAME(array));
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("wrap"),  .irgen = E_IRGEN_FUNCTION_NAME(wrap));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("default"),  .irgen = E_IRGEN_FUNCTION_NAME(default));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("cast"),     .irgen = E_IRGEN_FUNCTION_NAME(cast));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("bswap"),    .irgen = E_IRGEN_FUNCTION_NAME(bswap));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("array"),    .irgen = E_IRGEN_FUNCTION_NAME(array));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("wrap"),     .irgen = E_IRGEN_FUNCTION_NAME(wrap));
   return map;
 }
 
@@ -2391,7 +2397,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       {
         explicit_irgen_rule = irgen_rule_candidate;
         explicit_irgen_rule_tag = tag;
-        break;
       }
     }
   }
@@ -2776,7 +2781,6 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
         {
           result.rule = candidate;
           result.tag = tag;
-          break;
         }
       }
     }
@@ -2809,7 +2813,6 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
         {
           result.rule = candidate;
           result.tag = n->v;
-          break;
         }
       }
     }

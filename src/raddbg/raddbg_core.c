@@ -11527,8 +11527,8 @@ rd_frame(void)
         for(RD_CfgNode *n = auto_view_rules.first; n != 0; n = n->next)
         {
           RD_Cfg *rule = n->v;
-          String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("source"))->first->string;
-          String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("dest"))->first->string;
+          String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
+          String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
           e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
         }
       }

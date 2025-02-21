@@ -301,8 +301,8 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     //- rjf: special case: auto view rule
     if(str8_match(cfg->string, str8_lit("auto_view_rule"), 0))
     {
-      String8 src_string = rd_cfg_child_from_string(cfg, str8_lit("source"))->first->string;
-      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("dest"))->first->string;
+      String8 src_string = rd_cfg_child_from_string(cfg, str8_lit("type"))->first->string;
+      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("view_rule"))->first->string;
       Vec4F32 src_color = rgba;
       Vec4F32 dst_color = rgba;
       DR_FStrList src_fstrs = {0};
@@ -328,9 +328,9 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
         dst_fstrs = rd_fstrs_from_code_string(arena, 1.f, 0, dst_color, dst_string);
       }
       dr_fstrs_concat_in_place(&result, &src_fstrs);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       dr_fstrs_concat_in_place(&result, &dst_fstrs);
     }
     

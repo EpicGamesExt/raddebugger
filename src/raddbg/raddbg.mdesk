@@ -213,7 +213,7 @@ RD_VocabTable:
   //- rjf: auto view rules
   {
     auto_view_rule,
-    ```@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'source':code_string, 'dest':code_string}```,
+    ```@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}```,
   }
   
   //- rjf: recent projects
