@@ -9596,42 +9596,46 @@ rd_window_frame(void)
             UI_TextAlignment(UI_TextAlign_Center)
               UI_PrefWidth(ui_px(tab_bar_vheight, 1.f))
               UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
-              UI_Column
             {
-              if(panel->tab_side == Side_Max)
+              ui_set_next_child_layout_axis(Axis2_Y);
+              UI_Box *container = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "###add_new_tab");
+              UI_Parent(container)
               {
-                ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
-              }
-              else
-              {
-                ui_spacer(ui_px(1.f, 1.f));
-              }
-              UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
-                UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
-                UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
-                UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
-                RD_Font(RD_FontSlot_Icons)
-                UI_FontSize(ui_top_font_size())
-                UI_TagF("implicit")
-                UI_TagF("weak")
-                UI_HoverCursor(OS_Cursor_HandPoint)
-              {
-                UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                                UI_BoxFlag_DrawBorder|
-                                                                UI_BoxFlag_DrawBackground|
-                                                                UI_BoxFlag_DrawHotEffects|
-                                                                UI_BoxFlag_DrawActiveEffects|
-                                                                UI_BoxFlag_Clickable|
-                                                                UI_BoxFlag_DisableTextTrunc,
-                                                                "%S##add_new_tab_button_%p",
-                                                                rd_icon_kind_text_table[RD_IconKind_Add],
-                                                                panel->cfg);
-                UI_Signal sig = ui_signal_from_box(add_new_box);
-                if(ui_clicked(sig))
+                if(panel->tab_side == Side_Max)
                 {
-                  rd_cmd(RD_CmdKind_FocusPanel);
-                  UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-                  ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                  ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
+                }
+                else
+                {
+                  ui_spacer(ui_px(1.f, 1.f));
+                }
+                UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
+                  UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
+                  UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
+                  UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
+                  RD_Font(RD_FontSlot_Icons)
+                  UI_FontSize(ui_top_font_size())
+                  UI_TagF("implicit")
+                  UI_TagF("weak")
+                  UI_HoverCursor(OS_Cursor_HandPoint)
+                {
+                  UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                                  UI_BoxFlag_DrawBorder|
+                                                                  UI_BoxFlag_DrawBackground|
+                                                                  UI_BoxFlag_DrawHotEffects|
+                                                                  UI_BoxFlag_DrawActiveEffects|
+                                                                  UI_BoxFlag_Clickable|
+                                                                  UI_BoxFlag_DisableTextTrunc,
+                                                                  "%S##add_new_tab_button_%p",
+                                                                  rd_icon_kind_text_table[RD_IconKind_Add],
+                                                                  panel->cfg);
+                  UI_Signal sig = ui_signal_from_box(add_new_box);
+                  if(ui_clicked(sig))
+                  {
+                    rd_cmd(RD_CmdKind_FocusPanel);
+                    UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
+                    ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                  }
                 }
               }
             }
