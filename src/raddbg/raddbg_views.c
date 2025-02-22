@@ -1367,14 +1367,25 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           }break;
           case E_ExprKind_MemberAccess:
           {
-            E_Eval row_eval = result.eval;
-            String8 member_name = e_string_from_expr(arena, notable_expr->last);
+            Temp scratch = scratch_begin(&arena, 1);
+            E_Member member = result.eval.irtree.member;
+            String8 member_name = member.name;
+            if(member.inheritance_key_chain.count != 0)
+            {
+              String8List strings = {0};
+              for(E_TypeKeyNode *n = member.inheritance_key_chain.first; n != 0; n = n->next)
+              {
+                String8 base_class_name = e_type_string_from_key(scratch.arena, n->v);
+                str8_list_push(scratch.arena, &strings, base_class_name);
+              }
+              result.inheritance_tooltip = str8_list_join(arena, &strings, &(StringJoin){.sep = str8_lit_comp("::")});
+            }
             B32 is_non_code = 0;
             String8 string = push_str8f(arena, ".%S", member_name);
-            if(row_eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-               row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-               row_eval.space.kind == E_SpaceKind_File ||
-               row_eval.space.kind == E_SpaceKind_FileSystem)
+            if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+               result.eval.space.kind == E_SpaceKind_File ||
+               result.eval.space.kind == E_SpaceKind_FileSystem)
             {
               String8 fancy_name = rd_display_from_code_name(member_name);
               if(fancy_name.size != 0)
@@ -1385,6 +1396,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             }
             result.flags |= (!!is_non_code * RD_WatchCellFlag_IsNonCode);
             result.string = string;
+            scratch_end(scratch);
           }break;
         }
       }
@@ -1520,8 +1532,24 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     }break;
     case RD_WatchCellKind_Eval:
     {
-      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
-         result.eval.value.u64 == 0)
+      if(result.eval.msgs.max_kind != E_MsgKind_Null)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        result.flags |= RD_WatchCellFlag_IsErrored|RD_WatchCellFlag_IsNonCode;
+        String8List error_strings = {0};
+        for(E_Msg *msg = result.eval.msgs.first; msg != 0; msg = msg->next)
+        {
+          str8_list_push(scratch.arena, &error_strings, msg->text);
+          if(msg->next)
+          {
+            str8_list_pushf(scratch.arena, &error_strings, " ");
+          }
+        }
+        result.string = str8_list_join(arena, &error_strings, 0);
+        scratch_end(scratch);
+      }
+      else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
+              result.eval.value.u64 == 0)
       {
         CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(result.eval.space);
         E_TypeKey cfg_type = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);

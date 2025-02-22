@@ -52,6 +52,7 @@ struct E_IRTreeAndType
 {
   E_IRNode *root;
   E_TypeKey type_key;
+  E_Member member;
   E_Mode mode;
   E_MsgList msgs;
 };

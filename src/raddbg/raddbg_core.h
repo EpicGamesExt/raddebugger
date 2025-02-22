@@ -801,10 +801,6 @@ struct RD_State
   // rjf: icon texture
   R_Handle icon_texture;
   
-  // rjf: current path
-  Arena *current_path_arena;
-  String8 current_path;
-  
   // rjf: fixed ui keys
   UI_Key drop_completion_key;
   UI_Key ctx_menu_key;

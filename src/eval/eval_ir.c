@@ -588,6 +588,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
       e_msg_list_concat_in_place(&result.irtree_and_type.msgs, &l.msgs);
       
       // rjf: look up member
+      E_Member member = zero_struct;
       B32 r_found = 0;
       E_TypeKey r_type = zero_struct;
       U64 r_value = 0;
@@ -596,6 +597,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
       {
         Temp scratch = scratch_begin(&arena, 1);
         E_Member match = e_type_member_from_key_name__cached(check_type_key, exprr->string);
+        member = match;
         if(match.kind != E_MemberKind_Null)
         {
           r_found = 1;
@@ -688,6 +690,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
         // rjf: fill
         result.irtree_and_type.root     = new_tree;
         result.irtree_and_type.type_key = r_type;
+        result.irtree_and_type.member   = member;
         result.irtree_and_type.mode     = mode;
       }
     }break;
@@ -1166,7 +1169,7 @@ E_IRGEN_FUNCTION_DEF(cast)
   E_Expr *type_expr = tag->first->next;
   E_TypeKey type_key = e_type_from_expr(type_expr);
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
-  E_IRTreeAndType result = {irtree.root, type_key, irtree.mode, irtree.msgs};
+  E_IRTreeAndType result = {irtree.root, type_key, irtree.member, irtree.mode, irtree.msgs};
   return result;
 }
 
@@ -1175,7 +1178,7 @@ E_IRGEN_FUNCTION_DEF(bswap)
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
   E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
   e_irnode_push_child(root, irtree.root);
-  E_IRTreeAndType result = {root, irtree.type_key, irtree.mode, irtree.msgs};
+  E_IRTreeAndType result = {root, irtree.type_key, irtree.member, irtree.mode, irtree.msgs};
   return result;
 }
 

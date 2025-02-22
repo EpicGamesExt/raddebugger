@@ -15,6 +15,7 @@
 E_LOOKUP_INFO_FUNCTION_DEF(commands)
 {
   E_LookupInfo result = {0};
+  if(filter.size != 0)
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8List cmd_names = {0};
@@ -33,6 +34,10 @@ E_LOOKUP_INFO_FUNCTION_DEF(commands)
     result.user_data = accel;
     result.idxed_expr_count = accel->count;
     scratch_end(scratch);
+  }
+  else
+  {
+    result.idxed_expr_count = RD_CmdKind_COUNT;
   }
   return result;
 }
@@ -53,15 +58,31 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(commands)
 E_LOOKUP_RANGE_FUNCTION_DEF(commands)
 {
   U64 out_idx = 0;
-  String8Array *accel = (String8Array *)user_data;
-  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  if(user_data != 0)
   {
-    String8 cmd_name = accel->v[idx];
-    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-    expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
-    expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
-    expr->value.u64 = e_id_from_string(cmd_name);
-    exprs[out_idx] = expr;
+    String8Array *accel = (String8Array *)user_data;
+    for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+    {
+      String8 cmd_name = accel->v[idx];
+      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+      expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
+      expr->value.u64 = e_id_from_string(cmd_name);
+      exprs[out_idx] = expr;
+    }
+  }
+  else
+  {
+    for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+    {
+      RD_CmdKind cmd_kind = (RD_CmdKind)idx;
+      String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+      expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
+      expr->value.u64 = e_id_from_string(cmd_name);
+      exprs[out_idx] = expr;
+    }
   }
 }
 
@@ -344,28 +365,43 @@ E_LOOKUP_INFO_FUNCTION_DEF(cfg)
 
 E_LOOKUP_ACCESS_FUNCTION_DEF(cfg)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  RD_Cfg *cfg = &rd_nil_cfg;
+  if(kind == E_ExprKind_MemberAccess)
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
+    String8 rhs_name = rhs->string;
+    RD_CfgID id = 0;
+    if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0) &&
+       try_u64_from_str8_c_rules(str8_skip(rhs_name, 1), &id))
+    {
+      cfg = rd_cfg_from_id(id);
+    }
+  }
+  else if(kind == E_ExprKind_ArrayIndex)
+  {
     E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
     E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
     String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
     E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
     E_Value rhs_value = rhs_interp.value;
-    if(rhs_value.u64 < accel->cfgs.count)
+    U64 rhs_idx = rhs_value.u64;
+    RD_CfgLookupAccel *accel = (RD_CfgLookupAccel *)user_data;
+    if(0 <= rhs_idx && rhs_idx < accel->cfgs.count)
     {
-      RD_Cfg *cfg = accel->cfgs.v[rhs_value.u64];
-      E_Space cfg_space = rd_eval_space_from_cfg(cfg);
-      String8 cfg_name = cfg->string;
-      E_TypeKey cfg_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg_name);
-      result.irtree_and_type.root      = e_irtree_set_space(arena, cfg_space, e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key  = cfg_type_key;
-      result.irtree_and_type.mode      = E_Mode_Offset;
+      cfg = accel->cfgs.v[rhs_idx];
     }
-    scratch_end(scratch);
   }
+  if(cfg != &rd_nil_cfg)
+  {
+    E_Space cfg_space = rd_eval_space_from_cfg(cfg);
+    String8 cfg_name = cfg->string;
+    E_TypeKey cfg_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg_name);
+    result.irtree_and_type.root      = e_irtree_set_space(arena, cfg_space, e_irtree_const_u(arena, 0));
+    result.irtree_and_type.type_key  = cfg_type_key;
+    result.irtree_and_type.mode      = E_Mode_Offset;
+  }
+  scratch_end(scratch);
   return result;
 }
 
@@ -397,8 +433,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(cfg)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
-      exprs[dst_idx] = e_push_expr(arena, E_ExprKind_LeafIdent, 0);
-      exprs[dst_idx]->string = push_str8f(arena, "$%I64d", cfg->id);
+      exprs[dst_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, push_str8f(arena, "$%I64d", cfg->id));
     }
   }
 }
@@ -813,42 +848,53 @@ E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
 
 E_LOOKUP_ACCESS_FUNCTION_DEF(ctrl_entities)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  CTRL_Entity *entity = &ctrl_entity_nil;
+  if(kind == E_ExprKind_MemberAccess)
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
+    String8 rhs_name = rhs->string;
+    CTRL_Handle handle = ctrl_handle_from_string(rhs_name);
+    entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+  }
+  else if(kind == E_ExprKind_ArrayIndex)
+  {
     E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
     E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
     String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
     E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
     E_Value rhs_value = rhs_interp.value;
-    if(0 <= rhs_value.u64 && rhs_value.u64 < entities->count)
+    U64 rhs_idx = rhs_value.u64;
+    CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
+    if(0 <= rhs_idx && rhs_idx < entities->count)
     {
-      CTRL_Entity *entity = entities->v[rhs_value.u64];
-      E_Space entity_space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
-      String8 entity_name = ctrl_entity_kind_code_name_table[entity->kind];
-      E_TypeKey entity_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, entity_name);
-      result.irtree_and_type.root      = e_irtree_set_space(arena, entity_space, e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key  = entity_type_key;
-      result.irtree_and_type.mode      = E_Mode_Offset;
+      entity = entities->v[rhs_idx];
     }
-    scratch_end(scratch);
   }
+  if(entity != &ctrl_entity_nil)
+  {
+    E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
+    String8 name = ctrl_entity_kind_code_name_table[entity->kind];
+    E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
+    result.irtree_and_type.root      = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+    result.irtree_and_type.type_key  = type_key;
+    result.irtree_and_type.mode      = E_Mode_Offset;
+  }
+  scratch_end(scratch);
   return result;
 }
 
 E_LOOKUP_RANGE_FUNCTION_DEF(ctrl_entities)
 {
   CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
+  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
   Rng1U64 legal_range = r1u64(0, entities->count);
   Rng1U64 read_range = intersect_1u64(legal_range, idx_range);
   U64 read_count = dim_1u64(read_range);
   for(U64 out_idx = 0; out_idx < read_count; out_idx += 1)
   {
     CTRL_Entity *entity = entities->v[out_idx + read_range.min];
-    exprs[out_idx] = e_push_expr(arena, E_ExprKind_LeafIdent, 0);
-    exprs[out_idx]->string = ctrl_string_from_handle(arena, entity->handle);
+    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, ctrl_string_from_handle(arena, entity->handle));
   }
 }
 
@@ -5045,18 +5091,8 @@ rd_view_ui(Rng2F32 rect)
                     Vec4F32 cell_background_color_override = {0};
                     String8 cell_tag = {0};
                     {
-                      if(cell_info.flags & RD_WatchCellFlag_IsErrored)
-                      {
-                        cell_flags |= UI_BoxFlag_DrawBackground;
-                        cell_tag = str8_lit("bad");
-                      }
-                      else if(cell_info.inheritance_tooltip.size != 0)
-                      {
-                        cell_flags |= UI_BoxFlag_DrawBackground;
-                        cell_tag = str8_lit("pop");
-                      }
-                      else if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
-                              rd_state->hover_regs_slot == RD_RegSlot_Cfg)
+                      if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
+                         rd_state->hover_regs_slot == RD_RegSlot_Cfg)
                       {
                         RD_Cfg *cfg = cell_info.cfg;
                         Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
@@ -5110,6 +5146,7 @@ rd_view_ui(Rng2F32 rect)
                       UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                       RD_Font(RD_FontSlot_Code)
                       UI_TagF("weak")
+                      UI_Tag(cell_tag)
                     {
                       // rjf: cell has errors? -> build error box
                       if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
@@ -7436,6 +7473,17 @@ rd_window_frame(void)
         }
       }
       
+      //- rjf: any queries which take a file path mutate the debugger's "current path"
+      if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+      {
+        RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
+        if(input != &rd_nil_cfg)
+        {
+          String8 path_chopped = str8_chop_last_slash(input->first->string);
+          rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+        }
+      }
+      
       //- rjf: build darkening rectangle over rest of screen
       UI_Rect(window_rect) UI_TagF("inactive")
       {
@@ -7889,9 +7937,13 @@ rd_window_frame(void)
                   for(RD_CfgNode *n = targets.first; n != 0; n = n->next)
                   {
                     RD_Cfg *target = n->v;
-                    DR_FStrList title_fstrs = rd_title_fstrs_from_cfg(ui_build_arena(), target);
-                    UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                    ui_box_equip_display_fstrs(box, &title_fstrs);
+                    B32 target_is_enabled = !rd_disabled_from_cfg(target);
+                    if(target_is_enabled)
+                    {
+                      DR_FStrList title_fstrs = rd_title_fstrs_from_cfg(ui_build_arena(), target);
+                      UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                      ui_box_equip_display_fstrs(box, &title_fstrs);
+                    }
                   }
                 }
               }
@@ -8819,7 +8871,7 @@ rd_window_frame(void)
                                 panel_tree.focused == panel);
         RD_Cfg *selected_tab = panel->selected_tab;
         RD_ViewState *selected_tab_view_state = rd_view_state_from_cfg(selected_tab);
-        ProfScope("leaf panel UI work - %.*s", str8_varg(selected_tab->string))
+        ProfScope("leaf panel UI work - %.*s: %.*s", str8_varg(selected_tab->string), str8_varg(rd_expr_from_cfg(selected_tab)))
           UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
           //////////////////////////
@@ -12446,15 +12498,6 @@ rd_init(CmdLine *cmdln)
     scratch_end(scratch);
   }
   
-  // rjf: set up initial browse path
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8 current_path = os_get_current_path(scratch.arena);
-    rd_state->current_path_arena = arena_alloc();
-    rd_state->current_path = push_str8_copy(rd_state->current_path_arena, current_path);
-    scratch_end(scratch);
-  }
-  
   ProfEnd();
 }
 
@@ -12490,7 +12533,6 @@ rd_frame(void)
   rd_state->entity2evalblob_map = push_array(rd_frame_arena(), RD_Entity2EvalBlobMap, 1);
   rd_state->entity2evalblob_map->slots_count = 256;
   rd_state->entity2evalblob_map->slots = push_array(rd_frame_arena(), RD_Entity2EvalBlobSlot, rd_state->entity2evalblob_map->slots_count);
-  rd_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   
   //////////////////////////////
   //- rjf: iterate all tabs, touch their view-states
@@ -12703,23 +12745,33 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: calculate avg length in us of last many frames
+  //
+  U64 frame_time_history_avg_us = 0;
+  {
+    U64 num_frames_in_history = Min(ArrayCount(rd_state->frame_time_us_history), rd_state->frame_index);
+    U64 frame_time_history_sum_us = 0;
+    if(num_frames_in_history > 0)
+    {
+      for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
+      {
+        frame_time_history_sum_us += rd_state->frame_time_us_history[idx];
+      }
+      frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: pick target hz
   //
+  // pick among a number of sensible targets to snap to, given how well
+  // we've been performing
+  //
   // TODO(rjf): maximize target, given all windows and their monitors
+  //
   F32 target_hz = os_get_gfx_info()->default_refresh_rate;
   if(rd_state->frame_index > 32)
   {
-    // rjf: calculate average frame time out of the last N
-    U64 num_frames_in_history = Min(ArrayCount(rd_state->frame_time_us_history), rd_state->frame_index);
-    U64 frame_time_history_sum_us = 0;
-    for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
-    {
-      frame_time_history_sum_us += rd_state->frame_time_us_history[idx];
-    }
-    U64 frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
-    
-    // rjf: pick among a number of sensible targets to snap to, given how well
-    // we've been performing
     F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
     F32 best_target_hz = target_hz;
     S64 best_target_hz_frame_time_us_diff = max_S64;
@@ -12738,6 +12790,20 @@ rd_frame(void)
       }
     }
     target_hz = best_target_hz;
+  }
+  
+  //////////////////////////////
+  //- rjf: given frame time history, decide on amount of time we're willing to wait for memory read results
+  // for evaluations
+  //
+  {
+    rd_state->frame_eval_memread_endt_us = 0;
+    U64 frame_time_target_cap_us = (U64)(1000000/target_hz);
+    if(frame_time_history_avg_us < frame_time_target_cap_us)
+    {
+      U64 spare_time = (frame_time_target_cap_us - frame_time_history_avg_us) + 4000;
+      rd_state->frame_eval_memread_endt_us = os_now_microseconds() + spare_time;
+    }
   }
   
   //////////////////////////////
@@ -13413,9 +13479,9 @@ rd_frame(void)
         e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
       }
       
-      //- rjf: add macro for 'call_stack' -> 'current_thread.callstack'
+      //- rjf: add macro for 'call_stack' -> 'query:current_thread.callstack'
       {
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("current_thread.call_stack")).exprs.first;
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("query:current_thread.call_stack")).exprs.first;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
       }
       
@@ -14414,8 +14480,9 @@ rd_frame(void)
           //- rjf: files
           case RD_CmdKind_SetCurrentPath:
           {
-            arena_clear(rd_state->current_path_arena);
-            rd_state->current_path = push_str8_copy(rd_state->current_path_arena, rd_regs()->file_path);
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_Cfg *current_path = rd_cfg_child_from_string_or_alloc(user, str8_lit("current_path"));
+            rd_cfg_new_replace(current_path, rd_regs()->file_path);
           }break;
           case RD_CmdKind_SetFileReplacementPath:
           {
@@ -15872,7 +15939,19 @@ Z(getting_started)
             String8 initial_input = {0};
             if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
             {
-              initial_input = rd_state->current_path;
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
+              String8 current_path_string = current_path->first->string;
+              if(current_path_string.size == 0)
+              {
+                current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+              }
+              else
+              {
+                current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
+              }
+              initial_input = path_normalized_from_string(scratch.arena, current_path_string);
+              initial_input = push_str8f(scratch.arena, "%S/", initial_input);
             }
             else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
             {
