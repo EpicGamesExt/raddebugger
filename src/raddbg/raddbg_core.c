@@ -5247,6 +5247,32 @@ rd_view_ui(Rng2F32 rect)
                             UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
                             UI_Flags(0)
                           {
+                            // rjf: 'pull out' button
+                            UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
+                                                          ui_top_font_size()*1.5f,
+                                                          ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
+                                                          ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
+                              UI_CornerRadius(ui_top_font_size()*1.5f)
+                              UI_TextAlignment(UI_TextAlign_Center)
+                              UI_HoverCursor(OS_Cursor_HandPoint)
+                              RD_Font(RD_FontSlot_Icons)
+                            {
+                              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                                      UI_BoxFlag_Floating|
+                                                                      UI_BoxFlag_DrawText|
+                                                                      UI_BoxFlag_DrawBorder|
+                                                                      UI_BoxFlag_DrawBackground|
+                                                                      UI_BoxFlag_DrawActiveEffects|
+                                                                      UI_BoxFlag_DrawHotEffects,
+                                                                      "%S###pull_out",
+                                                                      rd_icon_kind_text_table[RD_IconKind_Window]);
+                              UI_Signal sig = ui_signal_from_box(box);
+                              if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
+                              {
+                                rd_drag_begin(RD_RegSlot_View);
+                              }
+                            }
+                            
                             // rjf: loading animation container
                             UI_Box *loading_overlay_container = &ui_nil_box;
                             UI_Parent(box) UI_WidthFill UI_HeightFill

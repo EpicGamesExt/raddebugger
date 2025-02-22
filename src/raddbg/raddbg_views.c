@@ -2982,9 +2982,9 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
   Vec4F32 grid_line_color = {0};
-  UI_TagF("alt")
+  UI_TagF("weak")
   {
-    grid_line_color = ui_color_from_name(str8_lit("background"));
+    grid_line_color = ui_color_from_name(str8_lit("text"));
   }
   for EachEnumVal(Axis2, axis)
   {

@@ -56,7 +56,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     if(expr_string.size != 0)
     {
       String8 query_name = rd_query_from_eval_string(arena, expr_string);
-      if(query_name.size != 0 && !str8_match(query_name, str8_lit("watches"), 0))
+      if(query_name.size != 0)
       {
         String8 query_code_name = query_name;
         String8 query_display_name = rd_display_from_code_name(query_code_name);
@@ -65,6 +65,10 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
         {
           query_code_name = rd_singular_from_code_name_plural(query_name);
           collection_name = rd_display_plural_from_code_name(query_code_name);
+          if(str8_match(collection_name, str8_lit("Watches"), 0))
+          {
+            collection_name = str8_lit("Watch");
+          }
         }
         RD_IconKind query_icon_kind = rd_icon_kind_from_code_name(query_code_name);
         if(query_icon_kind != RD_IconKind_Null)
@@ -234,7 +238,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     }
     
     //- rjf: cfg has expression attached -> use that
-    else if(expr_string.size != 0 && !is_within_window)
+    else if(expr_string.size != 0)
     {
       dr_fstrs_push_new(arena, &result, &params, expr_string, .font = rd_font_from_slot(RD_FontSlot_Code), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
