@@ -3190,7 +3190,7 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
     if(step > 0)
     {
       step -= 1;
-      if(step)
+      if(step == 0)
       {
         result.op = PE_UnwindOpCodeArm64_set_fp;
       }
@@ -3224,7 +3224,7 @@ ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 s
     if(step > 0)
     {
       step -= 1;
-      if(step)
+      if(step == 0)
       {
         result.op = PE_UnwindOpCodeArm64_set_fp;
       }
@@ -3386,9 +3386,8 @@ ctrl_unwind_code_from_xdata__pe_arm64(CTRL_Handle process_handle, U64 endt_us, U
     }
     else if((unwind_op >> 3) == 29)
     {
-      // custom stack cases for asm routines
+      //- antoniom: custom stack cases for asm routines (__security_pop_cookie)
       unwind_off += 1;
-      Assert(!"Have not encountered");
     }
     else if((unwind_op >> 2) == 50)
     {
@@ -3589,6 +3588,25 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
   U64 new_pc = 0;
   U64 new_sp = 0;
 
+  U64 function_start_vaddr = first_pdata ? first_pdata->voff_first + module->vaddr_range.min : 0;
+  U64 function_end_vaddr = 0;
+
+  //- antoniom: find function end vaddr
+  U32 combined_flag = first_pdata ? first_pdata->combined & 0x3 : 0;
+  if(first_pdata && combined_flag != 0)
+  {
+    U32 packed_unwind_data = first_pdata->combined;
+    function_end_vaddr = function_start_vaddr + (4 * ((packed_unwind_data >> 2) & 0x7FF));
+  }
+  else if(first_pdata)
+  {
+    U64 xdata_voff = first_pdata->combined + module->vaddr_range.min;
+    U32 header = 0;
+    is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, xdata_voff, &is_stale, &header, endt_us);
+    is_good = is_good && !is_stale;
+    function_end_vaddr = function_start_vaddr + (4 * (header & 0x3ffff));
+  }
+
   //- antoniom: check to see if in epilog
   B32 has_pdata_and_in_epilog = 0;
   if(first_pdata)
@@ -3596,13 +3614,15 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     B32 is_epilog = 0;
     B32 keep_parsing = 1;
     U64 read_vaddr = regs->pc.u64;
-    U64 read_vaddr_opl = read_vaddr + 256;
+
+    //- antoniom: only read 16 instructions before the end of the function
+    Rng1U64 epilog_vaddr_rng = r1u64(function_end_vaddr - 0x40, function_end_vaddr + 0x4);
 
     //- antoniom: Check to see if in epilog
     for(B32 keep_parsing = 1; keep_parsing;)
     {
       U32 inst = 0;
-      if(read_vaddr + sizeof(inst) <= read_vaddr_opl)
+      if(contains_1u64(epilog_vaddr_rng, read_vaddr))
       {
         is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
         is_good = is_good && !is_stale;
@@ -3620,7 +3640,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           keep_parsing = 0;
           is_epilog = 1;
         }
-        else if((inst & 0xFF0003FF) == 0xCB0003FF)
+        else if((inst & 0xFFC003FF) == 0x8B0003FF)
         {
           // add sp, sp, reg, lsl #imm
           keep_parsing = 0;
@@ -3701,15 +3721,12 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           U32 imm = (inst >> 10) & 0xFFF;
           new_sp += shift ? (imm << 12) : imm;
         }
-        else if((inst & 0xFFC003FF) == 0x910003FF)
+        else if((inst & 0xFFC003FF) == 0x8B0003FF)
         {
           // add sp, sp, lsl #imm
-          // 0 LSL, 1 LSR, 2 ASR, 3 ROR
-          // assuming always LSL
-          U8 shift_type = (inst >> 22) & 0x3;
+          U8 option = (inst >> 13) & 0x7;
           U32 shift_amount = (inst >> 10) & 0x3F;
           REGS_Reg64 *reg = &regs->x0 + ((inst >> 16) & 0x1F);
-
           new_sp += (reg->u64 << shift_amount);
         }
         else if(inst == 0xD65F03C0)
@@ -3723,14 +3740,28 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         else if((inst & 0xFC000000) == 0x94000000)
         {
           // bl (e.g. __security_pop_cookie)
-          // go to next instruction
+          //- antoniom: : it's possible to encounter a security_pop_cookie, which does add sp, sp, #0x10
+          S64 sign_extended_imm = ((S64)(inst & 0x3FFFFFF) << 38) >> 38;
+          U64 branch_read_vaddr = read_vaddr + 4 * sign_extended_imm;
+          U32 insts[16];
+          is_good = is_good && ctrl_read_cached_process_memory(process_handle, r1u64(branch_read_vaddr, branch_read_vaddr + sizeof(insts)), &is_stale, insts, endt_us);
+          is_good = is_good && !is_stale;
+          if(is_good) for(U32 idx = 0; idx < 16; idx += 1)
+          {
+            // add sp, sp, 0x10 -> ret
+            if(insts[idx] == 0x910043ff && idx < 15 && insts[idx+1] == 0xd65f03c0)
+            {
+              new_sp += 0x10;
+              break;
+            }
+          }
+          keep_parsing = is_good;
         }
         else if(inst == 0x910002BF)
         {
           // mov sp, x29
-          new_sp = regs->x29.u64;
         }
-        else if((inst & 0xFEC003E0) == 0xA8C003E0)
+        else if((inst & 0xFEC003E0) == 0xA9C003E0)
         {
           // ldp reg0, reg1, [sp,#imm]
           REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
@@ -3738,7 +3769,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
           S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 58) >> 58;
-          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
+          U64 reg_read_vaddr = (U64)((S64)new_sp + sign_extended_imm);
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -3755,7 +3786,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
           S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 58) >> 58;
-          U64 reg_read_vaddr = regs->x31.u64;
+          U64 reg_read_vaddr = new_sp;
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -3773,7 +3804,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
           // TODO(antoniom): sign-extended? even right?
           S64 imm = 8 * ((inst >> 10) & 0xFFF);
-          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + imm);
+          U64 reg_read_vaddr = (U64)((S64)new_sp + imm);
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -3787,13 +3818,17 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           // TODO(antoniom): sign-extended?
           S64 imm = 8 * ((inst >> 12) & 0x1FF);
           S64 sign_extended_imm = (imm << 54) >> 54;
-          U64 reg_read_vaddr = regs->x31.u64;
+          U64 reg_read_vaddr = new_sp;
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
 
           new_sp += sign_extended_imm;
           keep_parsing = is_good;
+        }
+        else if(inst == 0xd50323ff)
+        {
+          keep_parsing = 1;
         }
         else
         {
@@ -3804,20 +3839,16 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
   }
 
   B32 has_pdata_and_in_prolog = 0;
-  U64 function_start_voff = 0;
   if(first_pdata)
   {
-    function_start_voff = first_pdata->voff_first;
-
     B32 is_prolog = 0;
     U64 read_vaddr = regs->pc.u64;
-    U64 inst_start = function_start_voff + module->vaddr_range.min;
 
     for(B32 keep_parsing = 1; keep_parsing;)
     {
       U32 inst = 0;
 
-      if(contains_1u64(r1u64(inst_start, inst_start + 32), read_vaddr))
+      if(contains_1u64(r1u64(function_start_vaddr, function_start_vaddr + 0x30), read_vaddr))
       {
         is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
         is_good = is_good && !is_stale;
@@ -3843,7 +3874,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         }
         else if((inst & 0xFF0003FF) == 0xCB0003FF)
         {
-          // TODO(antoniom): same as add version?
           // sub sp, sp, reg, lsl #imm
           keep_parsing = 0;
           is_prolog = 1;
@@ -3872,15 +3902,25 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           keep_parsing = 0;
           is_prolog = 1;
         }
-        else if((inst & 0xFFE083E0) == 0xF82083E0)
+        else if((inst & 0xFFC003E0) == 0xF90003E0)
         {
           // str reg0, [sp,#imm]
           keep_parsing = 0;
-          is_prolog = 1;
+          U32 str_reg = inst & 0x1f;
+          if(19 <= str_reg && str_reg <= 30)
+          {
+            is_prolog = 1;
+          }
         }
         else if((inst & 0xFFE083E0) == 0xF82083E0)
         {
           // str reg0, [sp,#imm]! (pre-indexed_load)
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if(inst == 0xd503237f)
+        {
+          // pacibsp
           keep_parsing = 0;
           is_prolog = 1;
         }
@@ -3894,13 +3934,12 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
     has_pdata_and_in_prolog = is_prolog;
   }
 
-  //- antoniom: pdata & in epilog -> prolog unwind
+  //- antoniom: pdata & in prolog -> prolog unwind
   //  need to "undo" previous instructions, so the execution stream
   //  starts at the previous instruction. This makes operations look
   //  like the epilog block operations
   if (first_pdata && has_pdata_and_in_prolog)
   {
-    U64 inst_start = function_start_voff + module->vaddr_range.min;
     U64 read_vaddr = regs->pc.u64 - 4;
     new_sp = regs->x31.u64;
     new_pc = regs->pc.u64;
@@ -3910,7 +3949,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
       U32 inst = 0;
       is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, read_vaddr, &is_stale, &inst, endt_us);
       is_good = is_good && !is_stale;
-      read_vaddr -= 4;
 
       if(is_good)
       {
@@ -3932,24 +3970,33 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         }
         else if((inst & 0xFF0003FF) == 0xCB0003FF)
         {
-          // TODO(antoniom): same as add
           // sub sp, sp, reg, lsl #imm
-          U8 shift_type = (inst >> 22) & 0x3;
+          U8 option = (inst >> 13) & 0x7;
           U32 shift_amount = (inst >> 10) & 0x3F;
           REGS_Reg64 *reg = &regs->x0 + ((inst >> 16) & 0x1F);
           new_sp += (reg->u64 << shift_amount);
         }
         else if((inst & 0xFC000000) == 0x94000000)
         {
+          //- antoniom: basically for security_push_cookie.
+          // Look for sub sp, sp, #0x10. We're undoing it, so we will add 0x10 to sp
+          S64 sign_extended_imm = ((S64)(inst & 0x3FFFFFF) << 38) >> 38;
+          U64 branch_read_vaddr = read_vaddr + 4 * sign_extended_imm;
+          U32 branch_inst = 0;
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, branch_read_vaddr, &is_stale, &branch_inst, endt_us);
+          is_good = is_good && !is_stale;
+          if(is_good && branch_inst == 0xd10043ff)
+          {
+            new_sp += 0x10;
+          }
+          keep_parsing = is_good;
         }
-        else if(inst & 0x910003FD)
+        else if(inst == 0x910003FD)
         {
-          // mov x29, sp -> mov sp, x29
-          new_sp = regs->x29.u64;
+          // mov x29, sp
         }
-        else if((inst & 0xFFC003E0) == 0xA9000360)
+        else if((inst & 0xFFC003E0) == 0xA90003E0)
         {
-          // TODO(antoniom): 6 or e?
           // stp reg0, reg1, [sp,#imm] -> do load
           REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1F);
           REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1F);
@@ -3957,7 +4004,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           //- antoniom: multiply by 8 after?
           S64 imm = 8 * ((inst >> 15) & 0x7f);
           S64 sign_extended_imm = (imm << 58) >> 58;
-          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
+          U64 reg_read_vaddr = (U64)((S64)new_sp + sign_extended_imm);
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -3977,7 +4024,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           S64 sign_extended_imm = (imm << 57) >> 57;
           sign_extended_imm *= -1;
 
-          U64 reg_read_vaddr = regs->x31.u64;
+          U64 reg_read_vaddr = new_sp;
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -3988,13 +4035,13 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           new_sp += sign_extended_imm;
           keep_parsing = is_good;
         }
-        else if((inst & 0xFFE083E0) == 0xF82083E0)
+        else if((inst & 0xFFC003E0) == 0xF90003E0)
         {
           // str reg0, [sp,#imm] -> do load
           REGS_Reg64 *reg = &regs->x0 + (inst & 0x1F);
 
           S64 unsigned_imm = 8 * ((inst >> 10) & 0xFFF);
-          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + unsigned_imm);
+          U64 reg_read_vaddr = (U64)((S64)new_sp + unsigned_imm);
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -4008,7 +4055,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
           S64 imm = ((inst >> 10) & 0x1FF);
           S64 sign_extended_imm = (imm << 54) >> 54;
-          U64 reg_read_vaddr = regs->x31.u64;
+          U64 reg_read_vaddr = new_sp;
 
           is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg->u64, endt_us);
           is_good = is_good && !is_stale;
@@ -4023,10 +4070,14 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           keep_parsing = 0;
         }
       }
+      keep_parsing = keep_parsing && (read_vaddr >= function_start_vaddr);
+      read_vaddr -= 4;
     }
 
     //- antoniom: simulate ret
-    new_pc = regs->x30.u64;
+    U64 mask = ~0ULL;
+    mask >>= 17;
+    new_pc = regs->x30.u64 & mask;
   }
 
   //////////////////////////////
@@ -4039,8 +4090,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
     PE_Arm64Pdata *pdata = first_pdata;
 
-    U64 ip_from_function_start_voff = ip_voff - function_start_voff;
-
     U64 xdata_code_words = 0;
     U64 xdata_code_words_ptr = 0;
     U64 xdata_step_count = 0;
@@ -4049,7 +4098,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
 
     U64 packed_unwind_count = 0;
 
-    U32 combined_flag = pdata->combined & 0x3;
     if(is_good && combined_flag != 0)
     {
       is_packed_unwind_data = 1;
@@ -4127,7 +4175,6 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
       if(is_good)
       {
         U32 header = 0;
-
         is_good = is_good && ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+xdata_off, xdata_voff+xdata_off+sizeof(U32)), &is_stale, &header, endt_us);
         is_good = is_good && !is_stale;
 
@@ -4162,7 +4209,7 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         //- antoniom: epilog scope
         U64 epilog_scope_ptr = xdata_voff + xdata_off;
         U32 min_epilog_offset = max_U32;
-        U32 min_unwind_code_offset = 0xffffffff;
+        U32 min_unwind_code_offset = max_U32;
         for(U32 epilog_scope_idx = 0; is_good && !is_stale && epilog_scope_idx < parsed_data.epilog_count; epilog_scope_idx += 1)
         {
           U32 epilog_scope_header = 0;
@@ -4182,176 +4229,176 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           }
         }
 
-        if(min_epilog_offset == max_U32)
+        if(min_epilog_offset < max_U32)
         {
-          xdata_off += parsed_data.epilog_count;
+          xdata_off += parsed_data.epilog_count * 4 + min_unwind_code_offset;
+        }
+      }
+
+      xdata_code_words_ptr = xdata_voff + xdata_off;
+      xdata_code_words = parsed_data.code_words;
+
+      U64 unwind_off = xdata_off;
+      B32 keep_parsing = (unwind_off - xdata_off) <= (4 * parsed_data.code_words);
+      while(keep_parsing)
+      {
+        U32 unwind_header = 0;
+
+        is_good = is_good && ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+unwind_off, xdata_voff+unwind_off+sizeof(U32)), &is_stale, &unwind_header, endt_us);
+        is_good = is_good && !is_stale;
+
+        U8 unwind_op = unwind_header & 0xff;
+        U8 *unwind_header_u8s = (U8*)&unwind_header;
+
+        if((unwind_op >> 5) == 0)
+        {
+          // 000xxxxx
+          // epilog: add sp, sp, (x * 16)
+          unwind_off += 1;
+        }
+        else if((unwind_op >> 5) == 1)
+        {
+          // 001zzzzz
+          unwind_off += 1;
+        }
+        else if((unwind_op >> 6) == 1)
+        {
+          // 01zzzzzz
+          unwind_off += 1;
+        }
+        else if((unwind_op >> 6) == 2)
+        {
+          // 10zzzzzz
+          unwind_off += 1;
+        }
+        else if((unwind_op >> 3) == 24)
+        {
+          // 11000xxx'xxxxxxxx
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 3) == 29)
+        {
+          // custom stack cases for asm routines
+          unwind_off += 1;
+        }
+        else if((unwind_op >> 2) == 50)
+        {
+          // 110010xx'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 2) == 51)
+        {
+          // 110011xx'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 2) == 52)
+        {
+          // 110100xx'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 1) == 106)
+        {
+          // 1101010x'xxxzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 1) == 107)
+        {
+          // 1101011x'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 1) == 108)
+        {
+          // 1101100x'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 1) == 109)
+        {
+          // 1101101x'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if((unwind_op >> 1) == 110)
+        {
+          // 1101110x'xxzzzzzz
+          unwind_off += 2;
+        }
+        else if(unwind_op == 222)
+        {
+          // save_freg_x
+          // 11011110'xxxzzzzz:
+          unwind_off += 2;
+        }
+        else if(unwind_op == 224)
+        {
+          // alloc_l
+          // 11100000'xxxxxxxx'xxxxxxxx'xxxxxxxx
+          unwind_off += 4;
+        }
+        else if(unwind_op == 225)
+        {
+          // 11100001
+          unwind_off += 1;
+        }
+        else if(unwind_op == 226)
+        {
+          // 11100010'xxxxxxxx
+          unwind_off += 2;
+        }
+        else if(unwind_op == 227)
+        {
+          // 11100011
+          //- antoniom: skip nops
+          unwind_off += 1;
+        }
+        else if(unwind_op == 228)
+        {
+          // 11100100
+          unwind_off += 1;
+          keep_parsing = 0;
+        }
+        else if(unwind_op == 229)
+        {
+          // 11100101
+          unwind_off += 1;
+        }
+        else if(unwind_op == 230)
+        {
+          // 11100110
+          unwind_off += 1;
+        }
+        else if(unwind_op == 231)
+        {
+          // 11100111
+          unwind_off += 1;
+        }
+        else if(unwind_op == 232)
+        {
+          // MSFT_OP_TRAP_FRAME
+        }
+        else if(unwind_op == 233)
+        {
+          // MSFT_OP_MACHINE_FRAME
+        }
+        else if(unwind_op == 234)
+        {
+          // MSFT_OP_CONTEXT
+        }
+        else if(unwind_op == 235)
+        {
+          // MSFT_OP_EC_CONTEXT
+        }
+        else if(unwind_op == 236)
+        {
+          // MSFT_OP_CLEAR_UNWOUND_TO_CALL
+        }
+        else if(unwind_op == 252)
+        {
+          // 11111100
+          // qreg
+          unwind_off += 1;
         }
 
-        xdata_code_words_ptr = xdata_voff + xdata_off;
-        xdata_code_words = parsed_data.code_words;
-
-        U64 unwind_off = xdata_off;
-        B32 keep_parsing = (unwind_off - xdata_off) <= (4 * parsed_data.code_words);
-        while(keep_parsing)
-        {
-          U32 unwind_header = 0;
-
-          is_good = is_good && ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+unwind_off, xdata_voff+unwind_off+sizeof(U32)), &is_stale, &unwind_header, endt_us);
-          is_good = is_good && !is_stale;
-
-          U8 unwind_op = unwind_header & 0xff;
-          U8 *unwind_header_u8s = (U8*)&unwind_header;
-
-          if((unwind_op >> 5) == 0)
-          {
-            // 000xxxxx
-            // epilog: add sp, sp, (x * 16)
-            unwind_off += 1;
-          }
-          else if((unwind_op >> 5) == 1)
-          {
-            // 001zzzzz
-            unwind_off += 1;
-          }
-          else if((unwind_op >> 6) == 1)
-          {
-            // 01zzzzzz
-            unwind_off += 1;
-          }
-          else if((unwind_op >> 6) == 2)
-          {
-            // 10zzzzzz
-            unwind_off += 1;
-          }
-          else if((unwind_op >> 3) == 24)
-          {
-            // 11000xxx'xxxxxxxx
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 3) == 29)
-          {
-            // custom stack cases for asm routines
-            unwind_off += 1;
-          }
-          else if((unwind_op >> 2) == 50)
-          {
-            // 110010xx'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 2) == 51)
-          {
-            // 110011xx'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 2) == 52)
-          {
-            // 110100xx'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 1) == 106)
-          {
-            // 1101010x'xxxzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 1) == 107)
-          {
-            // 1101011x'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 1) == 108)
-          {
-            // 1101100x'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 1) == 109)
-          {
-            // 1101101x'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if((unwind_op >> 1) == 110)
-          {
-            // 1101110x'xxzzzzzz
-            unwind_off += 2;
-          }
-          else if(unwind_op == 222)
-          {
-            // save_freg_x
-            // 11011110'xxxzzzzz:
-            unwind_off += 2;
-          }
-          else if(unwind_op == 224)
-          {
-            // alloc_l
-            // 11100000'xxxxxxxx'xxxxxxxx'xxxxxxxx
-            unwind_off += 4;
-          }
-          else if(unwind_op == 225)
-          {
-            // 11100001
-            unwind_off += 1;
-          }
-          else if(unwind_op == 226)
-          {
-            // 11100010'xxxxxxxx
-            unwind_off += 2;
-          }
-          else if(unwind_op == 227)
-          {
-            // 11100011
-            //- antoniom: skip nops
-            unwind_off += 1;
-          }
-          else if(unwind_op == 228)
-          {
-            // 11100100
-            unwind_off += 1;
-            keep_parsing = 0;
-          }
-          else if(unwind_op == 229)
-          {
-            // 11100101
-            unwind_off += 1;
-          }
-          else if(unwind_op == 230)
-          {
-            // 11100110
-            unwind_off += 1;
-          }
-          else if(unwind_op == 231)
-          {
-            // 11100111
-            unwind_off += 1;
-          }
-          else if(unwind_op == 232)
-          {
-            // MSFT_OP_TRAP_FRAME
-          }
-          else if(unwind_op == 233)
-          {
-            // MSFT_OP_MACHINE_FRAME
-          }
-          else if(unwind_op == 234)
-          {
-            // MSFT_OP_CONTEXT
-          }
-          else if(unwind_op == 235)
-          {
-            // MSFT_OP_EC_CONTEXT
-          }
-          else if(unwind_op == 236)
-          {
-            // MSFT_OP_CLEAR_UNWOUND_TO_CALL
-          }
-          else if(unwind_op == 252)
-          {
-            // 11111100
-            // qreg
-            unwind_off += 1;
-          }
-
-          xdata_step_count += 1;
-          keep_parsing = keep_parsing && ((unwind_off - xdata_off) < (parsed_data.code_words * 4));
-        }
+        xdata_step_count += 1;
+        keep_parsing = keep_parsing && ((unwind_off - xdata_off) < (parsed_data.code_words * 4));
       }
     }
 
@@ -4502,7 +4549,9 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
           case PE_UnwindOpCodeArm64_end:
           {
             keep_processing = 0;
-            new_pc = regs->x30.u64;
+            U64 mask = ~0ULL;
+            mask >>= 17;
+            new_pc = regs->x30.u64 & mask;
           }break;
           // TODO(antoniom): entry_thunks contain q* saves
           case PE_UnwindOpCodeArm64_save_next:
@@ -4515,6 +4564,14 @@ ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, 
         step -= 1;
       }
     }
+  }
+
+  if(is_good && !first_pdata)
+  {
+    U64 mask = ~0ULL;
+    mask >>= 17;
+    new_pc = regs->x30.u64 & mask;
+    new_sp = regs->x31.u64;
   }
 
   CTRL_UnwindStepResult result = {0};
