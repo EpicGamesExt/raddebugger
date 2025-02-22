@@ -1443,6 +1443,8 @@ rd_cfg_newf(RD_Cfg *parent, char *fmt, ...)
 internal RD_Cfg *
 rd_cfg_new_replace(RD_Cfg *parent, String8 string)
 {
+  Temp scratch = scratch_begin(0, 0);
+  string = push_str8_copy(scratch.arena, string);
   for(RD_Cfg *child = parent->first->next, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
   {
     next = child->next;
@@ -1454,6 +1456,7 @@ rd_cfg_new_replace(RD_Cfg *parent, String8 string)
   }
   RD_Cfg *child = parent->first;
   rd_cfg_equip_string(child, string);
+  scratch_end(scratch);
   return child;
 }
 
@@ -3354,7 +3357,7 @@ rd_view_ui(Rng2F32 rect)
   RD_Cfg *input_root = rd_cfg_child_from_string(query_root, str8_lit("input"));
   RD_Cfg *cmd_root = rd_cfg_child_from_string(query_root, str8_lit("cmd"));
   String8 current_input = input_root->first->string;
-  B32 search_row_is_open = (vs->query_is_selected || current_input.size != 0);
+  B32 search_row_is_open = (vs->query_is_selected);
   F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open);
   if(search_row_open_t > 0.001f)
   {
@@ -3412,11 +3415,14 @@ rd_view_ui(Rng2F32 rect)
         params.edit_buffer_size     = sizeof(vs->query_buffer);
         params.pre_edit_value       = current_input;
       }
-      UI_Signal sig = rd_line_editf(&params, "###search");
-      if(ui_pressed(sig))
+      UI_Transparency(1-search_row_open_t)
       {
-        vs->query_is_selected = 1;
-        rd_cmd(RD_CmdKind_FocusPanel);
+        UI_Signal sig = rd_line_editf(&params, "###search");
+        if(ui_pressed(sig))
+        {
+          vs->query_is_selected = 1;
+          rd_cmd(RD_CmdKind_FocusPanel);
+        }
       }
     }
     
@@ -5389,7 +5395,7 @@ rd_view_ui(Rng2F32 rect)
                           }
                         }
                         
-                        // rjf: can't edit, but has cfg location info? -> find
+                        // rjf: can't edit, but has cfg? -> find or select
                         else if(cell_info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
                         {
                           RD_Cfg *cfg = rd_cfg_from_eval_space(cell_info.eval.space);
@@ -5402,6 +5408,24 @@ rd_view_ui(Rng2F32 rect)
                           {
                             U64 value = e_value_from_string(loc.expr).u64;
                             rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = value);
+                          }
+                          else if(str8_match(cfg->string, str8_lit("target"), 0) && sig.event_flags & OS_Modifier_Ctrl)
+                          {
+                            rd_cmd(RD_CmdKind_EnableCfg, .cfg = cfg->id);
+                          }
+                          else if(str8_match(cfg->string, str8_lit("target"), 0))
+                          {
+                            rd_cmd(RD_CmdKind_SelectCfg, .cfg = cfg->id);
+                          }
+                        }
+                        
+                        // rjf: can't edit, but has thread? -> select
+                        else if(cell_info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+                        {
+                          CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell_info.eval.space);
+                          if(entity->kind == CTRL_EntityKind_Thread)
+                          {
+                            rd_cmd(RD_CmdKind_SelectThread, .thread = entity->handle);
                           }
                         }
                       }
@@ -11516,23 +11540,6 @@ rd_set_autocomp_lister_query_(RD_Regs *regs)
 }
 
 ////////////////////////////////
-//~ rjf: Search Strings
-
-internal void
-rd_set_search_string(String8 string)
-{
-  arena_clear(rd_state->string_search_arena);
-  rd_state->string_search_string = push_str8_copy(rd_state->string_search_arena, string);
-}
-
-internal String8
-rd_push_search_string(Arena *arena)
-{
-  String8 result = push_str8_copy(arena, rd_state->string_search_string);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
@@ -12244,7 +12251,6 @@ rd_init(CmdLine *cmdln)
   rd_state->popup_arena = arena_alloc();
   rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
   rd_state->drop_completion_key = ui_key_from_string(ui_key_zero(), str8_lit("drop_completion_ctx_menu"));
-  rd_state->string_search_arena = arena_alloc();
   rd_state->bind_change_arena = arena_alloc();
   rd_state->drag_drop_arena = arena_alloc();
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
@@ -14059,25 +14065,6 @@ rd_frame(void)
             }
           }break;
           
-          //- rjf: code navigation
-          case RD_CmdKind_Search:
-          case RD_CmdKind_SearchBackwards:
-          case RD_CmdKind_FindTextForward:
-          case RD_CmdKind_FindTextBackward:
-          {
-            rd_set_search_string(rd_regs()->string);
-          }break;
-          
-          //- rjf: find next and find prev
-          case RD_CmdKind_FindNext:
-          {
-            rd_cmd(RD_CmdKind_Search, .string = rd_push_search_string(scratch.arena));
-          }break;
-          case RD_CmdKind_FindPrev:
-          {
-            rd_cmd(RD_CmdKind_SearchBackwards, .string = rd_push_search_string(scratch.arena));
-          }break;
-          
           //- rjf: font sizes
           case RD_CmdKind_IncUIFontScale:
           {
@@ -15854,6 +15841,7 @@ Z(getting_started)
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
             
             // rjf: floating queries -> set up window to build immediate-mode top-level query
+            RD_Cfg *view = &rd_nil_cfg;
             if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
@@ -15865,31 +15853,54 @@ Z(getting_started)
                 ws->query_cmd_name = push_str8_copy(ws->query_arena, cmd_name);
                 ws->query_regs = rd_regs_copy(ws->query_arena, rd_regs());
               }
+              RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
+              view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
             }
             
             // rjf: non-floating -> embed in tab parameter
             else
             {
-              RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-              RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-              RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
-              RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
-              String8 current_query_cmd_name = cmd->first->string;
-              RD_ViewState *vs = rd_view_state_from_cfg(view);
-              if(!str8_match(current_query_cmd_name, cmd_name, 0))
-              {
-                rd_cfg_new_replace(cmd, cmd_name);
-                if(!vs->query_is_selected)
-                {
-                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-                  vs->query_mark = txt_pt(1, 1);
-                }
-                vs->query_is_selected = 1;
-              }
-              else
-              {
-                vs->query_is_selected ^= 1;
-              }
+              view = rd_cfg_from_id(rd_regs()->view);
+            }
+            
+            // rjf: unpack view's query info
+            RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+            RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
+            RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+            
+            // rjf: choose initial input string
+            String8 initial_input = {0};
+            if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+            {
+              initial_input = rd_state->current_path;
+            }
+            else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
+            {
+              initial_input = input->first->string;
+            }
+            
+            // rjf: build query state
+            rd_cfg_new_replace(input, initial_input);
+            rd_cfg_new_replace(cmd, cmd_name);
+            String8 current_query_cmd_name = cmd->first->string;
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+            {
+              vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+              vs->query_mark = txt_pt(1, 1);
+            }
+            else
+            {
+              vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+              vs->query_mark = vs->query_cursor;
+            }
+            if(!str8_match(current_query_cmd_name, cmd_name, 0))
+            {
+              vs->query_is_selected = 1;
+            }
+            else
+            {
+              vs->query_is_selected ^= 1;
             }
           }break;
           case RD_CmdKind_CompleteQuery:
@@ -15914,7 +15925,6 @@ Z(getting_started)
               RD_ViewState *vs = rd_view_state_from_cfg(view);
               vs->query_is_selected = 0;
               vs->query_string_size = 0;
-              rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("query")));
             }
           }break;
           case RD_CmdKind_CancelQuery:

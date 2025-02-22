@@ -792,10 +792,6 @@ struct RD_State
   // rjf: text editing mode state
   B32 text_edit_mode;
   
-  // rjf: string search state
-  Arena *string_search_arena;
-  String8 string_search_string;
-  
   // rjf: contextual hover info
   RD_Regs *hover_regs;
   RD_RegSlot hover_regs_slot;
@@ -1145,12 +1141,6 @@ internal void rd_set_autocomp_lister_query_(RD_ListerParams *params);
 #endif
 internal void rd_set_autocomp_lister_query_(RD_Regs *regs);
 #define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
-
-////////////////////////////////
-//~ rjf: Search Strings
-
-internal void rd_set_search_string(String8 string);
-internal String8 rd_push_search_string(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config

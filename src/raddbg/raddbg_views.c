@@ -83,6 +83,18 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         arena_clear(cv->find_text_arena);
         cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->regs->string);
       }break;
+      case RD_CmdKind_FindNext:
+      {
+        String8 string = rd_view_query_input();
+        arena_clear(cv->find_text_arena);
+        cv->find_text_fwd = push_str8_copy(cv->find_text_arena, string);
+      }break;
+      case RD_CmdKind_FindPrev:
+      {
+        String8 string = rd_view_query_input();
+        arena_clear(cv->find_text_arena);
+        cv->find_text_bwd = push_str8_copy(cv->find_text_arena, string);
+      }break;
       case RD_CmdKind_ToggleWatchExpressionAtMouse:
       {
         cv->watch_expr_at_mouse = 1;
@@ -135,6 +147,29 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     catchall_margin_width_px = floor_f32(big_glyph_advance*3.5f);
   }
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, text_info, text_data, visible_line_num_range);
+  
+  //////////////////////////////
+  //- rjf: selection on single line, no query? -> set search text
+  //
+  if(rd_regs()->cursor.line == rd_regs()->mark.line)
+  {
+    RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+    RD_ViewState *vs = rd_view_state_from_cfg(view);
+    if(!vs->query_is_selected)
+    {
+      RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+      RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(rd_regs()->cursor, rd_regs()->mark));
+      if(text.size < 256)
+      {
+        rd_cfg_new_replace(input, text);
+      }
+      else
+      {
+        rd_cfg_new_replace(input, str8_zero());
+      }
+    }
+  }
   
   //////////////////////////////
   //- rjf: get active search query
@@ -428,9 +463,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         U64 needle_pos = str8_find_needle(line_string, search_start, cv->find_text_fwd, StringMatchFlag_CaseInsensitive);
         if(needle_pos < line_string.size)
         {
-          rd_regs()->cursor.line = line_num;
-          rd_regs()->cursor.column = needle_pos+1;
-          rd_regs()->mark = rd_regs()->cursor;
+          rd_regs()->mark.line = line_num;
+          rd_regs()->mark.column = needle_pos+1;
+          rd_regs()->cursor = rd_regs()->mark;
+          rd_regs()->cursor.column += cv->find_text_fwd.size;
           found = 1;
           break;
         }
@@ -460,15 +496,16 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       B32 found = 0;
       B32 first = 1;
-      S64 line_num_start = rd_regs()->cursor.line;
+      TxtRng rng = txt_rng(rd_regs()->cursor, rd_regs()->mark);
+      S64 line_num_start = rng.min.line;
       S64 line_num_last = (S64)text_info->lines_count;
       for(S64 line_num = line_num_start; 1 <= line_num && line_num <= line_num_last; first = 0)
       {
         // rjf: gather line info
         String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
-        if(rd_regs()->cursor.line == line_num && first)
+        if(rng.min.line == line_num && first)
         {
-          line_string = str8_prefix(line_string, rd_regs()->cursor.column-1);
+          line_string = str8_prefix(line_string, rng.min.column-1);
         }
         
         // rjf: search string
@@ -484,9 +521,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         }
         if(next_needle_pos < line_string.size)
         {
-          rd_regs()->cursor.line = line_num;
-          rd_regs()->cursor.column = next_needle_pos+1;
-          rd_regs()->mark = rd_regs()->cursor;
+          rd_regs()->mark.line = line_num;
+          rd_regs()->mark.column = next_needle_pos+1;
+          rd_regs()->cursor = rd_regs()->mark;
+          rd_regs()->cursor.column += cv->find_text_bwd.size;
           found = 1;
           break;
         }
@@ -587,13 +625,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       cv->watch_expr_at_mouse = 0;
       rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
-    }
-    
-    //- rjf: selected text on single line, no query? -> set search text
-    if(!txt_pt_match(rd_regs()->cursor, rd_regs()->mark) && rd_regs()->cursor.line == rd_regs()->mark.line && search_query.size == 0)
-    {
-      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(rd_regs()->cursor, rd_regs()->mark));
-      rd_set_search_string(text);
     }
   }
   

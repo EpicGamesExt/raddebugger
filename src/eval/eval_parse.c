@@ -819,12 +819,20 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
         op_info->sep,
         op_info->post,
       };
-      U64 idx = 0;
-      for(E_Expr *child = expr->first;; child = child->next, idx += 1)
+      U64 sep_idx = 0;
+      for(E_Expr *child = expr->first;; child = child->next)
       {
-        if(seps[idx].size != 0)
+        if(seps[sep_idx].size != 0)
         {
-          str8_list_push(arena, out, seps[idx]);
+          if(sep_idx == 1 && child == &e_expr_nil)
+          {
+            sep_idx += 1;
+          }
+          str8_list_push(arena, out, seps[sep_idx]);
+          if(sep_idx == 0)
+          {
+            sep_idx += 1;
+          }
         }
         if(child == &e_expr_nil)
         {

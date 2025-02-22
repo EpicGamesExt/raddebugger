@@ -1960,6 +1960,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: interact with margin box & text box
   //
+  B32 search_query_invalidated = 0;
   UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
@@ -2008,6 +2009,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         *cursor = mouse_drag_rng.max;
       }
       *preferred_column = cursor->column;
+    }
+    
+    //- rjf: dragging will invalidate the search string, so we don't want to draw it while dragging/releasing
+    if(ui_dragging(text_container_sig) || ui_released(text_container_sig))
+    {
+      search_query_invalidated = 1;
     }
     
     //- rjf: right-click => code context menu
@@ -2371,7 +2378,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         ui_box_equip_display_fstrs(line_box, &line_fstrs);
         
         // rjf: extra rendering for strings that are currently being searched for
-        if(params->search_query.size != 0)
+        if(!search_query_invalidated && params->search_query.size != 0)
         {
           for(U64 needle_pos = 0; needle_pos < line_string.size;)
           {
@@ -2392,13 +2399,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 line_box->rect.y1,
               };
               Vec4F32 color = pop_color;
-              if(cursor->line == line_num && needle_pos+1 <= cursor->column && cursor->column < needle_pos+params->search_query.size+1)
-              {
-                color.x += (1.f - color.x) * 0.5f;
-                color.y += (1.f - color.y) * 0.5f;
-                color.z += (1.f - color.z) * 0.5f;
-                color.w += (1.f - color.w) * 0.5f;
-              }
               if(!is_focused)
               {
                 color.w *= 0.5f;
