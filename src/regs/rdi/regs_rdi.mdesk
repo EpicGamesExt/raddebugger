@@ -28,6 +28,14 @@
           @expand(REGS_RegTableX86 a) `case REGS_RegCodeX86_$(a.name):{result = RDI_RegCodeX86_$(a.name);}break;`;
           `}`;
         `}break;`;
+      `case Arch_arm64:`;
+      `{`;
+        `switch(code)`
+          `{`;
+          `default:{}break;`;
+          @expand(REGS_RegTableARM64 a) `case REGS_RegCodeARM64_$(a.name):{result = RDI_RegCodeARM64_$(a.name);}break;`;
+          `}`;
+        `}break;`;
       `}`;
     `return result;`;
     `}`;
@@ -55,6 +63,14 @@
           `{`;
           `default:{}break;`;
           @expand(REGS_RegTableX86 a) `case RDI_RegCodeX86_$(a.name):{result = REGS_RegCodeX86_$(a.name);}break;`;
+          `}`;
+        `}break;`;
+      `case Arch_arm64:`;
+      `{`;
+        `switch(code)`
+          `{`;
+          `default:{}break;`;
+          @expand(REGS_RegTableARM64 a) `case RDI_RegCodeARM64_$(a.name):{result = REGS_RegCodeARM64_$(a.name);}break;`;
           `}`;
         `}break;`;
       `}`;

@@ -8,6 +8,9 @@
 //~ rjf: Third Party Includes
 
 #define STB_SPRINTF_DECORATE(name) raddbg_##name
+#if ARCH_64BIT
+#define stbsp__uintptr U64
+#endif
 #include "third_party/stb/stb_sprintf.h"
 
 ////////////////////////////////

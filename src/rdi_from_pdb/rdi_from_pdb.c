@@ -185,8 +185,9 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
   RDI_Arch result = 0;
   switch(cv_arch)
   {
-    case CV_Arch_8086: result = RDI_Arch_X86; break;
-    case CV_Arch_X64:  result = RDI_Arch_X64; break;
+    case CV_Arch_8086:  result = RDI_Arch_X86;   break;
+    case CV_Arch_X64:   result = RDI_Arch_X64;   break;
+    case CV_Arch_ARM64: result = RDI_Arch_ARM64; break;
     //case CV_Arch_8080: break;
     //case CV_Arch_80286: break;
     //case CV_Arch_80386: break;
@@ -243,7 +244,6 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
     //case CV_Arch_EBC: break;
     //case CV_Arch_THUMB: break;
     //case CV_Arch_ARMNT: break;
-    //case CV_Arch_ARM64: break;
     //case CV_Arch_D3D11_SHADER: break;
   }
   return(result);
@@ -270,6 +270,15 @@ p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
       {
 #define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX64_##RDN; break;
         CV_Reg_X64_XList(X)
+#undef X
+      }
+    }break;
+    case RDI_Arch_ARM64:
+    {
+      switch(reg_code)
+      {
+#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeARM64_##RDN; break;
+        CV_Reg_ARM64_XList(X)
 #undef X
       }
     }break;
@@ -455,6 +464,23 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
         case CV_EncodedFramePtrReg_BasePtr:
         {
           result = RDI_RegCodeX64_r13;
+        }break;
+      }
+    }break;
+    case RDI_Arch_ARM64:
+    {
+      switch(encoded_reg)
+      {
+        case CV_EncodedFramePtrReg_StackPtr:
+        {
+          result = RDI_RegCodeARM64_x31;
+        }break;
+        case CV_EncodedFramePtrReg_FramePtr:
+        {
+          result = RDI_RegCodeARM64_x29;
+        }break;
+        case CV_EncodedFramePtrReg_BasePtr:
+        {
         }break;
       }
     }break;
@@ -2556,6 +2582,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
               default:{}break;
               case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP);}break;
               case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP);}break;
+              case RDI_Arch_ARM64:{is_stack_reg = (cv_reg == CV_Regarm64_SP);}break;
             }
             if(is_stack_reg)
             {
@@ -2601,6 +2628,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
                 extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)));
               }break;
               case RDI_Arch_X64:
+              case RDI_Arch_ARM64:
               {
                 extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
               }break;

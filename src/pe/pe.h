@@ -8,7 +8,7 @@
 //~ rjf: PE Format-Defined Types/Constants
 
 #pragma pack(push,1)
-
+       
 typedef struct PE_DosHeader PE_DosHeader;
 struct PE_DosHeader
 {
@@ -481,6 +481,38 @@ struct PE_LoadConfig64
   U64 cast_guard_os_determined_failure_mode;
 };
 
+typedef struct PE_ARM64ECMetadata PE_ARM64ECMetadata;
+struct PE_ARM64ECMetadata
+{
+  U32 version;
+  U32 code_map;
+  U32 code_map_count;
+  U32 code_ranges_to_entry_point;
+  U32 redirection_metadata;
+  U32 os_arm64x_dispatch_call_no_redirect;
+  U32 os_arm64x_dispatch_ret;
+  U32 os_arm64x_dispatch_call;
+  U32 os_arm64x_dispatch_icall;
+  U32 os_arm64x_dispatch_icall_cfg;
+  U32 alternate_entry_point;
+  U32 auxiliary_iat;
+  U32 code_ranges_to_entry_points_count;
+  U32 redirection_metadata_count;
+  U32 get_x64_information_fptr;
+  U32 set_x64_information_fptr;
+  U32 extra_rfe_table;
+  U32 extra_rfe_table_size;
+  U32 os_arm64x_dispatch_fptr;
+  U32 auxilary_iat_copy;
+};
+
+typedef struct PE_ARM64ECCodeMapEntry PE_ARM64ECCodeMapEntry;
+struct PE_ARM64ECCodeMapEntry
+{
+  U32 addr_start_and_arch; // least significant 2 bits are arch
+  U32 size;
+};
+
 // this is the "MZ" as a 16-bit short
 #define PE_DOS_MAGIC      0x5a4d
 #define PE_MAGIC          0x00004550u
@@ -516,6 +548,13 @@ struct PE_IntelPdata
   U32 voff_first;
   U32 voff_one_past_last;
   U32 voff_unwind_info;
+};
+
+typedef struct PE_Arm64Pdata PE_Arm64Pdata;
+struct PE_Arm64Pdata
+{
+  U32 voff_first;
+  U32 combined;
 };
 
 #define PE_CODEVIEW_PDB20_MAGIC 0x3031424e
@@ -704,20 +743,20 @@ enum
 #define PE_BaseRelocKindFromEntry(x)   (((x) >> 12) & 0xf)
 #define PE_BaseRelocMake(k, off)       ((((U16)(k) & 0xf) << 12) | (U16)((off) & 0x1fff))
 
-typedef U32 PE_UnwindOpCode;
+typedef U32 PE_UnwindOpCodeX64;
 enum
 {
-  PE_UnwindOpCode_PUSH_NONVOL      = 0,
-  PE_UnwindOpCode_ALLOC_LARGE      = 1,
-  PE_UnwindOpCode_ALLOC_SMALL      = 2,
-  PE_UnwindOpCode_SET_FPREG        = 3,
-  PE_UnwindOpCode_SAVE_NONVOL      = 4,
-  PE_UnwindOpCode_SAVE_NONVOL_FAR  = 5,
-  PE_UnwindOpCode_EPILOG           = 6,
-  PE_UnwindOpCode_SPARE_CODE       = 7,
-  PE_UnwindOpCode_SAVE_XMM128      = 8,
-  PE_UnwindOpCode_SAVE_XMM128_FAR  = 9,
-  PE_UnwindOpCode_PUSH_MACHFRAME   = 10,
+  PE_UnwindOpCodeX64_PUSH_NONVOL      = 0,
+  PE_UnwindOpCodeX64_ALLOC_LARGE      = 1,
+  PE_UnwindOpCodeX64_ALLOC_SMALL      = 2,
+  PE_UnwindOpCodeX64_SET_FPREG        = 3,
+  PE_UnwindOpCodeX64_SAVE_NONVOL      = 4,
+  PE_UnwindOpCodeX64_SAVE_NONVOL_FAR  = 5,
+  PE_UnwindOpCodeX64_EPILOG           = 6,
+  PE_UnwindOpCodeX64_SPARE_CODE       = 7,
+  PE_UnwindOpCodeX64_SAVE_XMM128      = 8,
+  PE_UnwindOpCodeX64_SAVE_XMM128_FAR  = 9,
+  PE_UnwindOpCodeX64_PUSH_MACHFRAME   = 10,
 };
 
 typedef U8 PE_UnwindGprRegX64;
@@ -741,20 +780,20 @@ enum
   PE_UnwindGprRegX64_R15 = 15,
 };
 
-typedef U8 PE_UnwindInfoFlags;
+typedef U8 PE_UnwindInfoX64Flags;
 enum
 {
-  PE_UnwindInfoFlag_EHANDLER = (1<<0),
-  PE_UnwindInfoFlag_UHANDLER = (1<<1),
-  PE_UnwindInfoFlag_FHANDLER = 3,
-  PE_UnwindInfoFlag_CHAINED  = (1<<2),
+  PE_UnwindInfoX64Flag_EHANDLER = (1<<0),
+  PE_UnwindInfoX64Flag_UHANDLER = (1<<1),
+  PE_UnwindInfoX64Flag_FHANDLER = 3,
+  PE_UnwindInfoX64Flag_CHAINED  = (1<<2),
 };
 
 #define PE_UNWIND_OPCODE_FROM_FLAGS(f) ((f)&0xF)
 #define PE_UNWIND_INFO_FROM_FLAGS(f) (((f) >> 4)&0xF)
 
-typedef union PE_UnwindCode PE_UnwindCode;
-union PE_UnwindCode
+typedef union PE_UnwindCodeX64 PE_UnwindCodeX64;
+union PE_UnwindCodeX64
 {
   struct
   {
@@ -770,13 +809,48 @@ union PE_UnwindCode
 #define PE_UNWIND_INFO_OFF_FROM_FRAME(x)   (((x) >> 4)&0xF)
 #define PE_UNWIND_INFO_GET_CODE_COUNT(x)   (((x)+1) & ~1)
 
-typedef struct PE_UnwindInfo PE_UnwindInfo;
-struct PE_UnwindInfo
+typedef struct PE_UnwindInfoX64 PE_UnwindInfoX64;
+struct PE_UnwindInfoX64
 {
   U8 header;
   U8 prolog_size;
   U8 codes_num;
   U8 frame;
+};
+
+typedef U32 PE_UnwindOpCodeArm64;
+enum
+{
+  PE_UnwindOpCodeArm64_none,                          // 0x00
+  PE_UnwindOpCodeArm64_alloc_s,                       // 0x01
+  PE_UnwindOpCodeArm64_alloc_m,                       // 0x02
+  PE_UnwindOpCodeArm64_alloc_l,                       // 0x03
+  PE_UnwindOpCodeArm64_save_fplr,                     // 0x04
+  PE_UnwindOpCodeArm64_save_regp,                     // 0x05
+  PE_UnwindOpCodeArm64_save_reg,                      // 0x06
+  PE_UnwindOpCodeArm64_save_lrpair,                   // 0x07
+  PE_UnwindOpCodeArm64_save_fregp,                    // 0x08
+  PE_UnwindOpCodeArm64_save_freg,                     // 0x09
+  PE_UnwindOpCodeArm64_save_qregp,                    // 0x0a
+  PE_UnwindOpCodeArm64_save_r19r20_x,                 // 0x0b
+  PE_UnwindOpCodeArm64_save_fplr_x,                   // 0x0c
+  PE_UnwindOpCodeArm64_save_regp_x,                   // 0x0d
+  PE_UnwindOpCodeArm64_save_reg_x,                    // 0x0e
+  PE_UnwindOpCodeArm64_save_fregp_x,                  // 0x0f
+  PE_UnwindOpCodeArm64_save_freg_x,                   // 0x10
+  PE_UnwindOpCodeArm64_save_qregp_x,                  // 0x11
+  PE_UnwindOpCodeArm64_set_fp,                        // 0x12
+  PE_UnwindOpCodeArm64_add_fp,                        // 0x13
+  PE_UnwindOpCodeArm64_nop,                           // 0x14
+  PE_UnwindOpCodeArm64_end,                           // 0x15
+  PE_UnwindOpCodeArm64_end_c,                         // 0x16
+  PE_UnwindOpCodeArm64_save_next,                     // 0x17
+  PE_UnwindOpCodeArm64_MSFT_OP_TRAP_FRAME,            // 0x18
+  PE_UnwindOpCodeArm64_MSFT_OP_MACHINE_FRAME,         // 0x19
+  PE_UnwindOpCodeArm64_MSFT_OP_CONTEXT,               // 0x1a
+  PE_UnwindOpCodeArm64_MSFT_OP_EC_CONTEXT,            // 0x1b
+  PE_UnwindOpCodeArm64_MSFT_OP_CLEAR_UNWOUND_TO_CALL, // 0x1c
+  PE_UnwindOpCodeArm64_pac_sign_lr,                   // 0x1d
 };
 
 #pragma pack(pop)
@@ -796,6 +870,14 @@ read_only global String8 pe_dos_program = {pe_dos_program_data, sizeof(pe_dos_pr
 
 ////////////////////////////////
 //~ rjf: Parsed Info Types
+
+//- antoniom: ARM64EC code ranges
+typedef struct PE_HybridCodeRange PE_HybridCodeRange;
+struct PE_HybridCodeRange
+{
+  Rng1U64 range;
+  Arch    arch;
+};
 
 //- rjf: relocation blocks
 
@@ -1017,7 +1099,7 @@ struct PE_BinInfo
 ////////////////////////////////
 //~ rjf: Basic Enum Functions
 
-internal U32                 pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode);
+internal U32                 pe_slot_count_from_unwind_op_code(PE_UnwindOpCodeX64 opcode);
 internal PE_WindowsSubsystem pe_subsystem_from_string(String8 string);
 
 internal String8 pe_string_from_subsystem(PE_WindowsSubsystem x);
@@ -1047,6 +1129,7 @@ internal PE_ParsedTLS               pe_tls_from_data(Arena *arena, COFF_MachineT
 //~ rjf: Helpers
 
 internal U64                   pe_pdata_off_from_voff__binary_search_x8664(String8 raw_data, U64 voff);
+internal U64                   pe_pdata_off_from_voff__binary_search_arm64(String8 raw_data, PE_BinInfo *bin, U64 voff);
 internal void *                pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal U64                   pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal void *                pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);

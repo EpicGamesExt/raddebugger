@@ -506,7 +506,22 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     // rjf: call => place spoof at return spot in stack, single-step after hitting
     else if(point->inst_flags & DASM_InstFlag_Call)
     {
-      flags |= (CTRL_TrapFlag_BeginSpoofMode|CTRL_TrapFlag_SingleStepAfterHit);
+      switch(arch)
+      {
+        default:{}break;
+        case Arch_arm32:
+        case Arch_x86:
+        {NotImplemented;}break;
+
+        case Arch_x64:
+        {
+          flags |= (CTRL_TrapFlag_BeginSpoofMode|CTRL_TrapFlag_SingleStepAfterHit);
+        }break;
+        case Arch_arm64:
+        {
+          flags |= (CTRL_TrapFlag_SingleStepAfterHit);
+        }break;
+      }
     }
     
     // rjf: instruction changes stack pointer => save off the stack pointer, single-step over, keep stepping
@@ -526,7 +541,25 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   // rjf: push trap for natural linear flow
   if(good_line_info)
   {
-    CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
+    CTRL_TrapFlags trap_flags = 0;
+    switch(arch)
+    {
+      default:{}break;
+      case Arch_arm32:
+      case Arch_x86:
+      {NotImplemented;}break;
+
+      case Arch_x64:
+      {
+        trap_flags |= (CTRL_TrapFlag_EndStepping);
+      }break;
+      case Arch_arm64:
+      {
+        trap_flags |= (CTRL_TrapFlag_EndStepping | CTRL_TrapFlag_IgnoreStackPointerCheck);
+      }break;
+    }
+
+    CTRL_Trap trap = {trap_flags, line_vaddr_rng.max};
     ctrl_trap_list_push(arena, &result, &trap);
   }
   

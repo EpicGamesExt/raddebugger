@@ -29,6 +29,7 @@ cd /D "%~dp0"
 for %%a in (%*) do set "%%a=1"
 if not "%msvc%"=="1" if not "%clang%"=="1" set msvc=1
 if not "%release%"=="1" set debug=1
+if not "%arm64%"=="1"    set x64=1
 if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 if "%msvc%"=="1"    set clang=0 && echo [msvc compile]
@@ -64,10 +65,11 @@ if "%msvc%"=="1"    set only_compile=/c
 if "%clang%"=="1"   set only_compile=-c
 if "%msvc%"=="1"    set EHsc=/EHsc
 if "%clang%"=="1"   set EHsc=
-if "%msvc%"=="1"    set no_aslr=/DYNAMICBASE:NO
-if "%clang%"=="1"   set no_aslr=-Wl,/DYNAMICBASE:NO
+if "%msvc%"=="1"    if "%x64%"=="1" set no_aslr=/DYNAMICBASE:NO
+if "%clang%"=="1"   if "%x64%"=="1" set no_aslr=-Wl,/DYNAMICBASE:NO
 if "%msvc%"=="1"    set rc=call rc
 if "%clang%"=="1"   set rc=call llvm-rc
+if "%arm64%"=="1"   set no_aslr=
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%

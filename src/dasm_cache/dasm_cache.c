@@ -9,6 +9,22 @@
 #include "third_party/zydis/zydis.c"
 #endif
 
+#include "third_party/armadillo/source/armadillo.h"
+#include "third_party/armadillo/source/bits.h"
+#include "third_party/armadillo/source/utils.h"
+#include "third_party/armadillo/source/strext.h"
+
+#include "third_party/armadillo/source/utils.c"
+#include "third_party/armadillo/source/bits.c"
+#include "third_party/armadillo/source/strext.c"
+#include "third_party/armadillo/source/BranchExcSys.c"
+#include "third_party/armadillo/source/DataProcessingFloatingPoint.c"
+#include "third_party/armadillo/source/DataProcessingImmediate.c"
+#include "third_party/armadillo/source/DataProcessingRegister.c"
+#include "third_party/armadillo/source/LoadsAndStores.c"
+#include "third_party/armadillo/source/instruction.c"
+#include "third_party/armadillo/source/armadillo.c"
+
 internal DASM_Inst
 dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Syntax syntax)
 {
@@ -16,6 +32,181 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
   switch(arch)
   {
     default:{}break;
+
+    //- antoniom: arm64 disassembly
+    case Arch_arm64:
+    {
+      DASM_InstFlags flags = 0;
+      S64 rel_voff = 0;
+      S64 sp_delta = 0;
+
+      U32 opcode = *((U32*)code.str);
+      struct ad_insn *insn = 0;
+      ArmadilloDisassemble(opcode, vaddr, &insn);
+      {
+        S32 code = insn->instr_id;
+
+        switch(code)
+        {
+          // antoniom: changes x30
+          case AD_INSTR_BL:
+          {
+            flags |= DASM_InstFlag_Call;
+            rel_voff = insn->operands->op_imm.bits;
+          }break;
+
+          // antoniom: changes x30
+          // offset comes from register
+          case AD_INSTR_BLR:
+          case AD_INSTR_BLRAAZ:
+          case AD_INSTR_BLRAA:
+          case AD_INSTR_BLRABZ:
+          case AD_INSTR_BLRAB:
+          {
+            flags |= DASM_InstFlag_Call;
+          }break;
+
+          case AD_INSTR_B:
+          {
+            rel_voff = insn->operands->op_imm.bits;
+
+            if (insn->cc == -1)
+            {
+              flags |= DASM_InstFlag_UnconditionalJump;
+            }
+            else
+            {
+              flags |= DASM_InstFlag_Branch;
+            }
+          }break;
+
+          // antoniom: does not change x30
+          case AD_INSTR_BR:
+          {
+            flags |= DASM_InstFlag_UnconditionalJump;
+          }break;
+
+          case AD_INSTR_CBZ:
+          case AD_INSTR_CBNZ:
+          {
+            flags |= DASM_InstFlag_Branch;
+            struct ad_operand *imm_op = insn->operands;
+            rel_voff = imm_op->op_imm.bits & (~(-1LL << 19));
+          }break;
+
+          case AD_INSTR_TBZ:
+          case AD_INSTR_TBNZ:
+          {
+            flags |= DASM_InstFlag_Branch;
+            struct ad_operand *imm_op = insn->operands;
+            rel_voff = imm_op->op_imm.bits & (~(-1LL << 14));
+          }break;
+
+          case AD_INSTR_BRAA:
+          case AD_INSTR_BRAAZ:
+          case AD_INSTR_BRAB:
+          case AD_INSTR_BRABZ:
+          {
+            flags |= DASM_InstFlag_Branch;
+          }break;
+
+          case AD_INSTR_ERET:
+          case AD_INSTR_ERETAA:
+          case AD_INSTR_ERETAB:
+          case AD_INSTR_RET:
+          case AD_INSTR_RETAA:
+          case AD_INSTR_RETAB:
+          {
+            flags |= DASM_InstFlag_Return;
+          }break;
+
+          default:
+          {
+            flags |= DASM_InstFlag_NonFlow;
+          }break;
+        }
+
+        //- antoniom: check for stack pointer modifications
+        if(insn->num_operands > 0)
+        {
+          struct ad_operand *dst_op = insn->operands;
+          if(dst_op && dst_op->type == AD_OP_REG &&
+             (dst_op->op_reg.rn == AD_REG_SP || dst_op->op_reg.rn == 31) && dst_op->op_reg.zr == 0)
+          {
+            flags |= DASM_InstFlag_ChangesStackPointer;
+
+            struct ad_operand *src_op_0 = insn->operands + 1;
+            struct ad_operand *src_op_1 = insn->operands + 2;
+
+            B32 first_src_sp = (src_op_0 && src_op_0->type == AD_OP_REG &&
+                                (src_op_0->op_reg.rn == AD_REG_SP || src_op_0->op_reg.rn == 31) &&
+                                src_op_0->op_reg.zr == 0);
+            B32 second_src_imm = (src_op_1 && src_op_1->type == AD_OP_IMM);
+
+            if(code == AD_INSTR_SUB && first_src_sp && second_src_imm)
+            {
+              sp_delta = -1 * src_op_1->op_imm.bits;
+            }
+            else if(code == AD_INSTR_ADD && first_src_sp && second_src_imm)
+            {
+              S64 sign = src_op_1->op_imm.bits;
+            }
+            else
+            {
+              flags |= DASM_InstFlag_ChangesStackPointerVariably;
+            }
+          }
+
+          //- antoniom: this is a simple check for stp, str, ldp, ldr, etc.
+          // e.g.
+          // stp x29, x30, [sp, #-0x20]!
+          if (insn->num_operands > 2)
+          {
+            struct ad_operand *index_dst = 0;
+            struct ad_operand *index_imm = 0;
+
+            // 1 -> post
+            // 3 -> pre
+            if (insn->post_pre_index == 1 || insn->post_pre_index == 3)
+            {
+              index_dst = insn->operands + insn->num_operands - 2;
+              index_imm = insn->operands + insn->num_operands - 1;
+              flags |= DASM_InstFlag_ChangesStackPointer;
+            }
+
+            if (index_dst && index_imm && index_dst->type == AD_OP_REG && index_dst->op_reg.rn == 31)
+            {
+              if (index_imm->type == AD_OP_IMM) switch(index_imm->op_imm.type)
+              {
+                default: {}break;
+                case AD_IMM_INT:
+                case AD_IMM_LONG:
+                {
+                  sp_delta += (S64)index_imm->op_imm.bits;
+                }break;
+                case AD_IMM_UINT:
+                {
+                  sp_delta += (U32)index_imm->op_imm.bits;
+                }break;
+                case AD_IMM_ULONG:
+                {
+                  sp_delta += (U64)index_imm->op_imm.bits;
+                }break;
+              }
+            }
+          }
+        }
+      }
+
+      //- antoniom: fill+return
+      inst.size = 4;
+      inst.string = push_str8_copy(arena, str8_cstring(insn->decoded));
+      inst.jump_dest_vaddr = rel_voff;
+      inst.flags = flags;
+      // TODO(antonio): pass sp_delta
+
+      ArmadilloDone(&insn);
+    }break;
     
     //- rjf: x86/x64 disassembly
     case Arch_x86:
@@ -555,6 +746,8 @@ ASYNC_WORK_DEF(dasm_parse_work)
       default:{}break;
       
       //- rjf: x86/x64 decoding
+      //- antoniom: arm64 decoding
+      case Arch_arm64:
       case Arch_x64:
       case Arch_x86:
       {
