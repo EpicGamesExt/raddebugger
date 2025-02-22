@@ -190,6 +190,10 @@ struct RD_WatchViewState
 {
   B32 initialized;
   
+  // rjf: filter history
+  Arena *filter_arena;
+  String8 last_filter;
+  
   // rjf; table cursor state
   RD_WatchPt cursor;
   RD_WatchPt mark;

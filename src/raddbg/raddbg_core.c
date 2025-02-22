@@ -3759,6 +3759,7 @@ rd_view_ui(Rng2F32 rect)
       {
         is_first_frame = 1;
         ewv->initialized = 1;
+        ewv->filter_arena = rd_push_view_arena();
         ewv->text_edit_arena = rd_push_view_arena();
       }
       
@@ -3773,6 +3774,19 @@ rd_view_ui(Rng2F32 rect)
       String8 filter = rd_view_query_input();
       Vec4F32 pop_background_rgba = {0};
       UI_TagF("pop") pop_background_rgba = ui_color_from_name(str8_lit("background"));
+      
+      //////////////////////////////
+      //- rjf: whenever the filter changes, we want to reset the cursor/mark state
+      //
+      if(!str8_match(filter, ewv->last_filter, 0))
+      {
+        MemoryZeroStruct(&ewv->cursor);
+        MemoryZeroStruct(&ewv->mark);
+        MemoryZeroStruct(&ewv->next_cursor);
+        MemoryZeroStruct(&ewv->next_mark);
+        arena_clear(ewv->filter_arena);
+        ewv->last_filter = push_str8_copy(ewv->filter_arena, filter);
+      }
       
       //////////////////////////////
       //- rjf: decide if root should be implicit
@@ -3815,19 +3829,6 @@ rd_view_ui(Rng2F32 rect)
           }break;
         }
       }
-      
-      //////////////////////////////
-      //- rjf: consume query-completion events, if this view is being used as a query
-      //
-#if 0
-      if(vs->query_is_selected &&
-         ui_is_focus_active() &&
-         ui_slot_press(UI_EventActionSlot_Accept))
-      {
-        // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
-        // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): // TODO(rjf): 
-      }
-#endif
       
       //////////////////////////////
       //- rjf: consume events & perform navigations/edits - calculate state
@@ -4025,6 +4026,75 @@ rd_view_ui(Rng2F32 rect)
             evt = event;
           }
           B32 taken = 0;
+          
+          //////////////////////////////
+          //- rjf: consume query-completion events, if this view is being used as a query
+          //
+          {
+            RD_Cfg *lister = rd_cfg_child_from_string(view, str8_lit("lister"));
+            if(lister != &rd_nil_cfg &&
+               evt->kind == UI_EventKind_Press &&
+               evt->slot == UI_EventActionSlot_Accept &&
+               selection_tbl.min.y == selection_tbl.max.y)
+            {
+              RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
+              RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
+              String8 cmd_name = cmd->first->string;
+              
+              // rjf: if we have no selection, just pick the first row
+              EV_Row *row = 0;
+              if(selection_tbl.min.y == 0 && selection_tbl.max.y == 0)
+              {
+                row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, 1);
+              }
+              
+              // rjf: if we do have a selection, compute that row
+              else
+              {
+                row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, selection_tbl.min.y);
+              }
+              
+              // rjf: use row to complete query
+              if(row != 0)
+              {
+                taken = 1;
+                E_Eval eval = e_eval_from_expr(scratch.arena, row->expr);
+                switch(eval.space.kind)
+                {
+                  default:
+                  {
+                    String8 symbol_name = d_symbol_name_from_process_vaddr(scratch.arena, ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), eval.value.u64, 0, 0);
+                    rd_cmd(RD_CmdKind_CompleteQuery, .string = symbol_name);
+                  }break;
+                  case E_SpaceKind_File:
+                  case E_SpaceKind_FileSystem:
+                  {
+                    E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+                    String8 file = rd_file_path_from_eval(scratch.arena, eval);
+                    if(str8_match(type->name, str8_lit("folder"), 0))
+                    {
+                      String8 new_input_string = push_str8f(scratch.arena, "%S/", file);
+                      rd_cmd(RD_CmdKind_UpdateQuery, .string = new_input_string);
+                    }
+                    else
+                    {
+                      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = file);
+                    }
+                  }break;
+                  case RD_EvalSpaceKind_MetaCfg:
+                  {
+                    RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
+                    rd_cmd(RD_CmdKind_CompleteQuery, .cfg = cfg->id);
+                  }break;
+                  case RD_EvalSpaceKind_MetaUnattachedProcess:
+                  {
+                    U64 pid = eval.value.u128.u64[0];
+                    rd_cmd(RD_CmdKind_CompleteQuery, .pid = pid);
+                  }break;
+                }
+              }
+            }
+          }
           
           //////////////////////////
           //- rjf: begin editing on some operations
@@ -5376,8 +5446,16 @@ rd_view_ui(Rng2F32 rect)
                           ui_kill_action();
                         }
                         
+                        // rjf: this watch window is being queried? -> move curosr & accept
+                        RD_Cfg *lister = rd_cfg_child_from_string(view, str8_lit("lister"));
+                        if(lister != &rd_nil_cfg)
+                        {
+                          ewv->next_cursor = ewv->next_mark = cell_pt;
+                          rd_cmd(RD_CmdKind_Accept);
+                        }
+                        
                         // rjf: has a command name? -> push command
-                        if(cell_info.cmd_name.size != 0)
+                        else if(cell_info.cmd_name.size != 0)
                         {
                           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_info->eval.space);
                           RD_Cfg *cfg = rd_cfg_from_eval_space(row_info->eval.space);
@@ -5396,6 +5474,7 @@ rd_view_ui(Rng2F32 rect)
                         // rjf: can edit? -> begin editing
                         else if(!(sig.f & UI_SignalFlag_KeyboardPressed) && cell_info.flags & RD_WatchCellFlag_CanEdit)
                         {
+                          ewv->next_cursor = ewv->next_mark = cell_pt;
                           rd_cmd(RD_CmdKind_Edit);
                         }
                         
@@ -5698,7 +5777,14 @@ rd_view_ui(Rng2F32 rect)
     }
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
     {
-      rd_cmd(RD_CmdKind_CompleteQuery);
+      String8 cmd_name = rd_view_query_cmd();
+      String8 input = rd_view_query_input();
+      RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+      RD_RegsScope()
+      {
+        rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, input);
+        rd_cmd(RD_CmdKind_CompleteQuery);
+      }
     }
   }
   
@@ -15840,6 +15926,8 @@ Z(getting_started)
               if(dst_tab == &rd_nil_cfg && dst_panel == panel_w_auto && view_w_auto != &rd_nil_cfg)
               {
                 dst_tab = view_w_auto;
+                RD_ViewState *vs = rd_view_state_from_cfg(dst_tab);
+                vs->last_frame_index_built = 0;
                 RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("expression"));
                 rd_cfg_new_replace(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
               }
@@ -15985,11 +16073,9 @@ Z(getting_started)
           case RD_CmdKind_CompleteQuery:
           {
             String8 cmd_name = rd_view_query_cmd();
-            String8 input = rd_view_query_input();
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
             RD_RegsScope()
             {
-              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, input);
               rd_push_cmd(cmd_name, rd_regs());
             }
             if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
@@ -16016,6 +16102,17 @@ Z(getting_started)
               arena_clear(ws->query_arena);
               ws->query_cmd_name = str8_zero();
             }
+          }break;
+          case RD_CmdKind_UpdateQuery:
+          {
+            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+            RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+            rd_cfg_new_replace(input, rd_regs()->string);
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            vs->query_cursor = vs->query_mark = txt_pt(1, rd_regs()->string.size+1);
+            vs->query_string_size = Min(sizeof(vs->query_buffer), rd_regs()->string.size);
+            MemoryCopy(vs->query_buffer, rd_regs()->string.str, vs->query_string_size);
           }break;
           
           //- rjf: developer commands
