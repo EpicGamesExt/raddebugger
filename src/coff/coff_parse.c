@@ -8,9 +8,9 @@ coff_is_big_obj(String8 raw_coff)
   if (raw_coff.size >= sizeof(COFF_BigObjHeader)) {
     COFF_BigObjHeader *file_header32 = (COFF_BigObjHeader*)(raw_coff.str);
     is_big_obj = file_header32->sig1 == COFF_Machine_Unknown && 
-                 file_header32->sig2 == max_U16 &&
-                 file_header32->version >= 2 &&
-                 MemoryCompare(file_header32->magic, g_coff_big_header_magic, sizeof(file_header32->magic)) == 0;
+      file_header32->sig2 == max_U16 &&
+      file_header32->version >= 2 &&
+      MemoryCompare(file_header32->magic, g_coff_big_header_magic, sizeof(file_header32->magic)) == 0;
   }
   return is_big_obj;
 }
@@ -163,11 +163,11 @@ coff_symbol_array_from_data_16(Arena *arena, String8 raw_coff, U64 symbol_array_
   Rng1U64        sym16_arr_range = rng_1u64(symbol_array_off, symbol_array_off + sizeof(COFF_Symbol16) * symbol_count);
   String8        raw_sym16_arr   = str8_substr(raw_coff, sym16_arr_range);
   COFF_Symbol16 *sym16_arr       = (COFF_Symbol16 *)raw_sym16_arr.str;
-
+  
   for (U64 isymbol = 0, count = raw_sym16_arr.size / sizeof(COFF_Symbol16); isymbol < count; isymbol += 1) {
     COFF_Symbol16 *sym16 = &sym16_arr[isymbol];
     COFF_Symbol32 *sym32 = &result.v[isymbol];
-
+    
     sym32->name             = sym16->name;
     sym32->value            = sym16->value;
     if (sym16->section_number == COFF_Symbol_DebugSection16) {
@@ -185,7 +185,7 @@ coff_symbol_array_from_data_16(Arena *arena, String8 raw_coff, U64 symbol_array_
     for (U64 iaux = isymbol+1, iaux_hi = Min(count, iaux+sym16->aux_symbol_count); iaux < iaux_hi; iaux += 1) {
       COFF_Symbol16 *aux16 = sym16_arr + iaux;
       COFF_Symbol32 *aux32 = result.v  + iaux;
-
+      
       // 32bit COFF uses 16bit aux symbols
       MemoryCopy(aux32, aux16, sizeof(COFF_Symbol16));
       MemoryZero((U8 *)aux32 + sizeof(COFF_Symbol16), sizeof(COFF_Symbol32)-sizeof(COFF_Symbol16));
@@ -286,11 +286,11 @@ coff_resource_string_from_str16(Arena *arena, String16 string)
 {
   AssertAlways(string.size <= max_U16);
   U16 size16 = (U16)string.size;
-
+  
   U16 *buffer = push_array_no_zero(arena, U16, size16 + 1);
   MemoryCopy(buffer + 0, &size16,    sizeof(size16));
   MemoryCopy(buffer + 1, string.str, size16 * sizeof(string.str[0]));
-
+  
   return str8_array(buffer, size16 + 1);
 }
 
@@ -358,14 +358,14 @@ coff_read_resource(Arena *arena, String8 raw_res, U64 off, COFF_ParsedResource *
 {
   String8 raw_header    = str8_skip(raw_res, off);
   U64     header_cursor = 0;
-
+  
   // prefix
   COFF_ResourceHeaderPrefix prefix = {0};
   header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &prefix);
-
+  
   Assert(prefix.header_size >= sizeof(COFF_ResourceHeaderPrefix));
   raw_header = str8_prefix(raw_header, prefix.header_size);
-
+  
   // header
   COFF_ResourceID16 type_16 = {0};
   COFF_ResourceID16 name_16 = {0};
@@ -377,11 +377,11 @@ coff_read_resource(Arena *arena, String8 raw_res, U64 off, COFF_ParsedResource *
   header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->version);
   header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->characteristics);
   Assert(prefix.header_size == header_cursor);
-
+  
   // convert utf-16 resource ids to utf-8
   res_out->type = coff_utf8_resource_id_from_utf16(arena, &type_16);
   res_out->name = coff_utf8_resource_id_from_utf16(arena, &name_16);
-
+  
   // read data
   U64 data_read_size = str8_deserial_read_block(raw_res, off + prefix.header_size, prefix.data_size, &res_out->data);
   Assert(prefix.data_size == data_read_size);
@@ -411,14 +411,14 @@ coff_write_resource_id(Arena *arena, COFF_ResourceID id)
 {
   String8 result = str8_zero();
   switch (id.type) {
-  case COFF_ResourceIDType_Null: break;
-  case COFF_ResourceIDType_Number: {
-    result = coff_resource_number_from_u16(arena, id.u.number);
-  } break;
-  case COFF_ResourceIDType_String: {
-    result = coff_resource_string_from_str8(arena, id.u.string);
-  } break;
-  default: InvalidPath;
+    case COFF_ResourceIDType_Null: break;
+    case COFF_ResourceIDType_Number: {
+      result = coff_resource_number_from_u16(arena, id.u.number);
+    } break;
+    case COFF_ResourceIDType_String: {
+      result = coff_resource_string_from_str8(arena, id.u.string);
+    } break;
+    default: InvalidPath;
   }
   return result;
 }
@@ -435,13 +435,13 @@ coff_write_resource(Arena          *arena,
                     String8         data)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   String8List list = {0};
-
+  
   COFF_ResourceHeaderPrefix *prefix      = push_array(scratch.arena, COFF_ResourceHeaderPrefix, 1);
   String8                    packed_type = coff_write_resource_id(scratch.arena, type);
   String8                    packed_name = coff_write_resource_id(scratch.arena, name);
-
+  
   // prefix + header
   str8_list_push(scratch.arena, &list, str8_struct(prefix));
   str8_list_push(scratch.arena, &list, packed_type);
@@ -451,24 +451,24 @@ coff_write_resource(Arena          *arena,
   str8_list_push(scratch.arena, &list, str8_struct(&language_id));
   str8_list_push(scratch.arena, &list, str8_struct(&version));
   str8_list_push(scratch.arena, &list, str8_struct(&characteristics));
-
+  
   prefix->data_size   = safe_cast_u32(data.size);
   prefix->header_size = safe_cast_u32(list.total_size);
-
+  
   // data
   str8_list_push(scratch.arena, &list, data);
-
+  
   // magic
   str8_list_push_front(scratch.arena, &list, str8_array_fixed(g_coff_res_magic));
-
+  
   // align
   U64 align_size = AlignPow2(list.total_size, COFF_ResourceAlign) - list.total_size;
   U8 *align      = push_array(scratch.arena, U8, align_size);
   str8_list_push(scratch.arena, &list, str8(align, align_size));
-
+  
   // join
   String8 res = str8_list_join(arena, &list, 0);
-
+  
   scratch_end(scratch);
   return res;
 }
@@ -476,7 +476,7 @@ coff_write_resource(Arena          *arena,
 internal int
 coff_resource_id_compar(void *raw_a, void *raw_b)
 {
-  int cmp;
+  int cmp = 0;
   COFF_ResourceID *a = raw_a;
   COFF_ResourceID *b = raw_b;
   if (a->type == b->type) {
@@ -563,10 +563,10 @@ coff_parse_archive_member_header(String8 raw_archive, U64 offset, COFF_ParsedArc
     String8 mode     = str8_skip_chop_whitespace(str8_cstring_capped(header->mode,     header->mode     + sizeof(header->mode)    ));
     String8 size     = str8_skip_chop_whitespace(str8_cstring_capped(header->size,     header->size     + sizeof(header->size)    ));
     String8 end      = str8_cstring_capped(header->end, header->end + sizeof(header->end));
-
+    
     U32 data_size = u32_from_str8(size, 10);
     U64 data_off  = offset + sizeof(COFF_ArchiveMemberHeader);
-
+    
     header_out->name           = name;
     header_out->time_stamp     = u32_from_str8(date, 10);
     header_out->user_id        = u32_from_str8(user_id, 10);
@@ -574,7 +574,7 @@ coff_parse_archive_member_header(String8 raw_archive, U64 offset, COFF_ParsedArc
     header_out->mode           = mode;
     header_out->is_end_correct = str8_match_lit("`\n", end, 0);
     header_out->data_range     = rng_1u64(data_off, data_off + data_size);
-
+    
     return sizeof(*header);
   }
   return 0;
@@ -584,7 +584,7 @@ internal COFF_ArchiveFirstMember
 coff_parse_first_archive_member(COFF_ArchiveMember *member)
 {
   Assert(str8_match_lit("/", member->header.name, 0));
-
+  
   U64 cursor = 0;
   
   U32 symbol_count = 0;
@@ -597,17 +597,17 @@ coff_parse_first_archive_member(COFF_ArchiveMember *member)
   
   Rng1U64 string_table_range = rng_1u64(cursor, member->data.size);
   cursor += dim_1u64(string_table_range);
-
+  
   String8  raw_member_offsets  = str8_substr(member->data, member_offsets_range);
   U32     *member_offsets      = (U32 *)raw_member_offsets.str;
   U64      member_offset_count = raw_member_offsets.size / sizeof(member_offsets[0]);
-
+  
   COFF_ArchiveFirstMember result = {0};
   result.symbol_count            = symbol_count;
   result.member_offset_count     = member_offset_count;
   result.member_offsets          = member_offsets;
   result.string_table            = str8_substr(member->data, string_table_range);
-
+  
   return result;
 }
 
@@ -615,7 +615,7 @@ internal COFF_ArchiveSecondMember
 coff_parse_second_archive_member(COFF_ArchiveMember *member)
 {
   COFF_ArchiveSecondMember result = {0};
-
+  
   if (str8_match_lit("/", member->header.name, 0)) {
     U64 cursor = 0;
     
@@ -632,13 +632,13 @@ coff_parse_second_archive_member(COFF_ArchiveMember *member)
     cursor += dim_1u64(symbol_indices_range);
     
     Rng1U64 string_table_range = rng_1u64(cursor, member->data.size);
-
+    
     String8 raw_member_offsets = str8_substr(member->data, member_offsets_range);
     String8 raw_indices        = str8_substr(member->data, symbol_indices_range);
-
+    
     U32 *member_offsets      = (U32 *)raw_member_offsets.str;
     U64  member_offset_count = raw_member_offsets.size / sizeof(member_offsets[0]);
-
+    
     U16 *symbol_indices     = (U16 *)raw_indices.str;
     U64  symbol_index_count = raw_indices.size / sizeof(symbol_indices[0]);
     
@@ -650,7 +650,7 @@ coff_parse_second_archive_member(COFF_ArchiveMember *member)
     result.symbol_index_count  = symbol_index_count;
     result.string_table        = str8_substr(member->data, string_table_range);
   }
-
+  
   return result;
 }
 
@@ -683,7 +683,7 @@ coff_parse_import(String8 raw_archive_member, U64 offset, COFF_ParsedArchiveImpo
     Rng1U64 data_range  = rng_1u64(offset + sizeof(*header), offset + sizeof(*header) + header->data_size);
     String8 raw_data    = str8_substr(raw_archive_member, data_range);
     U64     data_cursor = 0;
-
+    
     header_out->version         = header->version;
     header_out->machine         = header->machine;
     header_out->time_stamp      = header->time_stamp;
@@ -744,7 +744,7 @@ coff_regular_archive_member_iter_next(String8 raw_archive, U64 *offset, COFF_Arc
   if (member_out->header.is_end_correct) {
     member_out->offset = *offset;
     member_out->data   = str8_substr(raw_archive, member_out->header.data_range);
-
+    
     U64 read_size = AlignPow2(header_size + dim_1u64(member_out->header.data_range), COFF_Archive_MemberAlign);
     *offset += read_size;
     
@@ -771,19 +771,19 @@ coff_thin_archive_member_iter_next(String8 raw_archive, U64 *offset, COFF_Archiv
   
   member_out->header.is_end_correct = 0;
   U64 header_size = coff_parse_archive_member_header(raw_archive, *offset, &member_out->header);
-
+  
   if (member_out->header.is_end_correct) {
     Rng1U64 data_in_archive_range = {0};
     if (str8_match_lit("/", member_out->header.name, 0) || str8_match_lit("//", member_out->header.name, 0)) {
       data_in_archive_range = member_out->header.data_range;
     }
-
+    
     member_out->offset = *offset;
     member_out->data   = str8_substr(raw_archive, data_in_archive_range);
-
+    
     U64 read_size = AlignPow2(header_size + dim_1u64(data_in_archive_range), COFF_Archive_MemberAlign);
     *offset += read_size;
-
+    
     is_parsed = 1;
   }
   
@@ -806,9 +806,9 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   COFF_ArchiveMember first_header      = {0};
   COFF_ArchiveMember second_header     = {0};
   COFF_ArchiveMember long_names_member = {0};
-
+  
   COFF_ArchiveMemberNode *ptr = member_list.first;
-
+  
   if (ptr) {
     if (str8_match_lit("/", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
@@ -821,7 +821,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   } else {
     error = str8_lit("missing first header");
   }
-
+  
   if (!error.size && ptr) {
     if (str8_match_lit("/", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
@@ -833,7 +833,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
       }
     }
   }
-
+  
   if (!error.size && ptr) {
     if (str8_match_lit("//", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
@@ -853,7 +853,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   parse.second_member     = coff_parse_second_archive_member(&second_header);
   parse.long_names        = long_names_member.data;
   parse.error             = error;
-
+  
   return parse;
 }
 
@@ -894,9 +894,9 @@ coff_archive_parse_from_data(String8 raw_archive)
 {
   COFF_ArchiveType type = coff_archive_type_from_data(raw_archive);
   switch (type) {
-  case COFF_Archive_Null:    break;
-  case COFF_Archive_Regular: return coff_regular_archive_parse_from_data(raw_archive);
-  case COFF_Archive_Thin:    return coff_thin_archive_parse_from_data(raw_archive);
+    case COFF_Archive_Null:    break;
+    case COFF_Archive_Regular: return coff_regular_archive_parse_from_data(raw_archive);
+    case COFF_Archive_Thin:    return coff_thin_archive_parse_from_data(raw_archive);
   }
   COFF_ArchiveParse null_parse = {0};
   return null_parse;
