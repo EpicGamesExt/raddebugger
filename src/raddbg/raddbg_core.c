@@ -11664,8 +11664,8 @@ rd_frame(void)
   
   //- TODO(rjf): @cfg debugging: stringify the current cfg tree
   {
-    String8 string = rd_string_from_cfg_tree(scratch.arena, rd_state->root_cfg);
-    int x = 0;
+    // String8 string = rd_string_from_cfg_tree(scratch.arena, rd_state->root_cfg);
+    // int x = 0;
   }
   
   //////////////////////////////
@@ -12391,10 +12391,13 @@ rd_frame(void)
               originating_window = rd_state->first_window;
             }
             OS_Handle preferred_monitor = {0};
-            RD_Window *new_ws = rd_window_open(v2f32(1280, 720), preferred_monitor, RD_CfgSrc_User);
-            if(originating_window)
+            DeferLoop(depth += 1, depth -= 1)
             {
-              MemoryCopy(new_ws->setting_vals, originating_window->setting_vals, sizeof(RD_SettingVal)*RD_SettingCode_COUNT);
+              RD_Window *new_ws = rd_window_open(v2f32(1280, 720), preferred_monitor, RD_CfgSrc_User);
+              if(originating_window)
+              {
+                MemoryCopy(new_ws->setting_vals, originating_window->setting_vals, sizeof(RD_SettingVal)*RD_SettingCode_COUNT);
+              }
             }
           }break;
           case RD_CmdKind_CloseWindow:
@@ -12484,6 +12487,7 @@ rd_frame(void)
           case RD_CmdKind_OpenProject:
           {
             //- TODO(rjf): @cfg load & apply user/project data to the cfg data structure
+#if 0
             {
               String8 file_root_key = (kind == RD_CmdKind_OpenUser ? str8_lit("user") : str8_lit("project"));
               RD_Cfg *file_root = rd_cfg_child_from_string(rd_state->root_cfg, file_root_key);
@@ -12508,6 +12512,7 @@ rd_frame(void)
                 rd_cfg_insert_child(file_root, file_root->last, n->v);
               }
             }
+#endif
             
             // TODO(rjf): dear lord this is so overcomplicated, this needs to be collapsed down & simplified ASAP
             

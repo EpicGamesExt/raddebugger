@@ -6395,10 +6395,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
     space_range = rd_whole_range_from_eval_space(eval.space);
-    if(dim_1u64(space_range) == 0)
-    {
-      space_range = r1u64(0, 0x7FFFFFFFFFFFull);
-    }
+  }
+  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity && dim_1u64(space_range) == KB(16))
+  {
+    space_range = r1u64(0, 0x7FFFFFFFFFFFull);
   }
   U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
   U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
