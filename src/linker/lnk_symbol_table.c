@@ -271,17 +271,17 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
       COFF_ComdatSelectType src_select = src_defn->u.selection;
 
       // handle objs compiled with /GR- and /GR
-      if ((src_select == COFF_ComdatSelectType_ANY && dst_select == COFF_ComdatSelectType_LARGEST) ||
-          (src_select == COFF_ComdatSelectType_LARGEST && dst_select == COFF_ComdatSelectType_ANY)) {
-        dst_select = COFF_ComdatSelectType_LARGEST;
-        src_select = COFF_ComdatSelectType_LARGEST;
+      if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
+          (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
+        dst_select = COFF_ComdatSelect_Largest;
+        src_select = COFF_ComdatSelect_Largest;
       }
 
       if (src_select == dst_select) {
         switch (src_select) {
         default: InvalidPath;
-        case COFF_ComdatSelectType_NULL:
-        case COFF_ComdatSelectType_ANY: {
+        case COFF_ComdatSelect_Null:
+        case COFF_ComdatSelect_Any: {
           LNK_Chunk *dst_chunk = dst_defn->u.chunk;
           LNK_Chunk *src_chunk = src_defn->u.chunk;
           U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
@@ -293,10 +293,10 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
             can_replace = src_chunk_size < dst_chunk_size;
           }
         } break;
-        case COFF_ComdatSelectType_NODUPLICATES: {
+        case COFF_ComdatSelect_NoDuplicates: {
           lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
         } break;
-        case COFF_ComdatSelectType_SAME_SIZE: {
+        case COFF_ComdatSelect_SameSize: {
           LNK_Chunk *dst_chunk = dst_defn->u.chunk;
           LNK_Chunk *src_chunk = src_defn->u.chunk;
           U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
@@ -306,13 +306,13 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
             lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
           }
         } break;
-        case COFF_ComdatSelectType_EXACT_MATCH: {
+        case COFF_ComdatSelect_ExactMatch: {
           B32 is_exact_match = (dst_defn->u.check_sum == src_defn->u.check_sum);
           if (!is_exact_match) {
             lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
           }
         } break;
-        case COFF_ComdatSelectType_LARGEST: {
+        case COFF_ComdatSelect_Largest: {
           LNK_Chunk *dst_chunk = dst_defn->u.chunk;
           LNK_Chunk *src_chunk = src_defn->u.chunk;
           U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
@@ -330,7 +330,7 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
             can_replace = dst_chunk_size < src_chunk_size;
           }
         } break;
-        case COFF_ComdatSelectType_ASSOCIATIVE: {
+        case COFF_ComdatSelect_Associative: {
           // ignore
         } break;
         }
@@ -630,7 +630,7 @@ lnk_symbol_table_push_weak(LNK_SymbolTable *symtab, String8 weak_name, COFF_Weak
   weak_name   = push_str8_copy(symtab->arena->v[0], weak_name);
   strong_name = push_str8_copy(symtab->arena->v[0], strong_name);
   LNK_Symbol *strong_symbol = lnk_make_undefined_symbol(symtab->arena->v[0], strong_name, LNK_SymbolScopeFlag_Main);
-  LNK_Symbol *weak_symbol   = lnk_make_weak_symbol(symtab->arena->v[0], weak_name, COFF_WeakExtType_SEARCH_ALIAS, strong_symbol);
+  LNK_Symbol *weak_symbol   = lnk_make_weak_symbol(symtab->arena->v[0], weak_name, COFF_WeakExt_SearchAlias, strong_symbol);
   lnk_symbol_table_push(symtab, weak_symbol);
   return weak_symbol;
 }

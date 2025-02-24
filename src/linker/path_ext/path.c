@@ -10,23 +10,6 @@ make_file_name_with_ext(Arena *arena, String8 file_name, String8 ext)
 }
 
 internal String8
-make_file_path_with_ext(Arena *arena, String8 file_name, String8 ext)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8 curr = os_get_current_path(scratch.arena);
-  String8 name = make_file_name_with_ext(scratch.arena, str8_skip_last_slash(file_name), ext);
-
-  String8List list = {0};
-  str8_list_push(scratch.arena, &list, curr);
-  str8_list_push(scratch.arena, &list, name);
-  String8 result = str8_path_list_join_by_style(arena, &list, PathStyle_SystemAbsolute);
-  
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
 path_char_from_style(PathStyle style)
 {
   String8 result = str8_zero();

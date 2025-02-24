@@ -161,15 +161,15 @@ internal RDI_BinarySectionFlags
 p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 {
   RDI_BinarySectionFlags result = 0;
-  if(flags & COFF_SectionFlag_MEM_READ)
+  if(flags & COFF_SectionFlag_MemRead)
   {
     result |= RDI_BinarySectionFlag_Read;
   }
-  if(flags & COFF_SectionFlag_MEM_WRITE)
+  if(flags & COFF_SectionFlag_MemWrite)
   {
     result |= RDI_BinarySectionFlag_Write;
   }
-  if(flags & COFF_SectionFlag_MEM_EXECUTE)
+  if(flags & COFF_SectionFlag_MemExecute)
   {
     result |= RDI_BinarySectionFlag_Execute;
   }
@@ -787,203 +787,58 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
             }
             
             // rjf: build line table, fill with parsed binary annotations
-            RDIM_LineTable *line_table = 0;
+
             if(inlinee_lines_parsed != 0)
             {
-              // rjf: state machine registers
-              CV_InlineRangeKind range_kind             = 0;
-              U32                code_length            = 0;
-              U32                code_offset            = 0;
-              String8            file_name              = inlinee_lines_parsed->file_name;
-              String8            last_file_name         = {0};
-              S32                line                   = (S32)inlinee_lines_parsed->first_source_ln;
-              S32                column                 = 1;
-              S32                last_column            = column;
-              
+              // rjf: grab checksums sub-section
+              CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
+
               // rjf: gathered lines
               typedef struct LineChunk LineChunk;
               struct LineChunk
               {
                 LineChunk *next;
-                U64 cap;
-                U64 count;
-                U64 *voffs;     // [line_count + 1] (sorted)
-                U32 *line_nums; // [line_count]
-                U16 *col_nums;  // [2*line_count]
+                U64        cap;
+                U64        count;
+                U64       *voffs;     // [line_count + 1] (sorted)
+                U32       *line_nums; // [line_count]
+                U16       *col_nums;  // [2*line_count]
               };
-              LineChunk *first_line_chunk = 0;
-              LineChunk *last_line_chunk = 0;
-              U64 total_line_chunk_line_count = 0;
-              
-              // rjf: grab checksums sub-section
-              CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
-              
-              // rjf: decode loop
-              B32 line_num_emitted = 0;
-              B32 code_off_emitted = 0;
-              B32 code_len_emitted = 0;
-              U64 read_off = 0;
-              U64 read_off_opl = binary_annots.size;
-              for(B32 good = 1; read_off < read_off_opl && good;)
+              LineChunk       *first_line_chunk            = 0;
+              LineChunk       *last_line_chunk             = 0;
+              U64              total_line_chunk_line_count = 0;
+              U32              last_file_off               = max_U32;
+              U32              curr_file_off               = max_U32;
+              RDIM_LineTable*  line_table                  = 0;
+
+              CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_lines_parsed->file_off, inlinee_lines_parsed->first_source_ln, base_voff);
+              for(;;)
               {
-                // rjf: decode next annotation op
-                U32 op = CV_InlineBinaryAnnotation_Null;
-                read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &op);
-                
-                // rjf: apply op
-                switch(op)
+                CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
+
+                if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile)
                 {
-                  default:{good = 0;}break;
-                  case CV_InlineBinaryAnnotation_Null:
-                  {
-                    good = 0;
-                  }break;
-                  case CV_InlineBinaryAnnotation_CodeOffset:
-                  {
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset);
-                    code_off_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
-                  {
-                    good = 0;
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // U32 delta = 0;
-                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
-                    // code_offset_base = code_offset;
-                    // code_offset_end  = code_offset + delta;
-                    // code_offset += delta;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeCodeOffset:
-                  {
-                    U32 delta = 0;
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
-                    code_offset += delta;
-                    code_off_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeCodeLength:
-                  {
-                    code_length = 0;
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
-                    code_len_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeFile:
-                  {
-                    U32 new_file_off = 0;
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &new_file_off);
-                    String8 new_file_name = {0};
-                    if(new_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
-                    {
-                      CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + new_file_off);
-                      U32 name_off = checksum->name_off;
-                      new_file_name = pdb_strtbl_string_from_off(in->pdb_strtbl, name_off);
-                    }
-                    file_name = new_file_name;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeLineOffset:
-                  {
-                    S32 delta = 0;
-                    read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &delta);
-                    line += delta;
-                    line_num_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeLineEndDelta:
-                  {
-                    good = 0;
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // S32 end_delta = 1;
-                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &end_delta);
-                    // line += end_delta;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeRangeKind:
-                  {
-                    good = 0;
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &range_kind);
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeColumnStart:
-                  {
-                    good = 0;
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // S32 delta = 0;
-                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &delta);
-                    // column += delta;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeColumnEndDelta:
-                  {
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // S32 end_delta = 0;
-                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &end_delta);
-                    // column += end_delta;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset:
-                  {
-                    U32 code_offset_and_line_offset = 0;
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset_and_line_offset);
-                    U32 code_delta = (code_offset_and_line_offset & 0xf);
-                    S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
-                    code_offset += code_delta;
-                    line        += line_delta;
-                    code_off_emitted = 1;
-                    line_num_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
-                  {
-                    U32 offset_delta = 0;
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
-                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &offset_delta); 
-                    code_offset += offset_delta;
-                    code_len_emitted = 1;
-                    code_off_emitted = 1;
-                  }break;
-                  case CV_InlineBinaryAnnotation_ChangeColumnEnd:
-                  {
-                    // TODO(rjf): currently untested/unknown - first guess below:
-                    //
-                    // U32 column_end = 0;
-                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &column_end);
-                  }break;
+                  last_file_off = curr_file_off;
+                  curr_file_off = step.file_off;
                 }
-                
-                // rjf: gather new lines
-                if(!good || (line_num_emitted && code_off_emitted && code_len_emitted))
+                if(step.flags == 0 && total_line_chunk_line_count > 0)
                 {
-                  LineChunk *chunk = last_line_chunk;
-                  if(chunk == 0 || chunk->count+1 >= chunk->cap)
+                  last_file_off = curr_file_off;
+                  curr_file_off = max_U32;
+                }
+                if((last_file_off != max_U32 && last_file_off != curr_file_off))
+                {
+                  String8 seq_file_name = {0};
+
+                  if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                   {
-                    chunk = push_array(scratch.arena, LineChunk, 1);
-                    SLLQueuePush(first_line_chunk, last_line_chunk, chunk);
-                    chunk->cap = 256;
-                    chunk->voffs = push_array_no_zero(scratch.arena, U64, chunk->cap);
-                    chunk->line_nums = push_array_no_zero(scratch.arena, U32, chunk->cap);
+                    CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
+                    U32             name_off = checksum->name_off;
+                    seq_file_name = pdb_strtbl_string_from_off(in->pdb_strtbl, name_off);
                   }
-                  chunk->voffs[chunk->count] = base_voff + code_offset;
-                  chunk->voffs[chunk->count+1] = base_voff + code_offset + code_length;
-                  chunk->line_nums[chunk->count] = (U32)line;
-                  chunk->count += 1;
-                  total_line_chunk_line_count += 1;
-                  line_num_emitted = 0;
-                  code_off_emitted = 0;
-                  code_len_emitted = 0;
-                }
-                
-                // rjf: advance code offset by the code length
-                {
-                  code_offset += code_length;
-                  code_length = 0;
-                }
-                
-                // rjf: push line sequence to line table & source file
-                if(!good || (op == CV_InlineBinaryAnnotation_ChangeFile && !str8_match(last_file_name, file_name, 0)))
-                {
-                  String8 seq_file_name = last_file_name; // NOTE(rjf): `file_name` is possibly changed to the next sequence, so use previous
                   
                   // rjf: file name -> normalized file path
-                  String8 file_path = seq_file_name;
+                  String8 file_path            = seq_file_name;
                   String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
                   for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
                   {
@@ -994,9 +849,9 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   }
                   
                   // rjf: normalized file path -> source file node
-                  U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-                  U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
-                  P2R_SrcFileNode *src_file_node = 0;
+                  U64              file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+                  U64              src_file_slot             = file_path_normalized_hash%src_file_map.slots_count;
+                  P2R_SrcFileNode *src_file_node             = 0;
                   for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
                   {
                     if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
@@ -1009,23 +864,22 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   {
                     src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
                     SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
-                    src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
+                    src_file_node->src_file                   = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
                     src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
                   }
                   
                   // rjf: gather all lines
-                  RDI_U64 *voffs = push_array_no_zero(arena, RDI_U64, total_line_chunk_line_count+1);
-                  RDI_U32 *line_nums = push_array_no_zero(arena, RDI_U32, total_line_chunk_line_count);
-                  RDI_U64 line_count = total_line_chunk_line_count;
+                  RDI_U64 *voffs      = push_array_no_zero(arena, RDI_U64, total_line_chunk_line_count+1);
+                  RDI_U32 *line_nums  = push_array_no_zero(arena, RDI_U32, total_line_chunk_line_count);
+                  RDI_U64  line_count = total_line_chunk_line_count;
                   {
                     U64 dst_idx = 0;
                     for(LineChunk *chunk = first_line_chunk; chunk != 0; chunk = chunk->next)
                     {
-                      MemoryCopy(voffs+dst_idx, chunk->voffs, sizeof(U64)*chunk->count);
+                      MemoryCopy(voffs+dst_idx, chunk->voffs, sizeof(U64)*(chunk->count+1));
                       MemoryCopy(line_nums+dst_idx, chunk->line_nums, sizeof(U32)*chunk->count);
                       dst_idx += chunk->count;
                     }
-                    voffs[dst_idx] = 0xffffffffffffffffull;
                   }
                   
                   // rjf: push
@@ -1044,8 +898,31 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   }
                   
                   // rjf: clear line chunks for subsequent sequences
-                  first_line_chunk = last_line_chunk = 0;
+                  first_line_chunk            = last_line_chunk = 0;
                   total_line_chunk_line_count = 0;
+                }
+
+                if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine)
+                {
+                  LineChunk *chunk = last_line_chunk;
+                  if(chunk == 0 || chunk->count+1 >= chunk->cap)
+                  {
+                    chunk = push_array(scratch.arena, LineChunk, 1);
+                    SLLQueuePush(first_line_chunk, last_line_chunk, chunk);
+                    chunk->cap       = 256;
+                    chunk->voffs     = push_array_no_zero(scratch.arena, U64, chunk->cap);
+                    chunk->line_nums = push_array_no_zero(scratch.arena, U32, chunk->cap);
+                  }
+                  chunk->voffs[chunk->count]     = step.line_voff;
+                  chunk->voffs[chunk->count+1]   = step.line_voff_end;
+                  chunk->line_nums[chunk->count] = step.ln;
+                  chunk->count                  += 1;
+                  total_line_chunk_line_count   += 1;
+                }
+
+                if(step.flags == 0)
+                {
+                  break;
                 }
               }
             }
@@ -2988,98 +2865,30 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           
           // rjf: parse offset ranges of this inline site - attach to scope
           {
-            U32 code_length      = 0;
-            U32 code_offset      = 0;
-            U32 last_code_offset = code_offset;
-            U32 last_code_length = code_length;
-            U64 read_off = 0;
-            U64 read_off_opl = binary_annots.size;
-            for(B32 good = 1; read_off < read_off_opl && good;)
+            CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(0, 0, procedure_base_voff);
+            for(;;)
             {
-              // rjf: decode next annotation op
-              U32 op = CV_InlineBinaryAnnotation_Null;
-              read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &op);
-              
-              // rjf: apply op
-              switch(op)
+              CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
+
+              if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange)
               {
-                default:{good = 1;}break;
-                case CV_InlineBinaryAnnotation_Null:
-                {
-                  good = 0;
-                }break;
-                case CV_InlineBinaryAnnotation_CodeOffset:
-                {
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset);
-                }break;
-                case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
-                {
-                  good = 0;
-                  // TODO(rjf): currently untested/unknown - first guess below:
-                  //
-                  // U32 delta = 0;
-                  // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
-                  // code_offset_base = code_offset;
-                  // code_offset_end  = code_offset + delta;
-                  // code_offset += delta;
-                }break;
-                case CV_InlineBinaryAnnotation_ChangeCodeOffset:
-                {
-                  U32 delta = 0;
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
-                  code_offset += delta;
-                }break;
-                case CV_InlineBinaryAnnotation_ChangeCodeLength:
-                {
-                  code_length = 0;
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
-                }break;
-                case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset:
-                {
-                  U32 code_offset_and_line_offset = 0;
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset_and_line_offset);
-                  U32 code_delta = (code_offset_and_line_offset & 0xf);
-                  code_offset += code_delta;
-                }break;
-                case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
-                {
-                  U32 offset_delta = 0;
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
-                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &offset_delta); 
-                  code_offset += offset_delta;
-                }break;
+                // rjf: build new range & add to scope
+                RDIM_Rng1U64 voff_range = { step.range.min, step.range.max };
+                rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
               }
-              
-              // rjf: gather new ranges
-              if(last_code_length != code_length)
+
+              if(step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange)
               {
-                // rjf: convert current state machine state to [first_voff, opl_voff)  range
-                RDIM_Rng1U64 voff_range =
+                if(scope->voff_ranges.last != 0) 
                 {
-                  procedure_base_voff + code_offset,
-                  procedure_base_voff + code_offset + code_length,
-                };
-                
-                // rjf: attempt to extend last-added range to cover this range, if possible
-                if(scope->voff_ranges.last != 0 && scope->voff_ranges.last->v.max == voff_range.min)
-                {
-                  scope->voff_ranges.last->v.max = voff_range.max;
+                  scope->voff_ranges.last->v.max = step.range.max;
                 }
-                
-                // rjf: cannot add to previous range? -> build new range & add to scope
-                else
-                {
-                  rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
-                }
-                
-                // rjf: advance
-                code_offset += code_length;
-                code_length = 0;
               }
-              
-              // rjf: update prev/current states
-              last_code_offset = code_offset;
-              last_code_length = code_length;
+
+              if(step.flags == 0)
+              {
+                break;
+              }
             }
           }
         }break;
@@ -4243,6 +4052,23 @@ ASYNC_WORK_DEF(p2r_bake_symbols_strings_work)
   return 0;
 }
 
+ASYNC_WORK_DEF(p2r_bake_inline_site_strings_work)
+{
+  ProfBeginFunction();
+  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  P2R_BakeInlineSiteStringsIn *in = input;
+  p2r_make_string_map_if_needed();
+  ProfScope("bake inline site strings")
+  {
+    for(P2R_BakeInlineSiteStringsInNode *n = in->first; n != 0; n = n->next)
+    {
+      rdim_bake_string_map_loose_push_inline_site_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
+    }
+  }
+  ProfEnd();
+  return 0;
+}
+
 ASYNC_WORK_DEF(p2r_bake_scopes_strings_work)
 {
   ProfBeginFunction();
@@ -4707,6 +4533,37 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
           }
           async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_symbols_strings_work, .input = in));
         }
+      }
+    }
+
+    ProfScope("kick off inline site string map build task")
+    {
+      U64 items_per_task = 4096;
+      U64 num_tasks = CeilIntegerDiv(in_params->inline_sites.total_count, items_per_task);
+      RDIM_InlineSiteChunkNode *chunk = in_params->inline_sites.first;
+      U64 chunk_off = 0;
+      for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
+      {
+        P2R_BakeInlineSiteStringsIn *in = push_array(scratch.arena, P2R_BakeInlineSiteStringsIn, 1);
+        in->top = &bake_string_map_topology;
+        in->maps = bake_string_maps__in_progress;
+        U64 items_left = items_per_task;
+        for(;chunk != 0 && items_left > 0;)
+        {
+          U64 items_in_this_chunk = Min(items_per_task, chunk->count-chunk_off);
+          P2R_BakeInlineSiteStringsInNode *n = push_array(scratch.arena, P2R_BakeInlineSiteStringsInNode, 1);
+          SLLQueuePush(in->first, in->last, n);
+          n->v = chunk->v + chunk_off;
+          n->count = items_in_this_chunk;
+          chunk_off += items_in_this_chunk;
+          items_left -= items_in_this_chunk;
+          if(chunk_off >= chunk->count)
+          {
+            chunk = chunk->next;
+            chunk_off = 0;
+          }
+        }
+        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_inline_site_strings_work, .input = in));
       }
     }
     

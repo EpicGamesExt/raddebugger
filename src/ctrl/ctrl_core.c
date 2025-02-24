@@ -3489,20 +3489,20 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     }
     
     //- rjf: read COFF header
-    U64 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
-    COFF_Header coff_header = {0};
+    U64 file_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+    COFF_FileHeader file_header = {0};
     if(is_valid)
     {
-      if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + coff_header_off, &coff_header))
+      if(!dmn_process_read_struct(process.dmn_handle, vaddr_range.min + file_header_off, &file_header))
       {
         is_valid = 0;
       }
     }
     
     //- rjf: unpack range of optional extension header
-    U32 opt_ext_size = coff_header.optional_header_size;
-    Rng1U64 opt_ext_off_range = r1u64(coff_header_off + sizeof(coff_header),
-                                      coff_header_off + sizeof(coff_header) + opt_ext_size);
+    U32 opt_ext_size = file_header.optional_header_size;
+    Rng1U64 opt_ext_off_range = r1u64(file_header_off + sizeof(COFF_FileHeader),
+                                      file_header_off + sizeof(COFF_FileHeader) + opt_ext_size);
     
     //- rjf: read optional header
     U16 optional_magic = 0;
@@ -3569,10 +3569,10 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         PE_DataDirectory dir = {0};
         dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
         Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        switch(coff_header.machine)
+        switch(file_header.machine)
         {
           default:{}break;
-          case COFF_MachineType_X86:
+          case COFF_Machine_X86:
           {
             PE_TLSHeader32 tls_header32 = {0};
             dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header32);
@@ -3583,7 +3583,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
             tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
             tls_header.characteristics   = (U64)tls_header32.characteristics;
           }break;
-          case COFF_MachineType_X64:
+          case COFF_Machine_X64:
           {
             dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
           }break;

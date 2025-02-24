@@ -27,20 +27,23 @@ typedef struct TP_Worker
 
 typedef struct TP_Context
 {
+  B32          is_live;
+  OS_Handle    exec_semaphore;
   OS_Handle    task_semaphore;
   OS_Handle    main_semaphore;
-  B32          is_live;
+
   U32          worker_count;
   TP_Worker   *worker_arr;
-  TP_Arena    *worker_arena;
-  U64          task_count;
+
+  TP_Arena    *task_arena;
   TP_TaskFunc *task_func;
   void        *task_data;
-  volatile U64 next_task_id;
-  volatile U64 take_count;
+  U64          task_count;
+  U64          task_done;
+  S64          task_left;
 } TP_Context;
 
-internal TP_Context * tp_alloc(Arena *arena, U32 worker_count);
+internal TP_Context * tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name);
 internal void         tp_release(TP_Context *pool);
 internal TP_Arena *   tp_arena_alloc(TP_Context *pool);
 internal void         tp_arena_release(TP_Arena **arena_ptr);

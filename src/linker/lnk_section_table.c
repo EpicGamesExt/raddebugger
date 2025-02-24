@@ -85,16 +85,16 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
   
   // pack sections with run-time data closer
   String8List sort_index_list = {0};
-  if (flags & COFF_SectionFlag_MEM_DISCARDABLE) {
+  if (flags & COFF_SectionFlag_MemDiscardable) {
     str8_list_pushf(scratch.arena, &sort_index_list, "b");
   } else {
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
   }
   
-  if (str8_match(name, str8_lit(".null"), 0)) {
+  if (str8_match_lit(".null", name, 0)) {
     // null section always first
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
-  } else if (str8_match(name, str8_lit(".rsrc"), 0)) {
+  } else if (str8_match_lit(".rsrc", name, 0)) {
     // section with resource data must be last because during runtime windows might append pages
     str8_list_pushf(scratch.arena, &sort_index_list, "c");
   } else {
@@ -102,32 +102,32 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
   }
   
   // sort sections based on the contents
-  if (flags & COFF_SectionFlag_CNT_CODE) {
+  if (flags & COFF_SectionFlag_CntCode) {
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
-    if (str8_match(name, str8_lit(".text"), 0)) {
+    if (str8_match_lit(".text", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "a");
     } else {
       str8_list_pushf(scratch.arena, &sort_index_list, "b");
     }
-  } else if (flags & COFF_SectionFlag_CNT_INITIALIZED_DATA) {
+  } else if (flags & COFF_SectionFlag_CntInitializedData) {
     str8_list_pushf(scratch.arena, &sort_index_list, "b");
-    if (str8_match(name, str8_lit(".data"), 0)) {
+    if (str8_match_lit(".data", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "a");
-    } else if (str8_match(name, str8_lit(".rdata"), 0)) {
+    } else if (str8_match_lit(".rdata", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "b");
-    } else if (str8_match(name, str8_lit(".tls"), 0)) {
+    } else if (str8_match_lit(".tls", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "c");
     } else {
       str8_list_pushf(scratch.arena, &sort_index_list, "d");
     }
-  } else if (flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+  } else if (flags & COFF_SectionFlag_CntUninitializedData) {
     str8_list_pushf(scratch.arena, &sort_index_list, "c");
   } else {
     str8_list_pushf(scratch.arena, &sort_index_list, "d");
   }
   
   // sort sections based on read/write access so final section layout looks cleaner
-  if (flags & COFF_SectionFlag_MEM_READ && ~flags & COFF_SectionFlag_MEM_WRITE) {
+  if (flags & COFF_SectionFlag_MemRead && ~flags & COFF_SectionFlag_MemWrite) {
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
   } else {
     str8_list_pushf(scratch.arena, &sort_index_list, "b");
@@ -145,7 +145,7 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
 internal void
 lnk_section_associate_chunks(LNK_Section *sect, LNK_Chunk *head, LNK_Chunk *associate)
 {
-  lnk_chunk_associate(sect->arena, head, associate);
+  lnk_chunk_associate(head, associate);
 }
 
 internal LNK_Chunk *
@@ -236,8 +236,8 @@ lnk_code_align_byte_from_machine(COFF_MachineType machine)
 {
   U8 align_byte = 0;
   switch (machine) {
-  case COFF_MachineType_X64:
-  case COFF_MachineType_X86: {
+  case COFF_Machine_X64:
+  case COFF_Machine_X86: {
     align_byte = 0xCC;
   } break;
   default: {
@@ -570,7 +570,7 @@ lnk_section_table_assign_file_offsets(LNK_SectionTable *st)
   U64 cursor = 0;
   for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
     LNK_Section *sect = &sect_node->data;
-    if (sect->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+    if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
       continue;
     }
     if (!sect->has_layout) continue;
@@ -617,7 +617,7 @@ lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, 
   for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
     LNK_Section *sect = &sect_n->data;
     if (sect->has_layout) {
-      if (sect->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+      if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
         continue;
       }
 
@@ -625,7 +625,7 @@ lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, 
       String8 sect_data = str8_substr(image, rng_1u64(image_cursor, image_cursor + sect_size));
 
       U8 fill_byte = 0;
-      if (sect->flags & COFF_SectionFlag_CNT_CODE) {
+      if (sect->flags & COFF_SectionFlag_CntCode) {
         fill_byte = lnk_code_align_byte_from_machine(machine);
       }
 
@@ -888,7 +888,7 @@ lnk_dump_chunks(LNK_SectionTable *st)
     LNK_Section *sect = sect_id_map[sect_id];
     if (!sect) continue;
     if (sect->is_merged) continue;
-    if (str8_match(sect->name, str8_lit(".text"), 0)) {
+    if (str8_match_lit(".text", sect->name, 0)) {
       for (U64 chunk_id = 0; chunk_id < sect->cman->total_chunk_count; ++chunk_id) {
         LNK_ChunkRef chunk_ref = { sect_id, chunk_id };
         LNK_Chunk *chunk = lnk_chunk_from_chunk_ref(sect_id_map, chunk_id_map, chunk_ref);

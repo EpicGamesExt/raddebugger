@@ -68,6 +68,31 @@ lnk_error(LNK_ErrorCode code, char *fmt, ...)
 }
 
 internal void
+lnk_error_with_loc_fv(LNK_ErrorCode code, String8 obj_path, String8 lib_path, char *fmt, va_list args)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 text = push_str8fv(scratch.arena, fmt, args);
+  if (obj_path.size) {
+    if (lib_path.size) {
+      lnk_error(code, "%S(%S): %S", lib_path, obj_path, text);
+    } else {
+      lnk_error(code, "%S: %S", obj_path, text);
+    }
+  } else {
+    lnk_error(code, "%S", text);
+  }
+  scratch_end(scratch);
+}
+
+internal void
+lnk_error_with_loc(LNK_ErrorCode code, String8 obj_path, String8 lib_path, char *fmt, ...)
+{
+  va_list args; va_start(args, fmt);
+  lnk_error_with_loc_fv(code, obj_path, lib_path, fmt, args);
+  va_end(args);
+}
+
+internal void
 lnk_supplement_error(char *fmt, ...)
 {
   va_list args;

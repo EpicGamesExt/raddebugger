@@ -353,6 +353,23 @@ struct P2R_BakeSymbolsStringsIn
   P2R_BakeSymbolsStringsInNode *last;
 };
 
+typedef struct P2R_BakeInlineSiteStringsInNode P2R_BakeInlineSiteStringsInNode;
+struct P2R_BakeInlineSiteStringsInNode
+{
+  P2R_BakeInlineSiteStringsInNode *next;
+  RDIM_InlineSite *v;
+  RDI_U64 count;
+};
+
+typedef struct P2R_BakeInlineSiteStringsIn P2R_BakeInlineSiteStringsIn;
+struct P2R_BakeInlineSiteStringsIn
+{
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
+  P2R_BakeInlineSiteStringsInNode *first;
+  P2R_BakeInlineSiteStringsInNode *last;
+};
+
 typedef struct P2R_BakeScopesStringsInNode P2R_BakeScopesStringsInNode;
 struct P2R_BakeScopesStringsInNode
 {

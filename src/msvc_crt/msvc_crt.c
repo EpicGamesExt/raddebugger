@@ -438,8 +438,8 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
       }
       */
 
-      B32 is_handler_v3_or_below = str8_match(handler_name, str8_lit("__CxxFrameHandler3"), 0) ||
-                                   str8_match(handler_name, str8_lit("__GSHandlerCheck_EH"), 0);
+      B32 is_handler_v3_or_below = str8_match_lit("__CxxFrameHandler3",  handler_name, 0) ||
+                                   str8_match_lit("__GSHandlerCheck_EH", handler_name, 0);
       if (is_handler_v3_or_below) {
         U64            func_info_foff = handler_data_foff + sizeof(handler_voff);
         MSCRT_FuncInfo func_info      = {0};
@@ -457,8 +457,8 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
         goto next;
       }
 
-      B32 is_handler_v4 = str8_match(handler_name, str8_lit("__CxxFrameHandler4"), 0) ||
-                          str8_match(handler_name, str8_lit("__GSHandlerCheck_EH4"), 0);
+      B32 is_handler_v4 = str8_match_lit("__CxxFrameHandler4", handler_name, 0) ||
+                          str8_match_lit("__GSHandlerCheck_EH4", handler_name, 0);
       if (is_handler_v4) {
         U32                   func_info_voff = *(U32 *)str8_deserial_get_raw_ptr(raw_data, handler_data_foff + sizeof(handler_voff), sizeof(func_info_voff));
         U64                   func_info_foff = coff_foff_from_voff(sections, section_count, func_info_voff);
