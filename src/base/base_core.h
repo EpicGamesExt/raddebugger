@@ -565,15 +565,15 @@ global U32 max_U32 = 0xffffffff;
 global U16 max_U16 = 0xffff;
 global U8  max_U8  = 0xff;
 
-global S64 max_S64 = (S64)0x7fffffffffffffffull;
+global S64 max_S64 = (S64)0x7fffffffffffffffll;
 global S32 max_S32 = (S32)0x7fffffff;
 global S16 max_S16 = (S16)0x7fff;
 global S8  max_S8  =  (S8)0x7f;
 
-global S64 min_S64 = (S64)0xffffffffffffffffull;
-global S32 min_S32 = (S32)0xffffffff;
-global S16 min_S16 = (S16)0xffff;
-global S8  min_S8  =  (S8)0xff;
+global S64 min_S64 = (S64)0x8000000000000000ll;
+global S32 min_S32 = (S32)0x80000000;
+global S16 min_S16 = (S16)0x8000;
+global S8  min_S8  =  (S8)0x80;
 
 global const U32 bitmask1  = 0x00000001;
 global const U32 bitmask2  = 0x00000003;
