@@ -2957,6 +2957,11 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     named_streams = pdb_named_stream_table_from_info(arena, info);
     MemoryCopyStruct(&auth_guid, &info->auth_guid);
     scratch_end(scratch);
+
+    if (info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO) {
+      fprintf(stderr, "ERROR: PDB was linked with /DEBUG:FASTLINK (partial debug info is not supported). Please relink using /DEBUG:FULL.");
+      os_abort(1);
+    }
   }
   
   //////////////////////////////////////////////////////////////

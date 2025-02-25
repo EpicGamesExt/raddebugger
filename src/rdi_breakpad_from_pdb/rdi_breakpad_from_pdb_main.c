@@ -27,7 +27,6 @@
 #include "coff/coff_parse.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
-#include "codeview/codeview_enum.h"
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
@@ -44,7 +43,6 @@
 #include "coff/coff_parse.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_parse.c"
-#include "codeview/codeview_enum.c"
 #include "msf/msf.c"
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
@@ -225,7 +223,7 @@ entry_point(CmdLine *cmdline)
   {
     convert2bake = p2r_convert(arena, user2convert);
   }
-  
+
   //- rjf: dump breakpad text
   String8List dump = {0};
   ProfScope("dump breakpad text")
