@@ -7427,7 +7427,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: calculate image coordinates
   //
-  Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2, -topology.dim.y/2, +topology.dim.x/2, +topology.dim.y/2);
+  Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2.0f, -topology.dim.y/2.0f, +topology.dim.x/2.0f, +topology.dim.y/2.0f);
   Rng2F32 img_rect_scr = rd_bitmap_screen_from_canvas_rect(view_center_pos, zoom, canvas_rect, img_rect_cvs);
   
   //////////////////////////////
