@@ -149,6 +149,13 @@ struct FuzzyMatchRangeList
   U64 total_dim;
 };
 
+typedef struct ScoredFuzzyMatchRangeList ScoredFuzzyMatchRangeList;
+struct ScoredFuzzyMatchRangeList
+{
+  FuzzyMatchRangeList list;
+  S32 score;
+};
+
 ////////////////////////////////
 //~ rjf: Character Classification & Conversion Functions
 
@@ -378,6 +385,7 @@ internal Vec4F32 rgba_from_hex_string_4f32(String8 hex_string);
 
 internal FuzzyMatchRangeList fuzzy_match_find(Arena *arena, String8 needle, String8 haystack);
 internal FuzzyMatchRangeList fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src);
+internal ScoredFuzzyMatchRangeList scored_fuzzy_match_find(Arena *arena, String8 needles, String8 haystack);
 
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers

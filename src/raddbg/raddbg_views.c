@@ -3903,7 +3903,7 @@ struct RD_FileInfo
 {
   String8 filename;
   FileProperties props;
-  FuzzyMatchRangeList match_ranges;
+  ScoredFuzzyMatchRangeList match_ranges;
 };
 
 typedef struct RD_FileInfoNode RD_FileInfoNode;
@@ -4028,11 +4028,11 @@ internal int
 rd_qsort_compare_file_info__default_filtered(RD_FileInfo *a, RD_FileInfo *b)
 {
   int result = 0;
-  if(a->filename.size < b->filename.size)
+  if(a->match_ranges.score > b->match_ranges.score)
   {
     result = -1;
   }
-  else if(a->filename.size > b->filename.size)
+  if(a->match_ranges.score < b->match_ranges.score)
   {
     result = +1;
   }
@@ -4138,8 +4138,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       OS_FileIter *it = os_file_iter_begin(scratch.arena, path_query.path, 0);
       for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
       {
-        FuzzyMatchRangeList match_ranges = fuzzy_match_find(fs->cached_files_arena, path_query.search, info.name);
-        B32 fits_search = (path_query.search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
+        ScoredFuzzyMatchRangeList match_ranges = scored_fuzzy_match_find(fs->cached_files_arena, path_query.search, info.name);
+        B32 fits_search = (path_query.search.size == 0 || match_ranges.list.count != 0);
         B32 fits_dir_only = !!(info.props.flags & FilePropertyFlag_IsFolder) || !dir_selection;
         if(fits_search && fits_dir_only)
         {
@@ -4421,7 +4421,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
           UI_PrefWidth(ui_pct(1, 0))
           {
             UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, file->filename);
-            ui_box_equip_fuzzy_match_ranges(box, &file->match_ranges);
+            ui_box_equip_fuzzy_match_ranges(box, &file->match_ranges.list);
           }
         }
         

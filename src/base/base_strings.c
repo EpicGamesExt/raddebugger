@@ -2151,6 +2151,85 @@ fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src)
   return dst;
 }
 
+internal ScoredFuzzyMatchRangeList
+scored_fuzzy_match_find(Arena *arena, String8 needle, String8 haystack)
+{
+  Temp scratch = scratch_begin(0, 0);
+  // We're going to implement a very simple scoring mechanism similar to that described in
+  // https://www.forrestthewoods.com/blog/reverse_engineering_sublime_texts_fuzzy_match/.
+#define scored_fuzzy_match_unmatched -1
+#define scored_fuzzy_match_consecutive 5
+#define scored_fuzzy_match_unmatched_leading -3
+  ScoredFuzzyMatchRangeList invalid = {0};
+  ScoredFuzzyMatchRangeList result = {0};
+  // Simplify to a single needle which has common delimiters removed.
+  String8List needles = str8_split(scratch.arena, needle, (U8*)" ", 1, 0);
+  needle = str8_list_join(scratch.arena, &needles, 0);
+  if (needle.size == 0)
+  {
+    scratch_end(scratch);
+    return invalid;
+  }
+  String8 tmp_str = str8(needle.str, 1);
+  U64 find_pos = 0;
+  find_pos = str8_find_needle(haystack, find_pos, tmp_str, StringMatchFlag_CaseInsensitive);
+  if (find_pos >= haystack.size)
+  {
+    scratch_end(scratch);
+    return invalid;
+  }
+  // Leading character penalty.
+  // Only go to a max of 3 based on the article.
+  result.score += Min(find_pos, 3) * scored_fuzzy_match_unmatched_leading;
+  // We also want to deduct for additional unmatched characters between start and find_pos.
+  if (find_pos > 3)
+  {
+    result.score += (find_pos - 3) * scored_fuzzy_match_unmatched;
+  }
+  Rng1U64 range = r1u64(find_pos, find_pos + 1);
+  FuzzyMatchRangeNode *n = push_array(arena, FuzzyMatchRangeNode, 1);
+  n->range = range;
+  SLLQueuePush(result.list.first, result.list.last, n);
+  result.list.count += 1;
+  // Match the rest.
+  U64 prev_found = find_pos;
+  U64 search_start = 0;
+  find_pos += 1;
+  for (U64 idx = 1; idx < needle.size; ++idx)
+  {
+    tmp_str = str8(needle.str + idx, 1);
+    search_start = find_pos;
+    find_pos = str8_find_needle(haystack, find_pos, tmp_str, StringMatchFlag_CaseInsensitive);
+    if (find_pos >= haystack.size)
+    {
+      scratch_end(scratch);
+      return invalid;
+    }
+    // Compute consecutive bonus.
+    if (prev_found + 1 == find_pos)
+    {
+      result.score += scored_fuzzy_match_consecutive;
+      // We can reuse the existing node and simply extend it.
+      result.list.last->range.max = find_pos + 1;
+    }
+    else
+    {
+      result.score += (find_pos - search_start) * scored_fuzzy_match_unmatched;
+      Rng1U64 range = r1u64(find_pos, find_pos + 1);
+      FuzzyMatchRangeNode *n = push_array(arena, FuzzyMatchRangeNode, 1);
+      n->range = range;
+      SLLQueuePush(result.list.first, result.list.last, n);
+      result.list.count += 1;
+    }
+    prev_found = find_pos;
+    find_pos += 1;
+  }
+  // Compute final unmatched characters.
+  result.score += (haystack.size - find_pos) * scored_fuzzy_match_unmatched;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers
 
