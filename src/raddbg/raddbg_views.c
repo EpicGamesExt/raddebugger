@@ -3441,21 +3441,27 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(null) {}
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(empty)
 {
-  ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-    UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+  RD_Window *ws = rd_window_from_handle(rd_regs()->window);
+  RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
+  RD_Panel *parent = panel->parent;
+  if(!rd_panel_is_nil(parent))
   {
-    UI_PrefHeight(ui_em(3.f, 1.f))
-      UI_Row
-      UI_Padding(ui_pct(1, 0))
-      UI_TextAlignment(UI_TextAlign_Center)
-      UI_PrefWidth(ui_em(15.f, 1.f))
-      UI_CornerRadius(ui_top_font_size()/2.f)
-      RD_Palette(RD_PaletteCode_NegativePopButton)
+    ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
+    UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
     {
-      if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
+      UI_PrefHeight(ui_em(3.f, 1.f))
+        UI_Row
+        UI_Padding(ui_pct(1, 0))
+        UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_em(15.f, 1.f))
+        UI_CornerRadius(ui_top_font_size()/2.f)
+        RD_Palette(RD_PaletteCode_NegativePopButton)
       {
-        rd_cmd(RD_CmdKind_ClosePanel);
+        if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
+        {
+          rd_cmd(RD_CmdKind_ClosePanel);
+        }
       }
     }
   }
