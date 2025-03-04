@@ -785,6 +785,7 @@ RDI_TypeModifierFlagTable:
 {
   {Const     `1<<0`}
   {Volatile  `1<<1`}
+  {Restrict  `1<<2`}
 }
 
 @table(name type_lhs type_rhs desc)

@@ -386,6 +386,7 @@ typedef enum RDI_TypeModifierFlagsEnum
 {
 RDI_TypeModifierFlag_Const                = 1<<0,
 RDI_TypeModifierFlag_Volatile             = 1<<1,
+RDI_TypeModifierFlag_Restrict             = 1<<2,
 } RDI_TypeModifierFlagsEnum;
 
 typedef RDI_U32 RDI_UDTFlags;
@@ -887,6 +888,7 @@ X(Count)\
 #define RDI_TypeModifierFlags_XList \
 X(Const)\
 X(Volatile)\
+X(Restrict)\
 
 #define RDI_TypeNode_XList \
 X(RDI_TypeKind, kind)\

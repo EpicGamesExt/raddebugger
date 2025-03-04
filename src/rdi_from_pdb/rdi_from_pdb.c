@@ -3526,8 +3526,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 
                 // rjf: cv -> rdi modifier flags
                 RDI_TypeModifierFlags modifier_flags = 0;
-                if(lf->attribs & CV_PointerAttrib_Const)    {modifier_flags |= RDI_TypeModifierFlag_Const;}
-                if(lf->attribs & CV_PointerAttrib_Volatile) {modifier_flags |= RDI_TypeModifierFlag_Volatile;}
+                if(lf->attribs & CV_PointerAttrib_Const)      {modifier_flags |= RDI_TypeModifierFlag_Const;}
+                if(lf->attribs & CV_PointerAttrib_Volatile)   {modifier_flags |= RDI_TypeModifierFlag_Volatile;}
+                if(lf->attribs & CV_PointerAttrib_Restricted) {modifier_flags |= RDI_TypeModifierFlag_Restrict;}
                 
                 // rjf: cv info -> rdi pointer type kind
                 RDI_TypeKind type_kind = RDI_TypeKind_Ptr;
