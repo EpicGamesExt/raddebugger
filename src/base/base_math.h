@@ -668,6 +668,7 @@ internal U32 u32_from_rgba(Vec4F32 rgba);
 internal void rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng);
 internal void rng1u64_list_concat(Rng1U64List *list, Rng1U64List *to_concat);
 internal Rng1U64Array rng1u64_array_from_list(Arena *arena, Rng1U64List *list);
+internal U64 rng_1u64_array_bsearch(Rng1U64Array arr, U64 value);
 
 internal void rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng);
 internal Rng1S64Array rng1s64_array_from_list(Arena *arena, Rng1S64List *list);

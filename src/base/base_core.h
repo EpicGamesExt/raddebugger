@@ -885,4 +885,8 @@ internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_dat
 
 #define quick_sort(ptr, count, element_size, cmp_function) qsort((ptr), (count), (element_size), (int (*)(const void *, const void *))(cmp_function))
 
+////////////////////////////////
+
+internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
+
 #endif // BASE_CORE_H
