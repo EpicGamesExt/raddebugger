@@ -98,16 +98,6 @@ enum
   ELF_MachineKind_S390_OLD    = 0xA390,
 };
 
-typedef U16 ELF_Type;
-enum
-{
-  ELF_Type_None,
-  ELF_Type_Rel,
-  ELF_Type_Exec,
-  ELF_Type_Dyn,
-  ELF_Type_Core,
-};
-
 typedef U8 ELF_Data;
 enum
 {
@@ -681,40 +671,54 @@ typedef enum ELF_Identifier
   ELF_Identifier_Max        = 16,
 } ELF_Identifier;
 
+typedef U16 ELF_Type;
+typedef enum ELF_TypeEnum
+{
+  ELF_Type_None   = 0,
+  ELF_Type_Rel    = 1,
+  ELF_Type_Exec   = 2,
+  ELF_Type_Dyn    = 3,
+  ELF_Type_Core   = 4,
+  ELF_Type_LoOs   = 0xfe00,
+  ELF_Type_HiOs   = 0xfeff,
+  ELF_Type_LoProc = 0xff00,
+  ELF_Type_HiProc = 0xffff,
+} ELF_TypeEnum;
+
 typedef struct ELF_Hdr64
 {
-  U8  e_ident[ELF_Identifier_Max];
-  U16 e_type;
-  U16 e_machine;
-  U32 e_version;
-  U64 e_entry;
-  U64 e_phoff;
-  U64 e_shoff;
-  U32 e_flags;
-  U16 e_ehsize;
-  U16 e_phentsize;
-  U16 e_phnum;
-  U16 e_shentsize;
-  U16 e_shnum;
-  U16 e_shstrndx;
+  U8              e_ident[ELF_Identifier_Max];
+  ELF_Type        e_type;
+  ELF_MachineKind e_machine;
+  U32             e_version;
+  U64             e_entry;
+  U64             e_phoff;
+  U64             e_shoff;
+  U32             e_flags;
+  U16             e_ehsize;
+  U16             e_phentsize;
+  U16             e_phnum;
+  U16             e_shentsize;
+  U16             e_shnum;
+  U16             e_shstrndx;
 } ELF_Hdr64;
 
 typedef struct ELF_Hdr32
 {
-  U8  e_ident[ELF_Identifier_Max];
-  U16 e_type;
-  U16 e_machine;
-  U32 e_version;
-  U32 e_entry;
-  U32 e_phoff;
-  U32 e_shoff;
-  U32 e_flags;
-  U16 e_ehsize;
-  U16 e_phentsize;
-  U16 e_phnum;
-  U16 e_shentsize;
-  U16 e_shnum;
-  U16 e_shstrndx;
+  U8              e_ident[ELF_Identifier_Max];
+  ELF_Type        e_type;
+  ELF_MachineKind e_machine;
+  U32             e_version;
+  U32             e_entry;
+  U32             e_phoff;
+  U32             e_shoff;
+  U32             e_flags;
+  U16             e_ehsize;
+  U16             e_phentsize;
+  U16             e_phnum;
+  U16             e_shentsize;
+  U16             e_shnum;
+  U16             e_shstrndx;
 } ELF_Hdr32;
 
 typedef struct ELF_Shdr64
