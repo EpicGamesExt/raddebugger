@@ -610,6 +610,21 @@ struct RDIM_Type
   struct RDIM_UDT *udt;
 };
 
+typedef struct RDIM_TypeNode RDIM_TypeNode;
+struct RDIM_TypeNode
+{
+  struct RDIM_TypeNode *next;
+  RDIM_Type *v;
+};
+
+typedef struct RDIM_TypeList RDIM_TypeList;
+struct RDIM_TypeList
+{
+  U64            count;
+  RDIM_TypeNode *first;
+  RDIM_TypeNode *last;
+};
+
 typedef struct RDIM_TypeChunkNode RDIM_TypeChunkNode;
 struct RDIM_TypeChunkNode
 {

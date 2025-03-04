@@ -652,6 +652,28 @@ rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList
 ////////////////////////////////
 //~ rjf: [Building] Type Info Building
 
+RDI_PROC RDIM_Type **
+rdim_array_from_type_list(RDIM_Arena *arena, RDIM_TypeList list)
+{
+  RDIM_Type **arr = push_array(arena, RDIM_Type *, list.count);
+  U64         i   = 0;
+  for(RDIM_TypeNode *n = list.first; n != 0; n = n->next, ++i)
+  {
+    arr[i] = n->v;
+  }
+  return arr;
+}
+
+RDI_PROC RDIM_TypeNode *
+rdim_type_list_push(RDIM_Arena *arena, RDIM_TypeList *list, RDIM_Type *v)
+{
+  RDIM_TypeNode *n = push_array(arena, RDIM_TypeNode, 1);
+  n->v = v;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return n;
+}
+
 RDI_PROC RDIM_Type *
 rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap)
 {
