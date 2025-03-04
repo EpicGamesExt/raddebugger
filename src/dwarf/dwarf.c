@@ -135,6 +135,11 @@ internal DW_AttribClass
 dw_attrib_class_from_form_kind(DW_Version ver, DW_FormKind k)
 {
   #define X(_N,_C) case DW_Form_##_N: return _C;
+
+  switch (k) {
+    DW_Form_AttribClass_GNU_XList(X)
+  }
+
   switch (ver) {
     case DW_Version_5: {
       switch (k) {
@@ -207,20 +212,20 @@ dw_dwo_name_string_from_section_kind(DW_SectionKind k)
 }
 
 internal U64
-dw_offset_size_from_mode(DW_Mode mode)
+dw_size_from_format(DW_Format format)
 {
   U64 result = 0;
-  switch (mode) {
-    case DW_Mode_Null: break;
-    case DW_Mode_32Bit: result = 4; break;
-    case DW_Mode_64Bit: result = 8; break;
+  switch (format) {
+    case DW_Format_Null: break;
+    case DW_Format_32Bit: result = 4; break;
+    case DW_Format_64Bit: result = 8; break;
     default: InvalidPath; break;
   }
   return result;
 }
 
 internal DW_AttribClass
-dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_Language lang, B32 relaxed, DW_AttribKind attrib_kind, DW_FormKind form_kind)
+dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib_kind, DW_FormKind form_kind)
 {
   // NOTE(rjf): DWARF's spec specifies two mappings:
   // (DW_AttribKind) => List(DW_AttribClass)
@@ -257,10 +262,59 @@ dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_Language lang, B32 rel
     }
   }
 
-  if (attrib_kind != DW_Attrib_Null && form_kind != DW_Form_Null) {
-    //Assert(result != DW_AttribClass_Null && result != DW_AttribClass_Undefined);
-  }
-
   return result;
+}
+
+internal U64
+dw_pick_default_lower_bound(DW_Language lang)
+{
+  U64 lower_bound = max_U64;
+  switch (lang) {
+  case DW_Language_Null: break;
+  case DW_Language_C89:
+  case DW_Language_C:
+  case DW_Language_CPlusPlus:
+  case DW_Language_C99:
+  case DW_Language_CPlusPlus03:
+  case DW_Language_CPlusPlus11:
+  case DW_Language_C11:
+  case DW_Language_CPlusPlus14:
+  case DW_Language_Java:
+  case DW_Language_ObjC:
+  case DW_Language_ObjCPlusPlus:
+  case DW_Language_UPC:
+  case DW_Language_D:
+  case DW_Language_Python:
+  case DW_Language_OpenCL:
+  case DW_Language_Go:
+  case DW_Language_Haskell:
+  case DW_Language_OCaml:
+  case DW_Language_Rust:
+  case DW_Language_Swift:
+  case DW_Language_Dylan:
+  case DW_Language_RenderScript:
+  case DW_Language_BLISS:
+      lower_bound = 0;
+      break;
+  case DW_Language_Ada83:
+  case DW_Language_Cobol74:
+  case DW_Language_Cobol85:
+  case DW_Language_Fortran77:
+  case DW_Language_Fortran90:
+  case DW_Language_Pascal83:
+  case DW_Language_Modula2:
+  case DW_Language_Ada95:
+  case DW_Language_Fortran95:
+  case DW_Language_PLI:
+  case DW_Language_Modula3:
+  case DW_Language_Julia:
+  case DW_Language_Fortran03:
+  case DW_Language_Fortran08:
+      lower_bound = 1;
+  default:
+      NotImplemented;
+      break;
+  }
+  return lower_bound;
 }
 

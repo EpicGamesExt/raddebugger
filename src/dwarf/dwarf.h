@@ -29,32 +29,35 @@ typedef enum DW_ExtEnum
   DW_Ext_All   = DW_Ext_GNU|DW_Ext_LLVM|DW_Ext_APPLE|DW_Ext_MIPS,
 } DW_ExtEnum;
 
-typedef enum DW_Mode
+#define DW_FormatFromSize(size) ((size) >= max_U32 ? DW_Format_64Bit : DW_Format_32Bit)
+typedef enum DW_Format
 {
-  DW_Mode_Null,
-  DW_Mode_32Bit,
-  DW_Mode_64Bit
-} DW_Mode;
+  DW_Format_Null,
+  DW_Format_32Bit,
+  DW_Format_64Bit
+} DW_Format;
 
-#define DW_SectionKind_XList(X)                                                      \
-  X(Null,       "",                  "",                   ""                      ) \
-  X(Abbrev,     ".debug_abbrev",     "__debug_abbrev",     ".debug_abbrev.dwo"     ) \
-  X(ARanges,    ".debug_aranges",    "__debug_aranges",    ".debug_aranges.dwo"    ) \
-  X(Frame,      ".debug_frame",      "__debug_frame",      ".debug_frame.dwo"      ) \
-  X(Info,       ".debug_info",       "__debug_info",       ".debug_info.dwo"       ) \
-  X(Line,       ".debug_line",       "__debug_line",       ".debug_line.dwo"       ) \
-  X(Loc,        ".debug_loc",        "__debug_loc",        ".debug_loc.dwo"        ) \
-  X(MacInfo,    ".debug_macinfo",    "__debug_macinfo",    ".debug_macinfo.dwo"    ) \
-  X(PubNames,   ".debug_pubnames",   "__debug_pubnames",   ".debug_pubnames.dwo"   ) \
-  X(PubTypes,   ".debug_pubtypes",   "__debug_pubtypes",   ".debug_pubtypes.dwo"   ) \
-  X(Ranges,     ".debug_ranges",     "__debug_ranges",     ".debug_ranges.dwo"     ) \
-  X(Str,        ".debug_str",        "__debug_str",        ".debug_str.dwo"        ) \
-  X(Addr,       ".debug_addr",       "__debug_addr",       ".debug_addr.dwo"       ) \
-  X(LocLists,   ".debug_loclists",   "__debug_loclists",   ".debug_loclists.dwo"   ) \
-  X(RngLists,   ".debug_rnglists",   "__debug_rnglists",   ".debug_rnglists.dwo"   ) \
-  X(StrOffsets, ".debug_stroffsets", "__debug_stroffsets", ".debug_stroffsets.dwo" ) \
-  X(LineStr,    ".debug_linestr",    "__debug_linestr",    ".debug_linestr.dwo"    ) \
-  X(Names,      ".debug_names",      "__debug_names",      ".debug_names.dwo"      )
+#define DW_SentinelFromSize(address_size) ((address_size) == 4 ? max_U32 : (address_size) == 8 ? max_U64 : 0)
+
+#define DW_SectionKind_XList(X                                                       )\
+  X(Null,       "",                   "",                    ""                      )\
+  X(Abbrev,     ".debug_abbrev",      "__debug_abbrev",      ".debug_abbrev.dwo"     )\
+  X(ARanges,    ".debug_aranges",     "__debug_aranges",     ".debug_aranges.dwo"    )\
+  X(Frame,      ".debug_frame",       "__debug_frame",       ".debug_frame.dwo"      )\
+  X(Info,       ".debug_info",        "__debug_info",        ".debug_info.dwo"       )\
+  X(Line,       ".debug_line",        "__debug_line",        ".debug_line.dwo"       )\
+  X(Loc,        ".debug_loc",         "__debug_loc",         ".debug_loc.dwo"        )\
+  X(MacInfo,    ".debug_macinfo",     "__debug_macinfo",     ".debug_macinfo.dwo"    )\
+  X(PubNames,   ".debug_pubnames",    "__debug_pubnames",    ".debug_pubnames.dwo"   )\
+  X(PubTypes,   ".debug_pubtypes",    "__debug_pubtypes",    ".debug_pubtypes.dwo"   )\
+  X(Ranges,     ".debug_ranges",      "__debug_ranges",      ".debug_ranges.dwo"     )\
+  X(Str,        ".debug_str",         "__debug_str",         ".debug_str.dwo"        )\
+  X(Addr,       ".debug_addr",        "__debug_addr",        ".debug_addr.dwo"       )\
+  X(LocLists,   ".debug_loclists",    "__debug_loclists",    ".debug_loclists.dwo"   )\
+  X(RngLists,   ".debug_rnglists",    "__debug_rnglists",    ".debug_rnglists.dwo"   )\
+  X(StrOffsets, ".debug_str_offsets", "__debug_str_offsets", ".debug_str_offsets.dwo")\
+  X(LineStr,    ".debug_line_str",    "__debug_line_str",    ".debug_line_str.dwo"   )\
+  X(Names,      ".debug_names",       "__debug_names",       ".debug_names.dwo"      )
 
 typedef U64 DW_SectionKind;
 typedef enum DW_SectionKindEnum
@@ -82,8 +85,8 @@ typedef enum DW_SectionKindEnum
   X(Ada95,               0x0D)   \
   X(Fortran95,           0x0E)   \
   X(PLI,                 0x0F)   \
-  X(ObjectiveC,          0x10)   \
-  X(ObjectiveCPlusPlus,  0x11)   \
+  X(ObjC,                0x10)   \
+  X(ObjCPlusPlus,        0x11)   \
   X(UPC,                 0x12)   \
   X(D,                   0x13)   \
   X(Python,              0x14)   \
@@ -171,19 +174,19 @@ typedef enum DW_ExtOpcode
 #undef X
 } DW_ExtOpcode;
 
-#define DW_NameCase_XList(X) \
-  X(Sensitive,   0x00)       \
-  X(Upper,       0x01)       \
-  X(Lower,       0x02)       \
-  X(Insensitive, 0x03)
+#define DW_IDCaseKind_XList(X) \
+  X(CaseSensitive,   0x00)     \
+  X(UpCase,          0x01)     \
+  X(DownCase,        0x02)     \
+  X(CaseInsensitive, 0x03)
 
-typedef enum DW_NameCase
+typedef U64 DW_IDCaseKind;
+typedef enum DW_IDCaseKindEnum
 {
-#define X(_N,_ID) DW_NameCase_##_N = _ID,
-  DW_NameCase_XList(X)
+#define X(_N,_ID) DW_IDCase_##_N = _ID,
+  DW_IDCaseKind_XList(X)
 #undef X
-  DW_NameCase_Count
-} DW_NameCase;
+} DW_IDCaseKindEnum;
 
 #define DW_Tag_V3_XList(X)        \
   X(ArrayType,              0x01) \
@@ -462,6 +465,18 @@ typedef enum DW_AttribClassEnum
   X(Addrx3,        DW_AttribClass_Address)       \
   X(Addrx4,        DW_AttribClass_Address)
 
+#define DW_Form_GNU_XList(X) \
+  X(GNU_AddrIndex, 0x1f01)   \
+  X(GNU_StrIndex,  0x1f02)   \
+  X(GNU_RefAlt,    0x1f20)   \
+  X(GNU_StrpAlt,   0x1f21)
+
+#define DW_Form_AttribClass_GNU_XList(X)     \
+  X(GNU_AddrIndex, DW_AttribClass_Undefined) \
+  X(GNU_StrIndex,  DW_AttribClass_Undefined) \
+  X(GNU_RefAlt,    DW_AttribClass_Undefined) \
+  X(GNU_StrpAlt,   DW_AttribClass_String)
+
 typedef U64 DW_FormKind;
 typedef enum DW_FormEnum
 {
@@ -470,6 +485,7 @@ typedef enum DW_FormEnum
   DW_Form_V2_XList(X)
   DW_Form_V4_XList(X)
   DW_Form_V5_XList(X)
+  DW_Form_GNU_XList(X)
 #undef X
 } DW_FormEnum;
 
@@ -1158,34 +1174,34 @@ typedef enum DW_AttribKindEnum
   DW_Attrib_UserHi = 0x3fff
 } DW_AttribKindEnum;
 
-#define DW_AttribTypeEncodingKind_XList(X) \
-  X(Null,           0x00)                  \
-  X(Address,        0x01)                  \
-  X(Boolean,        0x02)                  \
-  X(ComplexFloat,   0x03)                  \
-  X(Float,          0x04)                  \
-  X(Signed,         0x05)                  \
-  X(SignedChar,     0x06)                  \
-  X(Unsigned,       0x07)                  \
-  X(UnsignedChar,   0x08)                  \
-  X(ImaginaryFloat, 0x09)                  \
-  X(PackedDecimal,  0x0A)                  \
-  X(NumericString,  0x0B)                  \
-  X(Edited,         0x0C)                  \
-  X(SignedFixed,    0x0D)                  \
-  X(UnsignedFixed,  0x0E)                  \
-  X(DecimalFloat,   0x0F)                  \
-  X(Utf,            0x10)                  \
-  X(Ucs,            0x11)                  \
+#define DW_ATE_XList(X)   \
+  X(Null,           0x00) \
+  X(Address,        0x01) \
+  X(Boolean,        0x02) \
+  X(ComplexFloat,   0x03) \
+  X(Float,          0x04) \
+  X(Signed,         0x05) \
+  X(SignedChar,     0x06) \
+  X(Unsigned,       0x07) \
+  X(UnsignedChar,   0x08) \
+  X(ImaginaryFloat, 0x09) \
+  X(PackedDecimal,  0x0A) \
+  X(NumericString,  0x0B) \
+  X(Edited,         0x0C) \
+  X(SignedFixed,    0x0D) \
+  X(UnsignedFixed,  0x0E) \
+  X(DecimalFloat,   0x0F) \
+  X(Utf,            0x10) \
+  X(Ucs,            0x11) \
   X(Ascii,          0x12)
 
-typedef U64 DW_AttribTypeEncodingKind;
-typedef enum DW_AttribTypeEncodingKindEnum
+typedef U64 DW_ATE;
+typedef enum DW_ATEEnum
 {
-#define X(_N,_ID) DW_AttribTypeEncodingKind_##_N = _ID,
-  DW_AttribTypeEncodingKind_XList(X)
+#define X(_N,_ID) DW_ATE_##_N = _ID,
+  DW_ATE_XList(X)
 #undef X
-} DW_AttribTypeEncodingKindEnum;
+} DW_ATEnum;
 
 #define DW_CallingConventionKind_XList(X) \
   X(Normal,          0x0)                 \
@@ -1230,7 +1246,7 @@ typedef enum DW_VirtualityEnum
 
 #define DW_RngListEntryKind(X) \
   X(EndOfList,    0x00)        \
-  X(BaseAddressX, 0x01)        \
+  X(BaseAddressx, 0x01)        \
   X(StartxEndx,   0x02)        \
   X(StartxLength, 0x03)        \
   X(OffsetPair,   0x04)        \
@@ -1238,32 +1254,51 @@ typedef enum DW_VirtualityEnum
   X(StartEnd,     0x06)        \
   X(StartLength,  0x07)
 
-typedef U64 DW_RngListEntryKind;
-typedef enum DW_RngListEntryKindEnum
+typedef U8 DW_RLE;
+typedef enum DW_RLE_Enum
 {
-#define X(_N,_ID) DW_RngListEntryKind_##_N = _ID,
+#define X(_N,_ID) DW_RLE_##_N = _ID,
   DW_RngListEntryKind(X)
 #undef X
-} DW_RngListEntryKindEnum;
+} DW_RLE_Enum;
 
 #define DW_LocListEntry_XList(X) \
   X(EndOfList,       0x00)       \
-  X(BaseAddressX,    0x01)       \
-  X(StartXEndX,      0x02)       \
-  X(StartXLength,    0x03)       \
+  X(BaseAddressx,    0x01)       \
+  X(StartxEndx,      0x02)       \
+  X(StartxLength,    0x03)       \
   X(OffsetPair,      0x04)       \
   X(DefaultLocation, 0x05)       \
   X(BaseAddress,     0x06)       \
   X(StartEnd,        0x07)       \
   X(StartLength,     0x08)
 
-typedef U64 DW_LocListEntryKind;
-typedef enum DW_LocListEntryEnum
+#define DW_LocListEntry_GNU_XList(X) \
+  X(GNU_ViewPair, 0x9)
+
+typedef U8 DW_LLE;
+typedef enum DW_LLE_Enum
 {
-#define X(_N,_ID) DW_LocListEntryKind_##_N = _ID,
+#define X(_N,_ID) DW_LLE_##_N = _ID,
   DW_LocListEntry_XList(X)
 #undef X
-} DW_LocListEntryEnum;
+} DW_LLEEnum;
+
+#define DW_AddrClass_XList(X) \
+  X(None,   0)                \
+  X(Near16, 1)                \
+  X(Far16,  2)                \
+  X(Huge16, 3)                \
+  X(Near32, 4)                \
+  X(Far32,  5)
+
+typedef U64 DW_AddrClass;
+typedef enum DW_AddrClassEnum
+{
+#define X(_N, _ID) DW_AddrClassKind_##_N = _ID,
+  DW_AddrClass_XList(X)
+#undef X
+} DW_AddrClassEnum;
 
 #define DW_CompUnitKind_XList(X) \
   X(Reserved,     0)             \
@@ -1284,16 +1319,23 @@ typedef enum DW_CompUnitKindEnum
   DW_CompUnitKind_UserHi = 0xff
 } DW_CompUnitKindEnum;
 
-typedef enum DW_LNCT
+#define DW_LNCT_XList(X) \
+  X(Path,           0x1)       \
+  X(DirectoryIndex, 0x2)       \
+  X(TimeStamp,      0x3)       \
+  X(Size,           0x4)       \
+  X(MD5,            0x5)       \
+  X(LLVM_Source,    0x2001)
+
+typedef U64 DW_LNCT;
+typedef enum DW_LNCTEnum
 {
-  DW_LNCT_Path            = 0x1,
-  DW_LNCT_DirectoryIndex = 0x2,
-  DW_LNCT_TimeStamp       = 0x3,
-  DW_LNCT_Size            = 0x4,
-  DW_LNCT_MD5             = 0x5,
-  DW_LNCT_UserLo         = 0x2000,
-  DW_LNCT_UserHi         = 0x3fff
-} DW_LNCT;
+#define X(_N, _ID) DW_LNCT_##_N = _ID,
+  DW_LNCT_XList(X)
+#undef X
+  DW_LNCT_UserLo = 0x2000,
+  DW_LNCT_UserHi = 0x3fff
+} DW_LNCTEnum;
 
 #define DW_CFA_Kind1_XList(X) \
   X(Nop,            0x0)      \
@@ -1529,6 +1571,7 @@ enum
   X(GNU_RegvalType,      0xf5) \
   X(GNU_DerefType,       0xf6) \
   X(GNU_Convert,         0xf7) \
+  X(GNU_ParameterRef,    0xfa) \
   X(GNU_AddrIndex,       0xfb) \
   X(GNU_ConstIndex,      0xfc)
   
@@ -1705,10 +1748,12 @@ internal String8 dw_dwo_name_string_from_section_kind (DW_SectionKind k);
 
 ////////////////////////////////
 
-internal U64 dw_offset_size_from_mode(DW_Mode mode);
+internal U64 dw_size_from_format(DW_Format format);
 
 ////////////////////////////////
 
-internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, DW_Language lang, B32 relaxed, DW_AttribKind attrib, DW_FormKind form_kind);
+internal DW_AttribClass dw_pick_attrib_value_class(DW_Version ver, DW_Ext ext, B32 relaxed, DW_AttribKind attrib, DW_FormKind form_kind);
+
+internal U64 dw_pick_default_lower_bound(DW_Language lang);
 
 #endif // DWARF_H

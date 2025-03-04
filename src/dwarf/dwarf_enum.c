@@ -7,16 +7,10 @@ dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
   String8 result = {0};
 
   #define X(_N,...) case DW_ExprOp_##_N: result = str8_lit(Stringify(_N)); goto exit;
-  switch (ext) {
-    case DW_Ext_Null:  break;
-    case DW_Ext_LLVM:  break;
-    case DW_Ext_APPLE: break;
-    case DW_Ext_MIPS:  break;
-    case DW_Ext_GNU:   {
-      switch (op) {
-        DW_Expr_GNU_XList(X); 
-      }
-    } break;
+  if (ext & DW_Ext_GNU) {
+    switch (op) {
+      DW_Expr_GNU_XList(X); 
+    }
   }
 
   switch (ver) {
@@ -188,11 +182,11 @@ dw_string_from_calling_convetion(Arena *arena, DW_CallingConventionKind kind)
 }
 
 internal String8
-dw_string_from_attrib_type_encoding(Arena *arena, DW_AttribTypeEncodingKind kind)
+dw_string_from_attrib_type_encoding(Arena *arena, DW_ATE kind)
 {
   switch (kind) {
 #define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
-    DW_AttribTypeEncodingKind_XList(X)
+    DW_ATE_XList(X)
 #undef X
   }
   return push_str8f(arena, "%llx", kind);
@@ -222,7 +216,7 @@ dw_string_from_ext_opcode(Arena *arena, DW_ExtOpcode kind)
 }
 
 internal String8
-dw_string_from_loc_list_entry_kind(Arena *arena, DW_LocListEntryKind kind)
+dw_string_from_loc_list_entry_kind(Arena *arena, DW_LLE kind)
 {
   NotImplemented;
   return str8_zero();
@@ -236,7 +230,7 @@ dw_string_from_section_kind(Arena *arena, DW_SectionKind kind)
 }
 
 internal String8
-dw_string_from_rng_list_entry_kind(Arena *arena, DW_RngListEntryKind kind)
+dw_string_from_rng_list_entry_kind(Arena *arena, DW_RLE kind)
 {
   NotImplemented;
   return str8_zero();
