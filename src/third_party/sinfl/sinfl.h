@@ -1,4 +1,6 @@
-// NOTE: changed input and output var types from int to size_t
+// NOTE: 
+//  - updated library to handle 64-bit inputs
+//  - fixed a bug where on decomp would exit on blocks with zero length
 
 /*
 # Small Deflate
@@ -396,7 +398,7 @@ sinfl_decompress(unsigned char *out, size_t cap, const unsigned char *in, size_t
       last = sinfl__get(&s,1);
       type = sinfl__get(&s,2);
 
-      switch (type) {default: return (int)(out-o);
+      switch (type) {default: return (size_t)(out-o);
       case 0x00: state = stored; break;
       case 0x01: state = fixed; break;
       case 0x02: state = dyn; break;}
@@ -411,13 +413,13 @@ sinfl_decompress(unsigned char *out, size_t cap, const unsigned char *in, size_t
       s.bitbuf = s.bitcnt = 0;
 
       if ((unsigned short)len != (unsigned short)~nlen)
-        return (int)(out-o);
-      if (len > (e - s.bitptr) || !len)
-        return (int)(out-o);
+        return (size_t)(out-o);
+      if (len > (e - s.bitptr))
+        return (size_t)(out-o);
 
       memcpy(out, s.bitptr, (size_t)len);
       s.bitptr += len, out += len;
-      if (last) return (int)(out-o);
+      if (last) return (size_t)(out-o);
       state = hdr;
     } break;
     case fixed: {
@@ -472,7 +474,7 @@ sinfl_decompress(unsigned char *out, size_t cap, const unsigned char *in, size_t
         if (sym < 256) {
           /* literal */
           if (sinfl_unlikely(out >= oe)) {
-            return (int)(out-o);
+            return (size_t)(out-o);
           }
           *out++ = (unsigned char)sym;
           sym = sinfl_decode(&s, s.lits, 10);
@@ -483,22 +485,22 @@ sinfl_decompress(unsigned char *out, size_t cap, const unsigned char *in, size_t
         }
         if (sinfl_unlikely(sym == 256)) {
           /* end of block */
-          if (last) return (int)(out-o);
+          if (last) return (size_t)(out-o);
           state = hdr;
           break;
         }
         /* match */
         if (sym >= 286) {
           /* length codes 286 and 287 must not appear in compressed data */
-          return (int)(out-o);
+          return (size_t)(out-o);
         }
         sym -= 257;
         {int len = sinfl__get(&s, lbits[sym]) + lbase[sym];
         int dsym = sinfl_decode(&s, s.dsts, 8);
         int offs = sinfl__get(&s, dbits[dsym]) + dbase[dsym];
         unsigned char *dst = out, *src = out - offs;
-        if (sinfl_unlikely(offs > (int)(out-o))) {
-          return (int)(out-o);
+        if (sinfl_unlikely(offs > (size_t)(out-o))) {
+          return (size_t)(out-o);
         }
         out = out + len;
 
@@ -577,7 +579,7 @@ sinfl_adler32(unsigned adler32, const unsigned char *in, size_t in_len) {
   const unsigned ADLER_MOD = 65521;
   unsigned s1 = adler32 & 0xffff;
   unsigned s2 = adler32 >> 16;
-  unsigned blk_len, i;
+  size_t blk_len, i;
 
   blk_len = in_len % 5552;
   while (in_len) {
@@ -604,7 +606,7 @@ zsinflate(void *out, size_t cap, const void *mem, size_t size) {
   const unsigned char *in = (const unsigned char*)mem;
   if (size >= 6) {
     const unsigned char *eob = in + size - 4;
-    int n = sinfl_decompress((unsigned char*)out, cap, in + 2u, size);
+    size_t n = sinfl_decompress((unsigned char*)out, cap, in + 2u, size);
     unsigned a = sinfl_adler32(1u, (unsigned char*)out, n);
     unsigned h = eob[0] << 24 | eob[1] << 16 | eob[2] << 8 | eob[3] << 0;
     return a == h ? n : -1;
