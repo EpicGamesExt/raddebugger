@@ -199,6 +199,20 @@ hash_table_search_path(HashTable *ht, String8 path)
   return result;
 }
 
+internal void *
+hash_table_search_path_raw(HashTable *ht, String8 path)
+{
+  KeyValuePair *kv = hash_table_search_path(ht, path);
+  return kv ? kv->value_raw : 0;
+}
+
+internal void *
+hash_table_(HashTable *ht, String8 path)
+{
+  KeyValuePair *result = hash_table_search_path(ht, path);
+  return result ? result->value_raw : 0;
+}
+
 internal B32
 hash_table_search_path_u64(HashTable *ht, String8 key, U64 *value_out)
 {

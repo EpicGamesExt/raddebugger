@@ -7,6 +7,7 @@ typedef struct KeyValuePair
 {
   union {
     String8 key_string;
+    void   *key_raw;
     U32     key_u32;
     U64     key_u64;
   };
@@ -67,19 +68,21 @@ internal BucketNode * hash_table_push_u64_u64      (Arena *arena, HashTable *ht,
 //- search
 
 internal KeyValuePair * hash_table_search_string  (HashTable *ht, String8 string);
-internal KeyValuePair * hash_table_search_u32     (HashTable *ht, U32 key);
-internal KeyValuePair * hash_table_search_u64     (HashTable *ht, U64 key);
-internal KeyValuePair * hash_table_search_path    (HashTable *ht, String8 path);
+internal KeyValuePair * hash_table_search_u32     (HashTable *ht, U32 key       );
+internal KeyValuePair * hash_table_search_u64     (HashTable *ht, U64 key       );
+internal KeyValuePair * hash_table_search_path    (HashTable *ht, String8 path  );
+internal void *         hash_table_search_path_raw(HashTable *ht, String8 path  );
 
 internal B32 hash_table_search_path_u64(HashTable *ht, String8 key, U64 *value_out);
 
 //- key-value helpers
 
-internal U32 *          keys_from_hash_table_u32(Arena *arena, HashTable *ht);
-internal U64 *          keys_from_hash_table_u64(Arena *arena, HashTable *ht);
+internal U32 *          keys_from_hash_table_u32       (Arena *arena, HashTable *ht);
+internal U64 *          keys_from_hash_table_u64       (Arena *arena, HashTable *ht);
 internal KeyValuePair * key_value_pairs_from_hash_table(Arena *arena, HashTable *ht);
-internal void           sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count);
-internal void           sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);
+
+internal void sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count);
+internal void sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);
 
 ////////////////////////////////
 
