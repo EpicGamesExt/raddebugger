@@ -813,3 +813,25 @@ rdi_cstring_length(char *cstr)
   for(;cstr[result] != 0; result += 1){}
   return result;
 }
+
+RDI_PROC RDI_U64
+rdi_size_from_bytecode_stream(U8 *ptr, U8 *opl)
+{
+  RDI_U64 bytecode_size = 0;
+  RDI_U8 *off_first = ptr + sizeof(RDI_LocationKind);
+  for(RDI_U8 *off = off_first, *next_off = opl; off < opl; off = next_off)
+  {
+    RDI_U8 op = *off;
+    if(op == 0)
+    {
+      break;
+    }
+
+    RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+    RDI_U32 p_size   = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+    bytecode_size += (1 + p_size);
+    next_off = (off + 1 + p_size);
+  }
+  return bytecode_size;
+}
+

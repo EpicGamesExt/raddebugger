@@ -970,6 +970,8 @@ X(RDI_LinkFlags, link_flags)\
 X(RDI_U32, type_idx)\
 X(RDI_U32, root_scope_idx)\
 X(RDI_U32, container_idx)\
+X(RDI_U32, frame_base_location_first)\
+X(RDI_U32, frame_base_location_opl)\
 
 #define RDI_Scope_XList \
 X(RDI_U32, proc_idx)\
@@ -1397,6 +1399,8 @@ RDI_LinkFlags link_flags;
 RDI_U32 type_idx;
 RDI_U32 root_scope_idx;
 RDI_U32 container_idx;
+RDI_U32 frame_base_location_first;
+RDI_U32 frame_base_location_opl;
 };
 
 typedef struct RDI_Scope RDI_Scope;

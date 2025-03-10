@@ -1027,12 +1027,14 @@ RDI_ThreadVariableMemberTable:
 @table(name type desc)
 RDI_ProcedureMemberTable:
 {
-  {name_string_idx        RDI_U32                    ""}
-  {link_name_string_idx   RDI_U32                    ""}
-  {link_flags             RDI_LinkFlags              ""}
-  {type_idx               RDI_U32                    ""}
-  {root_scope_idx         RDI_U32                    ""}
-  {container_idx          RDI_U32                    ""}
+  {name_string_idx           RDI_U32                    ""}
+  {link_name_string_idx      RDI_U32                    ""}
+  {link_flags                RDI_LinkFlags              ""}
+  {type_idx                  RDI_U32                    ""}
+  {root_scope_idx            RDI_U32                    ""}
+  {container_idx             RDI_U32                    ""}
+  {frame_base_location_first RDI_U32                    ""}
+  {frame_base_location_opl   RDI_U32                    ""}
 }
 
 @table(name type desc)
@@ -1250,7 +1252,7 @@ RDI_EvalOpTable:
   {MemRead     4       1 1 1}
   {RegRead     5       4 0 1}
   {RegReadDyn  6       0 1 1}
-  {FrameOff    7       1 0 1}
+  {FrameOff    7       8 0 1}
   {ModuleOff   8       4 0 1}
   {TLSOff      9       4 0 1}
   {ObjectOff   10      0 0 0}

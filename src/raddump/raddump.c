@@ -978,6 +978,7 @@ rdi_print_type_node(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
     U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
     String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
     rd_printf("constructed.params      =%S", param_idx_str);
+    rd_printf("return type             =%u", type->constructed.direct_type_idx);
   } else if (type->kind == RDI_TypeKind_Method) {
     U32  param_idx_count = 0;
     U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
@@ -990,6 +991,7 @@ rdi_print_type_node(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
     String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
     rd_printf("constructed.this_type   =%S", this_type_str);
     rd_printf("constructed.params      =%S", param_idx_str);
+    rd_printf("return type             =%u", type->constructed.direct_type_idx);
   } else if (RDI_TypeKind_FirstConstructed <= type->kind && type->kind <= RDI_TypeKind_LastConstructed) {
 
     rd_printf("constructed.direct_type =%u", type->constructed.direct_type_idx);
@@ -1059,6 +1061,86 @@ rdi_print_udt(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, R
 }
 
 internal void
+rdi_print_locations(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, Arch arch, U64 block_lo, U64 block_hi)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64                location_block_count = 0;
+  U64                location_data_size   = 0;
+  RDI_LocationBlock *location_block_array = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
+  RDI_U8            *location_data        = rdi_table_from_name(rdi, LocationData,   &location_data_size);
+
+  block_lo = ClampTop(block_lo, location_block_count);
+  block_hi = ClampTop(block_hi, location_block_count);
+
+  for (U32 block_idx = block_lo; block_idx < block_hi; ++block_idx) {
+    RDI_LocationBlock *block_ptr = &location_block_array[block_idx];
+
+    if (block_ptr->scope_off_first == 0 && block_ptr->scope_off_opl == max_U32) {
+      rd_printf("case *always*:");
+    } else {
+      rd_printf("case [%#08x, %#08x):", block_ptr->scope_off_first, block_ptr->scope_off_opl);
+    }
+
+    if (block_ptr->location_data_off >= location_data_size) {
+      rd_printf("<bad-location-data-offset %x>", block_ptr->location_data_off);
+    } else {
+      U8               *loc_data_opl = location_data + location_data_size;
+      U8               *loc_base_ptr = location_data + block_ptr->location_data_off;
+      RDI_LocationKind  kind         = *(RDI_LocationKind*)loc_base_ptr;
+      switch (kind) {
+      default: {
+        rd_printf("\?\?\?: %u", kind);
+      } break;
+
+      case RDI_LocationKind_AddrBytecodeStream: {
+        Temp temp = temp_begin(scratch.arena);
+        String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
+        rd_printf("AddrBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
+        temp_end(temp);
+      } break;
+
+      case RDI_LocationKind_ValBytecodeStream: {
+        Temp temp = temp_begin(scratch.arena);
+        String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
+        rd_printf("ValBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
+        temp_end(temp);
+      } break;
+
+      case RDI_LocationKind_AddrRegPlusU16: {
+        if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl) {
+          rd_printf("AddrRegPlusU16(\?\?\?)");
+        } else {
+          RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
+          rd_printf("AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+        }
+      } break;
+
+      case RDI_LocationKind_AddrAddrRegPlusU16: {
+        if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
+          rd_printf("AddrAddrRegPlusU16(\?\?\?)");
+        } else {
+          RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
+          rd_printf("AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+        }
+      } break;
+
+      case RDI_LocationKind_ValReg: {
+        if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl) {
+          rd_printf("ValReg(\?\?\?)");
+        } else {
+          RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
+          rd_printf("ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
+        }
+      } break;
+      }
+    }
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
 rdi_print_global_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_GlobalVariable *gvar)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -1083,15 +1165,20 @@ rdi_print_thread_variable(Arena *arena, String8List *out, String8 indent, RDI_Pa
 }
 
 internal void
-rdi_print_procedure(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure *proc)
+rdi_print_procedure(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_Arch arch)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  rd_printf("name          ='%S'", str8_from_rdi_string_idx(rdi, proc->name_string_idx));
-  rd_printf("link_name     ='%S'", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
-  rd_printf("link_flags    =%S",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
-  rd_printf("type_idx      =%u",   proc->type_idx);
-  rd_printf("root_scope_idx=%u",   proc->root_scope_idx);
-  rd_printf("container_idx =%u",   proc->container_idx);
+  rd_printf("name           ='%S'", str8_from_rdi_string_idx(rdi, proc->name_string_idx));
+  rd_printf("link_name      ='%S'", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
+  rd_printf("link_flags     =%S",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
+  rd_printf("type_idx       =%u",   proc->type_idx);
+  rd_printf("root_scope_idx =%u",   proc->root_scope_idx);
+  rd_printf("container_idx  =%u",   proc->container_idx);
+  rd_printf("frame_base (first=%u, opl=%u)", proc->frame_base_location_first, proc->frame_base_location_opl);
+  rd_indent();
+  rdi_print_locations(arena, out, indent, rdi, arch, proc->frame_base_location_first, proc->frame_base_location_opl);
+  rd_unindent();
+
   scratch_end(scratch);
 }
 
@@ -1103,19 +1190,15 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
   U64                scope_count          = 0;
   U64                scope_voff_count     = 0;
   U64                local_count          = 0;
-  U64                location_block_count = 0;
-  U64                location_data_size   = 0;
   U64                proc_count           = 0;
   RDI_Scope         *scope_array          = rdi_table_from_name(rdi, Scopes,         &scope_count);
   U64               *scope_voff_array     = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voff_count);
   RDI_Local         *local_array          = rdi_table_from_name(rdi, Locals,         &local_count);
-  RDI_LocationBlock *location_block_array = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
-  RDI_U8            *location_data        = rdi_table_from_name(rdi, LocationData,   &location_data_size);
   RDI_Procedure     *proc_array           = rdi_table_from_name(rdi, Procedures, &proc_count);
 
   U32      voff_range_lo    = ClampTop(scope->voff_range_first, scope_voff_count);
   U32      voff_range_hi    = ClampTop(scope->voff_range_opl,   scope_voff_count);
-  U32      voff_range_count = (voff_range_hi - voff_range_lo) / 2;
+  U32      voff_range_count = (voff_range_hi - voff_range_lo);
   U64     *voff_ptr         = scope_voff_array + voff_range_lo;
   String8  voff_str         = rd_string_from_range_array_u64_hex(scratch.arena, voff_ptr, voff_range_count);
   
@@ -1147,74 +1230,10 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
         rd_printf("name    ='%S'", str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx));
         rd_printf("type_idx=%u",   local_ptr->type_idx);
         
-        U32 block_lo = ClampTop(local_ptr->location_first, location_block_count);
-        U32 block_hi = ClampTop(local_ptr->location_opl, location_block_count);
-        if (block_lo < block_hi) {
+        if (local_ptr->location_first < local_ptr->location_opl) {
           rd_printf("locations:");
           rd_indent();
-          for (U32 block_idx = block_lo; block_idx < block_hi; ++block_idx) {
-            RDI_LocationBlock *block_ptr = &location_block_array[block_idx];
-
-            if (block_ptr->scope_off_first == 0 && block_ptr->scope_off_opl == max_U32) {
-              rd_printf("case *always*:");
-            } else {
-              rd_printf("case [%#08x, %#08x):", block_ptr->scope_off_first, block_ptr->scope_off_opl);
-            }
-            
-            if (block_ptr->location_data_off >= location_data_size) {
-              rd_printf("<bad-location-data-offset %x>", block_ptr->location_data_off);
-            } else {
-              U8               *loc_data_opl = location_data + location_data_size;
-              U8               *loc_base_ptr = location_data + block_ptr->location_data_off;
-              RDI_LocationKind  kind         = *(RDI_LocationKind*)loc_base_ptr;
-              switch (kind) {
-              default: {
-                rd_printf("\?\?\?: %u", kind);
-              } break;
-
-              case RDI_LocationKind_AddrBytecodeStream: {
-                Temp temp = temp_begin(scratch.arena);
-                String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
-                rd_printf("AddrBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
-                temp_end(temp);
-              } break;
-
-              case RDI_LocationKind_ValBytecodeStream: {
-                Temp temp = temp_begin(scratch.arena);
-                String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
-                rd_printf("ValBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
-                temp_end(temp);
-              } break;
-
-              case RDI_LocationKind_AddrRegPlusU16: {
-                if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl) {
-                  rd_printf("AddrRegPlusU16(\?\?\?)");
-                } else {
-                  RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
-                  rd_printf("AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
-                }
-              } break;
-
-              case RDI_LocationKind_AddrAddrRegPlusU16: {
-                if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
-                  rd_printf("AddrAddrRegPlusU16(\?\?\?)");
-                } else {
-                  RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
-                  rd_printf("AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
-                }
-              } break;
-
-              case RDI_LocationKind_ValReg: {
-                if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl) {
-                  rd_printf("ValReg(\?\?\?)");
-                } else {
-                  RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
-                  rd_printf("ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
-                }
-              } break;
-              }
-            }
-          }
+          rdi_print_locations(arena, out, indent, rdi, arch, local_ptr->location_first, local_ptr->location_opl);
           rd_unindent();
         }
         rd_unindent();
@@ -1446,7 +1465,7 @@ rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Op
     for (U64 i = 0; i < proc_count; ++i) {
       rd_printf("procedure[%llu]:", i);
       rd_indent();
-      rdi_print_procedure(arena, out, indent, rdi, &proc_array[i]);
+      rdi_print_procedure(arena, out, indent, rdi, &proc_array[i], tli->arch);
       rd_unindent();
     }
     rd_unindent();
