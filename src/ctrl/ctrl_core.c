@@ -5513,10 +5513,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->reg_space.u64_0 = (U64)thread;
               ctx->module_base   = push_array(temp.arena, U64, 1);
               ctx->module_base[0]= module->vaddr_range.min;
+              ctx->frame_base    = push_array(temp.arena, U64, 1);
               ctx->tls_base      = push_array(temp.arena, U64, 1);
             }
-            e_select_interpret_ctx(&interpret_ctx);
-            
+            e_select_interpret_ctx(&interpret_ctx, type_ctx.primary_module->rdi, type_ctx.ip_voff);
+
             // rjf: evaluate
             E_Eval eval = zero_struct;
             ProfScope("evaluate expression")

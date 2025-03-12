@@ -11,9 +11,50 @@ e_selected_interpret_ctx(void)
 }
 
 internal void
-e_select_interpret_ctx(E_InterpretCtx *ctx)
+e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff)
 {
   e_interpret_ctx = ctx;
+
+  // compute and apply frame base
+  {
+    E_Interpretation frame_base = { .code = ~0 };
+
+    RDI_Procedure *proc = rdi_procedure_from_voff(primary_rdi, ip_voff);
+    for(U64 loc_block_idx = proc->frame_base_location_first; loc_block_idx < proc->frame_base_location_opl; loc_block_idx += 1)
+    {
+      RDI_LocationBlock *block = rdi_element_from_name_idx(primary_rdi, LocationBlocks, loc_block_idx);
+      if (block->scope_off_first <= ip_voff && ip_voff < block->scope_off_opl) {
+        U64  all_location_data_size = 0;
+        U8  *all_location_data      = rdi_table_from_name(primary_rdi, LocationData, &all_location_data_size);
+        if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
+        {
+          RDI_LocationKind loc_kind = *(RDI_LocationKind *)(all_location_data + block->location_data_off);
+          if(loc_kind == RDI_LocationKind_ValBytecodeStream || loc_kind == RDI_LocationKind_AddrBytecodeStream)
+          {
+            U8      *bytecode_ptr  = all_location_data + block->location_data_off + sizeof(RDI_LocationKind);
+            U8      *bytecode_opl  = all_location_data + all_location_data_size;
+            U64      bytecode_size = rdi_size_from_bytecode_stream(bytecode_ptr, bytecode_opl);
+            String8  bytecode      = str8(bytecode_ptr, bytecode_size);
+            frame_base = e_interpret(bytecode);
+          }
+          else if(loc_kind != RDI_LocationKind_NULL)
+          {
+            NotImplemented;
+          }
+        }
+        break;
+      }
+    }
+
+    if(frame_base.code == E_InterpretationCode_Good)
+    {
+      *ctx->frame_base = frame_base.value.u64;
+    }
+    else
+    {
+      ctx->frame_base = 0;
+    }
+  }
 }
 
 ////////////////////////////////

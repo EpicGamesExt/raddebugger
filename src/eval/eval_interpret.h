@@ -43,7 +43,7 @@ thread_static E_InterpretCtx *e_interpret_ctx = 0;
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
 internal E_InterpretCtx *e_selected_interpret_ctx(void);
-internal void e_select_interpret_ctx(E_InterpretCtx *ctx);
+internal void e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff);
 
 ////////////////////////////////
 //~ rjf: Space Reading Helpers
