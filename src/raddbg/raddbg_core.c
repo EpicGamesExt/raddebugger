@@ -8374,7 +8374,7 @@ rd_window_frame(void)
     //
     ProfScope("build hover eval")
     {
-      B32 build_hover_eval = hover_eval_is_open && !rd_drag_is_active();
+      B32 build_hover_eval = hover_eval_is_open && (!rd_drag_is_active() || rd_state->drag_drop_regs_slot == RD_RegSlot_View);
       
       // rjf: disable hover eval if hovered view is actively scrolling
       if(hover_eval_is_open)
@@ -14022,8 +14022,16 @@ rd_frame(void)
           }break;
           case RD_CmdKind_CloseWindow:
           {
+            RD_CfgList all_windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
             RD_Cfg *wcfg = rd_cfg_from_id(rd_regs()->window);
-            rd_cfg_release(wcfg);
+            if(all_windows.count == 1 && all_windows.first->v == wcfg)
+            {
+              rd_cmd(RD_CmdKind_Exit);
+            }
+            else
+            {
+              rd_cfg_release(wcfg);
+            }
           }break;
           case RD_CmdKind_ToggleFullscreen:
           {
