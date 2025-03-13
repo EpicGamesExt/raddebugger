@@ -152,17 +152,17 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     }
     if(key_node)
     {
-      if(key_node->hash_history_gen >= ArrayCount(key_node->hash_history))
+      if(key_node->hash_history_gen >= HS_KEY_HASH_HISTORY_STRONG_REF_COUNT)
       {
-        key_expired_hash = key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)];
+        key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-HS_KEY_HASH_HISTORY_STRONG_REF_COUNT)%ArrayCount(key_node->hash_history)];
       }
       key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
       key_node->hash_history_gen += 1;
     }
   }
   
-  //- rjf: if this key's history cache was full, dec key ref count of oldest hash
-  ProfScope("if this key's history cache was full, dec key ref count of oldest hash")
+  //- rjf: decrement key ref count of expired hash
+  ProfScope("decrement key ref count of expired hash")
     if(!u128_match(key_expired_hash, u128_zero()))
   {
     U64 old_hash_slot_idx = key_expired_hash.u64[1]%hs_shared->slots_count;
@@ -251,6 +251,49 @@ hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
 }
 
 ////////////////////////////////
+//~ rjf: Downstream Accesses
+
+internal void
+hs_hash_downstream_inc(U128 hash)
+{
+  U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
+  U64 stripe_idx = slot_idx%hs_shared->stripes_count;
+  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex)
+  {
+    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    {
+      if(u128_match(hash, n->hash))
+      {
+        ins_atomic_u64_inc_eval(&n->downstream_ref_count);
+        break;
+      }
+    }
+  }
+}
+
+internal void
+hs_hash_downstream_dec(U128 hash)
+{
+  U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
+  U64 stripe_idx = slot_idx%hs_shared->stripes_count;
+  HS_Slot *slot = &hs_shared->slots[slot_idx];
+  HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex)
+  {
+    for(HS_Node *n = slot->first; n != 0; n = n->next)
+    {
+      if(u128_match(hash, n->hash))
+      {
+        ins_atomic_u64_dec_eval(&n->downstream_ref_count);
+        break;
+      }
+    }
+  }
+}
+
+////////////////////////////////
 //~ rjf: Cache Lookup
 
 internal U128
@@ -321,7 +364,8 @@ hs_evictor_thread__entry_point(void *p)
         {
           U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
           U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-          if(key_ref_count == 0 && scope_ref_count == 0)
+          U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
+          if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
           {
             slot_has_work = 1;
             break;
@@ -335,7 +379,8 @@ hs_evictor_thread__entry_point(void *p)
           next = n->next;
           U64 key_ref_count = ins_atomic_u64_eval(&n->key_ref_count);
           U64 scope_ref_count = ins_atomic_u64_eval(&n->scope_ref_count);
-          if(key_ref_count == 0 && scope_ref_count == 0)
+          U64 downstream_ref_count = ins_atomic_u64_eval(&n->downstream_ref_count);
+          if(key_ref_count == 0 && scope_ref_count == 0 && downstream_ref_count == 0)
           {
             DLLRemove(slot->first, slot->last, n);
             SLLStackPush(hs_shared->stripes_free_nodes[stripe_idx], n);

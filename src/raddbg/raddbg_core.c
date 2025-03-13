@@ -5173,7 +5173,7 @@ rd_view_ui(Rng2F32 rect)
                         }
                         else
                         {
-                          rgba.w *= 0.15f;
+                          rgba.w *= 0.05f;
                         }
                         rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                         cell_background_color_override = rgba;
@@ -5191,7 +5191,7 @@ rd_view_ui(Rng2F32 rect)
                         }
                         else
                         {
-                          rgba.w *= 0.15f;
+                          rgba.w *= 0.05f;
                         }
                         rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                         cell_background_color_override = rgba;
@@ -7544,7 +7544,17 @@ rd_window_frame(void)
                                     content_rect_center.y - max_query_height_px/2.f,
                                     content_rect_center.x + query_width_px/2,
                                     content_rect_center.y - max_query_height_px/2.f + query_height_px*query_open_t);
-        
+        if(!ui_key_match(ui_key_zero(), ws->query_regs->ui_key))
+        {
+          UI_Box *anchor_box = ui_box_from_key(ws->query_regs->ui_key);
+          if(anchor_box != &ui_nil_box)
+          {
+            query_rect.x0 = anchor_box->rect.x0;
+            query_rect.y0 = anchor_box->rect.y1;
+            query_rect.x1 = query_rect.x0 + ui_top_font_size()*40.f;
+            query_rect.y1 = query_rect.y0 + query_height_px;
+          }
+        }
         RD_Font(RD_FontSlot_Code)
           UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
           UI_TagF("floating")
@@ -16035,7 +16045,7 @@ Z(getting_started)
             
             // rjf: floating queries -> set up window to build immediate-mode top-level query
             RD_Cfg *view = &rd_nil_cfg;
-            if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
+            if(cmd_name.size == 0 || cmd_kind_info->query.flags & RD_QueryFlag_Floating)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
               RD_WindowState *ws = rd_window_state_from_cfg(window);
