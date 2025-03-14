@@ -201,37 +201,6 @@ struct P2R_LinkNameMapBuildIn
   P2R_LinkNameMap *link_name_map;
 };
 
-//- rjf: type forward resolution map build
-
-typedef struct P2R_ITypeFwdMapFillIn P2R_ITypeFwdMapFillIn;
-struct P2R_ITypeFwdMapFillIn
-{
-  PDB_TpiHashParsed *tpi_hash;
-  CV_LeafParsed *tpi_leaf;
-  CV_TypeId itype_first;
-  CV_TypeId itype_opl;
-  CV_TypeId *itype_fwd_map;
-};
-
-//- rjf: itype chain build
-
-typedef struct P2R_TypeIdChain P2R_TypeIdChain;
-struct P2R_TypeIdChain
-{
-  P2R_TypeIdChain *next;
-  CV_TypeId itype;
-};
-
-typedef struct P2R_ITypeChainBuildIn P2R_ITypeChainBuildIn;
-struct P2R_ITypeChainBuildIn
-{
-  CV_LeafParsed *tpi_leaf;
-  CV_TypeId itype_first;
-  CV_TypeId itype_opl;
-  CV_TypeId *itype_fwd_map;
-  P2R_TypeIdChain **itype_chains;
-};
-
 //- rjf: udt conversion
 
 typedef struct P2R_UDTConvertIn P2R_UDTConvertIn;
@@ -240,7 +209,6 @@ struct P2R_UDTConvertIn
   CV_LeafParsed *tpi_leaf;
   CV_TypeId itype_first;
   CV_TypeId itype_opl;
-  CV_TypeId *itype_fwd_map;
   RDIM_Type **itype_type_ptrs;
 };
 
@@ -257,7 +225,6 @@ struct P2R_SymbolStreamConvertIn
   CV_SymParsed *sym;
   U64 sym_ranges_first;
   U64 sym_ranges_opl;
-  CV_TypeId *itype_fwd_map;
   RDIM_Type **itype_type_ptrs;
   P2R_LinkNameMap *link_name_map;
   RDIM_LineTable *first_inline_site_line_table;
@@ -340,12 +307,6 @@ ASYNC_WORK_DEF(p2r_units_convert_work);
 //~ rjf: Link Name Map Building Tasks
 
 ASYNC_WORK_DEF(p2r_link_name_map_build_work);
-
-////////////////////////////////
-//~ rjf: Type Parsing/Conversion Tasks
-
-ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work);
-ASYNC_WORK_DEF(p2r_itype_chain_build_work);
 
 ////////////////////////////////
 //~ rjf: UDT Conversion Tasks

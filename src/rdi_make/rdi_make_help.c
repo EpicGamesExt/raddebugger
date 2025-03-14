@@ -2,6 +2,40 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+
+internal RDIM_DataModel
+rdim_infer_data_model(OperatingSystem os, RDI_Arch arch)
+{
+  RDIM_DataModel data_model = RDIM_DataModel_Null;
+  switch (os) {
+  case OperatingSystem_Null: break;
+  case OperatingSystem_Windows: {
+    switch (arch) {
+    case RDI_Arch_X86:
+    case RDI_Arch_X64:
+      data_model = RDIM_DataModel_LLP64; break;
+    default: NotImplemented;
+    }
+  } break;
+  case OperatingSystem_Linux: {
+    switch (arch) {
+    case RDI_Arch_X86: data_model = RDIM_DataModel_ILP32; break;
+    case RDI_Arch_X64: data_model = RDIM_DataModel_LLP64; break;
+    default: NotImplemented;
+    }
+  } break;
+  case OperatingSystem_Mac: {
+    switch (arch) {
+    case RDI_Arch_X86: NotImplemented; break;
+    case RDI_Arch_X64: data_model = RDIM_DataModel_LP64; break;
+    }
+  } break;
+  default: InvalidPath;
+  }
+  return data_model;
+}
+
+////////////////////////////////
 //~ rjf: Baking Stage Tasks
 
 //- rjf: bake string map building
@@ -382,6 +416,154 @@ ASYNC_WORK_DEF(rdim_bake_idx_runs_work)
   return out;
 }
 
+internal U64
+rdim_help_hash(RDIM_String8 string)
+{
+  return XXH3_64bits(string.str, string.size);
+}
+
+internal void
+rdim_help_resolve_incomplete_types(RDIM_TypeChunkList *types)
+{
+  ProfBeginFunction();
+
+  Temp scratch = scratch_begin(0,0);
+
+  ProfBegin("Build Hash Table");
+  RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count);
+  for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
+  {
+    for(RDI_U64 i = 0; i < chunk->count; i += 1)
+    {
+      RDIM_Type *type = &chunk->v[i];
+      if(RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastRecord)
+      {
+        RDIM_String8 name = type->link_name.size ? type->link_name : type->name;
+        RDI_U64      hash = rdim_help_hash(name);
+
+        RDI_U64 best_slot = hash % types->total_count;
+        RDI_U64 slot      = best_slot;
+        do
+        {
+          RDIM_Type *s = name_ht[slot];
+          if(s == 0)
+          {
+            break;
+          }
+
+          if(s->link_name.size)
+          {
+            if(str8_match(s->link_name, name, 0))
+            {
+              break;
+            }
+          }
+          else if(s->name.size)
+          {
+            if(str8_match(s->name, type->name, 0))
+            {
+              break;
+            }
+          }
+
+          slot = (slot + 1) % types->total_count;
+        } while (slot != best_slot);
+
+        if(name_ht[slot] == 0)
+        {
+          name_ht[slot] = type;
+        }
+      }
+    }
+  }
+  ProfEnd();
+
+  ProfBegin("Make Fwd Map");
+  RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count);
+  for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
+  {
+    for(RDI_U64 i = 0; i < chunk->count; i += 1)
+    {
+      RDIM_Type *type = &chunk->v[i];
+
+      if(RDI_TypeKind_FirstIncomplete <= type->kind && type->kind <= RDI_TypeKind_LastIncomplete)
+      {
+        RDIM_String8 name      = type->link_name.size ? type->link_name : type->name;
+        RDI_U64      hash      = rdim_help_hash(name);
+        RDI_U64      best_slot = hash % types->total_count;
+        RDI_U64      slot      = best_slot;
+
+        RDIM_Type *match = 0;
+        do
+        {
+          if(name_ht[slot] == 0)
+          {
+            break;
+          }
+          RDIM_Type *s = name_ht[slot];
+          if(s->link_name.size)
+          {
+            if(str8_match(s->link_name, type->link_name, 0))
+            {
+              match = s;
+              break;
+            }
+          }
+          else
+          {
+            if(str8_match(s->name, type->name, 0))
+            {
+              match = s;
+              break;
+            }
+          }
+        } while(slot != best_slot);
+
+        if(match)
+        {
+          type->kind = RDI_TypeKind_NULL;
+
+          RDI_U64 type_idx = rdim_idx_from_type(type);
+          fwd_map[type_idx] = match;
+        }
+      }
+    }
+  }
+  ProfEnd();
+
+  ProfBegin("Resolve Types");
+  for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
+  {
+    for(RDI_U64 i = 0; i < chunk->count; ++i)
+    {
+      RDIM_Type *t = &chunk->v[i];
+      if(t->direct_type)
+      {
+        RDI_U64 direct_idx = rdim_idx_from_type(t->direct_type);
+        if(fwd_map[direct_idx])
+        {
+          t->direct_type = fwd_map[direct_idx];
+        }
+      }
+      if(t->param_types)
+      {
+        for(RDI_U64 param_idx = 0; param_idx < t->count; param_idx += 1)
+        {
+          RDI_U64 type_idx = rdim_idx_from_type(t->param_types[param_idx]);
+          if(fwd_map[type_idx])
+          {
+            t->param_types[param_idx] = fwd_map[type_idx];
+          }
+        }
+      }
+    }
+  }
+  ProfEnd();
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 internal RDIM_HelpState *
 rdim_help_init(void)
 {
@@ -404,6 +586,11 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   RDIM_BakeResults out = {0};
 
   rdim_help_state = state;
+
+  ////////////////////////////////
+  // resolve incomplete types
+
+  rdim_help_resolve_incomplete_types(&in_params->types);
 
   ////////////////////////////////
   // compute type indices

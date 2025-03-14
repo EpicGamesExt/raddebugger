@@ -282,6 +282,10 @@ struct RDIM_BakeIdxRunsIn
 };
 
 ////////////////////////////////
+
+internal RDIM_DataModel rdim_infer_data_model(OperatingSystem os, RDI_Arch arch);
+
+////////////////////////////////
 //~ rjf: Baking Stage Tasks
 
 //- rjf: unsorted bake string map building

@@ -595,6 +595,17 @@ struct RDIM_UnitChunkList
 ////////////////////////////////
 //~ rjf: Type System Node Types
 
+typedef RDI_U32 RDIM_DataModel;
+enum RDIM_DataModelEnum
+{
+  RDIM_DataModel_Null,
+  RDIM_DataModel_ILP32,
+  RDIM_DataModel_LLP64,
+  RDIM_DataModel_LP64,
+  RDIM_DataModel_ILP64,
+  RDIM_DataModel_SILP64
+};
+
 typedef struct RDIM_Type RDIM_Type;
 struct RDIM_Type
 {
@@ -605,6 +616,7 @@ struct RDIM_Type
   RDI_U32 off;
   RDI_U32 count;
   RDIM_String8 name;
+  RDIM_String8 link_name;
   RDIM_Type *direct_type;
   RDIM_Type **param_types;
   struct RDIM_UDT *udt;
@@ -1347,6 +1359,19 @@ RDI_PROC RDIM_SortKey *rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys
 
 //- rjf: rng1u64 list
 RDI_PROC void rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r);
+
+////////////////////////////////
+//~ Data Model
+
+RDI_PROC RDI_TypeKind rdim_short_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_int_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model);
 
 ////////////////////////////////
 //~ rjf: [Building] Binary Section Info Building
