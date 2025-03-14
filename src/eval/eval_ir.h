@@ -86,7 +86,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(default);
 typedef E_LOOKUP_ACCESS_FUNCTION_SIG(E_LookupAccessFunctionType);
 E_LOOKUP_ACCESS_FUNCTION_DEF(default);
 
-#define E_LOOKUP_RANGE_FUNCTION_SIG(name) void name(Arena *arena, E_Expr *lhs, E_Expr *tag, Rng1U64 idx_range, E_Expr **exprs, String8 *exprs_strings, void *user_data)
+#define E_LOOKUP_RANGE_FUNCTION_SIG(name) void name(Arena *arena, E_Expr *lhs, E_Expr *tag, String8 filter, Rng1U64 idx_range, E_Expr **exprs, String8 *exprs_strings, void *user_data)
 #define E_LOOKUP_RANGE_FUNCTION_NAME(name) e_lookup_range_##name
 #define E_LOOKUP_RANGE_FUNCTION_DEF(name) internal E_LOOKUP_RANGE_FUNCTION_SIG(E_LOOKUP_RANGE_FUNCTION_NAME(name))
 typedef E_LOOKUP_RANGE_FUNCTION_SIG(E_LookupRangeFunctionType);

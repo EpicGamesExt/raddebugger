@@ -712,7 +712,7 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
           Rng1U64 child_range = r1u64(split_relative_idx, split_relative_idx+1);
           E_Expr *child_expr = &e_expr_nil;
           String8 child_string = {0};
-          lookup_rule->range(arena, t->expr, lookup_rule_tag, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string, lookup_info.user_data);
+          lookup_rule->range(arena, t->expr, lookup_rule_tag, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string, lookup_info.user_data);
           if(child_expr != &e_expr_nil)
           {
             EV_Key child_key = child_keys[idx];
@@ -1003,7 +1003,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         }
         else
         {
-          n->v.block->lookup_rule->range(arena, n->v.block->expr, n->v.block->lookup_tag, block_relative_range__windowed, range_exprs, range_exprs_strings, n->v.block->lookup_rule_user_data);
+          n->v.block->lookup_rule->range(arena, n->v.block->expr, n->v.block->lookup_tag, filter, block_relative_range__windowed, range_exprs, range_exprs_strings, n->v.block->lookup_rule_user_data);
         }
         
         // rjf: no expansion operator applied -> push row for block expression; pass through block info

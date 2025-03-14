@@ -3143,7 +3143,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
     MemoryCopyStruct(&node->params, params);
     if(node->params.epsilon == 0)
     {
-      node->params.epsilon = 0.01f;
+      node->params.epsilon = 0.005f;
     }
     if(node->params.rate == 1)
     {

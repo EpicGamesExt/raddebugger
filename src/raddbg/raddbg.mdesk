@@ -156,7 +156,7 @@ RD_VocabTable:
   {
     target,
     ```
-      @commands(launch_and_run, launch_and_init, select_cfg, remove_cfg)
+      @commands(launch_and_run, launch_and_init, enable_cfg, remove_cfg)
       @collection_commands(add_target)
       x:
     {

@@ -1935,6 +1935,8 @@ e_member_cache_node_from_type_key(E_TypeKey key)
     node->members = e_type_data_members_from_key(e_type_state->arena, key);
     node->member_hash_slots_count = node->members.count;
     node->member_hash_slots = push_array(e_type_state->arena, E_MemberHashSlot, node->member_hash_slots_count);
+    node->member_filter_slots_count = 16;
+    node->member_filter_slots = push_array(e_type_state->arena, E_MemberFilterSlot, node->member_filter_slots_count);
     for EachIndex(idx, node->members.count)
     {
       U64 hash = e_hash_from_string(5381, node->members.v[idx].name);
@@ -1945,6 +1947,55 @@ e_member_cache_node_from_type_key(E_TypeKey key)
     }
   }
   return node;
+}
+
+internal E_MemberArray
+e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter)
+{
+  E_MemberArray members = {0};
+  E_MemberCacheNode *node = e_member_cache_node_from_type_key(key);
+  if(node != 0)
+  {
+    if(filter.size == 0)
+    {
+      members = node->members;
+    }
+    else
+    {
+      U64 hash = e_hash_from_string(5381, filter);
+      U64 slot_idx = hash%node->member_filter_slots_count;
+      E_MemberFilterSlot *slot = &node->member_filter_slots[slot_idx];
+      E_MemberFilterNode *filter_node = 0;
+      for(E_MemberFilterNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->filter, filter, 0))
+        {
+          filter_node = n;
+          break;
+        }
+      }
+      if(filter_node == 0)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        filter_node = push_array(e_type_state->arena, E_MemberFilterNode, 1);
+        filter_node->filter = push_str8_copy(e_type_state->arena, filter);
+        E_MemberList member_list__filtered = {0};
+        for EachIndex(idx, node->members.count)
+        {
+          E_Member *member = &node->members.v[idx];
+          FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, member->name);
+          if(matches.count == matches.needle_part_count)
+          {
+            e_member_list_push(scratch.arena, &member_list__filtered, member);
+          }
+        }
+        filter_node->members_filtered = e_member_array_from_list(e_type_state->arena, &member_list__filtered);
+        scratch_end(scratch);
+      }
+      members = filter_node->members_filtered;
+    }
+  }
+  return members;
 }
 
 internal E_MemberArray

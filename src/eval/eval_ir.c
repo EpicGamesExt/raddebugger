@@ -500,7 +500,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(slice)
 {
   if(user_data == 0)
   {
-    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, idx_range, exprs, exprs_strings, user_data);
+    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, filter, idx_range, exprs, exprs_strings, user_data);
   }
   else
   {
@@ -536,7 +536,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
            direct_type_kind == E_TypeKind_Class ||
            direct_type_kind == E_TypeKind_Union)
         {
-          E_MemberArray data_members = e_type_data_members_from_key__cached(direct_type_key);
+          E_MemberArray data_members = e_type_data_members_from_key_filter__cached(direct_type_key, filter);
           lookup_info.named_expr_count = data_members.count;
         }
         else if(direct_type_kind == E_TypeKind_Enum)
@@ -550,7 +550,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
             lhs_type_kind == E_TypeKind_Class ||
             lhs_type_kind == E_TypeKind_Union)
     {
-      E_MemberArray data_members = e_type_data_members_from_key__cached(lhs_type_key);
+      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(lhs_type_key, filter);
       lookup_info.named_expr_count = data_members.count;
     }
     else if(lhs_type_kind == E_TypeKind_Enum)
@@ -880,7 +880,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
     //- rjf: struct case -> the lookup-range will return a range of members
     if(do_struct_range)
     {
-      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
+      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(struct_type_key, filter);
       Rng1U64 legal_idx_range = r1u64(0, data_members.count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
@@ -1083,7 +1083,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(only_and_omit)
 {
   if(user_data == 0)
   {
-    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, idx_range, exprs, exprs_strings, user_data);
+    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, filter, idx_range, exprs, exprs_strings, user_data);
   }
   else
   {

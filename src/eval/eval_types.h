@@ -234,6 +234,21 @@ struct E_MemberHashSlot
   E_MemberHashNode *last;
 };
 
+typedef struct E_MemberFilterNode E_MemberFilterNode;
+struct E_MemberFilterNode
+{
+  E_MemberFilterNode *next;
+  String8 filter;
+  E_MemberArray members_filtered;
+};
+
+typedef struct E_MemberFilterSlot E_MemberFilterSlot;
+struct E_MemberFilterSlot
+{
+  E_MemberFilterNode *first;
+  E_MemberFilterNode *last;
+};
+
 typedef struct E_MemberCacheNode E_MemberCacheNode;
 struct E_MemberCacheNode
 {
@@ -242,6 +257,8 @@ struct E_MemberCacheNode
   E_MemberArray members;
   U64 member_hash_slots_count;
   E_MemberHashSlot *member_hash_slots;
+  U64 member_filter_slots_count;
+  E_MemberFilterSlot *member_filter_slots;
 };
 
 typedef struct E_MemberCacheSlot E_MemberCacheSlot;
@@ -381,6 +398,7 @@ internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8
 
 internal E_Type *e_type_from_key__cached(E_TypeKey key);
 internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
+internal E_MemberArray e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
 internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);
 

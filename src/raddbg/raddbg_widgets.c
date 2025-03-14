@@ -97,6 +97,12 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     B32 running_is_secondary = 0;
 #define start_secondary() if(!running_is_secondary){running_is_secondary = 1; params.color = rgba_secondary; params.size = ui_top_font_size()*0.95f;}
     
+    //- rjf: disabled? -> soften color
+    if(is_disabled)
+    {
+      params.color = rgba_secondary;
+    }
+    
     //- rjf: push icon
     if(icon_kind != RD_IconKind_Null)
     {
@@ -428,6 +434,17 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   {
     dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Locked], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = ui_color_from_name(str8_lit("text")));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+  }
+  
+  //- rjf: push selected icon, if selected thread
+  if(entity->kind == CTRL_EntityKind_Thread)
+  {
+    B32 is_selected = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
+    if(is_selected)
+    {
+      dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = color);
+      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+    }
   }
   
   //- rjf: push containing process prefix

@@ -10628,7 +10628,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
                 {
                   E_Expr *expr = &e_expr_nil;
                   String8 expr_string = {0};
-                  lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+                  lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, filter, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
                   if(expr != &e_expr_nil)
                   {
                     if(!is_first)
@@ -10772,7 +10772,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
           {
             E_Expr *expr = &e_expr_nil;
             String8 expr_string = {0};
-            lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+            lookup_rule->range(scratch.arena, eval.exprs.last, lookup_rule_tag, filter, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
             if(expr != &e_expr_nil)
             {
               if(!is_first)
