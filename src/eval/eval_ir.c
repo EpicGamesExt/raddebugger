@@ -368,11 +368,27 @@ E_LOOKUP_INFO_FUNCTION_DEF(slice)
   E_LookupInfo info = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_TypeKind type_kind = e_type_kind_from_key(lhs->type_key);
+    
+    // rjf: unpack struct type
+    E_TypeKey struct_type_key = e_type_unwrap(lhs->type_key);
+    for(;;)
+    {
+      if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(struct_type_key)))
+      {
+        struct_type_key = e_type_unwrap(e_type_direct_from_key(struct_type_key));
+      }
+      else
+      {
+        break;
+      }
+    }
+    
+    // rjf: build info from struct type
+    E_TypeKind type_kind = e_type_kind_from_key(struct_type_key);
     if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
     {
       // rjf: unpack members
-      E_MemberArray members = e_type_data_members_from_key__cached(lhs->type_key);
+      E_MemberArray members = e_type_data_members_from_key__cached(struct_type_key);
       
       // rjf: choose base pointer & count members
       E_Member *base_ptr_member = 0;
