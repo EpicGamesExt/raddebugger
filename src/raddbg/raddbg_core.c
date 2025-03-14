@@ -5248,10 +5248,10 @@ rd_view_ui(Rng2F32 rect)
                             UI_Flags(0)
                           {
                             // rjf: 'pull out' button
-                            UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
-                                                          ui_top_font_size()*1.5f,
-                                                          ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
-                                                          ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
+                            UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
+                                                                       ui_top_font_size()*1.5f,
+                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
+                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
                               UI_CornerRadius(ui_top_font_size()*1.5f)
                               UI_TextAlignment(UI_TextAlign_Center)
                               UI_HoverCursor(OS_Cursor_HandPoint)
@@ -7486,6 +7486,7 @@ rd_window_frame(void)
       String8 cmd_name = ws->query_cmd_name;
       RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
       B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
+      B32 query_is_anchored = (!ui_box_is_nil(ui_box_from_key(ws->query_regs->ui_key)));
       
       //- rjf: build & prepare view for query ui
       RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
@@ -7607,7 +7608,7 @@ rd_window_frame(void)
       }
       
       //- rjf: build darkening rectangle over rest of screen
-      UI_Rect(window_rect) UI_TagF("inactive")
+      if(!query_is_anchored) UI_Rect(window_rect) UI_TagF("inactive")
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
       }
@@ -8429,6 +8430,10 @@ rd_window_frame(void)
         build_hover_eval = 0;
       }
       
+      // rjf: determine if we have a top-level visualizer
+      EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
+      RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
+      
       // rjf: reset open animation
       if(ws->hover_eval_string.size == 0)
       {
@@ -8456,97 +8461,161 @@ rd_window_frame(void)
         UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
         UI_TagF("floating")
       {
+        // rjf: build cfg tree for temporary view
+        String8 view_name = str8_lit("watch");
+        if(view_ui_rule != &rd_nil_view_ui_rule)
+        {
+          view_name = view_ui_rule->name;
+        }
         F32 hover_eval_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_open_t"), 1.f);
         RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_%p", ws);
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
         RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+        rd_cfg_new(view, str8_lit("selected"));
         rd_cfg_new(explicit_root, str8_lit("1"));
-        RD_RegsScope(.view = view->id)
+        rd_cfg_new_replace(expr, hover_eval_expr);
+        
+        // rjf: push view regs
+        rd_push_regs(.view = view->id);
         {
-          rd_cfg_new_replace(expr, hover_eval_expr);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
-          F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
+          String8 view_expr = rd_expr_from_cfg(view);
+          String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
+          // NOTE(rjf): we want to only fill out this view's file path slot if it
+          // evaluates one - this way, a view can use the slot to know the selected
+          // file path (if there is one). this is useful when pushing commandas which
+          // apply to a cursor, for example.
+          if(view_file_path.size != 0)
+          {
+            rd_regs()->file_path = view_file_path;
+          }
+        }
+        
+        // rjf: determine size of hover evaluation container
+        EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
+        F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+        U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
+        if(ws->hover_eval_focused)
+        {
+          max_row_count *= 3;
+        }
+        U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
+        F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
+        F32 width_px = 60.f*ui_top_font_size();
+        F32 height_px = num_rows_t*row_height_px;
+        
+        // rjf: if arbitrary visualizer, pick catchall size
+        if(view_ui_rule != &rd_nil_view_ui_rule)
+        {
+          height_px = 40.f*ui_top_font_size();
+        }
+        
+        // rjf: build container
+        UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+          UI_PrefHeight(ui_px(row_height_px, 1.f))
+        {
+          // rjf: build top-level container box
+          Rng2F32 rect = r2f32p(ws->hover_eval_spawn_pos.x,
+                                ws->hover_eval_spawn_pos.y,
+                                ws->hover_eval_spawn_pos.x + width_px,
+                                ws->hover_eval_spawn_pos.y + height_px);
+          ui_set_next_fixed_x(rect.x0);
+          ui_set_next_fixed_y(rect.y0);
+          ui_set_next_pref_width(ui_px(rect.x1-rect.x0, 1.f));
+          ui_set_next_pref_height(ui_px(rect.y1-rect.y0, 1.f));
+          ui_set_next_child_layout_axis(Axis2_Y);
+          ui_set_next_squish(0.25f-0.25f*hover_eval_t);
+          ui_set_next_transparency(1.f-hover_eval_t);
+          UI_Box *container = ui_build_box_from_string(UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawBackgroundBlur|
+                                                       UI_BoxFlag_DisableFocusOverlay|
+                                                       UI_BoxFlag_DrawDropShadow,
+                                                       str8_lit("hover_eval_container"));
+          
+          // rjf: peek press events -> focus hover eval if we have a press
+          if(!ws->hover_eval_focused)
+          {
+            for(UI_Event *evt = 0; ui_next_event(&evt);)
+            {
+              if(evt->kind == UI_EventKind_Press &&
+                 evt->key == OS_Key_LeftMouseButton &&
+                 contains_2f32(container->rect, evt->pos))
+              {
+                ws->hover_eval_focused = 1;
+                break;
+              }
+            }
+          }
+          
+          // rjf: build overlay container for loading animation
+          UI_Box *loading_overlay_container = &ui_nil_box;
+          UI_Parent(container) UI_WidthFill UI_HeightFill
+          {
+            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
+          }
+          
+          // rjf: build contents
+          UI_Parent(container) UI_Focus(ws->hover_eval_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+          {
+            ui_set_next_pref_width(ui_pct(1, 0));
+            ui_set_next_pref_height(ui_pct(1, 0));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
+            UI_Parent(view_contents_container) UI_WidthFill
+            {
+              rd_view_ui(rect);
+            }
+          }
+          
+          // rjf: build loading overlay
+          {
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            F32 loading_t = vs->loading_t;
+            if(loading_t > 0.01f) UI_Parent(loading_overlay_container)
+            {
+              rd_loading_overlay(rect, loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
+            }
+          }
+          
+          // rjf: interact with container
+          UI_Signal sig = ui_signal_from_box(container);
+          if(ui_pressed(sig))
+          {
+            ws->hover_eval_focused = 1;
+          }
+          if(ui_mouse_over(sig) || ws->hover_eval_focused)
+          {
+            ws->hover_eval_last_frame_idx = rd_state->frame_index;
+          }
+          else if(ws->hover_eval_last_frame_idx+2 < rd_state->frame_index)
+          {
+            rd_request_frame();
+          }
           if(ws->hover_eval_focused)
           {
-            max_row_count *= 3;
-          }
-          U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
-          F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
-          
-          // rjf: build container
-          UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
-            UI_PrefHeight(ui_px(row_height_px, 1.f))
-          {
-            ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
-            ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-            ui_set_next_pref_width(ui_em(60.f, 1.f));
-            ui_set_next_pref_height(ui_px(num_rows_t*row_height_px, 1.f));
-            ui_set_next_child_layout_axis(Axis2_Y);
-            ui_set_next_squish(0.25f-0.25f*hover_eval_t);
-            ui_set_next_transparency(1.f-hover_eval_t);
-            UI_Box *container = ui_build_box_from_string(UI_BoxFlag_Clickable|
-                                                         UI_BoxFlag_DrawBorder|
-                                                         UI_BoxFlag_DrawBackground|
-                                                         UI_BoxFlag_DrawBackgroundBlur|
-                                                         UI_BoxFlag_DisableFocusOverlay|
-                                                         UI_BoxFlag_DrawDropShadow,
-                                                         str8_lit("hover_eval_container"));
-            if(!ws->hover_eval_focused)
+            for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
-              for(UI_Event *evt = 0; ui_next_event(&evt);)
+              if(evt->kind == UI_EventKind_Press &&
+                 evt->key == OS_Key_LeftMouseButton &&
+                 !contains_2f32(container->rect, evt->pos))
               {
-                if(evt->kind == UI_EventKind_Press &&
-                   evt->key == OS_Key_LeftMouseButton &&
-                   contains_2f32(container->rect, evt->pos))
-                {
-                  ws->hover_eval_focused = 1;
-                  break;
-                }
-              }
-            }
-            UI_Parent(container) UI_Focus(ws->hover_eval_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
-            {
-              ui_set_next_pref_width(ui_pct(1, 0));
-              ui_set_next_pref_height(ui_pct(1, 0));
-              ui_set_next_child_layout_axis(Axis2_Y);
-              UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
-              UI_Parent(view_contents_container) UI_WidthFill
-              {
-                rd_view_ui(view_contents_container->rect);
-              }
-            }
-            UI_Signal sig = ui_signal_from_box(container);
-            if(ui_pressed(sig))
-            {
-              ws->hover_eval_focused = 1;
-            }
-            if(ui_mouse_over(sig) || ws->hover_eval_focused)
-            {
-              ws->hover_eval_last_frame_idx = rd_state->frame_index;
-            }
-            else if(ws->hover_eval_last_frame_idx+2 < rd_state->frame_index)
-            {
-              rd_request_frame();
-            }
-            if(ws->hover_eval_focused)
-            {
-              for(UI_Event *evt = 0; ui_next_event(&evt);)
-              {
-                if(evt->kind == UI_EventKind_Press &&
-                   evt->key == OS_Key_LeftMouseButton &&
-                   !contains_2f32(container->rect, evt->pos))
-                {
-                  ws->hover_eval_focused = 0;
-                  MemoryZeroStruct(&ws->hover_eval_string);
-                  arena_clear(ws->hover_eval_arena);
-                  rd_request_frame();
-                  break;
-                }
+                ws->hover_eval_focused = 0;
+                MemoryZeroStruct(&ws->hover_eval_string);
+                arena_clear(ws->hover_eval_arena);
+                rd_request_frame();
+                break;
               }
             }
           }
+        }
+        
+        // rjf: pop interaction registers; commit if this is the selected view
+        RD_Regs *view_regs = rd_pop_regs();
+        if(ws->hover_eval_focused)
+        {
+          MemoryCopyStruct(rd_regs(), view_regs);
         }
       }
     }
@@ -9320,7 +9389,7 @@ rd_window_frame(void)
             
             //- rjf: pop interaction registers; commit if this is the selected view
             RD_Regs *view_regs = rd_pop_regs();
-            if(panel_tree.focused == panel)
+            if(panel_is_focused)
             {
               MemoryCopyStruct(rd_regs(), view_regs);
             }

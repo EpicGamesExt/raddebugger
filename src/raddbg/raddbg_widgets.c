@@ -598,7 +598,7 @@ rd_title_fstrs_from_file_path(Arena *arena, String8 file_path)
 internal void
 rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target)
 {
-  if(loading_t >= 0.001f)
+  if(loading_t >= 0.001f) UI_Focus(UI_FocusKind_Off)
   {
     // rjf: set up dimensions
     F32 edge_padding = 30.f;
