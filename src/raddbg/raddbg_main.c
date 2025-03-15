@@ -28,6 +28,11 @@
 //
 // [ ] r8 bitmap view rule seems incorrect?
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
+//
+// [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
+// single step over the first instruction of that line, even if the thread
+// would've stopped at the first instruction due to the step, were that bp not
+// there.
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
