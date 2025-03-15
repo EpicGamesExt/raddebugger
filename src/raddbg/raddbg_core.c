@@ -5256,6 +5256,7 @@ rd_view_ui(Rng2F32 rect)
                               UI_TextAlignment(UI_TextAlign_Center)
                               UI_HoverCursor(OS_Cursor_HandPoint)
                               RD_Font(RD_FontSlot_Icons)
+                              UI_FontSize(ui_top_font_size()*0.8f)
                             {
                               UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                       UI_BoxFlag_Floating|
@@ -9447,6 +9448,7 @@ rd_window_frame(void)
           F32 max_tab_width_px = ui_top_font_size()*20.f;
           if(build_panel)
           {
+            B32 reset = (ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
             for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
             {
               RD_Cfg *tab = n->v;
@@ -9457,8 +9459,9 @@ rd_window_frame(void)
               TabTask *t = push_array(scratch.arena, TabTask, 1);
               t->tab = tab;
               t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
-              t->tab_width = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
-              t->tab_width = Min(max_tab_width_px, t->tab_width);
+              F32 tab_width_target = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+              tab_width_target = Min(max_tab_width_px, tab_width_target);
+              t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0));
               SLLQueuePush(first_tab_task, last_tab_task, t);
               tab_task_count += 1;
             }
@@ -16362,25 +16365,26 @@ Z(getting_started)
             }
             if(file_path.size != 0 || expr.size != 0)
             {
-              B32 removed_already_existing = 0;
-              if(kind == RD_CmdKind_ToggleBreakpoint)
+              B32 already_exists = 0;
+              RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+              for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
               {
-                RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-                for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+                RD_Cfg *bp = n->v;
+                RD_Cfg *cnd = rd_cfg_child_from_string(bp, str8_lit("condition"));
+                RD_Location loc = rd_location_from_cfg(bp);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_expr    = (expr.size != 0 && str8_match(expr, loc.expr, 0));
+                if((loc_matches_file_pt || loc_matches_expr) && cnd->first->string.size == 0)
                 {
-                  RD_Cfg *bp = n->v;
-                  RD_Location loc = rd_location_from_cfg(bp);
-                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
-                  B32 loc_matches_expr    = (expr.size != 0 && str8_match(expr, loc.expr, 0));
-                  if(loc_matches_file_pt || loc_matches_expr)
+                  if(kind == RD_CmdKind_ToggleBreakpoint)
                   {
                     rd_cfg_release(bp);
-                    removed_already_existing = 1;
-                    break;
                   }
+                  already_exists = 1;
+                  break;
                 }
               }
-              if(!removed_already_existing)
+              if(!already_exists)
               {
                 RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
                 RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));

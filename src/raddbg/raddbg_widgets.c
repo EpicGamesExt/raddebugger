@@ -1072,6 +1072,8 @@ struct RD_BreakpointBoxDrawExtData
   F32 remap_px_delta;
   B32 do_lines;
   B32 do_glow;
+  B32 is_disabled;
+  B32 is_conditioned;
 };
 
 internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
@@ -1140,6 +1142,33 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
                   bp_center.y + remap_px_delta),
             remap_color,
             rd_icon_kind_text_table[RD_IconKind_CircleFilled]);
+  }
+  
+  // rjf: draw conditioned marker
+  if(u->is_conditioned) UI_TagF(u->is_disabled ? "weak" : "")
+  {
+    Temp scratch = scratch_begin(0, 0);
+    Vec4F32 color = ui_color_from_name(str8_lit("text"));
+    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Code), box->font_size*0.95f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("?"));
+    Vec2F32 p = center_2f32(box->rect);
+    p.x -= run.dim.x*0.5f;
+    p.y += run.descent;
+    dr_text_run(p, color, run);
+    scratch_end(scratch);
+  }
+  
+  // rjf: draw disabled marker
+  if(u->is_disabled)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    Vec4F32 color = ui_color_from_name(str8_lit("breakpoint"));
+    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Icons), box->font_size*0.95f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("x"));
+    Vec2F32 box_dim = dim_2f32(box->rect);
+    Vec2F32 p = center_2f32(box->rect);
+    p.x += box_dim.x*0.1f;
+    p.y -= box_dim.y*0.2f;
+    dr_text_run(p, color, run);
+    scratch_end(scratch);
   }
 }
 
@@ -1554,6 +1583,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "cfg_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               bp_draw->do_lines = do_bp_lines;
               bp_draw->do_glow  = do_bp_glow;
+              bp_draw->is_disabled = bp_is_disabled;
+              bp_draw->is_conditioned = (rd_cfg_child_from_string(bp, str8_lit("condition"))->first->string.size != 0);
               if(params->line_vaddrs[line_idx] == 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];
