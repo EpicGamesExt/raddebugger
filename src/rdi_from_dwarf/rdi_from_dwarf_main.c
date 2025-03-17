@@ -10,6 +10,7 @@
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 #include "third_party/xxHash/xxhash.c"
 #include "third_party/xxHash/xxhash.h"
+#include "third_party/radsort/radsort.h"
 
 ////////////////////////////////
 

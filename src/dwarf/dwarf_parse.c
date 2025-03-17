@@ -1787,7 +1787,7 @@ dw_rnglist_from_attrib_ptr(Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_At
 {
   Rng1U64List rnglist = {0};
   DW_AttribClass value_class = dw_value_class_from_attrib(cu, attrib);
-  if (value_class == DW_AttribClass_RngListPtr || DW_AttribClass_RngList) {
+  if (value_class == DW_AttribClass_RngListPtr || value_class == DW_AttribClass_RngList) {
     rnglist = dw_interp_rnglist(arena, input, cu, attrib->form_kind, attrib->form);
   } else if (value_class != DW_AttribClass_Null) {
     Assert(!"unexpected value class");
@@ -1947,7 +1947,7 @@ dw_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 internal U32
 dw_byte_size_32_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag)
 {
-  U32 byte_size32;
+  U32 byte_size32 = 0;
   U64 byte_size64;
   if (dw_try_byte_size_from_tag(input, cu, tag, &byte_size64)) {
     byte_size32 = safe_cast_u32(byte_size64);
