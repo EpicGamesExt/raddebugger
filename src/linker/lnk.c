@@ -3285,7 +3285,7 @@ lnk_run(int argc, char **argv)
       switch (state) {
       case State_Null: break;
       case State_SearchEntryPoint: {
-        ProfBegin("Serach Entry Point");
+        ProfBegin("Search Entry Point");
         LNK_Symbol *entry_point_symbol = 0;
         
         B32 is_entry_point_unspecified = config->entry_point_name.size == 0;
