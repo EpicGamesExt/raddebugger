@@ -931,15 +931,6 @@ cv_string_from_itemid(Arena *arena, CV_ItemId itemid)
 }
 
 internal String8
-cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg, U32 off)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8 result = push_str8f(arena, "%S+%x", cv_string_from_reg_id(scratch.arena, arch, reg), off);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
 cv_string_from_symbol_type(Arena *arena, CV_SymKind symbol_type)
 {
   String8 str    = cv_string_from_sym_kind(symbol_type);

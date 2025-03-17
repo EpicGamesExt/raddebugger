@@ -41,7 +41,6 @@ internal String8 cv_string_from_defrange_register_rel_flags(Arena *arena, CV_Def
 internal String8 cv_string_from_field_attribs(Arena *arena, CV_FieldAttribs attribs);
 internal String8 cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype);
 internal String8 cv_string_from_itemid(Arena *arena, CV_ItemId itemid);
-internal String8 cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg, U32 off);
 internal String8 cv_string_from_symbol_type(Arena *arena, CV_SymKind symbol_type);
 internal String8 cv_string_from_symbol_kind(Arena *arena, CV_SymKind kind);
 internal String8 cv_string_from_leaf_name(Arena *arena, U32 leaf_type);

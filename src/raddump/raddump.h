@@ -65,7 +65,7 @@ typedef U64 RD_Option;
                     RD_Option_DebugStrOffsets)
 #define RD_Option_RelaxDwarfParser (1ull << 31ull)
 // RDI
-#define RD_Option_NoRdi            (1ull << 32ull)
+#define RD_Option_NoRdi               (1ull << 32ull)
 #define RD_Option_RdiDataSections     (1ull << 33ull)
 #define RD_Option_RdiTopLevelInfo     (1ull << 34ull)
 #define RD_Option_RdiBinarySections   (1ull << 35ull)
@@ -86,6 +86,27 @@ typedef U64 RD_Option;
 #define RD_Option_RdiInlineSites      (1ull << 51ull)
 #define RD_Option_RdiNameMaps         (1ull << 52ull)
 #define RD_Option_RdiStrings          (1ull << 53ull)
+#define RD_Option_RdiAll              (RD_Option_RdiDataSections     | \
+                                       RD_Option_RdiTopLevelInfo     | \
+                                       RD_Option_RdiBinarySections   | \
+                                       RD_Option_RdiFilePaths        | \
+                                       RD_Option_RdiSourceFiles      | \
+                                       RD_Option_RdiLineTables       | \
+                                       RD_Option_RdiSourceLineMaps   | \
+                                       RD_Option_RdiUnits            | \
+                                       RD_Option_RdiUnitVMap         | \
+                                       RD_Option_RdiTypeNodes        | \
+                                       RD_Option_RdiUserDefinedTypes | \
+                                       RD_Option_RdiGlobalVars       | \
+                                       RD_Option_RdiGlobalVarsVMap   | \
+                                       RD_Option_RdiThreadVars       | \
+                                       RD_Option_RdiProcedures       | \
+                                       RD_Option_RdiScopes           | \
+                                       RD_Option_RdiScopeVMap        | \
+                                       RD_Option_RdiInlineSites      | \
+                                       RD_Option_RdiNameMaps         | \
+                                       RD_Option_RdiStrings)
+
 
 typedef struct RD_Marker
 {
@@ -190,33 +211,33 @@ internal void rdi_print_type_node      (Arena *arena, String8List *out, String8 
 internal void rdi_print_udt            (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_UDT            *udt);
 internal void rdi_print_global_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_GlobalVariable *gvar);
 internal void rdi_print_thread_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_ThreadVariable *tvar);
-internal void rdi_print_procedure      (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure      *proc);
+internal void rdi_print_procedure      (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure      *proc, RDI_Arch arch);
 internal void rdi_print_scope          (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Scope          *scope, RDI_Arch arch);
 internal void rdi_print_inline_site    (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_InlineSite     *inline_site);
 internal void rdi_print_vmap_entry     (Arena *arena, String8List *out, String8 indent, RDI_VMapEntry *v);
 
 // DWARF
 
-internal String8List dw_string_list_from_expression  (Arena *arena, String8 raw_data, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64);
-internal String8     dw_format_expression_single_line(Arena *arena, String8 raw_data, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64);
+internal String8List dw_string_list_from_expression  (Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
+internal String8     dw_format_expression_single_line(Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
 internal String8     dw_format_eh_ptr_enc            (Arena *arena, DW_EhPtrEnc enc);
-internal void        dw_print_cfi_program            (Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64);
+internal void        dw_print_cfi_program            (Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
 
 internal void dw_print_eh_frame         (Arena *arena, String8List *out, String8 indent, String8 raw_eh_frame, Arch arch, DW_Version ver, DW_Ext ext, DW_EhPtrCtx *ptr_ctx);
-internal void dw_print_debug_info       (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed);
-internal void dw_print_debug_abbrev     (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_line       (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, B32 relaxed);
-internal void dw_print_debug_str        (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed);
-internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed);
-internal void dw_print_debug_aranges    (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_addr       (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_loclists   (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Rng1U64Array segment_vranges, Arch arch);
-internal void dw_print_debug_rnglists   (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Rng1U64Array segment_vranges);
-internal void dw_print_debug_pubnames   (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_pubtypes   (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_line_str   (Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
-internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections);
+internal void dw_print_debug_info       (Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, Arch arch, B32 relaxed);
+internal void dw_print_debug_abbrev     (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_line       (Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, B32 relaxed);
+internal void dw_print_debug_str        (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed);
+internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed);
+internal void dw_print_debug_aranges    (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_addr       (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_loclists   (Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_vranges, Arch arch);
+internal void dw_print_debug_rnglists   (Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_vranges);
+internal void dw_print_debug_pubnames   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_pubtypes   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_line_str   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
+internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Input *input);
 
 // CodeView
 
