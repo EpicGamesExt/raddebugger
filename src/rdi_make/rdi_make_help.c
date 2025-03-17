@@ -419,7 +419,13 @@ ASYNC_WORK_DEF(rdim_bake_idx_runs_work)
 internal U64
 rdim_help_hash(RDIM_String8 string)
 {
-  return XXH3_64bits(string.str, string.size);
+  U64 hash = 5381;
+  U8 *ptr = string.str;
+  U8 *opl = string.str + string.size;
+  for (;ptr < opl; ++ptr) {
+    hash = ((hash << 5) + hash) + (*ptr);
+  }
+  return hash;
 }
 
 internal void
