@@ -14159,9 +14159,11 @@ rd_frame(void)
           case RD_CmdKind_OpenRecentProject:
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
-            if(str8_match(cfg->string, str8_lit("recent_project"), 0))
+            RD_Cfg *path = rd_cfg_child_from_string(cfg, str8_lit("path"));
+            if(str8_match(cfg->string, str8_lit("recent_project"), 0) &&
+               path->first->string.size != 0)
             {
-              rd_cmd(RD_CmdKind_OpenProject, .file_path = cfg->first->string);
+              rd_cmd(RD_CmdKind_OpenProject, .file_path = path->first->string);
             }
           }break;
           case RD_CmdKind_OpenUser:
