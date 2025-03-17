@@ -410,6 +410,8 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
 internal void
 dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off, DW_CIEUnpacked *cie_out)
 {
+  NotImplemented;
+#if 0
   MemoryZeroStruct(cie_out);
   
   // get version
@@ -521,6 +523,7 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
     cie_out->cfi_range.min         = cfi_off;
     cie_out->cfi_range.max         = cfi_off + cfi_size;
   }
+#endif
 }
 
 internal void

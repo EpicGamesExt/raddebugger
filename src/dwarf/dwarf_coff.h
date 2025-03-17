@@ -1,15 +1,15 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal DW_SectionArray
-dw_sections_from_coff_section_table(Arena              *arena,
-                                    String8             raw_image,
-                                    U64                 string_table_off,
-                                    U64                 section_count,
-                                    COFF_SectionHeader *sections)
+internal DW_Input
+dw_input_from_coff_section_table(Arena              *arena,
+                                 String8             raw_image,
+                                 U64                 string_table_off,
+                                 U64                 section_count,
+                                 COFF_SectionHeader *sections)
 {
-  DW_SectionArray result                            = {0};
-  B32             sect_status[ArrayCount(result.v)] = {0};
+  DW_Input input                            = {0};
+  B32      sect_status[ArrayCount(input.sec)] = {0};
 
   for (U64 i = 0; i < section_count; ++i) {
     COFF_SectionHeader *header         = &sections[i];
@@ -18,7 +18,7 @@ dw_sections_from_coff_section_table(Arena              *arena,
 
     DW_SectionKind  s      = DW_Section_Null;
     B32             is_dwo = 0;
-    #define X(_K,_L,_M,_W)                                            \
+    #define X(_K,_L,_M,_W)                                      \
       if (str8_match_lit(_L, name, 0)) { s = DW_Section_##_K; } \
       if (str8_match_lit(_M, name, 0)) { s = DW_Section_##_K; } \
       if (str8_match_lit(_W, name, 0)) { s = DW_Section_##_K; is_dwo = 1; }
@@ -30,16 +30,15 @@ dw_sections_from_coff_section_table(Arena              *arena,
         Assert(!"too many debug sections with identical name, picking first");
       } else {
         sect_status[s] = 1;
-        DW_Section *d = &result.v[s];
+        DW_Section *d = &input.sec[s];
         d->name       = push_str8_copy(arena, name);
         d->data       = str8_substr(raw_image, raw_data_range);
-        d->mode       = dim_1u64(raw_data_range) > max_U32 ? DW_Mode_64Bit : DW_Mode_32Bit;
         d->is_dwo     = is_dwo;
       }
     }
   }
 
-  return result;
+  return input;
 }
 
 

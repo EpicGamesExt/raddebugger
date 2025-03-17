@@ -187,6 +187,13 @@ hash_table_search_u64(HashTable *ht, U64 key_u64)
   return 0;
 }
 
+internal void *
+hash_table_search_u64_raw(HashTable *ht, U64 key_u64)
+{
+  KeyValuePair *kv = hash_table_search_u64(ht, key_u64);
+  return kv ? kv->value_raw : 0;
+}
+
 internal KeyValuePair *
 hash_table_search_path(HashTable *ht, String8 path)
 {

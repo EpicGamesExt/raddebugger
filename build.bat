@@ -109,7 +109,7 @@ if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg
 if "%radlink%"=="1"                    set didbuild=1 && %compile%  ..\src\linker\lnk.c                                      %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
-if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf.c                    %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
+if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf_main.c               %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
 if "%rdi_dump%"=="1"                   set didbuild=1 && %compile% ..\src\rdi_dump\rdi_dump_main.c                           %compile_link% %out%rdi_dump.exe || exit /b 1
 if "%rdi_breakpad_from_pdb%"=="1"      set didbuild=1 && %compile% ..\src\rdi_breakpad_from_pdb\rdi_breakpad_from_pdb_main.c %compile_link% %out%rdi_breakpad_from_pdb.exe || exit /b 1
 if "%tester%"=="1"                     set didbuild=1 && %compile% ..\src\tester\tester_main.c                               %compile_link% %out%tester.exe || exit /b 1
