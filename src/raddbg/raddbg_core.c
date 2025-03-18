@@ -8435,19 +8435,10 @@ rd_window_frame(void)
       EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
       
-      // rjf: reset open animation
-      if(ws->hover_eval_string.size == 0)
-      {
-        ws->hover_eval_open_t = 0;
-        ws->hover_eval_num_visible_rows_t = 0;
-      }
-      
-      // rjf: reset animation, but request frames if we're waiting to open
+      // rjf: request frames if we're waiting to open
       if(ws->hover_eval_string.size != 0 && !hover_eval_is_open && ws->hover_eval_last_frame_idx < ws->hover_eval_first_frame_idx+20 && rd_state->frame_index-ws->hover_eval_last_frame_idx < 50)
       {
         rd_request_frame();
-        ws->hover_eval_num_visible_rows_t = 0;
-        ws->hover_eval_open_t = 0;
       }
       
       // rjf: reset focus state if hover eval is not being built
@@ -10849,9 +10840,6 @@ rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 s
       arena_clear(ws->hover_eval_arena);
       ws->hover_eval_string = push_str8_copy(ws->hover_eval_arena, string);
       ws->hover_eval_view_rules = push_str8_copy(ws->hover_eval_arena, view_rules);
-      ws->hover_eval_file_path = push_str8_copy(ws->hover_eval_arena, file_path);
-      ws->hover_eval_file_pt = pt;
-      ws->hover_eval_vaddr = vaddr;
       ws->hover_eval_focused = 0;
     }
     ws->hover_eval_spawn_pos = pos;

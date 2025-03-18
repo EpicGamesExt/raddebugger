@@ -589,21 +589,12 @@ struct RD_WindowState
   
   // rjf: hover eval state
   B32 hover_eval_focused;
-  TxtPt hover_eval_txt_cursor;
-  TxtPt hover_eval_txt_mark;
-  U8 hover_eval_txt_buffer[1024];
-  U64 hover_eval_txt_size;
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
   String8 hover_eval_view_rules;
   U64 hover_eval_first_frame_idx;
   U64 hover_eval_last_frame_idx;
-  String8 hover_eval_file_path;
-  TxtPt hover_eval_file_pt;
-  U64 hover_eval_vaddr;
-  F32 hover_eval_open_t;
-  F32 hover_eval_num_visible_rows_t;
   
   // rjf: error state
   U8 error_buffer[512];
