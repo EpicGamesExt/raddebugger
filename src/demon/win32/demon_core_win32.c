@@ -1229,6 +1229,75 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       cmd = str8_list_join(scratch.arena, &args, &join_params);
     }
     
+    //- rjf: determine if process needs a console
+    B32 needs_console = 1;
+    {
+      String8 exe_path = params->cmd_line.first->string;
+      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, exe_path);
+      
+      // rjf: find PE offset
+      U32 pe_offset = 0;
+      {
+        U64 dos_magic_off = 0;
+        U16 dos_magic = 0;
+        os_file_read_struct(file, dos_magic_off, &dos_magic);
+        if(dos_magic == PE_DOS_MAGIC)
+        {
+          U64 pe_offset_off = OffsetOf(PE_DosHeader, coff_file_offset);
+          os_file_read_struct(file, pe_offset_off, &pe_offset);
+        }
+      }
+      
+      // rjf: get COFF header
+      B32 got_coff_header = 0;
+      U64 coff_header_off = 0;
+      COFF_Header coff_header = {0};
+      if(pe_offset > 0)
+      {
+        U64 pe_magic_off = pe_offset;
+        U32 pe_magic = 0;
+        os_file_read_struct(file, pe_magic_off, &pe_magic);
+        if(pe_magic == PE_MAGIC)
+        {
+          coff_header_off = pe_magic_off + sizeof(pe_magic);
+          if(os_file_read_struct(file, coff_header_off, &coff_header))
+          {
+            got_coff_header = 1;
+          }
+        }
+      }
+      
+      // rjf: get subsystem from PE header following COFF header
+      PE_WindowsSubsystem subsystem = 0;
+      {
+        U64 opt_header_off = coff_header_off + sizeof(coff_header);
+        switch(coff_header.machine)
+        {
+          default:{}break;
+          case COFF_MachineType_X64:
+          {
+            PE_OptionalHeader32Plus hdr = {0};
+            os_file_read_struct(file, opt_header_off, &hdr);
+            subsystem = hdr.subsystem;
+          }break;
+          case COFF_MachineType_X86:
+          {
+            PE_OptionalHeader32 hdr = {0};
+            os_file_read_struct(file, opt_header_off, &hdr);
+            subsystem = hdr.subsystem;
+          }break;
+        }
+      }
+      
+      // rjf: determine if we need a console depending on the subsystem
+      if(subsystem == PE_WindowsSubsystem_WINDOWS_GUI)
+      {
+        needs_console = 0;
+      }
+      
+      os_file_close(file);
+    }
+    
     //- rjf: produce environment strings
     String8 env = {0};
     {
@@ -1291,7 +1360,10 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       inherit_handles = 1;
     }
     PROCESS_INFORMATION process_info = {0};
-    AllocConsole();
+    if(needs_console)
+    {
+      AllocConsole();
+    }
     if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, creation_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
     {
       // check if we are 32-bit app, and just close it immediately
@@ -1315,7 +1387,10 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     {
       MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
     }
-    FreeConsole();
+    if(needs_console)
+    {
+      FreeConsole();
+    }
     
     //- rjf: eliminate all handles which have stuck around from the AllocConsole
     {

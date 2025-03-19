@@ -1731,7 +1731,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       Temp scratch = scratch_begin(0, 0);
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
-        UI_PrefWidth(ui_text_dim(10, 1))
+        UI_PrefWidth(ui_text_dim(1, 1))
+        UI_TagF("weak")
       {
         RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
         ui_labelf("Could not find \"%S\".", rd_regs()->file_path);
