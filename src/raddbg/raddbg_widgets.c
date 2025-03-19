@@ -2517,9 +2517,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           Rng2F32 cursor_rect =
           {
             ui_box_text_position(line_box).x+cursor_off_pixels-cursor_thickness/2.f,
-            line_box->rect.y0-params->font_size*0.25f,
+            line_box->rect.y0-params->font_size*0.125f,
             ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness/2.f,
-            line_box->rect.y1+params->font_size*0.25f,
+            line_box->rect.y1+params->font_size*0.125f,
           };
           Vec4F32 cursor_color = ui_color_from_name(str8_lit("cursor"));
           if(!is_focused)

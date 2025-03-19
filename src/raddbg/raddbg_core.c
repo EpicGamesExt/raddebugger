@@ -6342,6 +6342,7 @@ rd_window_frame(void)
   U64 hover_eval_open_delay_us = 400000;
   B32 hover_eval_is_open  = (!popup_is_open &&
                              !query_is_open &&
+                             !ws->menu_bar_focused &&
                              ws->hover_eval_string.size != 0 &&
                              ws->hover_eval_firstt_us+hover_eval_open_delay_us < ws->hover_eval_lastt_us &&
                              rd_state->time_in_us - ws->hover_eval_lastt_us < hover_eval_open_delay_us);
