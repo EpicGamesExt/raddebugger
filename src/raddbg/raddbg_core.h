@@ -82,6 +82,7 @@ typedef U64 RD_EvalSpaceKind;
 enum
 {
   RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaQuery,
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
   RD_EvalSpaceKind_MetaCtrlEntity,
@@ -437,21 +438,6 @@ typedef enum RD_FontSlot
 }
 RD_FontSlot;
 
-typedef enum RD_PaletteCode
-{
-  RD_PaletteCode_Base,
-  RD_PaletteCode_MenuBar,
-  RD_PaletteCode_Good,
-  RD_PaletteCode_Bad,
-  RD_PaletteCode_Pop,
-  RD_PaletteCode_ScrollBar,
-  RD_PaletteCode_Tab,
-  RD_PaletteCode_TabInactive,
-  RD_PaletteCode_DropSite,
-  RD_PaletteCode_COUNT
-}
-RD_PaletteCode;
-
 ////////////////////////////////
 //~ rjf: Lister Types
 
@@ -578,14 +564,6 @@ struct RD_WindowState
   Arena *query_arena;
   String8 query_cmd_name;
   RD_Regs *query_regs;
-  
-  // rjf: query view stack
-#if 0
-  Arena *query_cmd_arena;
-  String8 query_cmd_name;
-  RD_Regs *query_cmd_regs;
-  U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
-#endif
   
   // rjf: hover eval state
   B32 hover_eval_focused;

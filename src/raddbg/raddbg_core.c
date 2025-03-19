@@ -13676,7 +13676,7 @@ rd_frame(void)
         String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren);
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(watches),
@@ -13754,7 +13754,7 @@ rd_frame(void)
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCfg);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(cfg),
@@ -13772,7 +13772,7 @@ rd_frame(void)
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
@@ -13799,7 +13799,7 @@ rd_frame(void)
         E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(commands),
