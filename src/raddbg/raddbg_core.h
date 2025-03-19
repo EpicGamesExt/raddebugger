@@ -571,8 +571,8 @@ struct RD_WindowState
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
   String8 hover_eval_view_rules;
-  U64 hover_eval_first_frame_idx;
-  U64 hover_eval_last_frame_idx;
+  U64 hover_eval_firstt_us;
+  U64 hover_eval_lastt_us;
   
   // rjf: error state
   U8 error_buffer[512];
@@ -708,6 +708,7 @@ struct RD_State
   U64 frame_time_us_history[64];
   U64 num_frames_requested;
   F64 time_in_seconds;
+  U64 time_in_us;
   
   // rjf: frame parameters
   F32 frame_dt;
@@ -1084,7 +1085,7 @@ internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_Stri
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string, String8 view_rules);
+internal void rd_set_hover_eval(Vec2F32 pos, String8 string, String8 view_rules);
 
 ////////////////////////////////
 //~ rjf: Lister Functions
