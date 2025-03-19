@@ -795,7 +795,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
+    ui_state->default_animation_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
     ui_state->tooltip_can_overflow_window = 0;
     ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
     ui_state->tags_cache_slots_count = 512;
@@ -1117,11 +1117,15 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     Vec2F32 anchor = add_2f32(ui_state->ctx_menu_anchor_box_last_pos, ui_state->ctx_menu_anchor_off);
     UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
       UI_Focus(UI_FocusKind_On)
-      UI_Squish(0.25f-ui_state->ctx_menu_open_t*0.25f)
+      UI_Squish(0.1f-ui_state->ctx_menu_open_t*0.1f)
       UI_Transparency(1-ui_state->ctx_menu_open_t)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
-      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
+      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                          UI_BoxFlag_SquishAnchored|
+                                                          UI_BoxFlag_DrawDropShadow|
+                                                          (ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY),
+                                                          "###ctx_menu_%I64x", window.u64[0]);
     }
   }
   
@@ -1432,14 +1436,6 @@ ui_end_build(void)
       UI_Box *group_box = ui_box_from_key(b->group_key);
       b->hot_t = group_box->hot_t;
     }
-  }
-  
-  //- rjf: animate context menu
-  if(ui_state->ctx_menu_open && !ui_box_is_nil(ui_state->ctx_menu_root) && !ui_state->ctx_menu_changed)
-  {
-    UI_Box *root = ui_state->ctx_menu_root;
-    Rng2F32 rect = root->rect;
-    root->rect.y1 = root->rect.y0 + dim_2f32(rect).y * ui_state->ctx_menu_open_t;
   }
   
   //- rjf: fall-through interact with context menu

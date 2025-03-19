@@ -1241,20 +1241,6 @@ rd_get_hover_regs(void)
   return rd_state->hover_regs;
 }
 
-internal void
-rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot)
-{
-  RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
-  RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
-  if(ws != 0)
-  {
-    ui_ctx_menu_open(rd_state->ctx_menu_key, anchor_box_key, anchor_box_off);
-    arena_clear(ws->ctx_menu_arena);
-    ws->ctx_menu_regs = rd_regs_copy(ws->ctx_menu_arena, rd_regs());
-    ws->ctx_menu_regs_slot = slot;
-  }
-}
-
 ////////////////////////////////
 //~ rjf: Name Allocation
 
@@ -6280,10 +6266,6 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     }
     ws->r = r_window_equip(ws->os);
     ws->ui = ui_state_alloc();
-    ws->ctx_menu_arena = arena_alloc();
-    ws->ctx_menu_regs = push_array(ws->ctx_menu_arena, RD_Regs, 1);
-    ws->ctx_menu_input_buffer_size = KB(4);
-    ws->ctx_menu_input_buffer = push_array(ws->arena, U8, ws->ctx_menu_input_buffer_size);
     ws->drop_completion_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
     ws->query_arena = arena_alloc();
@@ -7063,6 +7045,7 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: @window_ui_part top-level registers context menu
     //
+#if 0
     UI_CtxMenu(rd_state->ctx_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
     {
       Temp scratch = scratch_begin(0, 0);
@@ -7321,6 +7304,7 @@ rd_window_frame(void)
       
       scratch_end(scratch);
     }
+#endif
     
     ////////////////////////////
     //- rjf: @window_ui_part drop-completion context menu
@@ -7462,6 +7446,7 @@ rd_window_frame(void)
       String8 view_name;
       String8 expr;
       B32 is_focused;
+      B32 is_anchored;
       UI_Signal signal; // NOTE(rjf): output, from build
     };
     FloatingViewTask *hover_eval_floating_view_task = 0;
@@ -7472,7 +7457,6 @@ rd_window_frame(void)
       UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
     {
       //- rjf: try to add hover eval first
-      if(ws->hover_eval_string.size != 0)
       {
         B32 build_hover_eval = (hover_eval_is_open && (!rd_drag_is_active() || rd_state->drag_drop_regs_slot == RD_RegSlot_View));
         
@@ -7550,12 +7534,6 @@ rd_window_frame(void)
           rd_request_frame();
         }
         
-        // rjf: reset focus state if hover eval is not being built
-        if(!build_hover_eval || ws->hover_eval_string.size == 0 || !hover_eval_is_open)
-        {
-          ws->hover_eval_focused = 0;
-        }
-        
         // rjf: determine size of hover evaluation container
         EV_BlockTree predicted_block_tree = {0};
         RD_RegsScope(.view = view->id)
@@ -7597,6 +7575,13 @@ rd_window_frame(void)
           t->view_name     = view_name;
           t->expr          = hover_eval_expr;
           t->is_focused    = ws->hover_eval_focused;
+          t->is_anchored   = 1;
+        }
+        
+        // rjf: reset focus state if hover eval is not being built
+        if(!build_hover_eval || ws->hover_eval_string.size == 0 || !hover_eval_is_open)
+        {
+          ws->hover_eval_focused = 0;
         }
       }
       
@@ -7675,6 +7660,17 @@ rd_window_frame(void)
                         content_rect_center.y - max_query_height_px/2.f,
                         content_rect_center.x + query_width_px/2,
                         content_rect_center.y - max_query_height_px/2.f + query_height_px);
+          if(!ui_key_match(ui_key_zero(), ws->query_regs->ui_key))
+          {
+            UI_Box *anchor_box = ui_box_from_key(ws->query_regs->ui_key);
+            if(anchor_box != &ui_nil_box)
+            {
+              rect.x0 = anchor_box->rect.x0;
+              rect.y0 = anchor_box->rect.y1;
+              rect.x1 = rect.x0 + ui_top_font_size()*40.f;
+              rect.y1 = rect.y0 + query_height_px;
+            }
+          }
         }
         
         // rjf: push query task
@@ -7688,6 +7684,7 @@ rd_window_frame(void)
           t->view_name     = str8_lit("watch");
           t->expr          = query_expression;
           t->is_focused    = 1;
+          t->is_anchored   = query_is_anchored;
         }
       }
     }
@@ -7700,6 +7697,8 @@ rd_window_frame(void)
       UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
       UI_TagF("floating")
     {
+      F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
+      F32 slow_open_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
       for(FloatingViewTask *t = first_floating_view_task; t != 0; t = t->next)
       {
         // rjf: unpack
@@ -7709,7 +7708,8 @@ rd_window_frame(void)
         String8 view_name = t->view_name;
         String8 expr      = t->expr;
         B32 is_focused    = t->is_focused;
-        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f);
+        B32 is_anchored   = t->is_anchored;
+        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate);
         
         // rjf: build cfg tree
         RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
@@ -7737,14 +7737,15 @@ rd_window_frame(void)
         {
           // rjf: build top-level container box
           UI_Box *container = &ui_nil_box;
-          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.25f-0.25f*open_t) UI_Transparency(1.f-open_t)
+          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.1f-0.1f*open_t) UI_Transparency(1.f-open_t)
           {
             container = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                   UI_BoxFlag_DrawBorder|
                                                   UI_BoxFlag_DrawBackground|
                                                   UI_BoxFlag_DrawBackgroundBlur|
                                                   UI_BoxFlag_DisableFocusOverlay|
-                                                  UI_BoxFlag_DrawDropShadow,
+                                                  UI_BoxFlag_DrawDropShadow|
+                                                  (UI_BoxFlag_SquishAnchored*!!is_anchored),
                                                   "floating_view_container_%p", view);
           }
           
@@ -7971,6 +7972,7 @@ rd_window_frame(void)
                 rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
                 rd_cmd_kind_info_table[RD_CmdKind_ResetToDefaultPanels].string,
                 rd_cmd_kind_info_table[RD_CmdKind_ResetToCompactPanels].string,
+                rd_cmd_kind_info_table[RD_CmdKind_ResetToSimplePanels].string,
               };
               U32 codepoints[] =
               {
@@ -7985,6 +7987,7 @@ rd_window_frame(void)
                 't',
                 'b',
                 'v',
+                0,
                 0,
                 0,
                 0,
@@ -8786,7 +8789,7 @@ rd_window_frame(void)
               UI_Box *site_box = &ui_nil_box;
               {
                 F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
-                UI_Rect(site_rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
+                UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
                   ui_signal_from_box(site_box);
@@ -8877,7 +8880,7 @@ rd_window_frame(void)
             UI_Box *site_box = &ui_nil_box;
             {
               F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
-              UI_Rect(site_rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
+              UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
               {
                 site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
                 ui_signal_from_box(site_box);
@@ -9195,7 +9198,7 @@ rd_window_frame(void)
                 UI_Box *site_box = &ui_nil_box;
                 {
                   F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
-                  UI_Rect(rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
+                  UI_Rect(rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
                   {
                     site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
                     ui_signal_from_box(site_box);
@@ -9851,6 +9854,7 @@ rd_window_frame(void)
   {
     MemoryZeroStruct(&ws->hover_eval_string);
     arena_clear(ws->hover_eval_arena);
+    ws->hover_eval_focused = 0;
     rd_request_frame();
   }
   
@@ -9870,7 +9874,7 @@ rd_window_frame(void)
     ProfScope("draw UI")
   {
     Temp scratch = scratch_begin(0, 0);
-    F32 box_squish_epsilon = 0.01f;
+    F32 box_squish_epsilon = 0.001f;
     Rng2F32 window_rect = os_client_rect_from_window(ws->os);
     
     //- rjf: unpack settings
@@ -9934,9 +9938,18 @@ rd_window_frame(void)
       if(box->squish > box_squish_epsilon)
       {
         Vec2F32 box_dim = dim_2f32(box->rect);
-        Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/2, -box->rect.y0));
+        Vec2F32 anchor_off = {0};
+        if(box->flags & UI_BoxFlag_SquishAnchored)
+        {
+          anchor_off.x = box_dim.x/2.f;
+        }
+        else
+        {
+          anchor_off.y = -box_dim.y/8.f;
+        }
+        Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/2 + anchor_off.x, -box->rect.y0 + anchor_off.y));
         Mat3x3F32 scale_xform = make_scale_3x3f32(v2f32(1-box->squish, 1-box->squish));
-        Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/2, box->rect.y0));
+        Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/2 - anchor_off.x, box->rect.y0 - anchor_off.y));
         Mat3x3F32 xform = mul_3x3f32(origin2box_xform, mul_3x3f32(scale_xform, box2origin_xform));
         dr_push_xform2d(xform);
         dr_push_tex2d_sample_kind(R_Tex2DSampleKind_Linear);
@@ -12776,7 +12789,6 @@ rd_frame(void)
           {
             arena_release(lister->arena);
           }
-          arena_release(ws->ctx_menu_arena);
           arena_release(ws->drop_completion_arena);
           arena_release(ws->hover_eval_arena);
           arena_release(ws->query_arena);
@@ -15254,6 +15266,7 @@ rd_frame(void)
           //- rjf: panel built-in layout builds
           case RD_CmdKind_ResetToDefaultPanels:
           case RD_CmdKind_ResetToCompactPanels:
+          case RD_CmdKind_ResetToSimplePanels:
           {
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_Cfg *panels = rd_cfg_child_from_string(window, str8_lit("panels"));
@@ -15454,6 +15467,38 @@ Z(getting_started)
                 rd_cfg_insert_child(root_0_3, root_0_3->last, call_stack);
                 rd_cfg_insert_child(root_0_3, root_0_3->last, modules);
                 rd_cfg_new(call_stack, str8_lit("selected"));
+                
+                // rjf: fill main panel with getting started, OR all collected code views
+                RD_Cfg *main_panel = root_1;
+                if(getting_started != &rd_nil_cfg)
+                {
+                  rd_cfg_insert_child(main_panel, main_panel->last, getting_started);
+                  rd_cfg_new(getting_started, str8_lit("selected"));
+                }
+                else if(texts.first)
+                {
+                  rd_cfg_new(texts.first->v, str8_lit("selected"));
+                }
+                for(RD_CfgNode *n = texts.first; n != 0; n = n->next)
+                {
+                  rd_cfg_insert_child(main_panel, main_panel->last, n->v);
+                }
+                
+                // rjf: set main panel as selected
+                rd_cfg_new(main_panel, str8_lit("selected"));
+              }break;
+              
+              //- rjf: simple layout
+              case RD_CmdKind_ResetToSimplePanels:
+              {
+                // rjf: root split
+                rd_cfg_child_from_string_or_alloc(window, str8_lit("split_x"));
+                RD_Cfg *root_0 = rd_cfg_new(panels, str8_lit("0.25"));
+                RD_Cfg *root_1 = rd_cfg_new(panels, str8_lit("0.75"));
+                
+                // rjf: fill smaller panel with watch
+                rd_cfg_insert_child(root_0, root_0->last, watches);
+                rd_cfg_new(watches, str8_lit("selected"));
                 
                 // rjf: fill main panel with getting started, OR all collected code views
                 RD_Cfg *main_panel = root_1;

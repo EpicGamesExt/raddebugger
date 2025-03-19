@@ -1149,7 +1149,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
   {
     Temp scratch = scratch_begin(0, 0);
     Vec4F32 color = ui_color_from_name(str8_lit("text"));
-    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Code), box->font_size*0.95f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("?"));
+    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Code), box->font_size*0.8f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("if"));
     Vec2F32 p = center_2f32(box->rect);
     p.x -= run.dim.x*0.5f;
     p.y += run.descent;
@@ -1391,10 +1391,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), ctrl_string_from_handle(scratch.arena, thread->handle), str8_zero());
               RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
             }
-            if(ui_right_clicked(thread_sig))
-            {
-              RD_RegsScope(.thread = thread->handle) rd_open_ctx_menu(thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0), RD_RegSlot_Thread);
-            }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
               RD_RegsScope(.thread = thread->handle) rd_drag_begin(RD_RegSlot_Thread);
@@ -1542,10 +1538,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_set_hover_eval(v2f32(thread_box->rect.x0, thread_box->rect.y1-2.f), ctrl_string_from_handle(scratch.arena, thread->handle), str8_zero());
               RD_RegsScope(.ctrl_entity = thread->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
-            }
-            if(ui_right_clicked(thread_sig))
-            {
-              RD_RegsScope(.thread = thread->handle) rd_open_ctx_menu(thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0), RD_RegSlot_Thread);
             }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {

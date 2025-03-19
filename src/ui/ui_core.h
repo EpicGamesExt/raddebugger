@@ -350,6 +350,7 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<49)
 # define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<50)
 # define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<51)
+# define UI_BoxFlag_SquishAnchored            (UI_BoxFlags)(1ull<<52)
 
 //- rjf: bundles
 # define UI_BoxFlag_Clickable           (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)

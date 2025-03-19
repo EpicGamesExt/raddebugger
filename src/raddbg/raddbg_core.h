@@ -545,16 +545,6 @@ struct RD_WindowState
   RD_Lister *autocomp_lister;
   U64 autocomp_lister_last_frame_idx;
   
-  // rjf: context menu state
-  Arena *ctx_menu_arena;
-  RD_Regs *ctx_menu_regs;
-  RD_RegSlot ctx_menu_regs_slot;
-  U8 *ctx_menu_input_buffer;
-  U64 ctx_menu_input_buffer_size;
-  U64 ctx_menu_input_string_size;
-  TxtPt ctx_menu_input_cursor;
-  TxtPt ctx_menu_input_mark;
-  
   // rjf: drop-completion state
   Arena *drop_completion_arena;
   String8List drop_completion_paths;
@@ -898,8 +888,6 @@ internal void rd_drag_kill(void);
 
 internal void rd_set_hover_regs(RD_RegSlot slot);
 internal RD_Regs *rd_get_hover_regs(void);
-
-internal void rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot);
 
 ////////////////////////////////
 //~ rjf: Name Allocation
