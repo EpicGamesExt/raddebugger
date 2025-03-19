@@ -1172,18 +1172,18 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
       ui_state->active_box_key[k] = ui_key_zero();
     }
   }
+  
+  //- rjf: escape -> close context menu
+  if(ui_any_ctx_menu_is_open() && ui_slot_press(UI_EventActionSlot_Cancel))
+  {
+    ui_ctx_menu_close();
+  }
 }
 
 internal void
 ui_end_build(void)
 {
   ProfBeginFunction();
-  
-  //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
-  {
-    ui_ctx_menu_close();
-  }
   
   //- rjf: prune untouched or transient boxes in the cache
   ProfScope("ui prune unused boxes")
