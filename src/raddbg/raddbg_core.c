@@ -16136,7 +16136,8 @@ Z(getting_started)
             for(RD_CfgNode *n = all_of_the_same_kind.first; n != 0; n = n->next)
             {
               RD_Cfg *c = n->v;
-              rd_cfg_child_from_string_or_alloc(c, str8_lit("disabled"));
+              RD_Cfg *disabled = rd_cfg_child_from_string_or_alloc(c, str8_lit("disabled"));
+              rd_cfg_new_replace(disabled, str8_lit("1"));
             }
             if(!is_selected)
             {
@@ -16414,7 +16415,8 @@ Z(getting_started)
             String8 file_path = rd_regs()->file_path;
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
             RD_Cfg *target = rd_cfg_new(project, str8_lit("target"));
-            rd_cfg_new(target, str8_lit("disabled"));
+            RD_Cfg *disabled = rd_cfg_new(target, str8_lit("disabled"));
+            rd_cfg_new(disabled, str8_lit("1"));
             RD_Cfg *exe = rd_cfg_new(target, str8_lit("executable"));
             rd_cfg_new(exe, file_path);
             String8 working_directory = str8_chop_last_slash(file_path);
