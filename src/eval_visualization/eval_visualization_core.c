@@ -1117,6 +1117,7 @@ internal B32
 ev_row_is_expandable(EV_Row *row)
 {
   B32 result = 0;
+  if(!ev_key_match(ev_key_root(), row->block->key))
   {
     Temp scratch = scratch_begin(0, 0);
     E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);

@@ -2136,7 +2136,8 @@ rd_color_from_cfg(RD_Cfg *cfg)
 internal B32
 rd_disabled_from_cfg(RD_Cfg *cfg)
 {
-  B32 is_disabled = (rd_cfg_child_from_string(cfg, str8_lit("disabled")) != &rd_nil_cfg);
+  String8 disabled_value_string = rd_cfg_child_from_string(cfg, str8_lit("disabled"))->first->string;
+  B32 is_disabled = (disabled_value_string.size != 0 && !str8_match(disabled_value_string, str8_lit("0"), 0));
   return is_disabled;
 }
 
@@ -5409,13 +5410,13 @@ rd_view_ui(Rng2F32 rect)
                       // rjf: hover -> rich hover cfgs
                       if(ui_hovering(sig) && cell_info.cfg != &rd_nil_cfg)
                       {
-                        RD_RegsScope(.cfg = cell_info.cfg->id) rd_set_hover_regs(RD_RegSlot_Cfg);
+                        RD_RegsScope(.cfg = cell_info.cfg->id, .no_rich_tooltip = 1) rd_set_hover_regs(RD_RegSlot_Cfg);
                       }
                       
                       // rjf: hover -> rich hover entities
                       if(ui_hovering(sig) && cell_info.entity != &ctrl_entity_nil)
                       {
-                        RD_RegsScope(.ctrl_entity = cell_info.entity->handle) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
+                        RD_RegsScope(.ctrl_entity = cell_info.entity->handle, .no_rich_tooltip = 1) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
                       }
                       
                       // rjf: dragging -> drag/drop
@@ -6546,9 +6547,9 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: @window_ui_part drag/drop tooltips
+    //- rjf: @window_ui_part rich hover / drag/drop tooltips
     //
-    if(rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active())
+    if((rd_state->hover_regs_slot != RD_RegSlot_Null && !rd_state->hover_regs->no_rich_tooltip) || (rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()))
     {
       Temp scratch = scratch_begin(0, 0);
       RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
@@ -8261,7 +8262,7 @@ rd_window_frame(void)
         }
         
         // rjf: based on query expression, determine if we have an explicit root
-        if(0 && (query_expr.size == 0 || !query_is_lister))
+        if(query_expr.size == 0 || !query_is_lister)
         {
           RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
           rd_cfg_new(explicit_root, str8_lit("1"));
@@ -8287,7 +8288,7 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            query_height_px = row_height_px * (predicted_block_tree.total_row_count-1);
+            query_height_px = row_height_px * predicted_block_tree.total_row_count;
             query_height_px = Min(query_height_px, max_query_height_px);
           }
           rect = r2f32p(content_rect_center.x - query_width_px/2,
