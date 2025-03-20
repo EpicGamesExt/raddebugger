@@ -1057,6 +1057,70 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       if(0){}
       
+      // rjf: folder / file rows
+      else if(info.eval.space.kind == E_SpaceKind_FileSystem)
+      {
+        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
+        if(type->kind == E_TypeKind_Set)
+        {
+          String8 file_path = e_string_from_id(info.eval.value.u64);
+          DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
+                                      .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
+                                      .pct = 1.f,
+                                      .fstrs = fstrs);
+          if(str8_match(type->name, str8_lit("file"), 0))
+          {
+            info.can_expand = 0;
+          }
+        }
+        else
+        {
+          info.cell_style_key = str8_lit("expr_and_eval");
+          RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+          RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+          RD_Cfg *w_cfg = style->first;
+          F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
+#undef take_pct
+        }
+      }
+      
+      // rjf: singular button for unattached processes
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
+      {
+        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
+        if(str8_match(type->name, str8_lit("unattached_process"), 0))
+        {
+          U64 pid = info.eval.value.u128.u64[0];
+          String8 name = e_string_from_id(info.eval.value.u128.u64[1]);
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          DR_FStrList fstrs = {0};
+          UI_TagF("weak")
+          {
+            dr_fstrs_push_new(arena, &fstrs, &params,
+                              rd_icon_kind_text_table[RD_IconKind_Scheduler],
+                              .font = rd_font_from_slot(RD_FontSlot_Icons),
+                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                              .color = ui_color_from_name(str8_lit("text")));
+          }
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+          dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+          dr_fstrs_push_new(arena, &fstrs, &params, name);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = fstrs);
+        }
+      }
+      
+      // rjf: lister rows
+      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
+      {
+        info.can_expand = 0;
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
+      }
+      
       // rjf: top-level cfg rows
       else if(is_top_level && evalled_cfg != &rd_nil_cfg)
       {
@@ -1147,32 +1211,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
       
-      // rjf: singular button for unattached processes
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
-      {
-        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
-        if(str8_match(type->name, str8_lit("unattached_process"), 0))
-        {
-          U64 pid = info.eval.value.u128.u64[0];
-          String8 name = e_string_from_id(info.eval.value.u128.u64[1]);
-          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
-          DR_FStrList fstrs = {0};
-          UI_TagF("weak")
-          {
-            dr_fstrs_push_new(arena, &fstrs, &params,
-                              rd_icon_kind_text_table[RD_IconKind_Scheduler],
-                              .font = rd_font_from_slot(RD_FontSlot_Icons),
-                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
-                              .color = ui_color_from_name(str8_lit("text")));
-          }
-          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-          dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
-          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-          dr_fstrs_push_new(arena, &fstrs, &params, name);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = fstrs);
-        }
-      }
-      
       // rjf: singular button for commands
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
@@ -1186,37 +1224,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           String8 cmd_name = e_string_from_id(e_value_eval_from_eval(info.eval).value.u64);
           RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
-        }
-      }
-      
-      // rjf: folder / file rows
-      else if(info.eval.space.kind == E_SpaceKind_FileSystem)
-      {
-        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Set)
-        {
-          String8 file_path = e_string_from_id(info.eval.value.u64);
-          DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
-                                      .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
-                                      .pct = 1.f,
-                                      .fstrs = fstrs);
-          if(str8_match(type->name, str8_lit("file"), 0))
-          {
-            info.can_expand = 0;
-          }
-        }
-        else
-        {
-          info.cell_style_key = str8_lit("expr_and_eval");
-          RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-          RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-          RD_Cfg *w_cfg = style->first;
-          F32 next_pct = 0;
-#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
-#undef take_pct
         }
       }
       
@@ -1247,13 +1254,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
 #undef take_pct
-      }
-      
-      // rjf: lister rows
-      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
-      {
-        info.can_expand = 0;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f);
       }
       
       // rjf: procedures collections get only expr/value/view-rule
@@ -1526,6 +1526,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         if(e_type_key_match(cfg_type, result.eval.irtree.type_key))
         {
           result.cfg = cfg;
+          result.fstrs = rd_title_fstrs_from_cfg(arena, cfg);
         }
       }
       else if(result.eval.space.kind == RD_EvalSpaceKind_MetaCmd)

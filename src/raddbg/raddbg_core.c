@@ -3568,7 +3568,7 @@ rd_view_ui(Rng2F32 rect)
                 ui_spacer(ui_em(1.5f, 1));
                 if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Step Into %S", target_name)))
                 {
-                  rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = target_cfg->id);
+                  rd_cmd(RD_CmdKind_LaunchAndStepInto, .cfg = target_cfg->id);
                 }
               }
             }break;
@@ -7625,10 +7625,14 @@ rd_window_frame(void)
               String8 cmds[] =
               {
                 rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string,
+                rd_cmd_kind_info_table[RD_CmdKind_LaunchAndRun].string,
+                rd_cmd_kind_info_table[RD_CmdKind_LaunchAndStepInto].string,
               };
               U32 codepoints[] =
               {
                 'a',
+                'r',
+                's',
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
@@ -8574,6 +8578,12 @@ rd_window_frame(void)
         if(is_focused)
         {
           MemoryCopyStruct(rd_regs(), view_regs);
+        }
+        
+        // rjf: is not anchored? -> darken rest of screen
+        if(!is_anchored)
+        {
+          UI_TagF("inactive") UI_Transparency(1-open_t) UI_Rect(content_rect) ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_Floating, ui_key_zero());
         }
       }
     }
@@ -13945,7 +13955,7 @@ rd_frame(void)
           //- rjf: default cases
           case RD_CmdKind_Run:
           case RD_CmdKind_LaunchAndRun:
-          case RD_CmdKind_LaunchAndInit:
+          case RD_CmdKind_LaunchAndStepInto:
           case RD_CmdKind_StepInto:
           case RD_CmdKind_StepOver:
           case RD_CmdKind_Restart:
@@ -15108,97 +15118,42 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Switch:
           {
-#if 0 // TODO(rjf): @cfg (opening recent files)
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            RD_Panel *src_panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *src_view = rd_view_from_handle(rd_regs()->view);
-            RD_ViewRuleKind src_view_kind = rd_view_rule_kind_from_string(src_view->spec->string);
-            RD_Entity *recent_file = rd_entity_from_handle(rd_regs()->entity);
-            if(!rd_entity_is_nil(recent_file))
-            {
-              String8 recent_file_path = recent_file->string;
-              RD_Panel *existing_panel = &rd_nil_panel;
-              RD_View *existing_view = &rd_nil_view;
-              for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
-              {
-                if(!rd_panel_is_nil(panel->first))
-                {
-                  continue;
-                }
-                for(RD_View *v = panel->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
-                {
-                  if(rd_view_is_project_filtered(v)) { continue; }
-                  String8 v_path = rd_file_path_from_eval_string(scratch.arena, str8(v->query_buffer, v->query_string_size));
-                  RD_ViewRuleKind v_kind = rd_view_rule_kind_from_string(v->spec->string);
-                  if(str8_match(v_path, recent_file_path, StringMatchFlag_CaseInsensitive) && v_kind == src_view_kind)
-                  {
-                    existing_panel = panel;
-                    existing_view = v;
-                    goto done_existing_view_search__switch;
-                  }
-                }
-              }
-              done_existing_view_search__switch:;
-              if(rd_view_is_nil(existing_view))
-              {
-                rd_cmd(RD_CmdKind_OpenTab,
-                       .string = rd_eval_string_from_file_path(scratch.arena, recent_file_path),
-                       .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
-              }
-              else
-              {
-                rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_panel(existing_panel));
-                existing_panel->selected_tab_view = rd_handle_from_view(existing_view);
-              }
-            }
-#endif
+            RD_Cfg *recent_file = rd_cfg_from_id(rd_regs()->cfg);
+            RD_Cfg *path_root = rd_cfg_child_from_string(recent_file, str8_lit("path"));
+            String8 path = path_root->first->string;
+            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
-#if 0 // TODO(rjf): @cfg (opening partner files)
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *view = rd_selected_tab_from_panel(panel);
+            String8 file_path      = rd_regs()->file_path;
+            String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
+            String8 file_folder    = str8_chop_last_slash(file_full_path);
+            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
+            String8 file_ext       = str8_skip_last_dot(file_full_path);
+            String8 partner_ext_candidates[] =
             {
-              String8 file_path      = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-              String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
-              String8 file_folder    = str8_chop_last_slash(file_full_path);
-              String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
-              String8 file_ext       = str8_skip_last_dot(file_full_path);
-              String8 partner_ext_candidates[] =
+              str8_lit_comp("h"),
+              str8_lit_comp("hpp"),
+              str8_lit_comp("hxx"),
+              str8_lit_comp("c"),
+              str8_lit_comp("cc"),
+              str8_lit_comp("cxx"),
+              str8_lit_comp("cpp"),
+            };
+            for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
+            {
+              if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
               {
-                str8_lit_comp("h"),
-                str8_lit_comp("hpp"),
-                str8_lit_comp("hxx"),
-                str8_lit_comp("c"),
-                str8_lit_comp("cc"),
-                str8_lit_comp("cxx"),
-                str8_lit_comp("cpp"),
-              };
-              for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
-              {
-                if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
+                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
+                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
+                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
+                if(candidate_props.modified != 0)
                 {
-                  String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
-                  String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
-                  FileProperties candidate_props = os_properties_from_file_path(candidate_path);
-                  if(candidate_props.modified != 0)
-                  {
-                    RD_Entity *recent_file = rd_entity_from_name_and_kind(candidate_path, RD_EntityKind_RecentFile);
-                    if(!rd_entity_is_nil(recent_file))
-                    {
-                      rd_cmd(RD_CmdKind_Switch, .entity = rd_handle_from_entity(recent_file));
-                    }
-                    else
-                    {
-                      rd_cmd(RD_CmdKind_RecordFileInProject, .file_path = candidate_path);
-                      rd_cmd(RD_CmdKind_OpenTab, .string = rd_eval_string_from_file_path(scratch.arena, candidate_path), .params_tree = md_tree_from_string(scratch.arena, view->spec->string)->first);
-                    }
-                    break;
-                  }
+                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0);
+                  break;
                 }
               }
             }
-#endif
           }break;
           case RD_CmdKind_RecordFileInProject:
           if(rd_regs()->file_path.size != 0)
@@ -16068,6 +16023,10 @@ Z(getting_started)
                 vs->last_frame_index_built = 0;
                 RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("expression"));
                 rd_cfg_new_replace(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
+                rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("cursor_line")), str8_lit("1"));
+                rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("cursor_column")), str8_lit("1"));
+                rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("mark_line")), str8_lit("1"));
+                rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("mark_column")), str8_lit("1"));
               }
               else if(dst_panel != &rd_nil_panel_node && dst_tab == &rd_nil_cfg)
               {

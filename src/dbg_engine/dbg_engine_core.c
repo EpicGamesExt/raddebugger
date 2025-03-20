@@ -1967,7 +1967,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         
         //- rjf: low-level target control operations
         case D_CmdKind_LaunchAndRun:
-        case D_CmdKind_LaunchAndInit:
+        case D_CmdKind_LaunchAndStepInto:
         {
           // rjf: get list of targets to launch
           D_TargetArray *targets_to_launch = &params->targets;
@@ -2047,7 +2047,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             need_run = 1;
             run_kind = D_RunKind_Run;
             run_thread = &ctrl_entity_nil;
-            run_flags = (cmd->kind == D_CmdKind_LaunchAndInit) ? CTRL_RunFlag_StopOnEntryPoint : 0;
+            run_flags = (cmd->kind == D_CmdKind_LaunchAndStepInto) ? CTRL_RunFlag_StopOnEntryPoint : 0;
           }
           
           // rjf: no targets -> error
@@ -2291,7 +2291,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           else if(!d_ctrl_targets_running())
           {
-            d_cmd(D_CmdKind_LaunchAndInit, .targets = *targets);
+            d_cmd(D_CmdKind_LaunchAndStepInto, .targets = *targets);
           }
         }break;
         

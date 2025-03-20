@@ -10,7 +10,7 @@ typedef enum D_CmdKind
 {
 D_CmdKind_Null,
 D_CmdKind_LaunchAndRun,
-D_CmdKind_LaunchAndInit,
+D_CmdKind_LaunchAndStepInto,
 D_CmdKind_Kill,
 D_CmdKind_KillAll,
 D_CmdKind_Detach,

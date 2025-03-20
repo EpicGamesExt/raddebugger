@@ -55,7 +55,7 @@ typedef enum RD_CmdKind
 {
 RD_CmdKind_Null,
 RD_CmdKind_LaunchAndRun,
-RD_CmdKind_LaunchAndInit,
+RD_CmdKind_LaunchAndStepInto,
 RD_CmdKind_Kill,
 RD_CmdKind_KillAll,
 RD_CmdKind_Detach,
