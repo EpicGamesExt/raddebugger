@@ -2,6 +2,48 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: 0.9.16 changes
+//
+// - Auto view rules have been upgraded to support type pattern-matching. This
+//   makes them usable for generic types in various languages.
+// - The `slice` view rule has been streamlined and simplified. When an
+//   expression with a `slice` view rule is expanded, it will simply expand to
+//   the slice's contents, which matches the behavior with static arrays.
+// - The `slice` view rule now supports `first, one-past-last` pointer pairs,
+//   as well as `base_pointer, length` pairs.
+// - The syntax for view rules has changed to improve its familiarity,
+//   usability, and to improve its consistency with the rest of the evaluation
+//   language. It now appears like function calls, and many arguments no longer
+//   need to be explicitly named. For example, instead of
+//   `bitmap:{w:1024, h:1024}`, the new view rule syntax would be
+//   `bitmap(1024, 1024)`. Commas can still be omitted. Named arguments are
+//   still possible (and required in some cases): `disasm(size=1024, arch=x64)`
+// - The hover evaluation feature has been majorly upgraded to support all
+//   features normally available in the `Watch` view. Hover evaluations now
+//   explicitly show type information, and contain a view rule column, which
+//   can be edited in an identical way as the `Watch` view.
+// - Added "auto tabs", which are colored differently than normal tabs. These
+//   tabs are automatically opened by the debugger when snapping to source code
+//   which is not already opened. They are automatically replaced and recycled
+//   when the debugger needs to snap to new locations. This will greatly reduce
+//   the number of unused source code tabs accumulated throughout a debugging
+//   session. These tabs can still be promoted to permanent tabs, in which case
+//   they'll stay around until manually closed.
+// - The `Scheduler` view has been removed, in favor of three separate views,
+//   which present various versions of the same information: `Threads`,
+//   `Processes`, and `Machines`. The justification for this is that the
+//   common case is debugging a small number of programs, usually 1, and for
+//   those purposes, the `Threads` view is sufficient if not desirable, and
+//   the extra information provided by `Processes` and `Machines`, while useful
+//   in other contexts, is not useful in that common case.
+// - The two separate interfaces for editing threads, breakpoints, and watch
+//   pins (the right-click context menu and the dedicated tabs) have been
+//   merged.
+// - Added the ability to add per-target environment strings.
+// - Fixed an annoyance where the debugger would open a console window, even
+//   for graphical programs, causing a flicker.
+
+////////////////////////////////
 //~ rjf: feature cleanup, code dedup, code elimination pass:
 //
 // [ ] frontend config entities, serialization/deserialization, remove hacks,

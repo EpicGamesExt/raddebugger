@@ -8468,7 +8468,7 @@ rd_window_frame(void)
       UI_Focus(ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
     {
       F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
-      F32 slow_open_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
+      F32 slow_open_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
       for(FloatingViewTask *t = first_floating_view_task; t != 0; t = t->next)
       {
         // rjf: unpack
@@ -13732,6 +13732,7 @@ rd_frame(void)
         String8 name = debug_info_table_collection_names[idx];
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(debug_info_table),
@@ -16088,7 +16089,10 @@ Z(getting_started)
                                                                .view  = dst_tab->id)
               {
                 rd_cmd(RD_CmdKind_FocusTab);
-                rd_cmd(RD_CmdKind_GoToLine, .cursor = point);
+                if(point.line != 0)
+                {
+                  rd_cmd(RD_CmdKind_GoToLine, .cursor = point);
+                }
                 rd_cmd(cursor_snap_kind);
               }
               
