@@ -5363,7 +5363,7 @@ rd_view_ui(Rng2F32 rect)
                                                                    RD_LineEditFlag_SingleClickActivate*is_activated_on_single_click|
                                                                    RD_LineEditFlag_KeyboardClickable|
                                                                    RD_LineEditFlag_Expander*!!(row_is_expandable && cell == row_info->cells.first)|
-                                                                   RD_LineEditFlag_ExpanderSpace*(row_depth==0 && cell == row_info->cells.first && !is_button)|
+                                                                   RD_LineEditFlag_ExpanderSpace*(row_depth==!implicit_root && cell == row_info->cells.first && !is_button)|
                                                                    RD_LineEditFlag_ExpanderSpace*((row_depth!=0 && cell == row_info->cells.first)));
                           line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                           line_edit_params.cursor               = &cell_edit_state->cursor;
@@ -7291,6 +7291,492 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: @window_ui_part gather all tasks to build floating views
+    //
+    typedef struct FloatingViewTask FloatingViewTask;
+    struct FloatingViewTask
+    {
+      FloatingViewTask *next;
+      RD_Cfg *view;
+      F32 row_height_px;
+      Rng2F32 rect;
+      String8 view_name;
+      String8 expr;
+      B32 is_focused;
+      B32 is_anchored;
+      UI_Signal signal; // NOTE(rjf): output, from build
+      B32 pressed;
+      B32 pressed_outside;
+    };
+    FloatingViewTask *hover_eval_floating_view_task = 0;
+    FloatingViewTask *query_floating_view_task = 0;
+    FloatingViewTask *first_floating_view_task = 0;
+    FloatingViewTask *last_floating_view_task = 0;
+    RD_Font(RD_FontSlot_Code)
+      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+    {
+      //- rjf: try to add hover eval first
+      {
+        B32 build_hover_eval = (hover_eval_is_open && (!rd_drag_is_active() || rd_state->drag_drop_regs_slot == RD_RegSlot_View));
+        
+        // rjf: disable hover eval if hovered view is actively scrolling
+        if(hover_eval_is_open)
+        {
+          for(RD_PanelNode *panel = panel_tree.root;
+              panel != &rd_nil_panel_node;
+              panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
+          {
+            if(panel->first != &rd_nil_panel_node) { continue; }
+            RD_Cfg *tab = panel->selected_tab;
+            if(tab != &rd_nil_cfg)
+            {
+              RD_ViewState *vs = rd_view_state_from_cfg(tab);
+              Rng2F32 panel_rect = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
+              if(contains_2f32(panel_rect, ui_mouse()) &&
+                 (abs_f32(vs->scroll_pos.x.off) > 0.01f ||
+                  abs_f32(vs->scroll_pos.y.off) > 0.01f))
+              {
+                build_hover_eval = 0;
+                ws->hover_eval_firstt_us = rd_state->time_in_us;
+              }
+            }
+          }
+        }
+        
+        // rjf: choose hover evaluation expression
+        String8 hover_eval_expr = push_str8f(scratch.arena, "%S%s%S", ws->hover_eval_string, ws->hover_eval_view_rules.size != 0 ? " => " : "", ws->hover_eval_view_rules);
+        
+        // rjf: evaluate hover evaluation expression, & determine if it evaluates
+        // such that we want to build a hover eval.
+        E_Eval hover_eval = e_eval_from_string(scratch.arena, hover_eval_expr);
+        {
+          if(hover_eval.msgs.max_kind > E_MsgKind_Null)
+          {
+            build_hover_eval = 0;
+          }
+          else if(hover_eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+                  rd_cfg_from_eval_space(hover_eval.space) == &rd_nil_cfg)
+          {
+            build_hover_eval = 0;
+          }
+          else if((hover_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+                   hover_eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
+                  rd_ctrl_entity_from_eval_space(hover_eval.space) == &ctrl_entity_nil)
+          {
+            build_hover_eval = 0;
+          }
+        }
+        
+        // rjf: determine if we have a top-level visualizer
+        EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
+        RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
+        
+        // rjf: determine view name
+        String8 view_name = str8_lit("watch");
+        if(view_ui_rule != &rd_nil_view_ui_rule)
+        {
+          view_name = view_ui_rule->name;
+        }
+        
+        // rjf: build view
+        RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
+        RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+        rd_cfg_new(explicit_root, str8_lit("1"));
+        
+        // rjf: request frames if we're waiting to open
+        if(ws->hover_eval_string.size != 0 &&
+           !hover_eval_is_open &&
+           ws->hover_eval_lastt_us < ws->hover_eval_firstt_us+hover_eval_open_delay_us &&
+           rd_state->time_in_us - ws->hover_eval_lastt_us < hover_eval_open_delay_us*2)
+        {
+          rd_request_frame();
+        }
+        
+        // rjf: determine size of hover evaluation container
+        EV_BlockTree predicted_block_tree = {0};
+        RD_RegsScope(.view = view->id)
+        {
+          predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
+        }
+        F32 row_height_px = ui_top_px_height();
+        U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
+        if(ws->hover_eval_focused)
+        {
+          max_row_count *= 3;
+        }
+        U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
+        F32 width_px = floor_f32(70.f*ui_top_font_size());
+        F32 height_px = needed_row_count*row_height_px;
+        
+        // rjf: if arbitrary visualizer, pick catchall size
+        if(view_ui_rule != &rd_nil_view_ui_rule)
+        {
+          height_px = floor_f32(40.f*ui_top_font_size());
+        }
+        
+        // rjf: determine hover eval top-level rect
+        Rng2F32 rect = r2f32p(ws->hover_eval_spawn_pos.x,
+                              ws->hover_eval_spawn_pos.y,
+                              ws->hover_eval_spawn_pos.x + width_px,
+                              ws->hover_eval_spawn_pos.y + height_px);
+        
+        // rjf: push hover eval task
+        if(build_hover_eval)
+        {
+          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
+          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
+          hover_eval_floating_view_task = t;
+          t->view          = view;
+          t->row_height_px = row_height_px;
+          t->rect          = rect;
+          t->view_name     = view_name;
+          t->expr          = hover_eval_expr;
+          t->is_focused    = ws->hover_eval_focused;
+          t->is_anchored   = 1;
+        }
+        
+        // rjf: reset focus state if hover eval is not being built
+        if(!build_hover_eval || ws->hover_eval_string.size == 0 || !hover_eval_is_open)
+        {
+          ws->hover_eval_focused = 0;
+        }
+      }
+      
+      //- rjf: force-close query, if it's anchored, but box is gone
+      if(query_is_open)
+      {
+        UI_Box *box = ui_box_from_key(ws->query_regs->ui_key);
+        if(!ui_key_match(ui_key_zero(), ws->query_regs->ui_key) && ui_box_is_nil(box))
+        {
+          query_is_open = 0;
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+      }
+      
+      //- rjf: force-close query, if it has an expression, but that expression does not evaluate
+      if(query_is_open)
+      {
+        String8 expr = ws->query_regs->expr;
+        E_Eval eval = e_eval_from_string(scratch.arena, expr);
+        if(eval.msgs.max_kind > E_MsgKind_Null)
+        {
+          query_is_open = 0;
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+        else if(eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+                rd_cfg_from_eval_space(eval.space) == &rd_nil_cfg)
+        {
+          query_is_open = 0;
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+        else if((eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+                 eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
+                rd_ctrl_entity_from_eval_space(eval.space) == &ctrl_entity_nil)
+        {
+          query_is_open = 0;
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+      }
+      
+      //- rjf: try to add opened query
+      if(query_is_open)
+      {
+        // rjf: unpack query info
+        String8 cmd_name = ws->query_regs->cmd_name;
+        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+        String8 query_expr = ws->query_regs->expr;
+        if(cmd_name.size != 0)
+        {
+          query_expr = cmd_kind_info->query.expr;
+        }
+        B32 query_is_anchored = (!ui_box_is_nil(ui_box_from_key(ws->query_regs->ui_key)));
+        B32 query_is_lister = (cmd_name.size != 0);
+        B32 size_query_by_expr_eval = (query_is_anchored || query_expr.size == 0);
+        
+        // rjf: build view for query
+        RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
+        RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+        RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
+        rd_cfg_new_replace(cmd, cmd_name);
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
+        if(query_is_lister)
+        {
+          rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+          vs->query_is_selected = 1;
+        }
+        else
+        {
+          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
+        }
+        
+        // rjf: compute query expression
+        if(query_expr.size == 0)
+        {
+          query_expr = str8(vs->query_buffer, vs->query_string_size);
+        }
+        else
+        {
+          U64 input_insertion_pos = str8_find_needle(query_expr, 0, str8_lit("$input"), 0);
+          if(input_insertion_pos < query_expr.size)
+          {
+            String8 pre_insertion  = str8_prefix(query_expr, input_insertion_pos);
+            String8 post_insertion = str8_skip(query_expr, input_insertion_pos + 6);
+            query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
+          }
+        }
+        
+        // rjf: based on query expression, determine if we have an explicit root
+        if(query_expr.size == 0 || !query_is_lister)
+        {
+          RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+          rd_cfg_new(explicit_root, str8_lit("1"));
+        }
+        else
+        {
+          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
+        }
+        
+        // rjf: evaluate query expression
+        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
+        
+        // rjf: compute query view's top-level rectangle
+        F32 row_height_px = ui_top_px_height();
+        Rng2F32 rect = {0};
+        RD_RegsScope(.view = view->id)
+        {
+          Vec2F32 content_rect_center = center_2f32(content_rect);
+          Vec2F32 content_rect_dim = dim_2f32(content_rect);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval.exprs);
+          F32 query_width_px = floor_f32(content_rect_dim.x * 0.35f);
+          F32 max_query_height_px = content_rect_dim.y*0.8f;
+          F32 query_height_px = max_query_height_px;
+          if(size_query_by_expr_eval)
+          {
+            query_height_px = row_height_px * predicted_block_tree.total_row_count;
+            query_height_px = Min(query_height_px, max_query_height_px);
+          }
+          rect = r2f32p(content_rect_center.x - query_width_px/2,
+                        content_rect_center.y - max_query_height_px/2.f,
+                        content_rect_center.x + query_width_px/2,
+                        content_rect_center.y - max_query_height_px/2.f + query_height_px);
+          if(!ui_key_match(ui_key_zero(), ws->query_regs->ui_key))
+          {
+            UI_Box *anchor_box = ui_box_from_key(ws->query_regs->ui_key);
+            if(anchor_box != &ui_nil_box)
+            {
+              rect.x0 = anchor_box->rect.x0;
+              rect.y0 = anchor_box->rect.y1;
+              rect.x1 = rect.x0 + ui_top_font_size()*60.f;
+              rect.y1 = rect.y0 + query_height_px;
+            }
+          }
+        }
+        
+        // rjf: push query task
+        {
+          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
+          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
+          query_floating_view_task = t;
+          t->view          = view;
+          t->row_height_px = row_height_px;
+          t->rect          = rect;
+          t->view_name     = str8_lit("watch");
+          t->expr          = query_expr;
+          t->is_focused    = 1;
+          t->is_anchored   = query_is_anchored;
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: @window_ui_part build all floating views
+    //
+    ProfScope("build all floating views")
+      RD_Font(RD_FontSlot_Code)
+      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+      UI_TagF("floating")
+      UI_Focus(ui_any_ctx_menu_is_open() || ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
+    {
+      F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
+      F32 slow_open_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
+      for(FloatingViewTask *t = first_floating_view_task; t != 0; t = t->next)
+      {
+        // rjf: unpack
+        RD_Cfg *view      = t->view;    
+        F32 row_height_px = t->row_height_px;
+        Rng2F32 rect      = t->rect;
+        String8 view_name = t->view_name;
+        String8 expr      = t->expr;
+        B32 is_focused    = t->is_focused;
+        B32 is_anchored   = t->is_anchored;
+        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate);
+        
+        // rjf: build cfg tree
+        RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+        rd_cfg_new(view, str8_lit("selected"));
+        rd_cfg_new_replace(expr_root, expr);
+        
+        // rjf: push view regs
+        rd_push_regs(.view = view->id);
+        {
+          String8 view_expr = rd_expr_from_cfg(view);
+          String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
+          // NOTE(rjf): we want to only fill out this view's file path slot if it
+          // evaluates one - this way, a view can use the slot to know the selected
+          // file path (if there is one). this is useful when pushing commandas which
+          // apply to a cursor, for example.
+          if(view_file_path.size != 0)
+          {
+            rd_regs()->file_path = view_file_path;
+          }
+        }
+        
+        // rjf: build
+        UI_Focus(is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+          UI_PrefHeight(ui_px(row_height_px, 1.f))
+        {
+          // rjf: build top-level container box
+          UI_Box *container = &ui_nil_box;
+          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.1f-0.1f*open_t) UI_Transparency(1.f-open_t)
+          {
+            container = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                  UI_BoxFlag_DrawBorder|
+                                                  UI_BoxFlag_DrawBackground|
+                                                  UI_BoxFlag_DrawBackgroundBlur|
+                                                  UI_BoxFlag_DisableFocusOverlay|
+                                                  UI_BoxFlag_DrawDropShadow|
+                                                  (UI_BoxFlag_SquishAnchored*!!is_anchored),
+                                                  "floating_view_container_%p", view);
+          }
+          
+          // rjf: peek press inside/outside events
+          {
+            for(UI_Event *evt = 0; ui_next_event(&evt);)
+            {
+              if(evt->kind == UI_EventKind_Press &&
+                 evt->key == OS_Key_LeftMouseButton)
+              {
+                if(contains_2f32(container->rect, evt->pos))
+                {
+                  t->pressed = 1;
+                }
+                else
+                {
+                  t->pressed_outside = 1;
+                }
+              }
+            }
+          }
+          
+          // rjf: build overlay container for loading animation
+          UI_Box *loading_overlay_container = &ui_nil_box;
+          UI_Parent(container) UI_WidthFill UI_HeightFill
+          {
+            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
+          }
+          
+          // rjf: build contents
+          UI_Parent(container) UI_Focus(is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+          {
+            ui_set_next_pref_width(ui_pct(1, 0));
+            ui_set_next_pref_height(ui_pct(1, 0));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
+            UI_Parent(view_contents_container) UI_WidthFill
+            {
+              rd_view_ui(rect);
+            }
+          }
+          
+          // rjf: build loading overlay
+          {
+            RD_ViewState *vs = rd_view_state_from_cfg(view);
+            F32 loading_t = vs->loading_t;
+            if(loading_t > 0.01f) UI_Parent(loading_overlay_container)
+            {
+              rd_loading_overlay(rect, loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
+            }
+          }
+          
+          // rjf: interact with container
+          UI_Signal sig = ui_signal_from_box(container);
+          t->signal = sig;
+        }
+        
+        // rjf: pop interaction registers; commit if this is focused
+        RD_Regs *view_regs = rd_pop_regs();
+        if(is_focused)
+        {
+          MemoryCopyStruct(rd_regs(), view_regs);
+        }
+        
+        // rjf: is not anchored? -> darken rest of screen
+        if(!is_anchored)
+        {
+          UI_TagF("inactive") UI_Transparency(1-open_t) UI_Rect(content_rect) ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_Floating, ui_key_zero());
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: @window_ui_part do special handling of floating view interactions
+    //
+    {
+      //- rjf: hover eval focus rules
+      if(hover_eval_floating_view_task)
+      {
+        UI_Signal sig = hover_eval_floating_view_task->signal;
+        if(ui_pressed(sig) || hover_eval_floating_view_task->pressed)
+        {
+          ws->hover_eval_focused = 1;
+        }
+        if(ui_mouse_over(sig) || ws->hover_eval_focused)
+        {
+          ws->hover_eval_lastt_us = rd_state->time_in_us;
+        }
+        else if(ws->hover_eval_lastt_us+1000000 < rd_state->time_in_us)
+        {
+          rd_request_frame();
+        }
+        if(hover_eval_floating_view_task->pressed_outside)
+        {
+          ws->hover_eval_focused = 0;
+          MemoryZeroStruct(&ws->hover_eval_string);
+          arena_clear(ws->hover_eval_arena);
+          rd_request_frame();
+        }
+      }
+      
+      //- rjf: query interactions
+      if(query_floating_view_task)
+      {
+        String8 cmd_name = ws->query_regs->cmd_name;
+        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+        
+        // rjf: close queries
+        if(ui_slot_press(UI_EventActionSlot_Cancel) || query_floating_view_task->pressed_outside)
+        {
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+        
+        // rjf: any queries which take a file path mutate the debugger's "current path"
+        if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+        {
+          RD_Cfg *view = query_floating_view_task->view;
+          RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
+          RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
+          if(input != &rd_nil_cfg)
+          {
+            String8 path_chopped = str8_chop_last_slash(input->first->string);
+            rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+          }
+        }
+      }
+    }
+    
+    ////////////////////////////
     //- rjf: @window_ui_part top bar
     //
     ProfScope("build top bar")
@@ -8057,459 +8543,6 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, pad_2f32(cls_sig.box->rect, 2.f));
-          }
-        }
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: @window_ui_part gather all tasks to build floating views
-    //
-    typedef struct FloatingViewTask FloatingViewTask;
-    struct FloatingViewTask
-    {
-      FloatingViewTask *next;
-      RD_Cfg *view;
-      F32 row_height_px;
-      Rng2F32 rect;
-      String8 view_name;
-      String8 expr;
-      B32 is_focused;
-      B32 is_anchored;
-      UI_Signal signal; // NOTE(rjf): output, from build
-    };
-    FloatingViewTask *hover_eval_floating_view_task = 0;
-    FloatingViewTask *query_floating_view_task = 0;
-    FloatingViewTask *first_floating_view_task = 0;
-    FloatingViewTask *last_floating_view_task = 0;
-    RD_Font(RD_FontSlot_Code)
-      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-    {
-      //- rjf: try to add hover eval first
-      {
-        B32 build_hover_eval = (hover_eval_is_open && (!rd_drag_is_active() || rd_state->drag_drop_regs_slot == RD_RegSlot_View));
-        
-        // rjf: disable hover eval if hovered view is actively scrolling
-        if(hover_eval_is_open)
-        {
-          for(RD_PanelNode *panel = panel_tree.root;
-              panel != &rd_nil_panel_node;
-              panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
-          {
-            if(panel->first != &rd_nil_panel_node) { continue; }
-            RD_Cfg *tab = panel->selected_tab;
-            if(tab != &rd_nil_cfg)
-            {
-              RD_ViewState *vs = rd_view_state_from_cfg(tab);
-              Rng2F32 panel_rect = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
-              if(contains_2f32(panel_rect, ui_mouse()) &&
-                 (abs_f32(vs->scroll_pos.x.off) > 0.01f ||
-                  abs_f32(vs->scroll_pos.y.off) > 0.01f))
-              {
-                build_hover_eval = 0;
-                ws->hover_eval_firstt_us = rd_state->time_in_us;
-              }
-            }
-          }
-        }
-        
-        // rjf: choose hover evaluation expression
-        String8 hover_eval_expr = push_str8f(scratch.arena, "%S%s%S", ws->hover_eval_string, ws->hover_eval_view_rules.size != 0 ? " => " : "", ws->hover_eval_view_rules);
-        
-        // rjf: evaluate hover evaluation expression, & determine if it evaluates
-        // such that we want to build a hover eval.
-        E_Eval hover_eval = e_eval_from_string(scratch.arena, hover_eval_expr);
-        {
-          if(hover_eval.msgs.max_kind > E_MsgKind_Null)
-          {
-            build_hover_eval = 0;
-          }
-          else if(hover_eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
-                  rd_cfg_from_eval_space(hover_eval.space) == &rd_nil_cfg)
-          {
-            build_hover_eval = 0;
-          }
-          else if((hover_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                   hover_eval.space.kind == RD_EvalSpaceKind_CtrlEntity) &&
-                  rd_ctrl_entity_from_eval_space(hover_eval.space) == &ctrl_entity_nil)
-          {
-            build_hover_eval = 0;
-          }
-        }
-        
-        // rjf: determine if we have a top-level visualizer
-        EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
-        RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
-        
-        // rjf: determine view name
-        String8 view_name = str8_lit("watch");
-        if(view_ui_rule != &rd_nil_view_ui_rule)
-        {
-          view_name = view_ui_rule->name;
-        }
-        
-        // rjf: build view
-        RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
-        RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-        rd_cfg_new(explicit_root, str8_lit("1"));
-        
-        // rjf: request frames if we're waiting to open
-        if(ws->hover_eval_string.size != 0 &&
-           !hover_eval_is_open &&
-           ws->hover_eval_lastt_us < ws->hover_eval_firstt_us+hover_eval_open_delay_us &&
-           rd_state->time_in_us - ws->hover_eval_lastt_us < hover_eval_open_delay_us*2)
-        {
-          rd_request_frame();
-        }
-        
-        // rjf: determine size of hover evaluation container
-        EV_BlockTree predicted_block_tree = {0};
-        RD_RegsScope(.view = view->id)
-        {
-          predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
-        }
-        F32 row_height_px = ui_top_px_height();
-        U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
-        if(ws->hover_eval_focused)
-        {
-          max_row_count *= 3;
-        }
-        U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
-        F32 width_px = floor_f32(70.f*ui_top_font_size());
-        F32 height_px = needed_row_count*row_height_px;
-        
-        // rjf: if arbitrary visualizer, pick catchall size
-        if(view_ui_rule != &rd_nil_view_ui_rule)
-        {
-          height_px = floor_f32(40.f*ui_top_font_size());
-        }
-        
-        // rjf: determine hover eval top-level rect
-        Rng2F32 rect = r2f32p(ws->hover_eval_spawn_pos.x,
-                              ws->hover_eval_spawn_pos.y,
-                              ws->hover_eval_spawn_pos.x + width_px,
-                              ws->hover_eval_spawn_pos.y + height_px);
-        
-        // rjf: push hover eval task
-        if(build_hover_eval)
-        {
-          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
-          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
-          hover_eval_floating_view_task = t;
-          t->view          = view;
-          t->row_height_px = row_height_px;
-          t->rect          = rect;
-          t->view_name     = view_name;
-          t->expr          = hover_eval_expr;
-          t->is_focused    = ws->hover_eval_focused;
-          t->is_anchored   = 1;
-        }
-        
-        // rjf: reset focus state if hover eval is not being built
-        if(!build_hover_eval || ws->hover_eval_string.size == 0 || !hover_eval_is_open)
-        {
-          ws->hover_eval_focused = 0;
-        }
-      }
-      
-      //- rjf: try to add opened query
-      if(query_is_open)
-      {
-        // rjf: unpack query info
-        String8 cmd_name = ws->query_regs->cmd_name;
-        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-        String8 query_expr = ws->query_regs->expr;
-        if(cmd_name.size != 0)
-        {
-          query_expr = cmd_kind_info->query.expr;
-        }
-        B32 query_is_anchored = (!ui_box_is_nil(ui_box_from_key(ws->query_regs->ui_key)));
-        B32 query_is_lister = (cmd_name.size != 0);
-        B32 size_query_by_expr_eval = (query_is_anchored || query_expr.size == 0);
-        
-        // rjf: build view for query
-        RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
-        RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-        RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
-        rd_cfg_new_replace(cmd, cmd_name);
-        RD_ViewState *vs = rd_view_state_from_cfg(view);
-        if(query_is_lister)
-        {
-          rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
-          vs->query_is_selected = 1;
-        }
-        else
-        {
-          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
-        }
-        
-        // rjf: compute query expression
-        if(query_expr.size == 0)
-        {
-          query_expr = str8(vs->query_buffer, vs->query_string_size);
-        }
-        else
-        {
-          U64 input_insertion_pos = str8_find_needle(query_expr, 0, str8_lit("$input"), 0);
-          if(input_insertion_pos < query_expr.size)
-          {
-            String8 pre_insertion  = str8_prefix(query_expr, input_insertion_pos);
-            String8 post_insertion = str8_skip(query_expr, input_insertion_pos + 6);
-            query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
-          }
-        }
-        
-        // rjf: based on query expression, determine if we have an explicit root
-        if(query_expr.size == 0 || !query_is_lister)
-        {
-          RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-          rd_cfg_new(explicit_root, str8_lit("1"));
-        }
-        else
-        {
-          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
-        }
-        
-        // rjf: evaluate query expression
-        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
-        
-        // rjf: compute query view's top-level rectangle
-        F32 row_height_px = ui_top_px_height();
-        Rng2F32 rect = {0};
-        RD_RegsScope(.view = view->id)
-        {
-          Vec2F32 content_rect_center = center_2f32(content_rect);
-          Vec2F32 content_rect_dim = dim_2f32(content_rect);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval.exprs);
-          F32 query_width_px = floor_f32(content_rect_dim.x * 0.35f);
-          F32 max_query_height_px = content_rect_dim.y*0.8f;
-          F32 query_height_px = max_query_height_px;
-          if(size_query_by_expr_eval)
-          {
-            query_height_px = row_height_px * predicted_block_tree.total_row_count;
-            query_height_px = Min(query_height_px, max_query_height_px);
-          }
-          rect = r2f32p(content_rect_center.x - query_width_px/2,
-                        content_rect_center.y - max_query_height_px/2.f,
-                        content_rect_center.x + query_width_px/2,
-                        content_rect_center.y - max_query_height_px/2.f + query_height_px);
-          if(!ui_key_match(ui_key_zero(), ws->query_regs->ui_key))
-          {
-            UI_Box *anchor_box = ui_box_from_key(ws->query_regs->ui_key);
-            if(anchor_box != &ui_nil_box)
-            {
-              rect.x0 = anchor_box->rect.x0;
-              rect.y0 = anchor_box->rect.y1;
-              rect.x1 = rect.x0 + ui_top_font_size()*60.f;
-              rect.y1 = rect.y0 + query_height_px;
-            }
-          }
-        }
-        
-        // rjf: push query task
-        {
-          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
-          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
-          query_floating_view_task = t;
-          t->view          = view;
-          t->row_height_px = row_height_px;
-          t->rect          = rect;
-          t->view_name     = str8_lit("watch");
-          t->expr          = query_expr;
-          t->is_focused    = 1;
-          t->is_anchored   = query_is_anchored;
-        }
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: @window_ui_part build all floating views
-    //
-    ProfScope("build all floating views")
-      RD_Font(RD_FontSlot_Code)
-      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-      UI_TagF("floating")
-      UI_Focus(ui_any_ctx_menu_is_open() || ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
-    {
-      F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
-      F32 slow_open_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
-      for(FloatingViewTask *t = first_floating_view_task; t != 0; t = t->next)
-      {
-        // rjf: unpack
-        RD_Cfg *view      = t->view;    
-        F32 row_height_px = t->row_height_px;
-        Rng2F32 rect      = t->rect;
-        String8 view_name = t->view_name;
-        String8 expr      = t->expr;
-        B32 is_focused    = t->is_focused;
-        B32 is_anchored   = t->is_anchored;
-        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate);
-        
-        // rjf: build cfg tree
-        RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_new(view, str8_lit("selected"));
-        rd_cfg_new_replace(expr_root, expr);
-        
-        // rjf: push view regs
-        rd_push_regs(.view = view->id);
-        {
-          String8 view_expr = rd_expr_from_cfg(view);
-          String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
-          // NOTE(rjf): we want to only fill out this view's file path slot if it
-          // evaluates one - this way, a view can use the slot to know the selected
-          // file path (if there is one). this is useful when pushing commandas which
-          // apply to a cursor, for example.
-          if(view_file_path.size != 0)
-          {
-            rd_regs()->file_path = view_file_path;
-          }
-        }
-        
-        // rjf: build
-        UI_Focus(is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
-          UI_PrefHeight(ui_px(row_height_px, 1.f))
-        {
-          // rjf: build top-level container box
-          UI_Box *container = &ui_nil_box;
-          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.1f-0.1f*open_t) UI_Transparency(1.f-open_t)
-          {
-            container = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                  UI_BoxFlag_DrawBorder|
-                                                  UI_BoxFlag_DrawBackground|
-                                                  UI_BoxFlag_DrawBackgroundBlur|
-                                                  UI_BoxFlag_DisableFocusOverlay|
-                                                  UI_BoxFlag_DrawDropShadow|
-                                                  (UI_BoxFlag_SquishAnchored*!!is_anchored),
-                                                  "floating_view_container_%p", view);
-          }
-          
-          // rjf: peek press events -> focus hover eval if we have a press
-          if(!ws->hover_eval_focused)
-          {
-            for(UI_Event *evt = 0; ui_next_event(&evt);)
-            {
-              if(evt->kind == UI_EventKind_Press &&
-                 evt->key == OS_Key_LeftMouseButton &&
-                 contains_2f32(container->rect, evt->pos))
-              {
-                ws->hover_eval_focused = 1;
-                break;
-              }
-            }
-          }
-          
-          // rjf: build overlay container for loading animation
-          UI_Box *loading_overlay_container = &ui_nil_box;
-          UI_Parent(container) UI_WidthFill UI_HeightFill
-          {
-            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
-          }
-          
-          // rjf: build contents
-          UI_Parent(container) UI_Focus(is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
-          {
-            ui_set_next_pref_width(ui_pct(1, 0));
-            ui_set_next_pref_height(ui_pct(1, 0));
-            ui_set_next_child_layout_axis(Axis2_Y);
-            UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
-            UI_Parent(view_contents_container) UI_WidthFill
-            {
-              rd_view_ui(rect);
-            }
-          }
-          
-          // rjf: build loading overlay
-          {
-            RD_ViewState *vs = rd_view_state_from_cfg(view);
-            F32 loading_t = vs->loading_t;
-            if(loading_t > 0.01f) UI_Parent(loading_overlay_container)
-            {
-              rd_loading_overlay(rect, loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
-            }
-          }
-          
-          // rjf: interact with container
-          UI_Signal sig = ui_signal_from_box(container);
-          t->signal = sig;
-        }
-        
-        // rjf: pop interaction registers; commit if this is focused
-        RD_Regs *view_regs = rd_pop_regs();
-        if(is_focused)
-        {
-          MemoryCopyStruct(rd_regs(), view_regs);
-        }
-        
-        // rjf: is not anchored? -> darken rest of screen
-        if(!is_anchored)
-        {
-          UI_TagF("inactive") UI_Transparency(1-open_t) UI_Rect(content_rect) ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_Floating, ui_key_zero());
-        }
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: @window_ui_part do special handling of floating view interactions
-    //
-    {
-      //- rjf: hover eval focus rules
-      if(hover_eval_floating_view_task)
-      {
-        UI_Signal sig = hover_eval_floating_view_task->signal;
-        if(ui_pressed(sig))
-        {
-          ws->hover_eval_focused = 1;
-        }
-        if(ui_mouse_over(sig) || ws->hover_eval_focused)
-        {
-          ws->hover_eval_lastt_us = rd_state->time_in_us;
-        }
-        else if(ws->hover_eval_lastt_us+1000000 < rd_state->time_in_us)
-        {
-          rd_request_frame();
-        }
-        if(ws->hover_eval_focused)
-        {
-          for(UI_Event *evt = 0; ui_next_event(&evt);)
-          {
-            if(evt->kind == UI_EventKind_Press &&
-               evt->key == OS_Key_LeftMouseButton &&
-               !contains_2f32(hover_eval_floating_view_task->rect, evt->pos))
-            {
-              ws->hover_eval_focused = 0;
-              MemoryZeroStruct(&ws->hover_eval_string);
-              arena_clear(ws->hover_eval_arena);
-              rd_request_frame();
-              break;
-            }
-          }
-        }
-      }
-      
-      //- rjf: query interactions
-      if(query_floating_view_task)
-      {
-        String8 cmd_name = ws->query_regs->cmd_name;
-        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-        
-        // rjf: close queries
-        if(ui_slot_press(UI_EventActionSlot_Cancel))
-        {
-          rd_cmd(RD_CmdKind_CancelQuery);
-        }
-        
-        // rjf: any queries which take a file path mutate the debugger's "current path"
-        if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
-        {
-          RD_Cfg *view = query_floating_view_task->view;
-          RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
-          RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
-          if(input != &rd_nil_cfg)
-          {
-            String8 path_chopped = str8_chop_last_slash(input->first->string);
-            rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
           }
         }
       }

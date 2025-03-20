@@ -3294,12 +3294,12 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
+    if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) == 0)
+    {
+      ui_spacer(ui_em(0.5f, 1.f));
+    }
     if(!is_focus_active && !is_focus_active_disabled && params->fstrs.total_size != 0)
     {
-      if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) == 0)
-      {
-        ui_spacer(ui_em(0.5f, 1.f));
-      }
       UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
       ui_box_equip_display_fstrs(label, &params->fstrs);
       if(params->fuzzy_matches != 0)

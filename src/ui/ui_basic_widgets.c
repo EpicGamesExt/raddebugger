@@ -148,16 +148,16 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   Rng2F32 cursor_rect =
   {
     text_position.x + cursor_pixel_off - cursor_thickness*0.50f,
-    box->rect.y0+4.f,
+    box->rect.y0+ui_top_font_size()*0.5f,
     text_position.x + cursor_pixel_off + cursor_thickness*0.50f,
-    box->rect.y1-4.f,
+    box->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 mark_rect =
   {
     text_position.x + mark_pixel_off - cursor_thickness*0.50f,
-    box->rect.y0+2.f,
+    box->rect.y0+ui_top_font_size()*0.5f,
     text_position.x + mark_pixel_off + cursor_thickness*0.50f,
-    box->rect.y1-2.f,
+    box->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
   dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);

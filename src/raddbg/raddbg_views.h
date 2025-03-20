@@ -10,8 +10,8 @@
 typedef U32 RD_CodeViewBuildFlags;
 enum
 {
-  RD_CodeViewBuildFlag_Margins = (1<<0),
-  RD_CodeViewBuildFlag_All     = 0xffffffff,
+  RD_CodeViewBuildFlag_Margins     = (1<<0),
+  RD_CodeViewBuildFlag_All         = 0xffffffff,
 };
 
 typedef struct RD_CodeViewState RD_CodeViewState;

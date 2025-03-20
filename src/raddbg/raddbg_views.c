@@ -45,6 +45,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
   CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+  B32 do_line_numbers = rd_setting_b32_from_name(str8_lit("show_line_numbers"));
   
   //////////////////////////////
   //- rjf: unpack information about the viewed source file, if any
@@ -138,7 +139,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 line_num_width_px = floor_f32(big_glyph_advance * (log10(visible_line_num_range.max) + 3));
+  F32 line_num_width_px = 0;
+  if(do_line_numbers)
+  {
+    line_num_width_px = floor_f32(big_glyph_advance * (log10(visible_line_num_range.max) + 3));
+  }
   F32 priority_margin_width_px = 0;
   F32 catchall_margin_width_px = 0;
   if(flags & RD_CodeViewBuildFlag_Margins)
@@ -183,7 +188,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   RD_CodeSliceParams code_slice_params = {0};
   {
     // rjf: fill basics
-    code_slice_params.flags                     = RD_CodeSliceFlag_LineNums|RD_CodeSliceFlag_Clickable;
+    code_slice_params.flags = RD_CodeSliceFlag_Clickable;
+    if(do_line_numbers)
+    {
+      code_slice_params.flags |= RD_CodeSliceFlag_LineNums;
+    }
     if(flags & RD_CodeViewBuildFlag_Margins)
     {
       code_slice_params.flags |= RD_CodeSliceFlag_PriorityMargin|RD_CodeSliceFlag_CatchallMargin;
