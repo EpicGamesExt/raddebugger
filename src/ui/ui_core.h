@@ -1112,6 +1112,7 @@ internal UI_Size  ui_set_next_pref_size(Axis2 axis, UI_Size v);
 internal void     ui_push_corner_radius(F32 v);
 internal void     ui_pop_corner_radius(void);
 internal void     ui_push_tagf(char *fmt, ...);
+internal F32      ui_top_px_height(void);
 
 ////////////////////////////////
 //~ rjf: Macro Loop Wrappers

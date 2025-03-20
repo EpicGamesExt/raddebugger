@@ -6,6 +6,7 @@
 
 @embed_file rd_icon_font_bytes:         "../data/icons.ttf"
 @embed_file rd_default_main_font_bytes: "../data/Roboto-Regular.ttf"
+//@embed_file rd_default_main_font_bytes: "../data/seguisb.ttf"
 @embed_file rd_default_code_font_bytes: "../data/liberation-mono.ttf"
 //@embed_file rd_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
 @embed_file rd_icon_file_bytes:         "../data/logo.ico"
@@ -101,6 +102,11 @@ RD_VocabTable:
   {project              _                           "Project"                   _                     Briefcase                                      }
   {recent_project       _                           "Recent Project"            _                     Briefcase                                      }
   {recent_file          _                           "Recent File"               _                     FileOutline                                    }
+  {show_addresses       ""                          "Show Addresses"            ""                    Null                                           }
+  {show_code_bytes      ""                          "Show Code Bytes"           ""                    Null                                           }
+  {show_source_lines    ""                          "Show Source Lines"         ""                    Null                                           }
+  {show_symbol_names    ""                          "Show Symbol Names"         ""                    Null                                           }
+  {syntax               syntaxes                    "Syntax"                    "Syntaxes"            Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -148,6 +154,54 @@ RD_VocabTable:
       @default(2) 'tab_width':      @range[1, 32] u64,
       @can_be_per_window 'main_font_size': @range[6, 72] u64,
       @can_be_per_window 'code_font_size': @range[1, 32] u64,
+    }
+    ```
+  }
+  
+  //- rjf: views
+  {
+    text,
+    ```
+      x:
+    {
+      'lang':lang,
+      'size':code_string,
+    }
+    ```
+  }
+  {
+    disasm,
+    ```
+      x:
+    {
+      'arch':              arch,
+      'size':              code_string,
+      @default(1) 'show_addresses':    bool,
+      @default(0) 'show_code_bytes':   bool,
+      @default(1) 'show_source_lines': bool,
+      @default(1) 'show_symbol_names': bool,
+      'syntax':            dasm_syntax,
+    }
+    ```
+  }
+  {
+    memory,
+    ```
+      x:
+    {
+      'size':        code_string,
+      @default(16) 'num_columns': @range[1, 64] u64,
+    }
+    ```
+  }
+  {
+    bitmap,
+    ```
+      x:
+    {
+      'w': code_string,
+      'h': code_string,
+      'fmt': tex2dformat,
     }
     ```
   }

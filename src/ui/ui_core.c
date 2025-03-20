@@ -3411,6 +3411,21 @@ ui_push_tagf(char *fmt, ...)
   scratch_end(scratch);
 }
 
+internal F32
+ui_top_px_height(void)
+{
+  F32 result = ui_top_font_size();
+  for(UI_PrefHeightNode *n = ui_state->pref_height_stack.top; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_SizeKind_Pixels)
+    {
+      result = n->v.value;
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Generated Code
 

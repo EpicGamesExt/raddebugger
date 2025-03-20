@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[298] =
+RD_VocabInfo rd_vocab_info_table[303] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -89,6 +89,11 @@ RD_VocabInfo rd_vocab_info_table[298] =
 {str8_lit_comp("project"), str8_lit_comp("projects"), str8_lit_comp("Project"), str8_lit_comp("Projects"), RD_IconKind_Briefcase},
 {str8_lit_comp("recent_project"), str8_lit_comp("recent_projects"), str8_lit_comp("Recent Project"), str8_lit_comp("Recent Projects"), RD_IconKind_Briefcase},
 {str8_lit_comp("recent_file"), str8_lit_comp("recent_files"), str8_lit_comp("Recent File"), str8_lit_comp("Recent Files"), RD_IconKind_FileOutline},
+{str8_lit_comp("show_addresses"), str8_lit_comp(""), str8_lit_comp("Show Addresses"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("show_code_bytes"), str8_lit_comp(""), str8_lit_comp("Show Code Bytes"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("show_source_lines"), str8_lit_comp(""), str8_lit_comp("Show Source Lines"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("show_symbol_names"), str8_lit_comp(""), str8_lit_comp("Show Symbol Names"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("syntax"), str8_lit_comp("syntaxes"), str8_lit_comp("Syntax"), str8_lit_comp("Syntaxes"), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -306,9 +311,13 @@ RD_VocabInfo rd_vocab_info_table[298] =
 {str8_lit_comp("log_marker"), str8_lit_comp(""), str8_lit_comp("Log Marker"), str8_lit_comp(""), RD_IconKind_Null},
 };
 
-RD_NameSchemaInfo rd_name_schema_info_table[12] =
+RD_NameSchemaInfo rd_name_schema_info_table[16] =
 {
 {str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n")},
+{str8_lit_comp("text"), str8_lit_comp("x:\n{\n  'lang':lang,\n  'size':code_string,\n}\n")},
+{str8_lit_comp("disasm"), str8_lit_comp("x:\n{\n  'arch':              arch,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  'syntax':            dasm_syntax,\n}\n")},
+{str8_lit_comp("memory"), str8_lit_comp("x:\n{\n  'size':        code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n}\n")},
+{str8_lit_comp("bitmap"), str8_lit_comp("x:\n{\n  'w': code_string,\n  'h': code_string,\n  'fmt': tex2dformat,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@commands(launch_and_run, launch_and_step_into, enable_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n  'environment':        query,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'disabled':         bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'view_rule':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},

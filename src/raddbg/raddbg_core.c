@@ -2261,14 +2261,26 @@ rd_setting_from_name(String8 name)
     // rjf: return resultant child string stored under this key
     result = setting->first->string;
     
-    // rjf: no result -> look for default in settings schema
+    // rjf: no result -> look for default in settings
     if(result.size == 0) ProfScope("default setting schema lookup")
     {
       Temp scratch = scratch_begin(0, 0);
-      MD_Node *schema = rd_schema_from_name(scratch.arena, str8_lit("settings"));
-      MD_Node *setting = md_child_from_string(schema, name, 0);
-      MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
-      result = default_tag->first->string;
+      String8 schema_names[] =
+      {
+        start_cfg->string,
+        str8_lit("settings"),
+      };
+      for EachElement(idx, schema_names)
+      {
+        MD_Node *schema = rd_schema_from_name(scratch.arena, schema_names[idx]);
+        MD_Node *setting = md_child_from_string(schema, name, 0);
+        MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
+        if(default_tag != &md_nil_node)
+        {
+          result = default_tag->first->string;
+          break;
+        }
+      }
       scratch_end(scratch);
     }
   }
@@ -2587,8 +2599,14 @@ rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
         E_Member *member = &type->members[member_idx];
         String8 child_name = member->name;
         MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
+        MD_Node *default_root = md_tag_from_string(member_schema, str8_lit("default"), 0);
         String8 member_type_name = member_schema->first->string;
         RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
+        String8 child_value = child->first->string;
+        if(child_value.size == 0)
+        {
+          child_value = default_root->first->string;
+        }
         if(str8_match(member_type_name, str8_lit("path_pt"), 0))
         {
           U64 off = type->byte_size + variable_width_parts.total_size;
@@ -2609,18 +2627,18 @@ rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
         {
           U64 off = type->byte_size + variable_width_parts.total_size;
           str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
-          str8_list_push(scratch.arena, &variable_width_parts, child->first->string);
+          str8_list_push(scratch.arena, &variable_width_parts, child_value);
           str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
         }
         else if(str8_match(member_type_name, str8_lit("u64"), 0))
         {
           U64 val = 0;
-          try_u64_from_str8_c_rules(child->first->string, &val);
+          try_u64_from_str8_c_rules(child_value, &val);
           str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&val)));
         }
         else if(str8_match(member_type_name, str8_lit("bool"), 0))
         {
-          B32 val = str8_match(child->first->string, str8_lit("1"), 0);
+          B32 val = str8_match(child_value, str8_lit("1"), 0);
           str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8((U8 *)&val, e_type_byte_size_from_key(member->type_key))));
         }
       }
@@ -3000,18 +3018,11 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         {
           U64 value = 0;
           MemoryCopy(&value, in, dim_1u64(range));
-          if(value == 0)
+          if(child == &rd_nil_cfg)
           {
-            rd_cfg_release(child);
+            child = rd_cfg_new(cfg, child_name);
           }
-          else
-          {
-            if(child == &rd_nil_cfg)
-            {
-              child = rd_cfg_new(cfg, child_name);
-            }
-            rd_cfg_new_replacef(child, "%I64u", value);
-          }
+          rd_cfg_new_replacef(child, "%I64u", value);
           result = 1;
           break;
         }
@@ -3409,7 +3420,7 @@ rd_view_ui(Rng2F32 rect)
     }
     
     //- rjf: determine dimensions
-    F32 search_row_height_target = floor_f32(ui_top_font_size()*2.5f);
+    F32 search_row_height_target = ui_top_px_height();
     F32 search_row_height = search_row_open_t*search_row_height_target;
     search_row_height = Min(search_row_height, dim_2f32(rect).y);
     rect.y0 += search_row_height;
@@ -3753,7 +3764,7 @@ rd_view_ui(Rng2F32 rect)
       //- rjf: unpack arguments
       //
       EV_View *eval_view = rd_view_eval_view();
-      F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+      F32 row_height_px = ui_top_px_height();
       S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
       F32 row_string_max_size_px = dim_2f32(rect).x;
       EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
@@ -5327,7 +5338,7 @@ rd_view_ui(Rng2F32 rect)
                           is_activated_on_single_click = 0;
                         }
                         String8 searched_string = cell_info.string;
-                        if(cell->fstrs.node_count != 0)
+                        if(cell_info.fstrs.node_count != 0)
                         {
                           searched_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
                         }
@@ -5351,7 +5362,7 @@ rd_view_ui(Rng2F32 rect)
                                                                    RD_LineEditFlag_SingleClickActivate*is_activated_on_single_click|
                                                                    RD_LineEditFlag_KeyboardClickable|
                                                                    RD_LineEditFlag_Expander*!!(row_is_expandable && cell == row_info->cells.first)|
-                                                                   RD_LineEditFlag_ExpanderPlaceholder*(row_depth==0 && cell == row_info->cells.first && !is_button)|
+                                                                   RD_LineEditFlag_ExpanderSpace*(row_depth==0 && cell == row_info->cells.first && !is_button)|
                                                                    RD_LineEditFlag_ExpanderSpace*((row_depth!=0 && cell == row_info->cells.first)));
                           line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                           line_edit_params.cursor               = &cell_edit_state->cursor;
@@ -5578,161 +5589,6 @@ rd_view_ui(Rng2F32 rect)
                     
                     //- rjf: bump x pixel coordinate
                     cell_x_px = next_cell_x_px;
-                    
-                    //- rjf: [DEV] hovering -> watch key tooltips
-                    if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
-                    {
-                      ui_labelf("Block Key:  {0x%I64x, %I64u}", row->block->key.parent_hash, row->block->key.child_id);
-                      ui_labelf("Row Key:    {0x%I64x, %I64u}", row->key.parent_hash, row->key.child_id);
-                      ui_labelf("Cursor Key: {0x%I64x, %I64u}", ewv->cursor.key.parent_hash, ewv->cursor.key.child_id);
-                      ui_spacer(ui_em(1.f, 1.f));
-                      ui_labelf("Cursor Table Coordinates: {%I64u, %I64u}", selection_tbl.min.x, selection_tbl.min.y);
-                    }
-                    
-                    //- rjf: [DEV] hovering -> eval system tooltips
-                    if(DEV_eval_compiler_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
-                    {
-                      local_persist char *spaces = "                                                                        ";
-                      String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
-                      E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
-                      E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
-                      E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.last);
-                      E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
-                      String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
-                      ui_labelf("Text:");
-                      ui_label(string);
-                      ui_spacer(ui_em(2.f, 1.f));
-                      ui_labelf("Tokens:");
-                      for(U64 idx = 0; idx < tokens.count; idx += 1)
-                      {
-                        ui_labelf("%S: '%S'", e_token_kind_strings[tokens.v[idx].kind], str8_substr(string, tokens.v[idx].range));
-                      }
-                      ui_spacer(ui_em(2.f, 1.f));
-                      ui_labelf("Expression:");
-                      {
-                        typedef struct Task Task;
-                        struct Task
-                        {
-                          Task *next;
-                          Task *prev;
-                          E_Expr *expr;
-                          S64 depth;
-                        };
-                        Task start_task = {0, 0, parse.exprs.last};
-                        Task *first_task = &start_task;
-                        Task *last_task = first_task;
-                        for(Task *t = first_task; t != 0; t = t->next)
-                        {
-                          String8 ext = {0};
-                          switch(t->expr->kind)
-                          {
-                            default:
-                            {
-                              if(t->expr->string.size != 0)
-                              {
-                                ext = push_str8f(scratch.arena, "'%S'", t->expr->string);
-                              }
-                              else if(t->expr->value.u32 != 0)
-                              {
-                                ext = push_str8f(scratch.arena, "0x%x", t->expr->value.u32);
-                              }
-                              else if(t->expr->value.f32 != 0)
-                              {
-                                ext = push_str8f(scratch.arena, "%f", t->expr->value.f32);
-                              }
-                              else if(t->expr->value.f64 != 0)
-                              {
-                                ext = push_str8f(scratch.arena, "%f", t->expr->value.f64);
-                              }
-                              else if(t->expr->value.u64 != 0)
-                              {
-                                ext = push_str8f(scratch.arena, "0x%I64x", t->expr->value.u64);
-                              }
-                            }break;
-                          }
-                          ui_labelf("%.*s%S%s%S", (int)t->depth*2, spaces, e_expr_kind_strings[t->expr->kind], ext.size ? " " : "", ext);
-                          for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
-                          {
-                            Task *task = push_array(scratch.arena, Task, 1);
-                            task->expr = child;
-                            task->depth = t->depth+1;
-                            DLLInsert(first_task, last_task, t, task);
-                          }
-                        }
-                      }
-                      ui_spacer(ui_em(2.f, 1.f));
-                      ui_labelf("IR Tree:");
-                      {
-                        typedef struct Task Task;
-                        struct Task
-                        {
-                          Task *next;
-                          Task *prev;
-                          E_IRNode *node;
-                          S64 depth;
-                        };
-                        Task start_task = {0, 0, irtree.root};
-                        Task *first_task = &start_task;
-                        Task *last_task = first_task;
-                        for(Task *t = first_task; t != 0; t = t->next)
-                        {
-                          String8 op_string = {0};
-                          switch(t->node->op)
-                          {
-                            default:{}break;
-                            case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
-                            case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
-#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
-                            RDI_EvalOp_XList
-#undef X
-                          }
-                          String8 ext = {0};
-                          ui_labelf("%.*s%S", (int)t->depth*2, spaces, op_string);
-                          for(E_IRNode *child = t->node->first; child != &e_irnode_nil; child = child->next)
-                          {
-                            Task *task = push_array(scratch.arena, Task, 1);
-                            task->node = child;
-                            task->depth = t->depth+1;
-                            DLLInsert(first_task, last_task, t, task);
-                          }
-                        }
-                      }
-                      ui_spacer(ui_em(2.f, 1.f));
-                      ui_labelf("Op List:");
-                      {
-                        for(E_Op *op = oplist.first; op != 0; op = op->next)
-                        {
-                          String8 op_string = {0};
-                          switch(op->opcode)
-                          {
-                            default:{}break;
-                            case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
-                            case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
-#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
-                            RDI_EvalOp_XList
-#undef X
-                          }
-                          String8 ext = {0};
-                          switch(op->opcode)
-                          {
-                            case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
-                            default:
-                            {
-                              ext = str8_from_u64(scratch.arena, op->value.u64, 16, 0, 0);
-                            }break;
-                          }
-                          ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);
-                        }
-                      }
-                      ui_spacer(ui_em(2.f, 1.f));
-                      ui_labelf("Bytecode:");
-                      {
-                        for(U64 idx = 0; idx < bytecode.size; idx += 1)
-                        {
-                          ui_labelf("  0x%x ('%c')", (U32)bytecode.str[idx], (char)bytecode.str[idx]);
-                        }
-                      }
-                    }
                   }
                 }
                 
@@ -5783,7 +5639,7 @@ rd_view_ui(Rng2F32 rect)
   //
   if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
   {
-    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+    if(ui_is_focus_active() && rd_cfg_child_from_string(view, str8_lit("lister")) == &rd_nil_cfg && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       vs->query_is_selected = 0;
       vs->query_string_size = 0;
@@ -6657,8 +6513,8 @@ rd_window_frame(void)
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_text_padding(main_font_size*0.3f);
-      ui_push_pref_width(ui_em(20.f, 1));
-      ui_push_pref_height(ui_em(2.75f, 1.f));
+      ui_push_pref_width(ui_px(floor_f32(ui_top_font_size()*20.f), 1.f));
+      ui_push_pref_height(ui_px(floor_f32(ui_top_font_size()*3.f), 1.f));
       ui_push_blur_size(10.f);
       FNT_RasterFlags text_raster_flags = 0;
       if(rd_setting_b32_from_name(str8_lit("smooth_main_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
@@ -6671,8 +6527,8 @@ rd_window_frame(void)
     //
     Rng2F32 window_rect = os_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
-    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+ui_top_pref_height().value);
-    Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - ui_top_pref_height().value, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
+    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+ui_top_px_height());
+    Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - ui_top_px_height(), window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     F32 window_edge_px = os_dpi_from_window(ws->os)*0.035f;
     content_rect = pad_2f32(content_rect, -window_edge_px);
@@ -8312,21 +8168,20 @@ rd_window_frame(void)
         {
           predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
         }
-        F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+        F32 row_height_px = ui_top_px_height();
         U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
         if(ws->hover_eval_focused)
         {
           max_row_count *= 3;
         }
         U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
-        F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
-        F32 width_px = 60.f*ui_top_font_size();
-        F32 height_px = num_rows_t*row_height_px;
+        F32 width_px = floor_f32(70.f*ui_top_font_size());
+        F32 height_px = needed_row_count*row_height_px;
         
         // rjf: if arbitrary visualizer, pick catchall size
         if(view_ui_rule != &rd_nil_view_ui_rule)
         {
-          height_px = 40.f*ui_top_font_size();
+          height_px = floor_f32(40.f*ui_top_font_size());
         }
         
         // rjf: determine hover eval top-level rect
@@ -8360,18 +8215,17 @@ rd_window_frame(void)
       //- rjf: try to add opened query
       if(query_is_open)
       {
-        // rjf: close queries
-        if(ui_slot_press(UI_EventActionSlot_Cancel))
-        {
-          rd_cmd(RD_CmdKind_CancelQuery);
-        }
-        
         // rjf: unpack query info
-        String8 cmd_name = ws->query_cmd_name;
+        String8 cmd_name = ws->query_regs->cmd_name;
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-        B32 size_query_by_expr_eval = (cmd_kind_info->query.expr.size == 0);
+        String8 query_expr = ws->query_regs->expr;
+        if(cmd_name.size != 0)
+        {
+          query_expr = cmd_kind_info->query.expr;
+        }
         B32 query_is_anchored = (!ui_box_is_nil(ui_box_from_key(ws->query_regs->ui_key)));
-        F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+        B32 query_is_lister = (cmd_name.size != 0);
+        B32 size_query_by_expr_eval = (query_is_anchored || query_expr.size == 0);
         
         // rjf: build view for query
         RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
@@ -8379,29 +8233,35 @@ rd_window_frame(void)
         RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
         RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
         rd_cfg_new_replace(cmd, cmd_name);
-        rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
         RD_ViewState *vs = rd_view_state_from_cfg(view);
-        vs->query_is_selected = 1;
-        
-        // rjf: compute query expression
-        String8 query_expression = cmd_kind_info->query.expr;
-        if(query_expression.size == 0)
+        if(query_is_lister)
         {
-          query_expression = str8(vs->query_buffer, vs->query_string_size);
+          rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+          vs->query_is_selected = 1;
         }
         else
         {
-          U64 input_insertion_pos = str8_find_needle(query_expression, 0, str8_lit("$input"), 0);
-          if(input_insertion_pos < query_expression.size)
+          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
+        }
+        
+        // rjf: compute query expression
+        if(query_expr.size == 0)
+        {
+          query_expr = str8(vs->query_buffer, vs->query_string_size);
+        }
+        else
+        {
+          U64 input_insertion_pos = str8_find_needle(query_expr, 0, str8_lit("$input"), 0);
+          if(input_insertion_pos < query_expr.size)
           {
-            String8 pre_insertion  = str8_prefix(query_expression, input_insertion_pos);
-            String8 post_insertion = str8_skip(query_expression, input_insertion_pos + 6);
-            query_expression = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
+            String8 pre_insertion  = str8_prefix(query_expr, input_insertion_pos);
+            String8 post_insertion = str8_skip(query_expr, input_insertion_pos + 6);
+            query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
           }
         }
         
         // rjf: based on query expression, determine if we have an explicit root
-        if(query_expression.size == 0)
+        if(0 && (query_expr.size == 0 || !query_is_lister))
         {
           RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
           rd_cfg_new(explicit_root, str8_lit("1"));
@@ -8412,9 +8272,10 @@ rd_window_frame(void)
         }
         
         // rjf: evaluate query expression
-        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expression);
+        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
         
         // rjf: compute query view's top-level rectangle
+        F32 row_height_px = ui_top_px_height();
         Rng2F32 rect = {0};
         RD_RegsScope(.view = view->id)
         {
@@ -8426,7 +8287,7 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            query_height_px = row_height_px*predicted_block_tree.total_row_count;
+            query_height_px = row_height_px * (predicted_block_tree.total_row_count-1);
             query_height_px = Min(query_height_px, max_query_height_px);
           }
           rect = r2f32p(content_rect_center.x - query_width_px/2,
@@ -8440,7 +8301,7 @@ rd_window_frame(void)
             {
               rect.x0 = anchor_box->rect.x0;
               rect.y0 = anchor_box->rect.y1;
-              rect.x1 = rect.x0 + ui_top_font_size()*40.f;
+              rect.x1 = rect.x0 + ui_top_font_size()*60.f;
               rect.y1 = rect.y0 + query_height_px;
             }
           }
@@ -8455,7 +8316,7 @@ rd_window_frame(void)
           t->row_height_px = row_height_px;
           t->rect          = rect;
           t->view_name     = str8_lit("watch");
-          t->expr          = query_expression;
+          t->expr          = query_expr;
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
         }
@@ -8469,7 +8330,7 @@ rd_window_frame(void)
       RD_Font(RD_FontSlot_Code)
       UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
       UI_TagF("floating")
-      UI_Focus(ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
+      UI_Focus(ui_any_ctx_menu_is_open() || ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
     {
       F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
       F32 slow_open_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
@@ -8629,8 +8490,14 @@ rd_window_frame(void)
       //- rjf: query interactions
       if(query_floating_view_task)
       {
-        String8 cmd_name = ws->query_cmd_name;
+        String8 cmd_name = ws->query_regs->cmd_name;
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+        
+        // rjf: close queries
+        if(ui_slot_press(UI_EventActionSlot_Cancel))
+        {
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
         
         // rjf: any queries which take a file path mutate the debugger's "current path"
         if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
@@ -9110,14 +8977,12 @@ rd_window_frame(void)
                                       panel_rect_pct.x1*content_rect_dim.x,
                                       panel_rect_pct.y1*content_rect_dim.y);
           panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
-          F32 tab_bar_rheight = ui_top_font_size()*3.f;
-          F32 tab_bar_vheight = ui_top_font_size()*2.6f;
+          F32 tab_bar_rheight = floor_f32(ui_top_font_size()*3.5f);
+          F32 tab_bar_vheight = floor_f32(ui_top_font_size()*3.f);
           F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
-          F32 tab_spacing = ui_top_font_size()*0.4f;
-          F32 filter_bar_height = ui_top_font_size()*3.f;
+          F32 tab_spacing = floor_f32(ui_top_font_size()*0.4f);
           Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
           Rng2F32 content_rect = r2f32p(panel_rect.x0, panel_rect.y0+tab_bar_vheight, panel_rect.x1, panel_rect.y1);
-          Rng2F32 filter_rect = {0};
           if(panel->tab_side == Side_Max)
           {
             tab_bar_rect.y0 = panel_rect.y1 - tab_bar_vheight;
@@ -9444,16 +9309,6 @@ rd_window_frame(void)
             {
               rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
             }
-            if(ui_right_clicked(panel_sig))
-            {
-              rd_cmd(RD_CmdKind_PushQuery,
-                     .view         = panel->selected_tab->id,
-                     .file_path    = rd_file_path_from_eval_string(rd_frame_arena(), rd_expr_from_cfg(panel->selected_tab)),
-                     .ui_key       = panel_box->key,
-                     .off_px       = sub_2f32(ui_mouse(), panel_box->rect.p0),
-                     .reg_slot     = RD_RegSlot_View,
-                     .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
-            }
           }
           
           //////////////////////////
@@ -9667,10 +9522,9 @@ rd_window_frame(void)
                     else if(ui_right_clicked(sig))
                     {
                       rd_cmd(RD_CmdKind_PushQuery,
-                             .reg_slot     = RD_RegSlot_View,
                              .ui_key       = sig.box->key,
                              .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
-                             .lister_flags = RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Settings);
+                             .expr         = push_str8f(scratch.arena, "$%I64x", tab->id));
                     }
                     else if(ui_middle_clicked(sig))
                     {
@@ -13479,22 +13333,6 @@ rd_frame(void)
       ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
       ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
       
-      //- rjf: choose set of evallable meta names
-      String8 evallable_meta_names[] =
-      {
-        str8_lit("breakpoint"),
-        str8_lit("watch_pin"),
-        str8_lit("target"),
-        str8_lit("file_path_map"),
-        str8_lit("auto_view_rule"),
-        str8_lit("recent_project"),
-        str8_lit("recent_file"),
-        str8_lit("machine"),
-        str8_lit("process"),
-        str8_lit("thread"),
-        str8_lit("module"),
-      };
-      
       //- rjf: build special member types for evallable meta types
       E_TypeKey bool_type_key = {0};
       E_TypeKey u64_type_key = {0};
@@ -13533,10 +13371,10 @@ rd_frame(void)
         { str8_lit("string"), string_type_key },
         { str8_lit("path_pt"), path_pt_type_key },
       };
-      E_TypeKey evallable_meta_types[ArrayCount(evallable_meta_names)] = {0};
-      for EachElement(idx, evallable_meta_names)
+      E_TypeKey evallable_meta_types[ArrayCount(rd_name_schema_info_table)] = {0};
+      for EachElement(idx, rd_name_schema_info_table)
       {
-        String8 name = evallable_meta_names[idx];
+        String8 name = rd_name_schema_info_table[idx].name;
         MD_Node *schema = rd_schema_from_name(scratch.arena, name);
         E_MemberList members_list = {0};
         U64 off = 0;
@@ -13577,14 +13415,14 @@ rd_frame(void)
       //- rjf: cache meta name -> type key correllation
       rd_state->meta_name2type_map = push_array(rd_frame_arena(), E_String2TypeKeyMap, 1);
       rd_state->meta_name2type_map[0] = e_string2typekey_map_make(rd_frame_arena(), 256);
-      for EachElement(idx, evallable_meta_names)
+      for EachElement(idx, rd_name_schema_info_table)
       {
-        String8 name = evallable_meta_names[idx];
+        String8 name = rd_name_schema_info_table[idx].name;
         E_TypeKey type_key = evallable_meta_types[idx];
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
       }
       
-      //- rjf: add macros for evallable config trees
+      //- rjf: add macros for evallable top-level config trees
       String8 evallable_cfg_names[] =
       {
         str8_lit("breakpoint"),
@@ -13610,7 +13448,7 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", cfg->id), expr);
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", cfg->id), expr);
           if(exe.size != 0)
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_skip_last_slash(exe), expr);
@@ -13618,6 +13456,32 @@ rd_frame(void)
           if(label.size != 0)
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, label, expr);
+          }
+        }
+      }
+      
+      //- rjf: add macros for windows/tabs
+      {
+        RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
+        for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
+        {
+          RD_Cfg *window = n->v;
+          RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+          for(RD_PanelNode *p = panel_tree.root;
+              p != &rd_nil_panel_node;
+              p = rd_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
+          {
+            for(RD_CfgNode *tab_n = p->tabs.first; tab_n != 0; tab_n = tab_n->next)
+            {
+              RD_Cfg *tab = tab_n->v;
+              E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, tab->string);
+              E_Space space = rd_eval_space_from_cfg(tab);
+              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+              expr->space    = space;
+              expr->mode     = E_Mode_Offset;
+              expr->type_key = type_key;
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", tab->id), expr);
+            }
           }
         }
       }
@@ -14607,9 +14471,9 @@ rd_frame(void)
               {
                 selection_cfg = p_selection;
               }
-              else
+              else for(RD_Cfg *s = p_selection; s != &rd_nil_cfg; s = rd_cfg_child_from_string(p_cfg, str8_lit("selected")))
               {
-                rd_cfg_release(p_selection);
+                rd_cfg_release(s);
               }
             }
             if(selection_cfg == &rd_nil_cfg)
@@ -14890,9 +14754,9 @@ rd_frame(void)
               {
                 selection_cfg = tab_selection_cfg;
               }
-              else
+              else for(RD_Cfg *s = tab_selection_cfg; s != &rd_nil_cfg; s = rd_cfg_child_from_string(n->v, str8_lit("selected")))
               {
-                rd_cfg_release(tab_selection_cfg);
+                rd_cfg_release(s);
               }
             }
             if(selection_cfg == &rd_nil_cfg)
@@ -16105,7 +15969,6 @@ Z(getting_started)
               {
                 ws->query_is_active = 1;
                 arena_clear(ws->query_arena);
-                ws->query_cmd_name = push_str8_copy(ws->query_arena, cmd_name);
                 ws->query_regs = rd_regs_copy(ws->query_arena, rd_regs());
               }
               RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
@@ -16125,25 +15988,28 @@ Z(getting_started)
             
             // rjf: choose initial input string
             String8 initial_input = {0};
-            if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+            if(cmd_name.size != 0)
             {
-              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-              RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
-              String8 current_path_string = current_path->first->string;
-              if(current_path_string.size == 0)
+              if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
               {
-                current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+                RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
+                String8 current_path_string = current_path->first->string;
+                if(current_path_string.size == 0)
+                {
+                  current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                }
+                else
+                {
+                  current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
+                }
+                initial_input = path_normalized_from_string(scratch.arena, current_path_string);
+                initial_input = push_str8f(scratch.arena, "%S/", initial_input);
               }
-              else
+              else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
               {
-                current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
+                initial_input = input->first->string;
               }
-              initial_input = path_normalized_from_string(scratch.arena, current_path_string);
-              initial_input = push_str8f(scratch.arena, "%S/", initial_input);
-            }
-            else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
-            {
-              initial_input = input->first->string;
             }
             
             // rjf: build query state
@@ -16151,23 +16017,26 @@ Z(getting_started)
             rd_cfg_new_replace(cmd, cmd_name);
             String8 current_query_cmd_name = cmd->first->string;
             RD_ViewState *vs = rd_view_state_from_cfg(view);
-            if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+            if(cmd_name.size != 0)
             {
-              vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-              vs->query_mark = txt_pt(1, 1);
-            }
-            else
-            {
-              vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-              vs->query_mark = vs->query_cursor;
-            }
-            if(!str8_match(current_query_cmd_name, cmd_name, 0))
-            {
-              vs->query_is_selected = 1;
-            }
-            else
-            {
-              vs->query_is_selected ^= 1;
+              if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+              {
+                vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                vs->query_mark = txt_pt(1, 1);
+              }
+              else
+              {
+                vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                vs->query_mark = vs->query_cursor;
+              }
+              if(!str8_match(current_query_cmd_name, cmd_name, 0))
+              {
+                vs->query_is_selected = 1;
+              }
+              else
+              {
+                vs->query_is_selected ^= 1;
+              }
             }
           }break;
           case RD_CmdKind_CompleteQuery:
@@ -16200,7 +16069,7 @@ Z(getting_started)
             {
               ws->query_is_active = 0;
               arena_clear(ws->query_arena);
-              ws->query_cmd_name = str8_zero();
+              ws->query_regs = 0;
             }
           }break;
           case RD_CmdKind_UpdateQuery:

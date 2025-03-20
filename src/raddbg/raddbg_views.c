@@ -1082,8 +1082,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           RD_Cfg *w_cfg = style->first;
           F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.35f, .pct = take_pct());
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
         }
       }
@@ -1251,8 +1251,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.25f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.75f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .default_pct = 0.35f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
       }
       
@@ -1879,7 +1879,6 @@ struct RD_DisasmViewState
   B32 initialized;
   TxtPt cursor;
   TxtPt mark;
-  DASM_StyleFlags style_flags;
   CTRL_Handle temp_look_process;
   U64 temp_look_vaddr;
   U64 temp_look_run_gen;
@@ -1903,7 +1902,6 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     dv->initialized = 1;
     dv->cursor = txt_pt(1, 1);
     dv->mark = txt_pt(1, 1);
-    dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
     rd_code_view_init(&dv->cv);
   }
   RD_CodeViewState *cv = &dv->cv;
@@ -1962,8 +1960,6 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
         dv->temp_look_run_gen = ctrl_run_gen();
         dv->goto_vaddr        = cmd->regs->vaddr;
       }break;
-      case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
-      case RD_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
     }
   }
   
@@ -1992,14 +1988,35 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
       base_vaddr  = dasm_module->vaddr_range.min;
     }break;
   }
+  DASM_StyleFlags style_flags = 0;
+  DASM_Syntax syntax = DASM_Syntax_Intel;
+  {
+    if(rd_setting_b32_from_name(str8_lit("show_addresses")))
+    {
+      style_flags |= DASM_StyleFlag_Addresses;
+    }
+    if(rd_setting_b32_from_name(str8_lit("show_code_bytes")))
+    {
+      style_flags |= DASM_StyleFlag_CodeBytes;
+    }
+    if(rd_setting_b32_from_name(str8_lit("show_source_lines")))
+    {
+      style_flags |= DASM_StyleFlag_SourceFilesNames;
+      style_flags |= DASM_StyleFlag_SourceLines;
+    }
+    if(rd_setting_b32_from_name(str8_lit("show_symbol_names")))
+    {
+      style_flags |= DASM_StyleFlag_SymbolNames;
+    }
+  }
   U128 dasm_key = rd_key_from_eval_space_range(space, range, 0);
   U128 dasm_data_hash = {0};
   DASM_Params dasm_params = {0};
   {
     dasm_params.vaddr       = range.min;
     dasm_params.arch        = arch;
-    dasm_params.style_flags = dv->style_flags;
-    dasm_params.syntax      = DASM_Syntax_Intel;
+    dasm_params.style_flags = style_flags;
+    dasm_params.syntax      = syntax;
     dasm_params.base_vaddr  = base_vaddr;
     dasm_params.dbgi_key    = dbgi_key;
   }

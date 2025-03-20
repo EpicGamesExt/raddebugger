@@ -552,7 +552,6 @@ struct RD_WindowState
   // rjf: query state
   B32 query_is_active;
   Arena *query_arena;
-  String8 query_cmd_name;
   RD_Regs *query_regs;
   
   // rjf: hover eval state
