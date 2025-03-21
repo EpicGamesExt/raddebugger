@@ -206,7 +206,6 @@ internal U64            os_file_write(OS_Handle file, Rng1U64 rng, void *data);
 internal B32            os_file_set_times(OS_Handle file, DateTime time);
 internal FileProperties os_properties_from_file(OS_Handle file);
 internal OS_FileID      os_id_from_file(OS_Handle file);
-internal B32            os_rename_file(String8 orig_name, String8 new_name);
 internal B32            os_file_reserve_size(OS_Handle file, U64 size);
 internal B32            os_delete_file_at_path(String8 path);
 internal B32            os_copy_file_path(String8 dst, String8 src);

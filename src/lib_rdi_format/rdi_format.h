@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 10
+#define RDI_ENCODING_VERSION 11
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
