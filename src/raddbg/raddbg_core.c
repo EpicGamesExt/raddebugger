@@ -15397,6 +15397,7 @@ Z(getting_started)
           //- rjf: thread finding
           case RD_CmdKind_FindThread:
           for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
+            RD_RegsScope(.window = ws->cfg_id)
           {
             DI_Scope *scope = di_scope_open();
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
@@ -15469,6 +15470,7 @@ Z(getting_started)
           }break;
           case RD_CmdKind_FindSelectedThread:
           for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
+            RD_RegsScope(.window = ws->cfg_id)
           {
             CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
             rd_cmd(RD_CmdKind_FindThread,
