@@ -968,7 +968,10 @@ if(work_top == 0) {work_top = &broken_work;}\
         String8 tag_name = md_content_string_from_token_flags_str8(token[1].flags, tag_name_raw);
         MD_Node *node = md_push_node(arena, MD_NodeKind_Tag, md_node_flags_from_token_flags(token[1].flags), tag_name, tag_name_raw, token[0].range.min);
         DLLPushBack_NPZ(&md_nil_node, work_top->first_gathered_tag, work_top->last_gathered_tag, node, next, prev);
-        if(token+2 < tokens_opl && token[2].flags & MD_TokenFlag_Reserved && str8_match(str8_substr(text, token[2].range), str8_lit("("), 0))
+        if(token+2 < tokens_opl && token[2].flags & MD_TokenFlag_Reserved &&
+           (str8_match(str8_substr(text, token[2].range), str8_lit("("), 0) ||
+            str8_match(str8_substr(text, token[2].range), str8_lit("["), 0) ||
+            str8_match(str8_substr(text, token[2].range), str8_lit("{"), 0)))
         {
           token += 3;
           MD_ParseWorkPush(MD_ParseWorkKind_Main, node);

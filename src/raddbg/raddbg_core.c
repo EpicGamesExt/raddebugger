@@ -2240,7 +2240,8 @@ rd_setting_from_name(String8 name)
   String8 result = {0};
   {
     // rjf: find most-granular config scope to begin looking for the setting
-    RD_Cfg *start_cfg = rd_cfg_from_id(rd_regs()->view);
+    RD_Cfg *view_cfg = rd_cfg_from_id(rd_regs()->view);
+    RD_Cfg *start_cfg = view_cfg;
     for(RD_Cfg *p = start_cfg->parent; p != &rd_nil_cfg; p = p->parent)
     {
       if(str8_match(p->string, str8_lit("transient"), 0))
@@ -2253,7 +2254,7 @@ rd_setting_from_name(String8 name)
     if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->window); }
     
     // rjf: scan upwards the config tree until we find the setting
-    RD_Cfg *setting = &rd_nil_cfg;
+    RD_Cfg *setting = rd_cfg_child_from_string(view_cfg, name);
     for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && setting == &rd_nil_cfg; cfg = cfg->parent)
     {
       setting = rd_cfg_child_from_string(cfg, name);
@@ -2268,7 +2269,7 @@ rd_setting_from_name(String8 name)
       Temp scratch = scratch_begin(0, 0);
       String8 schema_names[] =
       {
-        start_cfg->string,
+        view_cfg->string,
         str8_lit("settings"),
       };
       for EachElement(idx, schema_names)
@@ -4053,7 +4054,7 @@ rd_view_ui(Rng2F32 rect)
               }
               
               // rjf: use row to complete query
-              if(row != 0)
+              if(row->expr != &e_expr_nil)
               {
                 taken = 1;
                 E_Eval eval = e_eval_from_expr(scratch.arena, row->expr);
@@ -4858,9 +4859,9 @@ rd_view_ui(Rng2F32 rect)
                       F32 cell_width_px = cell->px + cell->pct * row_width_px;
                       F32 next_cell_x_px = cell_x_px + cell_width_px;
                       {
-                        Rng2F32 rect = r2f32p(next_cell_x_px - ui_top_font_size()*0.2f,
+                        Rng2F32 rect = r2f32p(next_cell_x_px - ui_top_font_size()*0.4f,
                                               boundary_start_idx*row_height_px,
-                                              next_cell_x_px + ui_top_font_size()*0.2f,
+                                              next_cell_x_px + ui_top_font_size()*0.4f,
                                               idx*row_height_px);
                         UI_Rect(rect) UI_HoverCursor(OS_Cursor_LeftRight)
                         {
@@ -6741,6 +6742,19 @@ rd_window_frame(void)
         //- rjf: tab dragging
         if(rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg)
         {
+          RD_Cfg *immediate_parent = &rd_nil_cfg;
+          for(RD_Cfg *p = view->parent; p != &rd_nil_cfg; p = p->parent)
+          {
+            if(str8_match(p->parent->string, str8_lit("immediate"), 0))
+            {
+              immediate_parent = p->parent;
+              break;
+            }
+          }
+          if(immediate_parent != &rd_nil_cfg)
+          {
+            rd_cfg_new(immediate_parent, str8_lit("hot"));
+          }
           UI_Size main_width = ui_top_pref_width();
           UI_Size main_height = ui_top_pref_height();
           UI_TextAlign main_text_align = ui_top_text_alignment();
@@ -7317,7 +7331,7 @@ rd_window_frame(void)
     {
       //- rjf: try to add hover eval first
       {
-        B32 build_hover_eval = (hover_eval_is_open && (!rd_drag_is_active() || rd_state->drag_drop_regs_slot == RD_RegSlot_View));
+        B32 build_hover_eval = (hover_eval_is_open && !rd_drag_is_active());
         
         // rjf: disable hover eval if hovered view is actively scrolling
         if(hover_eval_is_open)

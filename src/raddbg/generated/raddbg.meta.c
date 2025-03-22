@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[304] =
+RD_VocabInfo rd_vocab_info_table[305] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -95,6 +95,7 @@ RD_VocabInfo rd_vocab_info_table[304] =
 {str8_lit_comp("show_symbol_names"), str8_lit_comp(""), str8_lit_comp("Show Symbol Names"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("show_line_numbers"), str8_lit_comp(""), str8_lit_comp("Show Line Numbers"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("syntax"), str8_lit_comp("syntaxes"), str8_lit_comp("Syntax"), str8_lit_comp("Syntaxes"), RD_IconKind_Null},
+{str8_lit_comp("num_columns"), str8_lit_comp(""), str8_lit_comp("Number of Columns"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},

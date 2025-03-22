@@ -108,6 +108,7 @@ RD_VocabTable:
   {show_symbol_names    ""                          "Show Symbol Names"         ""                    Null                                           }
   {show_line_numbers    ""                          "Show Line Numbers"         ""                    Null                                           }
   {syntax               syntaxes                    "Syntax"                    "Syntaxes"            Null                                           }
+  {num_columns          ""                          "Number of Columns"         ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
