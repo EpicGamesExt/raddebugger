@@ -5,7 +5,7 @@
 // Build Options
 
 #define BUILD_CONSOLE_INTERFACE 1
-#define BUILD_TITLE "Epic Games Tools (R) RAD COFF/PE Linker"
+#define BUILD_TITLE "Epic Games Tools (R) RAD PE/COFF Linker"
 
 ////////////////////////////////
 

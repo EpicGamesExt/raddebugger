@@ -882,7 +882,7 @@ lnk_print_help(void)
   fprintf(stdout, "--- Help -------------------------------------------------------\n");
   fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
   fprintf(stdout, "\n");
-  fprintf(stdout, "  Usage: rad-link.exe [Options] [Files] [@rsp]\n");
+  fprintf(stdout, "  Usage: radlink.exe [Options] [Files] [@rsp]\n");
   fprintf(stdout, "\n");
 
   fprintf(stdout, "  Options:\n");
