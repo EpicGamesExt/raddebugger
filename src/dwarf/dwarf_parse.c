@@ -169,6 +169,29 @@ str8_deserial_read_sleb128_array(Arena *arena, String8 string, U64 off, U64 coun
   return bytes_read;
 }
 
+internal DW_SectionKind
+dw_section_kind_from_string(String8 string)
+{
+  DW_SectionKind s = DW_Section_Null;
+#define X(_K,_L,_M,_W)                                        \
+  if (str8_match_lit(_L, string, 0)) { s = DW_Section_##_K; } \
+  if (str8_match_lit(_M, string, 0)) { s = DW_Section_##_K; }
+  DW_SectionKind_XList(X)
+#undef X
+  return s;
+}
+
+internal DW_SectionKind
+dw_section_dwo_kind_from_string(String8 string)
+{
+  DW_SectionKind s = DW_Section_Null;
+#define X(_K,_L,_M,_W)                                        \
+  if (str8_match_lit(_W, string, 0)) { s = DW_Section_##_K; }
+  DW_SectionKind_XList(X)
+#undef X
+  return s;
+}
+
 internal Rng1U64List
 dw_unit_ranges_from_data(Arena *arena, String8 data)
 {

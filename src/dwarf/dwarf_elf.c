@@ -1,6 +1,38 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal B32
+dw_is_dwarf_present_elf_section_table(String8 raw_image, ELF_BinInfo *bin)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32 is_dwarf_present = 0;
+
+  ELF_Shdr64Array sections = elf_shdr64_array_from_bin(scratch.arena, raw_image, &bin->hdr);
+
+  for (U64 i = 0; i < sections.count; ++i) {
+    ELF_Shdr64 *shdr = &sections.v[i];
+    String8     name = elf_name_from_shdr64(raw_image, &bin->hdr, bin->sh_name_range, shdr);
+
+    if (shdr->sh_type != ELF_SectionCode_ProgBits) {
+      continue;
+    }
+
+    DW_SectionKind s = dw_section_kind_from_string(name);
+    if (s == DW_Section_Null) {
+      s = dw_section_dwo_kind_from_string(name);
+    }
+
+    is_dwarf_present = s != DW_Section_Null;
+    if (is_dwarf_present) {
+      break;
+    }
+  }
+
+  scratch_end(scratch);
+  return is_dwarf_present;
+}
+
 internal DW_Input
 dw_input_from_elf_section_table(Arena *arena, String8 raw_image, ELF_BinInfo *bin)
 {
@@ -10,7 +42,6 @@ dw_input_from_elf_section_table(Arena *arena, String8 raw_image, ELF_BinInfo *bi
   B32      sect_status[ArrayCount(result.sec)] = {0};
 
   ELF_Shdr64Array sections = elf_shdr64_array_from_bin(scratch.arena, raw_image, &bin->hdr);
-  String8         sh_names = str8_substr(raw_image, bin->sh_name_range);
 
   for (U64 sect_idx = 1; sect_idx < sections.count; ++sect_idx) {
     ELF_Shdr64 *shdr = &sections.v[sect_idx];
@@ -20,17 +51,14 @@ dw_input_from_elf_section_table(Arena *arena, String8 raw_image, ELF_BinInfo *bi
       continue;
     }
 
-    String8     name = {0};
-    str8_deserial_read_cstr(sh_names, shdr->sh_name, &name);
+    String8 name = elf_name_from_shdr64(raw_image, &bin->hdr, bin->sh_name_range, shdr);
 
-    DW_SectionKind  s      = DW_Section_Null;
-    B32             is_dwo = 0;
-    #define X(_K,_L,_M,_W)                                      \
-      if (str8_match_lit(_L, name, 0)) { s = DW_Section_##_K; } \
-      if (str8_match_lit(_M, name, 0)) { s = DW_Section_##_K; } \
-      if (str8_match_lit(_W, name, 0)) { s = DW_Section_##_K; is_dwo = 1; }
-      DW_SectionKind_XList(X)
-    #undef X
+    DW_SectionKind s      = dw_section_kind_from_string(name);
+    B32            is_dwo = 0;
+    if (s == DW_Section_Null) {
+      s      = dw_section_dwo_kind_from_string(name);
+      is_dwo = 1;
+    }
 
     if (s != DW_Section_Null) {
       if (sect_status[s]) {
