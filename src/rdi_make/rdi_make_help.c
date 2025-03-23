@@ -436,7 +436,7 @@ rdim_help_resolve_incomplete_types(RDIM_TypeChunkList *types)
   Temp scratch = scratch_begin(0,0);
 
   ProfBegin("Build Hash Table");
-  RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count);
+  RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count + 1);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
   {
     for(RDI_U64 i = 0; i < chunk->count; i += 1)
@@ -485,7 +485,7 @@ rdim_help_resolve_incomplete_types(RDIM_TypeChunkList *types)
   ProfEnd();
 
   ProfBegin("Make Fwd Map");
-  RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count);
+  RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count + 1);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
   {
     for(RDI_U64 i = 0; i < chunk->count; i += 1)
