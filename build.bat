@@ -107,6 +107,7 @@ if not "%no_meta%"=="1" (
 pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
 if "%radlink%"=="1"                    set didbuild=1 && %compile%  ..\src\linker\lnk.c                                      %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+if "%radcon%"=="1"                     set didbuild=1 && %compile% ..\src\radcon\radcon_main.c                               %compile_link% %out%radcon.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
 if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf_main.c               %compile_link% %out%rdi_from_dwarf.exe || exit /b 1

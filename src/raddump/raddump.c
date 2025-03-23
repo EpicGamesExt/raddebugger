@@ -42,78 +42,21 @@ rd_stderr(char *fmt, ...)
   scratch_end(scratch);
 }
 
-internal String8
-rd_invoke_rdi_converter(Arena *arena, String8 exe_name, String8 exe_data, String8 pdb_path)
-{
-  Temp scratch = scratch_begin(0,0);
-
-  P2R_User2Convert user2convert = {0};
-  user2convert.input_pdb_name   = pdb_path;
-  user2convert.input_pdb_data   = os_data_from_file_path(scratch.arena, pdb_path);
-  user2convert.input_exe_name   = exe_name;
-  user2convert.input_exe_data   = exe_data;
-  user2convert.output_name      = str8_zero();
-  user2convert.flags            = P2R_ConvertFlag_All;
-
-  P2R_Convert2Bake             *convert2bake = p2r_convert(scratch.arena, &user2convert);
-  P2R_Bake2Serialize           *bake2srlz    = p2r_bake(scratch.arena, convert2bake);
-  RDIM_SerializedSectionBundle  bundle       = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
-  String8List                   rdi_blobs    = rdim_file_blobs_from_section_bundle(scratch.arena, &bundle);
-  String8                       raw_rdi      = str8_list_join(arena, &rdi_blobs, 0);
-
-  scratch_end(scratch);
-  return raw_rdi;
-}
-
 internal RDI_Parsed *
-rd_rdi_from_pe(Arena *arena, String8 data_path, String8 raw_data)
+rd_rdi_from_pe(Arena *arena, String8 pe_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
+  // make command line for converter
+  String8List cmdl_string = {0};
+  str8_list_pushf(scratch.arena, &cmdl_string, "-pe:%S", pe_path);
+  CmdLine cmdl = cmd_line_from_string_list(scratch.arena, cmdl_string);
+
+  // run converter
+  String8 raw_rdi = rc_rdi_from_cmd_line(scratch.arena, &cmdl);
+
+  // load RDI
   RDI_Parsed *rdi = 0;
-
-  PE_BinInfo       pe            = pe_bin_info_from_data(scratch.arena, raw_data);
-  String8          raw_debug_dir = str8_substr(raw_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
-  PE_DebugInfoList dbg_list      = pe_parse_debug_directory(scratch.arena, raw_data, raw_debug_dir);
-
-  String8 raw_rdi  = {0};
-  Guid    rdi_guid = {0};
-  for (PE_DebugInfoNode *n = dbg_list.first; n != 0; n = n->next) {
-    PE_DebugInfo *v = &n->v;
-    if (v->header.type == PE_DebugDirectoryType_CODEVIEW) {
-      if (v->u.codeview.magic == PE_CODEVIEW_RDI_MAGIC) {
-        if (raw_rdi.size) {
-          rd_warningf("multiple RDI paths defined in %S");
-        } else {
-          raw_rdi  = os_data_from_file_path(arena, v->u.codeview.rdi.path);
-          rdi_guid = v->u.codeview.rdi.header.guid;
-          if (raw_rdi.size == 0) {
-            rd_errorf("unable to open RDI: %S", v->u.codeview.rdi.path);
-          }
-        }
-      }
-    }
-  }
-
-  if (!raw_rdi.size) {
-    String8 pdb_path    = str8_zero();
-    Guid    pdb_guid    = {0};
-    B32     convert_pdb = 0;
-    for (PE_DebugInfoNode *n = dbg_list.first; n != 0; n = n->next) {
-      PE_DebugInfo *v = &n->v;
-      if (v->header.type == PE_DebugDirectoryType_CODEVIEW) {
-        pdb_path    = v->u.codeview.pdb70.path;
-        pdb_guid    = v->u.codeview.pdb70.header.guid;
-        convert_pdb = 1;
-        break;
-      }
-    }
-
-    if (convert_pdb) {
-      raw_rdi = rd_invoke_rdi_converter(scratch.arena, data_path, raw_data, pdb_path);
-    }
-  }
-
   if (raw_rdi.size) {
     rdi = push_array(arena, RDI_Parsed, 1);
 

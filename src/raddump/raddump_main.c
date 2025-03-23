@@ -53,8 +53,12 @@
 #include "dwarf/dwarf_coff.h"
 #include "dwarf/dwarf_elf.h"
 #include "dwarf/dwarf_enum.h"
-#include "rdi_from_pdb/rdi_from_pdb.h"
-#include "rdi_from_dwarf/rdi_from_dwarf.h"
+#include "radcon/radcon.h"
+#include "radcon/radcon_coff.h"
+#include "radcon/radcon_cv.h"
+#include "radcon/radcon_elf.h"
+#include "radcon/radcon_pdb.h"
+#include "radcon/radcon_dwarf.h"
 
 #include "base/base_inc.c"
 #include "linker/base_ext/base_inc.c"
@@ -87,8 +91,12 @@
 #include "dwarf/dwarf_coff.c"
 #include "dwarf/dwarf_elf.c"
 #include "dwarf/dwarf_enum.c"
-#include "rdi_from_pdb/rdi_from_pdb.c"
-#include "rdi_from_dwarf/rdi_from_dwarf.c"
+#include "radcon/radcon_coff.c"
+#include "radcon/radcon_cv.c"
+#include "radcon/radcon_elf.c"
+#include "radcon/radcon_pdb.c"
+#include "radcon/radcon_dwarf.c"
+#include "radcon/radcon.c"
  
 #include "linker/thread_pool/thread_pool.h"
 #include "linker/thread_pool/thread_pool.c"
@@ -288,7 +296,7 @@ entry_point(CmdLine *cmdline)
   } else if (pe_check_magic(raw_data)) {
     RDI_Parsed *rdi = 0;
     if (!(opts & RD_Option_NoRdi)) {
-      rdi = rd_rdi_from_pe(arena, file_path, raw_data);
+      rdi = rd_rdi_from_pe(arena, file_path);
     }
     pe_print(arena, out, indent, raw_data, opts, rdi);
   } else if (pe_is_res(raw_data)) {
