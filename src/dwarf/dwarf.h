@@ -454,7 +454,7 @@ typedef enum DW_AttribClassEnum
   X(LineStrp,      DW_AttribClass_String)        \
   X(ImplicitConst, DW_AttribClass_Const)         \
   X(LocListx,      DW_AttribClass_LocListPtr)    \
-  X(RngListx,      DW_AttribClass_RngListPtr)    \
+  X(RngListx,      DW_AttribClass_RngList)    \
   X(RefSup8,       DW_AttribClass_Reference)     \
   X(Strx1,         DW_AttribClass_String)        \
   X(Strx2,         DW_AttribClass_String)        \
