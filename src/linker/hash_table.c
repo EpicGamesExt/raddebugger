@@ -129,17 +129,28 @@ hash_table_push_u64_u64(Arena *arena, HashTable *ht, U64 key, U64 value)
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_u64 = key, .value_u64 = value });
 }
 
+internal String8
+hash_table_normalize_path_string(Arena *arena, String8 path)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 result;
+  result = lower_from_str8(scratch.arena, path);
+  result = path_convert_slashes(arena, result, PathStyle_UnixAbsolute);
+  scratch_end(scratch);
+  return result;
+}
+
 internal BucketNode *
 hash_table_push_path_string(Arena *arena, HashTable *ht, String8 path, String8 value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path); 
+  String8 path_canon = hash_table_normalize_path_string(arena, path); 
   return hash_table_push_string_string(arena, ht, path_canon, value);
 }
 
 internal BucketNode *
 hash_table_push_path_u64(Arena *arena, HashTable *ht, String8 path, U64 value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path);
+  String8 path_canon = hash_table_normalize_path_string(arena, path);
   U64 hash = hash_table_hasher(path_canon);
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_string = path_canon, .value_u64 = value });
 }
@@ -147,7 +158,7 @@ hash_table_push_path_u64(Arena *arena, HashTable *ht, String8 path, U64 value)
 internal BucketNode *
 hash_table_push_path_raw(Arena *arena, HashTable *ht, String8 path, void *value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path);
+  String8 path_canon = hash_table_normalize_path_string(arena, path);
   U64 hash = hash_table_hasher(path_canon);
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_string = path_canon, .value_raw = value });
 }

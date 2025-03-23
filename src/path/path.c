@@ -1,29 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-//~ allen: Path Helper Functions
-
-internal StringMatchFlags
-path_match_flags_from_os(OperatingSystem os)
-{
-  StringMatchFlags flags = StringMatchFlag_SlashInsensitive;
-  switch(os)
-  {
-    default:{}break;
-    case OperatingSystem_Windows:
-    {
-      flags |= StringMatchFlag_CaseInsensitive;
-    }break;
-    case OperatingSystem_Linux:
-    case OperatingSystem_Mac:
-    {
-      // NOTE(rjf): no-op
-    }break;
-  }
-  return flags;
-}
-
 internal String8
 path_relative_dst_from_absolute_dst_src(Arena *arena, String8 dst, String8 src)
 {
@@ -122,14 +99,16 @@ path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src)
 }
 
 internal String8List
-path_normalized_list_from_string(Arena *arena, String8 path_string, PathStyle *style_out){
+path_normalized_list_from_string(Arena *arena, String8 path_string, PathStyle *style_out)
+{
   // analyze path
   PathStyle path_style = path_style_from_str8(path_string);
   String8List path = str8_split_path(arena, path_string);
   
   // prepend current path to convert relative -> absolute
   PathStyle path_style_full = path_style;
-  if (path.node_count != 0 && path_style == PathStyle_Relative){
+  if(path.node_count != 0 && path_style == PathStyle_Relative)
+  {
     String8 current_path_string = os_get_current_path(arena);
     
     PathStyle current_path_style = path_style_from_str8(current_path_string);
@@ -145,10 +124,11 @@ path_normalized_list_from_string(Arena *arena, String8 path_string, PathStyle *s
   str8_path_list_resolve_dots_in_place(&path, path_style_full);
   
   // return
-  if (style_out != 0){
+  if(style_out != 0)
+  {
     *style_out = path_style_full;
   }
-  return(path);
+  return path;
 }
 
 internal String8
@@ -160,19 +140,104 @@ path_normalized_from_string(Arena *arena, String8 path_string){
   
   String8 result = str8_path_list_join_by_style(arena, &path, style);
   scratch_end(scratch);
-  return(result);
+  return result;
 }
 
 internal B32
 path_match_normalized(String8 left, String8 right)
 {
-  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  String8 left_normalized = path_normalized_from_string(scratch.arena, left);
+  String8 right_normalized = path_normalized_from_string(scratch.arena, right);
+  B32 result = str8_match(left_normalized, right_normalized, StringMatchFlag_CaseInsensitive);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+path_char_from_style(PathStyle style)
+{
+  String8 result = str8_zero();
+  switch (style)
   {
-    Temp scratch = scratch_begin(0, 0);
-    String8 left_normalized = path_normalized_from_string(scratch.arena, left);
-    String8 right_normalized = path_normalized_from_string(scratch.arena, right);
-    result = str8_match(left_normalized, right_normalized, StringMatchFlag_CaseInsensitive);
-    scratch_end(scratch);
+  case PathStyle_Null:     break;
+  case PathStyle_Relative: break;
+  case PathStyle_WindowsAbsolute: result = str8_lit("\\"); break;
+  case PathStyle_UnixAbsolute:    result = str8_lit("/");  break;
   }
   return result;
 }
+
+internal StringMatchFlags
+path_match_flags_from_os(OperatingSystem os)
+{
+  StringMatchFlags flags = StringMatchFlag_SlashInsensitive;
+  switch(os)
+  {
+    default:{}break;
+    case OperatingSystem_Windows:
+    {
+      flags |= StringMatchFlag_CaseInsensitive;
+    }break;
+    case OperatingSystem_Linux:
+    case OperatingSystem_Mac:
+    {
+      // NOTE(rjf): no-op
+    }break;
+  }
+  return flags;
+}
+
+internal String8
+path_convert_slashes(Arena *arena, String8 path, PathStyle path_style)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = str8_split_path(scratch.arena, path);
+  StringJoin join = {0};
+  join.sep = path_char_from_style(path_style);
+  String8 result = str8_list_join(arena, &list, &join);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+path_replace_file_extension(Arena *arena, String8 file_name, String8 ext)
+{
+  String8 file_name_no_ext = str8_chop_last_dot(file_name);
+  String8 result           = push_str8f(arena, "%S.%S", file_name_no_ext, ext);
+  return result;
+}
+
+global read_only struct
+{
+  String8   string;
+  PathStyle path_style;
+} g_path_style_map[] =
+{
+  { str8_lit_comp(""),         PathStyle_Null            },
+  { str8_lit_comp("relative"), PathStyle_Relative        },
+  { str8_lit_comp("windows"),  PathStyle_WindowsAbsolute },
+  { str8_lit_comp("unix"),     PathStyle_UnixAbsolute    },
+  { str8_lit_comp("system"),   PathStyle_SystemAbsolute  },
+};
+
+internal PathStyle
+path_style_from_string(String8 string)
+{
+  for (U64 i = 0; i < ArrayCount(g_path_style_map); ++i)
+  {
+    if(str8_match(g_path_style_map[i].string, string, StringMatchFlag_CaseInsensitive))
+    {
+      return g_path_style_map[i].path_style;
+    }
+  }
+  return PathStyle_Null;
+}
+
+internal String8
+path_string_from_style(PathStyle style)
+{
+  Assert(style < ArrayCount(g_path_style_map));
+  return g_path_style_map[style].string;
+}
+

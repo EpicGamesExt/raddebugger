@@ -5,13 +5,30 @@
 #define PATH_H
 
 ////////////////////////////////
-//~ allen: Path Helper Functions
+// Relative <-> Absolute Path
 
-internal StringMatchFlags path_match_flags_from_os(OperatingSystem os);
 internal String8 path_relative_dst_from_absolute_dst_src(Arena *arena, String8 dst, String8 src);
 internal String8 path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src);
+
+////////////////////////////////
+// Normal Path Helpers
+
 internal String8List path_normalized_list_from_string(Arena *arena, String8 path, PathStyle *style_out);
-internal String8 path_normalized_from_string(Arena *arena, String8 path);
-internal B32 path_match_normalized(String8 left, String8 right);
+internal String8     path_normalized_from_string(Arena *arena, String8 path);
+internal B32         path_match_normalized(String8 left, String8 right);
+
+////////////////////////////////
+// Misc Helpers
+
+internal String8          path_char_from_style(PathStyle style);
+internal StringMatchFlags path_match_flags_from_os(OperatingSystem os);
+internal String8          path_convert_slashes(Arena *arena, String8 path, PathStyle path_style);
+internal String8          path_replace_file_extension(Arena *arena, String8 file_name, String8 ext);
+
+////////////////////////////////
+// Enum <-> String
+
+internal PathStyle path_style_from_string(String8 string);
+internal String8   path_string_from_style(PathStyle style);
 
 #endif //PATH_H

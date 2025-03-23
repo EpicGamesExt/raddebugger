@@ -78,7 +78,6 @@
 // Code Base Extensions
 
 #include "base_ext/base_inc.h"
-#include "path_ext/path.h"
 #include "hash_table.h"
 #include "thread_pool/thread_pool.h"
 #include "codeview_ext/codeview.h"
@@ -88,7 +87,6 @@
 #include "pdb_ext/pdb_builder.h"
 
 #include "base_ext/base_inc.c"
-#include "path_ext/path.c"
 #include "hash_table.c"
 #include "thread_pool/thread_pool.c"
 #include "codeview_ext/codeview.c"
