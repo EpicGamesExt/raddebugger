@@ -88,3 +88,56 @@ elf_shdr64_array_from_bin(Arena *arena, String8 raw_data, ELF_Hdr64 *hdr)
   return result;
 }
 
+internal String8
+elf_name_from_shdr64(String8 raw_data, ELF_Hdr64 *hdr, Rng1U64 sh_name_range, ELF_Shdr64 *shdr)
+{
+  String8 sh_names = str8_substr(raw_data, sh_name_range);
+  String8 name = {0};
+  str8_deserial_read_cstr(sh_names, shdr->sh_name, &name);
+  return name;
+}
+
+internal U64
+elf_base_addr_from_bin(ELF_Hdr64 *hdr)
+{
+  NotImplemented;
+  return 0;
+}
+
+internal B32
+elf_parse_debug_link(String8 raw_data, ELF_BinInfo *elf, ELF_GnuDebugLink *debug_link_out)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32             is_debug_link_present = 0;
+  ELF_Shdr64Array sections              = elf_shdr64_array_from_bin(scratch.arena, raw_data, &elf->hdr);
+  for (U64 i = 0; i < sections.count; ++i) {
+    ELF_Shdr64 *shdr = &sections.v[i];
+    String8     name = elf_name_from_shdr64(raw_data, &elf->hdr, elf->sh_name_range, shdr);
+
+    if (str8_match(name, str8_lit(".gnu_debuglink"), 0)) {
+      Rng1U64 raw_data_range = rng_1u64(shdr->sh_offset, shdr->sh_offset + shdr->sh_size);
+      String8 data           = str8_substr(raw_data, raw_data_range);
+
+      String8 path     = {0};
+      U32     checksum = 0;
+      {
+        U64 cursor = 0;
+        cursor += str8_deserial_read_cstr(data, cursor, &path);
+
+        cursor = AlignPow2(cursor, 4);
+        cursor += str8_deserial_read_struct(data, cursor, &checksum);
+      }
+
+      debug_link_out->path     = path;
+      debug_link_out->checksum = checksum;
+
+      is_debug_link_present = 1;
+      break;
+    }
+  }
+
+  scratch_end(scratch);
+  return is_debug_link_present;
+}
+
