@@ -488,7 +488,8 @@ RDI_EvalOp_Pop                  = 44,
 RDI_EvalOp_Insert               = 45,
 RDI_EvalOp_ValueRead            = 46,
 RDI_EvalOp_ByteSwap             = 47,
-RDI_EvalOp_COUNT                = 48,
+RDI_EvalOp_CallSiteValue        = 48,
+RDI_EvalOp_COUNT                = 49,
 } RDI_EvalOpEnum;
 
 typedef RDI_U8 RDI_EvalTypeGroup;
@@ -1066,6 +1067,7 @@ X(Pop)\
 X(Insert)\
 X(ValueRead)\
 X(ByteSwap)\
+X(CallSiteValue)\
 
 #define RDI_EvalTypeGroup_XList \
 X(Other)\
@@ -1537,6 +1539,6 @@ RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConver
 
 extern RDI_U16 rdi_section_element_size_table[37];
 extern RDI_U8 rdi_section_is_required_table[37];
-extern RDI_U16 rdi_eval_op_ctrlbits_table[49];
+extern RDI_U16 rdi_eval_op_ctrlbits_table[50];
 
 #endif // RDI_FORMAT_H

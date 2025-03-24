@@ -92,7 +92,7 @@ RDI_U8 rdi_section_is_required_table[37] =
 0,
 };
 
-RDI_U16 rdi_eval_op_ctrlbits_table[49] =
+RDI_U16 rdi_eval_op_ctrlbits_table[50] =
 {
 RDI_EVAL_CTRLBITS(0, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
@@ -142,6 +142,7 @@ RDI_EVAL_CTRLBITS(0, 1, 0),
 RDI_EVAL_CTRLBITS(1, 0, 0),
 RDI_EVAL_CTRLBITS(1, 2, 1),
 RDI_EVAL_CTRLBITS(1, 1, 1),
+RDI_EVAL_CTRLBITS(4, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
 };
 

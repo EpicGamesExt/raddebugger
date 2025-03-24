@@ -166,9 +166,10 @@ d2r_collect_proc_params(Arena *arena, D2R_TypeTable *type_table, DW_Input *input
 
 
 internal RDIM_EvalBytecode
-d2r_bytecode_from_expression(Arena *arena, U64 image_base, U64 address_size, RDI_Arch arch, DW_ListUnit *addr_lu, String8 expr)
+d2r_bytecode_from_expression(Arena *arena, U64 image_base, U64 address_size, RDI_Arch arch, DW_ListUnit *addr_lu, String8 expr, B32 *is_addr_out)
 {
   RDIM_EvalBytecode bc = {0};
+  *is_addr_out = 1;
 
   for (U64 cursor = 0; cursor < expr.size; ) {
     U8 op = 0;
@@ -415,7 +416,13 @@ d2r_bytecode_from_expression(Arena *arena, U64 image_base, U64 address_size, RDI
       String8 entry_value_expr = {0};
       cursor += str8_deserial_read_block(expr, cursor, block_size, &entry_value_expr);
 
-      RDIM_EvalBytecode entry_value_bc = d2r_bytecode_from_expression(arena, image_base, address_size, arch, addr_lu, entry_value_expr);
+      B32 dummy = 0;
+      RDIM_EvalBytecode call_site_bc = d2r_bytecode_from_expression(arena, image_base, address_size, arch, addr_lu, entry_value_expr, &dummy);
+
+      U32 encoded_size32 = safe_cast_u32(call_site_bc.encoded_size);
+      rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_CallSiteValue, encoded_size32);
+
+      rdim_bytecode_concat_in_place(&bc, &call_site_bc);
     } break;
 
     case DW_ExprOp_Addrx: {
@@ -575,9 +582,12 @@ d2r_transpile_expression(Arena *arena, U64 image_base, U64 address_size, RDI_Arc
 {
   RDIM_Location *loc = 0;
   if (expr.size) {
+    B32               is_addr  = 0;
+    RDIM_EvalBytecode bytecode = d2r_bytecode_from_expression(arena, image_base, address_size, arch, addr_lu, expr, &is_addr);
+
     loc           = push_array(arena, RDIM_Location, 1);
-    loc->kind     = RDI_LocationKind_AddrBytecodeStream;
-    loc->bytecode = d2r_bytecode_from_expression(arena, image_base, address_size, arch, addr_lu, expr);
+    loc->kind     = is_addr ? RDI_LocationKind_AddrBytecodeStream : RDI_LocationKind_ValBytecodeStream;
+    loc->bytecode = bytecode;
   }
   return loc;
 }
