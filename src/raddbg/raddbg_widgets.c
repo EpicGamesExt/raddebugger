@@ -3175,7 +3175,7 @@ rd_cell(RD_CellParams *params, String8 string)
     F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled);
     Vec4F32 untoggled_bg_color = {0};
     Vec4F32 toggled_bg_color = {0};
-    UI_TagF("pop")
+    UI_TagF("good_pop")
     {
       toggled_bg_color = ui_color_from_name(str8_lit("background"));
     }
