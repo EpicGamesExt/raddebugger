@@ -73,6 +73,22 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
   }
 
   //
+  // Pick conversion driver
+  //
+  RC_Driver driver = RC_Driver_Null;
+  if (cmd_line_has_flag(cmdl, str8_lit("driver"))) {
+    String8 driver_name = cmd_line_string(cmdl, str8_lit("driver"));
+    if (str8_match(driver_name, str8_lit("dwarf"), StringMatchFlag_CaseInsensitive)) {
+      driver = RC_Driver_Dwarf;
+    } else if (str8_match(driver_name, str8_lit("pdb"), StringMatchFlag_CaseInsensitive)) {
+      driver = RC_Driver_Pdb;
+    } else {
+      fprintf(stderr, "error: unknown driver \"%.*s\"\n", str8_varg(driver_name));
+      os_abort(1);
+    }
+  }
+
+  //
   // Load inputs
   //
   for (String8Node *input_n = cmdl->inputs.first; input_n != 0; input_n = input_n->next) {
@@ -144,21 +160,11 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     os_abort(1);
   }
 
-  //
-  // Pick conversion driver
-  //
-  RC_Driver driver = RC_Driver_Null;
-  if (cmd_line_has_flag(cmdl, str8_lit("driver"))) {
-    String8 driver_name = cmd_line_string(cmdl, str8_lit("driver"));
-    if (str8_match(driver_name, str8_lit("dwarf"), StringMatchFlag_CaseInsensitive)) {
-      driver = RC_Driver_Dwarf;
-    } else if (str8_match(driver_name, str8_lit("pdb"), StringMatchFlag_CaseInsensitive)) {
-      driver = RC_Driver_Pdb;
-    } else {
-      fprintf(stderr, "error: unknown driver %.*s\n", str8_varg(driver_name));
-      os_abort(1);
-    }
+  if (is_pe_present && (is_elf_present || is_elf_debug_present)) {
+    fprintf(stderr, "error: command line has too many image types specified.\n");
+    os_abort(1);
   }
+
 
   ImageType image      = Image_Null;
   String8   image_name = {0};
@@ -166,14 +172,18 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
   String8   debug_name = {0};
   String8   debug_data = {0};
 
+
   //
-  // Input is PE/COFF
+  // Input has PE/COFF
   //
   B32  check_guid  = 0;
   Guid pe_pdb_guid = {0};
   if (is_pe_present) {
-    PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, pe_data);
+    image      = Image_CoffPe;
+    image_name = pe_name;
+    image_data = pe_data;
 
+    PE_BinInfo       pe            = pe_bin_info_from_data(scratch.arena, pe_data);
     String8          raw_debug_dir = str8_substr(pe_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
     PE_DebugInfoList debug_dir     = pe_parse_debug_directory(scratch.arena, pe_data, raw_debug_dir);
     for (PE_DebugInfoNode *debug_n = debug_dir.first; debug_n != 0; debug_n = debug_n->next) {
@@ -194,48 +204,28 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
       }
     }
 
-    if (driver == RC_Driver_Dwarf || driver == RC_Driver_Null) {
+    if (driver == RC_Driver_Null || driver == RC_Driver_Dwarf) {
+      PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, pe_data);
       String8             raw_sections  = str8_substr(pe_data, rng_1u64(pe.section_array_off, pe.section_array_off+sizeof(COFF_SectionHeader)*pe.section_count));
       U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
       COFF_SectionHeader *section_array = (COFF_SectionHeader *)raw_sections.str;
       if (dw_is_dwarf_present_coff_section_table(pe_data, pe.string_table_off, section_count, section_array)) {
         driver     = RC_Driver_Dwarf;
-        image      = Image_CoffPe;
-        image_name = pe_name;
-        image_data = pe_data;
         debug_name = pe_name;
         debug_data = pe_data;
         goto driver_found;
-      } else {
-        if (driver == RC_Driver_Dwarf) {
-          fprintf(stderr, "error: image doesn't have DWARF debug sections.\n");
-          os_abort(1);
-        }
+      } else if (driver == RC_Driver_Dwarf) {
+        fprintf(stderr, "error: image doesn't have DWARF debug sections.\n");
+        os_abort(1);
       }
     }
-  }
-
-
-  //
-  // Input is PDB
-  //
-  if (driver == RC_Driver_Null && is_pdb_present) {
-    if (is_pe_present) {
-      image      = Image_CoffPe;
-      image_name = pe_name;
-      image_data = pe_data;
-    }
-    driver     = RC_Driver_Pdb;
-    debug_name = pdb_name;
-    debug_data = pdb_data;
-    goto driver_found;
   }
 
   B32              elf_has_debug_link = 0;
   ELF_GnuDebugLink debug_link         = {0};
   if (is_elf_present || is_elf_debug_present) {
     if (driver != RC_Driver_Null && driver != RC_Driver_Dwarf) {
-      fprintf(stderr, "ELF inputs are only supported when using DWARF driver.\n");
+      fprintf(stderr, "error: ELF inputs are only supported when using DWARF driver.\n");
       os_abort(1);
     }
 
@@ -304,6 +294,23 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     }
   }
 
+  //
+  // Input is PDB
+  //
+  if (is_pdb_present) {
+    if (driver == RC_Driver_Null || driver == RC_Driver_Pdb) {
+      driver     = RC_Driver_Pdb;
+      debug_name = pdb_name;
+      debug_data = pdb_data;
+      goto driver_found;
+    } else if (driver == RC_Driver_Dwarf) {
+      fprintf(stderr, "error: unable to select DWARF conversion driver because convert doesn't support PDB as input format.\n");
+      os_abort(1);
+    } else {
+      InvalidPath;
+    }
+  }
+
   driver_found:;
 
   //
@@ -342,6 +349,24 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
   ctx.image_data = image_data;
   ctx.debug_name = debug_name;
   ctx.debug_data = debug_data;
+  ctx.flags      = RC_Flag_Strings|
+                   RC_Flag_IndexRuns|
+                   RC_Flag_BinarySections|
+                   RC_Flag_Units|
+                   RC_Flag_Procedures|
+                   RC_Flag_GlobalVariables|
+                   RC_Flag_ThreadVariables|
+                   RC_Flag_Scopes|
+                   RC_Flag_Locals|
+                   RC_Flag_Types|
+                   RC_Flag_UDTs|
+                   RC_Flag_LineInfo|
+                   RC_Flag_GlobalVariableNameMap|
+                   RC_Flag_ThreadVariableNameMap|
+                   RC_Flag_ProcedureNameMap|
+                   RC_Flag_TypeNameMap|
+                   RC_Flag_LinkNameProcedureNameMap|
+                   RC_Flag_NormalSourcePathNameMap;
   if (check_guid) {
     ctx.flags |= RC_Flag_CheckPdbGuid;
     ctx.guid   = pe_pdb_guid;

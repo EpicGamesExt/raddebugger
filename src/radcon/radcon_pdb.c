@@ -2355,7 +2355,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   //////////////////////////////////////////////////////////////
   //- rjf: determine architecture
   //
-  RDI_Arch arch           = cv2r_rdi_arch_from_cv_arch(dbi->machine_type);
+  RDI_Arch arch           = c2r_rdi_arch_from_coff_machine(dbi->machine_type);
   U64      arch_addr_size = rdi_addr_size_from_arch(arch);
   
   //////////////////////////////////////////////////////////////
