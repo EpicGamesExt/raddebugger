@@ -5324,7 +5324,7 @@ rd_view_ui(Rng2F32 rect)
                       {
                         // rjf: compute visual params
                         B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
-                        B32 is_toggle_switch = (cell_info.eval.irtree.mode == E_Mode_Offset && e_type_kind_from_key(cell_info.eval.irtree.type_key) == E_TypeKind_Bool);
+                        B32 is_toggle_switch = (cell_info.eval.irtree.mode != E_Mode_Null && e_type_kind_from_key(cell_info.eval.irtree.type_key) == E_TypeKind_Bool);
                         B32 is_activated_on_single_click = !!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick);
                         B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
                         String8 ghost_text = {0};
