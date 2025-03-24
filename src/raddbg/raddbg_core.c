@@ -3449,10 +3449,10 @@ rd_view_ui(Rng2F32 rect)
         RD_Font(RD_FontSlot_Main) UI_PrefWidth(ui_text_dim(1, 1))
         ui_label(rd_display_from_code_name(cmd_name));
       ui_spacer(ui_em(0.5f, 1.f));
-      RD_LineEditParams params = {0};
+      RD_CellParams params = {0};
       {
-        params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_LineEditFlag_CodeContents;
-        params.flags |= RD_LineEditFlag_Border;
+        params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_CellFlag_CodeContents;
+        params.flags |= RD_CellFlag_Border;
         params.cursor               = &vs->query_cursor;
         params.mark                 = &vs->query_mark;
         params.edit_buffer          = vs->query_buffer;
@@ -3462,7 +3462,7 @@ rd_view_ui(Rng2F32 rect)
       }
       UI_Transparency(1-search_row_open_t)
       {
-        UI_Signal sig = rd_line_editf(&params, "###search");
+        UI_Signal sig = rd_cellf(&params, "###search");
         if(ui_pressed(sig))
         {
           vs->query_is_selected = 1;
@@ -4747,12 +4747,14 @@ rd_view_ui(Rng2F32 rect)
       B32 pressed = 0;
       ProfScope("build ui")
       {
+        Vec2F32 rect_dim = dim_2f32(rect);
+        F32 contents_width_px = (rect_dim.x - floor_f32(ui_top_font_size()*1.5f));
         Rng1S64 visible_row_rng = {0};
         UI_ScrollListParams scroll_list_params = {0};
         {
           scroll_list_params.flags         = UI_ScrollListFlag_All;
           scroll_list_params.row_height_px = row_height_px;
-          scroll_list_params.dim_px        = dim_2f32(rect);
+          scroll_list_params.dim_px        = rect_dim;
           scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, 0));
           scroll_list_params.item_range    = r1s64(0, block_tree.total_row_count - !!implicit_root);
           scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
@@ -4843,7 +4845,7 @@ rd_view_ui(Rng2F32 rect)
                 {
                   EV_Row *row = last_row;
                   RD_WatchRowInfo *row_info = last_row_info;
-                  F32 row_width_px = (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
+                  F32 row_width_px = contents_width_px;
                   if(row_info != 0)
                   {
                     U64 row_hash = ev_hash_from_key(row->key);
@@ -5088,7 +5090,7 @@ rd_view_ui(Rng2F32 rect)
                 //- rjf: build row box
                 //
                 ui_set_next_flags(disabled_flags);
-                ui_set_next_pref_width(ui_pct(1, 0));
+                ui_set_next_pref_width(ui_px(contents_width_px, 1.f));
                 ui_set_next_pref_height(ui_px(row_height_px*row->visual_size, 1.f));
                 ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
                 UI_Box *row_box = ui_build_box_from_stringf(row_flags|((!row_node->next)*UI_BoxFlag_DrawSideBottom)|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
@@ -5115,7 +5117,7 @@ rd_view_ui(Rng2F32 rect)
                     }
                   }
                   
-                  ////////////////////
+                  //////////////
                   //- rjf: draw mid-row cache line boundaries in expansions
                   //
                   if(row_info->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info->view_ui_rule == &rd_nil_view_ui_rule)
@@ -5138,14 +5140,16 @@ rd_view_ui(Rng2F32 rect)
                     }
                   }
                   
-                  ////////////////////
+                  //////////////
                   //- rjf: build all cells
                   //
                   S64 cell_x = 0;
                   F32 cell_x_px = 0;
                   for(RD_WatchCell *cell = row_info->cells.first; cell != 0; cell = cell->next, cell_x += 1)
                   {
+                    ////////////
                     //- rjf: unpack cell info
+                    //
                     U64 cell_id = rd_id_from_watch_cell(cell);
                     RD_WatchPt cell_pt = {row->block->key, row->key, cell_id};
                     RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
@@ -5153,9 +5157,12 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
                     F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
                     F32 next_cell_x_px = cell_x_px + cell_width_px;
+                    B32 cell_toggled = (e_value_eval_from_eval(cell_info.eval).value.u64 != 0);
+                    B32 next_cell_toggled = cell_toggled;
                     
+                    ////////////
                     //- rjf: determine cell's palette
-                    ProfBegin("determine cell's palette");
+                    //
                     UI_BoxFlags cell_flags = 0;
                     Vec4F32 cell_background_color_override = {0};
                     String8 cell_tag = {0};
@@ -5164,15 +5171,12 @@ rd_view_ui(Rng2F32 rect)
                          rd_state->hover_regs_slot == RD_RegSlot_Cfg)
                       {
                         RD_Cfg *cfg = cell_info.cfg;
-                        Vec4F32 rgba = linear_from_srgba(rd_color_from_cfg(cfg));
+                        Vec4F32 rgba = rd_color_from_cfg(cfg);
+                        rgba.w *= 0.05f;
                         if(rgba.w == 0)
                         {
                           rgba = pop_background_rgba;
                           rgba.w *= 0.5f;
-                        }
-                        else
-                        {
-                          rgba.w *= 0.05f;
                         }
                         rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                         cell_background_color_override = rgba;
@@ -5183,23 +5187,21 @@ rd_view_ui(Rng2F32 rect)
                       {
                         CTRL_Entity *entity = cell_info.entity;
                         Vec4F32 rgba = rd_color_from_ctrl_entity(entity);
+                        rgba.w *= 0.05f;
                         if(rgba.w == 0)
                         {
                           rgba = pop_background_rgba;
                           rgba.w *= 0.5f;
-                        }
-                        else
-                        {
-                          rgba.w *= 0.05f;
                         }
                         rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                         cell_background_color_override = rgba;
                         cell_flags |= UI_BoxFlag_DrawBackground;
                       }
                     }
-                    ProfEnd();
                     
-                    //- rjf: build cell
+                    ////////////
+                    //- rjf: build cell container
+                    //
                     UI_Box *cell_box = &ui_nil_box;
                     UI_PrefWidth(ui_px(cell_width_px, 0.f))
                     {
@@ -5207,7 +5209,9 @@ rd_view_ui(Rng2F32 rect)
                       cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft|cell_flags, "cell_%I64x_%I64x", row_hash, cell_id);
                     }
                     
+                    ////////////
                     //- rjf: build cell contents
+                    //
                     UI_Signal sig = {0};
                     ProfScope("build cell contents")
                       UI_Parent(cell_box)
@@ -5217,7 +5221,7 @@ rd_view_ui(Rng2F32 rect)
                       UI_TagF("weak")
                       UI_Tag(cell_tag)
                     {
-                      // rjf: cell has errors? -> build error box
+                      //- rjf: cell has errors? -> build error box
                       if(cell_info.flags & RD_WatchCellFlag_IsErrored) RD_Font(RD_FontSlot_Main)
                       {
                         UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###%I64x_%I64x", cell_id, row_hash);
@@ -5228,7 +5232,7 @@ rd_view_ui(Rng2F32 rect)
                         }
                       }
                       
-                      // rjf: cell has hook? -> build ui by calling hook
+                      //- rjf: cell has hook? -> build ui by calling hook
                       else if(cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                       {
                         Rng2F32 cell_rect = r2f32p(cell_x_px, 0, next_cell_x_px, row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
@@ -5295,7 +5299,7 @@ rd_view_ui(Rng2F32 rect)
                         sig = ui_signal_from_box(box);
                       }
                       
-                      // rjf: cell is call stack frame? -> build arrow if this is the selected frame, otherwise leave empty
+                      //- rjf: cell is call stack frame? -> build arrow if this is the selected frame, otherwise leave empty
                       else if(cell->kind == RD_WatchCellKind_CallStackFrame)
                       {
                         UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%I64x_%I64x", cell_id, row_hash);
@@ -5315,11 +5319,12 @@ rd_view_ui(Rng2F32 rect)
                         }
                       }
                       
-                      // rjf: build cell line edit
+                      //- rjf: build general cell
                       else
                       {
                         // rjf: compute visual params
                         B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
+                        B32 is_toggle_switch = (cell_info.eval.irtree.mode == E_Mode_Offset && e_type_kind_from_key(cell_info.eval.irtree.type_key) == E_TypeKind_Bool);
                         B32 is_activated_on_single_click = !!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick);
                         B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
                         String8 ghost_text = {0};
@@ -5355,17 +5360,11 @@ rd_view_ui(Rng2F32 rect)
                           }
                         }
                         
-                        // rjf: build
-                        RD_LineEditParams line_edit_params = {0};
+                        // rjf: form cell build parameters
+                        RD_CellParams line_edit_params = {0};
                         {
-                          line_edit_params.flags                = (RD_LineEditFlag_CodeContents*!is_non_code|
-                                                                   RD_LineEditFlag_NoBackground*!is_button|
-                                                                   RD_LineEditFlag_Button*is_button|
-                                                                   RD_LineEditFlag_SingleClickActivate*is_activated_on_single_click|
-                                                                   RD_LineEditFlag_KeyboardClickable|
-                                                                   RD_LineEditFlag_Expander*!!(row_is_expandable && cell == row_info->cells.first)|
-                                                                   RD_LineEditFlag_ExpanderSpace*(row_depth==!implicit_root && cell == row_info->cells.first && !is_button)|
-                                                                   RD_LineEditFlag_ExpanderSpace*((row_depth!=0 && cell == row_info->cells.first)));
+                          // rjf: set up base parameters
+                          line_edit_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
                           line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                           line_edit_params.cursor               = &cell_edit_state->cursor;
                           line_edit_params.mark                 = &cell_edit_state->mark;
@@ -5376,7 +5375,50 @@ rd_view_ui(Rng2F32 rect)
                           line_edit_params.pre_edit_value       = cell_info.string;
                           line_edit_params.fstrs                = cell_info.fstrs;
                           line_edit_params.fuzzy_matches        = &fuzzy_matches;
+                          
+                          // rjf: apply expander (or substitute space)
+                          if(row_is_expandable && cell == row_info->cells.first)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_Expander;
+                          }
+                          else if(row_depth == !implicit_root && cell == row_info->cells.first)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_ExpanderSpace;
+                          }
+                          else if(row_depth != 0 && cell == row_info->cells.first)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_ExpanderSpace;
+                          }
+                          
+                          // rjf: apply single-click-activation
+                          if(is_activated_on_single_click)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_SingleClickActivate;
+                          }
+                          
+                          // rjf: apply code styles
+                          if(is_non_code)
+                          {
+                            line_edit_params.flags &= ~RD_CellFlag_CodeContents;
+                          }
+                          
+                          // rjf: apply button styles
+                          if(is_button)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_Button;
+                            line_edit_params.flags &= ~RD_CellFlag_NoBackground;
+                            line_edit_params.flags &= ~RD_CellFlag_ExpanderSpace;
+                          }
+                          
+                          // rjf: apply toggle-switch
+                          if(is_toggle_switch)
+                          {
+                            line_edit_params.flags |= RD_CellFlag_ToggleSwitch;
+                            line_edit_params.toggled_out = &next_cell_toggled;
+                          }
                         }
+                        
+                        // rjf: build
                         if(cell_background_color_override.w != 0)
                         {
                           ui_push_background_color(cell_background_color_override);
@@ -5384,7 +5426,7 @@ rd_view_ui(Rng2F32 rect)
                         UI_TextAlignment(cell->px != 0 ? UI_TextAlign_Center : UI_TextAlign_Left)
                           RD_Font(is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                         {
-                          sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
+                          sig = rd_cellf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
                         }
                         if(cell_background_color_override.w != 0)
                         {
@@ -5406,7 +5448,9 @@ rd_view_ui(Rng2F32 rect)
                       }
                     }
                     
+                    ////////////
                     //- rjf: handle interactions
+                    //
                     {
                       // rjf: hover -> rich hover cfgs
                       if(ui_hovering(sig) && cell_info.cfg != &rd_nil_cfg)
@@ -5589,7 +5633,17 @@ rd_view_ui(Rng2F32 rect)
                       }
                     }
                     
+                    ////////////
+                    //- rjf: commit toggle changes
+                    //
+                    if(next_cell_toggled != cell_toggled)
+                    {
+                      rd_commit_eval_value_string(cell_info.eval, next_cell_toggled ? str8_lit("1") : str8_lit("0"), 0);
+                    }
+                    
+                    ////////////
                     //- rjf: bump x pixel coordinate
+                    //
                     cell_x_px = next_cell_x_px;
                   }
                 }
@@ -7155,7 +7209,7 @@ rd_window_frame(void)
                       MD_Node *param_tree = md_child_from_string(params, key->string, 0);
                       String8 pre_edit_value = md_string_from_children(scratch.arena, param_tree);
                       UI_PrefWidth(ui_em(10.f, 1.f)) ui_label(key->string);
-                      UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, pre_edit_value, "%S##view_param", key->string);
+                      UI_Signal sig = rd_cellf(RD_CellFlag_Border|RD_CellFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, pre_edit_value, "%S##view_param", key->string);
                       if(ui_committed(sig))
                       {
                         String8 new_string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size);
@@ -9882,7 +9936,8 @@ rd_window_frame(void)
       if(box->flags & UI_BoxFlag_DrawDropShadow)
       {
         Rng2F32 drop_shadow_rect = shift_2f32(pad_2f32(box->rect, 8), v2f32(4, 4));
-        dr_rect(drop_shadow_rect, drop_shadow_color, 0.8f, 0, 8.f);
+        R_Rect2DInst *inst = dr_rect(drop_shadow_rect, drop_shadow_color, 0.8f, 0, 8.f);
+        MemoryCopyArray(inst->corner_radii, box->corner_radii);
       }
       
       // rjf: blur background
@@ -10133,9 +10188,9 @@ rd_window_frame(void)
           }
           
           // rjf: debug border rendering
-          if(0)
+          if(b->flags & UI_BoxFlag_Debug)
           {
-            R_Rect2DInst *inst = dr_rect(b->rect, v4f32(1, 0, 1, 0.25f), 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, v4f32(1*box->pref_size[Axis2_X].strictness, 0, 1, 0.25f), 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           

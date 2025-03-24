@@ -1248,6 +1248,15 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
       
+      // rjf: for meta-evaluation space booleans, only do expr
+      else if(e_type_kind_from_key(info.eval.irtree.type_key) == E_TypeKind_Bool &&
+              (info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+               info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
+      }
+      
       // rjf: for meta-cfg evaluation spaces, only do expr/value
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||

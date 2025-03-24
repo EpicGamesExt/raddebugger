@@ -3066,17 +3066,23 @@ rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
 //~ rjf: UI Widgets: Line Edit
 
 internal UI_Signal
-rd_line_edit(RD_LineEditParams *params, String8 string)
+rd_cell(RD_CellParams *params, String8 string)
 {
   ProfBeginFunction();
   
+  //////////////////////////////
   //- rjf: unpack visual metrics
+  //
   F32 expander_size_px = ui_top_font_size()*2.f;
   
+  //////////////////////////////
   //- rjf: make key
+  //
   UI_Key key = ui_key_from_string(ui_active_seed_key(), string);
   
+  //////////////////////////////
   //- rjf: calculate & push focus
+  //
   B32 is_auto_focus_hot = ui_is_key_auto_focus_hot(key);
   B32 is_auto_focus_active = ui_is_key_auto_focus_active(key);
   if(is_auto_focus_hot) { ui_push_focus_hot(UI_FocusKind_On); }
@@ -3086,69 +3092,137 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   B32 is_focus_hot_disabled = (!is_focus_hot && ui_top_focus_hot() == UI_FocusKind_On);
   B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
+  //////////////////////////////
   //- rjf: build top-level box
+  //
   if(is_focus_active || is_focus_active_disabled)
   {
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
-  if(params->flags & RD_LineEditFlag_Button)
+  if(params->flags & RD_CellFlag_Button)
   {
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
-                                      (!!(params->flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
+                                      (!!(params->flags & RD_CellFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       UI_BoxFlag_DrawHotEffects|
-                                      (!!(params->flags & RD_LineEditFlag_SingleClickActivate)*UI_BoxFlag_DrawActiveEffects)|
-                                      (!(params->flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
-                                      (!!(params->flags & RD_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
+                                      (!!(params->flags & RD_CellFlag_SingleClickActivate)*UI_BoxFlag_DrawActiveEffects)|
+                                      (!(params->flags & RD_CellFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
+                                      (!!(params->flags & RD_CellFlag_Border)*UI_BoxFlag_DrawBorder)|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
                                       (is_focus_active || is_focus_active_disabled)*(UI_BoxFlag_Clip),
                                       key);
   
+  //////////////////////////////
   //- rjf: build indent
+  //
   UI_Parent(box) for(S32 idx = 0; idx < params->depth; idx += 1)
   {
     ui_set_next_flags(UI_BoxFlag_DrawSideLeft);
     ui_spacer(ui_em(1.f, 1.f));
   }
   
-  //- rjf: build expander
-  if(params->flags & RD_LineEditFlag_Expander) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Parent(box)
-    UI_Flags(UI_BoxFlag_DrawSideLeft)
-    UI_Focus(UI_FocusKind_Off)
+  //////////////////////////////
+  //- rjf: build expander (or placeholder, or space)
+  //
   {
-    UI_Signal expander_sig = ui_expanderf(params->expanded_out[0], "expander");
-    if(ui_pressed(expander_sig))
+    //- rjf: build expander
+    if(params->flags & RD_CellFlag_Expander) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Parent(box)
+      UI_Flags(UI_BoxFlag_DrawSideLeft)
+      UI_Focus(UI_FocusKind_Off)
     {
-      params->expanded_out[0] ^= 1;
+      UI_Signal expander_sig = ui_expanderf(params->expanded_out[0], "expander");
+      if(ui_pressed(expander_sig))
+      {
+        params->expanded_out[0] ^= 1;
+      }
+    }
+    
+    //- rjf: build expander placeholder
+    else if(params->flags & RD_CellFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
+    {
+      UI_TagF("weak")
+        UI_Flags(UI_BoxFlag_DrawSideLeft)
+        RD_Font(RD_FontSlot_Icons)
+        UI_TextAlignment(UI_TextAlign_Center)
+        ui_label(rd_icon_kind_text_table[RD_IconKind_Dot]);
+    }
+    
+    //- rjf: build expander space
+    else if(params->flags & RD_CellFlag_ExpanderSpace) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
+    {
+      UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_px(expander_size_px, 1.f));
     }
   }
   
-  //- rjf: build expander placeholder
-  else if(params->flags & RD_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
-  {
-    UI_TagF("weak")
-      UI_Flags(UI_BoxFlag_DrawSideLeft)
-      RD_Font(RD_FontSlot_Icons)
-      UI_TextAlignment(UI_TextAlign_Center)
-      ui_label(rd_icon_kind_text_table[RD_IconKind_Dot]);
-  }
-  
-  //- rjf: build expander space
-  else if(params->flags & RD_LineEditFlag_ExpanderSpace) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
-  {
-    UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_px(expander_size_px, 1.f));
-  }
-  
+  //////////////////////////////
   //- rjf: build scrollable container box
+  //
   UI_Box *scrollable_box = &ui_nil_box;
-  UI_Parent(box) UI_PrefWidth(ui_children_sum(0))
+  UI_Parent(box) UI_WidthFill
   {
     scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
   }
   
+  //////////////////////////////
+  //- rjf: build toggle-switch
+  //
+  if(params->flags & RD_CellFlag_ToggleSwitch && !is_focus_active)
+    UI_Parent(box)
+  {
+    B32 is_toggled = !!params->toggled_out[0];
+    F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled);
+    Vec4F32 untoggled_bg_color = {0};
+    Vec4F32 toggled_bg_color = {0};
+    UI_TagF("pop")
+    {
+      toggled_bg_color = ui_color_from_name(str8_lit("background"));
+    }
+    Vec4F32 bg_color = mix_4f32(untoggled_bg_color, toggled_bg_color, toggle_t);
+    F32 padding_px = floor_f32(ui_top_font_size()*0.4f);
+    F32 height_px = ui_top_px_height() - padding_px*2.f;
+    UI_PrefWidth(ui_children_sum(1.f))
+      UI_HeightFill
+      UI_Column UI_Padding(ui_px(padding_px, 1.f))
+      UI_Row UI_Padding(ui_px(padding_px, 1.f))
+      UI_PrefWidth(ui_em(4.f, 1.f))
+      UI_PrefHeight(ui_px(height_px, 1.f))
+      UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
+    {
+      ui_set_next_background_color(bg_color);
+      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+      UI_Box *switch_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "toggle_switch");
+      UI_Parent(switch_box)
+      {
+        ui_spacer(ui_pct(toggle_t, 0));
+        UI_BackgroundColor(ui_color_from_name(str8_lit("text")))
+          UI_PrefWidth(ui_px(height_px, 1.f))
+        {
+          F32 extratoggler_padding_px = floor_f32(ui_top_font_size()*0.35f);
+          F32 toggler_size_px = height_px - extratoggler_padding_px*2.f;
+          UI_Column UI_Padding(ui_px(extratoggler_padding_px, 1.f))
+            UI_Row UI_Padding(ui_px(extratoggler_padding_px, 1.f))
+            UI_PrefWidth(ui_px(toggler_size_px, 1.f))
+            UI_PrefHeight(ui_px(toggler_size_px, 1.f))
+            UI_CornerRadius(floor_f32(toggler_size_px/2.f - 1.f))
+          {
+            UI_Box *toggler = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
+          }
+        }
+        ui_spacer(ui_pct(1.f-toggle_t, 0));
+      }
+      UI_Signal switch_sig = ui_signal_from_box(switch_box);
+      if(ui_pressed(switch_sig))
+      {
+        params->toggled_out[0] ^= 1;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: do non-textual edits (delete, copy, cut)
+  //
   B32 commit = 0;
   if(!is_focus_active && is_focus_hot)
   {
@@ -3166,14 +3240,18 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     }
   }
   
+  //////////////////////////////
   //- rjf: get signal
+  //
   UI_Signal sig = ui_signal_from_box(box);
   if(commit)
   {
     sig.f |= UI_SignalFlag_Commit;
   }
   
+  //////////////////////////////
   //- rjf: do start/end editing interaction
+  //
   B32 focus_started = 0;
   if(!is_focus_active)
   {
@@ -3201,7 +3279,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       MemoryCopy(params->edit_buffer, edit_string.str, edit_string.size);
       params->edit_string_size_out[0] = edit_string.size;
       ui_set_auto_focus_active_key(key);
-      if(!(params->flags & RD_LineEditFlag_Button))
+      if(!(params->flags & RD_CellFlag_Button))
       {
         ui_kill_action();
       }
@@ -3216,7 +3294,9 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     sig.f |= UI_SignalFlag_Commit;
   }
   
+  //////////////////////////////
   //- rjf: determine autocompletion string
+  //
   String8 autocomplete_hint_string = {0};
   {
     for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -3228,9 +3308,11 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     }
   }
   
+  //////////////////////////////
   //- rjf: take navigation actions for editing
+  //
   B32 changes_made = 0;
-  if(!(params->flags & RD_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
+  if(!(params->flags & RD_CellFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
     rd_state->text_edit_mode = 1;
@@ -3290,12 +3372,14 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     scratch_end(scratch);
   }
   
+  //////////////////////////////
   //- rjf: build scrolled contents
+  //
   TxtPt mouse_pt = {0};
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
-    if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) == 0)
+    if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) == 0)
     {
       ui_spacer(ui_em(0.5f, 1.f));
     }
@@ -3308,10 +3392,10 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
         ui_box_equip_fuzzy_match_ranges(label, params->fuzzy_matches);
       }
     }
-    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
+    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_CellFlag_CodeContents)
     {
       String8 display_string = ui_display_part_from_key_string(string);
-      if(!(params->flags & RD_LineEditFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
+      if(!(params->flags & RD_CellFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
       {
         display_string = params->pre_edit_value;
         UI_Box *box = rd_code_label(1.f, 1, ui_color_from_name(str8_lit("text")), display_string);
@@ -3320,7 +3404,7 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
           ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
         }
       }
-      else if(params->flags & RD_LineEditFlag_DisplayStringIsCode)
+      else if(params->flags & RD_CellFlag_DisplayStringIsCode)
       {
         UI_Box *box = rd_code_label(1.f, 1, ui_color_from_name(str8_lit("text")), display_string);
         if(params->fuzzy_matches != 0)
@@ -3337,10 +3421,10 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
         }
       }
     }
-    else if(!is_focus_active && !is_focus_active_disabled && !(params->flags & RD_LineEditFlag_CodeContents))
+    else if(!is_focus_active && !is_focus_active_disabled && !(params->flags & RD_CellFlag_CodeContents))
     {
       String8 display_string = ui_display_part_from_key_string(string);
-      if(!(params->flags & RD_LineEditFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
+      if(!(params->flags & RD_CellFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
       {
         display_string = params->pre_edit_value;
       }
@@ -3354,12 +3438,12 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
         ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
       }
     }
-    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_LineEditFlag_CodeContents)
+    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_CellFlag_CodeContents)
     {
       String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
       F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
+      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
@@ -3437,11 +3521,11 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
       cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
       scratch_end(scratch);
     }
-    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_LineEditFlag_CodeContents))
+    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_CellFlag_CodeContents))
     {
       String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
+      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
@@ -3455,7 +3539,9 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     }
   }
   
+  //////////////////////////////
   //- rjf: click+drag
+  //
   if(is_focus_active && ui_dragging(sig))
   {
     if(ui_pressed(sig))
@@ -3469,7 +3555,9 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     params->cursor[0] = params->mark[0] = mouse_pt;
   }
   
+  //////////////////////////////
   //- rjf: focus cursor
+  //
   {
     F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*params->depth;
     if(visible_dim_px > 0)
@@ -3491,7 +3579,9 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
     }
   }
   
+  //////////////////////////////
   //- rjf: pop focus
+  //
   if(is_auto_focus_hot) { ui_pop_focus_hot(); }
   if(is_auto_focus_active) { ui_pop_focus_active(); }
   
@@ -3500,14 +3590,14 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
 }
 
 internal UI_Signal
-rd_line_editf(RD_LineEditParams *params, char *fmt, ...)
+rd_cellf(RD_CellParams *params, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
-  UI_Signal sig = rd_line_edit(params, string);
+  UI_Signal sig = rd_cell(params, string);
   scratch_end(scratch);
   return sig;
 }

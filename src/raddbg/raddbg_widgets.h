@@ -5,39 +5,64 @@
 #define RADDBG_WIDGETS_H
 
 ////////////////////////////////
-//~ rjf: Line Edit Types
+//~ rjf: Cell Types
 
-typedef U32 RD_LineEditFlags;
+typedef U32 RD_CellFlags;
 enum
 {
-  RD_LineEditFlag_Expander            = (1<<0),
-  RD_LineEditFlag_ExpanderSpace       = (1<<1),
-  RD_LineEditFlag_ExpanderPlaceholder = (1<<2),
-  RD_LineEditFlag_DisableEdit         = (1<<3),
-  RD_LineEditFlag_CodeContents        = (1<<4),
-  RD_LineEditFlag_KeyboardClickable   = (1<<5),
-  RD_LineEditFlag_Border              = (1<<6),
-  RD_LineEditFlag_NoBackground        = (1<<7),
-  RD_LineEditFlag_Button              = (1<<8),
-  RD_LineEditFlag_SingleClickActivate = (1<<9),
-  RD_LineEditFlag_PreferDisplayString = (1<<10),
-  RD_LineEditFlag_DisplayStringIsCode = (1<<11),
+  //- rjf: expander
+  RD_CellFlag_Expander            = (1<<0),
+  RD_CellFlag_ExpanderSpace       = (1<<1),
+  RD_CellFlag_ExpanderPlaceholder = (1<<2),
+  
+  //- rjf: toggle switch extension
+  RD_CellFlag_ToggleSwitch        = (1<<3),
+  
+  //- rjf: slider extension
+  RD_CellFlag_Slider              = (1<<4),
+  
+  //- rjf: behavior
+  RD_CellFlag_DisableEdit         = (1<<5),
+  RD_CellFlag_KeyboardClickable   = (1<<6),
+  RD_CellFlag_SingleClickActivate = (1<<7),
+  
+  //- rjf: contents description
+  RD_CellFlag_CodeContents        = (1<<8),
+  
+  //- rjf: appearance
+  RD_CellFlag_Border              = (1<<9),
+  RD_CellFlag_NoBackground        = (1<<10),
+  RD_CellFlag_Button              = (1<<11),
+  RD_CellFlag_PreferDisplayString = (1<<12),
+  RD_CellFlag_DisplayStringIsCode = (1<<13),
 };
 
-typedef struct RD_LineEditParams RD_LineEditParams;
-struct RD_LineEditParams
+typedef struct RD_CellParams RD_CellParams;
+struct RD_CellParams
 {
-  RD_LineEditFlags flags;
+  //- rjf: catachall parameters
+  RD_CellFlags flags;
   S32 depth;
   FuzzyMatchRangeList *fuzzy_matches;
+  String8 pre_edit_value;
+  DR_FStrList fstrs;
+  
+  //- rjf: expander r/w info
+  B32 *expanded_out;
+  
+  //- rjf: toggle-switch r/w info
+  B32 *toggled_out;
+  
+  //- rjf: slider info r/w info
+  Rng1U64 slider_value_range;
+  U64 *slider_value_out;
+  
+  //- rjf: text editing r/w info
   TxtPt *cursor;
   TxtPt *mark;
   U8 *edit_buffer;
   U64 edit_buffer_size;
   U64 *edit_string_size_out;
-  B32 *expanded_out;
-  String8 pre_edit_value;
-  DR_FStrList fstrs;
 };
 
 ////////////////////////////////
@@ -140,7 +165,7 @@ internal UI_Box *rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 b
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal rd_line_edit(RD_LineEditParams *params, String8 string);
-internal UI_Signal rd_line_editf(RD_LineEditParams *params, char *fmt, ...);
+internal UI_Signal rd_cell(RD_CellParams *params, String8 string);
+internal UI_Signal rd_cellf(RD_CellParams *params, char *fmt, ...);
 
 #endif // RADDBG_WIDGETS_H

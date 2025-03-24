@@ -228,8 +228,8 @@ RD_VocabTable:
       'stdout_path':        path,
       'stderr_path':        path,
       'stdin_path':         path,
-      'debug_subprocesses': bool,
       'environment':        query,
+      'debug_subprocesses': bool,
     }
     ```,
   }

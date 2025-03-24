@@ -352,6 +352,9 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<51)
 # define UI_BoxFlag_SquishAnchored            (UI_BoxFlags)(1ull<<52)
 
+//- rjf: debug
+# define UI_BoxFlag_Debug                     (UI_BoxFlags)(1ull<<53)
+
 //- rjf: bundles
 # define UI_BoxFlag_Clickable           (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
 # define UI_BoxFlag_DefaultFocusNav     (UI_BoxFlag_DefaultFocusNavX|UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_DefaultFocusEdit)
