@@ -25,7 +25,6 @@
 #include "os/os_inc.h"
 #include "async/async.h"
 #include "rdi_make/rdi_make_local.h"
-#include "rdi_make/rdi_make_help.h"
 #include "linker/path_ext/path.h"
 #include "linker/hash_table.h"
 #include "coff/coff.h"
@@ -44,7 +43,6 @@
 #include "coff/coff_parse.c"
 #include "pe/pe.c"
 #include "rdi_make/rdi_make_local.c"
-#include "rdi_make/rdi_make_help.c"
 #include "linker/rdi/rdi_coff.c"
 #include "linker/path_ext/path.c"
 #include "linker/hash_table.c"
@@ -89,14 +87,14 @@ entry_point(CmdLine *cmdline)
     os_abort(0);
   }
   
-  RDIM_HelpState *rdim_help_state = rdim_help_init();
+  RDIM_LocalState *rdim_local_state = rdim_local_init();
 
   ProfBegin("convert");
   RDIM_BakeParams *convert2bake = d2r_convert(arena, user2convert);
   ProfEnd();
 
   ProfBegin("bake");
-  RDIM_BakeResults bake2srlz = d2r_bake(rdim_help_state, convert2bake);
+  RDIM_BakeResults bake2srlz = d2r_bake(rdim_local_state, convert2bake);
   ProfEnd();
 
   ProfBegin("serialize bake");

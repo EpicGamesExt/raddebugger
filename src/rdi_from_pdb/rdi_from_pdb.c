@@ -787,11 +787,12 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
             }
             
             // rjf: build line table, fill with parsed binary annotations
+
             if(inlinee_lines_parsed != 0)
             {
               // rjf: grab checksums sub-section
               CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
-              
+
               // rjf: gathered lines
               typedef struct LineChunk LineChunk;
               struct LineChunk
@@ -809,12 +810,12 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
               U32              last_file_off               = max_U32;
               U32              curr_file_off               = max_U32;
               RDIM_LineTable*  line_table                  = 0;
-              
+
               CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_lines_parsed->file_off, inlinee_lines_parsed->first_source_ln, base_voff);
               for(;;)
               {
                 CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
-                
+
                 if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile)
                 {
                   last_file_off = curr_file_off;
@@ -828,7 +829,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                 if((last_file_off != max_U32 && last_file_off != curr_file_off))
                 {
                   String8 seq_file_name = {0};
-                  
+
                   if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                   {
                     CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
@@ -900,7 +901,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   first_line_chunk            = last_line_chunk = 0;
                   total_line_chunk_line_count = 0;
                 }
-                
+
                 if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine)
                 {
                   LineChunk *chunk = last_line_chunk;
@@ -918,7 +919,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   chunk->count                  += 1;
                   total_line_chunk_line_count   += 1;
                 }
-                
+
                 if(step.flags == 0)
                 {
                   break;
@@ -2435,14 +2436,14 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             for(;;)
             {
               CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
-              
+
               if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange)
               {
                 // rjf: build new range & add to scope
                 RDIM_Rng1U64 voff_range = { step.range.min, step.range.max };
                 rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
               }
-              
+
               if(step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange)
               {
                 if(scope->voff_ranges.last != 0) 
@@ -2450,7 +2451,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
                   scope->voff_ranges.last->v.max = step.range.max;
                 }
               }
-              
+
               if(step.flags == 0)
               {
                 break;
@@ -2523,7 +2524,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     named_streams = pdb_named_stream_table_from_info(arena, info);
     MemoryCopyStruct(&auth_guid, &info->auth_guid);
     scratch_end(scratch);
-    
+
     if (info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO) {
       fprintf(stderr, "ERROR: PDB was linked with /DEBUG:FASTLINK (partial debug info is not supported). Please relink using /DEBUG:FULL.");
       os_abort(1);
@@ -2887,13 +2888,13 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, tpi_leaf->itype_opl);
-    
+
     //////////////////////////
     //- build basic type
     //
     {
       RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
-      
+
       RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
       RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
       RDI_TypeKind int_type        = rdim_int_type_from_data_model(data_model);
@@ -2903,7 +2904,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       RDI_TypeKind long_long_type  = rdim_long_long_type_from_data_model(data_model);
       RDI_TypeKind ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
       RDI_TypeKind ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
-      
+
       struct
       {
         char *       name;
@@ -2958,7 +2959,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     , 1, 1, 1 }, // always UTF-32
         { "__pointer"            , ptr_type                , CV_BasicType_PTR        , 0, 0, 0 }
       };
-      
+
       for(U64 i = 0; i < ArrayCount(table); i += 1)
       {
         U64 builtin_size;
@@ -2970,14 +2971,14 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         {
           builtin_size = rdi_size_from_basic_type_kind(table[i].kind_rdi);
         }
-        
+
         RDIM_Type *builtin = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
         builtin->kind      = table[i].kind_rdi;
         builtin->name      = str8_cstring(table[i].name);
         builtin->byte_size = builtin_size;
-        
+
         itype_type_ptrs[table[i].kind_cv] = builtin;
-        
+
         if(table[i].make_pointer_near)
         {
           CV_TypeIndex near_ptr_itype = table[i].kind_cv | 0x100;
@@ -2985,7 +2986,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           ptr_near->kind         = RDI_TypeKind_Ptr;
           ptr_near->byte_size    = 2;
           ptr_near->direct_type  = builtin;
-          
+
           itype_type_ptrs[near_ptr_itype] = ptr_near;
         }
         if(table[i].make_pointer_32)
@@ -2995,7 +2996,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           ptr_32->kind         = RDI_TypeKind_Ptr;
           ptr_32->byte_size    = 4;
           ptr_32->direct_type  = builtin;
-          
+
           itype_type_ptrs[ptr_32_itype] = ptr_32;
         }
         if(table[i].make_pointer_64)
@@ -3005,12 +3006,12 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           ptr_64->kind         = RDI_TypeKind_Ptr;
           ptr_64->byte_size    = 8;
           ptr_64->direct_type  = builtin;
-          
+
           itype_type_ptrs[ptr_64_itype] = ptr_64;
         }
       }
     }
-    
+
     //////////////////////////
     //- rjf: build non-basic type
     //
@@ -3020,7 +3021,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       CV_RecRange *range              = &tpi_leaf->leaf_ranges.ranges[itype-tpi_leaf->itype_first];
       CV_LeafKind  kind               = range->hdr.kind;
       U64          header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-      
+
       if(range->off+range->hdr.size <= tpi_leaf->data.size &&
          range->off+2+header_struct_size <= tpi_leaf->data.size &&
          range->hdr.size >= 2)
@@ -3277,7 +3278,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
             {
               dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
             }
-            
+
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -3285,7 +3286,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
               U8 *unique_name_ptr = name_ptr + name.size + 1;
               dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
             }
-            
+
             dst_type->name      = name;
             dst_type->byte_size = safe_cast_u32(size_u64);
           }break;
@@ -3317,7 +3318,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
               dst_type->byte_size = (U32)size_u64;
               dst_type->name      = name;
             }
-            
+
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -3353,7 +3354,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
               dst_type->byte_size = (U32)size_u64;
               dst_type->name      = name;
             }
-            
+
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -3388,7 +3389,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
               dst_type->byte_size   = direct_type ? direct_type->byte_size : 0;
               dst_type->name        = name;
             }
-            
+
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -3571,13 +3572,13 @@ p2r_init(void)
 internal P2R_Bake2Serialize *
 p2r_bake(Arena *arena, P2R_Convert2Bake *in)
 {
-  RDIM_HelpState help_state           = {0};
-  help_state.arena                    = p2r_state->arena;
-  help_state.work_thread_arenas_count = p2r_state->work_thread_arenas_count;
-  help_state.work_thread_arenas       = p2r_state->work_thread_arenas;
-  
+  RDIM_LocalState local_state          = {0};
+  local_state.arena                    = p2r_state->arena;
+  local_state.work_thread_arenas_count = p2r_state->work_thread_arenas_count;
+  local_state.work_thread_arenas       = p2r_state->work_thread_arenas;
+
   P2R_Bake2Serialize *result = push_array(arena, P2R_Bake2Serialize, 1);
-  result->bake_results = rdim_bake(&help_state, &in->bake_params);
+  result->bake_results = rdim_bake(&local_state, &in->bake_params);
   return result;
 }
 

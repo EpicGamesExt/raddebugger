@@ -787,7 +787,7 @@ d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D
 }
 
 internal RDIM_BakeParams *
-d2r_convert(Arena *arena, RDIM_HelpState *help_state, RC_Context *in)
+d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -1799,7 +1799,7 @@ d2r_convert(Arena *arena, RDIM_HelpState *help_state, RC_Context *in)
 }
 
 internal RDIM_BakeResults
-d2r_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
+d2r_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
 {
   return rdim_bake(state, in_params);
 }

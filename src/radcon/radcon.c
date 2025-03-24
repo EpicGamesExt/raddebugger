@@ -362,12 +362,12 @@ rc_run(Arena *arena, RC_Context *rc)
   Temp scratch = scratch_begin(&arena, 1);
 
   ProfBegin("Convert");
-  RDIM_HelpState  *help_state   = rdim_help_init();
+  RDIM_LocalState *local_state  = rdim_local_init();
   RDIM_BakeParams *convert2bake = 0;
   switch (rc->driver) {
   case RC_Driver_Null: break;
-  case RC_Driver_Dwarf: convert2bake = d2r_convert(scratch.arena, help_state, rc); break;
-  case RC_Driver_Pdb:   convert2bake = p2r_convert(scratch.arena, help_state, rc); break;
+  case RC_Driver_Dwarf: convert2bake = d2r_convert(scratch.arena, local_state, rc); break;
+  case RC_Driver_Pdb:   convert2bake = p2r_convert(scratch.arena, local_state, rc); break;
   }
   ProfEnd();
 
@@ -376,7 +376,7 @@ rc_run(Arena *arena, RC_Context *rc)
   }
 
   ProfBegin("Bake");
-  RDIM_BakeResults bake2srlz = rdim_bake(help_state, convert2bake);
+  RDIM_BakeResults bake2srlz = rdim_bake(local_state, convert2bake);
   ProfEnd();
 
   ProfBegin("Serialize Bake");

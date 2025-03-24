@@ -56,7 +56,7 @@ internal D2R_User2Convert * d2r_user2convert_from_cmdln(Arena *arena, CmdLine *c
 // Top-Level Conversion Entry Point
 
 internal RDIM_BakeParams *            d2r_convert (Arena          *arena, D2R_User2Convert            *in);
-internal RDIM_BakeResults             d2r_bake    (RDIM_HelpState *state, RDIM_BakeParams             *in);
+internal RDIM_BakeResults             d2r_bake    (RDIM_LocalState *state, RDIM_BakeParams             *in);
 internal RDIM_SerializedSectionBundle d2r_compress(Arena          *arena, RDIM_SerializedSectionBundle in);
 
 ////////////////////////////////

@@ -1838,7 +1838,7 @@ d2r_convert(Arena *arena, D2R_User2Convert *in)
 }
 
 internal RDIM_BakeResults
-d2r_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
+d2r_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
 {
   return rdim_bake(state, in_params);
 }

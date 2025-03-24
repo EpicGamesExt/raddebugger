@@ -30,7 +30,7 @@ typedef struct D2R_CompUnitContribMap
 
 ////////////////////////////////
 
-internal RDIM_BakeParams * d2r_convert(Arena *arena, RDIM_HelpState *help_state, RC_Context *in);
+internal RDIM_BakeParams * d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in);
 
 ////////////////////////////////
 

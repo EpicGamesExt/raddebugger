@@ -6,7 +6,7 @@
 //
 // (search for != 0 instances, inserted to prevent prior crashes)
 
-global RDIM_HelpState *g_p2r_help_state = 0;
+global RDIM_LocalState *g_p2r_local_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -116,7 +116,7 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 ASYNC_WORK_DEF(p2r_exe_hash_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_EXEHashIn *in = (P2R_EXEHashIn *)input;
   U64 *out = push_array(arena, U64, 1);
   ProfScope("hash exe") *out = rdi_hash(in->exe_data.str, in->exe_data.size);
@@ -127,7 +127,7 @@ ASYNC_WORK_DEF(p2r_exe_hash_work)
 ASYNC_WORK_DEF(p2r_tpi_hash_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_TPIHashParseIn *in = (P2R_TPIHashParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi hash") out = pdb_tpi_hash_from_data(arena, in->strtbl, in->tpi, in->hash_data, in->aux_data);
@@ -138,7 +138,7 @@ ASYNC_WORK_DEF(p2r_tpi_hash_parse_work)
 ASYNC_WORK_DEF(p2r_tpi_leaf_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_TPILeafParseIn *in = (P2R_TPILeafParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi leaf") out = cv_leaf_from_data(arena, in->leaf_data, in->itype_first);
@@ -149,7 +149,7 @@ ASYNC_WORK_DEF(p2r_tpi_leaf_parse_work)
 ASYNC_WORK_DEF(p2r_symbol_stream_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)input;
   void *out = 0;
   ProfScope("parse symbol stream") out = cv_sym_from_data(arena, in->data, 4);
@@ -160,7 +160,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_parse_work)
 ASYNC_WORK_DEF(p2r_c13_stream_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)input;
   void *out = 0;
   ProfScope("parse c13 stream") out = cv_c13_parsed_from_data(arena, in->data, in->strtbl, in->coff_sections);
@@ -171,7 +171,7 @@ ASYNC_WORK_DEF(p2r_c13_stream_parse_work)
 ASYNC_WORK_DEF(p2r_comp_unit_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_CompUnitParseIn *in = (P2R_CompUnitParseIn *)input;
   void *out = 0;
   ProfScope("parse comp units") out = pdb_comp_unit_array_from_data(arena, in->data);
@@ -182,7 +182,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_parse_work)
 ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_CompUnitContributionsParseIn *in = (P2R_CompUnitContributionsParseIn *)input;
   void *out = 0;
   ProfScope("parse comp unit contributions") out = pdb_comp_unit_contribution_array_from_data(arena, in->data, in->coff_sections);
@@ -196,7 +196,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 ASYNC_WORK_DEF(p2r_units_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)input;
   P2R_UnitConvertOut *out = push_array(arena, P2R_UnitConvertOut, 1);
@@ -555,7 +555,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
 ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_LinkNameMapBuildIn *in = (P2R_LinkNameMapBuildIn *)input;
   CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
   CV_RecRange *rec_ranges_opl   = rec_ranges_first + in->sym->sym_ranges.count;
@@ -613,7 +613,7 @@ ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 ASYNC_WORK_DEF(p2r_udt_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)input;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[itype]) : 0)
   RDIM_UDTChunkList *udts = push_array(arena, RDIM_UDTChunkList, 1);
@@ -1250,7 +1250,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
 ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = g_p2r_help_state->work_thread_arenas[thread_idx];
+  Arena *arena = g_p2r_local_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)input;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[itype]) : 0)
@@ -2125,11 +2125,11 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
 //~ rjf: Top-Level Conversion Entry Point
 
 internal RDIM_BakeParams *
-p2r_convert(Arena *arena, RDIM_HelpState *help_state, RC_Context *in)
+p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  g_p2r_help_state = help_state;
+  g_p2r_local_state = local_state;
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse MSF structure
