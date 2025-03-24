@@ -582,11 +582,6 @@ d2r_transpile_expression(Arena *arena, U64 image_base, U64 address_size, RDI_Arc
   return loc;
 }
 
-internal RDIM_LocationSet
-d2r_convert_loclist(Arena *arena, RDIM_ScopeChunkList *scopes, U64 image_base, U64 address_size, RDI_Arch arch, DW_ListUnit *addr_lu, DW_LocList loclist)
-{
-}
-
 internal RDIM_Location *
 d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, RDI_Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
@@ -1796,19 +1791,6 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 
   scratch_end(scratch);
   return bake_params;
-}
-
-internal RDIM_BakeResults
-d2r_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
-{
-  return rdim_bake(state, in_params);
-}
-
-internal RDIM_SerializedSectionBundle
-d2r_compress(Arena *arena, RDIM_SerializedSectionBundle in)
-{
-  RDIM_SerializedSectionBundle result = {0};
-  return result;
 }
 
 internal RDI_Language
