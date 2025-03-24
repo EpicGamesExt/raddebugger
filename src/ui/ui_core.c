@@ -1289,9 +1289,31 @@ ui_end_build(void)
           !ui_box_is_nil(box);
           box = box->hash_next)
       {
-        if(box->flags & UI_BoxFlag_RoundChildrenByParent &&
-           !ui_box_is_nil(box->first) && !ui_box_is_nil(box->last))
+        if(box->flags & UI_BoxFlag_RoundChildrenByParent)
         {
+          for(UI_Box *b = box; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, box).next)
+          {
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_00] = box->corner_radii[Corner_00];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_10] = box->corner_radii[Corner_10];
+            }
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_01] = box->corner_radii[Corner_01];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_11] = box->corner_radii[Corner_11];
+            }
+          }
           box->first->corner_radii[Corner_00] = box->corner_radii[Corner_00];
           box->first->corner_radii[Corner_10] = box->corner_radii[Corner_10];
           box->last->corner_radii[Corner_01] = box->corner_radii[Corner_01];

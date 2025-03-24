@@ -1392,6 +1392,10 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             Temp scratch = scratch_begin(&arena, 1);
             E_Member member = result.eval.irtree.member;
             String8 member_name = member.name;
+            if(member_name.size == 0)
+            {
+              member_name = notable_expr->last->string;
+            }
             if(member.inheritance_key_chain.count != 0)
             {
               String8List strings = {0};

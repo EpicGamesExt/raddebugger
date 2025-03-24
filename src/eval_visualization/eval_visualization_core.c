@@ -485,7 +485,24 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
     {
       for(E_Expr *src_tag = block->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
       {
-        e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
+        B32 is_inherited = 0;
+        // TODO(rjf): table-drive this
+        if(str8_match(src_tag->string, str8_lit("hex"), 0) ||
+           str8_match(src_tag->string, str8_lit("oct"), 0) ||
+           str8_match(src_tag->string, str8_lit("bin"), 0) ||
+           str8_match(src_tag->string, str8_lit("dec"), 0) ||
+           str8_match(src_tag->string, str8_lit("no_addr"), 0) ||
+           str8_match(src_tag->string, str8_lit("digits"), 0) ||
+           str8_match(src_tag->string, str8_lit("no_string"), 0) ||
+           str8_match(src_tag->string, str8_lit("only"), 0) ||
+           str8_match(src_tag->string, str8_lit("omit"), 0))
+        {
+          is_inherited = 1;
+        }
+        if(is_inherited)
+        {
+          e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
+        }
       }
     }
     

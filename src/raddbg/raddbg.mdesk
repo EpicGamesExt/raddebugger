@@ -109,6 +109,8 @@ RD_VocabTable:
   {show_line_numbers    ""                          "Show Line Numbers"         ""                    Null                                           }
   {syntax               syntaxes                    "Syntax"                    "Syntaxes"            Null                                           }
   {num_columns          ""                          "Number of Columns"         ""                    Null                                           }
+  {bitmap               _                           "Bitmap"                    _                     Bitmap                                         }
+  {geo3d                ""                          "Geometry (3D)"             ""                    Cube                                           }
 }
 
 @struct RD_VocabInfo:
@@ -178,13 +180,13 @@ RD_VocabTable:
       x:
     {
       'arch':              arch,
+      'syntax':            dasm_syntax,
       'size':              code_string,
       @default(1) 'show_addresses':    bool,
       @default(0) 'show_code_bytes':   bool,
       @default(1) 'show_source_lines': bool,
       @default(1) 'show_symbol_names': bool,
       @default(1) 'show_line_numbers': bool,
-      'syntax':            dasm_syntax,
     }
     ```
   }
@@ -947,6 +949,7 @@ RD_IconTable:
   (RadioFilled              "o")
   (CheckHollow              "!")
   (CheckFilled              "1")
+  (Check                    "V")
   (LeftCaret                "<")
   (RightCaret               ">")
   (UpCaret                  "^")
@@ -987,7 +990,11 @@ RD_IconTable:
   (QuestionMark             "?")
   (Person                   "4")
   (Briefcase                "5")
-  (Dot                      "c")
+  (Dot                      "6")
+  (Bitmap                   "&")
+  (Cube                     "*")
+  (WindowRestore            "(")
+  (WindowMinimize           ")")
 }
 
 @enum RD_IconKind:

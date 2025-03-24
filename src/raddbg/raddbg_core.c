@@ -7654,11 +7654,13 @@ rd_window_frame(void)
           // rjf: build top-level container box
           UI_Box *container = &ui_nil_box;
           UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.1f-0.1f*open_t) UI_Transparency(1.f-open_t)
+            UI_CornerRadius(ui_top_font_size()*0.25f)
           {
             container = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                   UI_BoxFlag_DrawBorder|
                                                   UI_BoxFlag_DrawBackground|
                                                   UI_BoxFlag_DrawBackgroundBlur|
+                                                  UI_BoxFlag_RoundChildrenByParent|
                                                   UI_BoxFlag_DisableFocusOverlay|
                                                   UI_BoxFlag_DrawDropShadow|
                                                   (UI_BoxFlag_SquishAnchored*!!is_anchored),
@@ -7809,394 +7811,400 @@ rd_window_frame(void)
         MemoryZeroArray(ui_top_parent()->parent->corner_radii);
         
         //- rjf: left column
-        ui_set_next_flags(UI_BoxFlag_Clip|UI_BoxFlag_ViewScrollX|UI_BoxFlag_ViewClamp);
-        UI_WidthFill UI_NamedRow(str8_lit("###menu_bar"))
         {
-          //- rjf: icon
-          UI_Padding(ui_em(0.5f, 1.f))
+          ui_set_next_flags(UI_BoxFlag_Clip|UI_BoxFlag_ViewScrollX|UI_BoxFlag_ViewClamp);
+          UI_WidthFill UI_NamedRow(str8_lit("###menu_bar"))
           {
-            UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y - ui_top_font_size()*0.8f, 1.f))
-              UI_Column
-              UI_Padding(ui_em(0.4f, 1.f))
-              UI_HeightFill
+            //- rjf: icon
+            UI_Padding(ui_em(0.5f, 1.f))
             {
-              R_Handle texture = rd_state->icon_texture;
-              Vec2S32 texture_dim = r_size_from_tex2d(texture);
-              ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
-            }
-          }
-          
-          //- rjf: menu items
-          ui_set_next_flags(UI_BoxFlag_DrawBackground);
-          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(20, 1)) UI_GroupKey(menu_bar_group_key)
-          {
-            // rjf: file menu
-            UI_Key file_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_file_menu_key_"));
-            UI_CtxMenu(file_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[RD_CmdKind_Open].string,
-                rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
-                rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
-                rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
-              };
-              U32 codepoints[] =
-              {
-                'o',
-                'u',
-                'p',
-                'r',
-                'x',
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-            }
-            
-            // rjf: window menu
-            UI_Key window_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_window_menu_key_"));
-            UI_CtxMenu(window_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[RD_CmdKind_OpenWindow].string,
-                rd_cmd_kind_info_table[RD_CmdKind_CloseWindow].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ToggleFullscreen].string,
-              };
-              U32 codepoints[] =
-              {
-                'w',
-                'c',
-                'f',
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-            }
-            
-            // rjf: panel menu
-            UI_Key panel_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_panel_menu_key_"));
-            UI_CtxMenu(panel_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[RD_CmdKind_NewPanelUp].string,
-                rd_cmd_kind_info_table[RD_CmdKind_NewPanelDown].string,
-                rd_cmd_kind_info_table[RD_CmdKind_NewPanelRight].string,
-                rd_cmd_kind_info_table[RD_CmdKind_NewPanelLeft].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ClosePanel].string,
-                rd_cmd_kind_info_table[RD_CmdKind_RotatePanelColumns].string,
-                rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
-                rd_cmd_kind_info_table[RD_CmdKind_PrevPanel].string,
-                rd_cmd_kind_info_table[RD_CmdKind_CloseTab].string,
-                rd_cmd_kind_info_table[RD_CmdKind_NextTab].string,
-                rd_cmd_kind_info_table[RD_CmdKind_PrevTab].string,
-                rd_cmd_kind_info_table[RD_CmdKind_TabBarTop].string,
-                rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ResetToDefaultPanels].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ResetToCompactPanels].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ResetToSimplePanels].string,
-              };
-              U32 codepoints[] =
-              {
-                'u',
-                'd',
-                'r',
-                'l',
-                'x',
-                'c',
-                'n',
-                'p',
-                't',
-                'b',
-                'v',
-                0,
-                0,
-                0,
-                0,
-                0,
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-            }
-            
-            // rjf: view menu
-            UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-            UI_CtxMenu(view_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[RD_CmdKind_Targets].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Scheduler].string,
-                rd_cmd_kind_info_table[RD_CmdKind_CallStack].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Modules].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Output].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Memory].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Disassembly].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Watch].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Locals].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Registers].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Globals].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ThreadLocals].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Types].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Procedures].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Breakpoints].string,
-                rd_cmd_kind_info_table[RD_CmdKind_WatchPins].string,
-                rd_cmd_kind_info_table[RD_CmdKind_FilePathMap].string,
-                rd_cmd_kind_info_table[RD_CmdKind_AutoViewRules].string,
-                rd_cmd_kind_info_table[RD_CmdKind_Settings].string,
-                rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
-              };
-              U32 codepoints[] =
-              {
-                't',
-                's',
-                'k',
-                'd',
-                'o',
-                'm',
-                'y',
-                'w',
-                'l',
-                'r',
-                0,
-                0,
-                0,
-                0,
-                'b',
-                'h',
-                'p',
-                'v',
-                'g',
-                0,
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-            }
-            
-            // rjf: targets menu
-            UI_Key targets_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_targets_menu_key_"));
-            UI_CtxMenu(targets_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              Temp scratch = scratch_begin(0, 0);
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string,
-                rd_cmd_kind_info_table[RD_CmdKind_LaunchAndRun].string,
-                rd_cmd_kind_info_table[RD_CmdKind_LaunchAndStepInto].string,
-              };
-              U32 codepoints[] =
-              {
-                'a',
-                'r',
-                's',
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-              scratch_end(scratch);
-            }
-            
-            // rjf: ctrl menu
-            UI_Key ctrl_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_ctrl_menu_key_"));
-            UI_CtxMenu(ctrl_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              String8 cmds[] =
-              {
-                rd_cmd_kind_info_table[D_CmdKind_Run].string,
-                rd_cmd_kind_info_table[D_CmdKind_KillAll].string,
-                rd_cmd_kind_info_table[D_CmdKind_Restart].string,
-                rd_cmd_kind_info_table[D_CmdKind_Halt].string,
-                rd_cmd_kind_info_table[D_CmdKind_StepInto].string,
-                rd_cmd_kind_info_table[D_CmdKind_StepOver].string,
-                rd_cmd_kind_info_table[D_CmdKind_StepOut].string,
-                rd_cmd_kind_info_table[D_CmdKind_Attach].string,
-              };
-              U32 codepoints[] =
-              {
-                'r',
-                'k',
-                's',
-                'h',
-                'i',
-                'o',
-                't',
-                'a',
-              };
-              Assert(ArrayCount(codepoints) == ArrayCount(cmds));
-              rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-            }
-            
-            // rjf: help menu
-            UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
-            UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
-            {
-              UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TagF("weak")
-                ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
-              ui_spacer(ui_em(1.f, 1.f));
-              UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1, 0))
+              UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y - ui_top_font_size()*0.8f, 1.f))
+                UI_Column
+                UI_Padding(ui_em(0.4f, 1.f))
+                UI_HeightFill
               {
                 R_Handle texture = rd_state->icon_texture;
                 Vec2S32 texture_dim = r_size_from_tex2d(texture);
-                UI_PrefWidth(ui_px(ui_top_font_size()*10.f, 1.f))
-                  UI_PrefHeight(ui_px(ui_top_font_size()*10.f, 1.f))
-                  ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+                ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
               }
-              ui_spacer(ui_em(1.f, 1.f));
-              UI_Row
-                UI_PrefWidth(ui_text_dim(10, 1))
-                UI_TextAlignment(UI_TextAlign_Center)
-                UI_Padding(ui_pct(1, 0))
-              {
-                ui_labelf("Search for commands and options by pressing ");
-                UI_Flags(UI_BoxFlag_DrawBorder)
-                  UI_TextAlignment(UI_TextAlign_Center)
-                  rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
-              }
-              ui_spacer(ui_em(1.f, 1.f));
-              UI_TagF("pop")
-                UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(10, 1))
-                UI_CornerRadius(ui_top_font_size()*0.5f)
-              {
-                String8 url = str8_lit("https://github.com/EpicGamesExt/raddebugger/issues");
-                UI_Signal sig = ui_button(str8_lit("Submit Request, Issue, or Bug Report"));
-                if(ui_clicked(sig))
-                {
-                  os_open_in_browser(url);
-                }
-              }
-              ui_spacer(ui_em(0.5f, 1.f));
             }
             
-            // rjf: buttons
-            UI_TextAlignment(UI_TextAlign_Center) UI_HeightFill
+            //- rjf: menu items
+            if(dim_2f32(top_bar_rect).x > ui_top_font_size()*60)
             {
-              // rjf: set up table
-              struct
+              ui_set_next_flags(UI_BoxFlag_DrawBackground);
+              UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(20, 1)) UI_GroupKey(menu_bar_group_key)
               {
-                String8 name;
-                U32 codepoint;
-                OS_Key key;
-                UI_Key menu_key;
+                // rjf: file menu
+                UI_Key file_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_file_menu_key_"));
+                UI_CtxMenu(file_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[RD_CmdKind_Open].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    'o',
+                    'u',
+                    'p',
+                    'r',
+                    'x',
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                }
+                
+                // rjf: window menu
+                UI_Key window_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_window_menu_key_"));
+                UI_CtxMenu(window_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenWindow].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_CloseWindow].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ToggleFullscreen].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    'w',
+                    'c',
+                    'f',
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                }
+                
+                // rjf: panel menu
+                UI_Key panel_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_panel_menu_key_"));
+                UI_CtxMenu(panel_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[RD_CmdKind_NewPanelUp].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NewPanelDown].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NewPanelRight].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NewPanelLeft].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ClosePanel].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_RotatePanelColumns].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_PrevPanel].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_CloseTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NextTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_PrevTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_TabBarTop].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ResetToDefaultPanels].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ResetToCompactPanels].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ResetToSimplePanels].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    'u',
+                    'd',
+                    'r',
+                    'l',
+                    'x',
+                    'c',
+                    'n',
+                    'p',
+                    't',
+                    'b',
+                    'v',
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                }
+                
+                // rjf: view menu
+                UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
+                UI_CtxMenu(view_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[RD_CmdKind_Targets].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Scheduler].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_CallStack].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Modules].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Output].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Memory].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Disassembly].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Watch].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Locals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Registers].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Globals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ThreadLocals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Types].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Procedures].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Breakpoints].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_WatchPins].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_FilePathMap].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_AutoViewRules].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_Settings].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    't',
+                    's',
+                    'k',
+                    'd',
+                    'o',
+                    'm',
+                    'y',
+                    'w',
+                    'l',
+                    'r',
+                    0,
+                    0,
+                    0,
+                    0,
+                    'b',
+                    'h',
+                    'p',
+                    'v',
+                    'g',
+                    0,
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                }
+                
+                // rjf: targets menu
+                UI_Key targets_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_targets_menu_key_"));
+                UI_CtxMenu(targets_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  Temp scratch = scratch_begin(0, 0);
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_LaunchAndRun].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_LaunchAndStepInto].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    'a',
+                    'r',
+                    's',
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                  scratch_end(scratch);
+                }
+                
+                // rjf: ctrl menu
+                UI_Key ctrl_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_ctrl_menu_key_"));
+                UI_CtxMenu(ctrl_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  String8 cmds[] =
+                  {
+                    rd_cmd_kind_info_table[D_CmdKind_Run].string,
+                    rd_cmd_kind_info_table[D_CmdKind_KillAll].string,
+                    rd_cmd_kind_info_table[D_CmdKind_Restart].string,
+                    rd_cmd_kind_info_table[D_CmdKind_Halt].string,
+                    rd_cmd_kind_info_table[D_CmdKind_StepInto].string,
+                    rd_cmd_kind_info_table[D_CmdKind_StepOver].string,
+                    rd_cmd_kind_info_table[D_CmdKind_StepOut].string,
+                    rd_cmd_kind_info_table[D_CmdKind_Attach].string,
+                  };
+                  U32 codepoints[] =
+                  {
+                    'r',
+                    'k',
+                    's',
+                    'h',
+                    'i',
+                    'o',
+                    't',
+                    'a',
+                  };
+                  Assert(ArrayCount(codepoints) == ArrayCount(cmds));
+                  rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
+                }
+                
+                // rjf: help menu
+                UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
+                UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                {
+                  UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TagF("weak")
+                    ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+                  ui_spacer(ui_em(1.f, 1.f));
+                  UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1, 0))
+                  {
+                    R_Handle texture = rd_state->icon_texture;
+                    Vec2S32 texture_dim = r_size_from_tex2d(texture);
+                    UI_PrefWidth(ui_px(ui_top_font_size()*10.f, 1.f))
+                      UI_PrefHeight(ui_px(ui_top_font_size()*10.f, 1.f))
+                      ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+                  }
+                  ui_spacer(ui_em(1.f, 1.f));
+                  UI_Row
+                    UI_PrefWidth(ui_text_dim(10, 1))
+                    UI_TextAlignment(UI_TextAlign_Center)
+                    UI_Padding(ui_pct(1, 0))
+                  {
+                    ui_labelf("Search for commands and options by pressing ");
+                    UI_Flags(UI_BoxFlag_DrawBorder)
+                      UI_TextAlignment(UI_TextAlign_Center)
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
+                  }
+                  ui_spacer(ui_em(1.f, 1.f));
+                  UI_TagF("pop")
+                    UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(10, 1))
+                    UI_CornerRadius(ui_top_font_size()*0.5f)
+                  {
+                    String8 url = str8_lit("https://github.com/EpicGamesExt/raddebugger/issues");
+                    UI_Signal sig = ui_button(str8_lit("Submit Request, Issue, or Bug Report"));
+                    if(ui_clicked(sig))
+                    {
+                      os_open_in_browser(url);
+                    }
+                  }
+                  ui_spacer(ui_em(0.5f, 1.f));
+                }
+                
+                // rjf: buttons
+                UI_TextAlignment(UI_TextAlign_Center) UI_HeightFill
+                {
+                  // rjf: set up table
+                  struct
+                  {
+                    String8 name;
+                    U32 codepoint;
+                    OS_Key key;
+                    UI_Key menu_key;
+                  }
+                  items[] =
+                  {
+                    {str8_lit("File"),     'f', OS_Key_F, file_menu_key},
+                    {str8_lit("Window"),   'w', OS_Key_W, window_menu_key},
+                    {str8_lit("Panel"),    'p', OS_Key_P, panel_menu_key},
+                    {str8_lit("View"),     'v', OS_Key_V, view_menu_key},
+                    {str8_lit("Targets"),  't', OS_Key_T, targets_menu_key},
+                    {str8_lit("Control"),  'c', OS_Key_C, ctrl_menu_key},
+                    {str8_lit("Help"),     'h', OS_Key_H, help_menu_key},
+                  };
+                  
+                  // rjf: determine if one of the menus is already open
+                  B32 menu_open = 0;
+                  U64 open_menu_idx = 0;
+                  for(U64 idx = 0; idx < ArrayCount(items); idx += 1)
+                  {
+                    if(ui_ctx_menu_is_open(items[idx].menu_key))
+                    {
+                      menu_open = 1;
+                      open_menu_idx = idx;
+                      break;
+                    }
+                  }
+                  
+                  // rjf: navigate between menus
+                  U64 open_menu_idx_prime = open_menu_idx;
+                  if(menu_open && ws->menu_bar_focused && window_is_focused)
+                  {
+                    for(UI_Event *evt = 0; ui_next_event(&evt);)
+                    {
+                      B32 taken = 0;
+                      if(evt->delta_2s32.x > 0)
+                      {
+                        taken = 1;
+                        open_menu_idx_prime += 1;
+                        open_menu_idx_prime = open_menu_idx_prime%ArrayCount(items);
+                      }
+                      if(evt->delta_2s32.x < 0)
+                      {
+                        taken = 1;
+                        open_menu_idx_prime = open_menu_idx_prime > 0 ? open_menu_idx_prime-1 : (ArrayCount(items)-1);
+                      }
+                      if(taken)
+                      {
+                        ui_eat_event(evt);
+                      }
+                    }
+                  }
+                  
+                  // rjf: make ui
+                  for(U64 idx = 0; idx < ArrayCount(items); idx += 1)
+                  {
+                    ui_set_next_fastpath_codepoint(items[idx].codepoint);
+                    B32 alt_fastpath_key = 0;
+                    if(ui_key_press(OS_Modifier_Alt, items[idx].key))
+                    {
+                      alt_fastpath_key = 1;
+                    }
+                    if((ws->menu_bar_key_held || ws->menu_bar_focused) && !ui_any_ctx_menu_is_open())
+                    {
+                      ui_set_next_flags(UI_BoxFlag_DrawTextFastpathCodepoint);
+                    }
+                    UI_Signal sig = rd_menu_bar_button(items[idx].name);
+                    os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+                    if(menu_open)
+                    {
+                      if((ui_hovering(sig) && !ui_ctx_menu_is_open(items[idx].menu_key)) || (open_menu_idx_prime == idx && open_menu_idx_prime != open_menu_idx))
+                      {
+                        ui_ctx_menu_open(items[idx].menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
+                      }
+                    }
+                    else if(ui_pressed(sig) || alt_fastpath_key)
+                    {
+                      if(ui_ctx_menu_is_open(items[idx].menu_key))
+                      {
+                        ui_ctx_menu_close();
+                      }
+                      else
+                      {
+                        ui_ctx_menu_open(items[idx].menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
+                      }
+                    }
+                  }
+                }
               }
-              items[] =
-              {
-                {str8_lit("File"),     'f', OS_Key_F, file_menu_key},
-                {str8_lit("Window"),   'w', OS_Key_W, window_menu_key},
-                {str8_lit("Panel"),    'p', OS_Key_P, panel_menu_key},
-                {str8_lit("View"),     'v', OS_Key_V, view_menu_key},
-                {str8_lit("Targets"),  't', OS_Key_T, targets_menu_key},
-                {str8_lit("Control"),  'c', OS_Key_C, ctrl_menu_key},
-                {str8_lit("Help"),     'h', OS_Key_H, help_menu_key},
-              };
               
-              // rjf: determine if one of the menus is already open
-              B32 menu_open = 0;
-              U64 open_menu_idx = 0;
-              for(U64 idx = 0; idx < ArrayCount(items); idx += 1)
-              {
-                if(ui_ctx_menu_is_open(items[idx].menu_key))
-                {
-                  menu_open = 1;
-                  open_menu_idx = idx;
-                  break;
-                }
-              }
+              ui_spacer(ui_em(0.75f, 1));
               
-              // rjf: navigate between menus
-              U64 open_menu_idx_prime = open_menu_idx;
-              if(menu_open && ws->menu_bar_focused && window_is_focused)
+              // rjf: conversion task visualization
+              UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill UI_TagF("pop")
               {
-                for(UI_Event *evt = 0; ui_next_event(&evt);)
+                Temp scratch = scratch_begin(0, 0);
+                RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
+                for(RD_CfgNode *n = tasks.first; n != 0; n = n->next)
                 {
-                  B32 taken = 0;
-                  if(evt->delta_2s32.x > 0)
+                  RD_Cfg *task = n->v;
+                  F32 task_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "task_anim_%I64u", task->id), 1.f);
+                  if(task_t > 0.5f)
                   {
-                    taken = 1;
-                    open_menu_idx_prime += 1;
-                    open_menu_idx_prime = open_menu_idx_prime%ArrayCount(items);
-                  }
-                  if(evt->delta_2s32.x < 0)
-                  {
-                    taken = 1;
-                    open_menu_idx_prime = open_menu_idx_prime > 0 ? open_menu_idx_prime-1 : (ArrayCount(items)-1);
-                  }
-                  if(taken)
-                  {
-                    ui_eat_event(evt);
+                    String8 rdi_path = task->first->string;
+                    String8 rdi_name = str8_skip_last_slash(rdi_path);
+                    String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
+                    UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
+                    UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
+                    os_window_push_custom_title_bar_client_area(ws->os, box->rect);
+                    UI_Signal sig = ui_signal_from_box(box);
+                    if(ui_hovering(sig)) UI_Tooltip
+                    {
+                      ui_label(rdi_path);
+                    }
+                    ui_box_equip_display_string(box, task_text);
                   }
                 }
-              }
-              
-              // rjf: make ui
-              for(U64 idx = 0; idx < ArrayCount(items); idx += 1)
-              {
-                ui_set_next_fastpath_codepoint(items[idx].codepoint);
-                B32 alt_fastpath_key = 0;
-                if(ui_key_press(OS_Modifier_Alt, items[idx].key))
-                {
-                  alt_fastpath_key = 1;
-                }
-                if((ws->menu_bar_key_held || ws->menu_bar_focused) && !ui_any_ctx_menu_is_open())
-                {
-                  ui_set_next_flags(UI_BoxFlag_DrawTextFastpathCodepoint);
-                }
-                UI_Signal sig = rd_menu_bar_button(items[idx].name);
-                os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-                if(menu_open)
-                {
-                  if((ui_hovering(sig) && !ui_ctx_menu_is_open(items[idx].menu_key)) || (open_menu_idx_prime == idx && open_menu_idx_prime != open_menu_idx))
-                  {
-                    ui_ctx_menu_open(items[idx].menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
-                  }
-                }
-                else if(ui_pressed(sig) || alt_fastpath_key)
-                {
-                  if(ui_ctx_menu_is_open(items[idx].menu_key))
-                  {
-                    ui_ctx_menu_close();
-                  }
-                  else
-                  {
-                    ui_ctx_menu_open(items[idx].menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
-                  }
-                }
+                scratch_end(scratch);
               }
             }
-          }
-          
-          ui_spacer(ui_em(0.75f, 1));
-          
-          // rjf: conversion task visualization
-          UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill UI_TagF("pop")
-          {
-            Temp scratch = scratch_begin(0, 0);
-            RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
-            for(RD_CfgNode *n = tasks.first; n != 0; n = n->next)
-            {
-              RD_Cfg *task = n->v;
-              F32 task_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "task_anim_%I64u", task->id), 1.f);
-              if(task_t > 0.5f)
-              {
-                String8 rdi_path = task->first->string;
-                String8 rdi_name = str8_skip_last_slash(rdi_path);
-                String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
-                UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
-                UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
-                os_window_push_custom_title_bar_client_area(ws->os, box->rect);
-                UI_Signal sig = ui_signal_from_box(box);
-                if(ui_hovering(sig)) UI_Tooltip
-                {
-                  ui_label(rdi_path);
-                }
-                ui_box_equip_display_string(box, task_text);
-              }
-            }
-            scratch_end(scratch);
           }
         }
         
         //- rjf: center column
-        UI_PrefWidth(ui_children_sum(1.f)) UI_Row
+        if(dim_2f32(top_bar_rect).x > ui_top_font_size()*60)
+          UI_PrefWidth(ui_children_sum(1.f)) UI_Row
           UI_PrefWidth(ui_em(2.5f, 1))
           RD_Font(RD_FontSlot_Icons)
           UI_FontSize(ui_top_font_size()*0.85f)
@@ -8525,9 +8533,10 @@ rd_window_frame(void)
             Vec2F32 bar_dim = dim_2f32(top_bar_rect);
             F32 button_dim = floor_f32(bar_dim.y);
             UI_PrefWidth(ui_px(button_dim, 1.f))
+              UI_FontSize(ui_top_font_size()*0.75f)
             {
-              min_sig = rd_icon_buttonf(RD_IconKind_Minus,  0, "##minimize");
-              max_sig = rd_icon_buttonf(RD_IconKind_Window, 0, "##maximize");
+              min_sig = rd_icon_buttonf(RD_IconKind_WindowMinimize,  0, "##minimize");
+              max_sig = rd_icon_buttonf(os_window_is_maximized(ws->os) ? RD_IconKind_WindowRestore : RD_IconKind_Window, 0, "##maximize");
             }
             UI_PrefWidth(ui_px(button_dim, 1.f))
               UI_TagF("bad_pop")
@@ -9324,7 +9333,7 @@ rd_window_frame(void)
             //- rjf: build tab view
             UI_Parent(view_container_box) if(selected_tab != &rd_nil_cfg) ProfScope("build tab view")
             {
-              rd_view_ui(pad_2f32(content_rect, -1.f));
+              rd_view_ui(content_rect);
             }
             
             //- rjf: pop interaction registers; commit if this is the selected view
@@ -13411,13 +13420,13 @@ rd_frame(void)
       }
       schema_type_name_key_map[] =
       {
-        { str8_lit("bool"), bool_type_key },
-        { str8_lit("u64"), u64_type_key },
+        { str8_lit("bool"),        bool_type_key },
+        { str8_lit("u64"),         u64_type_key },
         { str8_lit("vaddr_range"), vaddr_range_type_key },
         { str8_lit("code_string"), code_string_type_key },
-        { str8_lit("path"), path_type_key },
-        { str8_lit("string"), string_type_key },
-        { str8_lit("path_pt"), path_pt_type_key },
+        { str8_lit("path"),        path_type_key },
+        { str8_lit("string"),      string_type_key },
+        { str8_lit("path_pt"),     path_pt_type_key },
       };
       E_TypeKey evallable_meta_types[ArrayCount(rd_name_schema_info_table)] = {0};
       for EachElement(idx, rd_name_schema_info_table)
@@ -16063,9 +16072,9 @@ Z(getting_started)
             }
             
             // rjf: build query state
+            String8 current_query_cmd_name = cmd->first->string;
             rd_cfg_new_replace(input, initial_input);
             rd_cfg_new_replace(cmd, cmd_name);
-            String8 current_query_cmd_name = cmd->first->string;
             RD_ViewState *vs = rd_view_state_from_cfg(view);
             if(cmd_name.size != 0)
             {
@@ -16174,7 +16183,7 @@ Z(getting_started)
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
             RD_Cfg *disabled = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("disabled"));
-            rd_cfg_new(disabled, str8_lit("1"));
+            rd_cfg_new_replace(disabled, str8_lit("1"));
           }break;
           case RD_CmdKind_RemoveCfg:
           {
