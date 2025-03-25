@@ -9796,11 +9796,18 @@ rd_window_frame(void)
                                                                   rd_icon_kind_text_table[RD_IconKind_Add],
                                                                   panel->cfg);
                   UI_Signal sig = ui_signal_from_box(add_new_box);
-                  if(ui_clicked(sig))
+                  if(ui_pressed(sig))
                   {
                     rd_cmd(RD_CmdKind_FocusPanel);
                     UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-                    ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                    if(ui_ctx_menu_is_open(view_menu_key))
+                    {
+                      ui_ctx_menu_close();
+                    }
+                    else
+                    {
+                      ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                    }
                   }
                 }
               }
