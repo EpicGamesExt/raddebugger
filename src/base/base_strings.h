@@ -223,6 +223,7 @@ internal String8 str8_skip(String8 str, U64 amt);
 internal String8 str8_postfix(String8 str, U64 size);
 internal String8 str8_chop(String8 str, U64 amt);
 internal String8 str8_skip_chop_whitespace(String8 string);
+internal String8 str8_skip_chop_slashes(String8 string);
 
 ////////////////////////////////
 //~ rjf: String Formatting & Copying
@@ -287,6 +288,7 @@ internal void         str8_list_from_flags(Arena *arena, String8List *list, U32 
 ////////////////////////////////
 //~ rjf; String Arrays
 
+internal String8Array str8_array_zero(void);
 internal String8Array str8_array_from_list(Arena *arena, String8List *list);
 internal String8Array str8_array_reserve(Arena *arena, U64 count);
 

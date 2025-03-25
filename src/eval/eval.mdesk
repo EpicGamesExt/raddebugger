@@ -71,7 +71,7 @@ E_TypeKindTable:
   {IncompleteEnum            "enum"                0    }
   {Bitfield                  "bitfield"            0    }
   {Variadic                  "variadic"            0    }
-  {Collection                "collection"          0    }
+  {Set                       "set"                 0    }
 }
 
 @table(name  op_kind  precedence  string  op_pre  op_sep  op_pos)
@@ -116,6 +116,8 @@ E_ExprKindTable:
   
   { Ternary              Null                0        "? "                ""        "?"       ":"}
   
+  { Call                 Null                0        "()"                "("       ","       ")"}
+  
   { LeafBytecode         Null                0        "bytecode"          ""        ""        "" }
   { LeafMember           Null                0        "member"            ""        ""        "" }
   { LeafStringLiteral    Null                0        "string_literal"    ""        ""        "" }
@@ -125,6 +127,7 @@ E_ExprKindTable:
   { LeafF32              Null                0        "F32"               ""        ""        "" }
   { LeafIdent            Null                0        "leaf_ident"        ""        ""        "" }
   { LeafOffset           Null                0        "leaf_offset"       ""        ""        "" }
+  { LeafValue            Null                0        "leaf_value"        ""        ""        "" }
   { LeafFilePath         Null                0        "leaf_filepath"     ""        ""        "" }
   
   { TypeIdent            Null                0        "type_ident"        ""        ""        "" }
@@ -133,6 +136,8 @@ E_ExprKindTable:
   { Func                 Null                0        "function"          ""        ""        "" }
   
   { Define               Binary              13       "="                 ""        "="       "" }
+  
+  { Tag                  Null                0        "=>"                "=>"      ","       "" }
 }
 
 @table(name display_string)

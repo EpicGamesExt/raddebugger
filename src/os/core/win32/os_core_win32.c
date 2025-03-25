@@ -503,6 +503,17 @@ os_copy_file_path(String8 dst, String8 src)
   return result;
 }
 
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 dst16 = str16_from_8(scratch.arena, dst);
+  String16 src16 = str16_from_8(scratch.arena, src);
+  B32 result = MoveFileW((WCHAR*)src16.str, (WCHAR*)dst16.str);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
@@ -559,6 +570,28 @@ os_properties_from_file_path(String8 path)
     os_w32_dense_time_from_file_time(&props.created, &find_data.ftCreationTime);
     os_w32_dense_time_from_file_time(&props.modified, &find_data.ftLastWriteTime);
     props.flags = os_w32_file_property_flags_from_dwFileAttributes(find_data.dwFileAttributes);
+  }
+  else
+  {
+    Temp scratch = scratch_begin(0, 0);
+    WCHAR buffer[512] = {0};
+    DWORD length = GetLogicalDriveStringsW(sizeof(buffer), buffer);
+    U64 last_slash_pos = 0;
+    for(;last_slash_pos < path.size; last_slash_pos = str8_find_needle(path, last_slash_pos+1, str8_lit("/"), StringMatchFlag_SlashInsensitive));
+    String8 path_trimmed = str8_prefix(path, last_slash_pos);
+    for(U64 off = 0; off < (U64)length;)
+    {
+      String16 next_drive_string_16 = str16_cstring((U16 *)buffer+off);
+      off += next_drive_string_16.size+1;
+      String8 next_drive_string = str8_from_16(scratch.arena, next_drive_string_16);
+      next_drive_string = str8_chop_last_slash(next_drive_string);
+      if(str8_match(path_trimmed, next_drive_string, StringMatchFlag_CaseInsensitive))
+      {
+        props.flags |= FilePropertyFlag_IsFolder;
+        break;
+      }
+    }
+    scratch_end(scratch);
   }
   FindClose(handle);
   scratch_end(scratch);

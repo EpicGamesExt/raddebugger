@@ -1,26 +1,43 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+global U64 global_update_tick_idx = 0;
+
 internal void
-main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **arguments, U64 arguments_count)
+main_thread_base_entry_point(int arguments_count, char **arguments)
 {
+  Temp scratch = scratch_begin(0, 0);
+  ThreadNameF("[main thread]");
+  
+  //- rjf: set up telemetry
 #if PROFILE_TELEMETRY
-  local_persist U8 tm_data[MB(64)];
+  local_persist char tm_data[MB(64)];
   tmLoadLibrary(TM_RELEASE);
   tmSetMaxThreadCount(256);
-  tmInitialize(sizeof(tm_data), (char *)tm_data);
+  tmInitialize(sizeof(tm_data), tm_data);
 #endif
-  ThreadNameF("[main thread]");
-  Temp scratch = scratch_begin(0, 0);
-  String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, (int)arguments_count, arguments);
+  
+  //- rjf: parse command line
+  String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, arguments_count, arguments);
   CmdLine cmdline = cmd_line_from_string_list(scratch.arena, command_line_argument_strings);
+  
+  //- rjf: begin captures
   B32 capture = cmd_line_has_flag(&cmdline, str8_lit("capture"));
   if(capture)
   {
     ProfBeginCapture(arguments[0]);
   }
-#if defined(TASK_SYSTEM_H) && !defined(TS_INIT_MANUAL)
-  ts_init();
+  
+#if PROFILE_TELEMETRY 
+  tmMessage(0, TMMF_ICON_NOTE, BUILD_TITLE);
+#endif
+  
+  //- rjf: initialize all included layers
+#if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
+  async_init(&cmdline);
+#endif
+#if defined(RDI_FROM_PDB_H) && !defined(P2R_INIT_MANUAL)
+  p2r_init();
 #endif
 #if defined(HASH_STORE_H) && !defined(HS_INIT_MANUAL)
   hs_init();
@@ -37,11 +54,8 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DASM_CACHE_H) && !defined(DASM_INIT_MANUAL)
   dasm_init();
 #endif
-#if defined(DI_H) && !defined(DI_INIT_MANUAL)
+#if defined(DBGI_H) && !defined(DI_INIT_MANUAL)
   di_init();
-#endif
-#if defined(FUZZY_SEARCH_H) && !defined(FZY_INIT_MANUAL)
-  fzy_init();
 #endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
@@ -49,7 +63,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(CTRL_CORE_H) && !defined(CTRL_INIT_MANUAL)
   ctrl_init();
 #endif
-#if defined(OS_GRAPHICAL_H) && !defined(OS_GFX_INIT_MANUAL)
+#if defined(OS_GFX_H) && !defined(OS_GFX_INIT_MANUAL)
   os_gfx_init();
 #endif
 #if defined(FONT_PROVIDER_H) && !defined(FP_INIT_MANUAL)
@@ -64,21 +78,25 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(GEO_CACHE_H) && !defined(GEO_INIT_MANUAL)
   geo_init();
 #endif
-#if defined(FONT_CACHE_H) && !defined(F_INIT_MANUAL)
-  f_init();
+#if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
+  fnt_init();
 #endif
-#if defined(DF_CORE_H) && !defined(DF_INIT_MANUAL)
-  DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
-  df_core_init(&cmdline, hist);
+#if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
+  d_init();
 #endif
-#if defined(DF_GFX_H) && !defined(DF_GFX_INIT_MANUAL)
-  df_gfx_init(update_and_render, df_state_delta_history());
+#if defined(RADDBG_CORE_H) && !defined(RD_INIT_MANUAL)
+  rd_init(&cmdline);
 #endif
+  
+  //- rjf: call into entry point
   entry_point(&cmdline);
+  
+  //- rjf: end captures
   if(capture)
   {
     ProfEndCapture();
   }
+  
   scratch_end(scratch);
 }
 
@@ -89,4 +107,24 @@ supplement_thread_base_entry_point(void (*entry_point)(void *params), void *para
   tctx_init_and_equip(&tctx);
   entry_point(params);
   tctx_release();
+}
+
+internal U64
+update_tick_idx(void)
+{
+  U64 result = ins_atomic_u64_eval(&global_update_tick_idx);
+  return result;
+}
+
+internal B32
+update(void)
+{
+  ProfTick(0);
+  ins_atomic_u64_inc_eval(&global_update_tick_idx);
+#if OS_FEATURE_GRAPHICAL
+  B32 result = frame();
+#else
+  B32 result = 0;
+#endif
+  return result;
 }

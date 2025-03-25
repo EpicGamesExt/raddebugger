@@ -8,9 +8,11 @@
 
 typedef BOOL w32_SetProcessDpiAwarenessContext_Type(void* value);
 typedef UINT w32_GetDpiForWindow_Type(HWND hwnd);
+typedef HRESULT w32_GetDpiForMonitor_Type(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX, UINT *dpiY);
 typedef int w32_GetSystemMetricsForDpi_Type(int nIndex, UINT dpi);
 #define w32_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((void*)-4)
 global w32_GetDpiForWindow_Type *w32_GetDpiForWindow_func = 0;
+global w32_GetDpiForMonitor_Type *w32_GetDpiForMonitor_func = 0;
 global w32_GetSystemMetricsForDpi_Type *w32_GetSystemMetricsForDpi_func = 0;
 
 ////////////////////////////////
@@ -713,9 +715,10 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             // of the top hit area so manually checking that.
             F32 dpi = w32_GetDpiForWindow_func ? (F32)w32_GetDpiForWindow_func(hwnd) : 96.f;
             S32 frame_y = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYFRAME, dpi) : GetSystemMetrics(SM_CYFRAME);
-            S32 padding = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : GetSystemMetrics(SM_CXPADDEDBORDER);
+            // NOTE(rjf): it seems incorrect to apply this padding here...
+            // S32 padding = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : GetSystemMetrics(SM_CXPADDEDBORDER);
             
-            B32 is_over_top_resize = pos_client.y >= 0 && pos_client.y < frame_y + padding;
+            B32 is_over_top_resize = pos_client.y >= 0 && pos_client.y < frame_y; // + padding;
             B32 is_over_title_bar  = pos_client.y >= 0 && pos_client.y < window->custom_border_title_thickness;
             
             //- rjf: check against title bar client areas
@@ -811,6 +814,7 @@ os_gfx_init(void)
     (w32_SetProcessDpiAwarenessContext_Type*)GetProcAddress(module, "SetProcessDpiAwarenessContext");
     w32_GetDpiForWindow_func =
     (w32_GetDpiForWindow_Type*)GetProcAddress(module, "GetDpiForWindow");
+    w32_GetDpiForMonitor_func = (w32_GetDpiForMonitor_Type *)GetProcAddress(module, "GetDpiForMonitor");
     w32_GetSystemMetricsForDpi_func = (w32_GetSystemMetricsForDpi_Type *)GetProcAddress(module, "GetSystemMetricsForDpi");
     FreeLibrary(module);
   }
@@ -1011,9 +1015,12 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
+os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
   B32 custom_border = !!(flags & OS_WindowFlag_CustomBorder);
+  B32 use_default_position = !!(flags & OS_WindowFlag_UseDefaultPosition);
+  Vec2F32 pos = rect.p0;
+  Vec2F32 dim = dim_2f32(rect);
   
   //- rjf: make hwnd
   HWND hwnd = 0;
@@ -1025,9 +1032,10 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
                            L"graphical-window",
                            (WCHAR*)title16.str,
                            WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
-                           CW_USEDEFAULT, CW_USEDEFAULT,
-                           (int)resolution.x,
-                           (int)resolution.y,
+                           use_default_position ? CW_USEDEFAULT : (S32)pos.x,
+                           use_default_position ? CW_USEDEFAULT : (S32)pos.y,
+                           (S32)dim.x,
+                           (S32)dim.y,
                            0, 0,
                            os_w32_gfx_state->hInstance,
                            0);
@@ -1381,6 +1389,21 @@ os_dim_from_monitor(OS_Handle monitor)
   {
     result.x = info.rcWork.right - info.rcWork.left;
     result.y = info.rcWork.bottom - info.rcWork.top;
+  }
+  return result;
+}
+
+internal F32
+os_dpi_from_monitor(OS_Handle monitor)
+{
+  F32 result = 96.f;
+  HMONITOR monitor_handle = (HMONITOR)monitor.u64[0];
+  if(w32_GetDpiForMonitor_func != 0)
+  {
+    UINT dpi_x = 0;
+    UINT dpi_y = 0;
+    HRESULT hr = w32_GetDpiForMonitor_func(monitor_handle, MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
+    result = (F32)dpi_x;
   }
   return result;
 }

@@ -2,6 +2,48 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: 0.9.16 changes
+//
+// - Auto view rules have been upgraded to support type pattern-matching. This
+//   makes them usable for generic types in various languages.
+// - The `slice` view rule has been streamlined and simplified. When an
+//   expression with a `slice` view rule is expanded, it will simply expand to
+//   the slice's contents, which matches the behavior with static arrays.
+// - The `slice` view rule now supports `first, one-past-last` pointer pairs,
+//   as well as `base_pointer, length` pairs.
+// - The syntax for view rules has changed to improve its familiarity,
+//   usability, and to improve its consistency with the rest of the evaluation
+//   language. It now appears like function calls, and many arguments no longer
+//   need to be explicitly named. For example, instead of
+//   `bitmap:{w:1024, h:1024}`, the new view rule syntax would be
+//   `bitmap(1024, 1024)`. Commas can still be omitted. Named arguments are
+//   still possible (and required in some cases): `disasm(size=1024, arch=x64)`
+// - The hover evaluation feature has been majorly upgraded to support all
+//   features normally available in the `Watch` view. Hover evaluations now
+//   explicitly show type information, and contain a view rule column, which
+//   can be edited in an identical way as the `Watch` view.
+// - Added "auto tabs", which are colored differently than normal tabs. These
+//   tabs are automatically opened by the debugger when snapping to source code
+//   which is not already opened. They are automatically replaced and recycled
+//   when the debugger needs to snap to new locations. This will greatly reduce
+//   the number of unused source code tabs accumulated throughout a debugging
+//   session. These tabs can still be promoted to permanent tabs, in which case
+//   they'll stay around until manually closed.
+// - The `Scheduler` view has been removed, in favor of three separate views,
+//   which present various versions of the same information: `Threads`,
+//   `Processes`, and `Machines`. The justification for this is that the
+//   common case is debugging a small number of programs, usually 1, and for
+//   those purposes, the `Threads` view is sufficient if not desirable, and
+//   the extra information provided by `Processes` and `Machines`, while useful
+//   in other contexts, is not useful in that common case.
+// - The two separate interfaces for editing threads, breakpoints, and watch
+//   pins (the right-click context menu and the dedicated tabs) have been
+//   merged.
+// - Added the ability to add per-target environment strings.
+// - Fixed an annoyance where the debugger would open a console window, even
+//   for graphical programs, causing a flicker.
+
+////////////////////////////////
 //~ rjf: feature cleanup, code dedup, code elimination pass:
 //
 // [ ] frontend config entities, serialization/deserialization, remove hacks,
@@ -25,6 +67,17 @@
 //     etc., all need to be merged, and optionally contextualized/filtered.
 //     right-clicking a tab should be equivalent to spawning a command lister,
 //     but only with commands that are directly
+//
+// [ ] r8 bitmap view rule seems incorrect?
+// [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
+//
+// [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
+// single step over the first instruction of that line, even if the thread
+// would've stopped at the first instruction due to the step, were that bp not
+// there.
+//
+// [ ] if a breakpoint matches the entry point's starting address, its hit count
+// is not correctly incremented.
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
@@ -603,106 +656,58 @@ entry_point(CmdLine *cmd_line)
         String8List args = cmd_line->inputs;
         if(args.node_count > 0 && args.first->string.size != 0)
         {
-          //- TODO(rjf): @cfg setup initial target from command line arguments
-          {
-            Temp scratch = scratch_begin(0, 0);
-            
-            //- rjf: unpack command line inputs
-            String8 executable_name_string = {0};
-            String8 arguments_string = {0};
-            String8 working_directory_string = {0};
-            {
-              // rjf: unpack full executable path
-              if(args.first->string.size != 0)
-              {
-                String8 current_path = os_get_current_path(scratch.arena);
-                String8 exe_name = args.first->string;
-                PathStyle style = path_style_from_str8(exe_name);
-                if(style == PathStyle_Relative)
-                {
-                  exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-                  exe_name = path_normalized_from_string(scratch.arena, exe_name);
-                }
-                executable_name_string = exe_name;
-              }
-              
-              // rjf: unpack working directory
-              if(args.first->string.size != 0)
-              {
-                String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-                if(path_part_of_arg.size != 0)
-                {
-                  String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-                  working_directory_string = path;
-                }
-              }
-              
-              // rjf: unpack arguments
-              String8List passthrough_args_list = {0};
-              for(String8Node *n = args.first->next; n != 0; n = n->next)
-              {
-                str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-              }
-              StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-              arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
-            }
-            
-            //- rjf: build config tree
-            RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
-            RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
-            RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
-            RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
-            RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
-            rd_cfg_new(exe, executable_name_string);
-            rd_cfg_new(args, arguments_string);
-            rd_cfg_new(wdir, working_directory_string);
-            
-            scratch_end(scratch);
-          }
-          
           Temp scratch = scratch_begin(0, 0);
-          RD_Entity *target = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
-          rd_entity_equip_cfg_src(target, RD_CfgSrc_CommandLine);
-          String8List passthrough_args_list = {0};
-          for(String8Node *n = args.first->next; n != 0; n = n->next)
-          {
-            str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-          }
           
-          // rjf: get current path
-          String8 current_path = os_get_current_path(scratch.arena);
-          
-          // rjf: equip exe
-          if(args.first->string.size != 0)
+          //- rjf: unpack command line inputs
+          String8 executable_name_string = {0};
+          String8 arguments_string = {0};
+          String8 working_directory_string = {0};
           {
-            String8 exe_name = args.first->string;
-            RD_Entity *exe = rd_entity_alloc(target, RD_EntityKind_Executable);
-            PathStyle style = path_style_from_str8(exe_name);
-            if(style == PathStyle_Relative)
+            // rjf: unpack full executable path
+            if(args.first->string.size != 0)
             {
-              exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-              exe_name = path_normalized_from_string(scratch.arena, exe_name);
+              String8 current_path = os_get_current_path(scratch.arena);
+              String8 exe_name = args.first->string;
+              PathStyle style = path_style_from_str8(exe_name);
+              if(style == PathStyle_Relative)
+              {
+                exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+                exe_name = path_normalized_from_string(scratch.arena, exe_name);
+              }
+              executable_name_string = exe_name;
             }
-            rd_entity_equip_name(exe, exe_name);
+            
+            // rjf: unpack working directory
+            if(args.first->string.size != 0)
+            {
+              String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
+              if(path_part_of_arg.size != 0)
+              {
+                String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
+                working_directory_string = path;
+              }
+            }
+            
+            // rjf: unpack arguments
+            String8List passthrough_args_list = {0};
+            for(String8Node *n = args.first->next; n != 0; n = n->next)
+            {
+              str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+            }
+            StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+            arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           }
           
-          // rjf: equip working directory
-          String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-          if(path_part_of_arg.size != 0)
-          {
-            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            RD_Entity *wdir = rd_entity_alloc(target, RD_EntityKind_WorkingDirectory);
-            rd_entity_equip_name(wdir, path);
-          }
+          //- rjf: build config tree
+          RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+          RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
+          RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
+          RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
+          RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
+          rd_cfg_new(exe, executable_name_string);
+          rd_cfg_new(args, arguments_string);
+          rd_cfg_new(wdir, working_directory_string);
           
-          // rjf: equip args
-          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-          String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
-          if(args_str.size != 0)
-          {
-            RD_Entity *args_entity = rd_entity_alloc(target, RD_EntityKind_Arguments);
-            rd_entity_equip_name(args_entity, args_str);
-          }
           scratch_end(scratch);
         }
       }
@@ -754,29 +759,32 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
-              RD_Window *dst_window = rd_state->first_window;
-              for(RD_Window *window = dst_window; window != 0; window = window->next)
+              RD_WindowState *dst_ws = rd_state->first_window_state;
+              for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
               {
-                if(os_window_is_focused(window->os))
+                if(os_window_is_focused(ws->os))
                 {
-                  dst_window = window;
+                  dst_ws = ws;
                   break;
                 }
               }
-              if(dst_window != 0)
+              if(dst_ws != &rd_nil_window_state)
               {
-                dst_window->window_temporarily_focused_ipc = 1;
+                dst_ws->window_temporarily_focused_ipc = 1;
                 U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
                 String8 cmd_kind_name_string = str8_prefix(msg, first_space_pos);
                 String8 cmd_args_string = str8_skip_chop_whitespace(str8_skip(msg, first_space_pos));
                 RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name_string);
                 if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
                 {
-                  if(dst_window != rd_window_from_handle(rd_regs()->window))
+                  if(dst_ws->cfg_id != rd_regs()->window)
                   {
-                    rd_regs()->window = rd_handle_from_window(dst_window);
-                    rd_regs()->panel  = rd_handle_from_panel(dst_window->focused_panel);
-                    rd_regs()->view   = dst_window->focused_panel->selected_tab_view;
+                    Temp scratch = scratch_begin(0, 0);
+                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_id(dst_ws->cfg_id));
+                    rd_regs()->window = dst_ws->cfg_id;
+                    rd_regs()->panel  = panel_tree.focused->cfg->id;
+                    rd_regs()->view   = panel_tree.focused->selected_tab->id;
+                    scratch_end(scratch);
                   }
                   rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
                   rd_push_cmd(cmd_kind_name_string, rd_regs());

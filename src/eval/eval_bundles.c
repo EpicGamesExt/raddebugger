@@ -7,26 +7,35 @@
 internal E_Eval
 e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
-  E_IRTreeAndType  irtree   = e_irtree_and_type_from_expr(arena, expr);
-  E_OpList         oplist   = e_oplist_from_irtree(arena, irtree.root);
-  String8          bytecode = e_bytecode_from_oplist(arena, &oplist);
-  E_Interpretation interp   = e_interpret(bytecode);
-  E_Space zero_space = {0};
-  E_Space space = (MemoryMatchStruct(&zero_space, &irtree.space) ? e_interpret_ctx->primary_space : irtree.space);
+  E_ExprChain exprs = {expr, expr};
+  E_Eval result = e_eval_from_exprs(arena, exprs);
+  return result;
+}
+
+internal E_Eval
+e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
+{
+  ProfBeginFunction();
+  E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(arena, exprs.last);
+  E_LookupRuleTagPair lookup   = e_lookup_rule_tag_pair_from_expr_irtree(exprs.last, &irtree);
+  E_OpList            oplist   = e_oplist_from_irtree(arena, irtree.root);
+  String8             bytecode = e_bytecode_from_oplist(arena, &oplist);
+  E_Interpretation    interp   = e_interpret(bytecode);
   E_Eval eval =
   {
-    .value    = interp.value,
-    .mode     = irtree.mode,
-    .space    = space,
-    .expr     = expr,
-    .type_key = irtree.type_key,
-    .code     = interp.code,
+    .value           = interp.value,
+    .space           = interp.space,
+    .exprs           = exprs,
+    .irtree          = irtree,
+    .lookup_rule_tag = lookup,
+    .code            = interp.code,
   };
   e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
   if(E_InterpretationCode_Good < eval.code && eval.code < E_InterpretationCode_COUNT)
   {
     e_msg(arena, &eval.msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[eval.code]);
   }
+  ProfEnd();
   return eval;
 }
 
@@ -35,26 +44,39 @@ e_eval_from_string(Arena *arena, String8 string)
 {
   E_TokenArray     tokens   = e_token_array_from_text(arena, string);
   E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, &tokens);
-  E_Eval           eval     = e_eval_from_expr(arena, parse.expr);
+  E_Eval           eval     = e_eval_from_exprs(arena, parse.exprs);
   e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
+  return eval;
+}
+
+internal E_Eval
+e_eval_from_stringf(Arena *arena, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  E_Eval eval = e_eval_from_string(arena, string);
+  va_end(args);
+  scratch_end(scratch);
   return eval;
 }
 
 internal E_Eval
 e_autoresolved_eval_from_eval(E_Eval eval)
 {
-  if(e_parse_ctx &&
+  if(e_parse_state &&
      e_interpret_ctx &&
-     e_parse_ctx->modules_count > 0 &&
+     e_parse_state->ctx->modules_count > 0 &&
      e_interpret_ctx->module_base != 0 &&
-     (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
-      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U64)) ||
-      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S32)) ||
-      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U32))))
+     (e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_S64)) ||
+      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_U64)) ||
+      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_S32)) ||
+      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_U32))))
   {
     U64 vaddr = eval.value.u64;
     U64 voff = vaddr - e_interpret_ctx->module_base[0];
-    RDI_Parsed *rdi = e_parse_ctx->primary_module->rdi;
+    RDI_Parsed *rdi = e_parse_state->ctx->primary_module->rdi;
     RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
     RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
     RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
@@ -63,7 +85,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
     if(string_idx == 0) { string_idx = gvar->name_string_idx; }
     if(string_idx != 0)
     {
-      eval.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_Void), 0);
+      eval.irtree.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_Void), 1, 0);
     }
   }
   return eval;
@@ -72,7 +94,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
 internal E_Eval
 e_dynamically_typed_eval_from_eval(E_Eval eval)
 {
-  E_TypeKey type_key = eval.type_key;
+  E_TypeKey type_key = eval.irtree.type_key;
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   if(e_type_state != 0 &&
      e_interpret_ctx != 0 &&
@@ -85,7 +107,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
     E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
     if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
     {
-      E_Type *ptee_type = e_type_from_key(scratch.arena, ptee_type_key);
+      E_Type *ptee_type = e_type_from_key__cached(ptee_type_key);
       B32 has_vtable = 0;
       for(U64 idx = 0; idx < ptee_type->count; idx += 1)
       {
@@ -129,8 +151,8 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
               RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
               RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
               E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
-              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 0);
-              eval.type_key = ptr_to_derived_type_key;
+              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 1, 0);
+              eval.irtree.type_key = ptr_to_derived_type_key;
             }
           }
         }
@@ -145,13 +167,13 @@ internal E_Eval
 e_value_eval_from_eval(E_Eval eval)
 {
   ProfBeginFunction();
-  if(eval.mode == E_Mode_Offset)
+  if(eval.irtree.mode == E_Mode_Offset)
   {
-    E_TypeKey type_key = e_type_unwrap(eval.type_key);
+    E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
     if(type_kind == E_TypeKind_Array)
     {
-      eval.mode = E_Mode_Value;
+      eval.irtree.mode = E_Mode_Value;
     }
     else
     {
@@ -162,13 +184,13 @@ e_value_eval_from_eval(E_Eval eval)
          type_byte_size <= sizeof(E_Value) &&
          e_space_read(eval.space, &eval.value, value_vaddr_range))
       {
-        eval.mode = E_Mode_Value;
+        eval.irtree.mode = E_Mode_Value;
         
         // rjf: mask&shift, for bitfields
         if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
         {
           Temp scratch = scratch_begin(0, 0);
-          E_Type *type = e_type_from_key(scratch.arena, type_key);
+          E_Type *type = e_type_from_key__cached(type_key);
           U64 valid_bits_mask = 0;
           for(U64 idx = 0; idx < type->count; idx += 1)
           {
@@ -176,7 +198,7 @@ e_value_eval_from_eval(E_Eval eval)
           }
           eval.value.u64 = eval.value.u64 >> type->off;
           eval.value.u64 = eval.value.u64 & valid_bits_mask;
-          eval.type_key = type->direct_type_key;
+          eval.irtree.type_key = type->direct_type_key;
           scratch_end(scratch);
         }
         
@@ -198,65 +220,37 @@ e_value_eval_from_eval(E_Eval eval)
   return eval;
 }
 
-internal E_Eval
-e_element_eval_from_array_eval_index(E_Eval eval, U64 index)
+internal E_Value
+e_value_from_string(String8 string)
 {
-  E_Eval result = {0};
-  result.mode     = eval.mode;
-  result.space    = eval.space;
-  result.type_key = e_type_direct_from_key(eval.type_key);
-  result.code     = eval.code;
-  result.msgs     = eval.msgs;
-  U64 element_size = e_type_byte_size_from_key(result.type_key);
-  switch(eval.mode)
-  {
-    default:{}break;
-    case E_Mode_Value:
-    if(element_size <= sizeof(E_Value) &&
-       index < sizeof(E_Value)/element_size)
-    {
-      MemoryCopy((U8 *)(&result.value.u512[0]),
-                 (U8 *)(&eval.value.u512[0]) + index*element_size,
-                 element_size);
-    }break;
-    case E_Mode_Offset:
-    {
-      result.value.u64 = eval.value.u64 + element_size*index;
-    }break;
-  }
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  E_Value result = value_eval.value;
+  scratch_end(scratch);
   return result;
 }
 
-internal E_Eval
-e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name)
+internal E_Value
+e_value_from_stringf(char *fmt, ...)
 {
-  E_Eval result = {0};
-  {
-    E_Member member = e_type_member_from_key_name__cached(eval.type_key, member_name);
-    if(member.kind != E_MemberKind_Null)
-    {
-      result.mode     = eval.mode;
-      result.space    = eval.space;
-      result.type_key = member.type_key;
-      result.code     = eval.code;
-      result.msgs     = eval.msgs;
-      switch(eval.mode)
-      {
-        default:{}break;
-        case E_Mode_Value:
-        if(member.off < sizeof(eval.value))
-        {
-          U64 member_size = e_type_byte_size_from_key(member.type_key);
-          MemoryCopy((U8 *)(&result.value.u512[0]),
-                     (U8 *)(&eval.value.u512[0]) + member.off,
-                     Min(member_size, sizeof(eval.value) - member.off));
-        }break;
-        case E_Mode_Offset:
-        {
-          result.value.u64 = eval.value.u64 + member.off;
-        }break;
-      }
-    }
-  }
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  E_Value result = e_value_from_string(string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+internal E_Value
+e_value_from_expr(E_Expr *expr)
+{
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  E_Value result = value_eval.value;
+  scratch_end(scratch);
   return result;
 }

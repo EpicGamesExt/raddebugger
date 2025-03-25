@@ -33,8 +33,7 @@ struct D_Breakpoint
 {
   String8 file_path;
   TxtPt pt;
-  String8 symbol_name;
-  U64 vaddr;
+  String8 vaddr_expr;
   String8 condition;
 };
 
@@ -331,7 +330,6 @@ struct D_State
   // rjf: top-level state
   Arena *arena;
   U64 frame_index;
-  U64 frame_eval_memread_endt_us;
   
   // rjf: commands
   Arena *cmds_arena;
@@ -433,8 +431,8 @@ internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL
 //~ rjf: Debug Info Lookups
 
 //- rjf: voff|vaddr -> symbol lookups
-internal String8 d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated);
-internal String8 d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, B32 decorated);
+internal String8 d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, U64 depth, B32 decorated);
+internal String8 d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, U64 depth, B32 decorated);
 
 //- rjf: symbol -> voff lookups
 internal U64 d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
@@ -495,6 +493,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64], CTRL_MetaEvalArray *meta_evals);
+internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64]);
 
 #endif // DBG_ENGINE_CORE_H

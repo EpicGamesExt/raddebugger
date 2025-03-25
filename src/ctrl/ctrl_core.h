@@ -13,229 +13,6 @@ typedef U64 CTRL_MachineID;
 #define CTRL_MachineID_Local (1)
 
 ////////////////////////////////
-//~ rjf: Meta Evaluation Types
-
-//- rjf: auto-checkbox b32s
-
-typedef struct CTRL_CheckB32 CTRL_CheckB32;
-struct CTRL_CheckB32
-{
-  B32 b32;
-};
-
-struct_members(CTRL_CheckB32)
-{
-  member_lit_comp(CTRL_CheckB32, type(B32), b32),
-};
-struct_type(CTRL_CheckB32);
-
-//- rjf: styled string types
-
-ptr_type(CTRL_PlainString8__str_ptr_type, type(U8), .flags = TypeFlag_IsPlainText,.count_delimiter_name = str8_lit_comp("size"));
-ptr_type(CTRL_CodeString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsCodeText, .count_delimiter_name = str8_lit_comp("size"));
-ptr_type(CTRL_PathString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsPathText, .count_delimiter_name = str8_lit_comp("size"));
-Member CTRL_PlainString8__members[] =
-{
-  member_lit_comp(String8, &CTRL_PlainString8__str_ptr_type, str,  .pretty_name = str8_lit_comp("Contents")),
-  member_lit_comp(String8, type(U64),                        size, .pretty_name = str8_lit_comp("Size")),
-};
-Member CTRL_CodeString8__members[] =
-{
-  member_lit_comp(String8, &CTRL_CodeString8__str_ptr_type, str,  .pretty_name = str8_lit_comp("Contents")),
-  member_lit_comp(String8, type(U64),                       size, .pretty_name = str8_lit_comp("Size")),
-};
-Member CTRL_PathString8__members[] =
-{
-  member_lit_comp(String8, &CTRL_PathString8__str_ptr_type, str,  .pretty_name = str8_lit_comp("Contents")),
-  member_lit_comp(String8, type(U64),                        size, .pretty_name = str8_lit_comp("Size")),
-};
-named_struct_type(CTRL_PlainString8, String8, .name = str8_lit_comp("string"));
-named_struct_type(CTRL_CodeString8,  String8, .name = str8_lit_comp("string"));
-named_struct_type(CTRL_PathString8,  String8, .name = str8_lit_comp("string"));
-
-//- rjf: meta evaluation callstack types
-
-typedef struct CTRL_MetaEvalFrame CTRL_MetaEvalFrame;
-struct CTRL_MetaEvalFrame
-{
-  U64 vaddr;
-  U64 inline_depth;
-};
-ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .flags = TypeFlag_IsExternal, .size = sizeof(U64));
-struct_members(CTRL_MetaEvalFrame)
-{
-  member_lit_comp(CTRL_MetaEvalFrame, &CTRL_MetaEvalFrame__vaddr_type, vaddr),
-  member_lit_comp(CTRL_MetaEvalFrame, type(U64), inline_depth),
-};
-struct_type(CTRL_MetaEvalFrame, .name = str8_lit_comp("callstack_frame"));
-typedef struct CTRL_MetaEvalFrameArray CTRL_MetaEvalFrameArray;
-struct CTRL_MetaEvalFrameArray
-{
-  U64 count;
-  CTRL_MetaEvalFrame *v;
-};
-ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, type(CTRL_MetaEvalFrame), .count_delimiter_name = str8_lit_comp("count"));
-struct_members(CTRL_MetaEvalFrameArray)
-{
-  member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count, .pretty_name = str8_lit_comp("Frame Count")),
-  {str8_lit_comp("v"), str8_lit_comp("Frame Addresses"), &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
-};
-struct_type(CTRL_MetaEvalFrameArray, .name = str8_lit_comp("callstack_frames"));
-
-//- rjf: meta evaluation instance types
-
-typedef struct CTRL_MetaEval CTRL_MetaEval;
-struct CTRL_MetaEval
-{
-#define CTRL_MetaEval_MemberXList \
-X(B32, enabled,            "Enabled")\
-X(B32, frozen,             "Frozen")\
-X(U64, hit_count,          "Hit Count")\
-X(U64, id,                 "ID")\
-X(Rng1U64, vaddr_range,    "Address Range")\
-X(U32, color,              "Color")\
-X(CTRL_CheckB32, debug_subprocesses,"Debug Subprocesses")\
-Y(String8, type(CTRL_CodeString8),  label,             "Label")\
-Y(String8, type(CTRL_PathString8),  exe,               "Executable Path")\
-Y(String8, type(CTRL_PathString8),  dbg,               "Debug Info Path")\
-Y(String8, type(CTRL_PlainString8), args,              "Arguments")\
-Y(String8, type(CTRL_PathString8),  working_directory, "Working Directory")\
-Y(String8, type(CTRL_CodeString8),  entry_point,       "Custom Entry Point")\
-Y(String8, type(CTRL_PathString8),  stdout_path,       "Standard Output Path")\
-Y(String8, type(CTRL_PathString8),  stderr_path,       "Standard Error Path")\
-Y(String8, type(CTRL_PathString8),  stdin_path,        "Standard Input Path")\
-Y(String8, type(CTRL_PathString8),  source_location,   "Source Location")\
-Y(String8, type(CTRL_CodeString8),  function_location, "Function Location")\
-Y(String8, type(CTRL_CodeString8),  address_location,  "Address Location")\
-Y(String8, type(CTRL_PathString8),  source_path,       "Source Path")\
-Y(String8, type(CTRL_PathString8),  destination_path,  "Destination Path")\
-Y(String8, type(CTRL_CodeString8),  type,              "Type")\
-Y(String8, type(CTRL_CodeString8),  view_rule,         "View Rule")\
-Y(String8, type(CTRL_CodeString8),  condition,         "Condition")\
-X(CTRL_MetaEvalFrameArray, callstack, "Call Stack")
-#define X(T, name, pretty_name) T name;
-#define Y(T, ti, name, pretty_name) T name;
-  CTRL_MetaEval_MemberXList
-#undef X
-#undef Y
-};
-struct_members(CTRL_MetaEval)
-{
-#define X(T, name, pretty_name_) member_lit_comp(CTRL_MetaEval, type(T), name, .pretty_name = str8_lit_comp(pretty_name_)),
-#define Y(T, ti, name, pretty_name_) member_lit_comp(CTRL_MetaEval, (ti), name, .pretty_name = str8_lit_comp(pretty_name_)),
-  CTRL_MetaEval_MemberXList
-#undef X
-#undef Y
-};
-struct_type(CTRL_MetaEval);
-
-//- rjf: filters on main meta evaluation bundle
-
-struct_members(CTRL_BreakpointMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(B32),              enabled,           .pretty_name = str8_lit_comp("Enabled")),
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,             .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(U64),              hit_count,         .pretty_name = str8_lit_comp("Hit Count")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,             .pretty_name = str8_lit_comp("Label")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), condition,         .pretty_name = str8_lit_comp("Condition")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), source_location,   .pretty_name = str8_lit_comp("Source Location")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), function_location, .pretty_name = str8_lit_comp("Function Location")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), address_location,  .pretty_name = str8_lit_comp("Address Location")),
-};
-
-struct_members(CTRL_TargetMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,              .pretty_name = str8_lit_comp("Label")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), exe,                .pretty_name = str8_lit_comp("Executable")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),args,               .pretty_name = str8_lit_comp("Arguments")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), working_directory,  .pretty_name = str8_lit_comp("Working Directory")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), entry_point,        .pretty_name = str8_lit_comp("Custom Entry Point")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdout_path,        .pretty_name = str8_lit_comp("Standard Output Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stderr_path,        .pretty_name = str8_lit_comp("Standard Error Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdin_path,         .pretty_name = str8_lit_comp("Standard Input Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CheckB32),    debug_subprocesses, .pretty_name = str8_lit_comp("Debug Subprocesses")),
-};
-
-struct_members(CTRL_PinMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,              .pretty_name = str8_lit_comp("Expression")),
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,              .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), source_location,    .pretty_name = str8_lit_comp("Source Location")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), address_location,   .pretty_name = str8_lit_comp("Address Location")),
-};
-
-struct_members(CTRL_FilePathMapMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), source_path,        .pretty_name = str8_lit_comp("Source Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), destination_path,   .pretty_name = str8_lit_comp("Destination Path")),
-};
-
-struct_members(CTRL_AutoViewRuleMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), type,        .pretty_name = str8_lit_comp("Type")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), view_rule,   .pretty_name = str8_lit_comp("View Rule")),
-};
-
-struct_members(CTRL_MachineMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(B32),              frozen,    .pretty_name = str8_lit_comp("Frozen")),
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,     .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,     .pretty_name = str8_lit_comp("Name")),
-};
-
-struct_members(CTRL_ProcessMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(B32),              frozen,    .pretty_name = str8_lit_comp("Frozen")),
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,     .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,     .pretty_name = str8_lit_comp("Name")),
-  member_lit_comp(CTRL_MetaEval, type(U64),              id,        .pretty_name = str8_lit_comp("ID")),
-};
-
-struct_members(CTRL_ModuleMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,       .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,       .pretty_name = str8_lit_comp("Name")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), exe,         .pretty_name = str8_lit_comp("Executable Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), dbg,         .pretty_name = str8_lit_comp("Debug Info Path")),
-  member_lit_comp(CTRL_MetaEval, type(Rng1U64),          vaddr_range, .pretty_name = str8_lit_comp("Address Range")),
-};
-
-struct_members(CTRL_ThreadMetaEval)
-{
-  member_lit_comp(CTRL_MetaEval, type(B32),                     frozen,    .pretty_name = str8_lit_comp("Frozen")),
-  member_lit_comp(CTRL_MetaEval, type(U32),                     color,     .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8),        label,     .pretty_name = str8_lit_comp("Name")),
-  member_lit_comp(CTRL_MetaEval, type(U64),                     id,        .pretty_name = str8_lit_comp("ID")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_MetaEvalFrameArray), callstack, .pretty_name = str8_lit_comp("Call Stack")),
-};
-
-named_struct_type(CTRL_BreakpointMetaEval,  CTRL_MetaEval, .name = str8_lit_comp("breakpoint"));
-named_struct_type(CTRL_TargetMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("target"));
-named_struct_type(CTRL_PinMetaEval,         CTRL_MetaEval, .name = str8_lit_comp("pin"));
-named_struct_type(CTRL_FilePathMapMetaEval, CTRL_MetaEval, .name = str8_lit_comp("file_path_map"));
-named_struct_type(CTRL_AutoViewRuleMetaEval,CTRL_MetaEval, .name = str8_lit_comp("auto_view_rule"));
-named_struct_type(CTRL_MachineMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("machine"));
-named_struct_type(CTRL_ProcessMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("process"));
-named_struct_type(CTRL_ModuleMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("module"));
-named_struct_type(CTRL_ThreadMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("thread"));
-
-//- rjf: meta evaluation array
-
-typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;
-struct CTRL_MetaEvalArray
-{
-  CTRL_MetaEval *v;
-  U64 count;
-};
-ptr_type(CTRL_MetaEvalArray__v_ptr_type, type(CTRL_BreakpointMetaEval), .count_delimiter_name = str8_lit_comp("count"));
-struct_members(CTRL_MetaEvalArray)
-{
-  {str8_lit_comp("v"), {0}, &CTRL_MetaEvalArray__v_ptr_type, OffsetOf(CTRL_MetaEvalArray, v)},
-  member_lit_comp(CTRL_MetaEvalArray, type(U64), count),
-};
-struct_type(CTRL_MetaEvalArray);
-
-////////////////////////////////
 //~ rjf: Entity Handle Types
 
 typedef struct CTRL_Handle CTRL_Handle;
@@ -340,6 +117,18 @@ struct CTRL_EntityStringChunkNode
   U64 size;
 };
 
+read_only global U64 ctrl_entity_string_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
+
 typedef struct CTRL_EntityStore CTRL_EntityStore;
 struct CTRL_EntityStore
 {
@@ -349,7 +138,7 @@ struct CTRL_EntityStore
   CTRL_EntityHashSlot *hash_slots;
   CTRL_EntityHashNode *hash_node_free;
   U64 hash_slots_count;
-  CTRL_EntityStringChunkNode *free_string_chunks[8];
+  CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
   U64 entity_kind_counts[CTRL_EntityKind_COUNT];
   Arena *entity_kind_lists_arenas[CTRL_EntityKind_COUNT];
   U64 entity_kind_lists_gens[CTRL_EntityKind_COUNT];
@@ -404,32 +193,23 @@ struct CTRL_Unwind
 ////////////////////////////////
 //~ rjf: Call Stack Types
 
-typedef struct CTRL_CallStackInlineFrame CTRL_CallStackInlineFrame;
-struct CTRL_CallStackInlineFrame
-{
-  CTRL_CallStackInlineFrame *next;
-  CTRL_CallStackInlineFrame *prev;
-  RDI_InlineSite *inline_site;
-};
-
 typedef struct CTRL_CallStackFrame CTRL_CallStackFrame;
 struct CTRL_CallStackFrame
 {
-  CTRL_CallStackInlineFrame *first_inline_frame;
-  CTRL_CallStackInlineFrame *last_inline_frame;
-  U64 inline_frame_count;
+  U64 parent_num;
+  U64 unwind_count;
+  U64 inline_depth;
   void *regs;
   RDI_Parsed *rdi;
   RDI_Procedure *procedure;
+  RDI_InlineSite *inline_site;
 };
 
 typedef struct CTRL_CallStack CTRL_CallStack;
 struct CTRL_CallStack
 {
   CTRL_CallStackFrame *frames;
-  U64 concrete_frame_count;
-  U64 inline_frame_count;
-  U64 total_frame_count;
+  U64 count;
 };
 
 ////////////////////////////////
@@ -483,8 +263,7 @@ typedef enum CTRL_UserBreakpointKind
 {
   CTRL_UserBreakpointKind_Null,
   CTRL_UserBreakpointKind_FileNameAndLineColNumber,
-  CTRL_UserBreakpointKind_SymbolNameAndOffset,
-  CTRL_UserBreakpointKind_VirtualAddress,
+  CTRL_UserBreakpointKind_Expression,
   CTRL_UserBreakpointKind_COUNT
 }
 CTRL_UserBreakpointKind;
@@ -573,7 +352,6 @@ struct CTRL_Msg
   String8 stdin_path;
   CTRL_TrapList traps;
   CTRL_UserBreakpointList user_bps;
-  CTRL_MetaEvalArray meta_evals;
 };
 
 typedef struct CTRL_MsgNode CTRL_MsgNode;
@@ -858,6 +636,19 @@ struct CTRL_DbgDirNode
 };
 
 ////////////////////////////////
+//~ rjf: Control Thread Evaluation Scopes
+
+typedef struct CTRL_EvalScope CTRL_EvalScope;
+struct CTRL_EvalScope
+{
+  DI_Scope *di_scope;
+  E_TypeCtx type_ctx;
+  E_ParseCtx parse_ctx;
+  E_IRCtx ir_ctx;
+  E_InterpretCtx interpret_ctx;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -909,8 +700,6 @@ struct CTRL_State
   DMN_EventNode *free_dmn_event_node;
   Arena *user_entry_point_arena;
   String8List user_entry_points;
-  Arena *user_meta_eval_arena;
-  CTRL_MetaEvalArray user_meta_evals;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   U64 process_counter;
   Arena *dbg_dir_arena;
@@ -949,8 +738,10 @@ read_only global CTRL_Entity ctrl_entity_nil =
 internal U64 ctrl_hash_from_string(String8 string);
 internal U64 ctrl_hash_from_handle(CTRL_Handle handle);
 internal CTRL_EventCause ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind);
+internal CTRL_ExceptionKind ctrl_exception_kind_from_dmn(DMN_ExceptionKind kind);
 internal String8 ctrl_string_from_event_kind(CTRL_EventKind kind);
 internal String8 ctrl_string_from_msg_kind(CTRL_MsgKind kind);
+internal CTRL_EntityKind ctrl_entity_kind_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Handle Type Functions
@@ -960,6 +751,7 @@ internal CTRL_Handle ctrl_handle_make(CTRL_MachineID machine_id, DMN_Handle dmn_
 internal B32 ctrl_handle_match(CTRL_Handle a, CTRL_Handle b);
 internal void ctrl_handle_list_push(Arena *arena, CTRL_HandleList *list, CTRL_Handle *pair);
 internal CTRL_HandleList ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src);
+internal String8 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions
@@ -1015,7 +807,7 @@ internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
 internal void ctrl_entity_store_release(CTRL_EntityStore *store);
 
 //- rjf: string allocation/deletion
-internal U64 ctrl_name_bucket_idx_from_string_size(U64 size);
+internal U64 ctrl_name_bucket_num_from_string_size(U64 size);
 internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string);
 internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 
@@ -1120,6 +912,7 @@ internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *sto
 //~ rjf: Call Stack Building Functions
 
 internal CTRL_CallStack ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
+internal CTRL_CallStackFrame *ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U64 unwind_count, U64 inline_depth);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes
@@ -1153,8 +946,8 @@ internal CTRL_EventList ctrl_c2u_pop_events(Arena *arena);
 internal void ctrl_thread__entry_point(void *p);
 
 //- rjf: breakpoint resolution
-internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
-internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
 internal void ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path);
@@ -1165,6 +958,10 @@ internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_
 
 //- rjf: eval helpers
 internal B32 ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
+
+//- rjf: control thread eval scopes
+internal CTRL_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread);
+internal void ctrl_thread__eval_scope_end(CTRL_EvalScope *scope);
 
 //- rjf: log flusher
 internal void ctrl_thread__flush_info_log(String8 string);

@@ -17,6 +17,7 @@
 #include "metagen_base_thread_context.h"
 #include "metagen_base_command_line.h"
 #include "metagen_base_markup.h"
+#include "metagen_base_meta.h"
 #include "metagen_base_log.h"
 #include "metagen_base_entry_point.h"
 

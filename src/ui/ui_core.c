@@ -717,17 +717,10 @@ ui_string_hover_begin_time_us(void)
   return ui_state->string_hover_begin_us;
 }
 
-internal String8
-ui_string_hover_string(Arena *arena)
+internal DR_FStrList
+ui_string_hover_fstrs(Arena *arena)
 {
-  String8 result = push_str8_copy(arena, ui_state->string_hover_string);
-  return result;
-}
-
-internal DR_FancyRunList
-ui_string_hover_runs(Arena *arena)
-{
-  DR_FancyRunList result = dr_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
+  DR_FStrList result = dr_fstrs_copy(arena, &ui_state->string_hover_fstrs);
   return result;
 }
 
@@ -789,7 +782,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -802,7 +795,13 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
+    ui_state->default_animation_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
+    ui_state->tooltip_can_overflow_window = 0;
+    ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
+    ui_state->tags_cache_slots_count = 512;
+    ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
+    ui_state->theme_pattern_cache_slots_count = 512;
+    ui_state->theme_pattern_cache_slots = push_array(ui_build_arena(), UI_ThemePatternCacheSlot, ui_state->theme_pattern_cache_slots_count);
   }
   
   //- rjf: prune unused animation nodes
@@ -811,7 +810,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node && n != 0; n = next)
     {
       next = n->lru_next;
-      if(n->last_touched_build_index+1 < ui_state->build_index)
+      if(n->last_touched_build_index+2 < ui_state->build_index)
       {
         U64 slot_idx = n->key.u64[0]%ui_state->anim_slots_count;
         UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
@@ -850,6 +849,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   
   //- rjf: fill build phase parameters
   {
+    ui_state->theme = theme;
     ui_state->events = events;
     ui_state->window = window;
     ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= os_now_microseconds()) ? os_mouse_from_window(window) : v2f32(-100, -100);
@@ -862,7 +862,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     {
       ui_state->icon_info.icon_kind_text_map[icon_kind] = push_str8_copy(ui_build_arena(), icon_info->icon_kind_text_map[icon_kind]);
     }
-    MemoryCopyStruct(&ui_state->widget_palette_info, widget_palette_info);
     MemoryCopyStruct(&ui_state->animation_info, animation_info);
   }
   
@@ -1118,11 +1117,15 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     Vec2F32 anchor = add_2f32(ui_state->ctx_menu_anchor_box_last_pos, ui_state->ctx_menu_anchor_off);
     UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
       UI_Focus(UI_FocusKind_On)
-      UI_Squish(0.25f-ui_state->ctx_menu_open_t*0.25f)
+      UI_Squish(0.1f-ui_state->ctx_menu_open_t*0.1f)
       UI_Transparency(1-ui_state->ctx_menu_open_t)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
-      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
+      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                          UI_BoxFlag_SquishAnchored|
+                                                          UI_BoxFlag_DrawDropShadow|
+                                                          (ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY),
+                                                          "###ctx_menu_%I64x", window.u64[0]);
     }
   }
   
@@ -1169,18 +1172,18 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
       ui_state->active_box_key[k] = ui_key_zero();
     }
   }
+  
+  //- rjf: escape -> close context menu
+  if(ui_any_ctx_menu_is_open() && ui_slot_press(UI_EventActionSlot_Cancel))
+  {
+    ui_ctx_menu_close();
+  }
 }
 
 internal void
 ui_end_build(void)
 {
   ProfBeginFunction();
-  
-  //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
-  {
-    ui_ctx_menu_close();
-  }
   
   //- rjf: prune untouched or transient boxes in the cache
   ProfScope("ui prune unused boxes")
@@ -1241,9 +1244,7 @@ ui_end_build(void)
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
   B32 force_contain[] =
   {
-    (ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero())),
+    !ui_state->tooltip_can_overflow_window,
     1,
   };
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
@@ -1288,9 +1289,31 @@ ui_end_build(void)
           !ui_box_is_nil(box);
           box = box->hash_next)
       {
-        if(box->flags & UI_BoxFlag_RoundChildrenByParent &&
-           !ui_box_is_nil(box->first) && !ui_box_is_nil(box->last))
+        if(box->flags & UI_BoxFlag_RoundChildrenByParent)
         {
+          for(UI_Box *b = box; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, box).next)
+          {
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_00] = box->corner_radii[Corner_00];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_10] = box->corner_radii[Corner_10];
+            }
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_01] = box->corner_radii[Corner_01];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_11] = box->corner_radii[Corner_11];
+            }
+          }
           box->first->corner_radii[Corner_00] = box->corner_radii[Corner_00];
           box->first->corner_radii[Corner_10] = box->corner_radii[Corner_10];
           box->last->corner_radii[Corner_01] = box->corner_radii[Corner_01];
@@ -1313,19 +1336,15 @@ ui_end_build(void)
         ui_state->is_animating = (ui_state->is_animating || abs_f32(n->params.target - n->current) > n->params.epsilon);
       }
     }
-    F32 vast_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
-    F32 fast_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
-    F32 fish_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
+    F32 fast_rate = ui_state->default_animation_rate;
     F32 slow_rate = 1 - pow_f32(2, (-30.f * ui_state->animation_dt));
-    F32 slug_rate = 1 - pow_f32(2, (-15.f * ui_state->animation_dt));
-    F32 slaf_rate = 1 - pow_f32(2, (-8.f * ui_state->animation_dt));
-    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? vast_rate : 1);
+    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? fast_rate : 1);
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
     }
-    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? vast_rate : 1);
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? fast_rate : 1);
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
     if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
     {
@@ -1338,7 +1357,8 @@ ui_end_build(void)
           box = box->hash_next)
       {
         // rjf: grab states informing animation
-        B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
+        B32 is_hot            = (ui_key_match(box->key, ui_state->hot_box_key) ||
+                                 ui_key_match(box->key, ui_state->drop_hot_box_key));
         B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
         B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+2 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
@@ -1381,7 +1401,7 @@ ui_end_build(void)
         
         // rjf: animate interaction transition states
         box->hot_t                   += hot_rate      * ((F32)is_hot - box->hot_t);
-        box->active_t                += active_rate   * ((F32)is_active - box->active_t);
+        box->active_t                = is_active ? 1.f : box->active_t + (active_rate   * ((F32)is_active - box->active_t));
         box->disabled_t              += disabled_rate * ((F32)is_disabled - box->disabled_t);
         box->focus_hot_t             += focus_rate    * ((F32)is_focus_hot - box->focus_hot_t);
         box->focus_active_t          += focus_rate    * ((F32)is_focus_active - box->focus_active_t);
@@ -1430,12 +1450,14 @@ ui_end_build(void)
     }
   }
   
-  //- rjf: animate context menu
-  if(ui_state->ctx_menu_open && !ui_box_is_nil(ui_state->ctx_menu_root) && !ui_state->ctx_menu_changed)
+  //- rjf: use group keys for box animation data if possible
+  for(UI_Box *b = ui_state->root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, ui_state->root).next)
   {
-    UI_Box *root = ui_state->ctx_menu_root;
-    Rng2F32 rect = root->rect;
-    root->rect.y1 = root->rect.y0 + dim_2f32(rect).y * ui_state->ctx_menu_open_t;
+    if(ui_key_match(b->key, ui_key_zero()) && !ui_key_match(b->group_key, ui_key_zero()))
+    {
+      UI_Box *group_box = ui_box_from_key(b->group_key);
+      b->hot_t = group_box->hot_t;
+    }
   }
   
   //- rjf: fall-through interact with context menu
@@ -1533,7 +1555,13 @@ ui_end_build(void)
             }
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
-            Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+            Vec2F32 drawn_text_dim = {0};
+            {
+              Temp scratch = scratch_begin(0, 0);
+              DR_FRunList fruns = dr_fruns_from_fstrs(scratch.arena, b->tab_size, &b->display_fstrs);
+              drawn_text_dim = fruns.dim;
+              scratch_end(scratch);
+            }
             B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
                                                          rect.y0,
@@ -1542,11 +1570,12 @@ ui_end_build(void)
                                                   ui_state->mouse);
             if(text_is_truncated && mouse_is_hovering && !(b->flags & UI_BoxFlag_DisableTruncatedHover))
             {
-              if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+              if(!str8_match(box_display_string, ui_state->string_hover_string, 0) || box->font_size != ui_state->string_hover_size)
               {
                 arena_clear(ui_state->string_hover_arena);
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-                ui_state->string_hover_fancy_runs = dr_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_size = box->font_size;
+                ui_state->string_hover_fstrs = dr_fstrs_copy(ui_state->string_hover_arena, &b->display_fstrs);
                 ui_state->string_hover_begin_us = os_now_microseconds();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
@@ -1599,7 +1628,7 @@ ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis)
     case UI_SizeKind_TextContent:
     {
       F32 padding = root->pref_size[axis].value;
-      F32 text_size = root->display_string_runs.dim.x;
+      F32 text_size = root->display_fruns.dim.x;
       root->fixed_size.v[axis] = padding + text_size + root->text_padding*2;
     }break;
   }
@@ -1911,13 +1940,15 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
-  ui_push_palette(ui_bottom_palette());
+  ui_push_tag(str8_lit("."));
+  ui_push_tag(str8_lit("floating"));
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
-  ui_pop_palette();
+  ui_pop_tag();
+  ui_pop_tag();
   ui_pop_text_raster_flags();
   ui_pop_flags();
   ui_pop_parent();
@@ -1928,10 +1959,9 @@ internal void
 ui_tooltip_begin(void)
 {
   ui_tooltip_begin_base();
-  ui_push_palette(ui_state->widget_palette_info.tooltip_palette);
-  ui_set_next_squish(0.25f-ui_state->tooltip_open_t*0.25f);
+  ui_set_next_squish(0.1f-ui_state->tooltip_open_t*0.1f);
   ui_set_next_transparency(1-ui_state->tooltip_open_t);
-  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow)
+  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_SquishAnchored)
     UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     UI_CornerRadius(ui_top_font_size()*0.25f)
@@ -1960,7 +1990,6 @@ ui_tooltip_end(void)
   ui_row_end();
   UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_column_end();
-  ui_pop_palette();
   ui_tooltip_end_base();
 }
 
@@ -1998,9 +2027,9 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_pref_height(ui_bottom_pref_height());
   ui_push_focus_hot(UI_FocusKind_Root);
   ui_push_focus_active(UI_FocusKind_Root);
-  ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
+  ui_push_tag(str8_lit("."));
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
-  if(is_open != 0)
+  if(is_open != 0) UI_TagF("floating")
   {
     ui_state->ctx_menu_touched_this_frame = 1;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_RoundChildrenByParent;
@@ -2011,8 +2040,10 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
-    ui_state->ctx_menu_root->palette = ui_top_palette();
+    ui_state->ctx_menu_root->tags_key = ui_top_tags_key();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
+    ui_state->ctx_menu_root->text_color = ui_color_from_name(str8_lit("text"));
+    ui_state->ctx_menu_root->background_color = ui_color_from_name(str8_lit("background"));
     ui_spacer(ui_em(1.f, 1.f));
   }
   ui_state->is_in_open_ctx_menu = is_open;
@@ -2027,7 +2058,7 @@ ui_end_ctx_menu(void)
     ui_state->is_in_open_ctx_menu = 0;
     ui_spacer(ui_em(1.f, 1.f));
   }
-  ui_pop_palette();
+  ui_pop_tag();
   ui_pop_focus_active();
   ui_pop_focus_hot();
   ui_pop_pref_width();
@@ -2161,27 +2192,115 @@ ui_set_auto_focus_hot_key(UI_Key key)
   }
 }
 
-//- rjf: palette forming
+//- rjf: current style tags key
 
-internal UI_Palette *
-ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
+internal UI_Key
+ui_top_tags_key(void)
 {
-  UI_Palette *palette = push_array(ui_build_arena(), UI_Palette, 1);
-  if(base != 0)
+  UI_Key key = ui_key_zero();
+  if(ui_state->tags_key_stack_top != 0)
   {
-    MemoryCopyStruct(palette, base);
+    key = ui_state->tags_key_stack_top->key;
   }
-  for EachEnumVal(UI_ColorCode, code)
+  return key;
+}
+
+//- rjf: theme color lookups
+
+internal Vec4F32
+ui_color_from_name(String8 name)
+{
+  Vec4F32 result = ui_color_from_tags_key_name(ui_top_tags_key(), name);
+  return result;
+}
+
+internal Vec4F32
+ui_color_from_tags_key_name(UI_Key key, String8 name)
+{
+  Vec4F32 result = {0};
   {
-    if(overrides->colors[code].x != 0 ||
-       overrides->colors[code].y != 0 ||
-       overrides->colors[code].z != 0 ||
-       overrides->colors[code].w != 0)
+    //- rjf: compute final key, mixing (tags_key, name)
+    UI_Key final_key = ui_key_from_string(key, name);
+    
+    //- rjf: map to existing node
+    U64 slot_idx = final_key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+    UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
+    UI_ThemePatternCacheNode *node = 0;
+    for(UI_ThemePatternCacheNode *n = slot->first;
+        n != 0;
+        n = n->next)
     {
-      palette->colors[code] = overrides->colors[code];
+      if(ui_key_match(n->key, final_key))
+      {
+        node = n;
+      }
+    }
+    
+    //- rjf: no node? create
+    if(node == 0)
+    {
+      // rjf: map tags_key (without name) -> full list of tags
+      String8Array tags = {0};
+      {
+        U64 tags_cache_slot_idx = key.u64[0]%ui_state->tags_cache_slots_count;
+        UI_TagsCacheSlot *tags_cache_slot = &ui_state->tags_cache_slots[tags_cache_slot_idx];
+        for(UI_TagsCacheNode *n = tags_cache_slot->first; n != 0; n = n->next)
+        {
+          if(ui_key_match(n->key, key))
+          {
+            tags = n->tags;
+            break;
+          }
+        }
+      }
+      
+      // rjf: map tags to theme pattern
+      UI_Theme *theme = ui_state->theme;
+      UI_ThemePattern *pattern = 0;
+      U64 best_match_count = 0;
+      for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
+      {
+        UI_ThemePattern *p = &theme->patterns[idx];
+        U64 match_count = 0;
+        B32 name_matches = 0;
+        for EachIndex(key_tags_idx, tags.count+1)
+        {
+          String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
+          for EachIndex(p_tags_idx, p->tags.count)
+          {
+            if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
+            {
+              name_matches = (key_tags_idx == tags.count);
+              match_count += 1;
+              break;
+            }
+          }
+        }
+        if(name_matches && match_count > best_match_count)
+        {
+          pattern = p;
+          best_match_count = match_count;
+        }
+        if(match_count == tags.count+1)
+        {
+          break;
+        }
+      }
+      
+      // rjf: store in (key, name) -> (pattern) cache
+      node = push_array(ui_build_arena(), UI_ThemePatternCacheNode, 1);
+      SLLQueuePush(slot->first, slot->last, node);
+      node->key = final_key;
+      node->pattern = pattern;
+    }
+    
+    //- rjf: grab resultant color
+    if(node != 0 && node->pattern != 0)
+    {
+      result = node->pattern->linear;
     }
   }
-  return palette;
+  return result;
 }
 
 //- rjf: box node construction
@@ -2256,7 +2375,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: fill box
   {
     box->key = key;
-    box->flags = flags|ui_state->flags_stack.top->v;
+    box->flags = (flags | ui_state->flags_stack.top->v) & ~ui_state->omit_flags_stack.top->v;
     box->fastpath_codepoint = ui_state->fastpath_codepoint_stack.top->v;
     box->group_key = ui_state->group_key_stack.top->v;
     
@@ -2329,7 +2448,6 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     
     box->text_align = ui_state->text_alignment_stack.top->v;
     box->child_layout_axis = ui_state->child_layout_axis_stack.top->v;
-    box->palette = ui_state->palette_stack.top->v;
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
@@ -2344,6 +2462,27 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
+    box->tags_key = ui_key_zero();
+    if(ui_state->tags_key_stack_top != 0)
+    {
+      box->tags_key = ui_state->tags_key_stack_top->key;
+    }
+    if(ui_state->background_color_stack.top != &ui_state->background_color_nil_stack_top)
+    {
+      box->background_color = ui_state->background_color_stack.top->v;
+    }
+    else
+    {
+      box->background_color = ui_color_from_name(str8_lit("background"));
+    }
+    if(ui_state->text_color_stack.top != &ui_state->text_color_nil_stack_top)
+    {
+      box->text_color = ui_state->text_color_stack.top->v;
+    }
+    else
+    {
+      box->text_color = ui_color_from_name(str8_lit("text"));
+    }
   }
   
   //- rjf: auto-pop all stacks
@@ -2417,13 +2556,14 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
-  UI_ColorCode text_color_code = (box->flags & UI_BoxFlag_DrawTextWeak ? UI_ColorCode_TextWeak : UI_ColorCode_Text);
+  Vec4F32 text_color = box->text_color;
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
-    DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+    DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+    DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+    box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+    box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2434,17 +2574,19 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      DR_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
-      DR_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FStrNode pst_fstr_n = {0,                   {str8_skip(display_string, fpcp_pos+fpcp.size), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrNode cdp_fstr_n = {&pst_fstr_n, {str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), {box->font, box->text_raster_flags, text_color, box->font_size, 3.f, 0}}};
+      DR_FStrNode pre_fstr_n = {&cdp_fstr_n, {str8_prefix(display_string, fpcp_pos), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&pre_fstr_n, &pst_fstr_n, 3};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     else
     {
-      DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     scratch_end(scratch);
   }
@@ -2452,19 +2594,12 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings)
+ui_box_equip_display_fstrs(UI_Box *box, DR_FStrList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = dr_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
-}
-
-internal inline void
-ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, DR_FancyRunList *runs)
-{
-  box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = push_str8_copy(ui_build_arena(), string);
-  box->display_string_runs = dr_fancy_run_list_copy(ui_build_arena(), runs);
+  box->string = dr_string_from_fstrs(ui_build_arena(), strings);
+  box->display_fstrs = dr_fstrs_copy(ui_build_arena(), strings);
+  box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
 }
 
 internal inline void
@@ -2529,13 +2664,13 @@ ui_box_text_position(UI_Box *box)
     }break;
     case UI_TextAlign_Center:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p1.x) - text_dim.x - box->text_padding);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
@@ -2979,6 +3114,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
 {
   // rjf: get animation cache node
   UI_AnimNode *node = &ui_nil_anim_node;
+  if(ui_state != 0)
   {
     U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
     UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
@@ -3014,22 +3150,191 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   }
   
   // rjf: touch node & update parameters - grab current
-  node->last_touched_build_index = ui_state->build_index;
-  DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
-  MemoryCopyStruct(&node->params, params);
-  if(node->params.epsilon == 0)
+  if(node != &ui_nil_anim_node)
   {
-    node->params.epsilon = 0.01f;
-  }
-  if(node->params.rate == 1)
-  {
-    node->current = node->params.target;
+    node->last_touched_build_index = ui_state->build_index;
+    DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
+    if(params->reset)
+    {
+      node->current = params->initial;
+    }
+    MemoryCopyStruct(&node->params, params);
+    if(node->params.epsilon == 0)
+    {
+      node->params.epsilon = 0.005f;
+    }
+    if(node->params.rate == 1)
+    {
+      node->current = node->params.target;
+    }
   }
   return node->current;
 }
 
 ////////////////////////////////
 //~ rjf: Stacks
+
+#define UI_StackTopImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.top->v;
+
+#define UI_StackBottomImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.bottom_val;
+
+#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+if(node->next == &state->name_lower##_nil_stack_top)\
+{\
+state->name_lower##_stack.bottom_val = (node->v);\
+}\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+#define UI_StackPopImpl(state, name_upper, name_lower) \
+UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
+if(popped != &state->name_lower##_nil_stack_top)\
+{\
+SLLStackPop(state->name_lower##_stack.top);\
+SLLStackPush(state->name_lower##_stack.free, popped);\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+}\
+return popped->v;\
+
+#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+state->name_lower##_stack.auto_pop = 1;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+internal void
+ui__push_tags_key_from_appended_string(String8 string)
+{
+  // rjf: generate new key, by combining hash of this new string with the top
+  // of the tags key stack
+  UI_Key seed_key = {0};
+  if(ui_state->tags_key_stack_top != 0)
+  {
+    seed_key = ui_state->tags_key_stack_top->key;
+  }
+  UI_Key key = seed_key;
+  if(!str8_match(str8_lit("."), string, 0) && string.size > 0)
+  {
+    key = ui_key_from_string(seed_key, string);
+  }
+  
+  // rjf: push this new key onto the stack
+  {
+    UI_TagsKeyStackNode *node = ui_state->tags_key_stack_free;
+    if(node != 0)
+    {
+      SLLStackPop(ui_state->tags_key_stack_free);
+    }
+    else
+    {
+      node = push_array(ui_build_arena(), UI_TagsKeyStackNode, 1);
+    }
+    SLLStackPush(ui_state->tags_key_stack_top, node);
+    node->key = key;
+  }
+  
+  // rjf: store in tags cache
+  U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
+  UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
+  UI_TagsCacheNode *node = 0;
+  for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(ui_key_match(n->key, key))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8List tags = {0};
+    if(!str8_match(string, str8_lit("."), 0))
+    {
+      if(string.size != 0)
+      {
+        str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), string));
+      }
+      for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
+      {
+        if(n->v.size == 1 && n->v.str[0] == '.')
+        {
+          break;
+        }
+        if(n->v.size != 0)
+        {
+          str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), n->v));
+        }
+      }
+    }
+    node = push_array(ui_build_arena(), UI_TagsCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->key = key;
+    node->tags = str8_array_from_list(ui_build_arena(), &tags);
+    scratch_end(scratch);
+  }
+}
+
+internal void
+ui__pop_tags_key(void)
+{
+  if(ui_state->tags_key_stack_top != 0)
+  {
+    UI_TagsKeyStackNode *popped = ui_state->tags_key_stack_top;
+    SLLStackPop(ui_state->tags_key_stack_top);
+    SLLStackPush(ui_state->tags_key_stack_free, popped);
+  }
+}
+
+//- rjf: manual implementations
+
+internal String8
+ui_top_tag(void)
+{
+  UI_StackTopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_bottom_tag(void)
+{
+  UI_StackBottomImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_push_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackPushImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
+
+internal String8
+ui_pop_tag(void)
+{
+  ui__pop_tags_key();
+  UI_StackPopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_set_next_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackSetNextImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
 
 //- rjf: helpers
 
@@ -3116,47 +3421,34 @@ ui_pop_corner_radius(void)
   ui_pop_corner_radius_11();
 }
 
+internal void
+ui_push_tagf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  ui_push_tag(string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
+internal F32
+ui_top_px_height(void)
+{
+  F32 result = ui_top_font_size();
+  for(UI_PrefHeightNode *n = ui_state->pref_height_stack.top; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_SizeKind_Pixels)
+    {
+      result = n->v.value;
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Generated Code
-
-#define UI_StackTopImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.top->v;
-
-#define UI_StackBottomImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.bottom_val;
-
-#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-if(node->next == &state->name_lower##_nil_stack_top)\
-{\
-state->name_lower##_stack.bottom_val = (new_value);\
-}\
-state->name_lower##_stack.auto_pop = 0;\
-return old_value;
-
-#define UI_StackPopImpl(state, name_upper, name_lower) \
-UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
-if(popped != &state->name_lower##_nil_stack_top)\
-{\
-SLLStackPop(state->name_lower##_stack.top);\
-SLLStackPush(state->name_lower##_stack.free, popped);\
-state->name_lower##_stack.auto_pop = 0;\
-}\
-return popped->v;\
-
-#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-state->name_lower##_stack.auto_pop = 1;\
-return old_value;
 
 #include "generated/ui.meta.c"

@@ -4,6 +4,19 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
+String8 ctrl_entity_kind_code_name_table[9] =
+{
+{0},
+str8_lit_comp("root"),
+str8_lit_comp("machine"),
+str8_lit_comp("process"),
+str8_lit_comp("thread"),
+str8_lit_comp("module"),
+str8_lit_comp("entry_point"),
+str8_lit_comp("debug_info_path"),
+str8_lit_comp("pending_thread_name"),
+};
+
 String8 ctrl_entity_kind_display_string_table[9] =
 {
 {0},

@@ -242,7 +242,7 @@ str8_cstring_capped_reverse(void *raw_start, void *raw_cap)
   for(; ptr > start; )
   {
     ptr -= 1;
-
+    
     if (*ptr == '\0')
     {
       break;
@@ -427,23 +427,53 @@ str8_chop(String8 str, U64 amt){
 }
 
 internal String8
-str8_skip_chop_whitespace(String8 string){
+str8_skip_chop_whitespace(String8 string)
+{
   U8 *first = string.str;
   U8 *opl = first + string.size;
-  for (;first < opl; first += 1){
-    if (!char_is_space(*first)){
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_space(*first))
+    {
       break;
     }
   }
-  for (;opl > first;){
+  for(;opl > first;)
+  {
     opl -= 1;
-    if (!char_is_space(*opl)){
+    if(!char_is_space(*opl))
+    {
       opl += 1;
       break;
     }
   }
   String8 result = str8_range(first, opl);
-  return(result);
+  return result;
+}
+
+internal String8
+str8_skip_chop_slashes(String8 string)
+{
+  U8 *first = string.str;
+  U8 *opl = first + string.size;
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_slash(*first))
+    {
+      break;
+    }
+  }
+  for(;opl > first;)
+  {
+    opl -= 1;
+    if(!char_is_slash(*opl))
+    {
+      opl += 1;
+      break;
+    }
+  }
+  String8 result = str8_range(first, opl);
+  return result;
 }
 
 ////////////////////////////////
@@ -619,7 +649,7 @@ internal String8
 str8_from_memory_size(Arena *arena, U64 size)
 {
   String8 result;
-
+  
   if(size < KB(1))
   {
     result = push_str8f(arena, "%llu Bytes", size);
@@ -640,7 +670,7 @@ str8_from_memory_size(Arena *arena, U64 size)
   {
     result = push_str8f(arena, "%llu.%02llu TiB", size / TB(1), ((size * 100) / TB(1)) % 100);
   }
-
+  
   return result;
 }
 
@@ -648,7 +678,7 @@ internal String8
 str8_from_count(Arena *arena, U64 count)
 {
   String8 result;
-
+  
   if(count < 1 * 1000)
   {
     result = push_str8f(arena, "%llu", count);
@@ -689,7 +719,7 @@ str8_from_count(Arena *arena, U64 count)
       result = push_str8f(arena, "%lluB", count / 1000000000, frac);
     }
   }
-
+  
   return result;
 }
 
@@ -1113,6 +1143,13 @@ str8_list_from_flags(Arena *arena, String8List *list,
 
 ////////////////////////////////
 //~ rjf; String Arrays
+
+internal String8Array
+str8_array_zero(void)
+{
+  String8Array result = {0};
+  return result;
+}
 
 internal String8Array
 str8_array_from_list(Arena *arena, String8List *list)
@@ -1827,10 +1864,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
     String8 data4_hi_str = list.first->next->next->next->string;
     String8 data4_lo_str = list.first->next->next->next->next->string;
     if(str8_is_integer(data1_str, 16) && 
-        str8_is_integer(data2_str, 16) &&
-        str8_is_integer(data3_str, 16) &&
-        str8_is_integer(data4_hi_str, 16) &&
-        str8_is_integer(data4_lo_str, 16))
+       str8_is_integer(data2_str, 16) &&
+       str8_is_integer(data3_str, 16) &&
+       str8_is_integer(data4_hi_str, 16) &&
+       str8_is_integer(data4_lo_str, 16))
     {
       U64 data1    = u64_from_str8(data1_str, 16);
       U64 data2    = u64_from_str8(data2_str, 16);
@@ -1838,10 +1875,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
       U64 data4_hi = u64_from_str8(data4_hi_str, 16);
       U64 data4_lo = u64_from_str8(data4_lo_str, 16);
       if(data1 <= max_U32 &&
-          data2 <= max_U16 &&
-          data3 <= max_U16 &&
-          data4_hi <= max_U16 &&
-          data4_lo <= 0xffffffffffff)
+         data2 <= max_U16 &&
+         data3 <= max_U16 &&
+         data4_hi <= max_U16 &&
+         data4_lo <= 0xffffffffffff)
       {
         guid_out->data1 = (U32)data1;
         guid_out->data2 = (U16)data2;
@@ -2370,4 +2407,3 @@ str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out)
   *block_out = str8_substr(string, range);
   return block_out->size;
 }
-

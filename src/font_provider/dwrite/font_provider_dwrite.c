@@ -191,6 +191,7 @@ fp_init(void)
   //- rjf: make sharp-hinted rendering params
   {
     FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
+    gamma = 1.f;
     FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
     if(fp_dwrite_state->dwrite2_is_supported)
     {
@@ -219,6 +220,7 @@ fp_init(void)
   //- rjf: make sharp-unhinted rendering params
   {
     FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
+    gamma = 1.f;
     FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
     if(fp_dwrite_state->dwrite2_is_supported)
     {
@@ -247,6 +249,7 @@ fp_init(void)
   //- rjf: make smooth-hinted rendering params
   {
     FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
+    gamma = 1.f;
     FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
     if(fp_dwrite_state->dwrite2_is_supported)
     {
@@ -432,7 +435,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   F32 right_side_bearing = 0;
   if(font.face != 0)
   {
-    atlas_dim.y = (S16)ceil_f32((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em) + 1;
+    atlas_dim.y = (S16)round_f32((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent + font_metrics.lineGap) / design_units_per_em) + 1;
     for(U64 idx = 0; idx < glyphs_count; idx += 1)
     {
       DWRITE_GLYPH_METRICS *glyph_metrics = glyphs_metrics + idx;
@@ -476,11 +479,14 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   }
   
   //- rjf: draw glyph run
-  Vec2F32 draw_p = {0, (F32)atlas_dim.y};
+  Vec2F32 draw_p = {0, (F32)atlas_dim.y - 1};
   if(font.face != 0)
   {
     F32 descent = round_f32((96.f/72.f)*size * font_metrics.descent / design_units_per_em);
+    F32 line_gap = round_f32((96.f/72.f)*size * font_metrics.lineGap / design_units_per_em);
     draw_p.y -= descent;
+    draw_p.y -= line_gap;
+    draw_p.y += 1;
   }
   DWRITE_GLYPH_RUN glyph_run = {0};
   if(font.face != 0)

@@ -40,6 +40,12 @@
 # define thread_static __thread
 #endif
 
+#if COMPILER_MSVC
+# define force_inline __forceinline
+#elif COMPILER_CLANG || COMPILER_GCC
+# define force_inline __attribute__((always_inline))
+#endif
+
 ////////////////////////////////
 //~ rjf: Linkage Keyword Macros
 
@@ -118,8 +124,10 @@
 #define DeferLoop(begin, end)        for(int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 #define DeferLoopChecked(begin, end) for(int _i_ = 2 * !(begin); (_i_ == 2 ? ((end), 0) : !_i_); _i_ += 1, (end))
 
-#define EachEnumVal(type, it) type it = (type)0; it < type##_COUNT; it = (type)(it+1)
-#define EachNonZeroEnumVal(type, it) type it = (type)1; it < type##_COUNT; it = (type)(it+1)
+#define EachIndex(it, count) (U64 it = 0; it < (count); it += 1)
+#define EachElement(it, array) (U64 it = 0; it < ArrayCount(array); it += 1)
+#define EachEnumVal(type, it) (type it = (type)0; it < type##_COUNT; it = (type)(it+1))
+#define EachNonZeroEnumVal(type, it) (type it = (type)1; it < type##_COUNT; it = (type)(it+1))
 
 ////////////////////////////////
 //~ rjf: Memory Operation Macros
@@ -170,33 +178,49 @@
 ////////////////////////////////
 //~ rjf: Atomic Operations
 
-#if OS_WINDOWS
-# include <windows.h>
-# include <tmmintrin.h>
-# include <wmmintrin.h>
+#if COMPILER_MSVC
 # include <intrin.h>
 # if ARCH_X64
-#  define ins_atomic_u64_eval(x) InterlockedAdd64((volatile __int64 *)(x), 0)
-#  define ins_atomic_u64_inc_eval(x) InterlockedIncrement64((volatile __int64 *)(x))
-#  define ins_atomic_u64_dec_eval(x) InterlockedDecrement64((volatile __int64 *)(x))
-#  define ins_atomic_u64_eval_assign(x,c) InterlockedExchange64((volatile __int64 *)(x),(c))
-#  define ins_atomic_u64_add_eval(x,c) InterlockedAdd64((volatile __int64 *)(x), c)
+#  define ins_atomic_u64_eval(x)                 *((volatile U64 *)(x))
+#  define ins_atomic_u64_inc_eval(x)             InterlockedIncrement64((volatile __int64 *)(x))
+#  define ins_atomic_u64_dec_eval(x)             InterlockedDecrement64((volatile __int64 *)(x))
+#  define ins_atomic_u64_eval_assign(x,c)        InterlockedExchange64((volatile __int64 *)(x),(c))
+#  define ins_atomic_u64_add_eval(x,c)           InterlockedAdd64((volatile __int64 *)(x), c)
 #  define ins_atomic_u64_eval_cond_assign(x,k,c) InterlockedCompareExchange64((volatile __int64 *)(x),(k),(c))
-#  define ins_atomic_u32_eval(x,c) InterlockedAdd((volatile LONG *)(x), 0)
-#  define ins_atomic_u32_eval_assign(x,c) InterlockedExchange((volatile LONG *)(x),(c))
+#  define ins_atomic_u32_eval(x)                 *((volatile U32 *)(x))
+#  define ins_atomic_u32_inc_eval(x)             InterlockedIncrement((volatile LONG *)x)
+#  define ins_atomic_u32_eval_assign(x,c)        InterlockedExchange((volatile LONG *)(x),(c))
 #  define ins_atomic_u32_eval_cond_assign(x,k,c) InterlockedCompareExchange((volatile LONG *)(x),(k),(c))
-#  define ins_atomic_ptr_eval_assign(x,c) (void*)ins_atomic_u64_eval_assign((volatile __int64 *)(x), (__int64)(c))
+#  define ins_atomic_u32_add_eval(x,c)           InterlockedAdd((volatile LONG *)(x), c)
 # else
-#  error Atomic intrinsics not defined for this operating system / architecture combination.
+#  error Atomic intrinsics not defined for this compiler / architecture combination.
 # endif
-#elif OS_LINUX
-# if ARCH_X64
-#  define ins_atomic_u64_inc_eval(x) __sync_fetch_and_add((volatile U64 *)(x), 1)
-# else
-#  error Atomic intrinsics not defined for this operating system / architecture combination.
-# endif
+#elif COMPILER_CLANG || COMPILER_GCC
+#  define ins_atomic_u64_eval(x)                 __atomic_load_n(x, __ATOMIC_SEQ_CST)
+#  define ins_atomic_u64_inc_eval(x)             (__atomic_fetch_add((volatile U64 *)(x), 1, __ATOMIC_SEQ_CST) + 1)
+#  define ins_atomic_u64_dec_eval(x)             (__atomic_fetch_sub((volatile U64 *)(x), 1, __ATOMIC_SEQ_CST) - 1)
+#  define ins_atomic_u64_eval_assign(x,c)        __atomic_exchange_n(x, c, __ATOMIC_SEQ_CST)
+#  define ins_atomic_u64_add_eval(x,c)           (__atomic_fetch_add((volatile U64 *)(x), c, __ATOMIC_SEQ_CST) + (c))
+#  define ins_atomic_u64_eval_cond_assign(x,k,c) ({ U64 _new = (c); __atomic_compare_exchange_n((volatile U64 *)(x),&_new,(k),0,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST); _new; })
+#  define ins_atomic_u32_eval(x)                 __atomic_load_n(x, __ATOMIC_SEQ_CST)
+#  define ins_atomic_u32_inc_eval(x)             (__atomic_fetch_add((volatile U32 *)(x), 1, __ATOMIC_SEQ_CST) + 1)
+#  define ins_atomic_u32_add_eval(x,c)           (__atomic_fetch_add((volatile U32 *)(x), c, __ATOMIC_SEQ_CST) + (c))
+#  define ins_atomic_u32_eval_assign(x,c)        __atomic_exchange_n(x, c, __ATOMIC_SEQ_CST)
+#  define ins_atomic_u32_eval_cond_assign(x,k,c) ({ U32 _new = (c); __atomic_compare_exchange_n((volatile U32 *)(x),&_new,(k),0,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST); _new; })
 #else
-# error Atomic intrinsics not defined for this operating system.
+#  error Atomic intrinsics not defined for this compiler / architecture.
+#endif
+
+#if ARCH_64BIT
+# define ins_atomic_ptr_eval_cond_assign(x,k,c) (void*)ins_atomic_u64_eval_cond_assign((volatile U64 *)(x), (U64)(k), (U64)(c))
+# define ins_atomic_ptr_eval_assign(x,c)        (void*)ins_atomic_u64_eval_assign((volatile U64 *)(x), (U64)(c))
+# define ins_atomic_ptr_eval(x)                 (void*)ins_atomic_u64_eval((volatile U64 *)x)
+#elif ARCH_32BIT
+# define ins_atomic_ptr_eval_cond_assign(x,k,c) (void*)ins_atomic_u32_eval_cond_assign((volatile U32 *)(x), (U32)(k), (U32)(c))
+# define ins_atomic_ptr_eval_assign(x,c)        (void*)ins_atomic_u32_eval_assign((volatile U32 *)(x), (U32)(c))
+# define ins_atomic_ptr_eval(x)                 (void*)ins_atomic_u32_eval((volatile U32 *)x)
+#else
+# error Atomic intrinsics for pointers not defined for this architecture.
 #endif
 
 ////////////////////////////////
@@ -430,16 +454,25 @@ typedef enum OperatingSystem
 }
 OperatingSystem;
 
-typedef enum Architecture
+typedef enum ImageType
 {
-  Architecture_Null,
-  Architecture_x64,
-  Architecture_x86,
-  Architecture_arm64,
-  Architecture_arm32,
-  Architecture_COUNT,
+  Image_Null,
+  Image_CoffPe,
+  Image_Elf32,
+  Image_Elf64,
+  Image_Macho
+} ImageType;
+
+typedef enum Arch
+{
+  Arch_Null,
+  Arch_x64,
+  Arch_x86,
+  Arch_arm64,
+  Arch_arm32,
+  Arch_COUNT,
 }
-Architecture;
+Arch;
 
 typedef enum Compiler
 {
@@ -466,6 +499,51 @@ struct TxtRng
 {
   TxtPt min;
   TxtPt max;
+};
+
+////////////////////////////////
+//~ Globally Unique Ids
+
+typedef union Guid Guid;
+union Guid
+{
+  struct
+  {
+    U32 data1;
+    U16 data2;
+    U16 data3;
+    U8  data4[8];
+  };
+  U8 v[16];
+};
+StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
+
+////////////////////////////////
+//~ Arrays
+
+typedef struct U16Array U16Array;
+struct U16Array
+{
+  U64  count;
+  U16 *v;
+};
+typedef struct U32Array U32Array;
+struct U32Array
+{
+  U64  count;
+  U32 *v;
+};
+typedef struct U64Array U64Array;
+struct U64Array
+{
+  U64  count;
+  U64 *v;
+};
+typedef struct U128Array U128Array;
+struct U128Array
+{
+  U64   count;
+  U128 *v;
 };
 
 ////////////////////////////////
@@ -734,7 +812,16 @@ internal U16 bswap_u16(U16 x);
 internal U32 bswap_u32(U32 x);
 internal U64 bswap_u64(U64 x);
 
-internal U64 count_bits_set16(U16 val);
+#if ARCH_LITTLE_ENDIAN
+# define from_be_u16(x) bswap_u16(x)
+# define from_be_u32(x) bswap_u32(x)
+# define from_be_u64(x) bswap_u64(x)
+#else
+# define from_be_u16(x) (x)
+# define from_be_u32(x) (x)
+# define from_be_u64(x) (x)
+#endif
+
 internal U64 count_bits_set32(U32 val);
 internal U64 count_bits_set64(U64 val);
 
@@ -770,19 +857,20 @@ internal B32 txt_rng_contains(TxtRng r, TxtPt pt);
 ////////////////////////////////
 //~ rjf: Toolchain/Environment Enum Functions
 
-internal U64 bit_size_from_arch(Architecture arch);
-internal U64 max_instruction_size_from_arch(Architecture arch);
+internal U64 bit_size_from_arch(Arch arch);
+internal U64 max_instruction_size_from_arch(Arch arch);
 
 internal OperatingSystem operating_system_from_context(void);
-internal Architecture architecture_from_context(void);
+internal Arch arch_from_context(void);
 internal Compiler compiler_from_context(void);
 
 ////////////////////////////////
 //~ rjf: Time Functions
 
 internal DenseTime dense_time_from_date_time(DateTime date_time);
-internal DateTime date_time_from_dense_time(DenseTime time);
-internal DateTime date_time_from_micro_seconds(U64 time);
+internal DateTime  date_time_from_dense_time(DenseTime time);
+internal DateTime  date_time_from_micro_seconds(U64 time);
+internal DateTime  date_time_from_unix_time(U64 unix_time);
 
 ////////////////////////////////
 //~ rjf: Non-Fancy Ring Buffer Reads/Writes

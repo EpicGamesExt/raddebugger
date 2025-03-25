@@ -59,6 +59,7 @@ typedef enum E_MemberKind
   E_MemberKind_VirtualBase,
   E_MemberKind_NestedType,
   E_MemberKind_Padding,
+  E_MemberKind_Query,
   E_MemberKind_COUNT
 }
 E_MemberKind;
@@ -66,12 +67,13 @@ E_MemberKind;
 typedef U32 E_TypeFlags;
 enum
 {
-  E_TypeFlag_Const      = (1<<0),
-  E_TypeFlag_Volatile   = (1<<1),
-  E_TypeFlag_External   = (1<<2),
-  E_TypeFlag_IsPlainText= (1<<3),
-  E_TypeFlag_IsCodeText = (1<<4),
-  E_TypeFlag_IsPathText = (1<<5),
+  E_TypeFlag_Const            = (1<<0),
+  E_TypeFlag_Volatile         = (1<<1),
+  E_TypeFlag_External         = (1<<2),
+  E_TypeFlag_IsPlainText      = (1<<3),
+  E_TypeFlag_IsCodeText       = (1<<4),
+  E_TypeFlag_IsPathText       = (1<<5),
+  E_TypeFlag_EditableChildren = (1<<6),
 };
 
 typedef struct E_Member E_Member;
@@ -80,7 +82,6 @@ struct E_Member
   E_MemberKind kind;
   E_TypeKey type_key;
   String8 name;
-  String8 pretty_name;
   U64 off;
   E_TypeKeyList inheritance_key_chain;
 };
@@ -129,12 +130,39 @@ struct E_Type
   String8 name;
   U64 byte_size;
   U64 count;
+  U64 depth;
   U32 off;
+  Arch arch;
   E_TypeKey direct_type_key;
   E_TypeKey owner_type_key;
   E_TypeKey *param_type_keys;
   E_Member *members;
   E_EnumVal *enum_vals;
+};
+
+////////////////////////////////
+//~ rjf: String -> Type Key Map Data Structure
+
+typedef struct E_String2TypeKeyNode E_String2TypeKeyNode;
+struct E_String2TypeKeyNode
+{
+  E_String2TypeKeyNode *next;
+  String8 string;
+  E_TypeKey key;
+};
+
+typedef struct E_String2TypeKeySlot E_String2TypeKeySlot;
+struct E_String2TypeKeySlot
+{
+  E_String2TypeKeyNode *first;
+  E_String2TypeKeyNode *last;
+};
+
+typedef struct E_String2TypeKeyMap E_String2TypeKeyMap;
+struct E_String2TypeKeyMap
+{
+  U64 slots_count;
+  E_String2TypeKeySlot *slots;
 };
 
 ////////////////////////////////
@@ -151,6 +179,7 @@ struct E_ConsTypeParams
   String8 name;
   E_TypeKey direct_key;
   U64 count;
+  U64 depth;
   E_Member *members;
   E_EnumVal *enum_vals;
 };
@@ -172,6 +201,23 @@ struct E_ConsTypeSlot
   E_ConsTypeNode *last;
 };
 
+//- rjf: unpacked type cache
+
+typedef struct E_TypeCacheNode E_TypeCacheNode;
+struct E_TypeCacheNode
+{
+  E_TypeCacheNode *next;
+  E_TypeKey key;
+  E_Type *type;
+};
+
+typedef struct E_TypeCacheSlot E_TypeCacheSlot;
+struct E_TypeCacheSlot
+{
+  E_TypeCacheNode *first;
+  E_TypeCacheNode *last;
+};
+
 //- rjf: member lookup cache types
 
 typedef struct E_MemberHashNode E_MemberHashNode;
@@ -188,6 +234,21 @@ struct E_MemberHashSlot
   E_MemberHashNode *last;
 };
 
+typedef struct E_MemberFilterNode E_MemberFilterNode;
+struct E_MemberFilterNode
+{
+  E_MemberFilterNode *next;
+  String8 filter;
+  E_MemberArray members_filtered;
+};
+
+typedef struct E_MemberFilterSlot E_MemberFilterSlot;
+struct E_MemberFilterSlot
+{
+  E_MemberFilterNode *first;
+  E_MemberFilterNode *last;
+};
+
 typedef struct E_MemberCacheNode E_MemberCacheNode;
 struct E_MemberCacheNode
 {
@@ -196,6 +257,8 @@ struct E_MemberCacheNode
   E_MemberArray members;
   U64 member_hash_slots_count;
   E_MemberHashSlot *member_hash_slots;
+  U64 member_filter_slots_count;
+  E_MemberFilterSlot *member_filter_slots;
 };
 
 typedef struct E_MemberCacheSlot E_MemberCacheSlot;
@@ -241,6 +304,10 @@ struct E_TypeState
   // rjf: member cache table
   U64 member_cache_slots_count;
   E_MemberCacheSlot *member_cache_slots;
+  
+  // rjf: unpacked type cache
+  U64 type_cache_slots_count;
+  E_TypeCacheSlot *type_cache_slots;
 };
 
 ////////////////////////////////
@@ -292,15 +359,15 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 #define e_type_key_cons(...) e_type_key_cons_(&(E_ConsTypeParams){.kind = E_TypeKind_Null, __VA_ARGS__})
 
 //- rjf: constructed type construction helpers
-internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
-internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags);
+internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
+internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_base(Type *type);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
 
 //- rjf: key -> info extraction
-internal U64 e_hash_from_type_key(E_TypeKey key);
+internal U64 e_hash_from_type(E_Type *type);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
@@ -322,11 +389,16 @@ internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
 //- rjf: type key data structures
 internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
+internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
+internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);
+internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
+internal E_Type *e_type_from_key__cached(E_TypeKey key);
 internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
+internal E_MemberArray e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
 internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);
 

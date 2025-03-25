@@ -189,11 +189,11 @@ fs_key_from_path_range(String8 path, Rng1U64 range)
   return key;
 }
 
-internal U64
-fs_timestamp_from_path(String8 path)
+internal FileProperties
+fs_properties_from_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  U64 result = 0;
+  FileProperties result = {0};
   path = path_normalized_from_string(scratch.arena, path);
   U64 path_hash = fs_little_hash_from_string(path);
   U64 slot_idx = path_hash%fs_shared->slots_count;
@@ -206,33 +206,7 @@ fs_timestamp_from_path(String8 path)
     {
       if(str8_match(path, n->path, 0))
       {
-        result = n->timestamp;
-        break;
-      }
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-internal U64
-fs_size_from_path(String8 path)
-{
-  Temp scratch = scratch_begin(0, 0);
-  U64 result = 0;
-  path = path_normalized_from_string(scratch.arena, path);
-  U64 path_hash = fs_little_hash_from_string(path);
-  U64 slot_idx = path_hash%fs_shared->slots_count;
-  U64 stripe_idx = slot_idx%fs_shared->stripes_count;
-  FS_Slot *slot = &fs_shared->slots[slot_idx];
-  FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
-  {
-    for(FS_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(path, n->path, 0))
-      {
-        result = n->size;
+        result = n->props;
         break;
       }
     }
@@ -314,8 +288,9 @@ ASYNC_WORK_DEF(fs_stream_work)
   ProfBegin("load \"%.*s\"", str8_varg(path));
   FileProperties pre_props = os_properties_from_file_path(path);
   U64 range_size = dim_1u64(range);
-  U64 read_size = Min(pre_props.size, range_size);
+  U64 read_size = Min(pre_props.size - range.min, range_size);
   OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
   U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
   data_arena_size += KB(4)-1;
   data_arena_size -= data_arena_size%KB(4);
@@ -328,8 +303,12 @@ ASYNC_WORK_DEF(fs_stream_work)
   os_file_close(file);
   FileProperties post_props = os_properties_from_file_path(path);
   
-  //- rjf: abort if modification timestamps differ - we did not successfully read the file
-  if(pre_props.modified != post_props.modified)
+  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
+  B32 read_good = (pre_props.modified == post_props.modified &&
+                   pre_props.size == post_props.size &&
+                   read_size == data.size &&
+                   (file_handle_is_valid || pre_props.flags & FilePropertyFlag_IsFolder));
+  if(!read_good)
   {
     ProfScope("abort")
     {
@@ -360,29 +339,13 @@ ASYNC_WORK_DEF(fs_stream_work)
         break;
       }
     }
-    if(node != 0)
+    if(node != 0 && read_good)
     {
-      if(node->timestamp != 0)
+      if(node->props.modified != 0)
       {
         ins_atomic_u64_inc_eval(&fs_shared->change_gen);
       }
-      if(post_props.modified == pre_props.modified)
-      {
-        node->timestamp = post_props.modified;
-        node->size = post_props.size;
-      }
-      U64 range_hash = fs_little_hash_from_string(str8_struct(&range));
-      U64 range_slot_idx = range_hash%node->slots_count;
-      FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
-      FS_RangeNode *range_node = 0;
-      for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-      {
-        if(MemoryMatchStruct(&n->range, &range))
-        {
-          range_node = n;
-          break;
-        }
-      }
+      node->props = post_props;
     }
   }
   os_condition_variable_broadcast(path_stripe->cv);
@@ -413,7 +376,7 @@ fs_detector_thread__entry_point(void *p)
         for(FS_Node *n = slot->first; n != 0; n = n->next)
         {
           FileProperties props = os_properties_from_file_path(n->path);
-          if(props.modified != n->timestamp)
+          if(props.modified != n->props.modified)
           {
             for(U64 range_slot_idx = 0; range_slot_idx < n->slots_count; range_slot_idx += 1)
             {

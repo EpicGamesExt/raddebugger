@@ -262,12 +262,14 @@ di_scope_open(void)
     scope = push_array_no_zero(di_tctx->arena, DI_Scope, 1);
   }
   MemoryZeroStruct(scope);
+  DLLPushBack(di_tctx->first_scope, di_tctx->last_scope, scope);
   return scope;
 }
 
 internal void
 di_scope_close(DI_Scope *scope)
 {
+  DLLRemove(di_tctx->first_scope, di_tctx->last_scope, scope);
   for(DI_Touch *t = scope->first_touch, *next = 0; t != 0; t = next)
   {
     next = t->next;
@@ -1349,7 +1351,6 @@ di_search_thread__entry_point(void *p)
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
-    DI_Scope *di_scope = di_scope_open();
     
     //- rjf: get next key, unpack
     U128 key = di_u2s_dequeue_req(thread_idx);
@@ -1379,6 +1380,9 @@ di_search_thread__entry_point(void *p)
         }
       }
     }
+    
+    //- rjf: begin debug info scope
+    DI_Scope *di_scope = di_scope_open();
     
     //- rjf: get all rdis
     U64 rdis_count = params.dbgi_keys.count;
@@ -1427,6 +1431,9 @@ di_search_thread__entry_point(void *p)
       di_search_item_chunk_list_concat_in_place(&items_list, &out->items);
       cancelled = (cancelled || out->cancelled);
     }
+    
+    //- rjf: end debug info scope
+    di_scope_close(di_scope);
     
     //- rjf: list -> array
     DI_SearchItemArray items = {0};
@@ -1496,7 +1503,6 @@ di_search_thread__entry_point(void *p)
       }
     }
     
-    di_scope_close(di_scope);
     scratch_end(scratch);
   }
 }

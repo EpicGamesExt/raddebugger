@@ -3,11 +3,11 @@
 
 //- rjf: stack table
 
-@table(name, name_lower, type, default)
+@table(name, name_lower, type, default, manual_impl)
 UI_StackTable:
 {
   //- rjf: parents
-  { Parent                             parent                       `UI_Box *`             `&ui_nil_box`                    }
+  { Parent                             parent                       `UI_Box *`             `&ui_nil_box`                      }
   
   //- rjf: layout params
   { ChildLayoutAxis                    child_layout_axis             Axis2                 `Axis2_X`                          }
@@ -23,6 +23,7 @@ UI_StackTable:
   //- rjf: flags
   { PermissionFlags                    permission_flags              UI_PermissionFlags    UI_PermissionFlag_All              }
   { Flags                              flags                         UI_BoxFlags           0                                  }
+  { OmitFlags                          omit_flags                    UI_BoxFlags           0                                  }
   
   //- rjf: interaction
   { FocusHot                           focus_hot                     UI_FocusKind          UI_FocusKind_Null                  }
@@ -32,7 +33,9 @@ UI_StackTable:
   
   //- rjf: colors
   { Transparency                       transparency                  F32                   0                                  }
-  { Palette                            palette                      `UI_Palette*    `     `&ui_g_nil_palette`                 }
+  { Tag                                tag                           String8              `str8_lit("")`                    1 }
+  { BackgroundColor                    background_color              Vec4F32              `v4f32(0, 0, 0, 0)`                 }
+  { TextColor                          text_color                    Vec4F32              `v4f32(0, 0, 0, 0)`                 }
   
   //- rjf: squish
   { Squish                             squish                        F32                   0                                  }
@@ -94,7 +97,7 @@ UI_StackTable:
   `#define UI_DeclStacks \\`;
   `struct\\`;
   `{\\`;
-    @expand(UI_StackTable a) `struct { UI_$(a.name)Node *top; $(a.type) bottom_val; UI_$(a.name)Node *free; B32 auto_pop; } $(a.name_lower)_stack;\\`;
+    @expand(UI_StackTable a) `struct { UI_$(a.name)Node *top; $(a.type) bottom_val; UI_$(a.name)Node *free; U64 gen; B32 auto_pop; } $(a.name_lower)_stack;\\`;
     `}`;
 }
 
@@ -148,13 +151,13 @@ UI_StackTable:
 @gen @c_file
 {
   @expand(UI_StackTable a)
-    `internal $(a.type) ui_top_$(a.name_lower)(void) { UI_StackTopImpl(ui_state, $(a.name), $(a.name_lower)) }`;
+    `$(a.manual_impl == "" -> "internal " .. a.type .. " ui_top_" .. a.name_lower .. "(void) { UI_StackTopImpl(ui_state, " .. a.name .. ", " .. a.name_lower .. ") }")`;
   @expand(UI_StackTable a)
-    `internal $(a.type) ui_bottom_$(a.name_lower)(void) { UI_StackBottomImpl(ui_state, $(a.name), $(a.name_lower)) }`;
+    `$(a.manual_impl == "" -> "internal " .. a.type .. " ui_bottom_" .. a.name_lower .. "(void) { UI_StackBottomImpl(ui_state, " .. a.name .. ", " .. a.name_lower .. ") }")`;
   @expand(UI_StackTable a)
-    `internal $(a.type) ui_push_$(a.name_lower)($(a.type) v) { UI_StackPushImpl(ui_state, $(a.name), $(a.name_lower), $(a.type), v) }`;
+    `$(a.manual_impl == "" -> "internal " .. a.type .. " ui_push_" .. a.name_lower .. "(" .. a.type .. " v) { UI_StackPushImpl(ui_state, " .. a.name .. ", " .. a.name_lower .. ", " .. a.type .. ", v) }")`;
   @expand(UI_StackTable a)
-    `internal $(a.type) ui_pop_$(a.name_lower)(void) { UI_StackPopImpl(ui_state, $(a.name), $(a.name_lower)) }`;
+    `$(a.manual_impl == "" -> "internal " .. a.type .. " ui_pop_" .. a.name_lower .. "(void) { UI_StackPopImpl(ui_state, " .. a.name .. ", " .. a.name_lower .. ") }")`;
   @expand(UI_StackTable a)
-    `internal $(a.type) ui_set_next_$(a.name_lower)($(a.type) v) { UI_StackSetNextImpl(ui_state, $(a.name), $(a.name_lower), $(a.type), v) }`;
+    `$(a.manual_impl == "" -> "internal " .. a.type .. " ui_set_next_" .. a.name_lower .. "(" .. a.type .. " v) { UI_StackSetNextImpl(ui_state, " .. a.name .. ", " .. a.name_lower .. ", " .. a.type .. ", v) }")`;
 }

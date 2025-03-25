@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[48] =
+String8 e_expr_kind_strings[51] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -49,6 +49,7 @@ str8_lit_comp("BitOr"),
 str8_lit_comp("LogAnd"),
 str8_lit_comp("LogOr"),
 str8_lit_comp("Ternary"),
+str8_lit_comp("Call"),
 str8_lit_comp("LeafBytecode"),
 str8_lit_comp("LeafMember"),
 str8_lit_comp("LeafStringLiteral"),
@@ -58,12 +59,14 @@ str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
 str8_lit_comp("LeafIdent"),
 str8_lit_comp("LeafOffset"),
+str8_lit_comp("LeafValue"),
 str8_lit_comp("LeafFilePath"),
 str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
 str8_lit_comp("Define"),
+str8_lit_comp("Tag"),
 };
 
 String8 e_interpretation_code_display_strings[11] =
@@ -81,7 +84,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[48] =
+E_OpInfo e_expr_kind_op_info_table[51] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -116,6 +119,8 @@ E_OpInfo e_expr_kind_op_info_table[48] =
 { E_OpKind_Binary, 11, str8_lit_comp(""), str8_lit_comp("&&"), str8_lit_comp("") },
 { E_OpKind_Binary, 12, str8_lit_comp(""), str8_lit_comp("||"), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp("?"), str8_lit_comp(":") },
+{ E_OpKind_Null, 0, str8_lit_comp("("), str8_lit_comp(","), str8_lit_comp(")") },
+{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -131,6 +136,7 @@ E_OpInfo e_expr_kind_op_info_table[48] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Binary, 13, str8_lit_comp(""), str8_lit_comp("="), str8_lit_comp("") },
+{ E_OpKind_Null, 0, str8_lit_comp("=>"), str8_lit_comp(","), str8_lit_comp("") },
 };
 
 U8 e_kind_basic_byte_size_table[56] =
@@ -250,7 +256,7 @@ str8_lit_comp("class"),
 str8_lit_comp("enum"),
 str8_lit_comp("bitfield"),
 str8_lit_comp("variadic"),
-str8_lit_comp("collection"),
+str8_lit_comp("set"),
 };
 
 C_LINKAGE_END

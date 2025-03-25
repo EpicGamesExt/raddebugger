@@ -5,21 +5,64 @@
 #define RADDBG_WIDGETS_H
 
 ////////////////////////////////
-//~ rjf: Line Edit Types
+//~ rjf: Cell Types
 
-typedef U32 RD_LineEditFlags;
+typedef U32 RD_CellFlags;
 enum
 {
-  RD_LineEditFlag_Expander            = (1<<0),
-  RD_LineEditFlag_ExpanderSpace       = (1<<1),
-  RD_LineEditFlag_ExpanderPlaceholder = (1<<2),
-  RD_LineEditFlag_DisableEdit         = (1<<3),
-  RD_LineEditFlag_CodeContents        = (1<<4),
-  RD_LineEditFlag_KeyboardClickable   = (1<<5),
-  RD_LineEditFlag_Border              = (1<<6),
-  RD_LineEditFlag_NoBackground        = (1<<7),
-  RD_LineEditFlag_PreferDisplayString = (1<<8),
-  RD_LineEditFlag_DisplayStringIsCode = (1<<9),
+  //- rjf: expander
+  RD_CellFlag_Expander            = (1<<0),
+  RD_CellFlag_ExpanderSpace       = (1<<1),
+  RD_CellFlag_ExpanderPlaceholder = (1<<2),
+  
+  //- rjf: toggle switch extension
+  RD_CellFlag_ToggleSwitch        = (1<<3),
+  
+  //- rjf: slider extension
+  RD_CellFlag_Slider              = (1<<4),
+  
+  //- rjf: behavior
+  RD_CellFlag_DisableEdit         = (1<<5),
+  RD_CellFlag_KeyboardClickable   = (1<<6),
+  RD_CellFlag_SingleClickActivate = (1<<7),
+  
+  //- rjf: contents description
+  RD_CellFlag_CodeContents        = (1<<8),
+  
+  //- rjf: appearance
+  RD_CellFlag_Border              = (1<<9),
+  RD_CellFlag_NoBackground        = (1<<10),
+  RD_CellFlag_Button              = (1<<11),
+  RD_CellFlag_PreferDisplayString = (1<<12),
+  RD_CellFlag_DisplayStringIsCode = (1<<13),
+};
+
+typedef struct RD_CellParams RD_CellParams;
+struct RD_CellParams
+{
+  //- rjf: catachall parameters
+  RD_CellFlags flags;
+  S32 depth;
+  FuzzyMatchRangeList *fuzzy_matches;
+  String8 pre_edit_value;
+  DR_FStrList fstrs;
+  
+  //- rjf: expander r/w info
+  B32 *expanded_out;
+  
+  //- rjf: toggle-switch r/w info
+  B32 *toggled_out;
+  
+  //- rjf: slider info r/w info
+  Rng1U64 slider_value_range;
+  U64 *slider_value_out;
+  
+  //- rjf: text editing r/w info
+  TxtPt *cursor;
+  TxtPt *mark;
+  U8 *edit_buffer;
+  U64 edit_buffer_size;
+  U64 *edit_string_size_out;
 };
 
 ////////////////////////////////
@@ -43,9 +86,9 @@ struct RD_CodeSliceParams
   String8 *line_text;
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
-  RD_EntityList *line_bps;
+  RD_CfgList *line_bps;
   CTRL_EntityList *line_ips;
-  RD_EntityList *line_pins;
+  RD_CfgList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
@@ -78,6 +121,14 @@ struct RD_CodeSliceSignal
 #define RD_Font(slot) UI_Font(rd_font_from_slot(slot)) UI_TextRasterFlags(rd_raster_flags_from_slot((slot)))
 
 ////////////////////////////////
+//~ rjf: UI Widgets: Fancy Title Strings
+
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
+internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
+internal DR_FStrList rd_title_fstrs_from_file_path(Arena *arena, String8 file_path);
+
+////////////////////////////////
 //~ rjf: UI Widgets: Loading Overlay
 
 internal void rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target);
@@ -108,13 +159,13 @@ internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count
 internal UI_Signal rd_label(String8 string);
 internal UI_Signal rd_error_label(String8 string);
 internal B32 rd_help_label(String8 string);
-internal DR_FancyStringList rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
+internal DR_FStrList rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
 internal UI_Box *rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal rd_line_editf(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal rd_cell(RD_CellParams *params, String8 string);
+internal UI_Signal rd_cellf(RD_CellParams *params, char *fmt, ...);
 
 #endif // RADDBG_WIDGETS_H
