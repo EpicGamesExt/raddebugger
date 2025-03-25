@@ -5581,7 +5581,17 @@ rd_view_ui(Rng2F32 rect)
                         {
                           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_info->eval.space);
                           RD_Cfg *cfg = rd_cfg_from_eval_space(row_info->eval.space);
-                          rd_cmd(RD_CmdKind_RunCommand, .cfg = cfg->id, .ctrl_entity = entity->handle, .cmd_name = cell_info.cmd_name);
+                          RD_RegsScope(.cfg = cfg->id, .ctrl_entity = entity->handle)
+                          {
+                            if(cfg != &rd_nil_cfg || entity != &ctrl_entity_nil)
+                            {
+                              rd_push_cmd(cell_info.cmd_name, rd_regs());
+                            }
+                            else
+                            {
+                              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cell_info.cmd_name);
+                            }
+                          }
                         }
                         
                         // rjf: row has callstack info? -> select unwind
@@ -7487,23 +7497,6 @@ rd_window_frame(void)
           }
         }
         
-        // rjf: determine if we have a top-level visualizer
-        EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
-        RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
-        
-        // rjf: determine view name
-        String8 view_name = str8_lit("watch");
-        if(view_ui_rule != &rd_nil_view_ui_rule)
-        {
-          view_name = view_ui_rule->name;
-        }
-        
-        // rjf: build view
-        RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
-        RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-        rd_cfg_new(explicit_root, str8_lit("1"));
-        
         // rjf: request frames if we're waiting to open
         if(ws->hover_eval_string.size != 0 &&
            !hover_eval_is_open &&
@@ -7513,47 +7506,67 @@ rd_window_frame(void)
           rd_request_frame();
         }
         
-        // rjf: determine size of hover evaluation container
-        EV_BlockTree predicted_block_tree = {0};
-        RD_RegsScope(.view = view->id)
-        {
-          predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
-        }
-        F32 row_height_px = ui_top_px_height();
-        U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
-        if(ws->hover_eval_focused)
-        {
-          max_row_count *= 3;
-        }
-        U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
-        F32 width_px = floor_f32(70.f*ui_top_font_size());
-        F32 height_px = needed_row_count*row_height_px;
-        
-        // rjf: if arbitrary visualizer, pick catchall size
-        if(view_ui_rule != &rd_nil_view_ui_rule)
-        {
-          height_px = floor_f32(40.f*ui_top_font_size());
-        }
-        
-        // rjf: determine hover eval top-level rect
-        Rng2F32 rect = r2f32p(ws->hover_eval_spawn_pos.x,
-                              ws->hover_eval_spawn_pos.y,
-                              ws->hover_eval_spawn_pos.x + width_px,
-                              ws->hover_eval_spawn_pos.y + height_px);
-        
-        // rjf: push hover eval task
+        // rjf: build hover eval task
         if(build_hover_eval)
         {
-          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
-          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
-          hover_eval_floating_view_task = t;
-          t->view          = view;
-          t->row_height_px = row_height_px;
-          t->rect          = rect;
-          t->view_name     = view_name;
-          t->expr          = hover_eval_expr;
-          t->is_focused    = ws->hover_eval_focused;
-          t->is_anchored   = 1;
+          // rjf: determine if we have a top-level visualizer
+          EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
+          RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
+          
+          // rjf: determine view name
+          String8 view_name = str8_lit("watch");
+          if(view_ui_rule != &rd_nil_view_ui_rule)
+          {
+            view_name = view_ui_rule->name;
+          }
+          
+          // rjf: build view
+          RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
+          RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
+          RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+          rd_cfg_new_replace(explicit_root, str8_lit("1"));
+          
+          // rjf: determine size of hover evaluation container
+          EV_BlockTree predicted_block_tree = {0};
+          RD_RegsScope(.view = view->id)
+          {
+            predicted_block_tree = ev_block_tree_from_exprs(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.exprs);
+          }
+          F32 row_height_px = ui_top_px_height();
+          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
+          if(ws->hover_eval_focused)
+          {
+            max_row_count *= 3;
+          }
+          U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
+          F32 width_px = floor_f32(70.f*ui_top_font_size());
+          F32 height_px = needed_row_count*row_height_px;
+          
+          // rjf: if arbitrary visualizer, pick catchall size
+          if(view_ui_rule != &rd_nil_view_ui_rule)
+          {
+            height_px = floor_f32(40.f*ui_top_font_size());
+          }
+          
+          // rjf: determine hover eval top-level rect
+          Rng2F32 rect = r2f32p(ws->hover_eval_spawn_pos.x,
+                                ws->hover_eval_spawn_pos.y,
+                                ws->hover_eval_spawn_pos.x + width_px,
+                                ws->hover_eval_spawn_pos.y + height_px);
+          
+          // rjf: push hover eval task
+          {
+            FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
+            SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
+            hover_eval_floating_view_task = t;
+            t->view          = view;
+            t->row_height_px = row_height_px;
+            t->rect          = rect;
+            t->view_name     = view_name;
+            t->expr          = hover_eval_expr;
+            t->is_focused    = ws->hover_eval_focused;
+            t->is_anchored   = 1;
+          }
         }
         
         // rjf: reset focus state if hover eval is not being built
