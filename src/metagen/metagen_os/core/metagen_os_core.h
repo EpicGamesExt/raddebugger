@@ -24,6 +24,7 @@ typedef struct OS_ProcessInfo OS_ProcessInfo;
 struct OS_ProcessInfo
 {
   U32 pid;
+  B32 large_pages_allowed;
   String8 binary_path;
   String8 initial_path;
   String8 user_program_data_path;
@@ -37,12 +38,13 @@ struct OS_ProcessInfo
 typedef U32 OS_AccessFlags;
 enum
 {
-  OS_AccessFlag_Read       = (1<<0),
-  OS_AccessFlag_Write      = (1<<1),
-  OS_AccessFlag_Execute    = (1<<2),
-  OS_AccessFlag_Append     = (1<<3),
-  OS_AccessFlag_ShareRead  = (1<<4),
-  OS_AccessFlag_ShareWrite = (1<<5),
+  OS_AccessFlag_Read        = (1<<0),
+  OS_AccessFlag_Write       = (1<<1),
+  OS_AccessFlag_Execute     = (1<<2),
+  OS_AccessFlag_Append      = (1<<3),
+  OS_AccessFlag_ShareRead   = (1<<4),
+  OS_AccessFlag_ShareWrite  = (1<<5),
+  OS_AccessFlag_Inherited   = (1<<6),
 };
 
 ////////////////////////////////
@@ -79,19 +81,6 @@ struct OS_FileID
 };
 
 ////////////////////////////////
-//~ rjf: Process Launch Parameters
-
-typedef struct OS_ProcessLaunchParams OS_ProcessLaunchParams;
-struct OS_ProcessLaunchParams
-{
-  String8List cmd_line;
-  String8 path;
-  String8List env;
-  B32 inherit_env;
-  B32 consoleless;
-};
-
-////////////////////////////////
 //~ rjf: Handle Type
 
 typedef struct OS_Handle OS_Handle;
@@ -123,17 +112,21 @@ struct OS_HandleArray
 };
 
 ////////////////////////////////
-//~ rjf: Globally Unique IDs
+//~ rjf: Process Launch Parameters
 
-typedef struct OS_Guid OS_Guid;
-struct OS_Guid
+typedef struct OS_ProcessLaunchParams OS_ProcessLaunchParams;
+struct OS_ProcessLaunchParams
 {
-  U32 data1;
-  U16 data2;
-  U16 data3;
-  U8  data4[8];
+  String8List cmd_line;
+  String8 path;
+  String8List env;
+  B32 inherit_env;
+  B32 debug_subprocesses;
+  B32 consoleless;
+  OS_Handle stdout_file;
+  OS_Handle stderr_file;
+  OS_Handle stdin_file;
 };
-StaticAssert(sizeof(OS_Guid) == 16, os_guid_check);
 
 ////////////////////////////////
 //~ rjf: Thread Types
@@ -165,16 +158,18 @@ internal S64            os_file_id_compare(OS_FileID a, OS_FileID b);
 internal String8        os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range);
 
 ////////////////////////////////
-//~ rjf: GUID Helpers (Helpers, Implemented Once)
+//~ rjf: Process Launcher Helpers
 
-internal String8 os_string_from_guid(Arena *arena, OS_Guid guid);
+internal OS_Handle os_cmd_line_launch(String8 string);
+internal OS_Handle os_cmd_line_launchf(char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: @os_hooks System/Process Info (Implemented Per-OS)
 
-internal OS_SystemInfo *os_get_system_info(void);
+internal OS_SystemInfo  *os_get_system_info(void);
 internal OS_ProcessInfo *os_get_process_info(void);
-internal String8 os_get_current_path(Arena *arena);
+internal String8         os_get_current_path(Arena *arena);
+internal U32             os_get_process_start_time_unix(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
@@ -207,14 +202,18 @@ internal void os_abort(S32 exit_code);
 internal OS_Handle      os_file_open(OS_AccessFlags flags, String8 path);
 internal void           os_file_close(OS_Handle file);
 internal U64            os_file_read(OS_Handle file, Rng1U64 rng, void *out_data);
+#define os_file_read_struct(f, off, ptr) os_file_read((f), r1u64((off), (off)+sizeof(*(ptr))), (ptr))
 internal U64            os_file_write(OS_Handle file, Rng1U64 rng, void *data);
 internal B32            os_file_set_times(OS_Handle file, DateTime time);
 internal FileProperties os_properties_from_file(OS_Handle file);
 internal OS_FileID      os_id_from_file(OS_Handle file);
+internal B32            os_file_reserve_size(OS_Handle file, U64 size);
 internal B32            os_delete_file_at_path(String8 path);
 internal B32            os_copy_file_path(String8 dst, String8 src);
+internal B32            os_move_file_path(String8 dst, String8 src);
 internal String8        os_full_path_from_path(Arena *arena, String8 path);
 internal B32            os_file_path_exists(String8 path);
+internal B32            os_folder_path_exists(String8 path);
 internal FileProperties os_properties_from_file_path(String8 path);
 
 //- rjf: file maps
@@ -320,7 +319,7 @@ internal void os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *f
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid os_make_guid(void);
+internal Guid os_make_guid(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Entry Points (Implemented Per-OS)

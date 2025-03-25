@@ -473,11 +473,11 @@ internal B32
 os_file_reserve_size(OS_Handle file, U64 size)
 {
   HANDLE handle = (HANDLE)file.u64[0];
-
+  
   FILE_ALLOCATION_INFO alloc_info    = {0};
   alloc_info.AllocationSize.LowPart  = size & max_U32;
   alloc_info.AllocationSize.HighPart = (size >> 32) & max_U32;
-
+  
   BOOL is_reserved = SetFileInformationByHandle(handle, FileAllocationInfo, &alloc_info, sizeof(alloc_info));
   return is_reserved;
 }

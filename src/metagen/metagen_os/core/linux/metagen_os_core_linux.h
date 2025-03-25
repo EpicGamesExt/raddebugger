@@ -8,24 +8,27 @@
 //~ rjf: Includes
 
 #define _GNU_SOURCE
+#include <dirent.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <features.h>
+#include <linux/limits.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <linux/limits.h>
-#include <time.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <sys/syscall.h>
-#include <signal.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <sys/sysinfo.h>
 #include <sys/random.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/sysinfo.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
+pid_t gettid(void);
 int pthread_setname_np(pthread_t thread, const char *name);
 int pthread_getname_np(pthread_t thread, char *name, size_t size);
 

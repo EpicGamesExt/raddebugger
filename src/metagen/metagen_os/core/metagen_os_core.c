@@ -152,22 +152,89 @@ os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range)
 }
 
 ////////////////////////////////
-//~ rjf: GUID Helpers (Helpers, Implemented Once)
+//~ rjf: Process Launcher Helpers
 
-internal String8
-os_string_from_guid(Arena *arena, OS_Guid guid)
+internal OS_Handle
+os_cmd_line_launch(String8 string)
 {
-  String8 result = push_str8f(arena, "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
-                              guid.data1,
-                              guid.data2,
-                              guid.data3,
-                              guid.data4[0],
-                              guid.data4[1],
-                              guid.data4[2],
-                              guid.data4[3],
-                              guid.data4[4],
-                              guid.data4[5],
-                              guid.data4[6],
-                              guid.data4[7]);
+  Temp scratch = scratch_begin(0, 0);
+  U8 split_chars[] = {' '};
+  String8List parts = str8_split(scratch.arena, string, split_chars, ArrayCount(split_chars), 0);
+  OS_Handle handle = {0};
+  if(parts.node_count != 0)
+  {
+    // rjf: unpack exe part
+    String8 exe = parts.first->string;
+    String8 exe_folder = str8_chop_last_slash(exe);
+    if(exe_folder.size == 0)
+    {
+      exe_folder = os_get_current_path(scratch.arena);
+    }
+    
+    // rjf: find stdout delimiter
+    String8Node *stdout_delimiter_n = 0;
+    for(String8Node *n = parts.first; n != 0; n = n->next)
+    {
+      if(str8_match(n->string, str8_lit(">"), 0))
+      {
+        stdout_delimiter_n = n;
+        break;
+      }
+    }
+    
+    // rjf: read stdout path
+    String8 stdout_path = {0};
+    if(stdout_delimiter_n && stdout_delimiter_n->next)
+    {
+      stdout_path = stdout_delimiter_n->next->string;
+    }
+    
+    // rjf: open stdout handle
+    OS_Handle stdout_handle = {0};
+    if(stdout_path.size != 0)
+    {
+      OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stdout_path);
+      os_file_close(file);
+      stdout_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, stdout_path);
+    }
+    
+    // rjf: form command line
+    String8List cmdline = {0};
+    for(String8Node *n = parts.first; n != stdout_delimiter_n && n != 0; n = n->next)
+    {
+      str8_list_push(scratch.arena, &cmdline, n->string);
+    }
+    
+    // rjf: launch
+    OS_ProcessLaunchParams params = {0};
+    params.cmd_line = cmdline;
+    params.path = exe_folder;
+    params.inherit_env = 1;
+    params.stdout_file = stdout_handle;
+    handle = os_process_launch(&params);
+    
+    // rjf: close stdout handle
+    {
+      if(stdout_path.size != 0)
+      {
+        os_file_close(stdout_handle);
+      }
+    }
+  }
+  scratch_end(scratch);
+  return handle;
+}
+
+internal OS_Handle
+os_cmd_line_launchf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  OS_Handle result = os_cmd_line_launch(string);
+  va_end(args);
+  scratch_end(scratch);
   return result;
 }
+

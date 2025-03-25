@@ -4335,6 +4335,9 @@ rd_view_ui(Rng2F32 rect)
                   // rjf: commit edited cell string
                   switch(cell->kind)
                   {
+                    case RD_WatchCellKind_ViewUI:
+                    case RD_WatchCellKind_CallStackFrame:
+                    {}break;
                     case RD_WatchCellKind_Expr:
                     {
                       RD_Cfg *cfg = row_info.group_cfg_child;
@@ -10269,7 +10272,7 @@ rd_window_frame(void)
           }
           
           // rjf: draw sides
-          if(b->flags & UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight)
+          if(b->flags & (UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight))
           {
             Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
             Rng2F32 r = b->rect;
