@@ -378,6 +378,7 @@ RD_RegTable:
   {B32              force_confirm    ForceConfirm  }
   {B32              prefer_disasm    PreferDisasm  }
   {B32              no_rich_tooltip  NoRichTooltip }
+  {B32              do_implicit_root DoImplicitRoot}
   {Dir2             dir2             Dir2          }
   {String8          string           String        }
   {String8          cmd_name         CmdName       }

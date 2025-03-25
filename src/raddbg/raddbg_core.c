@@ -323,10 +323,14 @@ E_LOOKUP_INFO_FUNCTION_DEF(schema)
     {
       if(!md_node_has_tag(child, str8_lit("no_expand"), 0))
       {
-        ExpandChildNode *n = push_array(scratch.arena, ExpandChildNode, 1);
-        n->n = child;
-        SLLQueuePush(first_child_node, last_child_node, n);
-        child_count += 1;
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, child->string);
+        if(matches.count == matches.needle_part_count)
+        {
+          ExpandChildNode *n = push_array(scratch.arena, ExpandChildNode, 1);
+          n->n = child;
+          SLLQueuePush(first_child_node, last_child_node, n);
+          child_count += 1;
+        }
       }
     }
     
@@ -387,7 +391,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(schema)
       else if(str8_match(child_schema->first->string, str8_lit("path_pt"), 0))
       {
         Temp scratch = scratch_begin(&arena, 1);
-        String8 string = push_str8f(scratch.arena, "%S:%S%s%S", child->first->string, child->first->first->string, child->first->first->first->string.size ? ":" : "", child->first->first->first->string);
+        String8 string = push_str8f(scratch.arena, "%S%s%S%s%S", child->first->string, child->first->string.size ? ":" : "", child->first->first->string, child->first->first->first->string.size ? ":" : "", child->first->first->first->string);
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), string.size, E_TypeFlag_IsPathText);
         scratch_end(scratch);
       }
@@ -2953,7 +2957,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         String8 child_type_name = child_schema->first->string;
         if(str8_match(child_type_name, str8_lit("path_pt"), 0))
         {
-          read_data = push_str8f(scratch.arena, "%S:%S%s%S", cfg->first->string, cfg->first->first->string, cfg->first->first->first->string.size ? ":" : "", cfg->first->first->first->string);
+          read_data = push_str8f(scratch.arena, "%S%s%S%s%S", cfg->first->string, cfg->first->string.size ? ":" : "", cfg->first->first->string, cfg->first->first->first->string.size ? ":" : "", cfg->first->first->first->string);
         }
         else if(str8_match(child_type_name, str8_lit("path"), 0) ||
                 str8_match(child_type_name, str8_lit("code_string"), 0) ||
@@ -7724,8 +7728,9 @@ rd_window_frame(void)
           }
         }
         
-        // rjf: based on query expression, determine if we have an explicit root
-        if(query_expr.size == 0 || !query_is_lister)
+        // rjf: determine if we want an explicit root
+        B32 do_explicit_root = (!ws->query_regs->do_implicit_root && (query_expr.size == 0 || !query_is_lister));
+        if(do_explicit_root)
         {
           RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
           rd_cfg_new(explicit_root, str8_lit("1"));
@@ -7751,7 +7756,7 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            query_height_px = row_height_px * predicted_block_tree.total_row_count;
+            query_height_px = row_height_px * (predicted_block_tree.total_row_count - !do_explicit_root);
             query_height_px = Min(query_height_px, max_query_height_px);
           }
           rect = r2f32p(content_rect_center.x - query_width_px/2,
@@ -9762,6 +9767,7 @@ rd_window_frame(void)
                     else if(ui_right_clicked(sig))
                     {
                       rd_cmd(RD_CmdKind_PushQuery,
+                             .do_implicit_root = 1,
                              .ui_key       = sig.box->key,
                              .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
                              .expr         = push_str8f(scratch.arena, "$%I64x", tab->id));

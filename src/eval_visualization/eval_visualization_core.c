@@ -1593,22 +1593,6 @@ ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
       }
     }
     
-    // rjf: next try implicit set name -> rule mapping
-    if(result.rule == &ev_nil_expand_rule)
-    {
-      E_TypeKind type_kind = e_type_kind_from_key(irtree->type_key);
-      if(type_kind == E_TypeKind_Set)
-      {
-        E_Type *type = e_type_from_key__cached(irtree->type_key);
-        String8 name = type->name;
-        EV_ExpandRule *candidate = ev_expand_rule_from_string(name);
-        if(candidate != &ev_nil_expand_rule)
-        {
-          result.rule = candidate;
-        }
-      }
-    }
-    
     // rjf: next try auto hook map
     if(result.rule == &ev_nil_expand_rule)
     {

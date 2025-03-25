@@ -75,6 +75,9 @@
 // single step over the first instruction of that line, even if the thread
 // would've stopped at the first instruction due to the step, were that bp not
 // there.
+//
+// [ ] if a breakpoint matches the entry point's starting address, its hit count
+// is not correctly incremented.
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
