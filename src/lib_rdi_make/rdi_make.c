@@ -1207,9 +1207,10 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
     }
     else
     {
-      left_dst->last_op = right_destroyed->last_op;
-      left_dst->op_count += right_destroyed->op_count;
-      left_dst->encoded_size += right_destroyed->encoded_size;
+      left_dst->last_op->next  = right_destroyed->first_op;
+      left_dst->last_op        = right_destroyed->last_op;
+      left_dst->op_count      += right_destroyed->op_count;
+      left_dst->encoded_size  += right_destroyed->encoded_size;
     }
     rdim_memzero_struct(right_destroyed);
   }
