@@ -815,7 +815,7 @@ rdi_cstring_length(char *cstr)
 }
 
 RDI_PROC RDI_U64
-rdi_size_from_bytecode_stream(U8 *ptr, U8 *opl)
+rdi_size_from_bytecode_stream(RDI_U8 *ptr, RDI_U8 *opl)
 {
   RDI_U64 bytecode_size = 0;
   RDI_U8 *off_first = ptr + sizeof(RDI_LocationKind);
@@ -826,7 +826,7 @@ rdi_size_from_bytecode_stream(U8 *ptr, U8 *opl)
     {
       break;
     }
-
+    
     RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
     RDI_U32 p_size   = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
     bytecode_size += (1 + p_size);
