@@ -1202,7 +1202,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
                                       .px = floor_f32(ui_top_font_size()*6.f),
-                                      .string = str8_lit("($expr).frozen"));
+                                      .string = str8_lit("($expr).active"));
         }
         if(entity->kind == CTRL_EntityKind_Thread)
         {

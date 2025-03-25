@@ -330,10 +330,10 @@ RD_NameSchemaInfo rd_name_schema_info_table[16] =
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},
 {str8_lit_comp("recent_file"), str8_lit_comp("x:{'path':path}")},
-{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, @no_expand 'frozen':bool, 'unattached_processes':query, 'processes':query}")},
-{str8_lit_comp("process"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'modules':query, 'threads':query}")},
+{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':query, 'processes':query}")},
+{str8_lit_comp("process"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':query, 'threads':query}")},
 {str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}")},
-{str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'call_stack':query}")},
+{str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
 Rng1U64 rd_reg_slot_range_table[42] =

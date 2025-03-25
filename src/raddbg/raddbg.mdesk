@@ -297,11 +297,11 @@ RD_VocabTable:
   //- rjf: control entities
   {
     machine,
-    ```x:{'label':code_string, @no_expand 'frozen':bool, 'unattached_processes':query, 'processes':query}```,
+    ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':query, 'processes':query}```,
   }
   {
     process,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'modules':query, 'threads':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'modules':query, 'threads':query}```,
   }
   {
     module,
@@ -309,7 +309,7 @@ RD_VocabTable:
   }
   {
     thread,
-    ```x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'call_stack':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}```,
   }
 }
 

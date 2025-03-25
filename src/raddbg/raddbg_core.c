@@ -289,6 +289,7 @@ typedef struct RD_SchemaLookupAccel RD_SchemaLookupAccel;
 struct RD_SchemaLookupAccel
 {
   RD_Cfg *cfg;
+  CTRL_Entity *entity;
   MD_Node *schema;
   MD_Node **children;
   U64 children_count;
@@ -304,7 +305,6 @@ E_LOOKUP_INFO_FUNCTION_DEF(schema)
     E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interpret = e_interpret(bytecode);
-    RD_Cfg *cfg = rd_cfg_from_eval_space(interpret.space);
     E_TypeKey type_key = lhs->type_key;
     E_Type *type = e_type_from_key__cached(type_key);
     MD_Node *schema = rd_schema_from_name(type->name);
@@ -346,7 +346,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(schema)
     
     // rjf: build accelerator for lookups
     RD_SchemaLookupAccel *accel = push_array(arena, RD_SchemaLookupAccel, 1);
-    accel->cfg = cfg;
+    accel->cfg = rd_cfg_from_eval_space(interpret.space);
+    accel->entity = rd_ctrl_entity_from_eval_space(interpret.space);
     accel->schema = schema;
     accel->children = children;
     accel->children_count = child_count;
@@ -378,9 +379,28 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(schema)
     if(child_schema != &md_nil_node)
     {
       RD_Cfg *cfg = accel->cfg;
+      CTRL_Entity *entity = accel->entity;
       RD_Cfg *child = rd_cfg_child_from_string(cfg, child_schema->string);
       E_TypeKey child_type_key = zero_struct;
-      if(str8_match(child_schema->first->string, str8_lit("code_string"), 0))
+      if(0){}
+      
+      //- rjf: ctrl entity members
+      else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("label"), 0))
+      {
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, E_TypeFlag_IsCodeText);
+      }
+      else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("exe"), 0))
+      {
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), entity->string.size, E_TypeFlag_IsPathText);
+      }
+      else if(entity != &ctrl_entity_nil && str8_match(child_schema->string, str8_lit("dbg"), 0))
+      {
+        CTRL_Entity *dbg = ctrl_entity_child_from_kind(entity, CTRL_EntityKind_DebugInfoPath);
+        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), dbg->string.size, E_TypeFlag_IsPathText);
+      }
+      
+      //- rjf: cfg members
+      else if(str8_match(child_schema->first->string, str8_lit("code_string"), 0))
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsCodeText);
       }
@@ -399,6 +419,8 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(schema)
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPlainText);
       }
+      
+      //- rjf: catchall cases
       else if(str8_match(child_schema->first->string, str8_lit("u64"), 0))
       {
         child_type_key = e_type_key_basic(E_TypeKind_U64);
@@ -407,13 +429,34 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(schema)
       {
         child_type_key = e_type_key_basic(E_TypeKind_Bool);
       }
+      else if(str8_match(child_schema->first->string, str8_lit("vaddr_range"), 0))
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_MemberList vaddr_range_members_list = {0};
+        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("min"), .off = 0);
+        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("max"), .off = 8);
+        E_MemberArray vaddr_range_members = e_member_array_from_list(scratch.arena, &vaddr_range_members_list);
+        child_type_key = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("vaddr_range"), .count = vaddr_range_members.count, .members = vaddr_range_members.v);
+        scratch_end(scratch);
+      }
       else if(str8_match(child_schema->first->string, str8_lit("query"), 0))
       {
         child_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = child_schema->string);
       }
-      E_Space child_eval_space = e_space_make(RD_EvalSpaceKind_MetaCfg);
-      child_eval_space.u64s[0] = cfg->id;
-      child_eval_space.u64s[1] = e_id_from_string(child_schema->string);
+      
+      //- rjf: evaluate
+      E_Space child_eval_space = zero_struct;
+      if(cfg != &rd_nil_cfg)
+      {
+        child_eval_space = e_space_make(RD_EvalSpaceKind_MetaCfg);
+        child_eval_space.u64s[0] = cfg->id;
+        child_eval_space.u64s[1] = e_id_from_string(child_schema->string);
+      }
+      else
+      {
+        child_eval_space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
+        child_eval_space.u64s[2] = e_id_from_string(child_schema->string);
+      }
       irtree.root     = e_irtree_set_space(arena, child_eval_space, e_push_irnode(arena, RDI_EvalOp_ConstU64));
       irtree.type_key = child_type_key;
       irtree.mode     = E_Mode_Offset;
@@ -3001,14 +3044,48 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: meta-entity reads
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
+      // rjf: unpack cfg
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
-      String8 entity_eval_blob = rd_eval_blob_from_entity__cached(entity);
-      Rng1U64 legal_range = r1u64(0, entity_eval_blob.size);
+      String8 child_key = e_string_from_id(space.u64s[2]);
+      
+      // rjf: determine data to read from, depending on child name in schema
+      String8 read_data = {0};
+      if(child_key.size != 0)
+      {
+        MD_Node *root_schema = rd_schema_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
+        if(str8_match(child_schema->string, str8_lit("exe"), 0) ||
+           str8_match(child_schema->string, str8_lit("label"), 0))
+        {
+          read_data = entity->string;
+        }
+        else if(str8_match(child_schema->string, str8_lit("dbg"), 0))
+        {
+          read_data = ctrl_entity_child_from_kind(entity, CTRL_EntityKind_DebugInfoPath)->string;
+        }
+        else if(str8_match(child_schema->string, str8_lit("vaddr_range"), 0))
+        {
+          read_data = str8_struct(&entity->vaddr_range);
+        }
+        else if(str8_match(child_schema->string, str8_lit("id"), 0))
+        {
+          read_data = str8_struct(&entity->id);
+        }
+        else if(str8_match(child_schema->string, str8_lit("active"), 0))
+        {
+          B32 is_frozen = ctrl_entity_tree_is_frozen(entity);
+          B32 is_active = !is_frozen;
+          read_data = push_str8_copy(scratch.arena, str8_struct(&is_active));
+        }
+      }
+      
+      // rjf: perform read
+      Rng1U64 legal_range = r1u64(0, read_data.size);
       Rng1U64 read_range = intersect_1u64(range, legal_range);
       if(read_range.min < read_range.max)
       {
         result = 1;
-        MemoryCopy(out, entity_eval_blob.str + read_range.min, dim_1u64(read_range));
+        MemoryCopy(out, read_data.str + read_range.min, dim_1u64(read_range));
       }
     }break;
   }
@@ -3118,108 +3195,49 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         }
       }
       
-      // rjf: find member to which this write applies, reflect back in the cfg tree
-#if 0
-      if(type->members != 0) for EachIndex(member_idx, type->count)
-      {
-        E_Member *member = &type->members[member_idx];
-        Rng1U64 member_range = r1u64(member->off, member->off + e_type_byte_size_from_key(member->type_key));
-        String8 child_name = member->name;
-        MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
-        String8 member_type_name = member_schema->first->string;
-        RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
-        if((str8_match(member_type_name, str8_lit("code_string"), 0) ||
-            str8_match(member_type_name, str8_lit("path"), 0) ||
-            str8_match(member_type_name, str8_lit("string"), 0)) &&
-           member->off+sizeof(U64) <= eval_blob.size)
-        {
-          U64 string_off = *(U64 *)(eval_blob.str + member->off);
-          U64 string_opl = string_off + child->first->string.size + 1;
-          Rng1U64 string_range = r1u64(string_off, string_opl);
-          if(contains_1u64(string_range, range.min))
-          {
-            String8 new_string = str8_cstring_capped(in, (U8 *)in + dim_1u64(range));
-            if(new_string.size == 0)
-            {
-              rd_cfg_release(child);
-            }
-            else
-            {
-              if(child == &rd_nil_cfg)
-              {
-                child = rd_cfg_new(cfg, child_name);
-              }
-              rd_cfg_new_replace(child, new_string);
-            }
-            result = 1;
-            break;
-          }
-        }
-        else if(str8_match(member_type_name, str8_lit("u64"), 0) && dim_1u64(range) >= 1 && contains_1u64(member_range, range.min))
-        {
-          U64 value = 0;
-          MemoryCopy(&value, in, dim_1u64(range));
-          if(value == 0)
-          {
-            rd_cfg_release(child);
-          }
-          else
-          {
-            if(child == &rd_nil_cfg)
-            {
-              child = rd_cfg_new(cfg, child_name);
-            }
-            rd_cfg_new_replacef(child, "%I64u", value);
-          }
-          result = 1;
-          break;
-        }
-        else if(str8_match(member_type_name, str8_lit("bool"), 0) && dim_1u64(range) >= 1 && contains_1u64(member_range, range.min))
-        {
-          U64 value = 0;
-          MemoryCopy(&value, in, dim_1u64(range));
-          if(child == &rd_nil_cfg)
-          {
-            child = rd_cfg_new(cfg, child_name);
-          }
-          rd_cfg_new_replacef(child, "%I64u", value);
-          result = 1;
-          break;
-        }
-      }
-#endif
-      
       scratch_end(scratch);
     }break;
     
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
-#if 0  // TODO(rjf): @cfg
       Temp scratch = scratch_begin(0, 0);
       
-      // rjf: get entity, produce meta-eval
+      // rjf: unpack write info
+      String8 write_string = str8_cstring_capped(in, (U8 *)in + dim_1u64(range));
+      
+      // rjf: unpack cfg
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
-      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
+      String8 child_key = e_string_from_id(space.u64s[2]);
       
-      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
-      arena_push(scratch.arena, 0, 64);
-      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
-      U64 pos_min = arena_pos(scratch.arena);
-      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
-      U64 pos_opl = arena_pos(scratch.arena);
+      // rjf: perform write, based on child name in schema
+      if(child_key.size != 0)
+      {
+        MD_Node *root_schema = rd_schema_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
+        if(str8_match(child_schema->string, str8_lit("label"), 0))
+        {
+          rd_cmd(D_CmdKind_SetEntityName, .ctrl_entity = entity->handle, .string = write_string);
+        }
+        else if(str8_match(child_schema->string, str8_lit("dbg"), 0))
+        {
+          // TODO(rjf)
+        }
+        else if(str8_match(child_schema->string, str8_lit("active"), 0))
+        {
+          B32 new_active = 0;
+          MemoryCopy(&new_active, in, dim_1u64(range));
+          if(!new_active)
+          {
+            rd_cmd(D_CmdKind_FreezeEntity, .ctrl_entity = entity->handle);
+          }
+          else
+          {
+            rd_cmd(D_CmdKind_ThawEntity, .ctrl_entity = entity->handle);
+          }
+        }
+      }
       
-      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
-      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
-      
-      // rjf: perform write to entity
-      if(0){}
-#define FlatMemberCase(name) else if(range.min == OffsetOf(CTRL_MetaEval, name) && dim_1u64(range) <= sizeof(meval_read->name))
-#define StringMemberCase(name) else if(range.min == (U64)meval_read->name.str)
-      StringMemberCase(label) {result = 1; ctrl_entity_equip_string(d_state->ctrl_entity_store, entity, str8_cstring_capped(in, (U8 *)in + 4096));}
-#undef FlatMemberCase
-#undef StringMemberCase
       scratch_end(scratch);
-#endif
     }break;
   }
   return result;
@@ -5488,66 +5506,69 @@ rd_view_ui(Rng2F32 rect)
                         }
                         
                         // rjf: form cell build parameters
-                        RD_CellParams line_edit_params = {0};
+                        RD_CellParams cell_params = {0};
                         {
                           // rjf: set up base parameters
-                          line_edit_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
-                          line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
-                          line_edit_params.cursor               = &cell_edit_state->cursor;
-                          line_edit_params.mark                 = &cell_edit_state->mark;
-                          line_edit_params.edit_buffer          = cell_edit_state->input_buffer;
-                          line_edit_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
-                          line_edit_params.edit_string_size_out = &cell_edit_state->input_size;
-                          line_edit_params.expanded_out         = &next_row_expanded;
-                          line_edit_params.pre_edit_value       = cell_info.string;
-                          line_edit_params.fstrs                = cell_info.fstrs;
-                          line_edit_params.fuzzy_matches        = &fuzzy_matches;
+                          cell_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
+                          cell_params.depth                = (cell_x == 0 ? row_depth : 0);
+                          cell_params.cursor               = &cell_edit_state->cursor;
+                          cell_params.mark                 = &cell_edit_state->mark;
+                          cell_params.edit_buffer          = cell_edit_state->input_buffer;
+                          cell_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
+                          cell_params.edit_string_size_out = &cell_edit_state->input_size;
+                          cell_params.expanded_out         = &next_row_expanded;
+                          cell_params.pre_edit_value       = cell_info.string;
+                          cell_params.fstrs                = cell_info.fstrs;
+                          cell_params.fuzzy_matches        = &fuzzy_matches;
                           
                           // rjf: apply expander (or substitute space)
                           if(row_is_expandable && cell == row_info->cells.first)
                           {
-                            line_edit_params.flags |= RD_CellFlag_Expander;
+                            cell_params.flags |= RD_CellFlag_Expander;
                           }
                           else if(row_depth == !implicit_root && cell == row_info->cells.first)
                           {
-                            line_edit_params.flags |= RD_CellFlag_ExpanderSpace;
+                            cell_params.flags |= RD_CellFlag_ExpanderSpace;
                           }
                           else if(row_depth != 0 && cell == row_info->cells.first)
                           {
-                            line_edit_params.flags |= RD_CellFlag_ExpanderSpace;
+                            cell_params.flags |= RD_CellFlag_ExpanderSpace;
                           }
                           
                           // rjf: apply single-click-activation
                           if(is_activated_on_single_click)
                           {
-                            line_edit_params.flags |= RD_CellFlag_SingleClickActivate;
+                            cell_params.flags |= RD_CellFlag_SingleClickActivate;
                           }
                           
                           // rjf: apply code styles
                           if(is_non_code)
                           {
-                            line_edit_params.flags &= ~RD_CellFlag_CodeContents;
+                            cell_params.flags &= ~RD_CellFlag_CodeContents;
                           }
                           
                           // rjf: apply button styles
                           if(is_button)
                           {
-                            line_edit_params.flags |= RD_CellFlag_Button;
-                            line_edit_params.flags &= ~RD_CellFlag_NoBackground;
-                            line_edit_params.flags &= ~RD_CellFlag_ExpanderSpace;
+                            cell_params.flags |= RD_CellFlag_Button;
+                            cell_params.flags &= ~RD_CellFlag_NoBackground;
+                            if(row_depth == 0)
+                            {
+                              cell_params.flags &= ~RD_CellFlag_ExpanderSpace;
+                            }
                           }
                           
                           // rjf: apply background
                           if(has_background)
                           {
-                            line_edit_params.flags &= ~RD_CellFlag_NoBackground;
+                            cell_params.flags &= ~RD_CellFlag_NoBackground;
                           }
                           
                           // rjf: apply toggle-switch
                           if(is_toggle_switch)
                           {
-                            line_edit_params.flags |= RD_CellFlag_ToggleSwitch;
-                            line_edit_params.toggled_out = &next_cell_toggled;
+                            cell_params.flags |= RD_CellFlag_ToggleSwitch;
+                            cell_params.toggled_out = &next_cell_toggled;
                           }
                         }
                         
@@ -5559,7 +5580,7 @@ rd_view_ui(Rng2F32 rect)
                         UI_TextAlignment(cell->px != 0 ? UI_TextAlign_Center : UI_TextAlign_Left)
                           RD_Font(is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                         {
-                          sig = rd_cellf(&line_edit_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
+                          sig = rd_cellf(&cell_params, "%S###%I64x_row_%I64x", ghost_text, cell_x, row_hash);
                         }
                         if(cell_background_color_override.w != 0)
                         {
