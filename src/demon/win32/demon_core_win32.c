@@ -469,9 +469,9 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   }
   
   // rjf: get COFF header
-  B32 got_file_header = 0;
-  U64 file_header_off = 0;
-  COFF_FileHeader file_header = {0};
+  B32 got_coff_header = 0;
+  U64 coff_header_off = 0;
+  COFF_FileHeader coff_header = {0};
   if(pe_offset > 0)
   {
     U64 pe_magic_off = base_vaddr + pe_offset;
@@ -479,21 +479,21 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
     dmn_w32_process_read_struct(process, pe_magic_off, &pe_magic);
     if(pe_magic == PE_MAGIC)
     {
-      file_header_off = pe_magic_off + sizeof(pe_magic);
-      if(dmn_w32_process_read_struct(process, file_header_off, &file_header))
+      coff_header_off = pe_magic_off + sizeof(pe_magic);
+      if(dmn_w32_process_read_struct(process, coff_header_off, &coff_header))
       {
-        got_file_header = 1;
+        got_coff_header = 1;
       }
     }
   }
   
   // rjf: get arch and size
   DMN_W32_ImageInfo result = zero_struct;
-  if(got_file_header)
+  if(got_coff_header)
   {
     U64 optional_size_off = 0;
     Arch arch = Arch_Null;
-    switch(file_header.machine)
+    switch(coff_header.machine)
     {
       case COFF_Machine_X86:
       {
@@ -510,7 +510,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
     }
     if(arch != Arch_Null)
     {
-      U64 optional_off = file_header_off + sizeof(COFF_FileHeader);
+      U64 optional_off = coff_header_off + sizeof(coff_header);
       U32 size = 0;
       if(dmn_w32_process_read_struct(process, optional_off+optional_size_off, &size) >= sizeof(size))
       {
@@ -1251,7 +1251,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       // rjf: get COFF header
       B32 got_coff_header = 0;
       U64 coff_header_off = 0;
-      COFF_Header coff_header = {0};
+      COFF_FileHeader coff_header = {0};
       if(pe_offset > 0)
       {
         U64 pe_magic_off = pe_offset;
@@ -1274,13 +1274,13 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
         switch(coff_header.machine)
         {
           default:{}break;
-          case COFF_MachineType_X64:
+          case COFF_Machine_X64:
           {
             PE_OptionalHeader32Plus hdr = {0};
             os_file_read_struct(file, opt_header_off, &hdr);
             subsystem = hdr.subsystem;
           }break;
-          case COFF_MachineType_X86:
+          case COFF_Machine_X86:
           {
             PE_OptionalHeader32 hdr = {0};
             os_file_read_struct(file, opt_header_off, &hdr);

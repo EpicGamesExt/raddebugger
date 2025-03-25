@@ -47,6 +47,7 @@ enum
 typedef U16 COFF_MachineType;
 enum
 {
+  // TODO(rjf): COFF_Machine prefix -> COFF_MachineType prefix
   COFF_Machine_Unknown    = 0x0,
   COFF_Machine_X86        = 0x14c,
   COFF_Machine_X64        = 0x8664,

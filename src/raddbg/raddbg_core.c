@@ -13923,7 +13923,7 @@ rd_frame(void)
       ctx->tls_base          = push_array(scratch.arena, U64, 1);
       ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
     }
-    e_select_interpret_ctx(interpret_ctx);
+    e_select_interpret_ctx(interpret_ctx, eval_modules_primary->rdi, rip_voff);
     
     ////////////////////////////
     //- rjf: build eval expand rule table

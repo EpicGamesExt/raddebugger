@@ -4639,9 +4639,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->reg_space.u64_0 = (U64)thread;
     ctx->module_base   = push_array(arena, U64, 1);
     ctx->module_base[0]= module->vaddr_range.min;
+    ctx->frame_base    = push_array(arena, U64, 1);
+    // TODO(rjf): need to compute this out here somehow... ctx->frame_base[0] = ;
     ctx->tls_base      = push_array(arena, U64, 1);
   }
-  e_select_interpret_ctx(&scope->interpret_ctx);
+  e_select_interpret_ctx(&scope->interpret_ctx, eval_modules_primary->rdi, thread_rip_voff);
   
   return scope;
 }
