@@ -14216,13 +14216,32 @@ rd_frame(void)
             //- rjf: load the new file's data
             String8 file_path = rd_regs()->file_path;
             String8 file_data = os_data_from_file_path(scratch.arena, file_path);
+            FileProperties file_props = os_properties_from_file_path(file_path);
             
             //- rjf: determine if the file is good
             B32 file_is_okay = 0;
             {
-              FileProperties file_props = os_properties_from_file_path(file_path);
               file_is_okay = ((file_props.size == 0 && file_props.created == 0) ||
                               str8_match(str8_prefix(file_data, 9), str8_lit("// raddbg"), 0));
+            }
+            
+            //- rjf: determine file's version
+            String8 file_version = {0};
+            if(file_is_okay && file_props.size != 0)
+            {
+              file_version = str8_skip(file_data, 10);
+              U64 line_end = str8_find_needle(file_version, 0, str8_lit("\n"), 0);
+              file_version = str8_prefix(file_version, line_end);
+              U64 first_space = str8_find_needle(file_version, 0, str8_lit(" "), 0);
+              file_version = str8_prefix(file_version, first_space);
+              file_version = str8_skip_chop_whitespace(file_version);
+              String8 current_version = str8_lit(BUILD_VERSION_STRING_LITERAL);
+              if(!str8_match(file_version, current_version, 0))
+              {
+                String8 msg = push_str8f(scratch.arena, "You are trying to run a new development version of RADDBG (%S) with old configuration files. This would overwrite your old configuration files, since the code to appropriately handle old configuration files hasn't been written yet. Out of caution, the program will now exit. If you want to use this new version anyway, delete or rename your configuration file at %S, so that the new development version can begin safely saving to it.", current_version, file_path);
+                os_graphical_message(1, str8_lit("Unsupported Configuration File Version"), msg);
+                os_abort(1);
+              }
             }
             
             //- rjf: bad file -> alert user
