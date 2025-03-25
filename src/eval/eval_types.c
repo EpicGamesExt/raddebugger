@@ -450,9 +450,9 @@ e_type_key_cons_(E_ConsTypeParams *params)
 //- rjf: constructed type helpers
 
 internal E_TypeKey
-e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
+e_type_key_cons_array(E_TypeKey element_type_key, U64 count, E_TypeFlags flags)
 {
-  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_Array, .direct_key = element_type_key, .count = count);
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_Array, .direct_key = element_type_key, .count = count, .flags = flags);
   return key;
 }
 
@@ -488,7 +488,7 @@ e_type_key_cons_base(Type *type)
     case TypeKind_Array:
     {
       E_TypeKey direct_type = e_type_key_cons_base(type->direct);
-      result = e_type_key_cons_array(direct_type, type->count);
+      result = e_type_key_cons_array(direct_type, type->count, 0);
     }break;
     case TypeKind_Struct:
     {
@@ -1065,7 +1065,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u128s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U128), reg_byte_count/16);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U128), reg_byte_count/16, 0);
             }
             if(type->byte_size > 8 && type->byte_size%8 == 0)
             {
@@ -1075,7 +1075,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u64s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U64), reg_byte_count/8);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U64), reg_byte_count/8, 0);
             }
             if(type->byte_size > 4 && type->byte_size%4 == 0)
             {
@@ -1085,7 +1085,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u32s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U32), reg_byte_count/4);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U32), reg_byte_count/4, 0);
             }
             if(type->byte_size > 2 && type->byte_size%2 == 0)
             {
@@ -1095,7 +1095,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u16s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U16), reg_byte_count/2);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U16), reg_byte_count/2, 0);
             }
             if(type->byte_size > 1)
             {
@@ -1105,7 +1105,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u8s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), reg_byte_count);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), reg_byte_count, 0);
             }
             if(type->byte_size > 4 && type->byte_size%4 == 0)
             {
@@ -1115,7 +1115,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("f32s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F32), reg_byte_count/4);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F32), reg_byte_count/4, 0);
             }
             if(type->byte_size > 8 && type->byte_size%8 == 0)
             {
@@ -1125,7 +1125,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("f64s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F64), reg_byte_count/8);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F64), reg_byte_count/8, 0);
             }
           }
         }
@@ -1573,7 +1573,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
       E_Member *padding_member = &new_members.v[n->prev_member_idx+padding_idx+1];
       MemoryZeroStruct(padding_member);
       padding_member->kind = E_MemberKind_Padding;
-      padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size);
+      padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size, 0);
       padding_member->off = n->off;
       padding_member->name = push_str8f(arena, "[padding %I64u]", padding_idx);
       padding_idx += 1;

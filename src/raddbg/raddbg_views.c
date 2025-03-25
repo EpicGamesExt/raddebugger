@@ -1135,7 +1135,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         RD_Cfg *cfg = evalled_cfg;
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg));
-        MD_Node *schema = rd_schema_from_name(arena, cfg->string);
+        MD_Node *schema = rd_schema_from_name(cfg->string);
         MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
         for MD_EachNode(cmd, cmds_root->first)
         {
@@ -1177,7 +1177,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
               }
             }break;
           }
-          if(cmd_kind != RD_CmdKind_Null)
+          if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
+          {
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Background,
+                                        .px = floor_f32(ui_top_font_size()*6.f),
+                                        .string = str8_lit("($expr).enabled"));
+          }
+          else if(cmd_kind != RD_CmdKind_Null)
           {
             String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
             rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
@@ -1194,13 +1200,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
            entity->kind == CTRL_EntityKind_Process ||
            entity->kind == CTRL_EntityKind_Thread)
         {
-          RD_CmdKind cmd_kind = RD_CmdKind_FreezeEntity;
-          if(ctrl_entity_tree_is_frozen(entity))
-          {
-            cmd_kind = RD_CmdKind_ThawEntity;
-          }
-          String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
+                                      .px = floor_f32(ui_top_font_size()*6.f),
+                                      .string = str8_lit("($expr).frozen"));
         }
         if(entity->kind == CTRL_EntityKind_Thread)
         {
@@ -1263,6 +1265,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
               info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
               info.eval.space.kind == E_SpaceKind_File)
       {
+        if(e_type_kind_from_key(info.eval.irtree.type_key) == E_TypeKind_Array &&
+           e_type_kind_from_key(e_type_direct_from_key(info.eval.irtree.type_key)) == E_TypeKind_U8)
+        {
+          info.can_expand = 0;
+        }
         info.cell_style_key = str8_lit("expr_and_eval");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
         RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);

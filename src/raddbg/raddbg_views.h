@@ -55,10 +55,11 @@ typedef U32 RD_WatchCellFlags;
 enum
 {
   RD_WatchCellFlag_Button                  = (1<<0),
-  RD_WatchCellFlag_ActivateWithSingleClick = (1<<1),
-  RD_WatchCellFlag_IsNonCode               = (1<<2),
-  RD_WatchCellFlag_CanEdit                 = (1<<3),
-  RD_WatchCellFlag_IsErrored               = (1<<4),
+  RD_WatchCellFlag_Background              = (1<<1),
+  RD_WatchCellFlag_ActivateWithSingleClick = (1<<2),
+  RD_WatchCellFlag_IsNonCode               = (1<<3),
+  RD_WatchCellFlag_CanEdit                 = (1<<4),
+  RD_WatchCellFlag_IsErrored               = (1<<5),
 };
 
 typedef struct RD_WatchCell RD_WatchCell;

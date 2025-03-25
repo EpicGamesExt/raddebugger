@@ -3106,7 +3106,7 @@ rd_cell(RD_CellParams *params, String8 string)
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                       (!!(params->flags & RD_CellFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
-                                      UI_BoxFlag_DrawHotEffects|
+                                      (!!(params->flags & RD_CellFlag_Button)*UI_BoxFlag_DrawHotEffects)|
                                       (!!(params->flags & RD_CellFlag_SingleClickActivate)*UI_BoxFlag_DrawActiveEffects)|
                                       (!(params->flags & RD_CellFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
                                       (!!(params->flags & RD_CellFlag_Border)*UI_BoxFlag_DrawBorder)|
@@ -3173,29 +3173,26 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     B32 is_toggled = !!params->toggled_out[0];
     F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled);
-    Vec4F32 untoggled_bg_color = {0};
-    Vec4F32 toggled_bg_color = {0};
-    UI_TagF("good_pop")
-    {
-      toggled_bg_color = ui_color_from_name(str8_lit("background"));
-    }
-    Vec4F32 bg_color = mix_4f32(untoggled_bg_color, toggled_bg_color, toggle_t);
-    F32 padding_px = floor_f32(ui_top_font_size()*0.4f);
+    F32 padding_px = floor_f32(ui_top_font_size()*0.65f);
     F32 height_px = ui_top_px_height() - padding_px*2.f;
     UI_PrefWidth(ui_children_sum(1.f))
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))
       UI_Row UI_Padding(ui_px(padding_px, 1.f))
-      UI_PrefWidth(ui_em(4.f, 1.f))
+      UI_PrefWidth(ui_em(3.5f, 1.f))
       UI_PrefHeight(ui_px(height_px, 1.f))
       UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
+      UI_TagF(is_toggled ? "good_pop" : "")
     {
-      ui_set_next_background_color(bg_color);
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-      UI_Box *switch_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "toggle_switch");
+      UI_Box *switch_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "toggle_switch");
       UI_Parent(switch_box)
       {
-        ui_spacer(ui_pct(toggle_t, 0));
+        RD_Font(RD_FontSlot_Icons) UI_PrefWidth(ui_pct(toggle_t, 0)) UI_Transparency(1.f - toggle_t)
+        {
+          ui_build_box_from_stringf(UI_BoxFlag_DisableTextTrunc | (toggle_t > 0.001f ? UI_BoxFlag_DrawText : 0),
+                                    "%S", rd_icon_kind_text_table[RD_IconKind_Check]); 
+        }
         UI_BackgroundColor(ui_color_from_name(str8_lit("text")))
           UI_PrefWidth(ui_px(height_px, 1.f))
         {

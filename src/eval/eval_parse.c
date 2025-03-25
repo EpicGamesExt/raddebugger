@@ -1034,7 +1034,7 @@ e_type_from_expr(E_Expr *expr)
     {
       E_Expr *child_expr = expr->first;
       E_TypeKey direct_type_key = e_type_from_expr(child_expr);
-      result = e_type_key_cons_array(direct_type_key, expr->value.u64);
+      result = e_type_key_cons_array(direct_type_key, expr->value.u64, 0);
     }break;
   }
   return result;

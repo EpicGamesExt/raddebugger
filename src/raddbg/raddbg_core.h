@@ -583,31 +583,6 @@ struct RD_WindowStateSlot
 };
 
 ////////////////////////////////
-//~ rjf: Config -> Eval Blob Cache Types
-
-typedef struct RD_Cfg2EvalBlobNode RD_Cfg2EvalBlobNode;
-struct RD_Cfg2EvalBlobNode
-{
-  RD_Cfg2EvalBlobNode *next;
-  RD_CfgID id;
-  String8 blob;
-};
-
-typedef struct RD_Cfg2EvalBlobSlot RD_Cfg2EvalBlobSlot;
-struct RD_Cfg2EvalBlobSlot
-{
-  RD_Cfg2EvalBlobNode *first;
-  RD_Cfg2EvalBlobNode *last;
-};
-
-typedef struct RD_Cfg2EvalBlobMap RD_Cfg2EvalBlobMap;
-struct RD_Cfg2EvalBlobMap
-{
-  U64 slots_count;
-  RD_Cfg2EvalBlobSlot *slots;
-};
-
-////////////////////////////////
 //~ rjf: Control Entity -> Eval Blob Cache Types
 
 typedef struct RD_Entity2EvalBlobNode RD_Entity2EvalBlobNode;
@@ -721,7 +696,6 @@ struct RD_State
   E_String2TypeKeyMap *meta_name2type_map;
   
   // rjf: eval blob caches (lazily constructed from-scratch each frame)
-  RD_Cfg2EvalBlobMap *cfg2evalblob_map;
   RD_Entity2EvalBlobMap *entity2evalblob_map;
   
   // rjf: name -> view ui map (constructed from-scratch each frame)
@@ -949,7 +923,7 @@ internal String8 rd_view_rule_from_cfg(RD_Cfg *cfg);
 internal String8 rd_path_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 
-internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
+internal MD_Node *rd_schema_from_name(String8 name);
 
 internal String8 rd_setting_from_name(String8 name);
 #define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))
@@ -979,10 +953,6 @@ internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
-
-//- rjf: cfg -> eval blob
-internal String8 rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg);
-internal String8 rd_eval_blob_from_cfg__cached(RD_Cfg *cfg);
 
 //- rjf: ctrl entity -> eval blob
 internal String8 rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity);

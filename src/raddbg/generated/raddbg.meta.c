@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[307] =
+RD_VocabInfo rd_vocab_info_table[308] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -76,6 +76,7 @@ RD_VocabInfo rd_vocab_info_table[307] =
 {str8_lit_comp("local"), str8_lit_comp("locals"), str8_lit_comp("Local"), str8_lit_comp("Locals"), RD_IconKind_Null},
 {str8_lit_comp("memory"), str8_lit_comp("memories"), str8_lit_comp("Memory"), str8_lit_comp("Memories"), RD_IconKind_Grid},
 {str8_lit_comp("hit_count"), str8_lit_comp("hit_counts"), str8_lit_comp("Hit Count"), str8_lit_comp("Hit Counts"), RD_IconKind_Null},
+{str8_lit_comp("enabled"), str8_lit_comp(""), str8_lit_comp("Enabled"), str8_lit_comp("Enabled"), RD_IconKind_Null},
 {str8_lit_comp("disabled"), str8_lit_comp(""), str8_lit_comp("Disabled"), str8_lit_comp("Disabled"), RD_IconKind_Null},
 {str8_lit_comp("debug_subprocesses"), str8_lit_comp(""), str8_lit_comp("Debug Subprocesses"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("environment"), str8_lit_comp("environments"), str8_lit_comp("Environment"), str8_lit_comp("Environments"), RD_IconKind_Null},
@@ -322,17 +323,17 @@ RD_NameSchemaInfo rd_name_schema_info_table[16] =
 {str8_lit_comp("disasm"), str8_lit_comp("x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},
 {str8_lit_comp("memory"), str8_lit_comp("x:\n{\n  'size':        code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n}\n")},
 {str8_lit_comp("bitmap"), str8_lit_comp("x:\n{\n  'w': code_string,\n  'h': code_string,\n  'fmt': tex2dformat,\n}\n")},
-{str8_lit_comp("target"), str8_lit_comp("@commands(launch_and_run, launch_and_step_into, enable_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n}\n")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'disabled':         bool,\n}\n")},
+{str8_lit_comp("target"), str8_lit_comp("@commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'view_rule':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},
 {str8_lit_comp("recent_file"), str8_lit_comp("x:{'path':path}")},
-{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, 'frozen':bool, 'unattached_processes':query, 'processes':query}")},
-{str8_lit_comp("process"), str8_lit_comp("x:{'label':code_string, 'id':u64, 'frozen':bool, 'modules':query, 'threads':query}")},
+{str8_lit_comp("machine"), str8_lit_comp("x:{'label':code_string, @no_expand 'frozen':bool, 'unattached_processes':query, 'processes':query}")},
+{str8_lit_comp("process"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'modules':query, 'threads':query}")},
 {str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}")},
-{str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, 'frozen':bool, 'call_stack':query}")},
+{str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'call_stack':query}")},
 };
 
 Rng1U64 rd_reg_slot_range_table[41] =

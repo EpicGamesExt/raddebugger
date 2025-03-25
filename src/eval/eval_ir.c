@@ -322,7 +322,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(file)
       E_Space space = e_space_make(E_SpaceKind_File);
       space.u64_0 = e_id_from_string(accel->file_path);
       result.irtree_and_type.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size);
+      result.irtree_and_type.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size, 0);
       result.irtree_and_type.mode = E_Mode_Offset;
     }
   }
@@ -2102,7 +2102,6 @@ E_IRGEN_FUNCTION_DEF(default)
       result = e_irtree_and_type_from_expr(arena, expr->first);
     }break;
     case E_ExprKind_Neg:
-    case E_ExprKind_LogNot:
     case E_ExprKind_BitNot:
     {
       // rjf: unpack operand
@@ -2112,6 +2111,39 @@ E_IRGEN_FUNCTION_DEF(default)
       E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
       RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
       E_TypeKey r_type_promoted = e_type_promote(r_type);
+      RDI_EvalOp op = e_opcode_from_expr_kind(kind);
+      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+      
+      // rjf: bad conditions? -> error if applicable, exit
+      if(r_tree.root->op == 0)
+      {
+        break;
+      }
+      else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+        break;
+      }
+      
+      // rjf: generate
+      {
+        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+        in_tree = e_irtree_convert_hi(arena, in_tree, r_type_promoted, r_type);
+        E_IRNode *new_tree = e_irtree_unary_op(arena, op, r_type_group, in_tree);
+        result.root     = new_tree;
+        result.type_key = r_type_promoted;
+        result.mode     = E_Mode_Value;
+      }
+    }break;
+    case E_ExprKind_LogNot:
+    {
+      // rjf: unpack operand
+      E_Expr *r_expr = expr->first;
+      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+      RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
+      E_TypeKey r_type_promoted = e_type_key_basic(E_TypeKind_Bool);
       RDI_EvalOp op = e_opcode_from_expr_kind(kind);
       e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
       
@@ -2449,7 +2481,7 @@ E_IRGEN_FUNCTION_DEF(default)
     case E_ExprKind_LeafStringLiteral:
     {
       String8 string = expr->string;
-      E_TypeKey type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_UChar8), string.size);
+      E_TypeKey type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_UChar8), string.size, 0);
       E_IRNode *new_tree = e_irtree_string_literal(arena, string);
       result.root     = new_tree;
       result.type_key = type_key;

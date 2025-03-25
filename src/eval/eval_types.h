@@ -359,7 +359,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 #define e_type_key_cons(...) e_type_key_cons_(&(E_ConsTypeParams){.kind = E_TypeKind_Null, __VA_ARGS__})
 
 //- rjf: constructed type construction helpers
-internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
+internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_base(Type *type);
 

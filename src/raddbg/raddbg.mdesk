@@ -89,6 +89,7 @@ RD_VocabTable:
   {local                _                           "Local"                     _                     Null                                           }
   {memory               memories                    "Memory"                    "Memories"            Grid                                           }
   {hit_count            hit_counts                  "Hit Count"                 "Hit Counts"          Null                                           }
+  {enabled              ""                          "Enabled"                   "Enabled"             Null                                           }
   {disabled             ""                          "Disabled"                  "Disabled"            Null                                           }
   {debug_subprocesses   ""                          "Debug Subprocesses"        ""                    Null                                           }
   {environment          _                           "Environment"               _                     Null                                           }
@@ -216,7 +217,7 @@ RD_VocabTable:
   {
     target,
     ```
-      @commands(launch_and_run, launch_and_step_into, enable_cfg, remove_cfg)
+      @commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)
       @collection_commands(add_target)
       x:
     {
@@ -230,6 +231,7 @@ RD_VocabTable:
       'stdin_path':         path,
       'environment':        query,
       'debug_subprocesses': bool,
+      @no_expand @default(0) 'enabled': bool,
     }
     ```,
   }
@@ -247,7 +249,7 @@ RD_VocabTable:
       'source_location':  path_pt,
       'address_location': code_string,
       'hit_count':        u64,
-      'disabled':         bool,
+      @no_expand @default(1) 'enabled': bool,
     }
     ```,
   }
@@ -295,11 +297,11 @@ RD_VocabTable:
   //- rjf: control entities
   {
     machine,
-    ```x:{'label':code_string, 'frozen':bool, 'unattached_processes':query, 'processes':query}```,
+    ```x:{'label':code_string, @no_expand 'frozen':bool, 'unattached_processes':query, 'processes':query}```,
   }
   {
     process,
-    ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'modules':query, 'threads':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'modules':query, 'threads':query}```,
   }
   {
     module,
@@ -307,7 +309,7 @@ RD_VocabTable:
   }
   {
     thread,
-    ```x:{'label':code_string, 'id':u64, 'frozen':bool, 'call_stack':query}```,
+    ```x:{'label':code_string, 'id':u64, @no_expand 'frozen':bool, 'call_stack':query}```,
   }
 }
 
