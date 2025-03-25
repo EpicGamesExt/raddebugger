@@ -583,31 +583,6 @@ struct RD_WindowStateSlot
 };
 
 ////////////////////////////////
-//~ rjf: Control Entity -> Eval Blob Cache Types
-
-typedef struct RD_Entity2EvalBlobNode RD_Entity2EvalBlobNode;
-struct RD_Entity2EvalBlobNode
-{
-  RD_Entity2EvalBlobNode *next;
-  CTRL_Handle handle;
-  String8 blob;
-};
-
-typedef struct RD_Entity2EvalBlobSlot RD_Entity2EvalBlobSlot;
-struct RD_Entity2EvalBlobSlot
-{
-  RD_Entity2EvalBlobNode *first;
-  RD_Entity2EvalBlobNode *last;
-};
-
-typedef struct RD_Entity2EvalBlobMap RD_Entity2EvalBlobMap;
-struct RD_Entity2EvalBlobMap
-{
-  U64 slots_count;
-  RD_Entity2EvalBlobSlot *slots;
-};
-
-////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 read_only global U64 rd_name_bucket_chunk_sizes[] =
@@ -694,9 +669,6 @@ struct RD_State
   
   // rjf: meta name -> eval type key map (constructed from-scratch each frame)
   E_String2TypeKeyMap *meta_name2type_map;
-  
-  // rjf: eval blob caches (lazily constructed from-scratch each frame)
-  RD_Entity2EvalBlobMap *entity2evalblob_map;
   
   // rjf: name -> view ui map (constructed from-scratch each frame)
   RD_ViewUIRuleMap *view_ui_rule_map;
@@ -953,10 +925,6 @@ internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
-
-//- rjf: ctrl entity -> eval blob
-internal String8 rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity);
-internal String8 rd_eval_blob_from_entity__cached(CTRL_Entity *entity);
 
 //- rjf: eval space reads/writes
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);

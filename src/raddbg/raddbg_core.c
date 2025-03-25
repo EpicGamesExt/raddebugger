@@ -2781,108 +2781,6 @@ rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
   return space;
 }
 
-//- rjf: ctrl entity -> eval blob
-
-internal String8
-rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity)
-{
-  String8 result = {0};
-  String8 name = ctrl_entity_kind_code_name_table[entity->kind];
-  E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-  if(!e_type_key_match(e_type_key_zero(), type_key))
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    MD_Node *schema = rd_schema_from_name(name);
-    String8List fixed_width_parts = {0};
-    String8List variable_width_parts = {0};
-    {
-      E_Type *type = e_type_from_key__cached(type_key);
-      if(type->members != 0) for EachIndex(member_idx, type->count)
-      {
-        E_Member *member = &type->members[member_idx];
-        String8 member_name = member->name;
-        if(0){}
-        else if(str8_match(member_name, str8_lit("frozen"), 0))
-        {
-          B32 is_frozen = ctrl_entity_tree_is_frozen(entity);
-          str8_list_push(scratch.arena, &fixed_width_parts, str8((U8 *)&is_frozen, 1));
-        }
-        else if(str8_match(member_name, str8_lit("vaddr_range"), 0))
-        {
-          str8_list_push(scratch.arena, &fixed_width_parts, str8_struct(&entity->vaddr_range));
-        }
-        else if(str8_match(member_name, str8_lit("id"), 0))
-        {
-          str8_list_push(scratch.arena, &fixed_width_parts, str8_struct(&entity->id));
-        }
-        else if(str8_match(member_name, str8_lit("label"), 0))
-        {
-          String8 label = entity->string;
-          if(entity->kind == CTRL_EntityKind_Module)
-          {
-            label = str8_skip_last_slash(label);
-          }
-          U64 off = type->byte_size + variable_width_parts.total_size;
-          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
-          str8_list_push(scratch.arena, &variable_width_parts, label);
-          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
-        }
-        else if(str8_match(member_name, str8_lit("exe"), 0))
-        {
-          String8 string = entity->string;
-          U64 off = type->byte_size + variable_width_parts.total_size;
-          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
-          str8_list_push(scratch.arena, &variable_width_parts, string);
-          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
-        }
-        else if(str8_match(member_name, str8_lit("dbg"), 0))
-        {
-          String8 string = ctrl_entity_child_from_kind(entity, CTRL_EntityKind_DebugInfoPath)->string;
-          U64 off = type->byte_size + variable_width_parts.total_size;
-          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
-          str8_list_push(scratch.arena, &variable_width_parts, string);
-          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
-        }
-      }
-    }
-    String8List all_parts = {0};
-    str8_list_concat_in_place(&all_parts, &fixed_width_parts);
-    str8_list_concat_in_place(&all_parts, &variable_width_parts);
-    result = str8_list_join(arena, &all_parts, 0);
-  }
-  return result;
-}
-
-internal String8
-rd_eval_blob_from_entity__cached(CTRL_Entity *entity)
-{
-  String8 result = {0};
-  {
-    RD_Entity2EvalBlobMap *map = rd_state->entity2evalblob_map;
-    CTRL_Handle handle = entity->handle;
-    U64 hash = ctrl_hash_from_handle(handle);
-    U64 slot_idx = hash%map->slots_count;
-    RD_Entity2EvalBlobNode *node = 0;
-    for(RD_Entity2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
-    {
-      if(ctrl_handle_match(n->handle, handle))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == 0)
-    {
-      node = push_array(rd_frame_arena(), RD_Entity2EvalBlobNode, 1);
-      SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
-      node->handle = handle;
-      node->blob = rd_eval_blob_from_entity(rd_frame_arena(), entity);
-    }
-    result = node->blob;
-  }
-  return result;
-}
-
 //- rjf: eval space reads/writes
 
 internal B32
@@ -12840,9 +12738,6 @@ rd_frame(void)
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
-  rd_state->entity2evalblob_map = push_array(rd_frame_arena(), RD_Entity2EvalBlobMap, 1);
-  rd_state->entity2evalblob_map->slots_count = 256;
-  rd_state->entity2evalblob_map->slots = push_array(rd_frame_arena(), RD_Entity2EvalBlobSlot, rd_state->entity2evalblob_map->slots_count);
   
   //////////////////////////////
   //- rjf: iterate all tabs, touch their view-states
