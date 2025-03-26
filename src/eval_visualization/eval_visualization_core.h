@@ -225,33 +225,6 @@ struct EV_WindowedRowList
 };
 
 ////////////////////////////////
-//~ rjf: Automatic Type -> View Rule Map Types
-
-typedef struct EV_AutoViewRuleNode EV_AutoViewRuleNode;
-struct EV_AutoViewRuleNode
-{
-  EV_AutoViewRuleNode *next;
-  E_TypeKey key;
-  String8 view_rule;
-  B32 is_required;
-};
-
-typedef struct EV_AutoViewRuleSlot EV_AutoViewRuleSlot;
-struct EV_AutoViewRuleSlot
-{
-  EV_AutoViewRuleNode *first;
-  EV_AutoViewRuleNode *last;
-  U64 count;
-};
-
-typedef struct EV_AutoViewRuleTable EV_AutoViewRuleTable;
-struct EV_AutoViewRuleTable
-{
-  EV_AutoViewRuleSlot *slots;
-  U64 slots_count;
-};
-
-////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/eval_visualization.meta.h"
@@ -280,7 +253,6 @@ global read_only EV_ExpandRule ev_nil_expand_rule =
   EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
 };
 thread_static EV_ExpandRuleTable *ev_view_rule_info_table = 0;
-thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
 global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_lookup_rule__nil, &ev_nil_expand_rule};
 
 ////////////////////////////////

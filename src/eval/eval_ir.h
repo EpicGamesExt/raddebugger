@@ -188,7 +188,7 @@ struct E_AutoHookNode
 {
   E_AutoHookNode *hash_next;
   E_AutoHookNode *pattern_order_next;
-  E_TypeKey type_key;
+  String8 type_string;
   String8List type_pattern_parts;
   E_ExprChain tag_exprs;
 };

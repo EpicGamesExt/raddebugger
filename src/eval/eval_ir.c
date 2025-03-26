@@ -1326,13 +1326,13 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
     type_key = irtree.type_key;
   }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
-  node->type_key = type_key;
+  node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
   U8 pattern_split = '?';
   node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
   node->tag_exprs = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).exprs;
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
-    U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+    U64 hash = e_hash_from_string(5381, node->type_string);
     U64 slot_idx = hash%map->slots_count;
     SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
   }
@@ -1352,15 +1352,16 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
   {
     Temp scratch = scratch_begin(&arena, 1);
     E_AutoHookMap *map = e_ir_state->ctx->auto_hook_map;
+    String8 type_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, type_key));
     
     //- rjf: gather exact-type-key-matches from the map
     if(map != 0 && map->slots_count != 0)
     {
-      U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+      U64 hash = e_hash_from_string(5381, type_string);
       U64 slot_idx = hash%map->slots_count;
       for(E_AutoHookNode *n = map->slots[slot_idx].first; n != 0; n = n->hash_next)
       {
-        if(e_type_key_match(n->type_key, type_key))
+        if(str8_match(n->type_string, type_string, 0))
         {
           for(E_Expr *e = n->tag_exprs.first; e != &e_expr_nil; e = e->next)
           {
@@ -1373,7 +1374,6 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
     //- rjf: gather fuzzy matches from all patterns in the map
     if(map != 0 && map->first_pattern != 0)
     {
-      String8 type_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, type_key));
       for(E_AutoHookNode *auto_hook_node = map->first_pattern;
           auto_hook_node != 0;
           auto_hook_node = auto_hook_node->pattern_order_next)
