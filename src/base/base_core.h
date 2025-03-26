@@ -348,6 +348,9 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 #define IsPow2OrZero(x)    ((((x) - 1)&(x)) == 0)
 
 #define ExtractBit(word, idx) (((word) >> (idx)) & 1)
+#define Extract8(word, pos)   (((word) >> ((pos)*8))  & max_U8)
+#define Extract16(word, pos)  (((word) >> ((pos)*16)) & max_U16)
+#define Extract32(word, pos)  (((word) >> ((pos)*32)) & max_U32)
 
 #if LANG_CPP
 # define zero_struct {}
