@@ -1670,6 +1670,22 @@ typedef enum DW_ExprOpEnum
   X(Xmm13,   30, zmm13,  0, 16) \
   X(Xmm14,   31, zmm14,  0, 16) \
   X(Xmm15,   32, zmm15,  0, 16) \
+  X(Xmm16,   67, zmm16,  0, 16) \
+  X(Xmm17,   68, zmm17,  0, 16) \
+  X(Xmm18,   69, zmm18,  0, 16) \
+  X(Xmm19,   70, zmm19,  0, 16) \
+  X(Xmm20,   71, zmm20,  0, 16) \
+  X(Xmm21,   72, zmm21,  0, 16) \
+  X(Xmm22,   73, zmm22,  0, 16) \
+  X(Xmm23,   74, zmm23,  0, 16) \
+  X(Xmm24,   75, zmm24,  0, 16) \
+  X(Xmm25,   76, zmm25,  0, 16) \
+  X(Xmm26,   77, zmm26,  0, 16) \
+  X(Xmm27,   78, zmm27,  0, 16) \
+  X(Xmm28,   79, zmm28,  0, 16) \
+  X(Xmm29,   80, zmm29,  0, 16) \
+  X(Xmm30,   81, zmm30,  0, 16) \
+  X(Xmm31,   82, zmm31,  0, 16) \
   X(St0,     33, st0,    0, 10) \
   X(St1,     34, st1,    0, 10) \
   X(St2,     35, st2,    0, 10) \
@@ -1717,6 +1733,13 @@ typedef enum DW_RegX64Enum
 } DW_RegX64Enum;
 
 ////////////////////////////////
+
+internal U64 dw_reg_size_from_code_x86(U64 reg_code);
+internal U64 dw_reg_pos_from_code_x86(U64 reg_code);
+internal U64 dw_reg_size_from_code_x64(U64 reg_code);
+internal U64 dw_reg_pos_from_code_x64(U64 reg_code);
+internal U64 dw_reg_size_from_code(Arch arch, U64 reg_code);
+internal U64 dw_reg_pos_from_code(Arch arch, U64 reg_code);
 
 //- Attrib Class Encodings
 

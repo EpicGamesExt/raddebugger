@@ -1,6 +1,70 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal U64
+dw_reg_size_from_code_x86(U64 reg_code)
+{
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX86_##reg_name_dw: return reg_size;
+    DW_Regs_X86_XList(X)
+#undef X
+  }
+  return 0;
+}
+
+internal U64
+dw_reg_pos_from_code_x86(U64 reg_code)
+{
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX86_##reg_name_dw: return reg_pos;
+    DW_Regs_X86_XList(X)
+#undef X
+  }
+  return max_U64;
+}
+
+internal U64
+dw_reg_size_from_code_x64(U64 reg_code)
+{
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_size;
+    DW_Regs_X64_XList(X)
+#undef X
+  }
+  return 0;
+}
+
+internal U64
+dw_reg_pos_from_code_x64(U64 reg_code)
+{
+  switch (reg_code) {
+#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return reg_pos;
+    DW_Regs_X64_XList(X)
+#undef X
+  }
+  return max_U64;
+}
+
+internal U64
+dw_reg_size_from_code(RDI_Arch arch, U64 reg_code)
+{
+  switch (arch) {
+  case RDI_Arch_X86: return dw_reg_size_from_code_x86(reg_code);
+  case RDI_Arch_X64: return dw_reg_size_from_code_x64(reg_code);
+  }
+  return 0;
+}
+
+internal U64
+dw_reg_pos_from_code(RDI_Arch arch, U64 reg_code)
+{
+  switch (arch) {
+  case RDI_Arch_X86: return dw_reg_pos_from_code_x86(reg_code);
+  case RDI_Arch_X64: return dw_reg_pos_from_code_x64(reg_code);
+  }
+  return max_U64;
+}
+
 internal DW_AttribClass
 dw_attrib_class_from_attrib_kind_v2(DW_AttribKind k)
 {
