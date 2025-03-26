@@ -729,7 +729,6 @@ rd_cmd_binding_buttons(String8 name)
     
     //- rjf: build box
     ui_set_next_tag(has_conflicts ? str8_lit("bad_pop") : rebinding_active_for_this_binding ? str8_lit("pop") : str8_zero());
-    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
     ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
@@ -803,7 +802,6 @@ rd_cmd_binding_buttons(String8 name)
                             rd_state->bind_change_binding_id == 0);
   RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "")
   {
-    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
     ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
@@ -837,7 +835,6 @@ rd_cmd_binding_buttons(String8 name)
 internal UI_Signal
 rd_menu_bar_button(String8 string)
 {
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects, string);
   UI_Signal sig = ui_signal_from_box(box);
   return sig;
@@ -847,7 +844,6 @@ internal UI_Signal
 rd_cmd_spec_button(String8 name)
 {
   RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(name);
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
                                           UI_BoxFlag_DrawBackground|
@@ -914,7 +910,6 @@ internal UI_Signal
 rd_icon_button(RD_IconKind kind, FuzzyMatchRangeList *matches, String8 string)
 {
   String8 display_string = ui_display_part_from_key_string(string);
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|
                                          UI_BoxFlag_DrawBorder|
@@ -1609,7 +1604,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
-            ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             ui_set_next_text_alignment(UI_TextAlign_Center);
             ui_set_next_text_color(bp_rgba);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
@@ -1669,7 +1663,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_font(rd_font_from_slot(RD_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
-            ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             ui_set_next_text_alignment(UI_TextAlign_Center);
             ui_set_next_text_color(color);
             UI_Box *pin_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
@@ -3099,10 +3092,6 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
-  if(params->flags & RD_CellFlag_Button)
-  {
-    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-  }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                       (!!(params->flags & RD_CellFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
@@ -3184,7 +3173,6 @@ rd_cell(RD_CellParams *params, String8 string)
       UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
       UI_TagF(is_toggled ? "good_pop" : "")
     {
-      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       UI_Box *switch_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "toggle_switch");
       UI_Parent(switch_box)
       {

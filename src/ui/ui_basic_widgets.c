@@ -70,7 +70,6 @@ ui_label_multilinef(F32 max, char *fmt, ...)
 internal UI_Signal
 ui_button(String8 string)
 {
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|
                                          UI_BoxFlag_DrawBackground|
                                          UI_BoxFlag_DrawBorder|
@@ -181,7 +180,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
-  ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_Pointer);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                       UI_BoxFlag_DrawBorder|
                                       UI_BoxFlag_MouseClickable|
@@ -1258,7 +1257,6 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       if(idx_range.max != idx_range.min)
       {
         ui_set_next_pref_size(axis, ui_pct((F32)((F64)(pt.idx-idx_range.min)/(F64)idx_range_dim), 0));
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *space_before_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "##scroll_area_before");
         space_before_sig = ui_signal_from_box(space_before_box);
       }
@@ -1274,7 +1272,6 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       if(idx_range.max != idx_range.min)
       {
         ui_set_next_pref_size(axis, ui_pct(1.f - (F32)((F64)(pt.idx-idx_range.min)/(F64)idx_range_dim), 0));
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *space_after_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "##scroll_area_after");
         space_after_sig = ui_signal_from_box(space_after_box);
       }

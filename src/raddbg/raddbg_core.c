@@ -5302,7 +5302,6 @@ rd_view_ui(Rng2F32 rect)
                                                                        ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
                               UI_CornerRadius(ui_top_font_size()*1.5f)
                               UI_TextAlignment(UI_TextAlign_Center)
-                              UI_HoverCursor(OS_Cursor_HandPoint)
                               RD_Font(RD_FontSlot_Icons)
                               UI_FontSize(ui_top_font_size()*0.8f)
                             {
@@ -8572,7 +8571,6 @@ rd_window_frame(void)
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
-            ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             UI_Box *user_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                          UI_BoxFlag_DrawBorder|
                                                          UI_BoxFlag_DrawBackground|
@@ -8606,7 +8604,6 @@ rd_window_frame(void)
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
-            ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             UI_Box *prof_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                          UI_BoxFlag_DrawBorder|
                                                          UI_BoxFlag_DrawBackground|
@@ -9644,7 +9641,6 @@ rd_window_frame(void)
                   {
                     ui_spacer(ui_px(1.f, 1.f));
                   }
-                  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                   UI_Box *tab_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|
                                                               UI_BoxFlag_DrawBackground|
                                                               UI_BoxFlag_DrawBorder|
@@ -9671,7 +9667,6 @@ rd_window_frame(void)
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
                     {
-                      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                       UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                     UI_BoxFlag_DrawBorder|
                                                                     UI_BoxFlag_DrawBackground|
@@ -9745,7 +9740,6 @@ rd_window_frame(void)
                   {
                     ui_spacer(ui_px(1.f, 1.f));
                   }
-                  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                   ui_set_next_group_key(catchall_drop_site_key);
                   UI_Box *tab_box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|
                                                           UI_BoxFlag_DrawBackground|
@@ -9786,7 +9780,6 @@ rd_window_frame(void)
                   UI_FontSize(ui_top_font_size())
                   UI_TagF("implicit")
                   UI_TagF("weak")
-                  UI_HoverCursor(OS_Cursor_HandPoint)
                 {
                   UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                                   UI_BoxFlag_DrawBorder|
