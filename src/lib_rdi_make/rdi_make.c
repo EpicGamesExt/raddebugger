@@ -2342,6 +2342,7 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
           RDI_U32 type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, &n->v[idx]); // TODO(rjf): @u64_to_u32
+          if(type_idx == 0) {continue;}
           rdim_bake_name_map_push(arena, map, n->v[idx].name, type_idx);
         }
       }
