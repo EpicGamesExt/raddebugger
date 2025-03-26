@@ -35,11 +35,21 @@
 //   common case is debugging a small number of programs, usually 1, and for
 //   those purposes, the `Threads` view is sufficient if not desirable, and
 //   the extra information provided by `Processes` and `Machines`, while useful
-//   in other contexts, is not useful in that common case.
+//   in other contexts, is not useful in that common case. The `Machines` view
+//   now shows a superset of the information previosuly found in the
+//   `Scheduler` view.
 // - The two separate interfaces for editing threads, breakpoints, and watch
 //   pins (the right-click context menu and the dedicated tabs) have been
 //   merged.
-// - Added the ability to add per-target environment strings.
+// - Added the ability to add a list environment strings to targets.
+// - Added support for watch annotations derived from source code markup,
+//   rather than only from configuration. Instances of
+//   `raddbg_pin(<expr>, <view_rule>)` will be parsed, and used to create watch
+//   annotations inline with source code, in the same way that watch pins do.
+//   For instance, `raddbg_pin(dynamic_array, slice)` will visualize
+//   `dynamic_array` with a `slice` view rule;
+//   `raddbg_pin(some_function, disasm)` will visualize `some_function` as
+//   disassembly; and so on.
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.
 

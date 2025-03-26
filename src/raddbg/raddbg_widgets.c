@@ -1910,9 +1910,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           U64 arg_start_off = 0;
           for(U64 contents_off = 0; contents_off <= contents.size; contents_off += 1)
           {
-            if(contents_off == contents.size || contents.str[contents_off] == ',')
+            if(nest == 0 && (contents_off == contents.size || contents.str[contents_off] == ','))
             {
               String8 arg = str8_substr(contents, r1u64(arg_start_off, contents_off));
+              arg = str8_skip_chop_whitespace(arg);
               str8_list_push(scratch.arena, &args, arg);
               arg_start_off = contents_off+1;
             }

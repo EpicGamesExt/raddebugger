@@ -1642,9 +1642,9 @@ fancy_viz_eval_tests(void)
                        "  return 0;\n"
                        "}\n\n");
   int x1 = 0;
-  raddbg_pin(long_string,          "text");
-  raddbg_pin(code_string,          "text(lang=c)");
-  raddbg_pin(fancy_viz_eval_tests, "disasm");
+  raddbg_pin(long_string,          text);
+  raddbg_pin(code_string,          text(lang=c));
+  raddbg_pin(fancy_viz_eval_tests, disasm);
   
   //- rjf: bitmaps
   unsigned int background_color = 0x00000000;
@@ -1676,7 +1676,7 @@ fancy_viz_eval_tests(void)
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
   };
-  raddbg_pin(bitmap, "bitmap:(w:18, h:18)");
+  raddbg_pin(bitmap, bitmap(18, 18));
   for(int i = 0; i < sizeof(bitmap)/sizeof(bitmap[0]); i += 1)
   {
     unsigned int r = bitmap[i]&0x000000ff;
