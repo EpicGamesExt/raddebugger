@@ -726,6 +726,78 @@ rdi_string_from_reg_code(Arena *arena, RDI_Arch arch, U64 reg_code)
 }
 
 internal String8
+rdi_string_from_eval_op(Arena *arena, RDI_EvalOp op)
+{
+  switch (op) {
+  case RDI_EvalOp_Stop:            return str8_lit("Stop");
+  case RDI_EvalOp_Noop:            return str8_lit("Noop");
+  case RDI_EvalOp_Cond:            return str8_lit("Cond");
+  case RDI_EvalOp_Skip:            return str8_lit("Skip");
+  case RDI_EvalOp_MemRead:         return str8_lit("MemRead");
+  case RDI_EvalOp_RegRead:         return str8_lit("RegRead");
+  case RDI_EvalOp_RegReadDyn:      return str8_lit("RegReadDyn");
+  case RDI_EvalOp_FrameOff:        return str8_lit("FrameOff");
+  case RDI_EvalOp_ModuleOff:       return str8_lit("ModuleOff");
+  case RDI_EvalOp_TLSOff:          return str8_lit("TLSOff");
+  case RDI_EvalOp_ObjectOff:       return str8_lit("ObjectOff");
+  case RDI_EvalOp_CFA:             return str8_lit("CFA");
+  case RDI_EvalOp_ConstU8:         return str8_lit("ConstU8");
+  case RDI_EvalOp_ConstU16:        return str8_lit("ConstU16");
+  case RDI_EvalOp_ConstU32:        return str8_lit("ConstU32");
+  case RDI_EvalOp_ConstU64:        return str8_lit("ConstU64");
+  case RDI_EvalOp_ConstU128:       return str8_lit("ConstU128");
+  case RDI_EvalOp_ConstString:     return str8_lit("ConstString");
+  case RDI_EvalOp_Abs:             return str8_lit("Abs");
+  case RDI_EvalOp_Neg:             return str8_lit("Neg");
+  case RDI_EvalOp_Add:             return str8_lit("Add");
+  case RDI_EvalOp_Sub:             return str8_lit("Sub");
+  case RDI_EvalOp_Mul:             return str8_lit("Mul");
+  case RDI_EvalOp_Div:             return str8_lit("Div");
+  case RDI_EvalOp_Mod:             return str8_lit("Mod");
+  case RDI_EvalOp_LShift:          return str8_lit("LShift");
+  case RDI_EvalOp_RShift:          return str8_lit("RShift");
+  case RDI_EvalOp_BitAnd:          return str8_lit("BitAnd");
+  case RDI_EvalOp_BitOr:           return str8_lit("BitOr");
+  case RDI_EvalOp_BitXor:          return str8_lit("BitXor");
+  case RDI_EvalOp_BitNot:          return str8_lit("BitNot");
+  case RDI_EvalOp_LogAnd:          return str8_lit("LogAnd");
+  case RDI_EvalOp_LogOr:           return str8_lit("LogOr");
+  case RDI_EvalOp_LogNot:          return str8_lit("LogNot");
+  case RDI_EvalOp_EqEq:            return str8_lit("EqEq");
+  case RDI_EvalOp_NtEq:            return str8_lit("NtEq");
+  case RDI_EvalOp_LsEq:            return str8_lit("LsEq");
+  case RDI_EvalOp_GrEq:            return str8_lit("GrEq");
+  case RDI_EvalOp_Less:            return str8_lit("Less");
+  case RDI_EvalOp_Grtr:            return str8_lit("Grtr");
+  case RDI_EvalOp_Trunc:           return str8_lit("Trunc");
+  case RDI_EvalOp_TruncSigned:     return str8_lit("TruncSigned");
+  case RDI_EvalOp_Convert:         return str8_lit("Convert");
+  case RDI_EvalOp_Pick:            return str8_lit("Pick");
+  case RDI_EvalOp_Pop:             return str8_lit("Pop");
+  case RDI_EvalOp_Insert:          return str8_lit("Insert");
+  case RDI_EvalOp_ValueRead:       return str8_lit("ValueRead");
+  case RDI_EvalOp_ByteSwap:        return str8_lit("ByteSwap");
+  case RDI_EvalOp_CallSiteValue:   return str8_lit("CallSiteValue");
+  case RDI_EvalOp_PartialValue:    return str8_lit("PartialValue");
+  case RDI_EvalOp_PartialValueBit: return str8_lit("PartialValueBit");
+  }
+  return push_str8f(arena, "%#x", op);
+}
+
+internal String8
+rdi_string_from_eval_type_group(Arena *arena, RDI_EvalTypeGroup x)
+{
+  switch (x) {
+  case RDI_EvalTypeGroup_Other: return str8_lit("Other");
+  case RDI_EvalTypeGroup_U:     return str8_lit("U");
+  case RDI_EvalTypeGroup_S:     return str8_lit("S");
+  case RDI_EvalTypeGroup_F32:   return str8_lit("F32");
+  case RDI_EvalTypeGroup_F64:   return str8_lit("F64");
+  }
+  return push_str8f(arena, "%#x", x);
+}
+
+internal String8
 rdi_string_from_binary_section_flags(Arena *arena, RDI_BinarySectionFlags flags)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -1030,8 +1102,169 @@ rdi_print_udt(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, R
   scratch_end(scratch);
 }
 
+internal String8
+rdi_string_from_bytecode(Arena *arena, RDI_Arch arch, String8 bc)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List fmt = {0};
+  for (U64 cursor = 0; cursor < bc.size; ) {
+    RDI_EvalOp op = RDI_EvalOp_Stop;
+    cursor += str8_deserial_read_struct(bc, cursor, &op);
+
+    U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+    U32 imm_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+
+    String8 imm = {0};
+    cursor += str8_deserial_read_block(bc, cursor, imm_size, &imm);
+    if (imm.size != imm_size) {
+      str8_list_pushf(scratch.arena, &fmt, "(ERROR: not enough bytes to read immediate)");
+      break;
+    }
+
+    String8 imm_fmt = {0};
+    switch (op) {
+    case RDI_EvalOp_Stop: goto exit;
+    case RDI_EvalOp_Noop: break;
+    case RDI_EvalOp_Cond: break;
+    case RDI_EvalOp_Skip:  {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U16 *)imm.str);
+    } break;
+    case RDI_EvalOp_MemRead: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U8 *)imm.str);
+    } break;
+    case RDI_EvalOp_RegRead: {
+      U32         regread   = *(U32 *)imm.str;
+      RDI_RegCode reg_code  = Extract8(regread, 0);
+      U8          byte_size = Extract8(regread, 1);
+      U8          byte_off  = Extract8(regread, 2);
+      String8     reg_str   = rdi_string_from_reg_code(scratch.arena, arch, reg_code);
+      imm_fmt = push_str8f(scratch.arena, "%S, Size: %u", rd_string_from_reg_off(scratch.arena, reg_str, byte_off), byte_size);
+    } break;
+    case RDI_EvalOp_RegReadDyn: break;
+    case RDI_EvalOp_FrameOff: {
+      imm_fmt = push_str8f(scratch.arena, "%+lld", *(S64 *)imm.str);
+    } break;
+    case RDI_EvalOp_ModuleOff: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_TLSOff: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU8: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U8 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU16: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U16 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU32: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU64: {
+      imm_fmt = push_str8f(scratch.arena, "%llu", *(U64 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU128: {
+      imm_fmt = push_str8f(scratch.arena, "Lo: %llu, Hi: %llu", *(U64 *)imm.str, *((U64 *)imm.str + 1));
+    } break;
+    case RDI_EvalOp_ConstString: {
+      U8      size   = *(U8 *)imm.str;
+      String8 string = {0};
+      cursor += str8_deserial_read_block(bc, cursor, size, &string);
+
+      imm_fmt = push_str8f(scratch.arena, "(%u) \"%S\"", size, string);
+    } break;
+    case RDI_EvalOp_Abs:
+    case RDI_EvalOp_Neg: 
+    case RDI_EvalOp_Add:
+    case RDI_EvalOp_Sub:
+    case RDI_EvalOp_Mul:
+    case RDI_EvalOp_Div:
+    case RDI_EvalOp_Mod:
+    case RDI_EvalOp_LShift:
+    case RDI_EvalOp_RShift:
+    case RDI_EvalOp_BitAnd:
+    case RDI_EvalOp_BitOr:
+    case RDI_EvalOp_BitXor:
+    case RDI_EvalOp_BitNot:
+    case RDI_EvalOp_LogAnd:
+    case RDI_EvalOp_LogOr:
+    case RDI_EvalOp_LogNot:
+    case RDI_EvalOp_EqEq:
+    case RDI_EvalOp_NtEq:
+    case RDI_EvalOp_LsEq:
+    case RDI_EvalOp_GrEq:
+    case RDI_EvalOp_Less:
+    case RDI_EvalOp_Grtr: {
+      U8 eval_type_group = *(U8 *)imm.str;
+      imm_fmt = rdi_string_from_eval_type_group(scratch.arena, eval_type_group);
+    } break;
+    case RDI_EvalOp_Trunc:
+    case RDI_EvalOp_TruncSigned: {
+      U8 trunc = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", trunc);
+    } break;
+    case RDI_EvalOp_Convert: {
+      U16 convert = *(U16 *)imm.str;
+      U8 in  = Extract8(convert, 0);
+      U8 out = Extract8(convert, 1);
+      String8 in_str  = rdi_string_from_eval_type_group(scratch.arena, in);
+      String8 out_str = rdi_string_from_eval_type_group(scratch.arena, out);
+      imm_fmt = push_str8f(scratch.arena, "in: %S out: %S", in_str, out_str);
+    } break;
+    case RDI_EvalOp_Pick: {
+      U8 pick = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", pick);
+    } break;
+    case RDI_EvalOp_Pop: break;
+    case RDI_EvalOp_Insert: {
+      U8 insert = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", insert);
+    } break;
+    case RDI_EvalOp_ValueRead: {
+      U8 bytes_to_read = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", bytes_to_read);
+    } break;
+    case RDI_EvalOp_ByteSwap: {
+      U8 byte_size = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", byte_size);
+    } break;
+    case RDI_EvalOp_CallSiteValue: {
+      U32     call_site_bc_size = *(U32 *)imm.str;
+      String8 call_site_bc      = {0};
+      cursor += str8_deserial_read_block(bc, cursor, call_site_bc_size, &call_site_bc);
+
+      String8 call_site_str = rdi_string_from_bytecode(scratch.arena, arch, call_site_bc);
+      imm_fmt = push_str8f(scratch.arena, "%S", call_site_str);
+    } break;
+    case RDI_EvalOp_PartialValue: {
+      U32 partial_value_size = *(U32 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", partial_value_size);
+    } break;
+    case RDI_EvalOp_PartialValueBit: {
+      U64 partial_value = *(U64 *)imm.str;
+      U32 bit_size = Extract32(partial_value, 0);
+      U32 bit_off  = Extract32(partial_value, 1);
+      imm_fmt = push_str8f(scratch.arena, "Off: %u, Size: %u", bit_size, bit_off);
+    } break;
+    }
+
+    String8 op_str = rdi_string_from_eval_op(scratch.arena, op);
+    if (imm_fmt.size) {
+      str8_list_pushf(scratch.arena, &fmt, "RDI_EvalOp_%S(%S)", op_str, imm_fmt);
+    } else {
+      str8_list_pushf(scratch.arena, &fmt, "RDI_EvalOp_%S", op_str);
+    }
+  }
+  exit:;
+
+  String8 result = str8_list_join(arena, &fmt, &(StringJoin){.sep = str8_lit(", ")});
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal void
-rdi_print_locations(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, Arch arch, U64 block_lo, U64 block_hi)
+rdi_print_locations(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Arch arch, U64 block_lo, U64 block_hi)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -1046,65 +1279,68 @@ rdi_print_locations(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
   for (U32 block_idx = block_lo; block_idx < block_hi; ++block_idx) {
     RDI_LocationBlock *block_ptr = &location_block_array[block_idx];
 
+    String8List fmt = {0};
+
     if (block_ptr->scope_off_first == 0 && block_ptr->scope_off_opl == max_U32) {
-      rd_printf("case *always*:");
+      str8_list_pushf(scratch.arena, &fmt, "*always*:");
     } else {
-      rd_printf("case [%#08x, %#08x):", block_ptr->scope_off_first, block_ptr->scope_off_opl);
+      str8_list_pushf(scratch.arena, &fmt, "[%#08x, %#08x):", block_ptr->scope_off_first, block_ptr->scope_off_opl);
     }
 
     if (block_ptr->location_data_off >= location_data_size) {
-      rd_printf("<bad-location-data-offset %x>", block_ptr->location_data_off);
+      str8_list_pushf(scratch.arena, &fmt, "<bad-location-data-offset %x>", block_ptr->location_data_off);
     } else {
       U8               *loc_data_opl = location_data + location_data_size;
       U8               *loc_base_ptr = location_data + block_ptr->location_data_off;
       RDI_LocationKind  kind         = *(RDI_LocationKind*)loc_base_ptr;
       switch (kind) {
       default: {
-        rd_printf("\?\?\?: %u", kind);
+        str8_list_pushf(scratch.arena, &fmt, "\?\?\?: %u", kind);
       } break;
 
       case RDI_LocationKind_AddrBytecodeStream: {
-        Temp temp = temp_begin(scratch.arena);
-        String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
-        rd_printf("AddrBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
-        temp_end(temp);
+        String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
+        String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
+        str8_list_pushf(scratch.arena, &fmt, "AddrBytecodeStream(%S)", bc_str);
       } break;
 
       case RDI_LocationKind_ValBytecodeStream: {
-        Temp temp = temp_begin(scratch.arena);
-        String8 raw_bytes = str8_cstring_capped(loc_base_ptr + 1, loc_data_opl);
-        rd_printf("ValBytecodeStream: %S", rd_format_hex_array(temp.arena, raw_bytes.str, raw_bytes.size));
-        temp_end(temp);
+        String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
+        String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
+        str8_list_pushf(scratch.arena, &fmt, "ValBytecodeStream(%S)", bc_str);
       } break;
 
       case RDI_LocationKind_AddrRegPlusU16: {
         if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl) {
-          rd_printf("AddrRegPlusU16(\?\?\?)");
+          str8_list_pushf(scratch.arena, &fmt, "AddrRegPlusU16(\?\?\?)");
         } else {
           RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
-          rd_printf("AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+          str8_list_pushf(scratch.arena, &fmt, "AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
         }
       } break;
 
       case RDI_LocationKind_AddrAddrRegPlusU16: {
         if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
-          rd_printf("AddrAddrRegPlusU16(\?\?\?)");
+          str8_list_pushf(scratch.arena, &fmt, "AddrAddrRegPlusU16(\?\?\?)");
         } else {
           RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
-          rd_printf("AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+          str8_list_pushf(scratch.arena, &fmt, "AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
         }
       } break;
 
       case RDI_LocationKind_ValReg: {
         if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl) {
-          rd_printf("ValReg(\?\?\?)");
+          str8_list_pushf(scratch.arena, &fmt, "ValReg(\?\?\?)");
         } else {
           RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
-          rd_printf("ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
+          str8_list_pushf(scratch.arena, &fmt, "ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
         }
       } break;
       }
     }
+
+    String8 print_string = str8_list_join(scratch.arena, &fmt, &(StringJoin){.sep=str8_lit(" ")});
+    rd_printf("%S", print_string);
   }
 
   scratch_end(scratch);
@@ -1161,10 +1397,12 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
   U64                scope_voff_count     = 0;
   U64                local_count          = 0;
   U64                proc_count           = 0;
+  U64                inline_site_count    = 0;
   RDI_Scope         *scope_array          = rdi_table_from_name(rdi, Scopes,         &scope_count);
   U64               *scope_voff_array     = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voff_count);
   RDI_Local         *local_array          = rdi_table_from_name(rdi, Locals,         &local_count);
-  RDI_Procedure     *proc_array           = rdi_table_from_name(rdi, Procedures, &proc_count);
+  RDI_Procedure     *proc_array           = rdi_table_from_name(rdi, Procedures,     &proc_count);
+  RDI_InlineSite    *inline_site_array    = rdi_table_from_name(rdi, InlineSites,    &inline_site_count);
 
   U32      voff_range_lo    = ClampTop(scope->voff_range_first, scope_voff_count);
   U32      voff_range_hi    = ClampTop(scope->voff_range_opl,   scope_voff_count);
@@ -1173,7 +1411,7 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
   String8  voff_str         = rd_string_from_range_array_u64_hex(scratch.arena, voff_ptr, voff_range_count);
   
   U64 scope_idx = (U64)(scope - scope_array);
-  rd_printf("[%llu]", scope_idx);
+  rd_printf("scope[%llu]", scope_idx);
   rd_indent();
 
   String8 proc_name = str8_lit("???");
@@ -1182,10 +1420,21 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
     proc_name           = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
   }
 
+  String8 inline_site_name = str8_lit("");
+  if (scope->inline_site_idx != 0) {
+    if (scope->inline_site_idx < inline_site_count) {
+      RDI_InlineSite *inline_site = &inline_site_array[scope->inline_site_idx];
+      inline_site_name = str8_from_rdi_string_idx(rdi, inline_site->name_string_idx);
+    } else {
+      inline_site_name = str8_lit("???");
+    }
+    inline_site_name = push_str8f(scratch.arena, " '%S'", inline_site_name);
+  }
+
   rd_printf("proc_idx              =%u '%S'", scope->proc_idx, proc_name);
   rd_printf("first_child_scope_idx =%u",      scope->first_child_scope_idx);
   rd_printf("next_sibling_scope_idx=%u",      scope->next_sibling_scope_idx);
-  rd_printf("inline_site_idx       =%u",      scope->inline_site_idx);
+  rd_printf("inline_site_idx       =%u%S",    scope->inline_site_idx, inline_site_name);
   rd_printf("voff_ranges           =%S",      voff_str);
   
   // local_array
