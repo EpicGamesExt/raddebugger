@@ -437,8 +437,10 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
 
   Temp scratch = scratch_begin(0,0);
 
+  U64 total_type_count = types->total_count + 1;
+
   ProfBegin("Build Hash Table");
-  RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count + 1);
+  RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, total_type_count);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
   {
     for(RDI_U64 i = 0; i < chunk->count; i += 1)
@@ -474,7 +476,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
             }
           }
 
-          slot = (slot + 1) % types->total_count;
+          slot = (slot + 1) % total_type_count;
         } while (slot != best_slot);
 
         if(name_ht[slot] == 0)
@@ -487,7 +489,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
   ProfEnd();
 
   ProfBegin("Make Fwd Map");
-  RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, types->total_count + 1);
+  RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, total_type_count);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
   {
     for(RDI_U64 i = 0; i < chunk->count; i += 1)
@@ -525,6 +527,8 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
               break;
             }
           }
+
+          slot = (slot + 1) % total_type_count;
         } while(slot != best_slot);
 
         if(match)
