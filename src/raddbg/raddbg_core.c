@@ -13906,12 +13906,18 @@ rd_frame(void)
       for(CTRL_EntityNode *n = modules.first; n != 0; n = n->next)
       {
         String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, n->v->handle);
-        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, raddbg_data);
-        RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, n->v->handle));
-        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+        U8 split_char = 0;
+        String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
+        for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
         {
-          rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
-          rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
+          String8 text = text_n->string;
+          RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
+          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, n->v->handle));
+          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+          {
+            rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
+            rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
+          }
         }
       }
       

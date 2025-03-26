@@ -1602,6 +1602,15 @@ basic_inline_tests(void)
 ////////////////////////////////
 //~ rjf: Fancy Visualization Eval Tests
 
+struct Bitmap
+{
+  unsigned char *base;
+  int width;
+  int height;
+};
+// raddbg_auto_view_rule(Bitmap, wrap(base) bitmap(width, height));
+raddbg_auto_view_rule(Bitmap, wrap($expr.base));
+
 static unsigned int
 mule_bswap_u32(unsigned int x)
 {
@@ -1707,6 +1716,10 @@ fancy_viz_eval_tests(void)
     bitmap[i] |= (a);
   }
   int x2 = 0;
+  
+  //- rjf: auto-view-rule'd bitmaps
+  Bitmap foo = {(unsigned char *)&bitmap[0], 18, 18};
+  raddbg_pin(foo);
   
   //- rjf: 3D geometry
   float vertex_data[] = // pos.x, pos.y, pos.z, nor.x, nor.y, nor.z, tex.u, tex.v, col.r, col.g, col.b, ...
@@ -2365,12 +2378,12 @@ debug_string_tests(void)
     OutputDebugStringA("Hello, World!\n");
   }
   char message[65409+1];
-	memset(&message[0], '=', sizeof(message));
-	for(int i = 1; i < sizeof(message); i += 128)
-	{
-		message[i] = '\n';
-	}
-	message[sizeof(message) - 1] = 0;
+  memset(&message[0], '=', sizeof(message));
+  for(int i = 1; i < sizeof(message); i += 128)
+  {
+    message[i] = '\n';
+  }
+  message[sizeof(message) - 1] = 0;
   OutputDebugStringA(message);
 #endif
 }
@@ -2643,13 +2656,13 @@ static void
 dynamic_step_test(void){
 #if _WIN32
 #if defined(_x86_64) || defined( __x86_64__ ) || defined( _M_X64 ) || defined( _M_AMD64 )
-	void *page = VirtualAlloc(0, 4096, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+  void *page = VirtualAlloc(0, 4096, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE);
   char *ptr = (char*)page;
   *ptr++ =  0x51; // push rcx
   *ptr++ = 0x59; // pop rcx
   *ptr++ = 0xC3; // ret
-	callback_t cb = (callback_t)page;
-	cb(1);
+  callback_t cb = (callback_t)page;
+  cb(1);
 #endif
 #endif
 }

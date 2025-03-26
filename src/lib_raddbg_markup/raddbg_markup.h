@@ -23,7 +23,13 @@
 #define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
 #define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
 #define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
-#define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_auto_view_rule_data__##__COUNTER__[] = ("auto_view_rule: {type:" #type ", view_rule: " #__VA_ARGS__ "}")
+#define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_glue(raddbg_auto_view_rule_data__, __COUNTER__)[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+
+////////////////////////////////
+//~ Helpers
+
+#define raddbg_glue_(a, b) a##b
+#define raddbg_glue(a, b) raddbg_glue_(a, b)
 
 ////////////////////////////////
 //~ Win32 Implementations
