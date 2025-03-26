@@ -2077,6 +2077,26 @@ ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Handle module_handle
   return result;
 }
 
+internal String8
+ctrl_raddbg_data_from_module(Arena *arena, CTRL_Handle module_handle)
+{
+  String8 result = {0};
+  U64 hash = ctrl_hash_from_handle(module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(ctrl_handle_match(n->module, module_handle))
+    {
+      result = push_str8_copy(arena, n->raddbg_data);
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Unwinding Functions
 
@@ -3582,6 +3602,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   U32 rdi_dbg_time = 0;
   Guid rdi_dbg_guid = {0};
   String8 rdi_dbg_path = str8_zero();
+  String8 raddbg_data = str8_zero();
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -3775,6 +3796,30 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
           }
         }
       }
+      
+      // rjf: extract copy of module's raddbg data
+      {
+        Temp scratch = scratch_begin(0, 0);
+        U64 sec_array_off = opt_ext_off_range.max;
+        U64 sec_count = file_header.section_count;
+        COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
+        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
+        Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
+        for EachIndex(idx, sec_count)
+        {
+          String8 section_name = str8_cstring(sec[idx].name);
+          if(str8_match(section_name, str8_lit(".raddbg"), 0))
+          {
+            raddbg_section_voff_range.min = sec[idx].voff;
+            raddbg_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
+          }
+        }
+        raddbg_data.size = dim_1u64(raddbg_section_voff_range);
+        raddbg_data.str = push_array(arena, U8, raddbg_data.size);
+        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + raddbg_section_voff_range.min,
+                                                   vaddr_range.min + raddbg_section_voff_range.max), raddbg_data.str);
+        scratch_end(scratch);
+      }
     }
   }
   
@@ -3853,6 +3898,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         node->pdatas_count = pdatas_count;
         node->entry_point_voff = entry_point_voff;
         node->initial_debug_info_path = initial_debug_info_path;
+        node->raddbg_data = raddbg_data;
       }
     }
   }

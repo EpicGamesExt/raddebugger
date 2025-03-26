@@ -13900,15 +13900,39 @@ rd_frame(void)
         }
       }
       
+      //- rjf: gather auto-view-rules from loaded modules
+      RD_CfgList immediate_auto_view_rules = {0};
+      CTRL_EntityList modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+      for(CTRL_EntityNode *n = modules.first; n != 0; n = n->next)
+      {
+        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, n->v->handle);
+        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, raddbg_data);
+        RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, n->v->handle));
+        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+        {
+          rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
+          rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
+        }
+      }
+      
       //- rjf: add auto-hook rules for auto-view-rules
       {
         RD_CfgList auto_view_rules = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("auto_view_rule"));
-        for(RD_CfgNode *n = auto_view_rules.first; n != 0; n = n->next)
+        RD_CfgList rules_lists[] =
         {
-          RD_Cfg *rule = n->v;
-          String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
-          String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
-          e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
+          auto_view_rules,
+          immediate_auto_view_rules,
+        };
+        for EachElement(list_idx, rules_lists)
+        {
+          RD_CfgList list = rules_lists[list_idx];
+          for(RD_CfgNode *n = list.first; n != 0; n = n->next)
+          {
+            RD_Cfg *rule = n->v;
+            String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
+            String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
+            e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
+          }
         }
       }
     }

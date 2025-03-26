@@ -388,7 +388,6 @@
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 #include "lib_raddbg_markup/raddbg_markup.h"
-#include "lib_raddbg_markup/raddbg_markup.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"

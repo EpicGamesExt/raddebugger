@@ -6,6 +6,7 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
+#define RADDBG_MARKUP_IMPLEMENTATION
 #include "lib_raddbg_markup/raddbg_markup.h"
 
 ////////////////////////////////
@@ -142,6 +143,7 @@ struct Fixed_Array{
   int count;
 };
 
+raddbg_auto_view_rule(Dynamic?, slice);
 struct Dynamic_Array{
   Pair *pairs;
   int count;

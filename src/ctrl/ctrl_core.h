@@ -593,6 +593,7 @@ struct CTRL_ModuleImageInfoCacheNode
   U64 entry_point_voff;
   Rng1U64 tls_vaddr_range;
   String8 initial_debug_info_path;
+  String8 raddbg_data;
 };
 
 typedef struct CTRL_ModuleImageInfoCacheSlot CTRL_ModuleImageInfoCacheSlot;
@@ -891,6 +892,7 @@ internal PE_IntelPdata *ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_Han
 internal U64 ctrl_entry_point_voff_from_module(CTRL_Handle module_handle);
 internal Rng1U64 ctrl_tls_vaddr_range_from_module(CTRL_Handle module_handle);
 internal String8 ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Handle module_handle);
+internal String8 ctrl_raddbg_data_from_module(Arena *arena, CTRL_Handle module_handle);
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions
