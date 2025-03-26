@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[308] =
+RD_VocabInfo rd_vocab_info_table[307] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -267,7 +267,6 @@ RD_VocabInfo rd_vocab_info_table[308] =
 {str8_lit_comp("relocate_cfg"), str8_lit_comp(""), str8_lit_comp("Relocate Config Tree"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("add_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("add_address_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Address Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
-{str8_lit_comp("add_function_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Function Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("toggle_breakpoint"), str8_lit_comp(""), str8_lit_comp("Toggle Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("enable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Enable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("disable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Disable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckHollow},
@@ -324,7 +323,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[16] =
 {str8_lit_comp("memory"), str8_lit_comp("x:\n{\n  'size':        code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n}\n")},
 {str8_lit_comp("bitmap"), str8_lit_comp("x:\n{\n  'w': code_string,\n  'h': code_string,\n  'fmt': tex2dformat,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'view_rule':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
@@ -382,7 +381,7 @@ Rng1U64 rd_reg_slot_range_table[42] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[216] =
+RD_CmdKindInfo rd_cmd_kind_info_table[215] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -553,7 +552,6 @@ RD_CmdKindInfo rd_cmd_kind_info_table[216] =
 { str8_lit_comp("relocate_cfg"), str8_lit_comp("Relocates a config tree."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("add_breakpoint"), str8_lit_comp("Places a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("add_address_breakpoint"), str8_lit_comp("Places a breakpoint on the specified address."), str8_lit_comp(""), str8_lit_comp("$breakpoints,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Expr, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("add_function_breakpoint"), str8_lit_comp("Places a breakpoint on the first address(es) of the specified function."), str8_lit_comp(""), str8_lit_comp("$breakpoints,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Expr, str8_lit_comp("query:procedures"), str8_lit_comp("symbol_lister"), CTRL_EntityKind_Null}},
 { str8_lit_comp("toggle_breakpoint"), str8_lit_comp("Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("$text_pt,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("enable_breakpoint"), str8_lit_comp("Enables a breakpoint."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:breakpoints"), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("disable_breakpoint"), str8_lit_comp("Disables a breakpoint."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:breakpoints"), str8_lit_comp(""), CTRL_EntityKind_Null}},

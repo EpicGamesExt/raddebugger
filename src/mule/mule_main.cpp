@@ -328,6 +328,7 @@ type_coverage_eval_tests(void)
   raddbg_pin(basics);
   raddbg_pin(fixed);
   raddbg_pin(pointer);
+  raddbg_pin(dynamic, slice);
   
   Struct_With_Embedded_Arrays swea = {0};
   {
@@ -1642,8 +1643,8 @@ fancy_viz_eval_tests(void)
                        "}\n\n");
   int x1 = 0;
   raddbg_pin(long_string,          "text");
-  raddbg_pin(code_string,          "text: (lang:c)");
-  raddbg_pin(fancy_viz_eval_tests, "disasm: (arch:x64)");
+  raddbg_pin(code_string,          "text(lang=c)");
+  raddbg_pin(fancy_viz_eval_tests, "disasm");
   
   //- rjf: bitmaps
   unsigned int background_color = 0x00000000;
@@ -1892,7 +1893,7 @@ fancy_viz_eval_tests(void)
     136, 137, 138, 138, 139, 136, 140, 141, 142, 142, 143, 140, 144, 145, 146, 146, 147, 144, 148, 149, 150, 150, 151, 148,
     152, 153, 154, 154, 155, 152, 156, 157, 158, 158, 159, 156, 160, 161, 162, 162, 163, 160, 164, 165, 166, 166, 167, 164,
   };
-  raddbg_pin(index_data, "geo3d: { count:(sizeof index_data/4), vtx:(vertex_data), vtx_size:(sizeof vertex_data) }");
+  raddbg_pin(index_data, "geo3d(count = (sizeof index_data/4), vtx = (vertex_data), vtx_size = (sizeof vertex_data))");
   int x3 = 0;
 }
 

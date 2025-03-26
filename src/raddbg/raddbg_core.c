@@ -10047,12 +10047,17 @@ rd_window_frame(void)
         // rjf: hot effect extension
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
+          B32 is_hot = ui_key_match(box->key, ui_hot_key());
           Vec4F32 hover_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
           
           // rjf: brighten
           {
             Vec4F32 color = hover_color;
-            color.w *= t*0.05f;
+            color.w *= 0.05f;
+            if(!is_hot)
+            {
+              color.w *= t;
+            }
             R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, 1.f);
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
@@ -10063,7 +10068,11 @@ rd_window_frame(void)
           if(box->hot_t > 0.01f) DR_ClipScope(box->rect)
           {
             Vec4F32 color = hover_color;
-            color.w *= 0.02f*t;
+            color.w *= 0.02f;
+            if(!is_hot)
+            {
+              color.w *= t;
+            }
             Vec2F32 center = ui_mouse();
             Vec2F32 box_dim = dim_2f32(box->rect);
             F32 max_dim = Max(box_dim.x, box_dim.y);
@@ -10249,7 +10258,10 @@ rd_window_frame(void)
             if(b->flags & UI_BoxFlag_DrawHotEffects)
             {
               Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
-              color.w *= b->hot_t;
+              if(!ui_key_match(b->key, ui_hot_key()))
+              {
+                color.w *= b->hot_t;
+              }
               R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
               inst->colors[Corner_01].w *= 0.2f;
               inst->colors[Corner_11].w *= 0.2f;
@@ -16322,7 +16334,8 @@ Z(getting_started)
           case RD_CmdKind_DeselectCfg:
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
-            rd_cfg_release(rd_cfg_child_from_string(cfg, str8_lit("enabled")));
+            RD_Cfg *enabled_root = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("enabled"));
+            rd_cfg_new_replacef(enabled_root, "0");
           }break;
           case RD_CmdKind_RemoveCfg:
           {
@@ -16441,7 +16454,6 @@ Z(getting_started)
             }
           }break;
           case RD_CmdKind_AddAddressBreakpoint:
-          case RD_CmdKind_AddFunctionBreakpoint:
           {
             rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero());
           }break;

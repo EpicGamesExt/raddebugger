@@ -1872,57 +1872,135 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      RD_CfgList pins = params->line_pins[line_idx];
-      if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])
-        RD_Font(RD_FontSlot_Code)
-        UI_FontSize(params->font_size)
-        UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+      RD_CfgList immediate_pins = {0};
+      String8 line_text = params->line_text[line_idx];
+      for(U64 off = 0, next_off = line_text.size;
+          off < line_text.size;
+          off = next_off)
       {
-        for(RD_CfgNode *n = pins.first; n != 0; n = n->next)
+        // rjf: find next opener
+        String8 markup_opener = str8_lit("raddbg_pin(");
+        next_off = str8_find_needle(line_text, off, markup_opener, 0);
+        next_off += markup_opener.size;
+        
+        // rjf: extract contents of markup
+        String8 contents = {0};
+        S32 nest = 1;
+        for(U64 off2 = next_off; off2 < line_text.size; off2 += 1)
         {
-          RD_Cfg *pin = n->v;
-          String8 pin_expr = rd_expr_from_cfg(pin);
-          String8 pin_view_rule = rd_view_rule_from_cfg(pin);
-          String8 full_pin_expr = push_str8f(scratch.arena, "%S => %S", pin_expr, pin_view_rule);
-          E_Eval eval = e_eval_from_string(scratch.arena, full_pin_expr);
-          String8 eval_string = {0};
-          if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
+          if(line_text.str[off2] == '(')
           {
-            eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval);
+            nest += 1;
           }
-          ui_spacer(ui_em(1.5f, 1.f));
-          ui_set_next_pref_width(ui_children_sum(1));
-          UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
-          UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|
-                                                  UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
-                                                  UI_BoxFlag_DrawHotEffects|
-                                                  UI_BoxFlag_DrawBorder, pin_box_key);
-          UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
+          else if(line_text.str[off2] == ')')
           {
-            Vec4F32 pin_color = rd_color_from_cfg(pin);
-            if(pin_color.w == 0)
+            nest -= 1;
+            if(nest == 0)
             {
-              pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+              contents = str8_substr(line_text, r1u64(next_off, off2));
+              break;
             }
-            UI_PrefWidth(ui_em(1.5f, 1.f))
-              RD_Font(RD_FontSlot_Icons)
-              UI_TextAlignment(UI_TextAlign_Center)
-              UI_Flags(UI_BoxFlag_DisableTextTrunc)
-              UI_TextColor(pin_color)
+          }
+        }
+        
+        // rjf: gather arguments
+        String8List args = {0};
+        {
+          S32 nest = 0;
+          U64 arg_start_off = 0;
+          for(U64 contents_off = 0; contents_off <= contents.size; contents_off += 1)
+          {
+            if(contents_off == contents.size || contents.str[contents_off] == ',')
             {
-              UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
-              if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
+              String8 arg = str8_substr(contents, r1u64(arg_start_off, contents_off));
+              str8_list_push(scratch.arena, &args, arg);
+              arg_start_off = contents_off+1;
+            }
+            if(contents_off < contents.size)
+            {
+              if(contents.str[contents_off] == '(')
               {
-                RD_RegsScope(.cfg = pin->id) rd_drag_begin(RD_RegSlot_Cfg);
+                nest += 1;
+              }
+              else if(contents.str[contents_off] == ')')
+              {
+                nest -= 1;
               }
             }
-            rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);
-            rd_code_label(0.6f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), eval_string);
           }
-          UI_Signal pin_sig = ui_signal_from_box(pin_box);
-          if(ui_key_match(pin_box_key, ui_hot_key()))
+        }
+        
+        // rjf: extract fixed arguments
+        String8 expr_string = {0};
+        String8 view_rule_string = {0};
+        if(args.first != 0)
+        {
+          expr_string = args.first->string;
+        }
+        if(args.first->next != 0)
+        {
+          view_rule_string = args.first->next->string;
+        }
+        
+        // rjf: build immediate pin for this markup
+        if(expr_string.size != 0)
+        {
+          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("markup_pin_%I64x_%I64x", line_num, off);
+          RD_Cfg *pin = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("watch_pin"));
+          RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(pin, str8_lit("expression"));
+          RD_Cfg *view_rule = rd_cfg_child_from_string_or_alloc(pin, str8_lit("view_rule"));
+          rd_cfg_new_replace(expr, expr_string);
+          rd_cfg_new_replace(view_rule, view_rule_string);
+          rd_cfg_list_push(scratch.arena, &immediate_pins, pin);
+        }
+      }
+      RD_CfgList pin_lists[] =
+      {
+        params->line_pins[line_idx],
+        immediate_pins,
+      };
+      for EachElement(list_idx, pin_lists)
+      {
+        RD_CfgList pins = pin_lists[list_idx];
+        if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])
+          RD_Font(RD_FontSlot_Code)
+          UI_FontSize(params->font_size)
+          UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+        {
+          for(RD_CfgNode *n = pins.first; n != 0; n = n->next)
           {
-            rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr, pin_view_rule);
+            RD_Cfg *pin = n->v;
+            String8 pin_expr = rd_expr_from_cfg(pin);
+            String8 pin_view_rule = rd_view_rule_from_cfg(pin);
+            String8 full_pin_expr = push_str8f(scratch.arena, "%S => %S", pin_expr, pin_view_rule);
+            E_Eval eval = e_eval_from_string(scratch.arena, full_pin_expr);
+            String8 eval_string = {0};
+            if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
+            {
+              eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval);
+            }
+            ui_spacer(ui_em(1.5f, 1.f));
+            ui_set_next_pref_width(ui_children_sum(1));
+            UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
+            UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|
+                                                    UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
+                                                    UI_BoxFlag_DrawHotEffects|
+                                                    UI_BoxFlag_DrawBorder, pin_box_key);
+            UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              Vec4F32 pin_color = rd_color_from_cfg(pin);
+              if(pin_color.w == 0)
+              {
+                pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+              }
+              rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);
+              rd_code_label(0.6f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), eval_string);
+            }
+            UI_Signal pin_sig = ui_signal_from_box(pin_box);
+            if(ui_key_match(pin_box_key, ui_hot_key()))
+            {
+              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr, pin_view_rule);
+            }
           }
         }
       }
