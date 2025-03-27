@@ -464,7 +464,7 @@ rdim_local_hash(RDIM_String8 string)
 }
 
 internal void
-rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
+rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList *udts)
 {
   ProfBeginFunction();
 
@@ -603,6 +603,27 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types)
       }
     }
   }
+  for(RDIM_UDTChunkNode *chunk = udts->first; chunk != 0; chunk = chunk->next)
+  {
+    for(RDI_U64 i = 0; i < chunk->count; ++i)
+    {
+      RDIM_UDT *udt = &chunk->v[i];
+      RDI_U64 self_idx = rdim_idx_from_type(udt->self_type);
+      if(fwd_map[self_idx])
+      {
+        udt->self_type = fwd_map[self_idx];
+      }
+
+      for(RDIM_UDTMember *member = udt->first_member; member != 0; member = member->next)
+      {
+        RDI_U64 member_idx = rdim_idx_from_type(member->type);
+        if(fwd_map[member_idx])
+        {
+          member->type = fwd_map[member_idx];
+        }
+      }
+    }
+  }
   ProfEnd();
 
   scratch_end(scratch);
@@ -635,7 +656,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   ////////////////////////////////
   // resolve incomplete types
 
-  rdim_local_resolve_incomplete_types(&in_params->types);
+  rdim_local_resolve_incomplete_types(&in_params->types, &in_params->udts);
 
   ////////////////////////////////
   // compute type indices
