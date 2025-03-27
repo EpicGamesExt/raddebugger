@@ -24,8 +24,8 @@ jobs:
           call build raddbg clang debug                || exit /b 1
           call build rdi_from_pdb msvc debug           || exit /b 1
           call build rdi_from_pdb clang debug          || exit /b 1
-          call build rdi_dump msvc debug               || exit /b 1
-          call build rdi_dump clang debug              || exit /b 1
+          call build raddump msvc debug                || exit /b 1
+          call build raddump clang debug               || exit /b 1
           call build radlink msvc debug                || exit /b 1
           call build radlink clang debug               || exit /b 1
           call build rdi_breakpad_from_pdb msvc debug  || exit /b 1
