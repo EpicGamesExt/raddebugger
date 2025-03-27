@@ -9,7 +9,6 @@ typedef struct D2R_TypeTable
   HashTable          *ht;
   RDIM_TypeChunkList *types;
   U64                 type_chunk_cap;
-  RDIM_Type          *void_type;
   RDIM_Type          *varg_type;
 } D2R_TypeTable;
 

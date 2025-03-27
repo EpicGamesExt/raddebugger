@@ -1491,6 +1491,23 @@ rdi_hash(RDI_U8 *ptr, RDI_U64 size)
 
 @gen(functions) @c_file
 {
+  `RDI_PROC RDI_U8 *`;
+  `rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out)`;
+  `{`;
+    `RDI_U8 *result = 0;`;
+    `*size_out = 0;`;
+    `switch (kind)`;
+    `{`;
+      `default:{}break;`;
+      @expand(RDI_TypeKindTable a) `   case RDI_TypeKind_$(a.name): {result = "$(a.name)"; *size_out = sizeof("$(a.name)")-1;}break;`,
+      `}`;
+    `return result;`;
+   `}`;
+  ``;
+}
+
+@gen(functions) @c_file
+{
   `RDI_PROC RDI_U32`;
   `rdi_size_from_basic_type_kind(RDI_TypeKind kind)`;
   `{`;

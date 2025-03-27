@@ -1460,6 +1460,11 @@ RDI_PROC RDI_LocationBlock * rdim_location_block_chunk_list_push_array(RDIM_Aren
 RDI_PROC RDI_U32 rdim_count_from_location_block_chunk_list(RDIM_String8List *list);
 
 ////////////////////////////////
+
+RDI_PROC RDIM_TypeChunkList rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch);
+RDI_PROC RDIM_Type *        rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind);
+
+////////////////////////////////
 // Type Index
 
 RDI_PROC void      rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx);

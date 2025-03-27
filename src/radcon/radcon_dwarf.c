@@ -38,8 +38,8 @@ d2r_rdi_reg_from_dw_reg_code(Arch arch, U64 reg_code)
   case Arch_Null: return 0;
   case Arch_x64:  return d2r_rdi_reg_from_dw_reg_code_x64(reg_code);
   case Arch_x86:  return d2r_rdi_reg_from_dw_reg_code_x86(reg_code);
+  default: InvalidPath;
   }
-  InvalidPath;
   return 0;
 }
 
@@ -89,7 +89,7 @@ d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, D
       Assert(!"unexpected attrib class");
     }
   } else if (attrib->attrib_kind == DW_Attrib_Null) {
-    type = type_table->void_type;
+    type = rdim_builtin_type_from_kind(*type_table->types, RDI_TypeKind_NULL);
   }
 
   return type;
@@ -1154,7 +1154,7 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 
   RDIM_UnitChunkList       units        = {0};
   RDIM_UDTChunkList        udts         = {0};
-  RDIM_TypeChunkList       types        = {0};
+  RDIM_TypeChunkList       types        = rdim_init_type_chunk_list(arena, arch);
   RDIM_SymbolChunkList     gvars        = {0};
   RDIM_SymbolChunkList     tvars        = {0};
   RDIM_SymbolChunkList     procs        = {0};
@@ -1356,8 +1356,6 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
     type_table->ht              = hash_table_init(comp_temp.arena, 0x4000);
     type_table->types           = &types;
     type_table->type_chunk_cap  = TYPE_CHUNK_CAP;
-    type_table->void_type       = d2r_create_type(arena, type_table);
-    type_table->void_type->kind = RDI_TypeKind_Void;
     type_table->varg_type       = d2r_create_type(arena, type_table);
     type_table->varg_type->kind = RDI_TypeKind_Variadic;
 
@@ -1597,7 +1595,7 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
           default: AssertAlways(!"unexpected base type encoding"); break; // TODO: error handling
           }
 
-          RDIM_Type *base_type = d2r_create_type(arena, type_table);
+          RDIM_Type *base_type = rdim_builtin_type_from_kind(types, kind);
           base_type->kind      = kind;
           base_type->byte_size = byte_size;
 

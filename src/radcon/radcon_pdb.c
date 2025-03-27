@@ -2445,27 +2445,24 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   // from regular type info.
   //
   RDIM_Type         **itype_type_ptrs = 0;
-  RDIM_TypeChunkList  all_types       = {0};
+  RDIM_TypeChunkList  all_types       = rdim_init_type_chunk_list(arena, arch);
 #define p2r_type_ptr_from_itype(itype) (((itype) < tpi_leaf->itype_opl) ? itype_type_ptrs[itype] : 0)
   if(in->flags & RC_Flag_Types) ProfScope("types pass 1: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, tpi_leaf->itype_opl);
 
     //////////////////////////
-    //- build basic type
+    //- build basic types
     //
     {
-      RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
-
-      RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
-      RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
-      RDI_TypeKind int_type        = rdim_int_type_from_data_model(data_model);
-      RDI_TypeKind uint_type       = rdim_unsigned_int_type_from_data_model(data_model);
-      RDI_TypeKind long_type       = rdim_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
-      RDI_TypeKind long_long_type  = rdim_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
+      RDIM_DataModel data_model      = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
+      RDI_TypeKind   short_type      = rdim_short_type_from_data_model(data_model);
+      RDI_TypeKind   long_type       = rdim_long_type_from_data_model(data_model);
+      RDI_TypeKind   long_long_type  = rdim_long_long_type_from_data_model(data_model);
+      RDI_TypeKind   ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
+      RDI_TypeKind   ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
+      RDI_TypeKind   ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
+      RDI_TypeKind   ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
 
       struct
       {
@@ -2508,8 +2505,8 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
         { "__uint8"              , RDI_TypeKind_U8         , CV_BasicType_UINT8      , 1, 1, 1 },
         { "__int16"              , RDI_TypeKind_S16        , CV_BasicType_INT16      , 1, 1, 1 },
         { "__uint16"             , RDI_TypeKind_U16        , CV_BasicType_UINT16     , 1, 1, 1 },
-        { "int"                  , int_type                , CV_BasicType_INT32      , 1, 1, 1 },
-        { "unsigned int"         , uint_type               , CV_BasicType_UINT32     , 1, 1, 1 },
+        { "int"                  , RDI_TypeKind_S32        , CV_BasicType_INT32      , 1, 1, 1 },
+        { "unsigned int"         , RDI_TypeKind_U32        , CV_BasicType_UINT32     , 1, 1, 1 },
         { "__int64"              , RDI_TypeKind_S64        , CV_BasicType_INT64      , 1, 1, 1 },
         { "__uint64"             , RDI_TypeKind_U64        , CV_BasicType_UINT64     , 1, 1, 1 },
         { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_INT128     , 1, 1, 1 },
@@ -2524,22 +2521,11 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 
       for(U64 i = 0; i < ArrayCount(table); i += 1)
       {
-        U64 builtin_size;
-        if(table[i].kind_rdi == RDI_TypeKind_Void || table[i].kind_rdi == RDI_TypeKind_Handle)
-        {
-          builtin_size = arch_addr_size;
-        }
-        else
-        {
-          builtin_size = rdi_size_from_basic_type_kind(table[i].kind_rdi);
-        }
-
-        RDIM_Type *builtin = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-        builtin->kind      = table[i].kind_rdi;
-        builtin->name      = str8_cstring(table[i].name);
-        builtin->byte_size = builtin_size;
-
-        itype_type_ptrs[table[i].kind_cv] = builtin;
+        RDIM_Type *type   = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
+        type->kind        = RDI_TypeKind_Alias;
+        type->name        = str8_cstring(table[i].name);
+        type->direct_type = rdim_builtin_type_from_kind(all_types, table[i].kind_rdi);
+        itype_type_ptrs[table[i].kind_cv] = type;
 
         if(table[i].make_pointer_near)
         {
@@ -2547,8 +2533,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
           RDIM_Type *ptr_near    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_near->kind         = RDI_TypeKind_Ptr;
           ptr_near->byte_size    = 2;
-          ptr_near->direct_type  = builtin;
-
+          ptr_near->direct_type  = type;
           itype_type_ptrs[near_ptr_itype] = ptr_near;
         }
         if(table[i].make_pointer_32)
@@ -2557,8 +2542,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
           RDIM_Type *ptr_32    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_32->kind         = RDI_TypeKind_Ptr;
           ptr_32->byte_size    = 4;
-          ptr_32->direct_type  = builtin;
-
+          ptr_32->direct_type  = type;
           itype_type_ptrs[ptr_32_itype] = ptr_32;
         }
         if(table[i].make_pointer_64)
@@ -2567,15 +2551,14 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
           RDIM_Type *ptr_64    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_64->kind         = RDI_TypeKind_Ptr;
           ptr_64->byte_size    = 8;
-          ptr_64->direct_type  = builtin;
-
+          ptr_64->direct_type  = type;
           itype_type_ptrs[ptr_64_itype] = ptr_64;
         }
       }
     }
 
     //////////////////////////
-    //- rjf: build non-basic type
+    //- rjf: build complex type
     //
     for(CV_TypeId itype = tpi_leaf->itype_first; itype < tpi_leaf->itype_opl; itype += 1)
     {
