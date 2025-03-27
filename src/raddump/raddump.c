@@ -666,19 +666,6 @@ rdi_string_from_local_kind(Arena *arena, RDI_LocalKind v)
 }
 
 internal String8
-rdi_string_from_type_kind(Arena *arena, RDI_TypeKind v)
-{
-  String8 result;
-  switch (v) {
-    default: { result = push_str8f(arena, "%u", v); } break;
-#define X(name) case RDI_TypeKind_##name: { result = str8_lit(#name); } break;
-    RDI_TypeKind_XList
-#undef X
-  }
-  return result;
-}
-
-internal String8
 rdi_string_from_member_kind(Arena *arena, RDI_MemberKind v)
 {
   String8 result;
@@ -1001,7 +988,10 @@ rdi_print_type_node(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  rd_printf("kind                    =%S", rdi_string_from_type_kind(scratch.arena, type->kind));
+  String8 type_kind_str = {0};
+  type_kind_str.str = rdi_string_from_type_kind(type->kind, &type_kind_str.size);
+
+  rd_printf("kind                    =%S", type_kind_str);
   if (type->kind == RDI_TypeKind_Modifier) {
     rd_printf("flags                   =%S", rdi_string_from_type_modifier_flags(scratch.arena, type->flags));
   } else {

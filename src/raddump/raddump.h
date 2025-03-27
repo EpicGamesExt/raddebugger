@@ -191,7 +191,7 @@ internal String8 rdi_string_from_data_section_kind(Arena *arena, RDI_SectionKind
 internal String8 rdi_string_from_arch             (Arena *arena, RDI_Arch        v);
 internal String8 rdi_string_from_language         (Arena *arena, RDI_Language    v);
 internal String8 rdi_string_from_local_kind       (Arena *arena, RDI_LocalKind   v);
-internal String8 rdi_string_from_type_kind        (Arena *arena, RDI_TypeKind    v);
+//internal String8 rdi_string_from_type_kind        (Arena *arena, RDI_TypeKind    v);
 internal String8 rdi_string_from_member_kind      (Arena *arena, RDI_MemberKind  v);
 
 internal String8 rdi_string_from_binary_section_flags(Arena *arena, RDI_BinarySectionFlags flags);
