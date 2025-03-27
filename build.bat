@@ -111,7 +111,6 @@ if "%radcon%"=="1"                     set didbuild=1 && %compile% ..\src\radcon
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
 if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf_main.c               %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
-if "%rdi_dump%"=="1"                   set didbuild=1 && %compile% ..\src\rdi_dump\rdi_dump_main.c                           %compile_link% %out%rdi_dump.exe || exit /b 1
 if "%rdi_breakpad_from_pdb%"=="1"      set didbuild=1 && %compile% ..\src\rdi_breakpad_from_pdb\rdi_breakpad_from_pdb_main.c %compile_link% %out%rdi_breakpad_from_pdb.exe || exit /b 1
 if "%tester%"=="1"                     set didbuild=1 && %compile% ..\src\tester\tester_main.c                               %compile_link% %out%tester.exe || exit /b 1
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
