@@ -2641,12 +2641,18 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   }
   
   //- rjf: pick the ir-generation rule from explicitly-stored expressions
+  B32 default_is_forced = 0;
   E_IRGenRule *explicit_irgen_rule = &e_irgen_rule__default;
   E_Expr *explicit_irgen_rule_tag = &e_expr_nil;
   for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     String8 name = tag->string;
     E_IRGenRule *irgen_rule_candidate = e_irgen_rule_from_string(name);
+    if(str8_match(name, e_irgen_rule__default.name, 0))
+    {
+      default_is_forced = 1;
+      break;
+    }
     if(irgen_rule_candidate != &e_irgen_rule__default)
     {
       B32 tag_is_poisoned = e_tag_is_poisoned(tag);
@@ -2685,6 +2691,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     }
     
     // rjf: find any auto hooks according to this generation's type
+    if(!default_is_forced)
     {
       E_ExprList exprs = e_auto_hook_tag_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
@@ -3028,11 +3035,19 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
   E_LookupRuleTagPair result = {&e_lookup_rule__default, &e_expr_nil};
   {
     // rjf: first try explicitly-stored tags
+    B32 default_is_forced = 0;
     if(result.rule == &e_lookup_rule__default)
     {
       for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
       {
         if(e_tag_is_poisoned(tag)) { continue; }
+        if(str8_match(tag->string, e_lookup_rule__default.name, 0))
+        {
+          result.rule = &e_lookup_rule__default;
+          result.tag = &e_expr_nil;
+          default_is_forced = 1;
+          break;
+        }
         E_LookupRule *candidate = e_lookup_rule_from_string(tag->string);
         if(candidate != &e_lookup_rule__nil)
         {
@@ -3043,7 +3058,7 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     }
     
     // rjf: next try implicit set name -> rule mapping
-    if(result.rule == &e_lookup_rule__default)
+    if(!default_is_forced && result.rule == &e_lookup_rule__default)
     {
       E_TypeKind type_kind = e_type_kind_from_key(irtree->type_key);
       if(type_kind == E_TypeKind_Set)
@@ -3059,7 +3074,7 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     }
     
     // rjf: next try auto hook map
-    if(result.rule == &e_lookup_rule__default)
+    if(!default_is_forced && result.rule == &e_lookup_rule__default)
     {
       E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
       for(E_ExprNode *n = tags.first; n != 0; n = n->next)

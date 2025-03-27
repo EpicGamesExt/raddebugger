@@ -1329,10 +1329,10 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .default_pct = 0.25f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .default_pct = 0.35f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .default_pct = 0.15f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .default_pct = 0.25f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                                 .default_pct = 0.25f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                 .default_pct = 0.35f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr => default)"), .default_pct = 0.15f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                                  .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
       }
     }
