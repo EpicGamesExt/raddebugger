@@ -13,6 +13,19 @@ jobs:
     runs-on: windows-2022
     strategy:
       fail-fast: false
+      matrix:
+        target:
+          - raddbg
+          - radlink
+          - rdi_from_pdb
+          - raddump
+          - rdi_breakpad_from_pdb
+        compiler:
+          - msvc
+          - clang
+        mode:
+          - debug
+          - release
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -20,13 +33,4 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call build raddbg msvc debug                 || exit /b 1
-          call build raddbg clang debug                || exit /b 1
-          call build rdi_from_pdb msvc debug           || exit /b 1
-          call build rdi_from_pdb clang debug          || exit /b 1
-          call build raddump msvc debug                || exit /b 1
-          call build raddump clang debug               || exit /b 1
-          call build radlink msvc debug                || exit /b 1
-          call build radlink clang debug               || exit /b 1
-          call build rdi_breakpad_from_pdb msvc debug  || exit /b 1
-          call build rdi_breakpad_from_pdb clang debug || exit /b 1
+          call build ${{ matrix.target }} ${{ matrix.compiler }} ${{ matrix.mode }} || exit /b 1
