@@ -3,13 +3,16 @@
 
 //- analyzers
 
+#if 0
 internal DW_SimpleLoc
 dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
 {
   DW_SimpleLoc result = {DW_SimpleLocKind_Empty};
   
+  String8 expr_data = str8((U8*)data+range.min, (U8*)data+range.max);
+
   U8 op = 0;
-  if (dw_based_range_read(base, range, 0, 1, &op)) {
+  if (str8_deserial_read_struct(expr_data, 0, &op)) {
     // step params
     U64 size_param = 0;
     B32 is_signed  = 0;
@@ -548,12 +551,14 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
   scratch_end(scratch);
   return result;
 }
+#endif
 
 //- full eval
 
 internal DW_Location
 dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_ExprMachineConfig *config)
 {
+#if 0
   Temp scratch = scratch_begin(&arena_optional, 1);
 
   DW_Location result = {0};
@@ -1322,7 +1327,11 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
   // clear stack
   scratch_end(scratch);
   return result;
+#endif
+  DW_Location result = {0};
+  return result;
 }
+
 
 //- dw expr val stack
 

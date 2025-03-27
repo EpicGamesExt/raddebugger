@@ -172,12 +172,15 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
   String8   debug_name = {0};
   String8   debug_data = {0};
 
+  B32  check_guid  = 0;
+  Guid pe_pdb_guid = {0};
+
+  B32              elf_has_debug_link = 0;
+  ELF_GnuDebugLink debug_link         = {0};
 
   //
   // Input has PE/COFF
   //
-  B32  check_guid  = 0;
-  Guid pe_pdb_guid = {0};
   if (is_pe_present) {
     image      = Image_CoffPe;
     image_name = pe_name;
@@ -221,8 +224,6 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     }
   }
 
-  B32              elf_has_debug_link = 0;
-  ELF_GnuDebugLink debug_link         = {0};
   if (is_elf_present || is_elf_debug_present) {
     if (driver != RC_Driver_Null && driver != RC_Driver_Dwarf) {
       fprintf(stderr, "error: ELF inputs are only supported when using DWARF driver.\n");

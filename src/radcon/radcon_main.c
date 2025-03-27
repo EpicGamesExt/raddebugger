@@ -14,6 +14,7 @@
 #include "third_party/xxHash/xxhash.h"
 #define SINFL_IMPLEMENTATION
 #include "third_party/sinfl/sinfl.h"
+#include "third_party/radsort/radsort.h"
 
 ////////////////////////////////
 // RDI Format Library

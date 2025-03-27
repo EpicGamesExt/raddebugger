@@ -1,6 +1,11 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal U64 dw_based_range_read(void *base, Rng1U64 range, U64 off, U64 size, void *out) { return 0; }
+internal U64 dw_based_range_read_uleb128(void *base, Rng1U64 range, U64 off, U64 *out)    { return 0; }
+internal U64 dw_based_range_read_sleb128(void *base, Rng1U64 range, U64 off, S64 *out)    { return 0; }
+internal U64 dw_based_range_read_length(void *base, Rng1U64 range, U64 off, U64 *out)     { return 0; }
+
 ////////////////////////////////
 // x64 Unwind Function
 

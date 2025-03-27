@@ -82,10 +82,10 @@ elf_sym64_from_sym32(ELF_Sym32 sym32)
 internal ELF_Rel64
 elf_rel64_from_rel32(ELF_Rel32 rel32)
 {
-  U32 sym  = SYMS_ELF32_R_SYM(rel32.r_info);
-  U32 type = SYMS_ELF32_R_TYPE(rel32.r_info);
+  U32 sym  = ELF32_R_SYM(rel32.r_info);
+  U32 type = ELF32_R_TYPE(rel32.r_info);
   ELF_Rel64 rel64 = {0};
-  rel64.r_info    = SYMS_ELF64_R_INFO(sym, type);
+  rel64.r_info    = ELF64_R_INFO(sym, type);
   rel64.r_offset  = rel32.r_offset;
   return rel64;
 }
@@ -93,11 +93,11 @@ elf_rel64_from_rel32(ELF_Rel32 rel32)
 internal ELF_Rela64
 elf_rela64_from_rela32(ELF_Rela32 rela32)
 {
-  U32 sym  = SYMS_ELF32_R_SYM(rela32.r_info);
-  U32 type = SYMS_ELF32_R_TYPE(rela32.r_info);
+  U32 sym  = ELF32_R_SYM(rela32.r_info);
+  U32 type = ELF32_R_TYPE(rela32.r_info);
   ELF_Rela64 rela64 = {0};
   rela64.r_offset   = rela32.r_info;
-  rela64.r_info     = SYMS_ELF64_R_INFO(sym, type);
+  rela64.r_info     = ELF64_R_INFO(sym, type);
   rela64.r_addend   = rela32.r_addend;
   return rela64;
 }

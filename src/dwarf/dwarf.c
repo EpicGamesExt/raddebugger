@@ -46,21 +46,25 @@ dw_reg_pos_from_code_x64(DW_Reg reg_code)
 }
 
 internal U64
-dw_reg_size_from_code(RDI_Arch arch, DW_Reg reg_code)
+dw_reg_size_from_code(Arch arch, DW_Reg reg_code)
 {
   switch (arch) {
+  case Arch_Null: break;
   case Arch_x86: return dw_reg_size_from_code_x86(reg_code);
   case Arch_x64: return dw_reg_size_from_code_x64(reg_code);
+  default: NotImplemented; break;
   }
   return 0;
 }
 
 internal U64
-dw_reg_pos_from_code(RDI_Arch arch, DW_Reg reg_code)
+dw_reg_pos_from_code(Arch arch, DW_Reg reg_code)
 {
   switch (arch) {
+  case Arch_Null: break;
   case Arch_x86: return dw_reg_pos_from_code_x86(reg_code);
   case Arch_x64: return dw_reg_pos_from_code_x64(reg_code);
+  default: NotImplemented; break;
   }
   return max_U64;
 }
