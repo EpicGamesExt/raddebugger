@@ -7,7 +7,6 @@
 internal RDI_Arch               c2r_rdi_arch_from_coff_machine(COFF_MachineType machine);
 internal RDI_BinarySectionFlags c2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
 internal RDIM_BinarySectionList c2r_rdi_binary_sections_from_coff_sections(Arena *arena, String8 image_data, U64 string_table_off, U64 sectab_count, COFF_SectionHeader *sectab);
-internal RDIM_TopLevelInfo      c2r_make_rdim_top_level_info(String8 image_name, RDI_Arch arch, U64 exe_hash, U64 sectab_count, COFF_SectionHeader *sectab);
 
 #endif // RADCON_COFF_H
 

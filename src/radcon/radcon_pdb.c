@@ -2364,14 +2364,14 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   U64 exe_hash = *async_task_join_struct(exe_hash_task, U64);
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce top-level-info
-  //
-  RDIM_TopLevelInfo top_level_info = c2r_make_rdim_top_level_info(in->image_name, arch, exe_hash, coff_sections.count, coff_sections.v);
-  
-  //////////////////////////////////////////////////////////////
   //- rjf: build binary sections list
   //
   RDIM_BinarySectionList binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, str8_zero(), 0, coff_sections.count, coff_sections.v);
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: produce top-level-info
+  //
+  RDIM_TopLevelInfo top_level_info = rdim_make_top_level_info(in->image_name, arch_from_coff_machine(dbi->machine_type), exe_hash, binary_sections);
 
   //////////////////////////////////////////////////////////////
   //- rjf: kick off unit conversion & source file collection

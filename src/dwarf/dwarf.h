@@ -1734,12 +1734,12 @@ typedef enum DW_RegX64Enum
 
 ////////////////////////////////
 
-internal U64 dw_reg_size_from_code_x86(U64 reg_code);
-internal U64 dw_reg_pos_from_code_x86(U64 reg_code);
-internal U64 dw_reg_size_from_code_x64(U64 reg_code);
-internal U64 dw_reg_pos_from_code_x64(U64 reg_code);
-internal U64 dw_reg_size_from_code(Arch arch, U64 reg_code);
-internal U64 dw_reg_pos_from_code(Arch arch, U64 reg_code);
+internal U64 dw_reg_size_from_code_x86(DW_Reg reg_code);
+internal U64 dw_reg_pos_from_code_x86(DW_Reg reg_code);
+internal U64 dw_reg_size_from_code_x64(DW_Reg reg_code);
+internal U64 dw_reg_pos_from_code_x64(DW_Reg reg_code);
+internal U64 dw_reg_size_from_code(Arch arch, DW_Reg reg_code);
+internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
 
 //- Attrib Class Encodings
 

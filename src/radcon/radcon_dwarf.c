@@ -32,12 +32,12 @@ d2r_rdi_reg_from_dw_reg_code_x86(U64 reg_code)
 }
 
 internal RDI_RegCode
-d2r_rdi_reg_from_dw_reg_code(RDI_Arch arch, U64 reg_code)
+d2r_rdi_reg_from_dw_reg_code(Arch arch, U64 reg_code)
 {
   switch (arch) {
-  case RDI_Arch_NULL: return 0;
-  case RDI_Arch_X64: return d2r_rdi_reg_from_dw_reg_code_x64(reg_code);
-  case RDI_Arch_X86: return d2r_rdi_reg_from_dw_reg_code_x86(reg_code);
+  case Arch_Null: return 0;
+  case Arch_x64:  return d2r_rdi_reg_from_dw_reg_code_x64(reg_code);
+  case Arch_x86:  return d2r_rdi_reg_from_dw_reg_code_x86(reg_code);
   }
   InvalidPath;
   return 0;
@@ -243,7 +243,7 @@ d2r_bytecode_from_expression(Arena       *arena,
                              DW_Input    *input,
                              U64          image_base,
                              U64          address_size,
-                             RDI_Arch     arch,
+                             Arch         arch,
                              DW_ListUnit *addr_lu,
                              String8      expr,
                              DW_CompUnit *cu,
@@ -821,7 +821,7 @@ d2r_bytecode_from_expression(Arena       *arena,
 }
 
 internal RDIM_Location *
-d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, U64 address_size, RDI_Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
+d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, U64 address_size, Arch arch, DW_ListUnit *addr_lu, DW_CompUnit *cu, String8 expr)
 {
   RDIM_Location *loc = 0;
   if (expr.size) {
@@ -836,7 +836,7 @@ d2r_transpile_expression(Arena *arena, DW_Input *input, U64 image_base, U64 addr
 }
 
 internal RDIM_Location *
-d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, RDI_Arch arch, DW_Tag tag, DW_AttribKind kind)
+d2r_location_from_attrib(Arena *arena, DW_Input *input, DW_CompUnit *cu, U64 image_base, Arch arch, DW_Tag tag, DW_AttribKind kind)
 {
   String8 expr = dw_exprloc_from_attrib(input, cu, tag, kind);
   RDIM_Location *location = d2r_transpile_expression(arena, input, image_base, cu->address_size, arch, cu->addr_lu, cu, expr);
@@ -850,7 +850,7 @@ d2r_locset_from_attrib(Arena               *arena,
                        RDIM_ScopeChunkList *scopes,
                        RDIM_Scope          *curr_scope,
                        U64                  image_base,
-                       RDI_Arch             arch,
+                       Arch                 arch,
                        DW_Tag               tag,
                        DW_AttribKind        kind)
 {
@@ -897,7 +897,7 @@ d2r_var_locset_from_tag(Arena               *arena,
                         RDIM_ScopeChunkList *scopes,
                         RDIM_Scope          *curr_scope,
                         U64                  image_base,
-                        RDI_Arch             arch,
+                        Arch                 arch,
                         DW_Tag               tag)
 {
   RDIM_LocationSet locset = {0};
@@ -1086,64 +1086,54 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 
   ////////////////////////////////
 
-  RDI_Arch               arch            = RDI_Arch_NULL;
+  Arch                   arch            = Arch_Null;
+  U64                    image_base      = 0;
   RDIM_BinarySectionList binary_sections = {0};
-  RDIM_TopLevelInfo      top_level_info  = {0};
-
-  U64              image_base = 0;
-  DW_Input         input      = {0};
-  DW_ListUnitInput lui        = {0};
+  DW_Input               input           = {0};
 
   if (in->image == Image_CoffPe) {
     PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, in->image_data);
 
-    // convert arch
-    switch (pe.arch) {
-    case Arch_Null: arch = RDI_Arch_NULL; break;
-    case Arch_x64:  arch = RDI_Arch_X64;  break;
-    case Arch_x86:  arch = RDI_Arch_X86;  break;
-    default: NotImplemented; break;
-    }
+    // get image arch
+    arch = pe.arch;
 
     // get image base
     image_base = pe.image_base;
 
-    // get COFF sections
+    // get image sections
     String8             raw_sections  = str8_substr(in->image_data, rng_1u64(pe.section_array_off, pe.section_array_off+sizeof(COFF_SectionHeader)*pe.section_count));
     U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
     COFF_SectionHeader *section_array = (COFF_SectionHeader *)raw_sections.str;
 
-    // convert sections & top level info
+    // convert sections
     binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, in->image_data, pe.string_table_off, section_count, section_array);
-    top_level_info  = c2r_make_rdim_top_level_info(in->image_name, arch, exe_hash, section_count, section_array);
 
-    // find DWARF sections
+    // make DWARF input
     input = dw_input_from_coff_section_table(scratch.arena, in->image_data, pe.string_table_off, section_count, section_array);
   } else if (in->image == Image_Elf32 || in->image == Image_Elf64) {
     ELF_BinInfo elf = elf_bin_from_data(in->debug_data);
 
+    // get image arch
+    arch = arch_from_elf_machine(elf.hdr.e_machine);
+
     // get image base
     image_base = elf_base_addr_from_bin(&elf.hdr);
 
-    // convert arch
-    switch (elf.hdr.e_machine) {
-    case ELF_MachineKind_None:   arch = RDI_Arch_NULL; break;
-    case ELF_MachineKind_X86_64: arch = RDI_Arch_X64;  break;
-    case ELF_MachineKind_386:    arch = RDI_Arch_X86;  break;
-    default: NotImplemented; break;
-    }
-
+    // get image sections
     ELF_Shdr64Array shdrs = elf_shdr64_array_from_bin(scratch.arena, in->debug_data, &elf.hdr);
 
-    // convert sections & top level info
-    binary_sections          = e2r_rdi_binary_sections_from_elf_section_table(arena, shdrs);
-    top_level_info           = e2r_make_rdim_top_level_info(in->debug_data, exe_hash, shdrs);
+    // convert sections
+    binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, shdrs);
 
-    // find DWARF sections
+    // make DWARF input
     input = dw_input_from_elf_section_table(scratch.arena, in->debug_data, &elf);
   } else {
     InvalidPath;
   }
+
+  ////////////////////////////////
+
+  RDIM_TopLevelInfo top_level_info = rdim_make_top_level_info(in->image_name, arch, exe_hash, binary_sections);
 
   ////////////////////////////////
 

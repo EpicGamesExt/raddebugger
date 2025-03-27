@@ -78,25 +78,3 @@ c2r_rdi_binary_sections_from_coff_sections(Arena *arena, String8 image_data, U64
   return binary_sections;
 }
 
-internal RDIM_TopLevelInfo
-c2r_make_rdim_top_level_info(String8 image_name, RDI_Arch arch, U64 exe_hash, U64 sectab_count, COFF_SectionHeader *sectab)
-{
-  U64 exe_voff_max = 0;
-  {
-    COFF_SectionHeader *coff_sec_ptr = sectab;
-    COFF_SectionHeader *coff_ptr_opl = sectab + sectab_count;
-    for (;coff_sec_ptr < coff_ptr_opl; coff_sec_ptr += 1) {
-      U64 sec_voff_max = coff_sec_ptr->voff + coff_sec_ptr->vsize;
-      exe_voff_max = Max(exe_voff_max, sec_voff_max);
-    }
-  }
-
-  RDIM_TopLevelInfo top_level_info = {0};
-  top_level_info.arch              = arch;
-  top_level_info.exe_name          = str8_skip_last_slash(image_name);
-  top_level_info.exe_hash          = exe_hash;
-  top_level_info.voff_max          = exe_voff_max;
-  top_level_info.producer_name     = str8_lit(BUILD_TITLE_STRING_LITERAL);
-
-  return top_level_info;
-}
