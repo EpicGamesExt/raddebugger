@@ -30,7 +30,7 @@
 # define raddbg_is_attached(...)               raddbg_is_attached__impl()
 # define raddbg_thread_name(fmt, ...)          raddbg_thread_name__impl((fmt), __VA_ARGS__)
 # define raddbg_thread_color_hex(hexcode)      raddbg_thread_color__impl((hexcode))
-# define raddbg_thread_color_rgba(r, g, b, a)  raddbg_thread_color__impl((unsigned int)(((r)*255) << 24) | (unsigned int)(((g)*255) << 16) | (unsigned int)(((b)*255) << 8) | (unsigned int)((a)*255))
+# define raddbg_thread_color_rgba(r, g, b, a)  raddbg_thread_color__impl(((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
 # define raddbg_break(...)                     raddbg_break__impl()
 # define raddbg_break_if(expr, ...)            ((expr) ? raddbg_break__impl() : (void)0)
 # define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
