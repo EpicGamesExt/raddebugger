@@ -3114,6 +3114,8 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
         if(str8_match(child_schema->string, str8_lit("label"), 0))
         {
+          result = 1;
+          ctrl_entity_equip_string(d_state->ctrl_entity_store, entity, write_string);
           rd_cmd(D_CmdKind_SetEntityName, .ctrl_entity = entity->handle, .string = write_string);
         }
         else if(str8_match(child_schema->string, str8_lit("dbg"), 0))

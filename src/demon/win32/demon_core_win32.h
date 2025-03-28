@@ -56,6 +56,7 @@
 #define DMN_W32_EXCEPTION_SET_THREAD_NAME          0x406d1388u
 #define DMN_w32_EXCEPTION_CLRDBG_NOTIFICATION      0x04242420u
 #define DMN_w32_EXCEPTION_CLR                      0xE0434352u
+#define DMN_W32_EXCEPTION_RADDBG_SET_THREAD_COLOR  0x00524144u
 
 ////////////////////////////////
 //~ rjf: Win32 Register Codes

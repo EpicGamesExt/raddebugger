@@ -606,8 +606,8 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.stack_base);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_root);
     read_off += str8_deserial_read_struct(string, read_off, &event.timestamp);
-    read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
+    read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
     read_off += str8_deserial_read(string, read_off, event.string.str, event.string.size, 1);
@@ -3603,6 +3603,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   Guid rdi_dbg_guid = {0};
   String8 rdi_dbg_path = str8_zero();
   String8 raddbg_data = str8_zero();
+  Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -3804,7 +3805,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         U64 sec_count = file_header.section_count;
         COFF_SectionHeader *sec = push_array(scratch.arena, COFF_SectionHeader, sec_count);
         dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
-        Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
         for EachIndex(idx, sec_count)
         {
           String8 section_name = str8_cstring(sec[idx].name);
@@ -3819,6 +3819,13 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + raddbg_section_voff_range.min,
                                                    vaddr_range.min + raddbg_section_voff_range.max), raddbg_data.str);
         scratch_end(scratch);
+      }
+      
+      // rjf: if we have a raddbg section, mark the first byte as 1, to signify attachment
+      if(raddbg_section_voff_range.max != raddbg_section_voff_range.min)
+      {
+        U8 new_value = 1;
+        dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_section_voff_range.min, &new_value);
       }
     }
   }
@@ -3898,6 +3905,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         node->pdatas_count = pdatas_count;
         node->entry_point_voff = entry_point_voff;
         node->initial_debug_info_path = initial_debug_info_path;
+        node->raddbg_section_voff_range = raddbg_section_voff_range;
         node->raddbg_data = raddbg_data;
       }
     }
@@ -3905,11 +3913,12 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
 }
 
 internal void
-ctrl_thread__module_close(CTRL_Handle module)
+ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range)
 {
   //////////////////////////////
   //- rjf: evict module image info from cache
   //
+  Rng1U64 raddbg_section_voff_range = {0};
   {
     U64 hash = ctrl_hash_from_handle(module);
     U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
@@ -3929,10 +3938,20 @@ ctrl_thread__module_close(CTRL_Handle module)
       }
       if(node)
       {
+        raddbg_section_voff_range = node->raddbg_section_voff_range;
         DLLRemove(slot->first, slot->last, node);
         arena_release(node->arena);
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: write 0 into first byte of raddbg data section, to signify detachment
+  //
+  if(raddbg_section_voff_range.max != raddbg_section_voff_range.min)
+  {
+    U8 new_value = 0;
+    dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_section_voff_range.min, &new_value);
   }
 }
 
@@ -4265,13 +4284,14 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       CTRL_Handle module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
+      CTRL_Entity *module_ent = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, module_handle);
+      CTRL_Entity *process_ent = ctrl_process_from_entity(module_ent);
       String8 module_path = event->string;
-      ctrl_thread__module_close(module_handle);
+      ctrl_thread__module_close(process_ent->handle, module_handle, module_ent->vaddr_range);
       out_evt->kind       = CTRL_EventKind_EndModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->entity     = module_handle;
       out_evt->string     = module_path;
-      CTRL_Entity *module_ent = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, module_handle);
       CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
       if(debug_info_path_ent != &ctrl_entity_nil)
       {
@@ -4301,6 +4321,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
       out_evt->string     = event->string;
       out_evt->entity_id  = event->code;
+    }break;
+    case DMN_EventKind_SetThreadColor:
+    {
+      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+      out_evt->kind       = CTRL_EventKind_ThreadColor;
+      out_evt->msg_id     = msg->msg_id;
+      out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
+      out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
+      out_evt->rgba       = event->code;
     }break;
   }
   ctrl_c2u_push_events(&evts);

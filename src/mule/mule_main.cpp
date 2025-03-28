@@ -2670,7 +2670,15 @@ dynamic_step_test(void){
 ////////////////////////////////
 
 int
-mule_main(int argc, char** argv){
+mule_main(int argc, char** argv)
+{
+  raddbg_thread_name("mule_main_thread");
+  raddbg_thread_color_rgba(1, 0, 0, 1);
+  if(raddbg_is_attached())
+  {
+    raddbg_log("raddbg is attached!\n");
+  }
+  
   mule_init();
   
   // NOTE(allen): Eval Tests
@@ -2735,5 +2743,3 @@ mule_main(int argc, char** argv){
   
   return(0);
 }
-
-

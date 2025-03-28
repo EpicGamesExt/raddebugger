@@ -593,6 +593,7 @@ struct CTRL_ModuleImageInfoCacheNode
   U64 entry_point_voff;
   Rng1U64 tls_vaddr_range;
   String8 initial_debug_info_path;
+  Rng1U64 raddbg_section_voff_range;
   String8 raddbg_data;
 };
 
@@ -953,7 +954,7 @@ internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, C
 
 //- rjf: module lifetime open/close work
 internal void ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path);
-internal void ctrl_thread__module_close(CTRL_Handle module);
+internal void ctrl_thread__module_close(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);

@@ -7,23 +7,37 @@
 ////////////////////////////////
 //~ Implementation Overrides
 
-#if !defined(raddbg_markup_vsnprintf)
-# define raddbg_markup_vsnprintf vsnprintf
+#if !defined(RADDBG_MARKUP_VSNPRINTF)
+# define RADDBG_MARKUP_DEFAULT_VSNPRINTF 1
+# define RADDBG_MARKUP_VSNPRINTF vsnprintf
 #endif
 
 ////////////////////////////////
 //~ Usage Macros
 
-#define raddbg_is_attached(...)               raddbg_is_attached__impl()
-#define raddbg_thread_name(fmt, ...)          raddbg_thread_name__impl((fmt), __VA_ARGS__)
-#define raddbg_thread_color_hex(hexcode)      raddbg_thread_color__impl((hexcode))
-#define raddbg_thread_color_rgba(r, g, b, a)  raddbg_thread_color__impl((unsigned int)(((r)*255) << 24) | (unsigned int)(((g)*255) << 16) | (unsigned int)(((b)*255) << 8) | (unsigned int)((a)*255))
-#define raddbg_break(...)                     raddbg_break__impl()
-#define raddbg_break_if(expr, ...)            ((expr) ? raddbg_break__impl() : (void)0)
-#define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
-#define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
-#define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
-#define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_glue(raddbg_auto_view_rule_data__, __COUNTER__)[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+#if defined(RADDBG_MARKUP_STUBS)
+# define raddbg_is_attached(...)               (0)
+# define raddbg_thread_name(fmt, ...)          ((void)0)
+# define raddbg_thread_color_hex(hexcode)      ((void)0)
+# define raddbg_thread_color_rgba(r, g, b, a)  ((void)0)
+# define raddbg_break(...)                     ((void)0)
+# define raddbg_break_if(expr, ...)            ((void)0)
+# define raddbg_watch(fmt, ...)                ((void)0)
+# define raddbg_pin(expr, ...)
+# define raddbg_log(fmt, ...)                  ((void)0)
+# define raddbg_auto_view_rule(type, ...)      struct raddbg_glue(raddbg_auto_view_rule_stub__, __COUNTER__){int __unused__}
+#else
+# define raddbg_is_attached(...)               raddbg_is_attached__impl()
+# define raddbg_thread_name(fmt, ...)          raddbg_thread_name__impl((fmt), __VA_ARGS__)
+# define raddbg_thread_color_hex(hexcode)      raddbg_thread_color__impl((hexcode))
+# define raddbg_thread_color_rgba(r, g, b, a)  raddbg_thread_color__impl((unsigned int)(((r)*255) << 24) | (unsigned int)(((g)*255) << 16) | (unsigned int)(((b)*255) << 8) | (unsigned int)((a)*255))
+# define raddbg_break(...)                     raddbg_break__impl()
+# define raddbg_break_if(expr, ...)            ((expr) ? raddbg_break__impl() : (void)0)
+# define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
+# define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
+# define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
+# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_glue(raddbg_auto_view_rule_data__, __COUNTER__)[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+#endif
 
 ////////////////////////////////
 //~ Helpers
@@ -34,12 +48,20 @@
 ////////////////////////////////
 //~ Win32 Implementations
 
-#if defined(RADDBG_MARKUP_IMPLEMENTATION)
+#if defined(RADDBG_MARKUP_IMPLEMENTATION) && !defined(RADDBG_MARKUP_STUBS)
 #if defined(_WIN32)
 
+//- default includes
+#if RADDBG_MARKUP_DEFAULT_VSNPRINTF
+#include <stdio.h>
+#endif
+
 //- section allocating
-#pragma section(".raddbg", read)
+#pragma section(".raddbg", read, write)
 #define raddbg_exe_data __declspec(allocate(".raddbg"))
+
+//- first byte of exe data section -> is attached
+raddbg_exe_data unsigned char raddbg_is_attached_byte_marker = 0;
 
 //- types
 
@@ -72,11 +94,12 @@ extern "C"
   __declspec(dllimport) HANDLE GetCurrentThread(void);
   __declspec(dllimport) DWORD GetCurrentThreadId(void);
   __declspec(dllimport) void RaiseException(DWORD dwExceptionCode, DWORD dwExceptionFlags, DWORD nNumberOfArguments, const ULONG_PTR *lpArguments);
+  __declspec(dllimport) void OutputDebugStringA(LPCSTR buffer);
   long long _InterlockedCompareExchange64(long long volatile*, long long, long long);
   long long _InterlockedExchangeAdd64(long long volatile*, long long);
 #pragma intrinsic(_InterlockedCompareExchange64)
 #pragma intrinsic(_InterlockedExchangeAdd64)
-  int raddbg_markup_vsnprintf(char * const, unsigned long long const, const char * const, va_list);
+  int RADDBG_MARKUP_VSNPRINTF(char * const, unsigned long long const, const char * const, va_list);
 #if defined(__cplusplus)
 }
 #endif
@@ -173,8 +196,7 @@ raddbg_encode_utf16(wchar_t *str, unsigned __int32 codepoint)
 static inline int
 raddbg_is_attached__impl(void)
 {
-  // TODO(rjf)
-  return 0;
+  return !!raddbg_is_attached_byte_marker;
 }
 
 static inline void
@@ -186,7 +208,7 @@ raddbg_thread_name__impl(char *fmt, ...)
   {
     va_list args;
     va_start(args, fmt);
-    raddbg_markup_vsnprintf(buffer, sizeof(buffer), fmt, args);
+    RADDBG_MARKUP_VSNPRINTF(buffer, sizeof(buffer), fmt, args);
     va_end(args);
   }
   
@@ -260,7 +282,32 @@ raddbg_thread_name__impl(char *fmt, ...)
 static inline void
 raddbg_thread_color__impl(unsigned int hexcode)
 {
-  // TODO(rjf)
+  if(raddbg_is_attached())
+  {
+#pragma pack(push, 8)
+    typedef struct RADDBG_ThreadColorInfo RADDBG_ThreadColorInfo;
+    struct RADDBG_ThreadColorInfo
+    {
+      DWORD dwThreadID;
+      DWORD _pad0_;
+      DWORD rgba;
+      DWORD _pad1_;
+    };
+#pragma pack(pop)
+    RADDBG_ThreadColorInfo info;
+    info.dwThreadID = GetCurrentThreadId();
+    info.rgba = hexcode;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x00524144u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except(1)
+    {
+    }
+#pragma warning(pop)
+  }
 }
 
 #define raddbg_break__impl() (__debugbreak())
@@ -274,7 +321,17 @@ raddbg_watch__impl(char *fmt, ...)
 static inline void
 raddbg_log__impl(char *fmt, ...)
 {
-  // TODO(rjf)
+  // rjf: resolve variadic arguments
+  char buffer[4096];
+  {
+    va_list args;
+    va_start(args, fmt);
+    RADDBG_MARKUP_VSNPRINTF(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+  }
+  
+  // rjf: output debug string
+  OutputDebugStringA(buffer);
 }
 
 #endif // defined(_WIN32)

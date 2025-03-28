@@ -25,6 +25,7 @@ DMN_EventKind_Halt,
 DMN_EventKind_Memory,
 DMN_EventKind_DebugString,
 DMN_EventKind_SetThreadName,
+DMN_EventKind_SetThreadColor,
 DMN_EventKind_COUNT,
 } DMN_EventKind;
 
@@ -58,7 +59,7 @@ DMN_ExceptionKind_COUNT,
 } DMN_ExceptionKind;
 
 C_LINKAGE_BEGIN
-extern String8 dmn_event_kind_string_table[17];
+extern String8 dmn_event_kind_string_table[18];
 extern String8 dmn_exception_kind_string_table[5];
 
 C_LINKAGE_END

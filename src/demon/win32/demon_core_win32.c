@@ -2378,6 +2378,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     }
                   }break;
                   
+                  //- rjf: fill set-thread-color info
+                  case DMN_W32_EXCEPTION_RADDBG_SET_THREAD_COLOR:
+                  {
+                    e->kind = DMN_EventKind_SetThreadColor;
+                    e->code = exception->ExceptionInformation[1];
+                  }break;
+                  
                   //- rjf: unhandled exception case
                   default:
                   {
