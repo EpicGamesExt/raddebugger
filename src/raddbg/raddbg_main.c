@@ -2,14 +2,18 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: 0.9.16 changes
+//~ rjf: 0.9.16 release notes
 //
 // - Auto view rules have been upgraded to support type pattern-matching. This
-//   makes them usable for generic types in various languages.
+//   makes them usable for generic types in various languages. This
+//   pattern-matching is done by using `?` characters in a pattern, to specify
+//   placeholders for various parts of a type name. For example, the pattern
+//   `DynamicArray<?>` would match `DynamicArray<int>`, `DynamicArray<float>`,
+//   and so on.
 // - The `slice` view rule has been streamlined and simplified. When an
 //   expression with a `slice` view rule is expanded, it will simply expand to
 //   the slice's contents, which matches the behavior with static arrays.
-// - The `slice` view rule now supports `first, one-past-last` pointer pairs,
+// - The `slice` view rule now supports `first, one_past_last` pointer pairs,
 //   as well as `base_pointer, length` pairs.
 // - The syntax for view rules has changed to improve its familiarity,
 //   usability, and to improve its consistency with the rest of the evaluation
@@ -17,7 +21,9 @@
 //   need to be explicitly named. For example, instead of
 //   `bitmap:{w:1024, h:1024}`, the new view rule syntax would be
 //   `bitmap(1024, 1024)`. Commas can still be omitted. Named arguments are
-//   still possible (and required in some cases): `disasm(size=1024, arch=x64)`
+//   still possible (and required in some cases):
+//   `disasm(size=1024, arch=x64)`. If there are no arguments required for a
+//   view rule, like `hex`, then no parentheses are needed.
 // - The hover evaluation feature has been majorly upgraded to support all
 //   features normally available in the `Watch` view. Hover evaluations now
 //   explicitly show type information, and contain a view rule column, which
@@ -42,37 +48,49 @@
 //   pins (the right-click context menu and the dedicated tabs) have been
 //   merged.
 // - Added the ability to add a list environment strings to targets.
-// - Added support for watch annotations derived from source code markup,
-//   rather than only from configuration. Instances of
-//   `raddbg_pin(<expr>, <view_rule>)` will be parsed, and used to create watch
-//   annotations inline with source code, in the same way that watch pins do.
-//   For instance, `raddbg_pin(dynamic_array, slice)` will visualize
-//   `dynamic_array` with a `slice` view rule;
-//   `raddbg_pin(some_function, disasm)` will visualize `some_function` as
-//   disassembly; and so on.
+// - The debugger releases are now packaged with a `raddbg_markup.h`
+//   single-header library which contains a number of source code markup tools
+//   which can be used in your programs. Some of these features are for direct
+//   interaction with the RAD Debugger. Others are simply helpers (often
+//   abstracting over platform functionality) for very commonly needed
+//   debugger-related features, like setting thread names. This second set of
+//   features will work with any debugger. Here is a list of this library's
+//   initial features (proper documentation will be written once the library
+//   matures):
+//   - `raddbg_is_attached()`: Returns 1 if the RAD Debugger is attached,
+//     otherwise returns 0.
+//   - `raddbg_break()`: Generates a trap instruction at the usage site.
+//   - `raddbg_break_if(expr)`: Generates a trap instruction guarded by a
+//     conditional, evaluating `expr`.
+//   - `raddbg_thread_name(format, ...)`, e.g.
+//     `raddbg_thread_name("worker_thread_%i", index)`: Sets the calling
+//     thread's name.
+//   - `raddbg_log(format, ...)`, e.g.
+//     `raddbg_log("This is a number: %i", 123)`: Writes a debug string for a
+//     debugger to read and display in its UI.
+//   - `raddbg_thread_color_hex(hexcode)`, e.g.
+//     `raddbg_thread_color_hex(0xff0000ff)`: Sets the calling thread's color.
+//     - Also can be done with individual `[0, 1]` color components:
+//       `raddbg_thread_color_rgba(1.f, 0.f, 0.f, 1.f)`
+//   - `raddbg_pin(<expr>, <view_rule>)`, e.g.
+//     `raddbg_pin(dynamic_array, slice)`: Like watch pins, but defined in source
+//     code. This is used by the debugger UI, but does not show up anywhere
+//     other than the source code, so it can either be used as a macro (which
+//     expands to nothing), or in comments too.
+//   - `raddbg_auto_view_rule(<type|pattern>, <view_rule>)`, e.g.
+//     `raddbg_auto_view_rule(DynamicArray<?>, slice)`: declares an
+//     auto-view-rule from source code, rather than from debugger
+//     configuration.
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.
+// - Made several visual improvements.
 
 ////////////////////////////////
 //~ rjf: feature cleanup, code dedup, code elimination pass:
 //
-// [ ] frontend config entities, serialization/deserialization, remove hacks,
-//     etc. - the entity structure should be dramatically simplified & made
-//     to reflect a more flexible string-tree data structure which can be
-//     more trivially derived from config, and more flexibly rearranged.
-//     drag/drop watch rows -> tabs, tabs -> watch rows, etc.
-// [ ] frontend entities need to be the "upstream state" for windows, panels,
-//     tabs, etc. - entities can be mapped to caches of window/panel/view state
-//     in purely immediate-mode fashion, so the only *state* part of the
-//     equation only has to do with the string tree.
-// [ ] config hot-reloading using the wins from the previous points
-// [ ] undo/redo, using the wins from the previous points
-// [ ] watch table UI - hidden table boundaries, special-cased control hacks
-// [ ] hash store -> need to somehow hold on to hash blobs which are still
-//     depended upon by usage layers, e.g. extra dependency refcount, e.g.
-//     text cache can explicitly correllate nodes in its cache to hashes,
-//     bump their refcount - this would keep the hash correllated to its key
-//     and it would prevent it from being evicted (output debug string perf)
+// [ ] config hot-reloading, using cfg wins
+// [ ] undo/redo, using cfg wins
+// [ ] back/forward, using cfg wins
 // [ ] autocompletion lister, file lister, function lister, command lister,
 //     etc., all need to be merged, and optionally contextualized/filtered.
 //     right-clicking a tab should be equivalent to spawning a command lister,
@@ -97,44 +115,21 @@
 // [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
 //
 // [ ] CLI argument over-mangling?
-//
-// [ ] OutputDebugString spam, keeping way too much around!
-//
 // [ ] fix light themes
 // [ ] make `array` view rule work with actual array types, to change their
 //     size dynamically
-//
-//
-// [ ] auto view rule templates (?)
 // [ ] single-line visualization busted with auto-view-rules applied, it seems...
 //     not showing member variables, just commas, check w/ mohit
-// [ ] auto-view-rules likely should apply at each level in the expression
-//     tree
-// [ ] `slice` view rule - extend to support begin/end style as well
 // [ ] disasm starting address - need to use debug info for more correct
 //     results...
-//
 //  [ ] linked list view rule
-//
-//  [ ] investigate false exceptions, being reported while stepping through init code
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-//
 //  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi
-//
 //  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
 //      module/symbol, in cases where one line maps to many voffs
-//
-//  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
-//  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
-//  [ ] entity <-> mdesk paths
-//
 //  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 //  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
-//
-//  [ ] save view column pcts; generalize to being a first-class thing in
-//      RD_View, e.g. by just having a string -> f32 store
-//
 //  [ ] visualize all breakpoints everywhere - source view should show up in
 //      disasm, disasm should show up in source view, function should show up in
 //      both, etc.
@@ -146,7 +141,6 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [ ] transient view timeout releasing
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
@@ -182,14 +176,10 @@
 //  [ ] max view rule
 //  [ ] min view rule
 //
-// [ ] double-click vs. single-click for folder navigation, see if we can infer
 // [ ] use backslashes on windows by default, forward slashes elsewhere (?)
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
-//
-//
-// [ ] visualize conversion failures
 //
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
@@ -202,16 +192,6 @@
 //      how to load them, but not how you save them. Obviously I can just copy
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
-//
-// [ ] Right-clicking on a thread in the Scheduler window pops up a context
-//     menu, but you can't actually see it because the tooltip for the thread
-//     draws on top of it, so you can't see the menu.
-//
-//  [ ] In a "hover watch" (where you hover over a variable and it shows a pop-
-//      up watch window), if you expand an item near the bottom of the listing,
-//      it will be clipped to the bottom of the listing instead of showing the
-//      actual items (ie., it doesn't resize the listing based on what's
-//      actually visible)
 //
 //  [ ] ** One very nice feature of RemedyBG that I use all the time is the
 //      ability to put "$err, hr" into the watch window, which will just show
@@ -267,29 +247,13 @@
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
 //
-// [ ] @eval_upgrade
-//  [ ] new eval system; support strings, many address spaces, many debug
-//      infos, wide/async transforms (e.g. diff(blob1, blob2))
-//
-// [ ] Fancy View Rules
-//  [ ] table column boundaries should be checked against *AFTER* table
-//      contents, not before
-//  [ ] `array:(x, y)` - multidimensional array
-//
+// [ ] eval wide/async transforms (e.g. diff(blob1, blob2))
 // [ ] search-in-all-files
-//
 // [ ] Memory View
 //  [ ] memory view mutation controls
 //  [ ] memory view user-made annotations
-//
-// [ ] undo/redo
-// [ ] proper "go back" + "go forward" history navigations
-//  [ ]  undo close tab would be nice. If not for everything, then at least
-//       just for source files
-//
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
-//
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
 // [ ] automatically start search query with selected text
@@ -314,8 +278,8 @@
 //
 // [ ] @feature eval ui improvement features
 //  [ ] serializing eval view maps
-//  [ ] view rule editors in hover-eval
 //  [ ] view rule hook coverage
+//  [ ] `array:(x, y)` - multidimensional array
 //   [ ] `each:(expr addition)` - apply some additional expression to all
 //        elements in an array/linked list would be useful to look at only a
 //        subset of an array of complex structs
@@ -348,8 +312,6 @@
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
 // [ ] frontend speedup opportunities
-//  [ ] tables in UI -> currently building per-row, could probably cut down on
-//      # of boxes and # of draws by doing per-column in some cases?
 //  [ ] font cache layer -> can probably cache (string*font*size) -> (run) too
 //      (not just rasterization)... would save a *lot*, there is a ton of work
 //      just in looking up & stitching stuff repeatedly
@@ -366,6 +328,45 @@
 //       values for "unknown identifier". But also yellow arrow in call stack
 //       disappears if font size gets too large.
 // [x] @cleanup central worker thread pool - eliminate per-layer thread pools
+// [x] frontend config entities, serialization/deserialization, remove hacks,
+//     etc. - the entity structure should be dramatically simplified & made
+//     to reflect a more flexible string-tree data structure which can be
+//     more trivially derived from config, and more flexibly rearranged.
+//     drag/drop watch rows -> tabs, tabs -> watch rows, etc.
+// [x] frontend entities need to be the "upstream state" for windows, panels,
+//     tabs, etc. - entities can be mapped to caches of window/panel/view state
+//     in purely immediate-mode fashion, so the only *state* part of the
+//     equation only has to do with the string tree.
+// [x] watch table UI - hidden table boundaries, special-cased control hacks
+// [x] hash store -> need to somehow hold on to hash blobs which are still
+//     depended upon by usage layers, e.g. extra dependency refcount, e.g.
+//     text cache can explicitly correllate nodes in its cache to hashes,
+//     bump their refcount - this would keep the hash correllated to its key
+//     and it would prevent it from being evicted (output debug string perf)
+// [x] OutputDebugString spam, keeping way too much around!
+// [x] auto view rule templates (?)
+// [x] auto-view-rules likely should apply at each level in the expression
+//     tree
+// [x] `slice` view rule - extend to support begin/end style as well
+//  [x] investigate false exceptions, being reported while stepping through init code
+//  [x] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
+//  [x] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
+//  [x] entity <-> mdesk paths
+//  [x] save view column pcts; generalize to being a first-class thing in
+//      RD_View, e.g. by just having a string -> f32 store
+// [x] transient view timeout releasing
+//  [x] view rule editors in hover-eval
+//  [x] table column boundaries should be checked against *AFTER* table
+//      contents, not before
+//  [x] In a "hover watch" (where you hover over a variable and it shows a pop-
+//      up watch window), if you expand an item near the bottom of the listing,
+//      it will be clipped to the bottom of the listing instead of showing the
+//      actual items (ie., it doesn't resize the listing based on what's
+//      actually visible)
+// [x] Right-clicking on a thread in the Scheduler window pops up a context
+//     menu, but you can't actually see it because the tooltip for the thread
+//     draws on top of it, so you can't see the menu.
+// [x] double-click vs. single-click for folder navigation, see if we can infer
 
 ////////////////////////////////
 //~ rjf: Build Options

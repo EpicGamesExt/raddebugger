@@ -21,7 +21,7 @@
 # define raddbg_thread_color_hex(hexcode)      ((void)0)
 # define raddbg_thread_color_rgba(r, g, b, a)  ((void)0)
 # define raddbg_break(...)                     ((void)0)
-# define raddbg_break_if(expr, ...)            ((void)0)
+# define raddbg_break_if(expr, ...)            ((void)expr)
 # define raddbg_watch(fmt, ...)                ((void)0)
 # define raddbg_pin(expr, ...)
 # define raddbg_log(fmt, ...)                  ((void)0)
