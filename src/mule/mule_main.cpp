@@ -103,7 +103,10 @@ void optimized_struct_parameters_eval_tests(void);
 ////////////////////////////////
 // NOTE(allen): Type Coverage Eval
 
+#include <vector>
 #include <stdint.h>
+
+raddbg_auto_view_rule(std::vector<?>, wrap($expr._Mypair._Myval2), slice);
 
 struct Basics{
   char a;
@@ -438,6 +441,15 @@ type_coverage_eval_tests(void)
   const int32_t x1 = 3;
   const int32_t y1 = -10;
   const int32_t z1 = x1 + y1;
+  
+  std::vector<int> int_vector;
+  int_vector.push_back(1);
+  int_vector.push_back(2);
+  int_vector.push_back(3);
+  int_vector.push_back(4);
+  int_vector.push_back(5);
+  int_vector.push_back(6);
+  int_vector.push_back(7);
   
   int x = (int)(Anonymous_D);
 }

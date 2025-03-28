@@ -61,7 +61,7 @@
 #define raddbg_exe_data __declspec(allocate(".raddbg"))
 
 //- first byte of exe data section -> is attached
-raddbg_exe_data unsigned char raddbg_is_attached_byte_marker = 0;
+raddbg_exe_data unsigned char raddbg_is_attached_byte_marker[1];
 
 //- types
 
