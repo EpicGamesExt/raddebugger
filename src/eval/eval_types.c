@@ -225,12 +225,6 @@ e_member_array_from_list(Arena *arena, E_MemberList *list)
 ////////////////////////////////
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
-internal E_TypeCtx *
-e_selected_type_ctx(void)
-{
-  return e_type_state->ctx;
-}
-
 internal void
 e_select_type_ctx(E_TypeCtx *ctx)
 {
@@ -605,8 +599,8 @@ e_type_from_key(Arena *arena, E_TypeKey key)
         {
           type = push_array(arena, E_Type, 1);
           type->kind       = kind;
-          type->name       = e_kind_basic_string_table[kind];
-          type->byte_size  = e_kind_basic_byte_size_table[kind];
+          type->name       = e_type_kind_basic_string_table[kind];
+          type->byte_size  = e_type_kind_basic_byte_size_table[kind];
         }
       }break;
       
@@ -1159,7 +1153,7 @@ e_type_byte_size_from_key(E_TypeKey key)
     case E_TypeKeyKind_Basic:
     {
       E_TypeKind kind = (E_TypeKind)key.u32[0];
-      result = e_kind_basic_byte_size_table[kind];
+      result = e_type_kind_basic_byte_size_table[kind];
     }break;
     case E_TypeKeyKind_Ext:
     {

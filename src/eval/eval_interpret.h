@@ -18,8 +18,6 @@ struct E_Interpretation
 ////////////////////////////////
 //~ rjf: Interpretation Context
 
-typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
-
 typedef struct E_InterpretCtx E_InterpretCtx;
 struct E_InterpretCtx
 {

@@ -113,7 +113,7 @@ entry_point(CmdLine *cmdline)
           indent += 1)
       {
         E_Type *type = e_type_from_key(arena, type_key);
-        raddbg_log("%.*s%S\n", (int)indent*4, indent_spaces, e_kind_basic_string_table[type->kind]);
+        raddbg_log("%.*s%S\n", (int)indent*4, indent_spaces, e_type_kind_basic_string_table[type->kind]);
       }
     }
     

@@ -115,6 +115,147 @@ struct E_Space
 };
 
 ////////////////////////////////
+//~ rjf: Implicit Type Graph Key Types
+
+typedef enum E_TypeKeyKind
+{
+  E_TypeKeyKind_Null,
+  E_TypeKeyKind_Basic,
+  E_TypeKeyKind_Ext,
+  E_TypeKeyKind_Cons,
+  E_TypeKeyKind_Reg,
+  E_TypeKeyKind_RegAlias,
+}
+E_TypeKeyKind;
+
+typedef struct E_TypeKey E_TypeKey;
+struct E_TypeKey
+{
+  E_TypeKeyKind kind;
+  U32 u32[3];
+  // [0] -> E_TypeKind (Basic, Cons, Ext); Arch (Reg, RegAlias)
+  // [1] -> Type Index In RDI (Ext); Code (Reg, RegAlias); Type Index In Constructed (Cons)
+  // [2] -> RDI Index (Ext)
+};
+
+typedef struct E_TypeKeyNode E_TypeKeyNode;
+struct E_TypeKeyNode
+{
+  E_TypeKeyNode *next;
+  E_TypeKey v;
+};
+
+typedef struct E_TypeKeyList E_TypeKeyList;
+struct E_TypeKeyList
+{
+  E_TypeKeyNode *first;
+  E_TypeKeyNode *last;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/eval.meta.h"
+
+////////////////////////////////
+//~ rjf: Full Extracted Type Information Types
+
+typedef enum E_MemberKind
+{
+  E_MemberKind_Null,
+  E_MemberKind_DataField,
+  E_MemberKind_StaticData,
+  E_MemberKind_Method,
+  E_MemberKind_StaticMethod,
+  E_MemberKind_VirtualMethod,
+  E_MemberKind_VTablePtr,
+  E_MemberKind_Base,
+  E_MemberKind_VirtualBase,
+  E_MemberKind_NestedType,
+  E_MemberKind_Padding,
+  E_MemberKind_Query,
+  E_MemberKind_COUNT
+}
+E_MemberKind;
+
+typedef U32 E_TypeFlags;
+enum
+{
+  E_TypeFlag_Const            = (1<<0),
+  E_TypeFlag_Volatile         = (1<<1),
+  E_TypeFlag_External         = (1<<2),
+  E_TypeFlag_IsPlainText      = (1<<3),
+  E_TypeFlag_IsCodeText       = (1<<4),
+  E_TypeFlag_IsPathText       = (1<<5),
+  E_TypeFlag_EditableChildren = (1<<6),
+};
+
+typedef struct E_Member E_Member;
+struct E_Member
+{
+  E_MemberKind kind;
+  E_TypeKey type_key;
+  String8 name;
+  U64 off;
+  E_TypeKeyList inheritance_key_chain;
+};
+
+typedef struct E_MemberNode E_MemberNode;
+struct E_MemberNode
+{
+  E_MemberNode *next;
+  E_Member v;
+};
+
+typedef struct E_MemberList E_MemberList;
+struct E_MemberList
+{
+  E_MemberNode *first;
+  E_MemberNode *last;
+  U64 count;
+};
+
+typedef struct E_MemberArray E_MemberArray;
+struct E_MemberArray
+{
+  E_Member *v;
+  U64 count;
+};
+
+typedef struct E_EnumVal E_EnumVal;
+struct E_EnumVal
+{
+  String8 name;
+  U64 val;
+};
+
+typedef struct E_EnumValArray E_EnumValArray;
+struct E_EnumValArray
+{
+  E_EnumVal *v;
+  U64 count;
+};
+
+typedef struct E_Type E_Type;
+struct E_Type
+{
+  E_TypeKind kind;
+  E_TypeFlags flags;
+  String8 name;
+  U64 byte_size;
+  U64 count;
+  U64 depth;
+  U32 off;
+  Arch arch;
+  E_TypeKey direct_type_key;
+  E_TypeKey owner_type_key;
+  E_TypeKey *param_type_keys;
+  E_Member *members;
+  E_EnumVal *enum_vals;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Modes
 
 typedef enum E_Mode
@@ -136,6 +277,339 @@ struct E_Module
   Arch arch;
   E_Space space;
 };
+
+////////////////////////////////
+//~ rjf: Token Types
+
+typedef struct E_Token E_Token;
+struct E_Token
+{
+  E_TokenKind kind;
+  Rng1U64 range;
+};
+
+typedef struct E_TokenChunkNode E_TokenChunkNode;
+struct E_TokenChunkNode
+{
+  E_TokenChunkNode *next;
+  E_Token *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct E_TokenChunkList E_TokenChunkList;
+struct E_TokenChunkList
+{
+  E_TokenChunkNode *first;
+  E_TokenChunkNode *last;
+  U64 node_count;
+  U64 total_count;
+};
+
+typedef struct E_TokenArray E_TokenArray;
+struct E_TokenArray
+{
+  E_Token *v;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Expression Tree Types
+
+typedef struct E_Expr E_Expr;
+struct E_Expr
+{
+  E_Expr *first;
+  E_Expr *last;
+  E_Expr *first_tag;
+  E_Expr *last_tag;
+  E_Expr *next;
+  E_Expr *prev;
+  E_Expr *ref;
+  void *location;
+  E_ExprKind kind;
+  E_Mode mode;
+  E_Space space;
+  E_TypeKey type_key;
+  E_Value value;
+  String8 string;
+  String8 qualifier;
+  String8 bytecode;
+};
+
+typedef struct E_ExprChain E_ExprChain;
+struct E_ExprChain
+{
+  E_Expr *first;
+  E_Expr *last;
+};
+
+typedef struct E_ExprNode E_ExprNode;
+struct E_ExprNode
+{
+  E_ExprNode *next;
+  E_Expr *v;
+};
+
+typedef struct E_ExprList E_ExprList;
+struct E_ExprList
+{
+  E_ExprNode *first;
+  E_ExprNode *last;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: IR Tree Types
+
+typedef struct E_IRNode E_IRNode;
+struct E_IRNode
+{
+  E_IRNode *first;
+  E_IRNode *last;
+  E_IRNode *next;
+  RDI_EvalOp op;
+  E_Space space;
+  String8 string;
+  E_Value value;
+};
+
+typedef struct E_IRTreeAndType E_IRTreeAndType;
+struct E_IRTreeAndType
+{
+  E_IRNode *root;
+  E_TypeKey type_key;
+  E_Member member;
+  E_Mode mode;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
+//~ rjf: String -> Num
+
+typedef struct E_String2NumMapNode E_String2NumMapNode;
+struct E_String2NumMapNode
+{
+  E_String2NumMapNode *order_next;
+  E_String2NumMapNode *hash_next;
+  String8 string;
+  U64 num;
+};
+
+typedef struct E_String2NumMapNodeArray E_String2NumMapNodeArray;
+struct E_String2NumMapNodeArray
+{
+  E_String2NumMapNode **v;
+  U64 count;
+};
+
+typedef struct E_String2NumMapSlot E_String2NumMapSlot;
+struct E_String2NumMapSlot
+{
+  E_String2NumMapNode *first;
+  E_String2NumMapNode *last;
+};
+
+typedef struct E_String2NumMap E_String2NumMap;
+struct E_String2NumMap
+{
+  U64 slots_count;
+  U64 node_count;
+  E_String2NumMapSlot *slots;
+  E_String2NumMapNode *first;
+  E_String2NumMapNode *last;
+};
+
+////////////////////////////////
+//~ rjf: String -> Expr
+
+typedef struct E_String2ExprMapNode E_String2ExprMapNode;
+struct E_String2ExprMapNode
+{
+  E_String2ExprMapNode *hash_next;
+  String8 string;
+  E_Expr *expr;
+  U64 poison_count;
+};
+
+typedef struct E_String2ExprMapSlot E_String2ExprMapSlot;
+struct E_String2ExprMapSlot
+{
+  E_String2ExprMapNode *first;
+  E_String2ExprMapNode *last;
+};
+
+typedef struct E_String2ExprMap E_String2ExprMap;
+struct E_String2ExprMap
+{
+  U64 slots_count;
+  E_String2ExprMapSlot *slots;
+};
+
+////////////////////////////////
+//~ rjf: Member/Index Lookup Hooks
+
+typedef struct E_LookupInfo E_LookupInfo;
+struct E_LookupInfo
+{
+  void *user_data;
+  U64 named_expr_count;
+  U64 idxed_expr_count;
+};
+
+typedef struct E_LookupAccess E_LookupAccess;
+struct E_LookupAccess
+{
+  E_IRTreeAndType irtree_and_type;
+};
+
+#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_IRTreeAndType *lhs, E_Expr *tag, String8 filter)
+#define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
+#define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
+typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
+E_LOOKUP_INFO_FUNCTION_DEF(default);
+
+#define E_LOOKUP_ACCESS_FUNCTION_SIG(name) E_LookupAccess name(Arena *arena, E_ExprKind kind, E_Expr *lhs, E_Expr *rhs, E_Expr *tag, void *user_data)
+#define E_LOOKUP_ACCESS_FUNCTION_NAME(name) e_lookup_access_##name
+#define E_LOOKUP_ACCESS_FUNCTION_DEF(name) internal E_LOOKUP_ACCESS_FUNCTION_SIG(E_LOOKUP_ACCESS_FUNCTION_NAME(name))
+typedef E_LOOKUP_ACCESS_FUNCTION_SIG(E_LookupAccessFunctionType);
+E_LOOKUP_ACCESS_FUNCTION_DEF(default);
+
+#define E_LOOKUP_RANGE_FUNCTION_SIG(name) void name(Arena *arena, E_Expr *lhs, E_Expr *tag, String8 filter, Rng1U64 idx_range, E_Expr **exprs, String8 *exprs_strings, void *user_data)
+#define E_LOOKUP_RANGE_FUNCTION_NAME(name) e_lookup_range_##name
+#define E_LOOKUP_RANGE_FUNCTION_DEF(name) internal E_LOOKUP_RANGE_FUNCTION_SIG(E_LOOKUP_RANGE_FUNCTION_NAME(name))
+typedef E_LOOKUP_RANGE_FUNCTION_SIG(E_LookupRangeFunctionType);
+E_LOOKUP_RANGE_FUNCTION_DEF(default);
+
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(name) U64 name(U64 num, void *user_data)
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name) e_lookup_id_from_num_##name
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(name) internal E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name))
+typedef E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LookupIDFromNumFunctionType);
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default);
+
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(name) U64 name(U64 id, void *user_data)
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name) e_lookup_num_from_id_##name
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(name) internal E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name))
+typedef E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LookupNumFromIDFunctionType);
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default);
+
+typedef struct E_LookupRule E_LookupRule;
+struct E_LookupRule
+{
+  String8 name;
+  E_LookupInfoFunctionType *info;
+  E_LookupAccessFunctionType *access;
+  E_LookupRangeFunctionType *range;
+  E_LookupIDFromNumFunctionType *id_from_num;
+  E_LookupNumFromIDFunctionType *num_from_id;
+};
+
+typedef struct E_LookupRuleNode E_LookupRuleNode;
+struct E_LookupRuleNode
+{
+  E_LookupRuleNode *next;
+  E_LookupRule v;
+};
+
+typedef struct E_LookupRuleSlot E_LookupRuleSlot;
+struct E_LookupRuleSlot
+{
+  E_LookupRuleNode *first;
+  E_LookupRuleNode *last;
+};
+
+typedef struct E_LookupRuleMap E_LookupRuleMap;
+struct E_LookupRuleMap
+{
+  E_LookupRuleSlot *slots;
+  U64 slots_count;
+};
+
+typedef struct E_LookupRuleTagPair E_LookupRuleTagPair;
+struct E_LookupRuleTagPair
+{
+  E_LookupRule *rule;
+  E_Expr *tag;
+};
+
+////////////////////////////////
+//~ rjf: IR Generation Hooks
+
+#define E_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_Expr *tag)
+#define E_IRGEN_FUNCTION_NAME(name) e_irgen_##name
+#define E_IRGEN_FUNCTION_DEF(name) internal E_IRGEN_FUNCTION_SIG(E_IRGEN_FUNCTION_NAME(name))
+typedef E_IRGEN_FUNCTION_SIG(E_IRGenFunctionType);
+E_IRGEN_FUNCTION_DEF(default);
+
+typedef struct E_IRGenRule E_IRGenRule;
+struct E_IRGenRule
+{
+  String8 name;
+  E_IRGenFunctionType *irgen;
+};
+
+typedef struct E_IRGenRuleNode E_IRGenRuleNode;
+struct E_IRGenRuleNode
+{
+  E_IRGenRuleNode *next;
+  E_IRGenRule v;
+};
+
+typedef struct E_IRGenRuleSlot E_IRGenRuleSlot;
+struct E_IRGenRuleSlot
+{
+  E_IRGenRuleNode *first;
+  E_IRGenRuleNode *last;
+};
+
+typedef struct E_IRGenRuleMap E_IRGenRuleMap;
+struct E_IRGenRuleMap
+{
+  U64 slots_count;
+  E_IRGenRuleSlot *slots;
+};
+
+////////////////////////////////
+//~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)
+
+typedef struct E_AutoHookNode E_AutoHookNode;
+struct E_AutoHookNode
+{
+  E_AutoHookNode *hash_next;
+  E_AutoHookNode *pattern_order_next;
+  String8 type_string;
+  String8List type_pattern_parts;
+  E_ExprChain tag_exprs;
+};
+
+typedef struct E_AutoHookSlot E_AutoHookSlot;
+struct E_AutoHookSlot
+{
+  E_AutoHookNode *first;
+  E_AutoHookNode *last;
+};
+
+typedef struct E_AutoHookMap E_AutoHookMap;
+struct E_AutoHookMap
+{
+  U64 slots_count;
+  E_AutoHookSlot *slots;
+  E_AutoHookNode *first_pattern;
+  E_AutoHookNode *last_pattern;
+};
+
+typedef struct E_AutoHookParams E_AutoHookParams;
+struct E_AutoHookParams
+{
+  E_TypeKey type_key;
+  String8 type_pattern;
+  String8 tag_expr_string;
+};
+
+////////////////////////////////
+//~ rjf: Contextual & Implicit Evaluation Parameters
+
+typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
 
 ////////////////////////////////
 //~ rjf: Generated Code
