@@ -310,21 +310,6 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: IR State
 
-typedef struct E_IRTreeAndTypeCacheNode E_IRTreeAndTypeCacheNode;
-struct E_IRTreeAndTypeCacheNode
-{
-  E_IRTreeAndTypeCacheNode *next;
-  E_Expr *expr;
-  E_IRTreeAndType irtree_and_type;
-};
-
-typedef struct E_IRTreeAndTypeCacheSlot E_IRTreeAndTypeCacheSlot;
-struct E_IRTreeAndTypeCacheSlot
-{
-  E_IRTreeAndTypeCacheNode *first;
-  E_IRTreeAndTypeCacheNode *last;
-};
-
 typedef struct E_IRState E_IRState;
 struct E_IRState
 {
@@ -337,8 +322,6 @@ struct E_IRState
   // rjf: caches
   E_UsedTagMap *used_tag_map;
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
-  U64 irtree_and_type_cache_slots_count;
-  E_IRTreeAndTypeCacheSlot *irtree_and_type_cache_slots;
   U64 string_id_gen;
   E_StringIDMap *string_id_map;
 };
@@ -467,11 +450,6 @@ internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeA
 internal E_Expr *e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index);
 internal E_Expr *e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree);
 internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key);
-
-////////////////////////////////
-//~ rjf: IRified Expression Cache
-
-internal E_IRTreeAndType e_irtree_and_type_from_expr__cached(E_Expr *expr);
 
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Lookup Rule

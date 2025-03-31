@@ -634,8 +634,6 @@ e_select_parse_ctx(E_ParseCtx *ctx)
   }
   arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
   e_parse_state->ctx = ctx;
-  e_parse_state->parse_cache_slots_count = 1024;
-  e_parse_state->parse_cache_slots = push_array(e_parse_state->arena, E_ParseCacheSlot, e_parse_state->parse_cache_slots_count);
 }
 
 internal U32
@@ -2304,37 +2302,5 @@ e_parse_expr_from_text(Arena *arena, String8 text)
   E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
   E_Parse parse = e_parse_expr_from_text_tokens(arena, text, &tokens);
   scratch_end(scratch);
-  return parse;
-}
-
-internal E_Parse
-e_parse_expr_from_text__cached(String8 text)
-{
-  E_Parse parse = {0, &e_expr_nil};
-  U64 hash = e_hash_from_string(5381, str8_struct(&text));
-  U64 slot_idx = hash%e_parse_state->parse_cache_slots_count;
-  E_ParseCacheNode *node = 0;
-  for(E_ParseCacheNode *n = e_parse_state->parse_cache_slots[slot_idx].first; n != 0; n = n->next)
-  {
-    if(str8_match(n->string, text, 0))
-    {
-      node = n;
-      break;
-    }
-  }
-  if(node == 0)
-  {
-    Temp scratch = scratch_begin(0, 0);
-    node = push_array(e_parse_state->arena, E_ParseCacheNode, 1);
-    SLLQueuePush(e_parse_state->parse_cache_slots[slot_idx].first, e_parse_state->parse_cache_slots[slot_idx].last, node);
-    node->string = push_str8_copy(e_parse_state->arena, text);
-    E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
-    node->parse = e_parse_expr_from_text_tokens(e_parse_state->arena, node->string, &tokens);
-    scratch_end(scratch);
-  }
-  if(node != 0)
-  {
-    parse = node->parse;
-  }
   return parse;
 }

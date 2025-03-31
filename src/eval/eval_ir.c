@@ -82,8 +82,6 @@ e_select_ir_ctx(E_IRCtx *ctx)
   e_ir_state->type_auto_hook_cache_map = push_array(e_ir_state->arena, E_TypeAutoHookCacheMap, 1);
   e_ir_state->type_auto_hook_cache_map->slots_count = 256;
   e_ir_state->type_auto_hook_cache_map->slots = push_array(e_ir_state->arena, E_TypeAutoHookCacheSlot, e_ir_state->type_auto_hook_cache_map->slots_count);
-  e_ir_state->irtree_and_type_cache_slots_count = 1024;
-  e_ir_state->irtree_and_type_cache_slots = push_array(e_ir_state->arena, E_IRTreeAndTypeCacheSlot, e_ir_state->irtree_and_type_cache_slots_count);
   e_ir_state->string_id_gen = 0;
   e_ir_state->string_id_map = push_array(e_ir_state->arena, E_StringIDMap, 1);
   e_ir_state->string_id_map->id_slots_count = 1024;
@@ -2991,39 +2989,6 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
   e_expr_push_child(root, lhs);
   e_expr_push_child(root, rhs_bytecode);
   return root;
-}
-
-////////////////////////////////
-//~ rjf: IRified Expression Cache
-
-internal E_IRTreeAndType
-e_irtree_and_type_from_expr__cached(E_Expr *expr)
-{
-  E_IRTreeAndType result = {&e_irnode_nil};
-  {
-    U64 hash = e_hash_from_string(5381, str8_struct(&expr));
-    U64 slot_idx = hash%e_ir_state->irtree_and_type_cache_slots_count;
-    E_IRTreeAndTypeCacheNode *node = 0;
-    for(E_IRTreeAndTypeCacheNode *n = e_ir_state->irtree_and_type_cache_slots[slot_idx].first; n != 0; n = n->next)
-    {
-      if(n->expr == expr)
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == 0)
-    {
-      node = push_array(e_ir_state->arena, E_IRTreeAndTypeCacheNode, 1);
-      SLLQueuePush(e_ir_state->irtree_and_type_cache_slots[slot_idx].first, e_ir_state->irtree_and_type_cache_slots[slot_idx].last, node);
-      node->irtree_and_type = e_irtree_and_type_from_expr(e_ir_state->arena, expr);
-    }
-    if(node != 0)
-    {
-      result = node->irtree_and_type;
-    }
-  }
-  return result;
 }
 
 ////////////////////////////////

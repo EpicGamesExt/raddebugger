@@ -13892,7 +13892,7 @@ rd_frame(void)
       {
         RD_Cfg *watch = n->v;
         String8 expr = rd_expr_from_cfg(watch);
-        E_Parse parse = e_parse_expr_from_text__cached(expr);
+        E_Parse parse = e_parse_expr_from_text(scratch.arena, expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
           for(E_Expr *expr = parse.exprs.first; expr != &e_expr_nil; expr = expr->next)

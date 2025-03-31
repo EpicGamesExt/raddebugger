@@ -190,31 +190,12 @@ struct E_ParseCtx
 ////////////////////////////////
 //~ rjf: Parse State (stateful thread-local caching mechanisms, not provided by user)
 
-typedef struct E_ParseCacheNode E_ParseCacheNode;
-struct E_ParseCacheNode
-{
-  E_ParseCacheNode *next;
-  String8 string;
-  E_Parse parse;
-};
-
-typedef struct E_ParseCacheSlot E_ParseCacheSlot;
-struct E_ParseCacheSlot
-{
-  E_ParseCacheNode *first;
-  E_ParseCacheNode *last;
-};
-
 typedef struct E_ParseState E_ParseState;
 struct E_ParseState
 {
   Arena *arena;
   U64 arena_eval_start_pos;
   E_ParseCtx *ctx;
-  
-  // rjf: string -> parse cache
-  E_ParseCacheSlot *parse_cache_slots;
-  U64 parse_cache_slots_count;
 };
 
 ////////////////////////////////
@@ -296,6 +277,5 @@ internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_Tok
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence, U64 max_chain_count);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Parse e_parse_expr_from_text(Arena *arena, String8 text);
-internal E_Parse e_parse_expr_from_text__cached(String8 text);
 
 #endif // EVAL_PARSE_H

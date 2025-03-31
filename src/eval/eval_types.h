@@ -184,7 +184,7 @@ struct E_ConsTypeParams
   E_EnumVal *enum_vals;
 };
 
-typedef struct E_ConsTypeNode  E_ConsTypeNode;
+typedef struct E_ConsTypeNode E_ConsTypeNode;
 struct E_ConsTypeNode
 {
   E_ConsTypeNode *key_next;
