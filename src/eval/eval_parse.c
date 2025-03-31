@@ -633,6 +633,10 @@ e_select_parse_ctx(E_ParseCtx *ctx)
     e_parse_state->arena_eval_start_pos = arena_pos(arena);
   }
   arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
+  if(ctx->regs_map == 0)      { ctx->regs_map = &e_string2num_map_nil; }
+  if(ctx->reg_alias_map == 0) { ctx->reg_alias_map = &e_string2num_map_nil; }
+  if(ctx->locals_map == 0)    { ctx->locals_map = &e_string2num_map_nil; }
+  if(ctx->member_map == 0)    { ctx->member_map = &e_string2num_map_nil; }
   e_parse_state->ctx = ctx;
 }
 
@@ -1498,43 +1502,46 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                     arch = module->arch;
                     U64 all_location_data_size = 0;
                     U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
-                    loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
-                    switch(loc_kind)
+                    if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
                     {
-                      default:{mapped_identifier = 0;}break;
-                      case RDI_LocationKind_ValBytecodeStream: goto bytecode_stream;
-                      case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
-                      bytecode_stream:;
+                      loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
+                      switch(loc_kind)
                       {
-                        U64 bytecode_size = 0;
-                        U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
-                        U64 off_opl = all_location_data_size;
-                        for(U64 off = off_first, next_off = off_opl;
-                            off < all_location_data_size;
-                            off = next_off)
+                        default:{mapped_identifier = 0;}break;
+                        case RDI_LocationKind_ValBytecodeStream: goto bytecode_stream;
+                        case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
+                        bytecode_stream:;
                         {
-                          next_off = off_opl;
-                          U8 op = all_location_data[off];
-                          if(op == 0)
+                          U64 bytecode_size = 0;
+                          U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
+                          U64 off_opl = all_location_data_size;
+                          for(U64 off = off_first, next_off = off_opl;
+                              off < all_location_data_size;
+                              off = next_off)
                           {
-                            break;
+                            next_off = off_opl;
+                            U8 op = all_location_data[off];
+                            if(op == 0)
+                            {
+                              break;
+                            }
+                            U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+                            U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+                            bytecode_size += (1 + p_size);
+                            next_off = (off + 1 + p_size);
                           }
-                          U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-                          U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                          bytecode_size += (1 + p_size);
-                          next_off = (off + 1 + p_size);
-                        }
-                        loc_bytecode = str8(all_location_data + off_first, bytecode_size);
-                      }break;
-                      case RDI_LocationKind_AddrRegPlusU16:
-                      case RDI_LocationKind_AddrAddrRegPlusU16:
-                      {
-                        MemoryCopy(&loc_reg_u16, (all_location_data + block->location_data_off), sizeof(loc_reg_u16));
-                      }break;
-                      case RDI_LocationKind_ValReg:
-                      {
-                        MemoryCopy(&loc_reg, (all_location_data + block->location_data_off), sizeof(loc_reg));
-                      }break;
+                          loc_bytecode = str8(all_location_data + off_first, bytecode_size);
+                        }break;
+                        case RDI_LocationKind_AddrRegPlusU16:
+                        case RDI_LocationKind_AddrAddrRegPlusU16:
+                        {
+                          MemoryCopy(&loc_reg_u16, (all_location_data + block->location_data_off), sizeof(loc_reg_u16));
+                        }break;
+                        case RDI_LocationKind_ValReg:
+                        {
+                          MemoryCopy(&loc_reg, (all_location_data + block->location_data_off), sizeof(loc_reg));
+                        }break;
+                      }
                     }
                   }
                 }

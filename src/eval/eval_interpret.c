@@ -572,13 +572,13 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_EqEq:
       {
-        B32 result = MemoryMatchArray(svals[0].u512, svals[1].u512);
+        B32 result = MemoryMatchArray(svals[0].u512.u64, svals[1].u512.u64);
         nval.u64 = !!result;
       }break;
       
       case RDI_EvalOp_NtEq:
       {
-        B32 result = MemoryMatchArray(svals[0].u512, svals[1].u512);
+        B32 result = MemoryMatchArray(svals[0].u512.u64, svals[1].u512.u64);
         nval.u64 = !result;
       }break;
       
@@ -813,7 +813,7 @@ e_interpret(String8 bytecode)
         if(offset + bytes_to_read <= sizeof(E_Value))
         {
           E_Value src_val = svals[1];
-          MemoryCopy(&nval.u512[0], (U8 *)(&src_val.u512[0]) + offset, bytes_to_read);
+          MemoryCopy(&nval.u512.u64[0], (U8 *)(&src_val.u512.u64[0]) + offset, bytes_to_read);
         }
       }break;
       

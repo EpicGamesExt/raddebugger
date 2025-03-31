@@ -42,8 +42,8 @@ struct E_MsgList
 typedef union E_Value E_Value;
 union E_Value
 {
-  U64 u512[8];
-  U64 u256[4];
+  U512 u512;
+  U256 u256;
   U128 u128;
   U64 u64;
   U32 u32;

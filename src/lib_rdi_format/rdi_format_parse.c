@@ -834,4 +834,3 @@ rdi_size_from_bytecode_stream(RDI_U8 *ptr, RDI_U8 *opl)
   }
   return bytecode_size;
 }
-

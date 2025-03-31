@@ -382,10 +382,32 @@ typedef S64      B64;
 typedef float    F32;
 typedef double   F64;
 typedef void VoidProc(void);
-typedef struct U128 U128;
-struct U128
+typedef union U128 U128;
+union U128
 {
+  U8 u8[16];
+  U16 u16[8];
+  U32 u32[4];
   U64 u64[2];
+};
+typedef union U256 U256;
+union U256
+{
+  U8 u8[32];
+  U16 u16[16];
+  U32 u32[8];
+  U64 u64[4];
+  U128 u128[2];
+};
+typedef union U512 U512;
+union U512
+{
+  U8 u8[64];
+  U16 u16[32];
+  U32 u32[16];
+  U64 u64[8];
+  U128 u128[4];
+  U256 u256[2];
 };
 
 ////////////////////////////////
