@@ -14,11 +14,12 @@ internal void
 e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff)
 {
   e_interpret_ctx = ctx;
-
+  
   // compute and apply frame base
+  if(primary_rdi != 0)
   {
     E_Interpretation frame_base = { .code = ~0 };
-
+    
     RDI_Procedure *proc = rdi_procedure_from_voff(primary_rdi, ip_voff);
     for(U64 loc_block_idx = proc->frame_base_location_first; loc_block_idx < proc->frame_base_location_opl; loc_block_idx += 1)
     {
@@ -45,7 +46,7 @@ e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff
         break;
       }
     }
-
+    
     if(frame_base.code == E_InterpretationCode_Good)
     {
       *ctx->frame_base = frame_base.value.u64;

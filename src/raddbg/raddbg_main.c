@@ -27,7 +27,7 @@
 // - The hover evaluation feature has been majorly upgraded to support all
 //   features normally available in the `Watch` view. Hover evaluations now
 //   explicitly show type information, and contain a view rule column, which
-//   can be edited in an identical way as the `Watch` view.
+//   can be edited in a way identical to the `Watch` view.
 // - Added "auto tabs", which are colored differently than normal tabs. These
 //   tabs are automatically opened by the debugger when snapping to source code
 //   which is not already opened. They are automatically replaced and recycled
@@ -42,12 +42,13 @@
 //   those purposes, the `Threads` view is sufficient if not desirable, and
 //   the extra information provided by `Processes` and `Machines`, while useful
 //   in other contexts, is not useful in that common case. The `Machines` view
-//   now shows a superset of the information previosuly found in the
+//   now shows a superset of the information previously found in the
 //   `Scheduler` view.
 // - The two separate interfaces for editing threads, breakpoints, and watch
 //   pins (the right-click context menu and the dedicated tabs) have been
-//   merged.
-// - Added the ability to add a list environment strings to targets.
+//   merged. Both interfaces support exactly the same features in exactly the
+//   same way.
+// - Added the ability to add a list of environment strings to targets.
 // - The debugger releases are now packaged with a `raddbg_markup.h`
 //   single-header library which contains a number of source code markup tools
 //   which can be used in your programs. Some of these features are for direct
@@ -388,7 +389,6 @@
 //- rjf: [lib]
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
-#include "lib_raddbg_markup/raddbg_markup.h"
 
 //- rjf: [h]
 #include "base/base_inc.h"

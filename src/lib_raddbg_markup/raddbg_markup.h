@@ -99,7 +99,9 @@ extern "C"
   long long _InterlockedExchangeAdd64(long long volatile*, long long);
 #pragma intrinsic(_InterlockedCompareExchange64)
 #pragma intrinsic(_InterlockedExchangeAdd64)
+#if RADDBG_MARKUP_DEFAULT_VSNPRINTF
   int RADDBG_MARKUP_VSNPRINTF(char * const, unsigned long long const, const char * const, va_list);
+#endif
 #if defined(__cplusplus)
 }
 #endif
