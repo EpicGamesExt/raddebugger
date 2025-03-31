@@ -2383,6 +2383,11 @@ recursion_stepping_tests(void){
 static void
 debug_string_tests(void)
 {
+  for(int i = 0; i < 100; i += 1)
+  {
+    printf("here is a number: %i\n", i);
+    fflush(stdout);
+  }
 #if _WIN32
   for(int i = 0; i < 100; i += 1)
   {
