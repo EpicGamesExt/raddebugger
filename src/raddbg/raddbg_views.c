@@ -1468,7 +1468,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         Task *last_task = first_task;
         for(Task *t = first_task; t != 0; t = t->next)
         {
-          if(t->expr->kind == E_ExprKind_LeafIdent && str8_match(t->expr->string, str8_lit("$expr"), 0))
+          if(t->expr->kind == E_ExprKind_LeafIdentifier && str8_match(t->expr->string, str8_lit("$expr"), 0))
           {
             E_Expr *original_expr_ref = e_expr_ref(scratch.arena, row->expr);
             if(t->parent != &e_expr_nil)

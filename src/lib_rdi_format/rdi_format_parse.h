@@ -132,6 +132,7 @@ static union
   RDI_Local local;
 }
 rdi_nil_element_union = {0};
+static RDI_Parsed rdi_parsed_nil = {0};
 
 ////////////////////////////////
 //~ Top-Level Parsing API

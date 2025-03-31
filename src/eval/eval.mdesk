@@ -125,7 +125,7 @@ E_ExprKindTable:
   { LeafU64              Null                0        "U64"               ""        ""        "" }
   { LeafF64              Null                0        "F64"               ""        ""        "" }
   { LeafF32              Null                0        "F32"               ""        ""        "" }
-  { LeafIdent            Null                0        "leaf_ident"        ""        ""        "" }
+  { LeafIdentifier       Null                0        "leaf_identifier"   ""        ""        "" }
   { LeafOffset           Null                0        "leaf_offset"       ""        ""        "" }
   { LeafValue            Null                0        "leaf_value"        ""        ""        "" }
   { LeafFilePath         Null                0        "leaf_filepath"     ""        ""        "" }

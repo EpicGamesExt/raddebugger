@@ -4624,7 +4624,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];
-  eval_modules_primary->rdi = &di_rdi_parsed_nil;
+  eval_modules_primary->rdi = &rdi_parsed_nil;
   eval_modules_primary->vaddr_range = r1u64(0, max_U64);
   {
     U64 eval_module_idx = 0;

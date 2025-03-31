@@ -532,7 +532,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
   }
   
   //- rjf: get dbg info
-  RDI_Parsed *rdi = &di_rdi_parsed_nil;
+  RDI_Parsed *rdi = &rdi_parsed_nil;
   if(got_task && params.dbgi_key.path.size != 0)
   {
     rdi = di_rdi_from_key(di_scope, &params.dbgi_key, max_U64);
@@ -573,7 +573,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
           // rjf: push strings derived from voff -> line info
           if(params.style_flags & (DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines))
           {
-            if(rdi != &di_rdi_parsed_nil)
+            if(rdi != &rdi_parsed_nil)
             {
               U64 voff = (params.vaddr+off) - params.base_vaddr;
               U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
@@ -655,7 +655,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
           String8 addr_part = {0};
           if(params.style_flags & DASM_StyleFlag_Addresses)
           {
-            addr_part = push_str8f(scratch.arena, "%s0x%016I64x  ", rdi != &di_rdi_parsed_nil ? "  " : "", params.vaddr+off);
+            addr_part = push_str8f(scratch.arena, "%s0x%016I64x  ", rdi != &rdi_parsed_nil ? "  " : "", params.vaddr+off);
           }
           String8 code_bytes_part = {0};
           if(params.style_flags & DASM_StyleFlag_CodeBytes)
@@ -677,7 +677,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
             code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
           }
           String8 symbol_part = {0};
-          if(inst.jump_dest_vaddr != 0 && rdi != &di_rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
+          if(inst.jump_dest_vaddr != 0 && rdi != &rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
           {
             RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.jump_dest_vaddr-params.base_vaddr);
             if(scope_idx != 0)
@@ -752,7 +752,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
       {
         n->info_arena = info_arena;
         MemoryCopyStruct(&n->info, &info);
-        if(rdi != &di_rdi_parsed_nil && params.style_flags & (DASM_StyleFlag_SourceLines|DASM_StyleFlag_SourceFilesNames))
+        if(rdi != &rdi_parsed_nil && params.style_flags & (DASM_StyleFlag_SourceLines|DASM_StyleFlag_SourceFilesNames))
         {
           n->change_gen = change_gen;
         }

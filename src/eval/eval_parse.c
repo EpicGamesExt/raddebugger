@@ -637,6 +637,7 @@ e_select_parse_ctx(E_ParseCtx *ctx)
   if(ctx->reg_alias_map == 0) { ctx->reg_alias_map = &e_string2num_map_nil; }
   if(ctx->locals_map == 0)    { ctx->locals_map = &e_string2num_map_nil; }
   if(ctx->member_map == 0)    { ctx->member_map = &e_string2num_map_nil; }
+  if(ctx->primary_module == 0){ ctx->primary_module = &e_module_nil; }
   e_parse_state->ctx = ctx;
 }
 
@@ -855,7 +856,7 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     }break;
     case E_ExprKind_LeafBytecode:
     case E_ExprKind_LeafMember:
-    case E_ExprKind_LeafIdent:
+    case E_ExprKind_LeafIdentifier:
     {
       str8_list_push(arena, out, expr->string);
     }break;
@@ -1058,7 +1059,7 @@ e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String2ExprMap *map,
     {
       E_Expr *exprl = expr->first;
       E_Expr *exprr = exprl->next;
-      if(exprl->kind == E_ExprKind_LeafIdent)
+      if(exprl->kind == E_ExprKind_LeafIdentifier)
       {
         e_string2expr_map_insert(arena, map, exprl->string, exprr);
       }
@@ -1869,7 +1870,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             //- rjf: map failure -> attach as leaf identifier, to be resolved later
             if(!mapped_identifier)
             {
-              atom = e_push_expr(arena, E_ExprKind_LeafIdent, token_string.str);
+              atom = e_push_expr(arena, E_ExprKind_LeafIdentifier, token_string.str);
               atom->string = token_string;
               it += 1;
             }

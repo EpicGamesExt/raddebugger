@@ -3376,7 +3376,7 @@ rd_query_from_eval_string(Arena *arena, String8 string)
   {
     Temp scratch = scratch_begin(&arena, 1);
     E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
-    if(expr->kind == E_ExprKind_LeafIdent &&
+    if(expr->kind == E_ExprKind_LeafIdentifier &&
        str8_match(expr->qualifier, str8_lit("query"), 0))
     {
       result = expr->string;
@@ -6036,7 +6036,7 @@ rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag)
   // rjf: try implicit non-define arguments
   for(E_Expr *param = tag->first->next; param != &e_expr_nil && !got_fmt; param = param->next)
   {
-    if(param->kind == E_ExprKind_LeafIdent)
+    if(param->kind == E_ExprKind_LeafIdentifier)
     {
       for EachEnumVal(R_Tex2DFormat, f)
       {
@@ -10747,7 +10747,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
             }break;
             case E_Mode_Value:
             {
-              MemoryCopy(string_buffer, &eval.value.u512[0], Min(string_buffer_size, sizeof(eval.value)));
+              MemoryCopy(string_buffer, &eval.value.u512.u64[0], Min(string_buffer_size, sizeof(eval.value)));
             }break;
           }
           String8 string = {0};
@@ -13449,7 +13449,7 @@ rd_frame(void)
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &eval_modules[0];
-    eval_modules_primary->rdi = &di_rdi_parsed_nil;
+    eval_modules_primary->rdi = &rdi_parsed_nil;
     eval_modules_primary->vaddr_range = r1u64(0, max_U64);
     DI_Key primary_dbgi_key = {0};
     ProfScope("produce all eval modules")
@@ -15640,7 +15640,7 @@ Z(getting_started)
               // rjf: snap to resolved line
               B32 missing_rip   = (rip_vaddr == 0);
               B32 dbgi_missing  = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
-              B32 dbgi_pending  = !dbgi_missing && rdi == &di_rdi_parsed_nil;
+              B32 dbgi_pending  = !dbgi_missing && rdi == &rdi_parsed_nil;
               B32 has_line_info = (line.voff_range.max != 0);
               B32 has_module    = (module != &ctrl_entity_nil);
               B32 has_dbg_info  = has_module && !dbgi_missing;
@@ -17312,7 +17312,7 @@ Z(getting_started)
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)
           {
-            if(t->expr->kind == E_ExprKind_LeafIdent)
+            if(t->expr->kind == E_ExprKind_LeafIdentifier)
             {
               E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, t->expr->string);
               if(macro_expr != &e_expr_nil)

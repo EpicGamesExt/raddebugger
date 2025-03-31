@@ -379,7 +379,6 @@ struct DI_Shared
 
 global DI_Shared *di_shared = 0;
 thread_static DI_TCTX *di_tctx = 0;
-global RDI_Parsed di_rdi_parsed_nil = {0};
 
 ////////////////////////////////
 //~ rjf: Basic Helpers

@@ -501,7 +501,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
       DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
       RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
-      if(rdi != &di_rdi_parsed_nil)
+      if(rdi != &rdi_parsed_nil)
       {
         RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
         String8 name = {0};

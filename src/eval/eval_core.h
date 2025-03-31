@@ -143,6 +143,11 @@ struct E_Module
 #include "eval/generated/eval.meta.h"
 
 ////////////////////////////////
+//~ rjf: Globals
+
+global read_only E_Module e_module_nil = {&rdi_parsed_nil};
+
+////////////////////////////////
 //~ rjf: Basic Helper Functions
 
 internal U64 e_hash_from_string(U64 seed, String8 string);

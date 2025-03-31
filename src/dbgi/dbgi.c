@@ -582,7 +582,7 @@ internal RDI_Parsed *
 di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
 {
   ProfBeginFunction();
-  RDI_Parsed *result = &di_rdi_parsed_nil;
+  RDI_Parsed *result = &rdi_parsed_nil;
   if(key->path.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
@@ -1086,7 +1086,7 @@ ASYNC_WORK_DEF(di_parse_work)
   ////////////////////////////
   //- rjf: do initial parse of rdi
   //
-  RDI_Parsed rdi_parsed_maybe_compressed = di_rdi_parsed_nil;
+  RDI_Parsed rdi_parsed_maybe_compressed = rdi_parsed_nil;
   {
     RDI_ParseStatus parse_status = rdi_parse((U8 *)file_base, file_props.size, &rdi_parsed_maybe_compressed);
     (void)parse_status;

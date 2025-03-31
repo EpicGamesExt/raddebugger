@@ -41,6 +41,7 @@ entry_point(CmdLine *cmdline)
     str8_lit("123"),
     str8_lit("1 + 2"),
     str8_lit("foo"),
+    str8_lit("foo(bar)"),
   };
   for EachElement(idx, exprs)
   {
@@ -81,6 +82,10 @@ entry_point(CmdLine *cmdline)
           case E_ExprKind_LeafU64:
           {
             raddbg_log(" (%I64u)", expr->value.u64);
+          }break;
+          case E_ExprKind_LeafIdentifier:
+          {
+            raddbg_log(" (`%S`)", expr->string);
           }break;
         }
         raddbg_log("\n");
@@ -153,5 +158,6 @@ entry_point(CmdLine *cmdline)
       }
     }
     
+    raddbg_log("\n");
   }
 }

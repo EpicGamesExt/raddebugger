@@ -811,7 +811,7 @@ d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
       RDI_NameMapKind_GlobalVariables,
       RDI_NameMapKind_Procedures,
     };
-    if(rdi != &di_rdi_parsed_nil)
+    if(rdi != &rdi_parsed_nil)
     {
       for(U64 name_map_kind_idx = 0;
           name_map_kind_idx < ArrayCount(name_map_kinds);
@@ -1038,7 +1038,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
     // rjf: file_path_normalized * rdi -> src_id
     B32 good_src_id = 0;
     U32 src_id = 0;
-    if(rdi != &di_rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
+    if(rdi != &rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
     {
       RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
       RDI_ParsedNameMap map = {0};
@@ -1136,7 +1136,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
       U32 src_id = 0;
-      if(rdi != &di_rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
+      if(rdi != &rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
       {
         RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
         RDI_ParsedNameMap map = {0};

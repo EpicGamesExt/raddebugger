@@ -75,6 +75,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
     e_ir_state->arena_eval_start_pos = arena_pos(arena);
   }
   arena_pop_to(e_ir_state->arena, e_ir_state->arena_eval_start_pos);
+  if(ctx->macro_map == 0) {ctx->macro_map = &e_string2expr_map_nil;}
   e_ir_state->ctx = ctx;
   e_ir_state->used_tag_map       = push_array(e_ir_state->arena, E_UsedTagMap, 1);
   e_ir_state->used_tag_map->slots_count = 64;
@@ -1230,7 +1231,7 @@ E_IRGEN_FUNCTION_DEF(wrap)
     Task *last_task = first_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
-      if(t->expr->kind == E_ExprKind_LeafIdent && str8_match(t->expr->string, str8_lit("$expr"), 0))
+      if(t->expr->kind == E_ExprKind_LeafIdentifier && str8_match(t->expr->string, str8_lit("$expr"), 0))
       {
         E_Expr *original_expr_ref = e_expr_ref(arena, expr);
         if(t->parent != &e_expr_nil)
@@ -2530,7 +2531,7 @@ E_IRGEN_FUNCTION_DEF(default)
     }break;
     
     //- rjf: leaf identifiers
-    case E_ExprKind_LeafIdent:
+    case E_ExprKind_LeafIdentifier:
     {
       E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, expr->string);
       if(macro_expr == &e_expr_nil)
@@ -2618,7 +2619,7 @@ E_IRGEN_FUNCTION_DEF(default)
       E_Expr *lhs = expr->first;
       E_Expr *rhs = lhs->next;
       result = e_irtree_and_type_from_expr(arena, rhs);
-      if(lhs->kind != E_ExprKind_LeafIdent)
+      if(lhs->kind != E_ExprKind_LeafIdentifier)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
       }
