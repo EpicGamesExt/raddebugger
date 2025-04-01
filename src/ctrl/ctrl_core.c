@@ -3714,7 +3714,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         switch(file_header.machine)
         {
           default:{}break;
-          case COFF_Machine_X86:
+          case COFF_MachineType_X86:
           {
             PE_TLSHeader32 tls_header32 = {0};
             dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header32);
@@ -3725,7 +3725,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
             tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
             tls_header.characteristics   = (U64)tls_header32.characteristics;
           }break;
-          case COFF_Machine_X64:
+          case COFF_MachineType_X64:
           {
             dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
           }break;

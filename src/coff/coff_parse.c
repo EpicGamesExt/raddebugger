@@ -7,7 +7,7 @@ coff_is_big_obj(String8 raw_coff)
   B32 is_big_obj = 0;
   if (raw_coff.size >= sizeof(COFF_BigObjHeader)) {
     COFF_BigObjHeader *file_header32 = (COFF_BigObjHeader*)(raw_coff.str);
-    is_big_obj = file_header32->sig1 == COFF_Machine_Unknown && 
+    is_big_obj = file_header32->sig1 == COFF_MachineType_Unknown && 
                  file_header32->sig2 == max_U16 &&
                  file_header32->version >= 2 &&
                  MemoryCompare(file_header32->magic, g_coff_big_header_magic, sizeof(file_header32->magic)) == 0;
@@ -26,19 +26,19 @@ coff_is_obj(String8 raw_coff)
     // validate machine
     B32 is_machine_type_valid = 0;
     switch (header->machine) {
-      case COFF_Machine_Unknown:
-      case COFF_Machine_X86:    case COFF_Machine_X64:
-      case COFF_Machine_Am33:   case COFF_Machine_Arm:
-      case COFF_Machine_Arm64:  case COFF_Machine_ArmNt:
-      case COFF_Machine_Ebc:    case COFF_Machine_Ia64:
-      case COFF_Machine_M32R:   case COFF_Machine_Mips16:
-      case COFF_Machine_MipsFpu:case COFF_Machine_MipsFpu16:
-      case COFF_Machine_PowerPc:case COFF_Machine_PowerPcFp:
-      case COFF_Machine_R4000:  case COFF_Machine_RiscV32:
-      case COFF_Machine_RiscV64:case COFF_Machine_RiscV128:
-      case COFF_Machine_Sh3:    case COFF_Machine_Sh3Dsp:
-      case COFF_Machine_Sh4:    case COFF_Machine_Sh5:
-      case COFF_Machine_Thumb:  case COFF_Machine_WceMipsV2:
+      case COFF_MachineType_Unknown:
+      case COFF_MachineType_X86:    case COFF_MachineType_X64:
+      case COFF_MachineType_Am33:   case COFF_MachineType_Arm:
+      case COFF_MachineType_Arm64:  case COFF_MachineType_ArmNt:
+      case COFF_MachineType_Ebc:    case COFF_MachineType_Ia64:
+      case COFF_MachineType_M32R:   case COFF_MachineType_Mips16:
+      case COFF_MachineType_MipsFpu:case COFF_MachineType_MipsFpu16:
+      case COFF_MachineType_PowerPc:case COFF_MachineType_PowerPcFp:
+      case COFF_MachineType_R4000:  case COFF_MachineType_RiscV32:
+      case COFF_MachineType_RiscV64:case COFF_MachineType_RiscV128:
+      case COFF_MachineType_Sh3:    case COFF_MachineType_Sh3Dsp:
+      case COFF_MachineType_Sh4:    case COFF_MachineType_Sh5:
+      case COFF_MachineType_Thumb:  case COFF_MachineType_WceMipsV2:
       {
         is_machine_type_valid = 1;
       }break;
@@ -499,7 +499,7 @@ coff_is_import(String8 raw_archive_member)
   if (raw_archive_member.size >= sizeof(U16)*2) {
     U16 *sig1 = (U16*)raw_archive_member.str;
     U16 *sig2 = sig1 + 1;
-    is_import = *sig1 == COFF_Machine_Unknown && *sig2 == 0xffff;
+    is_import = *sig1 == COFF_MachineType_Unknown && *sig2 == 0xffff;
   }
   return is_import;
 }

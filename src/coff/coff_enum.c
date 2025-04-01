@@ -21,31 +21,31 @@ read_only struct
   String8          string;
   COFF_MachineType machine;
 } g_coff_machine_map[] = {
-  { str8_lit_comp(""),          COFF_Machine_Unknown   },
-  { str8_lit_comp("X86"),       COFF_Machine_X86       },
-  { str8_lit_comp("Amd64"),     COFF_Machine_X64       },
-  { str8_lit_comp("X64"),       COFF_Machine_X64       },
-  { str8_lit_comp("Am33"),      COFF_Machine_Am33      },
-  { str8_lit_comp("Arm"),       COFF_Machine_Arm       },
-  { str8_lit_comp("Arm64"),     COFF_Machine_Arm64     },
-  { str8_lit_comp("ArmNt"),     COFF_Machine_ArmNt     },
-  { str8_lit_comp("Ebc"),       COFF_Machine_Ebc       },
-  { str8_lit_comp("Ia64"),      COFF_Machine_Ia64      },
-  { str8_lit_comp("M32r"),      COFF_Machine_M32R      },
-  { str8_lit_comp("Mips16"),    COFF_Machine_Mips16    },
-  { str8_lit_comp("MipsFpu"),   COFF_Machine_MipsFpu   },
-  { str8_lit_comp("MipsFpu16"), COFF_Machine_MipsFpu16 },
-  { str8_lit_comp("PowerPc"),   COFF_Machine_PowerPc   },
-  { str8_lit_comp("PowerPcFp"), COFF_Machine_PowerPcFp },
-  { str8_lit_comp("R4000"),     COFF_Machine_R4000     },
-  { str8_lit_comp("RiscV32"),   COFF_Machine_RiscV32   },
-  { str8_lit_comp("RiscV64"),   COFF_Machine_RiscV64   },
-  { str8_lit_comp("Sh3"),       COFF_Machine_Sh3       },
-  { str8_lit_comp("Sh3Dsp"),    COFF_Machine_Sh3Dsp    },
-  { str8_lit_comp("Sh4"),       COFF_Machine_Sh4       },
-  { str8_lit_comp("Sh5"),       COFF_Machine_Sh5       },
-  { str8_lit_comp("Thumb"),     COFF_Machine_Thumb     },
-  { str8_lit_comp("WceMipsV2"), COFF_Machine_WceMipsV2 },
+  { str8_lit_comp(""),          COFF_MachineType_Unknown   },
+  { str8_lit_comp("X86"),       COFF_MachineType_X86       },
+  { str8_lit_comp("Amd64"),     COFF_MachineType_X64       },
+  { str8_lit_comp("X64"),       COFF_MachineType_X64       },
+  { str8_lit_comp("Am33"),      COFF_MachineType_Am33      },
+  { str8_lit_comp("Arm"),       COFF_MachineType_Arm       },
+  { str8_lit_comp("Arm64"),     COFF_MachineType_Arm64     },
+  { str8_lit_comp("ArmNt"),     COFF_MachineType_ArmNt     },
+  { str8_lit_comp("Ebc"),       COFF_MachineType_Ebc       },
+  { str8_lit_comp("Ia64"),      COFF_MachineType_Ia64      },
+  { str8_lit_comp("M32r"),      COFF_MachineType_M32R      },
+  { str8_lit_comp("Mips16"),    COFF_MachineType_Mips16    },
+  { str8_lit_comp("MipsFpu"),   COFF_MachineType_MipsFpu   },
+  { str8_lit_comp("MipsFpu16"), COFF_MachineType_MipsFpu16 },
+  { str8_lit_comp("PowerPc"),   COFF_MachineType_PowerPc   },
+  { str8_lit_comp("PowerPcFp"), COFF_MachineType_PowerPcFp },
+  { str8_lit_comp("R4000"),     COFF_MachineType_R4000     },
+  { str8_lit_comp("RiscV32"),   COFF_MachineType_RiscV32   },
+  { str8_lit_comp("RiscV64"),   COFF_MachineType_RiscV64   },
+  { str8_lit_comp("Sh3"),       COFF_MachineType_Sh3       },
+  { str8_lit_comp("Sh3Dsp"),    COFF_MachineType_Sh3Dsp    },
+  { str8_lit_comp("Sh4"),       COFF_MachineType_Sh4       },
+  { str8_lit_comp("Sh5"),       COFF_MachineType_Sh5       },
+  { str8_lit_comp("Thumb"),     COFF_MachineType_Thumb     },
+  { str8_lit_comp("WceMipsV2"), COFF_MachineType_WceMipsV2 },
 };
 
 read_only static struct {
@@ -446,10 +446,10 @@ internal String8
 coff_string_from_reloc(COFF_MachineType machine, COFF_RelocType x)
 {
   switch (machine) {
-    case COFF_Machine_X86:   return coff_string_from_reloc_x86(x);
-    case COFF_Machine_X64:   return coff_string_from_reloc_x64(x);
-    case COFF_Machine_Arm:   return coff_string_from_reloc_arm(x);
-    case COFF_Machine_Arm64: return coff_string_from_reloc_arm64(x);
+    case COFF_MachineType_X86:   return coff_string_from_reloc_x86(x);
+    case COFF_MachineType_X64:   return coff_string_from_reloc_x64(x);
+    case COFF_MachineType_Arm:   return coff_string_from_reloc_arm(x);
+    case COFF_MachineType_Arm64: return coff_string_from_reloc_arm64(x);
   }
   return str8_zero();
 }
@@ -462,7 +462,7 @@ coff_machine_from_string(String8 string)
       return g_coff_machine_map[i].machine;
     }
   }
-  return COFF_Machine_Unknown;
+  return COFF_MachineType_Unknown;
 }
 
 internal COFF_ImportType

@@ -174,8 +174,8 @@ internal U64
 coff_apply_size_from_reloc(COFF_MachineType machine, COFF_RelocType x)
 {
   switch (machine) {
-    case COFF_Machine_X64: return coff_apply_size_from_reloc_x64(x);
-    case COFF_Machine_X86: return coff_apply_size_from_reloc_x86(x);
+    case COFF_MachineType_X64: return coff_apply_size_from_reloc_x64(x);
+    case COFF_MachineType_X86: return coff_apply_size_from_reloc_x86(x);
     default: NotImplemented;
   }
   return 0;
@@ -221,7 +221,7 @@ coff_make_import_header_by_name(Arena            *arena,
   flags |= COFF_ImportBy_Name << COFF_ImportHeader_ImportByShift;
 
   COFF_ImportHeader header = {0};
-  header.sig1              = COFF_Machine_Unknown;
+  header.sig1              = COFF_MachineType_Unknown;
   header.sig2              = max_U16;
   header.version           = 0;
   header.machine           = machine;
@@ -264,7 +264,7 @@ coff_make_import_header_by_ordinal(Arena             *arena,
   flags |= COFF_ImportBy_Ordinal << COFF_ImportHeader_ImportByShift;
 
   COFF_ImportHeader header = {0};
-  header.sig1              = COFF_Machine_Unknown;
+  header.sig1              = COFF_MachineType_Unknown;
   header.sig2              = max_U16;
   header.version           = 0;
   header.machine           = machine;
@@ -298,8 +298,8 @@ coff_word_size_from_machine(COFF_MachineType machine)
 {
   U64 result = 0;
   switch (machine) {
-  case COFF_Machine_X64: result = 8; break;
-  case COFF_Machine_X86: result = 4; break;
+  case COFF_MachineType_X64: result = 8; break;
+  case COFF_MachineType_X86: result = 4; break;
   }
   return result;
 }
@@ -332,11 +332,11 @@ arch_from_coff_machine(COFF_MachineType machine)
 {
   Arch result = Arch_Null;
   switch (machine) {
-    case COFF_Machine_Unknown: break;
-    case COFF_Machine_X86:   result = Arch_x86;   break;
-    case COFF_Machine_X64:   result = Arch_x64;   break;
-    case COFF_Machine_Arm:   result = Arch_arm32; break;
-    case COFF_Machine_Arm64: result = Arch_arm64; break;
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X86:   result = Arch_x86;   break;
+    case COFF_MachineType_X64:   result = Arch_x64;   break;
+    case COFF_MachineType_Arm:   result = Arch_arm32; break;
+    case COFF_MachineType_Arm64: result = Arch_arm64; break;
   }
   return result;
 }

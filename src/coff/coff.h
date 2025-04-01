@@ -47,32 +47,31 @@ enum
 typedef U16 COFF_MachineType;
 enum
 {
-  // TODO(rjf): COFF_Machine prefix -> COFF_MachineType prefix
-  COFF_Machine_Unknown    = 0x0,
-  COFF_Machine_X86        = 0x14c,
-  COFF_Machine_X64        = 0x8664,
-  COFF_Machine_Am33       = 0x1d3,
-  COFF_Machine_Arm        = 0x1c0,
-  COFF_Machine_Arm64      = 0xaa64,
-  COFF_Machine_ArmNt      = 0x1c4,
-  COFF_Machine_Ebc        = 0xebc,
-  COFF_Machine_Ia64       = 0x200,
-  COFF_Machine_M32R       = 0x9041,
-  COFF_Machine_Mips16     = 0x266,
-  COFF_Machine_MipsFpu    = 0x366,
-  COFF_Machine_MipsFpu16  = 0x466,
-  COFF_Machine_PowerPc    = 0x1f0,
-  COFF_Machine_PowerPcFp  = 0x1f1,
-  COFF_Machine_R4000      = 0x166,
-  COFF_Machine_RiscV32    = 0x5032,
-  COFF_Machine_RiscV64    = 0x5064,
-  COFF_Machine_RiscV128   = 0x5128,
-  COFF_Machine_Sh3        = 0x1a2,
-  COFF_Machine_Sh3Dsp     = 0x1a3,
-  COFF_Machine_Sh4        = 0x1a6,
-  COFF_Machine_Sh5        = 0x1a8,
-  COFF_Machine_Thumb      = 0x1c2,
-  COFF_Machine_WceMipsV2  = 0x169
+  COFF_MachineType_Unknown    = 0x0,
+  COFF_MachineType_X86        = 0x14c,
+  COFF_MachineType_X64        = 0x8664,
+  COFF_MachineType_Am33       = 0x1d3,
+  COFF_MachineType_Arm        = 0x1c0,
+  COFF_MachineType_Arm64      = 0xaa64,
+  COFF_MachineType_ArmNt      = 0x1c4,
+  COFF_MachineType_Ebc        = 0xebc,
+  COFF_MachineType_Ia64       = 0x200,
+  COFF_MachineType_M32R       = 0x9041,
+  COFF_MachineType_Mips16     = 0x266,
+  COFF_MachineType_MipsFpu    = 0x366,
+  COFF_MachineType_MipsFpu16  = 0x466,
+  COFF_MachineType_PowerPc    = 0x1f0,
+  COFF_MachineType_PowerPcFp  = 0x1f1,
+  COFF_MachineType_R4000      = 0x166,
+  COFF_MachineType_RiscV32    = 0x5032,
+  COFF_MachineType_RiscV64    = 0x5064,
+  COFF_MachineType_RiscV128   = 0x5128,
+  COFF_MachineType_Sh3        = 0x1a2,
+  COFF_MachineType_Sh3Dsp     = 0x1a3,
+  COFF_MachineType_Sh4        = 0x1a6,
+  COFF_MachineType_Sh5        = 0x1a8,
+  COFF_MachineType_Thumb      = 0x1c2,
+  COFF_MachineType_WceMipsV2  = 0x169
 };
 
 typedef struct COFF_FileHeader
@@ -88,7 +87,7 @@ typedef struct COFF_FileHeader
 
 typedef struct COFF_BigObjHeader
 {
-  U16              sig1;              // COFF_Machine_Unknown
+  U16              sig1;              // COFF_MachineType_Unknown
   U16              sig2;              // max_U16
   U16              version;           // 2
   COFF_MachineType machine;
@@ -548,7 +547,7 @@ enum
 
 typedef struct COFF_ImportHeader
 {
-  U16                    sig1;     // COFF_Machine_Unknown
+  U16                    sig1;     // COFF_MachineType_Unknown
   U16                    sig2;     // max_U16
   U16                    version;  // 0
   COFF_MachineType       machine;

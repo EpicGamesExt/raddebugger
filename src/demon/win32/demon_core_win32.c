@@ -495,12 +495,12 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
     Arch arch = Arch_Null;
     switch(coff_header.machine)
     {
-      case COFF_Machine_X86:
+      case COFF_MachineType_X86:
       {
         arch = Arch_x86;
         optional_size_off = OffsetOf(PE_OptionalHeader32, sizeof_image);
       }break;
-      case COFF_Machine_X64:
+      case COFF_MachineType_X64:
       {
         arch = Arch_x64;
         optional_size_off = OffsetOf(PE_OptionalHeader32Plus, sizeof_image);

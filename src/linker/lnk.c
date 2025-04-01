@@ -1283,7 +1283,7 @@ lnk_push_linker_symbols(LNK_SymbolTable *symtab, COFF_MachineType machine)
   LNK_Symbol *image_base = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("__ImageBase"), LNK_DefinedSymbolVisibility_Extern, 0, g_null_chunk_ptr, 0, COFF_ComdatSelect_Any, 0);
   
   { // load config symbols
-    if (machine == COFF_Machine_X86) {
+    if (machine == COFF_MachineType_X86) {
       lnk_symbol_table_push_defined_chunk(symtab, str8_lit(LNK_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Extern, 0, g_null_chunk_ptr, 0, COFF_ComdatSelect_NoDuplicates, 0);
       lnk_symbol_table_push_defined_chunk(symtab, str8_lit(LNK_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Extern, 0, g_null_chunk_ptr, 0, COFF_ComdatSelect_NoDuplicates, 0);
     }
@@ -1604,7 +1604,7 @@ lnk_build_guard_tables(TP_Context       *tp,
   }
   
   // TODO: emit table for SEH on X86
-  if (machine == COFF_Machine_X86) {
+  if (machine == COFF_MachineType_X86) {
     lnk_not_implemented("__safe_se_handler_table");
     lnk_not_implemented("__safe_se_handler_count");
   }
@@ -2372,7 +2372,7 @@ lnk_build_win32_image_header(LNK_SymbolTable     *symtab,
   lnk_build_pe_magic(symtab, header_sect, pe_magic_chunk);
   lnk_build_coff_file_header(symtab, header_sect, coff_file_header_chunk, config->machine, config->time_stamp, config->file_characteristics);
   switch (config->machine) {
-    case COFF_Machine_X64: {
+    case COFF_MachineType_X64: {
       lnk_build_pe_optional_header_x64(symtab,
                                        header_sect,
                                        pe_optional_chunk,
@@ -3404,8 +3404,8 @@ lnk_run(int argc, char **argv)
         
         String8 delay_helper_name = str8_zero();
         switch (config->machine) {
-          case COFF_Machine_X86: delay_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
-          case COFF_Machine_X64: delay_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
+          case COFF_MachineType_X86: delay_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
+          case COFF_MachineType_X64: delay_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
           default: NotImplemented;
         }
         
@@ -3464,7 +3464,7 @@ lnk_run(int argc, char **argv)
           
           if (is_delayed) {
             if (!imptab_delayed) {
-              Assert(config->machine != COFF_Machine_Unknown);
+              Assert(config->machine != COFF_MachineType_Unknown);
               B32 is_unloadable = !!(config->flags & LNK_ConfigFlag_DelayUnload);
               B32 is_bindable   = !!(config->flags & LNK_ConfigFlag_DelayBind);
               imptab_delayed = lnk_import_table_alloc_delayed(st, symtab, config->machine, is_unloadable, is_bindable); 
@@ -3479,7 +3479,7 @@ lnk_run(int argc, char **argv)
             }
           } else {
             if (!imptab_static) {
-              Assert(config->machine != COFF_Machine_Unknown);
+              Assert(config->machine != COFF_MachineType_Unknown);
               imptab_static = lnk_import_table_alloc_static(st, symtab, config->machine);
             }
             LNK_ImportDLL *dll = lnk_import_table_search_dll(imptab_static, import_header->dll_name);
@@ -3561,14 +3561,14 @@ lnk_run(int argc, char **argv)
           LNK_Obj *obj = &obj_node_arr.v[obj_idx].data;
           
           // derive machine from obj
-          if (config->machine == COFF_Machine_Unknown) {
+          if (config->machine == COFF_MachineType_Unknown) {
             config->machine = obj->machine;
-          } else if (config->machine != COFF_Machine_X64) {
+          } else if (config->machine != COFF_MachineType_X64) {
             lnk_error_with_loc(LNK_Error_UnsupportedMachine, obj->path, obj->lib_path, "%S machine is supported", coff_string_from_machine_type(obj->machine));
           } else {
             // is obj machine compatible? 
             if (config->machine != obj->machine &&
-                obj->machine != COFF_Machine_Unknown) { // obj with unknown machine type is compatible with any other machine type
+                obj->machine != COFF_MachineType_Unknown) { // obj with unknown machine type is compatible with any other machine type
               lnk_error_obj(LNK_Error_IncompatibleObj, obj,
                             "conflicting machine types expected %S but got %S",
                             coff_string_from_machine_type(config->machine),
@@ -3990,18 +3990,18 @@ lnk_run(int argc, char **argv)
         if (pdata_symbol) {
           String8 pdata = lnk_data_from_chunk_ref_no_pad(sect_id_map, image_data, pdata_symbol->u.defined.u.chunk->ref);
           switch (config->machine) {
-          case COFF_Machine_X86:
-          case COFF_Machine_X64: {
+          case COFF_MachineType_X86:
+          case COFF_MachineType_X64: {
             U64 count = pdata.size / sizeof(PE_IntelPdata);
             radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
           } break;
-          case COFF_Machine_Arm64:
-          case COFF_Machine_Arm: {
+          case COFF_MachineType_Arm64:
+          case COFF_MachineType_Arm: {
             AssertAlways(!"TOOD: ARM");
           } break;
-          case COFF_Machine_MipsFpu:
-          case COFF_Machine_Mips16:
-          case COFF_Machine_MipsFpu16: {
+          case COFF_MachineType_MipsFpu:
+          case COFF_MachineType_Mips16:
+          case COFF_MachineType_MipsFpu16: {
             AssertAlways(!"TODO: MIPS");
           } break;
           }

@@ -14,30 +14,30 @@ cv_arch_from_coff_machine(COFF_MachineType machine)
   CV_Arch arch = 0;
   switch(machine)
   {
-  case COFF_Machine_X64:       arch = CV_Arch_X64;    break;
-  case COFF_Machine_X86:       arch = CV_Arch_8086;   break;
-  case COFF_Machine_Am33:      arch = CV_Arch_AM33;   break;
-  case COFF_Machine_Arm:       NotImplemented;        break;
-  case COFF_Machine_Arm64:     arch = CV_Arch_ARM64;  break;
-  case COFF_Machine_ArmNt:     arch = CV_Arch_ARMNT;  break;
-  case COFF_Machine_Ebc:       arch = CV_Arch_EBC;    break;
-  case COFF_Machine_Ia64:      arch = CV_Arch_IA64;   break;
-  case COFF_Machine_M32R:      arch = CV_Arch_M32R;   break;
-  case COFF_Machine_Mips16:    arch = CV_Arch_MIPS16; break;
-  case COFF_Machine_MipsFpu:   NotImplemented;        break;
-  case COFF_Machine_MipsFpu16: NotImplemented;        break;
-  case COFF_Machine_PowerPc:   NotImplemented;        break;
-  case COFF_Machine_PowerPcFp: arch = CV_Arch_PPCFP;  break;
-  case COFF_Machine_R4000:     NotImplemented;        break;
-  case COFF_Machine_RiscV32:   NotImplemented;        break;
-  case COFF_Machine_RiscV64:   NotImplemented;        break;
-  case COFF_Machine_RiscV128:  NotImplemented;        break;
-  case COFF_Machine_Sh3:       arch = CV_Arch_SH3;    break;
-  case COFF_Machine_Sh3Dsp:    arch = CV_Arch_SH3DSP; break;
-  case COFF_Machine_Sh4:       arch = CV_Arch_SH4;    break;
-  case COFF_Machine_Sh5:       NotImplemented;        break;
-  case COFF_Machine_Thumb:     arch = CV_Arch_THUMB;  break;
-  case COFF_Machine_WceMipsV2: NotImplemented;        break;
+  case COFF_MachineType_X64:       arch = CV_Arch_X64;    break;
+  case COFF_MachineType_X86:       arch = CV_Arch_8086;   break;
+  case COFF_MachineType_Am33:      arch = CV_Arch_AM33;   break;
+  case COFF_MachineType_Arm:       NotImplemented;        break;
+  case COFF_MachineType_Arm64:     arch = CV_Arch_ARM64;  break;
+  case COFF_MachineType_ArmNt:     arch = CV_Arch_ARMNT;  break;
+  case COFF_MachineType_Ebc:       arch = CV_Arch_EBC;    break;
+  case COFF_MachineType_Ia64:      arch = CV_Arch_IA64;   break;
+  case COFF_MachineType_M32R:      arch = CV_Arch_M32R;   break;
+  case COFF_MachineType_Mips16:    arch = CV_Arch_MIPS16; break;
+  case COFF_MachineType_MipsFpu:   NotImplemented;        break;
+  case COFF_MachineType_MipsFpu16: NotImplemented;        break;
+  case COFF_MachineType_PowerPc:   NotImplemented;        break;
+  case COFF_MachineType_PowerPcFp: arch = CV_Arch_PPCFP;  break;
+  case COFF_MachineType_R4000:     NotImplemented;        break;
+  case COFF_MachineType_RiscV32:   NotImplemented;        break;
+  case COFF_MachineType_RiscV64:   NotImplemented;        break;
+  case COFF_MachineType_RiscV128:  NotImplemented;        break;
+  case COFF_MachineType_Sh3:       arch = CV_Arch_SH3;    break;
+  case COFF_MachineType_Sh3Dsp:    arch = CV_Arch_SH3DSP; break;
+  case COFF_MachineType_Sh4:       arch = CV_Arch_SH4;    break;
+  case COFF_MachineType_Sh5:       NotImplemented;        break;
+  case COFF_MachineType_Thumb:     arch = CV_Arch_THUMB;  break;
+  case COFF_MachineType_WceMipsV2: NotImplemented;        break;
   }
   return arch;
 }

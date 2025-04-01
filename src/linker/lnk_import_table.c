@@ -345,7 +345,7 @@ lnk_import_table_push_dll_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *symt
   // emit tail merge
   LNK_Chunk *tail_merge_chunk = 0;
   switch (machine) {
-  case COFF_Machine_X64: {
+  case COFF_MachineType_X64: {
     LNK_Symbol *delay_load_helper_symbol = lnk_make_undefined_symbol(symtab->arena->v[0], str8_lit(LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME), LNK_SymbolScopeFlag_Main);
     tail_merge_chunk = lnk_emit_tail_merge_thunk_x64(code_sect, code_chunk, imp_desc_symbol, delay_load_helper_symbol);
   } break;
@@ -446,7 +446,7 @@ lnk_import_table_push_func_static(LNK_ImportTable *imptab, LNK_SymbolTable *symt
   LNK_Symbol *jmp_thunk_symbol = g_null_symbol_ptr;
   if (header->type == COFF_ImportHeader_Code) {
     switch (dll->machine) {
-    case COFF_Machine_X64: {
+    case COFF_MachineType_X64: {
       // generate jump thunk
       LNK_Chunk *jmp_thunk_chunk = lnk_emit_indirect_jump_thunk_x64(code_sect, code_table_chunk, iat_symbol);
       lnk_section_associate_chunks(data_sect, iat_chunk, jmp_thunk_chunk);
@@ -507,7 +507,7 @@ lnk_import_table_push_func_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *sym
   LNK_Chunk  *load_thunk_chunk  = 0;
   if (header->type == COFF_ImportHeader_Code) {
     switch (dll->machine) {
-    case COFF_Machine_X64: {
+    case COFF_MachineType_X64: {
       String8     iat_symbol_name = push_str8f(symtab->arena->v[0], "__imp_%S", header->func_name);
       LNK_Symbol *iat_symbol      = lnk_make_undefined_symbol(symtab->arena->v[0], iat_symbol_name, LNK_SymbolScopeFlag_Main);
       
@@ -624,12 +624,12 @@ lnk_ordinal_data_from_hint(Arena *arena, COFF_MachineType machine, U16 hint)
 {
   String8 ordinal_data = str8_zero();
   switch (machine) {
-  case COFF_Machine_X64: {
+  case COFF_MachineType_X64: {
     U64 *ordinal = push_array(arena, U64, 1);
     *ordinal     = coff_make_ordinal64(hint);
     ordinal_data = str8_struct(ordinal);
   } break;
-  case COFF_Machine_X86: {
+  case COFF_MachineType_X86: {
     U32 *ordinal = push_array(arena, U32, 1);
     *ordinal     = coff_make_ordinal32(hint);
     ordinal_data = str8_struct(ordinal);

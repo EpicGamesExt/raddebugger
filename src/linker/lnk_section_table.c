@@ -236,8 +236,8 @@ lnk_code_align_byte_from_machine(COFF_MachineType machine)
 {
   U8 align_byte = 0;
   switch (machine) {
-  case COFF_Machine_X64:
-  case COFF_Machine_X86: {
+  case COFF_MachineType_X64:
+  case COFF_MachineType_X86: {
     align_byte = 0xCC;
   } break;
   default: {

@@ -117,8 +117,8 @@ lnk_ext_reloc_type_from_coff(COFF_MachineType machine, U32 type)
 {
   LNK_RelocType result = LNK_Reloc_NULL;
   switch (machine) {
-  case COFF_Machine_Unknown: break;
-  case COFF_Machine_X64: {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X64: {
     switch (type) {
     case COFF_Reloc_X64_Abs:       result = LNK_Reloc_NULL;        break;
     case COFF_Reloc_X64_Addr64:    result = LNK_Reloc_ADDR_64;     break;
@@ -150,7 +150,7 @@ lnk_ext_reloc_type_to_coff(COFF_MachineType machine, LNK_RelocType type)
 {
   U32 result = 0;
   switch (machine) {
-  case COFF_Machine_X64: {
+  case COFF_MachineType_X64: {
     switch (type) {
     case LNK_Reloc_NULL:        result = COFF_Reloc_X64_Abs;      break;
     case LNK_Reloc_ADDR_64:     result = COFF_Reloc_X64_Addr64;   break;

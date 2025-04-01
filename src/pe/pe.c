@@ -568,8 +568,8 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     switch(file_header.machine)
     {
       default:{ NotImplemented; }break;
-      case COFF_Machine_Unknown: break;
-      case COFF_Machine_X86:
+      case COFF_MachineType_Unknown: break;
+      case COFF_MachineType_X86:
       {
         PE_TLSHeader32 tls_header32 = {0};
         if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header32) == sizeof(tls_header32))
@@ -586,7 +586,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
           Assert(!"unable to read TLS Header 32");
         }
       }break;
-      case COFF_Machine_X64:
+      case COFF_MachineType_X64:
       {
         if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header) != sizeof(tls_header))
         {
@@ -981,7 +981,7 @@ pe_get_entry_point_names(COFF_MachineType            machine,
   String8Array entry_point_names = {0};
   
   if (file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
-    if (machine == COFF_Machine_X86) {
+    if (machine == COFF_MachineType_X86) {
       read_only static String8 dll_entry_point_arr[] = {
         str8_lit_comp("__DllMainCRTStartup@12"),
       };
@@ -1432,8 +1432,8 @@ pe_tls_from_data(Arena              *arena,
   U64            *callback_addrs = 0;
 
   switch (machine) {
-    case COFF_Machine_Unknown: break;
-    case COFF_Machine_X86: {
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X86: {
       PE_TLSHeader32 header32 = {0};
       str8_deserial_read_struct(raw_tls, 0, &header32);
 
@@ -1458,7 +1458,7 @@ pe_tls_from_data(Arena              *arena,
         callback_addrs[i] = (U64)src[i];
       }
     } break;
-    case COFF_Machine_X64: {
+    case COFF_MachineType_X64: {
       str8_deserial_read_struct(raw_tls, 0, &header64);
 
       U64 callbacks_voff = header64.callbacks_address - image_base;

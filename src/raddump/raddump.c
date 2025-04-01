@@ -7959,9 +7959,9 @@ pe_print_exceptions(Arena              *arena,
     rd_indent();
     rd_printf("%-8s %-8s %-8s %-8s", "Offset", "Begin", "End", "Unwind Info");
     switch (machine) {
-      case COFF_Machine_Unknown: break;
-      case COFF_Machine_X64:
-      case COFF_Machine_X86: {
+      case COFF_MachineType_Unknown: break;
+      case COFF_MachineType_X64:
+      case COFF_MachineType_X86: {
         pe_print_exceptions_x8664(arena, out, indent, section_count, sections, raw_data, except_frange, rdi);
       } break;
       default: NotImplemented; break;
@@ -7994,9 +7994,9 @@ pe_print_base_relocs(Arena              *arena,
 
     U32 addr_size = 0;
     switch (machine) {
-      case COFF_Machine_Unknown: break;
-      case COFF_Machine_X86:     addr_size = 4; break;
-      case COFF_Machine_X64:     addr_size = 8; break;
+      case COFF_MachineType_Unknown: break;
+      case COFF_MachineType_X86:     addr_size = 4; break;
+      case COFF_MachineType_X64:     addr_size = 8; break;
       default: NotImplemented;
     }
    
@@ -8026,9 +8026,9 @@ pe_print_base_relocs(Arena              *arena,
           case PE_BaseRelocKind_DIR64:    type_str = "DIR64";   break;
           default: {
             switch (machine) {
-              case COFF_Machine_Arm:
-              case COFF_Machine_Arm64:
-              case COFF_Machine_ArmNt: {
+              case COFF_MachineType_Arm:
+              case COFF_MachineType_Arm64:
+              case COFF_MachineType_ArmNt: {
                 switch (type) {
                   case PE_BaseRelocKind_ARM_MOV32:   type_str = "ARM_MOV32";   break;
                   case PE_BaseRelocKind_THUMB_MOV32: type_str = "THUMB_MOV32"; break;
@@ -8226,8 +8226,8 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
     String8 raw_lc = str8_substr(raw_data, dirs_file_ranges[PE_DataDirectoryIndex_LOAD_CONFIG]);
     if (raw_lc.size) {
       switch (file_header->machine) {
-        case COFF_Machine_Unknown: break;
-        case COFF_Machine_X86: {
+        case COFF_MachineType_Unknown: break;
+        case COFF_MachineType_X86: {
           PE_LoadConfig32 *lc = str8_deserial_get_raw_ptr(raw_lc, 0, sizeof(*lc));
           if (lc) {
             pe_print_load_config32(arena, out, indent, lc);
@@ -8235,7 +8235,7 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
             rd_errorf("not enough bytes to parse 32bit load config");
           }
         } break;
-        case COFF_Machine_X64: {
+        case COFF_MachineType_X64: {
           PE_LoadConfig64 *lc = str8_deserial_get_raw_ptr(raw_lc, 0, sizeof(*lc));
           if (lc) {
             pe_print_load_config64(arena, out, indent, lc);
