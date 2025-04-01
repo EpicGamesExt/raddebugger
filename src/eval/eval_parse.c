@@ -914,103 +914,124 @@ e_leaf_type_from_name(String8 name)
 {
   E_TypeKey key = zero_struct;
   B32 found = 0;
-  for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-  {
-    RDI_Parsed *rdi = e_parse_state->ctx->modules[module_idx].rdi;
-    RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
-    RDI_ParsedNameMap parsed_name_map = {0};
-    rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-    RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
-    if(node != 0)
-    {
-      U32 match_count = 0;
-      U32 *matches = rdi_matches_from_map_node(rdi, node, &match_count);
-      if(match_count != 0)
-      {
-        RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, matches[0]);
-        found = (type_node->kind != RDI_TypeKind_NULL);
-        key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), matches[0], module_idx);
-        break;
-      }
-    }
-  }
   if(!found)
   {
 #define Case(str) (str8_match(name, str8_lit(str), 0))
     if(0){}
     else if(Case("u8") || Case("uint8") || Case("uint8_t") || Case("U8"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_U8);
     }
     else if(Case("uchar8") || Case("uchar"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_UChar8);
     }
     else if(Case("u16") || Case("uint16") || Case("uint16_t") || Case("U16"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_U16);
     }
     else if(Case("uchar16"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_UChar16);
     }
     else if(Case("u32") || Case("uint32") || Case("uint32_t") || Case("U32") || Case("uint"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_U32);
     }
     else if(Case("uchar32"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_UChar32);
     }
     else if(Case("u64") || Case("uint64") || Case("uint64_t") || Case("U64") || Case("size_t"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_U64);
     }
     else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t") || Case("S8"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_S8);
     }
     else if(Case("char8") || Case("char"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_Char8);
     }
     else if(Case("s16") || Case("b16") || Case("B16") || Case("i16") ||  Case("int16") || Case("int16_t") || Case("S16"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_S16);
     }
     else if(Case("char16"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_Char16);
     }
     else if(Case("s32") || Case("b32") || Case("B32") || Case("i32") || Case("int32") || Case("int32_t") || Case("char32") || Case("S32") || Case("int"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_S32);
     }
     else if(Case("char32"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_Char32);
     }
     else if(Case("s64") || Case("b64") || Case("B64") || Case("i64") || Case("int64") || Case("int64_t") || Case("S64") || Case("ssize_t"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_S64);
     }
     else if(Case("void"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_Void);
     }
     else if(Case("bool"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_Bool);
     }
     else if(Case("float") || Case("f32") || Case("F32") || Case("r32") || Case("R32"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_F32);
     }
     else if(Case("double") || Case("f64") || Case("F64") || Case("r64") || Case("R64"))
     {
+      found = 1;
       key = e_type_key_basic(E_TypeKind_F64);
     }
 #undef Case
+  }
+  if(!found)
+  {
+    for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
+    {
+      RDI_Parsed *rdi = e_parse_state->ctx->modules[module_idx].rdi;
+      RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
+      RDI_ParsedNameMap parsed_name_map = {0};
+      rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+      RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
+      if(node != 0)
+      {
+        U32 match_count = 0;
+        U32 *matches = rdi_matches_from_map_node(rdi, node, &match_count);
+        if(match_count != 0)
+        {
+          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, matches[0]);
+          found = (type_node->kind != RDI_TypeKind_NULL);
+          key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), matches[0], module_idx);
+          break;
+        }
+      }
+    }
   }
   return key;
 }

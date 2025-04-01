@@ -26,32 +26,32 @@ E_TypeKindTable:
   {UChar8                    "uchar8"              1    }
   {UChar16                   "uchar16"             2    }
   {UChar32                   "uchar32"             4    }
-  {U8                        "U8"                  1    }
-  {U16                       "U16"                 2    }
-  {U32                       "U32"                 4    }
-  {U64                       "U64"                 8    }
-  {U128                      "U128"                16   }
-  {U256                      "U256"                32   }
-  {U512                      "U512"                64   }
-  {S8                        "S8"                  1    }
-  {S16                       "S16"                 2    }
-  {S32                       "S32"                 4    }
-  {S64                       "S64"                 8    }
-  {S128                      "S128"                16   }
-  {S256                      "S256"                32   }
-  {S512                      "S512"                64   }
+  {U8                        "uint8"               1    }
+  {U16                       "uint16"              2    }
+  {U32                       "uint32"              4    }
+  {U64                       "uint64"              8    }
+  {U128                      "uint128"             16   }
+  {U256                      "uint256"             32   }
+  {U512                      "uint512"             64   }
+  {S8                        "int8"                1    }
+  {S16                       "int16"               2    }
+  {S32                       "int32"               4    }
+  {S64                       "int64"               8    }
+  {S128                      "int128"              16   }
+  {S256                      "int256"              32   }
+  {S512                      "int512"              64   }
   {Bool                      "bool"                1    }
-  {F16                       "F16"                 2    }
-  {F32                       "F32"                 4    }
-  {F32PP                     "F32PP"               4    }
-  {F48                       "F48"                 6    }
-  {F64                       "F64"                 8    }
-  {F80                       "F80"                 10   }
-  {F128                      "F128"                16   }
-  {ComplexF32                "ComplexF32"          8    }
-  {ComplexF64                "ComplexF64"          16   }
-  {ComplexF80                "ComplexF80"          20   }
-  {ComplexF128               "ComplexF128"         32   }
+  {F16                       "float16"             2    }
+  {F32                       "float32"             4    }
+  {F32PP                     "float32PP"           4    }
+  {F48                       "float48"             6    }
+  {F64                       "float64"             8    }
+  {F80                       "float80"             10   }
+  {F128                      "float128"            16   }
+  {ComplexF32                "complex_float32"     8    }
+  {ComplexF64                "complex_float64"     16   }
+  {ComplexF80                "complex_float80"     20   }
+  {ComplexF128               "complex_float128"    32   }
   {Modifier                  "modifier"            0    }
   {Ptr                       "ptr"                 0    }
   {LRef                      "lref"                0    }
