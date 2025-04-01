@@ -1474,12 +1474,25 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
 }
 
 internal void
-rdi_print_inline_site(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_InlineSite *inline_site)
+rdi_print_inline_site(Arena          *arena,
+                      String8List    *out,
+                      String8         indent,
+                      RDI_Parsed     *rdi,
+                      U64             idx,
+                      RDI_InlineSite *inline_site)
 {
-  rd_printf("name          ='%S'", str8_from_rdi_string_idx(rdi, inline_site->name_string_idx));
-  rd_printf("type_idx      =%u",   inline_site->type_idx);
-  rd_printf("owner_type_idx=%u",   inline_site->owner_type_idx);
-  rd_printf("line_table_idx=%u",   inline_site->line_table_idx);
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 inline_site_idx = push_str8f(scratch.arena, "inline_site[%u]",      idx);
+  String8 type_idx        = push_str8f(scratch.arena, "type_idx = %u,",       inline_site->type_idx);
+  String8 owner_type_idx  = push_str8f(scratch.arena, "owner_type_idx = %u,", inline_site->owner_type_idx);
+  String8 line_table_idx  = push_str8f(scratch.arena, "line_table_idx = %u,", inline_site->line_table_idx);
+  rd_printf("%-20S = { %-25S %-25S %-25S name = '%-20S' }",
+            inline_site_idx,
+            type_idx,
+            owner_type_idx,
+            line_table_idx,
+            str8_from_rdi_string_idx(rdi, inline_site->name_string_idx));
+  scratch_end(scratch);
 }
 
 internal void
@@ -1712,10 +1725,7 @@ rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Op
     rd_printf("# INLINE SITES");
     rd_indent();
     for (U64 i = 0; i < inline_site_count; ++i) {
-      rd_printf("inline_site[%llu]:", i);
-      rd_indent();
-      rdi_print_inline_site(arena, out, indent, rdi, &inline_site_array[i]);
-      rd_unindent();
+      rdi_print_inline_site(arena, out, indent, rdi, i, &inline_site_array[i]);
     }
     rd_unindent();
     rd_newline();
@@ -4070,26 +4080,26 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
   switch (type) {
     case CV_SymKind_THUNK32_ST:
     case CV_SymKind_THUNK32: {
-      CV_SymThunk32 sym   = {0};
+      CV_SymThunk32 sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Parent:  %x", sym.parent);
-      rd_printf("End:     %x", sym.end);
-      rd_printf("Next:    %x", sym.next);
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:  %u", sym.len);
-      rd_printf("Ordinal: %S", cv_string_from_thunk_ordinal(sym.ord));
+      rd_printf("Name   : %S",  name);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
+      rd_printf("Next   : %#x", sym.next);
+      rd_printf("Address: %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length : %u",  sym.len);
+      rd_printf("Ordinal: %S",  cv_string_from_thunk_ordinal(sym.ord));
     } break;
     case CV_SymKind_FILESTATIC: {
       CV_SymFileStatic sym   = {0};
       String8          name = str8_zero();
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
-      rd_printf("Name:  %S", name);
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name : %S", name);
+      rd_printf("Type : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Flags: %S", cv_string_from_local_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_CALLERS:
@@ -4106,7 +4116,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       rd_indent();
       for (U32 i = 0; i < sym.count; ++i) {
         U32 invoks = i < invocation_count ? invocations[i] : 0;
-        rd_printf("%08x (%u)", funcs[i], invoks);
+        rd_printf("%#08x (%u)", funcs[i], invoks);
       }
       rd_unindent();
     } break;
@@ -4129,20 +4139,20 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_annots.size;
 
-      rd_printf("Parent:  %#x", sym.parent);
-      rd_printf("End:     %#x", sym.end);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
       rd_printf("Inlinee: %S",  cv_string_from_itemid(arena, sym.inlinee));
       cv_print_binary_annots(arena, out, indent, arch, raw_annots);
     } break;
     case CV_SymKind_INLINESITE2: {
-      CV_SymInlineSite2 sym         = {0};
+      CV_SymInlineSite2 sym        = {0};
       String8           raw_annots = str8_skip(raw_symbol, sizeof(CV_SymInlineSite2));
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_annots.size;
 
-      rd_printf("Parent:      %#x", sym.parent_off);
-      rd_printf("End:         %#x", sym.end_off);
-      rd_printf("Inlinee:     %S",  cv_string_from_itemid(arena, sym.inlinee));
+      rd_printf("Parent     : %#x", sym.parent_off);
+      rd_printf("End        : %#x", sym.end_off);
+      rd_printf("Inlinee    : %S",  cv_string_from_itemid(arena, sym.inlinee));
       rd_printf("Invocations: %u",  sym.invocations);
       cv_print_binary_annots(arena, out, indent, arch, raw_annots);
     } break;
@@ -4153,37 +4163,37 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
     case CV_SymKind_GTHREAD32_ST:
     case CV_SymKind_LTHREAD32:
     case CV_SymKind_GTHREAD32: {
-      CV_SymThread32 sym   = {0};
+      CV_SymThread32 sym  = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:        %S", name);
+      rd_printf("Name       : %S", name);
       rd_printf("TSL Address: %S", cv_string_sec_off(scratch.arena, sym.tls_seg, sym.tls_off));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type       : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_OBJNAME: {
-      CV_SymObjName sym   = {0};
+      CV_SymObjName sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:      %S",  name);
+      rd_printf("Name     : %S",  name);
       rd_printf("Signature: %#x", sym.sig);
     } break;
     case CV_SymKind_BLOCK32_ST:
     case CV_SymKind_BLOCK32: {
-      CV_SymBlock32 sym   = {0};
+      CV_SymBlock32 sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Parent:  %x", sym.parent);
-      rd_printf("End:     %x", sym.end);
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:  %u", sym.len);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
+      rd_printf("Address: %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length : %u",  sym.len);
+      rd_printf("Name   : %S",  name);
       if (name.size) {
-        rd_printf("Name:    %S", name);
       }
     } break;
     case CV_SymKind_LABEL32_ST:
@@ -4207,13 +4217,13 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       U32     float_pkg    = CV_CompileFlags_Extract_FloatPkg(sym.flags);
       U32     ambient_data = CV_CompileFlags_Extract_AmbientData(sym.flags);
       U32     mode         = CV_CompileFlags_Extract_Mode(sym.flags);
-      rd_printf("Arch:           %S", cv_string_from_arch(sym.machine));
-      rd_printf("Language:       %S", cv_string_from_language(language));
-      rd_printf("FloatPrec:      %x", float_prec);
-      rd_printf("FloatPkg:       %x", float_pkg);
-      rd_printf("Ambient Data:   %x", ambient_data);
-      rd_printf("Mode:           %x", mode);
-      rd_printf("Version String: %S", version_string);
+      rd_printf("Arch          : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Language      : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("FloatPrec     : %#x",      float_prec);
+      rd_printf("FloatPkg      : %#x",      float_pkg);
+      rd_printf("Ambient Data  : %#x",      ambient_data);
+      rd_printf("Mode          : %#x",      mode);
+      rd_printf("Version String: %S",       version_string);
     } break;
     case CV_SymKind_COMPILE2_ST:
     case CV_SymKind_COMPILE2: {
@@ -4224,14 +4234,14 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &version_string);
 
       U32 language = CV_Compile2Flags_Extract_Language(sym.flags);
-      rd_printf("Machine:          %S",    cv_string_from_arch(sym.machine));
-      rd_printf("Flags:            %x",    sym.flags);
-      rd_printf("Language:         %S",    cv_string_from_language(language));
-      rd_printf("Frontend Version: %u.%u", sym.ver_fe_major, sym.ver_fe_minor);
-      rd_printf("Frontend Build:   %u",    sym.ver_fe_build);
-      rd_printf("Backend Version:  %u.%u", sym.ver_major, sym.ver_minor);
-      rd_printf("Backend Build:    %u",    sym.ver_build);
-      rd_printf("Version String:   %S",    version_string);
+      rd_printf("Machine         : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Flags           : %#x",      sym.flags);
+      rd_printf("Language        : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("Frontend Version: %u.%u",    sym.ver_fe_major, sym.ver_fe_minor);
+      rd_printf("Frontend Build  : %u",       sym.ver_fe_build);
+      rd_printf("Backend Version : %u.%u",    sym.ver_major, sym.ver_minor);
+      rd_printf("Backend Build   : %u",       sym.ver_build);
+      rd_printf("Version String  : %S",       version_string);
     } break;
     case CV_SymKind_COMPILE3: {
       CV_SymCompile3 sym            = {0};
@@ -4240,16 +4250,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &version_string);
 
       U32 language = CV_Compile3Flags_Extract_Language(sym.flags);
-      rd_printf("Machine:          %S",    cv_string_from_arch(sym.machine));
-      rd_printf("Flags:            %x",    sym.flags);
-      rd_printf("Language:         %S",    cv_string_from_language(language));
-      rd_printf("Frontend Version: %u.%u", sym.ver_fe_major, sym.ver_fe_minor);
-      rd_printf("Frontend Build:   %u",    sym.ver_fe_build);
-      rd_printf("Fontend QFE:      %u",    sym.ver_feqfe);
-      rd_printf("Backend Version:  %u.%u", sym.ver_major, sym.ver_minor);
-      rd_printf("Backend Build:    %u",    sym.ver_build);
-      rd_printf("Backend QFE:      %u",    sym.ver_qfe);
-      rd_printf("Version String:   %S",    version_string);
+      rd_printf("Machine         : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Flags           : %#x",      sym.flags);
+      rd_printf("Language        : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("Frontend Version: %u.%u",    sym.ver_fe_major, sym.ver_fe_minor);
+      rd_printf("Frontend Build  : %u",       sym.ver_fe_build);
+      rd_printf("Fontend QFE     : %u",       sym.ver_feqfe);
+      rd_printf("Backend Version : %u.%u",    sym.ver_major, sym.ver_minor);
+      rd_printf("Backend Build   : %u",       sym.ver_build);
+      rd_printf("Backend QFE     : %u",       sym.ver_qfe);
+      rd_printf("Version String  : %S",       version_string);
     } break;
     case CV_SymKind_GPROC32_ST:
     case CV_SymKind_LPROC32_ST:
@@ -4262,16 +4272,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 name = str8_zero();
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:        %S",  name);
-      rd_printf("Parent:      %#x", sym.parent);
-      rd_printf("End:         %#x", sym.end);
-      rd_printf("Next:        %#x", sym.next);
-      rd_printf("Address:     %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:      %u",  sym.len);
-      rd_printf("Type:        %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("Flags:       %S",  cv_string_from_proc_flags(scratch.arena, sym.flags));
-      rd_printf("Debug Start: %#x", sym.dbg_start);
-      rd_printf("Debug End:   %#x", sym.dbg_end);
+      rd_printf("Name       : %S",       name);
+      rd_printf("Parent     : %#x",      sym.parent);
+      rd_printf("End        : %#x",      sym.end);
+      rd_printf("Next       : %#x",      sym.next);
+      rd_printf("Address    : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length     : %u",       sym.len);
+      rd_printf("Type       : %S",       cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Flags      : %#x (%S)", sym.flags, cv_string_from_proc_flags(scratch.arena, sym.flags));
+      rd_printf("Debug Start: %#x",      sym.dbg_start);
+      rd_printf("Debug End  : %#x",      sym.dbg_end);
     } break;
     case CV_SymKind_LDATA32_ST:
     case CV_SymKind_GDATA32_ST:
@@ -4282,8 +4292,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name   : %S", name);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_CONSTANT_ST:
@@ -4306,14 +4316,14 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 flags     = cv_string_from_frame_proc_flags(scratch.arena, sym.flags);
       U32     local_ptr = CV_FrameprocFlags_Extract_LocalBasePointer(sym.flags);
       U32     param_ptr = CV_FrameprocFlags_Extract_ParamBasePointer(sym.flags);
-      rd_printf("Frame Size:          %x", sym.frame_size);
-      rd_printf("Pad Size:            %x", sym.pad_size);
-      rd_printf("Pad Offset:          %x", sym.pad_off);
-      rd_printf("Save Registers Area: %u", sym.save_reg_size);
-      rd_printf("Exception Handler:   %S", cv_string_sec_off(arena, sym.eh_sec, sym.eh_off));
-      rd_printf("Flags:               %S", flags);
-      rd_printf("Local pointer:       %S", cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, local_ptr)));
-      rd_printf("Param pointer:       %S", cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, param_ptr)));
+      rd_printf("Frame Size         : %#x", sym.frame_size);
+      rd_printf("Pad Size           : %#x", sym.pad_size);
+      rd_printf("Pad Offset         : %#x", sym.pad_off);
+      rd_printf("Save Registers Area: %u",  sym.save_reg_size);
+      rd_printf("Exception Handler  : %S",  cv_string_sec_off(arena, sym.eh_sec, sym.eh_off));
+      rd_printf("Flags              : %S",  flags);
+      rd_printf("Local pointer      : %S",  cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, local_ptr)));
+      rd_printf("Param pointer      : %S",  cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, param_ptr)));
     } break;
     case CV_SymKind_LOCAL: {
       CV_SymLocal sym  = {0};
@@ -4321,8 +4331,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name : %S", name);
+      rd_printf("Type : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Flags: %S", cv_string_from_local_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_DEFRANGE: {
@@ -4341,7 +4351,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Register:   %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
+      rd_printf("Register  : %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
       rd_printf("Attributes: %S", cv_string_from_range_attribs(scratch.arena, sym.attribs));
       cv_print_lvar_addr_range(arena, out, indent, sym.range);
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
@@ -4361,9 +4371,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Register:      %S",  cv_string_from_reg_id(scratch.arena, arch, sym.reg));
-      rd_printf("Attributes:    %S",  cv_string_from_range_attribs(scratch.arena, sym.attribs));
-      rd_printf("Parent Offset: %#x", sym.field_offset);
+      rd_printf("Register     : %#x (%S)", sym.reg, cv_string_from_reg_id(scratch.arena, arch, sym.reg));
+      rd_printf("Attributes   : %#x (%S)", sym.attribs, cv_string_from_range_attribs(scratch.arena, sym.attribs));
+      rd_printf("Parent Offset: %#x",      sym.field_offset);
       cv_print_lvar_addr_range(arena, out, indent, sym.range);
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
     } break;
@@ -4378,8 +4388,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Flags:   %S", cv_string_from_defrange_register_rel_flags(scratch.arena, sym.flags));
-      rd_printf("Address: %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.reg_off));
+      rd_printf("Flags  : %#x (%S)", sym.flags, cv_string_from_defrange_register_rel_flags(scratch.arena, sym.flags));
+      rd_printf("Address: %S",       cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.reg_off));
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
     } break;
     case CV_SymKind_END:
@@ -4425,16 +4435,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Pad:     %u", sym.pad);
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Pad    : %u", sym.pad);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_FRAMECOOKIE: {
       CV_SymFrameCookie sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Address: %S",  cv_string_sec_off(arena, sym.reg, sym.off));
-      rd_printf("Kind:    %S",  cv_string_from_frame_cookie_kind(sym.kind));
-      rd_printf("Flags:   %#x", sym.flags); // TODO: llvm and cvinfo.h don't define these flags...
+      rd_printf("Address: %S",       cv_string_sec_off(arena, sym.reg, sym.off));
+      rd_printf("Kind   : %#x (%S)", sym.kind, cv_string_from_frame_cookie_kind(sym.kind));
+      rd_printf("Flags  : %#x",      sym.flags); // TODO: llvm and cvinfo.h don't define these flags...
     } break;
     case CV_SymKind_HEAPALLOCSITE: {
       CV_SymHeapAllocSite sym = {0};
@@ -4442,8 +4452,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
 
       String8 addr  = cv_string_sec_off(arena, sym.sec, sym.off);
       String8 itype = cv_string_from_itype(arena, min_itype, sym.itype);
-      rd_printf("Address: %S", addr);
-      rd_printf("Type:    %S", itype);
+      rd_printf("Address                : %S", addr);
+      rd_printf("Type                   : %S", itype);
       rd_printf("Call instruction length: %x", sym.call_inst_len);
     } break;
     case CV_SymKind_ALIGN: {
@@ -4476,7 +4486,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Start Symbol: %#x", sym.start_symbol);
-      rd_printf("Segment:      %#x", sym.segment);
+      rd_printf("Segment     : %#x", sym.segment);
     } break;
     case CV_SymKind_RETURN: {
       Assert(!"TODO: test");
@@ -4484,15 +4494,15 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymReturn sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Flags: %S", cv_string_from_generic_flags(scratch.arena, sym.flags));
-      rd_printf("Style: %S", cv_string_from_generic_style(sym.style));
+      rd_printf("Flags     : %#x (%S)", sym.flags, cv_string_from_generic_flags(scratch.arena, sym.flags));
+      rd_printf("Style     : %#x (%S)", sym.style, cv_string_from_generic_style(sym.style));
       if (sym.style == CV_GenericStyle_REG) {
         U8 count = 0;
         cursor += str8_deserial_read_struct(raw_symbol, cursor, &count);
 
         String8 data = rd_format_hex_array(scratch.arena, raw_symbol.str, raw_symbol.size);
         rd_printf("Byte Count: %u", count);
-        rd_printf("Data:       %S", data);
+        rd_printf("Data      : %S", data);
       }
     } break;
     case CV_SymKind_ENTRYTHIS: {
@@ -4506,13 +4516,13 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cv_print_symbol(arena, out, indent, arch, min_itype, type, raw_subsym);
     } break;
     case CV_SymKind_SLINK32: {
-      Assert(!"ret");
+      Assert(!"TODO: test");
       
       CV_SymSLink32 sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Frame Size: %x", sym.frame_size);
-      rd_printf("Address:    %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.offset));
+      rd_printf("Address   : %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.offset));
     } break;
     case CV_SymKind_OEM: {
       Assert(!"TODO: test");
@@ -4525,7 +4535,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       //
       // CV-spec doesn't even mention S_OEM just LF_OEM and cvdump.exe prints out type with guid...
       rd_printf("Type: %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("ID:   %S", string_from_guid(scratch.arena, sym.id));
+      rd_printf("ID  : %S", string_from_guid(scratch.arena, sym.id));
     } break;
     case CV_SymKind_VFTABLE32:{
       Assert(!"TODO: test");
@@ -4533,8 +4543,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymVPath32 sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Root:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.root));
-      rd_printf("Path:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.path));
+      rd_printf("Root   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.root));
+      rd_printf("Path   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.path));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
     } break;
     case CV_SymKind_PUB32_ST:
@@ -4544,8 +4554,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Flags:   %S", cv_string_from_pub32_flags(scratch.arena, sym.flags));
+      rd_printf("Name   : %S", name);
+      rd_printf("Flags  : %S", cv_string_from_pub32_flags(scratch.arena, sym.flags));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_BPREL32_ST:
@@ -4557,9 +4567,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:   %S",  name);
+      rd_printf("Name  : %S",  name);
       rd_printf("Offset: %#x", sym.off);
-      rd_printf("Type:   %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type  : %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_REGISTER: {
       Assert(!"TODO: test");
@@ -4569,9 +4579,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
+      rd_printf("Name    : %S", name);
       rd_printf("Register: %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_PROCREF_ST:
     case CV_SymKind_DATAREF_ST:
@@ -4587,9 +4597,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name: %S",  name);
-      rd_printf("SUC:  %#x", sym.suc_name);
-      rd_printf("IMod: %#x", sym.imod);
+      rd_printf("Name                : %S",  name);
+      rd_printf("SUC                 : %#x", sym.suc_name);
+      rd_printf("IMod                : %#x", sym.imod);
       rd_printf("Symbol Stream Offset: %#x", sym.sym_off);
     } break;
     case CV_SymKind_SEPCODE: {
@@ -4598,12 +4608,12 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymSepcode sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Parent:         %#x", sym.parent);
-      rd_printf("End:            %#x", sym.end);
-      rd_printf("Length:         %u",  sym.len);
-      rd_printf("Flags:          %S",  cv_string_from_sepcode(scratch.arena, sym.flags));
-      rd_printf("Address:        %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.sec_off));
-      rd_printf("Parent Address: %S",  cv_string_sec_off(scratch.arena, sym.sec_parent, sym.sec_parent_off));
+      rd_printf("Parent        : %#x",      sym.parent);
+      rd_printf("End           : %#x",      sym.end);
+      rd_printf("Length        : %u",       sym.len);
+      rd_printf("Flags         : %#x (%S)", sym.flags, cv_string_from_sepcode(scratch.arena, sym.flags));
+      rd_printf("Address       : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.sec_off));
+      rd_printf("Parent Address: %S",       cv_string_sec_off(scratch.arena, sym.sec_parent, sym.sec_parent_off));
     } break;
     case CV_SymKind_PARAMSLOT_ST:
     case CV_SymKind_LOCALSLOT_ST:
@@ -4625,10 +4635,10 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymTrampoline sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:       %S",   cv_string_from_trampoline_kind(sym.kind));
-      rd_printf("Thunk Size: %u",   sym.thunk_size);
-      rd_printf("Thunk:      %.*s", cv_string_sec_off(scratch.arena, sym.thunk_sec, sym.thunk_sec_off));
-      rd_printf("Target:     %.*s", cv_string_sec_off(scratch.arena, sym.target_sec, sym.target_sec_off));
+      rd_printf("Type      : %S", cv_string_from_trampoline_kind(sym.kind));
+      rd_printf("Thunk Size: %u", sym.thunk_size);
+      rd_printf("Thunk     : %S", cv_string_sec_off(scratch.arena, sym.thunk_sec, sym.thunk_sec_off));
+      rd_printf("Target    : %S", cv_string_sec_off(scratch.arena, sym.target_sec, sym.target_sec_off));
     } break;
     case CV_SymKind_POGODATA: {
       Assert(!"TODO: test");
@@ -4636,9 +4646,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymPogoInfo sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Invocations:                          %u", sym.invocations);
-      rd_printf("Dynamic instruction count:            %u", sym.dynamic_inst_count);
-      rd_printf("Static instruction count:             %u", sym.static_inst_count);
+      rd_printf("Invocations                         : %u", sym.invocations);
+      rd_printf("Dynamic instruction count           : %u", sym.dynamic_inst_count);
+      rd_printf("Static instruction count            : %u", sym.static_inst_count);
       rd_printf("Post inline static instruction count: %u", sym.post_inline_static_inst_count);
     } break;
     case CV_SymKind_MANYREG: {
@@ -4647,9 +4657,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymManyreg sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:      %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Type     : %S", cv_string_from_itype(arena, min_itype, sym.itype));
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U8 i = 0; i < sym.count; ++i) {
         U8 v = 0;
@@ -4665,9 +4675,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymManyreg sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:      %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Type     : %S", cv_string_from_itype(arena, min_itype, sym.itype));
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U16 i = 0; i < sym.count; ++i) {
         U16 v = 0;
@@ -4684,11 +4694,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:            %S",  name);
-      rd_printf("Index:           %u",  sym.sec_index);
-      rd_printf("Align:           %u",  sym.align);
-      rd_printf("Virtual Offset:  %#x", sym.rva);
-      rd_printf("Size:            %u",  sym.size);
+      rd_printf("Name           : %S",  name);
+      rd_printf("Index          : %u",  sym.sec_index);
+      rd_printf("Align          : %u",  sym.align);
+      rd_printf("Virtual Offset : %#x", sym.rva);
+      rd_printf("Size           : %u",  sym.size);
       rd_printf("Characteristics: %S",  coff_string_from_section_flags(scratch.arena, sym.characteristics));
     } break;
     case CV_SymKind_ENVBLOCK: {
@@ -4714,10 +4724,10 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:            %S", name);
-      rd_printf("Size:            %u", sym.size);
-      rd_printf("Characteristics: %S", coff_string_from_section_flags(scratch.arena, sym.characteristics));
-      rd_printf("Address:         %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Name           : %S",       name);
+      rd_printf("Size           : %u",       sym.size);
+      rd_printf("Characteristics: %#x (%S)", sym.characteristics, coff_string_from_section_flags(scratch.arena, sym.characteristics));
+      rd_printf("Address        : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_EXPORT: {
       Assert(!"TODO: test");
@@ -4727,9 +4737,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S",  name);
+      rd_printf("Name   : %S",  name);
       rd_printf("Ordinal: %#x", sym.ordinal);
-      rd_printf("Flags:   %S",  cv_string_from_export_flags(scratch.arena, sym.flags));
+      rd_printf("Flags  : %S",  cv_string_from_export_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_ANNOTATION: {
       Assert(!"TODO: test");
@@ -4737,8 +4747,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymAnnotation sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
-      rd_printf("Count:   %u", sym.count);
+      rd_printf("Address    : %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
+      rd_printf("Count      : %u", sym.count);
       rd_printf("Annotations:");
       rd_indent();
       for (U16 i = 0; i < sym.count; ++i) {
@@ -4757,9 +4767,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:   %S",  name);
+      rd_printf("Name  : %S",  name);
       rd_printf("Offset: %#x", sym.off);
-      rd_printf("Type:   %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type  : %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
     case CV_SymKind_MANREGISTER:
@@ -4771,8 +4781,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name    : %S", name);
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Register: %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
@@ -4784,9 +4794,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("Address:  %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.off));
+      rd_printf("Name   : %S", name);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Address: %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.off));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
     case CV_SymKind_MANYREG_ST:
@@ -4801,11 +4811,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 name = str8_zero();
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:      %S", name);
-      rd_printf("Type:      %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name     : %S", name);
+      rd_printf("Type     : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U8 i = 0; i < sym.count; ++i) {
         rd_printf("%S", cv_string_from_reg_id(scratch.arena, arch, regs[i]));
@@ -4852,8 +4862,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &symbol_type);
       String8 raw_subsym = str8_skip(raw_symbol, cursor);
 
-      rd_printf("Kind:             %x", sym.kind);
-      rd_printf("File ID:          %x", sym.file_id);
+      rd_printf("Kind            : %x", sym.kind);
+      rd_printf("File ID         : %x", sym.file_id);
       rd_printf("File Line Number: %u", sym.file_ln);
       rd_printf("# Discarded Symbol");
       cv_print_symbol(arena, out, indent, arch, min_itype, symbol_type, raw_subsym);
@@ -4867,7 +4877,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &to);
 
       rd_printf("From: %S", from);
-      rd_printf("To:   %S", to);
+      rd_printf("To  : %S", to);
     } break;
     case CV_SymKind_FASTLINK: {
       Assert(!"TODO: test");
@@ -4877,9 +4887,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Flags: %x", sym.flags);
-      rd_printf("Type:  %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Name : %S",  name);
+      rd_printf("Flags: %#x", sym.flags);
+      rd_printf("Type : %S",  cv_string_from_itype(arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_ARMSWITCHTABLE: {
       Assert(!"TODO: test");
@@ -4887,11 +4897,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymArmSwitchTable sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Base Address:   %S", cv_string_sec_off(scratch.arena, sym.sec_base,   sym.off_base));
+      rd_printf("Base Address  : %S", cv_string_sec_off(scratch.arena, sym.sec_base,   sym.off_base));
       rd_printf("Branch Address: %S", cv_string_sec_off(scratch.arena, sym.sec_branch, sym.off_branch));
-      rd_printf("Table Address:  %S", cv_string_sec_off(scratch.arena, sym.sec_table,  sym.off_table));
-      rd_printf("Entry count:    %u", sym.entry_count);
-      rd_printf("Switch Type:    %x", sym.kind);
+      rd_printf("Table Address : %S", cv_string_sec_off(scratch.arena, sym.sec_table,  sym.off_table));
+      rd_printf("Entry count   : %u", sym.entry_count);
+      rd_printf("Switch Type   : %x", sym.kind);
     } break;
     case CV_SymKind_REF_MINIPDB: {
       Assert(!"TODO: test");
@@ -4901,11 +4911,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Flags: %x", sym.flags);
-      rd_printf("IMod:  %04x", sym.imod);
+      rd_printf("Name      : %S", name);
+      rd_printf("Flags     : %x", sym.flags);
+      rd_printf("IMod      : %04x", sym.imod);
       if (sym.flags & CV_RefMiniPdbFlag_UDT) {
-        rd_printf("Type: %S", cv_string_from_itype(scratch.arena, min_itype, (CV_TypeIndex)sym.data));
+        rd_printf("Type      : %S", cv_string_from_itype(scratch.arena, min_itype, (CV_TypeIndex)sym.data));
       } else {
         rd_printf("Coff ISect: %#x", sym.data);
       }
@@ -5022,8 +5032,8 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       CV_LeafBitField lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Length:   %u", lf.len);
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Length  : %u", lf.len);
       rd_printf("Position: %u", lf.pos);
     } break;
     case CV_LeafKind_CLASS2:
@@ -5035,12 +5045,12 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &size);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:       %S", name);
-      rd_printf("Fields:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Properties: %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Derived:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
-      rd_printf("VShape:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
-      rd_printf("Unknown:    %x", lf.unknown);
+      rd_printf("Name       : %S",       name);
+      rd_printf("Fields     : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Derived    : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
+      rd_printf("VShape     : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
+      rd_printf("Unknown    : %#x",      lf.unknown);
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = str8_zero();
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -5049,25 +5059,25 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_PRECOMP_ST: 
     case CV_LeafKind_PRECOMP: { 
-      CV_LeafPreComp lf  = {0};
+      CV_LeafPreComp lf   = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
+      rd_printf("Name       : %S", name);
       rd_printf("Start Index: %x", lf.start_index);
-      rd_printf("Count:       %u", lf.count);
-      rd_printf("Signature:   %x", lf.sig);
+      rd_printf("Count      : %u", lf.count);
+      rd_printf("Signature  : %x", lf.sig);
     } break;
     case CV_LeafKind_TYPESERVER2: {
-      CV_LeafTypeServer2 lf  = {0};
+      CV_LeafTypeServer2 lf   = {0};
       String8            name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:  %S", name);
+      rd_printf("Name : %S", name);
       rd_printf("Sig70: %S", string_from_guid(arena, lf.sig70));
-      rd_printf("Age:   %u", lf.age);
+      rd_printf("Age  : %u", lf.age);
     } break;
     case CV_LeafKind_BUILDINFO: {
       CV_LeafBuildInfo lf = {0};
@@ -5083,13 +5093,13 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       rd_unindent();
     } break;
     case CV_LeafKind_MFUNC_ID: {
-      CV_LeafMFuncId lf  = {0};
+      CV_LeafMFuncId lf   = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:       %S", name);
+      rd_printf("Name      : %S", name);
       rd_printf("Owner Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.owner_itype));
-      rd_printf("Type:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Type      : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_VFUNCTAB: {
       CV_LeafVFuncTab lf = {0};
@@ -5107,8 +5117,8 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
         if (has_vbase) {
           cursor += str8_deserial_read_struct(raw_leaf, cursor, &vbase);
         }
-        rd_printf("Attribs:      %S", cv_string_from_field_attribs(scratch.arena, ml.attribs));
-        rd_printf("Type:         %S", cv_string_from_itype(scratch.arena, min_itype, ml.itype));
+        rd_printf("Attribs     : %#x (%S)", ml.attribs, cv_string_from_field_attribs(scratch.arena, ml.attribs));
+        rd_printf("Type        : %S",       cv_string_from_itype(scratch.arena, min_itype, ml.itype));
         if (has_vbase) {
           rd_printf("Virtual Base: %x", vbase);
         }
@@ -5126,48 +5136,48 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       }
       String8 name = {0};
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:          %S", name);
-      rd_printf("Field Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:          %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name         : %S",       name);
+      rd_printf("Field Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type         : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       if (has_vbase) {
         rd_printf("Virtual Base:  %#x", vbase);
       }
     } break;
     case CV_LeafKind_METHOD_ST: 
     case CV_LeafKind_METHOD: {
-      CV_LeafMethod lf  = {0};
+      CV_LeafMethod lf   = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:      %S", name);
-      rd_printf("Count:     %u", lf.count);
+      rd_printf("Name     : %S", name);
+      rd_printf("Count    : %u", lf.count);
       rd_printf("Type List: %S", cv_string_from_itype(scratch.arena, min_itype, lf.list_itype));
     } break;
     case CV_LeafKind_VBCLASS:
     case CV_LeafKind_IVBCLASS: {
-      CV_LeafVBClass   lf         = {0};
+      CV_LeafVBClass   lf          = {0};
       CV_NumericParsed vbptr_off   = {0};
       CV_NumericParsed vbtable_off = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &vbptr_off);
       cursor += cv_read_numeric(raw_leaf, cursor, &vbtable_off);
 
-      rd_printf("Attribs:          %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Attribs         : %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
       rd_printf("Direct Base Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       rd_printf("Virtual Base Ptr: %S", cv_string_from_itype(scratch.arena, min_itype, lf.vbptr_itype));
-      rd_printf("vbpoff:           %S", cv_string_from_numeric(scratch.arena, vbptr_off));
-      rd_printf("vbind:            %S", cv_string_from_numeric(scratch.arena, vbtable_off));
+      rd_printf("vbpoff          : %S", cv_string_from_numeric(scratch.arena, vbptr_off));
+      rd_printf("vbind           : %S", cv_string_from_numeric(scratch.arena, vbtable_off));
     } break;
     case CV_LeafKind_BCLASS: {
-      CV_LeafBClass    lf    = {0};
+      CV_LeafBClass    lf     = {0};
       CV_NumericParsed offset = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &offset);
 
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Offset:  %S", cv_string_from_numeric(scratch.arena, offset));
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Offset : %S",       cv_string_from_numeric(scratch.arena, offset));
     } break;
     case CV_LeafKind_VTSHAPE: {
       CV_LeafVTShape lf = {0};
@@ -5186,26 +5196,26 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_STMEMBER_ST: 
     case CV_LeafKind_STMEMBER: {
-      CV_LeafStMember lf  = {0};
+      CV_LeafStMember lf   = {0};
       String8         name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name   : %S",       name);
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_MFUNCTION: {
       CV_LeafMFunction lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Return Type:      %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
-      rd_printf("Class Type:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.class_itype));
-      rd_printf("This Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.this_itype));
-      rd_printf("Call Kind:        %S", cv_string_from_call_kind(lf.call_kind));
-      rd_printf("Function Attribs: %S", cv_string_from_function_attribs(scratch.arena, lf.attribs));
-      rd_printf("Argument Count:   %u", lf.arg_count);
-      rd_printf("Argument Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
+      rd_printf("Return Type     : %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
+      rd_printf("Class Type      : %S", cv_string_from_itype(scratch.arena, min_itype, lf.class_itype));
+      rd_printf("This Type       : %S", cv_string_from_itype(scratch.arena, min_itype, lf.this_itype));
+      rd_printf("Call Kind       : %#x (%S)", lf.call_kind, cv_string_from_call_kind(lf.call_kind));
+      rd_printf("Function Attribs: %#x (%S)", lf.attribs, cv_string_from_function_attribs(scratch.arena, lf.attribs));
+      rd_printf("Argument Count  : %u", lf.arg_count);
+      rd_printf("Argument Type   : %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
     } break;
     #if 0
     case CV_LeafKind_SKIP_16t: {
@@ -5229,11 +5239,11 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Field Count: %u", lf.count);
-      rd_printf("Properties:  %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.base_itype));
-      rd_printf("Field:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Name       : %S",       name);
+      rd_printf("Field Count: %u",       lf.count);
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Type       : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.base_itype));
+      rd_printf("Field      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -5248,9 +5258,9 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &value);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
+      rd_printf("Name   : %S", name);
       rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Value:   %S", cv_string_from_numeric(scratch.arena, value));
+      rd_printf("Value  : %S", cv_string_from_numeric(scratch.arena, value));
     } break;
     case CV_LeafKind_NESTTYPE_ST: 
     case CV_LeafKind_NESTTYPE: {
@@ -5258,7 +5268,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       String8         name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:  %S", name);
+      rd_printf("Name : %S", name);
       rd_printf("Index: %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_NOTTRAN: {
@@ -5277,7 +5287,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &string);
 
-      rd_printf("string:     %S", string);
+      rd_printf("string    : %S", string);
       rd_printf("Substrings: %S", cv_string_from_itemid(arena, lf.substr_list_id)); // TODO: print actual strings instead
     } break;
     case CV_LeafKind_POINTER: {
@@ -5287,7 +5297,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       CV_PointerKind kind = CV_PointerAttribs_Extract_Kind(lf.attribs);
       CV_PointerMode mode = CV_PointerAttribs_Extract_Mode(lf.attribs);
 
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       rd_printf("Attribs: %S", cv_string_from_pointer_attribs(arena, lf.attribs));
       rd_indent();
       if (mode == CV_PointerMode_PtrMem) {
@@ -5297,7 +5307,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
         cursor += str8_deserial_read_struct(raw_leaf, cursor, &pm);
 
         rd_printf("Class Type: %S", cv_string_from_itype(scratch.arena, min_itype, itype));
-        rd_printf("Format:     %S", cv_string_from_member_pointer_kind(pm));
+        rd_printf("Format    : %S", cv_string_from_member_pointer_kind(pm));
       } else {
         if (kind == CV_PointerKind_BaseSeg) {
           U16 seg;
@@ -5311,25 +5321,25 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
           cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
           rd_printf("Base Type: %S", cv_string_from_itype(scratch.arena, min_itype, base_itype));
-          rd_printf("Name:      %S", name);
+          rd_printf("Name     : %S", name);
         }
       }
       rd_unindent();
     } break;
     case CV_LeafKind_UNION_ST: 
     case CV_LeafKind_UNION: {
-      CV_LeafUnion     lf  = {0};
+      CV_LeafUnion     lf   = {0};
       CV_NumericParsed num  = {0};
       String8          name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Field Count: %u", lf.count);
-      rd_printf("Properties:  %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Field:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Size:        %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name       : %S",       name);
+      rd_printf("Field Count: %u",       lf.count);
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Field      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Size       : %S",       cv_string_from_numeric(scratch.arena, num));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -5347,13 +5357,13 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:             %S", name);
-      rd_printf("Field Count:      %u", lf.count);
-      rd_printf("Properties:       %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Field List Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Derived Type:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
-      rd_printf("VShape:           %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
-      rd_printf("Size:             %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name           : %S",       name);
+      rd_printf("Field Count    : %u",       lf.count);
+      rd_printf("Properties     : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Field List Type: %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Derived Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
+      rd_printf("VShape         : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
+      rd_printf("Size           : %S",       cv_string_from_numeric(scratch.arena, num));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -5381,11 +5391,11 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       String8 call_kind    = cv_string_from_call_kind(lf.call_kind);
       String8 func_attribs = cv_string_from_function_attribs(scratch.arena, lf.attribs);
 
-      rd_printf("Return type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
-      rd_printf("Call Convention:    %S", call_kind);
-      rd_printf("Function Attribs:   %S", func_attribs);
-      rd_printf("Argumnet Count:     %u", lf.arg_count);
-      rd_printf("Argument List Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
+      rd_printf("Return type       : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
+      rd_printf("Call Convention   : %#x (%S)", lf.call_kind, call_kind);
+      rd_printf("Function Attribs  : %#x (%S)", lf.attribs, func_attribs);
+      rd_printf("Argumnet Count    : %u",       lf.arg_count);
+      rd_printf("Argument List Type: %S",       cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
     } break;
     case CV_LeafKind_FUNC_ID: {
       CV_LeafFuncId lf  = {0};
@@ -5393,16 +5403,16 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Scope Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.scope_string_id));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name      : %S",       name);
+      rd_printf("Scope Type: %#x (%S)", lf.scope_string_id, cv_string_from_itype(scratch.arena, min_itype, lf.scope_string_id));
+      rd_printf("Type      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_MODIFIER: {
       CV_LeafModifier lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Flags: %S", cv_string_from_modifier_flags(scratch.arena, lf.flags));
+      rd_printf("Type : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Flags: %#x (%S)", lf.flags, cv_string_from_modifier_flags(scratch.arena, lf.flags));
     } break;
     case CV_LeafKind_ARRAY_ST: 
     case CV_LeafKind_ARRAY: {
@@ -5413,7 +5423,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
 
       rd_printf("Entry type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.entry_itype));
       rd_printf("Index type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.index_itype));
-      rd_printf("Length:     %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Length    : %S", cv_string_from_numeric(scratch.arena, num));
     } break;
     case CV_LeafKind_FIELDLIST: {
       for (U64 idx = 0; cursor < raw_leaf.size;) {
@@ -5437,10 +5447,10 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Offset:  %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name   : %S",       name);
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Offset : %S",       cv_string_from_numeric(scratch.arena, num));
     } break;
     case CV_LeafKind_LABEL: {
       CV_LeafLabel lf = {0};
@@ -5936,12 +5946,12 @@ coff_print_archive_member_header(Arena *arena, String8List *out, String8 indent,
   Temp scratch = scratch_begin(&arena, 1);
   String8 time_stamp = coff_string_from_time_stamp(scratch.arena, header.time_stamp);
 
-  rd_printf("Name:       %S"             , header.name    );
-  rd_printf("Time Stamp: %S"             , time_stamp     );
-  rd_printf("User ID:    %u"             , header.user_id );
-  rd_printf("Group ID:   %u"             , header.group_id);
-  rd_printf("Mode:       %S"             , header.mode    );
-  rd_printf("Data:       [%#llx-%#llx)", header.data_range.min, header.data_range.max);
+  rd_printf("Name      : %S"             , header.name    );
+  rd_printf("Time Stamp: (%#x) %S"       , header.time_stamp, time_stamp     );
+  rd_printf("User ID   : %u"             , header.user_id );
+  rd_printf("Group ID  : %u"             , header.group_id);
+  rd_printf("Mode      : %S"             , header.mode    );
+  rd_printf("Data      : [%#llx-%#llx)", header.data_range.min, header.data_range.max);
 
   scratch_end(scratch);
 }
@@ -6388,11 +6398,11 @@ coff_print_big_obj_header(Arena *arena, String8List *out, String8 indent, COFF_B
 
   rd_printf("# Big Obj");
   rd_indent();
-  rd_printf("Time Stamp:    %S",  time_stamp               );
-  rd_printf("Machine:       %S",  machine                  );
+  rd_printf("Time Stamp   : %#x (%S)",  header->time_stamp, time_stamp);
+  rd_printf("Machine      : %#x (%S)",  header->machine, machine      );
   rd_printf("Section Count: %u",  header->section_count    );
-  rd_printf("Symbol Table:  %#x", header->symbol_table_foff);
-  rd_printf("Symbol Count:  %u",  header->symbol_count     );
+  rd_printf("Symbol Table : %#x", header->symbol_table_foff);
+  rd_printf("Symbol Count : %u",  header->symbol_count     );
   rd_unindent();
 
   scratch_end(scratch);
@@ -6409,13 +6419,13 @@ coff_print_file_header(Arena *arena, String8List *out, String8 indent, COFF_File
 
   rd_printf("# COFF File Header");
   rd_indent();
-  rd_printf("Time Stamp:           %S",  time_stamp                  );
-  rd_printf("Machine:              %S",  machine                     );
-  rd_printf("Section Count:        %u",  header->section_count       );
-  rd_printf("Symbol Table:         %#x", header->symbol_table_foff   );
-  rd_printf("Symbol Count:         %u",  header->symbol_count        );
-  rd_printf("Optional Header Size: %m",  header->optional_header_size);
-  rd_printf("Flags:                %S",  flags                       );
+  rd_printf("Time Stamp          : %#x (%S)", header->time_stamp, time_stamp                            );
+  rd_printf("Machine             : %#x %S",   header->machine, machine                                  );
+  rd_printf("Section Count       : %u",       header->section_count                                     );
+  rd_printf("Symbol Table        : %#x",      header->symbol_table_foff                                 );
+  rd_printf("Symbol Count        : %u",       header->symbol_count                                      );
+  rd_printf("Optional Header Size: %#x (%m)", header->optional_header_size, header->optional_header_size);
+  rd_printf("Flags               : %#x (%S)", header->flags, flags                                      );
   rd_unindent();
 
   scratch_end(scratch);
@@ -6431,15 +6441,15 @@ coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ParsedArc
 
   rd_printf("# Import");
   rd_indent();
-  rd_printf("Version:    %u", header->version        );
-  rd_printf("Machine:    %S", machine                );
-  rd_printf("Time Stamp: %S", time_stamp             );
-  rd_printf("Data Size:  %m", header->data_size      );
-  rd_printf("Hint:       %u", header->hint_or_ordinal);
-  rd_printf("Type:       %u", header->type           );
-  rd_printf("Import By:  %u", header->import_by      );
-  rd_printf("Function:   %S", header->func_name      );
-  rd_printf("DLL:        %S", header->dll_name       );
+  rd_printf("Version   : %u", header->version        );
+  rd_printf("Machine   : %S", machine                );
+  rd_printf("Time Stamp: %#x (%S)", header->time_stamp, time_stamp      );
+  rd_printf("Data Size : %#x (%m)", header->data_size, header->data_size);
+  rd_printf("Hint      : %u", header->hint_or_ordinal);
+  rd_printf("Type      : %u", header->type           );
+  rd_printf("Import By : %u", header->import_by      );
+  rd_printf("Function  : %S", header->func_name      );
+  rd_printf("DLL       : %S", header->dll_name       );
   rd_unindent();
 
   scratch_end(scratch);
@@ -6592,8 +6602,8 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
     rd_printf("# First Header");
     rd_indent();
 
-    rd_printf("Symbol Count:      %u", first_member.symbol_count);
-    rd_printf("String Table Size: %M", first_member.string_table.size);
+    rd_printf("Symbol Count     : %u",         first_member.symbol_count);
+    rd_printf("String Table Size: %#llx (%M)", first_member.string_table.size, first_member.string_table.size);
 
     rd_printf("Members:");
     rd_indent();
@@ -6622,9 +6632,9 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
     rd_printf("# Second Header");
     rd_indent();
 
-    rd_printf("Member Count:      %u", second_member.member_count);
-    rd_printf("Symbol Count:      %u", second_member.symbol_count);
-    rd_printf("String Table Size: %M", second_member.string_table.size);
+    rd_printf("Member Count     : %u",         second_member.member_count);
+    rd_printf("Symbol Count     : %u",         second_member.symbol_count);
+    rd_printf("String Table Size: %#llx (%M)", second_member.string_table.size, second_member.string_table.size);
 
     String8List string_table = str8_split_by_string_chars(scratch.arena, second_member.string_table, str8_lit("\0"), 0);
 
@@ -6744,11 +6754,11 @@ mscrt_print_eh_handler_type32(Arena *arena, String8List *out, String8 indent, RD
   Temp scratch = scratch_begin(&arena, 1);
   String8 catch_line     = rd_format_line_from_voff(scratch.arena, rdi, handler->catch_handler_voff, PathStyle_WindowsAbsolute);
   String8 adjectives_str = mscrt_string_from_eh_adjectives(scratch.arena, handler->adjectives);
-  rd_printf("Adjectives:                %S",      adjectives_str, handler->adjectives);
-  rd_printf("Descriptor:                %#x",     handler->descriptor_voff);
-  rd_printf("Catch Object Frame Offset: %#x",     handler->catch_obj_frame_offset);
-  rd_printf("Catch Handler:             %#x%s%S", handler->catch_handler_voff, catch_line.size ? " " : "", catch_line);
-  rd_printf("Delta to FP Handler:       %#x",     handler->fp_distance);
+  rd_printf("Adjectives               : %#x (%S)", handler->adjectives, adjectives_str);
+  rd_printf("Descriptor               : %#x",      handler->descriptor_voff);
+  rd_printf("Catch Object Frame Offset: %#x",      handler->catch_obj_frame_offset);
+  rd_printf("Catch Handler            : %#x%s%S",  handler->catch_handler_voff, catch_line.size ? " " : "", catch_line);
+  rd_printf("Delta to FP Handler      : %#x",      handler->fp_distance);
   scratch_end(scratch);
 }
 
@@ -6783,32 +6793,32 @@ pe_print_optional_header32(Arena *arena, String8List *out, String8 indent, PE_Op
 
   rd_printf("# PE Optional Header 32");
   rd_indent();
-  rd_printf("Magic:                 %#x",   opt_header->magic);
-  rd_printf("Linker version:        %u.%u", opt_header->major_linker_version, opt_header->minor_linker_version);
-  rd_printf("Size of code:          %m",    opt_header->sizeof_code);
-  rd_printf("Size of inited data:   %m",    opt_header->sizeof_inited_data);
-  rd_printf("Size of uninited data: %m",    opt_header->sizeof_uninited_data);
-  rd_printf("Entry point:           %#x",   opt_header->entry_point_va);
-  rd_printf("Code base:             %#x",   opt_header->code_base);
-  rd_printf("Data base:             %#x",   opt_header->data_base);
-  rd_printf("Image base:            %#x",   opt_header->image_base);
-  rd_printf("Section align:         %#x",   opt_header->section_alignment);
-  rd_printf("File align:            %#x",   opt_header->file_alignment);
-  rd_printf("OS version:            %u.%u", opt_header->major_os_ver, opt_header->minor_os_ver);
-  rd_printf("Image Version:         %u.%u", opt_header->major_img_ver, opt_header->minor_img_ver);
-  rd_printf("Subsystem version:     %u.%u", opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
-  rd_printf("Win32 version:         %u",    opt_header->win32_version_value);
-  rd_printf("Size of image:         %m",    opt_header->sizeof_image);
-  rd_printf("Size of headers:       %m",    opt_header->sizeof_headers);
-  rd_printf("Checksum:              %#x",   opt_header->check_sum);
-  rd_printf("Subsystem:             %S",    subsystem);
-  rd_printf("DLL Characteristics:   %S",    dll_chars);
-  rd_printf("Stack reserve:         %m",    opt_header->sizeof_stack_reserve);
-  rd_printf("Stack commit:          %m",    opt_header->sizeof_stack_commit);
-  rd_printf("Heap reserve:          %m",    opt_header->sizeof_heap_reserve);
-  rd_printf("Heap commit:           %m",    opt_header->sizeof_heap_commit);
-  rd_printf("Loader flags:          %#x",   opt_header->loader_flags);
-  rd_printf("RVA and offset count:  %u",    opt_header->data_dir_count);
+  rd_printf("Magic                : %#x",        opt_header->magic);
+  rd_printf("Linker version       : %u.%u",      opt_header->major_linker_version, opt_header->minor_linker_version);
+  rd_printf("Size of code         : %#-8x (%m)", opt_header->sizeof_code, opt_header->sizeof_code);
+  rd_printf("Size of inited data  : %#-8x (%m)", opt_header->sizeof_inited_data, opt_header->sizeof_inited_data);
+  rd_printf("Size of uninited data: %#-8x (%m)", opt_header->sizeof_uninited_data, opt_header->sizeof_uninited_data);
+  rd_printf("Entry point          : %#x",        opt_header->entry_point_va);
+  rd_printf("Code base            : %#x",        opt_header->code_base);
+  rd_printf("Data base            : %#x",        opt_header->data_base);
+  rd_printf("Image base           : %#x",        opt_header->image_base);
+  rd_printf("Section align        : %#x",        opt_header->section_alignment);
+  rd_printf("File align           : %#x",        opt_header->file_alignment);
+  rd_printf("OS version           : %u.%u",      opt_header->major_os_ver, opt_header->minor_os_ver);
+  rd_printf("Image Version        : %u.%u",      opt_header->major_img_ver, opt_header->minor_img_ver);
+  rd_printf("Subsystem version    : %u.%u",      opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
+  rd_printf("Win32 version        : %u",         opt_header->win32_version_value);
+  rd_printf("Size of image        : %#x (%m)",   opt_header->sizeof_image, opt_header->sizeof_image);
+  rd_printf("Size of headers      : %#x (%m)",   opt_header->sizeof_headers, opt_header->sizeof_headers);
+  rd_printf("Checksum             : %#x",        opt_header->check_sum);
+  rd_printf("Subsystem            : %#x (%S)",   opt_header->subsystem, subsystem);
+  rd_printf("DLL Characteristics  : %#x (%S)",   opt_header->dll_characteristics, dll_chars);
+  rd_printf("Stack reserve        : %#-8x (%m)", opt_header->sizeof_stack_reserve, opt_header->sizeof_stack_reserve);
+  rd_printf("Stack commit         : %#-8x (%m)", opt_header->sizeof_stack_commit, opt_header->sizeof_stack_commit);
+  rd_printf("Heap reserve         : %#-8x (%m)", opt_header->sizeof_heap_reserve, opt_header->sizeof_heap_reserve);
+  rd_printf("Heap commit          : %#-8x (%m)", opt_header->sizeof_heap_commit, opt_header->sizeof_heap_commit);
+  rd_printf("Loader flags         : %#x",        opt_header->loader_flags);
+  rd_printf("RVA and offset count : %u",         opt_header->data_dir_count);
   rd_newline();
 
   pe_print_data_directory_ranges(arena, out, indent, opt_header->data_dir_count, dirs);
@@ -6827,31 +6837,31 @@ pe_print_optional_header32plus(Arena *arena, String8List *out, String8 indent, P
 
   rd_printf("# PE Optional Header 32+");
   rd_indent();
-  rd_printf("Magic:                 %#x",   opt_header->magic);
-  rd_printf("Linker version:        %u.%u", opt_header->major_linker_version, opt_header->minor_linker_version);
-  rd_printf("Size of code:          %m",    opt_header->sizeof_code);
-  rd_printf("Size of inited data:   %m",    opt_header->sizeof_inited_data);
-  rd_printf("Size of uninited data: %m",    opt_header->sizeof_uninited_data);
-  rd_printf("Entry point:           %#x",   opt_header->entry_point_va);
-  rd_printf("Code base:             %#x",   opt_header->code_base);
-  rd_printf("Image base:            %#llx", opt_header->image_base);
-  rd_printf("Section align:         %#x",   opt_header->section_alignment);
-  rd_printf("File align:            %#x",   opt_header->file_alignment);
-  rd_printf("OS version:            %u.%u", opt_header->major_os_ver, opt_header->minor_os_ver);
-  rd_printf("Image Version:         %u.%u", opt_header->major_img_ver, opt_header->minor_img_ver);
-  rd_printf("Subsystem version:     %u.%u", opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
-  rd_printf("Win32 version:         %u",    opt_header->win32_version_value);
-  rd_printf("Size of image:         %m",    opt_header->sizeof_image);
-  rd_printf("Size of headers:       %m",    opt_header->sizeof_headers);
-  rd_printf("Checksum:              %#x",   opt_header->check_sum);
-  rd_printf("Subsystem:             %S",    subsystem);
-  rd_printf("DLL Characteristics:   %S",    dll_chars);
-  rd_printf("Stack reserve:         %M",    opt_header->sizeof_stack_reserve);
-  rd_printf("Stack commit:          %M",    opt_header->sizeof_stack_commit);
-  rd_printf("Heap reserve:          %M",    opt_header->sizeof_heap_reserve);
-  rd_printf("Heap commit:           %M",    opt_header->sizeof_heap_commit);
-  rd_printf("Loader flags:          %#x",   opt_header->loader_flags);
-  rd_printf("RVA and offset count:  %u",    opt_header->data_dir_count);
+  rd_printf("Magic                : %#x",          opt_header->magic);
+  rd_printf("Linker version       : %u.%u",        opt_header->major_linker_version, opt_header->minor_linker_version);
+  rd_printf("Size of code         : %#-8x (%m)",   opt_header->sizeof_code, opt_header->sizeof_code);
+  rd_printf("Size of inited data  : %#-8x (%m)",   opt_header->sizeof_inited_data, opt_header->sizeof_inited_data);
+  rd_printf("Size of uninited data: %#-8x (%m)",   opt_header->sizeof_uninited_data, opt_header->sizeof_uninited_data);
+  rd_printf("Entry point          : %#x",          opt_header->entry_point_va);
+  rd_printf("Code base            : %#x",          opt_header->code_base);
+  rd_printf("Image base           : %#llx",        opt_header->image_base);
+  rd_printf("Section align        : %#x",          opt_header->section_alignment);
+  rd_printf("File align           : %#x",          opt_header->file_alignment);
+  rd_printf("OS version           : %u.%u",        opt_header->major_os_ver, opt_header->minor_os_ver);
+  rd_printf("Image Version        : %u.%u",        opt_header->major_img_ver, opt_header->minor_img_ver);
+  rd_printf("Subsystem version    : %u.%u",        opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
+  rd_printf("Win32 version        : %u",           opt_header->win32_version_value);
+  rd_printf("Size of image        : %#x (%m)",     opt_header->sizeof_image, opt_header->sizeof_image);
+  rd_printf("Size of headers      : %#x (%m)",     opt_header->sizeof_headers, opt_header->sizeof_headers);
+  rd_printf("Checksum             : %#x",          opt_header->check_sum);
+  rd_printf("Subsystem            : %#llx (%S)",   opt_header->subsystem, subsystem);
+  rd_printf("DLL Characteristics  : %#llx (%S)",   opt_header->dll_characteristics, dll_chars);
+  rd_printf("Stack reserve        : %#-8llx (%M)", opt_header->sizeof_stack_reserve, opt_header->sizeof_stack_reserve);
+  rd_printf("Stack commit         : %#-8llx (%M)", opt_header->sizeof_stack_commit, opt_header->sizeof_stack_commit);
+  rd_printf("Heap reserve         : %#-8llx (%M)", opt_header->sizeof_heap_reserve, opt_header->sizeof_heap_reserve);
+  rd_printf("Heap commit          : %#-8llx (%M)", opt_header->sizeof_heap_commit, opt_header->sizeof_heap_commit);
+  rd_printf("Loader flags         : %#x",          opt_header->loader_flags);
+  rd_printf("RVA and offset count : %u",           opt_header->data_dir_count);
   rd_newline();
 
   pe_print_data_directory_ranges(arena, out, indent, opt_header->data_dir_count, dirs);

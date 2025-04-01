@@ -213,7 +213,7 @@ internal void rdi_print_global_variable(Arena *arena, String8List *out, String8 
 internal void rdi_print_thread_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_ThreadVariable *tvar);
 internal void rdi_print_procedure      (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure      *proc, RDI_Arch arch);
 internal void rdi_print_scope          (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Scope          *scope, RDI_Arch arch);
-internal void rdi_print_inline_site    (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_InlineSite     *inline_site);
+internal void rdi_print_inline_site    (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, U64 idx, RDI_InlineSite     *inline_site);
 internal void rdi_print_vmap_entry     (Arena *arena, String8List *out, String8 indent, RDI_VMapEntry *v);
 
 // DWARF

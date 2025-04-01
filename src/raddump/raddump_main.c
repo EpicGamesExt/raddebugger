@@ -274,17 +274,19 @@ entry_point(CmdLine *cmdline)
     RDI_Parsed rdi = {0};
     RDI_ParseStatus parse_status = rdi_parse(raw_data.str, raw_data.size, &rdi);
     switch (parse_status) {
-    case RDI_ParseStatus_Good:                     rdi_print(arena, out, indent, &rdi, opts);                     break;
+    case RDI_ParseStatus_Good: {
+      RD_Option rdi_print_opts = opts;
+      if ((rdi_print_opts & RD_Option_RdiAll) == 0) {
+        rdi_print_opts |= RD_Option_RdiAll;
+      }
+      rdi_print(arena, out, indent, &rdi, rdi_print_opts); 
+    } break;
     case RDI_ParseStatus_HeaderDoesNotMatch:       rd_errorf("RDI Parse: header does not match");                 break;
     case RDI_ParseStatus_UnsupportedVersionNumber: rd_errorf("RDI Parse: unsupported version");                   break;
     case RDI_ParseStatus_InvalidDataSecionLayout:  rd_errorf("RDI Parse: invalid data section layout");           break;
     case RDI_ParseStatus_MissingRequiredSection:   rd_errorf("RDI Parse: missing required section");              break;
     default:                                       rd_errorf("RDI Parse: unknown parse status %u", parse_status); break;
     }
-    if ((opts & RD_Option_RdiAll) == 0) {
-      opts = RD_Option_RdiAll;
-    }
-    rdi_print(arena, out, indent, &rdi, opts);
   } else if (coff_is_regular_archive(raw_data) || coff_is_thin_archive(raw_data)) {
     coff_print_archive(arena, out, indent, raw_data, opts);
   } else if (coff_is_big_obj(raw_data)) {
