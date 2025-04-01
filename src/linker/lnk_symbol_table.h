@@ -201,7 +201,7 @@ internal LNK_SymbolArray     lnk_symbol_array_from_list(Arena *arena, LNK_Symbol
 
 ////////////////////////////////
 
-internal void                 lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunk_list, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *new_symbol);
+internal void                 lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunks, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *symbol);
 internal LNK_SymbolHashTrie * lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name);
 internal void                 lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie);
 

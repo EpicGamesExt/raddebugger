@@ -221,133 +221,128 @@ lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *
 }
 
 internal B32
-lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
+lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  B32 can_replace = 0;
-
+  Assert(src->type != LNK_Symbol_Undefined);
   Assert(dst != src);
   Assert(str8_match(dst->name, src->name, 0));
-  Assert(src->type != LNK_Symbol_Undefined);
 
+  B32 can_replace = 0;
+
+  // lazy vs lazy
   if (dst->type == LNK_Symbol_Lazy && src->type == LNK_Symbol_Lazy) {
     // link.exe picks symbol from lib that is discovered first
     LNK_Lib *dst_lib = dst->u.lazy.lib;
     LNK_Lib *src_lib = src->u.lazy.lib;
-    
-    //if (dst_lib->input_idx == src_lib->input_idx) {
-      //Assert(!"TODO: report duplicate symbols in lib");
-    //}
-
     can_replace = dst_lib->input_idx > src_lib->input_idx;
-  } else if (dst->type == LNK_Symbol_Lazy && (LNK_Symbol_IsDefined(src->type) || src->type == LNK_Symbol_Weak)) {
+  }
+  // lazy vs weak
+  else if (dst->type == LNK_Symbol_Lazy && (LNK_Symbol_IsDefined(src->type) || src->type == LNK_Symbol_Weak)) {
     can_replace = 1;
-  } else if (dst->type == LNK_Symbol_Weak && LNK_Symbol_IsDefined(src->type)) {
-    // strong definition found, replace weak symbol
+  }
+  // weak vs strong
+  else if (dst->type == LNK_Symbol_Weak && LNK_Symbol_IsDefined(src->type)) {
     can_replace = 1;
-  } else if (dst->type == LNK_Symbol_Weak && src->type == LNK_Symbol_Weak) {
+  }
+  // weak vs weak
+  else if (dst->type == LNK_Symbol_Weak && src->type == LNK_Symbol_Weak) {
     B32 is_fallback_same = str8_match(dst->u.weak.fallback_symbol->name, src->u.weak.fallback_symbol->name, 0);
-    if (!is_fallback_same) {
+    if (is_fallback_same) {
+      if (src->obj && !dst->obj) {
+        can_replace = 1;
+      } else if (src->obj && dst->obj) {
+        can_replace = src->obj->input_idx < dst->obj->input_idx;
+      }
+    } else {
       lnk_error(LNK_Error_MultiplyDefinedSymbol, "multiply defined weak symbol %S, symbol defined in:", src->name);
       lnk_supplement_error("%S", dst->obj->path);
       lnk_supplement_error("%S", src->obj->path);
     }
+  }
+  // defined VA vs defined chunk
+  else if (LNK_Symbol_IsDefined(dst->type) && dst->u.defined.value_type == LNK_DefinedSymbolValue_VA &&
+           LNK_Symbol_IsDefined(src->type)) {
+    can_replace = 1;
+  }
+  // defined chunk vs defined chunk
+  else if (LNK_Symbol_IsDefined(dst->type) && dst->u.defined.value_type == LNK_DefinedSymbolValue_Chunk &&
+           LNK_Symbol_IsDefined(src->type) && src->u.defined.value_type == LNK_DefinedSymbolValue_Chunk) {
+    LNK_DefinedSymbol *dst_defn = &dst->u.defined;
+    LNK_DefinedSymbol *src_defn = &src->u.defined;
 
-    if (src->obj && !dst->obj) {
-      can_replace = 1;
-    } else if (src->obj && dst->obj) {
-      can_replace = src->obj->input_idx < dst->obj->input_idx;
+    Assert(dst_defn->u.chunk->is_discarded == 0);
+    Assert(dst_defn->u.chunk->type == LNK_Chunk_Leaf);
+    Assert(src_defn->u.chunk->type == LNK_Chunk_Leaf);
+
+    COFF_ComdatSelectType dst_select = dst_defn->u.selection;
+    COFF_ComdatSelectType src_select = src_defn->u.selection;
+
+    // handle objs compiled with /GR- and /GR
+    if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
+        (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
+      dst_select = COFF_ComdatSelect_Largest;
+      src_select = COFF_ComdatSelect_Largest;
     }
-  } else if (LNK_Symbol_IsDefined(dst->type) && LNK_Symbol_IsDefined(src->type)) {
-    const LNK_DefinedSymbol *dst_defn = &dst->u.defined;
-    const LNK_DefinedSymbol *src_defn = &src->u.defined;
 
-    if (dst_defn->value_type == LNK_DefinedSymbolValue_Chunk &&
-        src_defn->value_type == LNK_DefinedSymbolValue_Chunk) {
-      Assert(dst_defn->u.chunk->is_discarded == 0);
-      Assert(dst_defn->u.chunk->type == LNK_Chunk_Leaf);
-      Assert(src_defn->u.chunk->type == LNK_Chunk_Leaf);
+    if (src_select == dst_select) {
+      LNK_Chunk *dst_chunk      = dst_defn->u.chunk;
+      LNK_Chunk *src_chunk      = src_defn->u.chunk;
+      U64        dst_chunk_size = lnk_chunk_get_size(dst_chunk);
+      U64        src_chunk_size = lnk_chunk_get_size(src_chunk);
 
-      COFF_ComdatSelectType dst_select = dst_defn->u.selection;
-      COFF_ComdatSelectType src_select = src_defn->u.selection;
-
-      // handle objs compiled with /GR- and /GR
-      if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
-          (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
-        dst_select = COFF_ComdatSelect_Largest;
-        src_select = COFF_ComdatSelect_Largest;
-      }
-
-      if (src_select == dst_select) {
-        switch (src_select) {
-        default: InvalidPath;
-        case COFF_ComdatSelect_Null:
-        case COFF_ComdatSelect_Any: {
-          LNK_Chunk *dst_chunk = dst_defn->u.chunk;
-          LNK_Chunk *src_chunk = src_defn->u.chunk;
-          U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
-          U64 src_chunk_size = lnk_chunk_get_size(src_chunk);
-          if (src_chunk_size == dst_chunk_size) {
-            can_replace = src_chunk->input_idx < dst_chunk->input_idx;
-          } else {
-            // both COMDATs are valid but to get smaller exe pick smallest
-            can_replace = src_chunk_size < dst_chunk_size;
-          }
-        } break;
-        case COFF_ComdatSelect_NoDuplicates: {
-          lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
-        } break;
-        case COFF_ComdatSelect_SameSize: {
-          LNK_Chunk *dst_chunk = dst_defn->u.chunk;
-          LNK_Chunk *src_chunk = src_defn->u.chunk;
-          U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
-          U64 src_chunk_size = lnk_chunk_get_size(src_chunk);
-          B32 is_same_size = (dst_chunk_size == src_chunk_size);
-          if (!is_same_size) {
-            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
-          }
-        } break;
-        case COFF_ComdatSelect_ExactMatch: {
-          B32 is_exact_match = (dst_defn->u.check_sum == src_defn->u.check_sum);
-          if (!is_exact_match) {
-            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
-          }
-        } break;
-        case COFF_ComdatSelect_Largest: {
-          LNK_Chunk *dst_chunk = dst_defn->u.chunk;
-          LNK_Chunk *src_chunk = src_defn->u.chunk;
-          U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
-          U64 src_chunk_size = lnk_chunk_get_size(src_chunk);
-          if (dst_chunk_size == src_chunk_size) {
-            if (dst_defn->u.chunk->u.leaf.str == 0 && src_defn->u.chunk->u.leaf.size > 0) {
-              // handle communal variable
-              //
-              // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
-              can_replace = 1;
-            } else {
-              can_replace = src_chunk->input_idx < dst_chunk->input_idx;
-            }
-          } else {
-            can_replace = dst_chunk_size < src_chunk_size;
-          }
-        } break;
-        case COFF_ComdatSelect_Associative: {
-          // ignore
-        } break;
+      switch (src_select) {
+      case COFF_ComdatSelect_Null:
+      case COFF_ComdatSelect_Any: {
+        if (src_chunk_size == dst_chunk_size) {
+          can_replace = src_chunk->input_idx < dst_chunk->input_idx;
+        } else {
+          // both COMDATs are valid but to get smaller exe pick smallest
+          can_replace = src_chunk_size < dst_chunk_size;
         }
-      } else {
-        String8 src_select_str = coff_string_from_comdat_select_type(src_defn->u.selection); 
-        String8 dst_select_str = coff_string_from_comdat_select_type(dst_defn->u.selection);
-        lnk_error_obj(LNK_Warning_UnresolvedComdat, src->obj,
-                  "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
-                  src->name, src_select_str, dst_select_str, dst->obj->path);
+      } break;
+      case COFF_ComdatSelect_NoDuplicates: {
+        lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
+      } break;
+      case COFF_ComdatSelect_SameSize: {
+        if (dst_chunk_size != src_chunk_size) {
+          lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
+        }
+      } break;
+      case COFF_ComdatSelect_ExactMatch: {
+        if (dst_defn->u.check_sum != src_defn->u.check_sum) {
+          lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src->obj, "multiply defined symbol %S in %S.", dst->name, dst->obj->path);
+        }
+      } break;
+      case COFF_ComdatSelect_Largest: {
+        if (dst_chunk_size == src_chunk_size) {
+          if (dst_defn->u.chunk->u.leaf.str == 0 && src_defn->u.chunk->u.leaf.size > 0) {
+            // handle communal variable
+            //
+            // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
+            can_replace = 1;
+          } else {
+            can_replace = src_chunk->input_idx < dst_chunk->input_idx;
+          }
+        } else {
+          can_replace = dst_chunk_size < src_chunk_size;
+        }
+      } break;
+      case COFF_ComdatSelect_Associative: {
+        // ignore
+      } break;
+      default: {
+        lnk_error_obj(LNK_Error_InvalidPath, src->obj, "unknown COMDAT selection %#x", src->obj, src_select);
+      } break;
       }
-    } else if (dst_defn->value_type == LNK_DefinedSymbolValue_VA && src_defn->value_type == LNK_DefinedSymbolValue_Chunk) {
-      can_replace = 1;
     } else {
-      InvalidPath;
+      String8 src_select_str = coff_string_from_comdat_select_type(src_defn->u.selection); 
+      String8 dst_select_str = coff_string_from_comdat_select_type(dst_defn->u.selection);
+      lnk_error_obj(LNK_Warning_UnresolvedComdat, src->obj,
+                "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
+                src->name, src_select_str, dst_select_str, dst->obj->path);
     }
   } else {
-    InvalidPath;
+    lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
   }
 
   return can_replace;
@@ -388,19 +383,22 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
 }
 
 internal void
-lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunk_list, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *new_symbol)
+lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
+                                       LNK_SymbolHashTrieChunkList  *chunks,
+                                       LNK_SymbolHashTrie          **trie,
+                                       U64                           hash,
+                                       LNK_Symbol                   *symbol)
 {
   LNK_SymbolHashTrie **curr_trie_ptr = trie;
-
   for (U64 h = hash; ; h <<= 2) {
     // load current pointer
     LNK_SymbolHashTrie *curr_trie = ins_atomic_ptr_eval(curr_trie_ptr);
 
     if (curr_trie == 0) {
       // init node
-      LNK_SymbolHashTrie *new_trie = lnk_symbol_hash_trie_chunk_list_push(arena, chunk_list, 512);
-      new_trie->name               = &new_symbol->name;
-      new_trie->symbol             = new_symbol;
+      LNK_SymbolHashTrie *new_trie = lnk_symbol_hash_trie_chunk_list_push(arena, chunks, 512);
+      new_trie->name               = &symbol->name;
+      new_trie->symbol             = symbol;
       MemoryZeroArray(new_trie->child);
 
       // try to insert new node
@@ -412,7 +410,7 @@ lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList
       }
 
       // rollback chunk list push
-      chunk_list->last->count -= 1;
+      --chunks->last->count;
 
       // retry insert with trie node from another thread
       curr_trie = cmp;
@@ -421,39 +419,38 @@ lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList
     // load current symbol
     String8 *curr_name = ins_atomic_ptr_eval(&curr_trie->name);
 
-    if (curr_name) {
-      if (str8_match(*curr_name, new_symbol->name, 0)) {
-        for (LNK_Symbol *src = new_symbol, *dst;;) {
-          LNK_Symbol *dst = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
+    if (curr_name && str8_match(*curr_name, symbol->name, 0)) {
+      for (LNK_Symbol *src = symbol;;) {
+        // try replacing current symbol with zero, otherwise loop back and retry
+        LNK_Symbol *dst = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
 
-          if (dst) {
-            if (lnk_can_replace_symbol(dst, src)) {
-              // HACK: patch dst because relocations might point to it
-              lnk_on_symbol_replace(dst, src);
-
-              // swap
-              dst = src;
-            } else {
-              // discard source
-              lnk_on_symbol_replace(src, dst);
-            }
-          }
-
-          // try insert back symbol
-          dst = ins_atomic_ptr_eval_cond_assign(&curr_trie->symbol, src, 0);
-
-          if (dst == 0) {
-            break;
+        // apply replacement logic
+        LNK_Symbol *current_symbol = dst;
+        if (dst) {
+          if (lnk_can_replace_symbol(dst, src)) {
+            // HACK: patch dst because relocations might point to it
+            lnk_on_symbol_replace(dst, src);
+            current_symbol = src;
+          } else {
+            // discard source
+            lnk_on_symbol_replace(src, dst);
           }
         }
 
-        break;
+        // try replacing symbol, if another thread has already taken the slot, rerun the whole loop
+        dst = ins_atomic_ptr_eval_cond_assign(&curr_trie->symbol, current_symbol, 0);
+
+        // symbol replaced, exit
+        if (dst == 0) {
+          goto exit;
+        }
       }
     }
 
-    // descend
+    // pick child and descend
     curr_trie_ptr = curr_trie->child + (h >> 62);
   }
+  exit:;
 }
 
 internal LNK_SymbolHashTrie *

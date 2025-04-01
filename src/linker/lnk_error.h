@@ -31,10 +31,10 @@ typedef enum
   LNK_Error_LoadRes,
   LNK_Error_IO,
   LNK_Error_LargeAddrAwareRequired,
+  LNK_Error_InvalidPath,
   LNK_Error_StopLast,
   
   LNK_Error_First,
-  LNK_Error_InvalidPath,
   LNK_Error_AlreadyDefinedSymbol,
   LNK_Error_AlternateNameConflict,
   LNK_Error_CvPrecomp,
