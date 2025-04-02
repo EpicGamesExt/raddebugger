@@ -196,7 +196,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(locals)
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_state->ctx->locals_map);
+    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_ir_state->ctx->locals_map);
     e_string2num_map_node_array_sort__in_place(&nodes);
     String8List exprs_filtered = {0};
     for EachIndex(idx, nodes.count)
@@ -11873,7 +11873,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as local
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, string);
+      U64 local_num = e_num_from_string(e_ir_state->ctx->locals_map, string);
       if(local_num != 0)
       {
         mapped = 1;
@@ -11884,7 +11884,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as member
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 member_num = e_num_from_string(e_parse_state->ctx->member_map, string);
+      U64 member_num = e_num_from_string(e_ir_state->ctx->member_map, string);
       if(member_num != 0)
       {
         mapped = 1;
@@ -11895,7 +11895,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register
     if(!mapped)
     {
-      U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, string);
+      U64 reg_num = e_num_from_string(e_ir_state->ctx->regs_map, string);
       if(reg_num != 0)
       {
         mapped = 1;
@@ -11906,7 +11906,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register alias
     if(!mapped)
     {
-      U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, string);
+      U64 alias_num = e_num_from_string(e_ir_state->ctx->reg_alias_map, string);
       if(alias_num != 0)
       {
         mapped = 1;
@@ -13479,8 +13479,6 @@ rd_frame(void)
     ProfScope("build eval type context")
     {
       E_TypeCtx *ctx = type_ctx;
-      ctx->ip_vaddr          = rip_vaddr;
-      ctx->ip_voff           = rip_voff;
       ctx->modules           = eval_modules;
       ctx->modules_count     = eval_modules_count;
       ctx->primary_module    = eval_modules_primary;
@@ -13494,16 +13492,9 @@ rd_frame(void)
     ProfScope("build eval parse context")
     {
       E_ParseCtx *ctx = parse_ctx;
-      ctx->ip_vaddr          = rip_vaddr;
-      ctx->ip_voff           = rip_voff;
-      ctx->ip_thread_space   = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
       ctx->modules           = eval_modules;
       ctx->modules_count     = eval_modules_count;
       ctx->primary_module    = eval_modules_primary;
-      ctx->regs_map      = ctrl_string2reg_from_arch(ctx->primary_module->arch);
-      ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->primary_module->arch);
-      ctx->locals_map    = d_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
-      ctx->member_map    = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
     }
     e_select_parse_ctx(parse_ctx);
     
@@ -13514,6 +13505,13 @@ rd_frame(void)
     if(e_ir_state != 0) { e_ir_state->ctx = 0; }
     {
       E_IRCtx *ctx = ir_ctx;
+      ctx->modules           = eval_modules;
+      ctx->modules_count     = eval_modules_count;
+      ctx->primary_module    = eval_modules_primary;
+      ctx->regs_map      = ctrl_string2reg_from_arch(ctx->primary_module->arch);
+      ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->primary_module->arch);
+      ctx->locals_map    = d_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+      ctx->member_map    = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
       ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
       ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
       ctx->lookup_rule_map    = push_array(scratch.arena, E_LookupRuleMap, 1);

@@ -586,6 +586,30 @@ rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
   return scope;
 }
 
+RDI_PROC RDI_UDT *
+rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_U64 idx = 0;
+  if(procedure->link_flags & RDI_LinkFlag_TypeScoped)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, idx);
+  return udt;
+}
+
+RDI_PROC RDI_Procedure *
+rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_U64 idx = 0;
+  if(procedure->link_flags & RDI_LinkFlag_ProcScoped)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_Procedure *container_procedure = rdi_element_from_name_idx(rdi, Procedures, idx);
+  return container_procedure;
+}
+
 RDI_PROC RDI_U64
 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 {

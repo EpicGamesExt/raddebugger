@@ -116,7 +116,24 @@ struct E_StringIDMap
 typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
 {
+  // rjf: instruction pointer info
+  U64 ip_vaddr;
+  U64 ip_voff;
+  E_Space ip_thread_space;
+  
+  // rjf: modules
+  E_Module *modules;
+  U64 modules_count;
+  E_Module *primary_module;
+  
+  // rjf: identifier-resolution maps
+  E_String2NumMap *regs_map;
+  E_String2NumMap *reg_alias_map;
+  E_String2NumMap *locals_map; // (within `primary_module`)
+  E_String2NumMap *member_map; // (within `primary_module`)
   E_String2ExprMap *macro_map;
+  
+  // rjf: hook maps
   E_LookupRuleMap *lookup_rule_map;
   E_IRGenRuleMap *irgen_rule_map;
   E_AutoHookMap *auto_hook_map;
@@ -133,6 +150,9 @@ struct E_IRState
   
   // rjf: ir context
   E_IRCtx *ctx;
+  
+  // rjf: unpacked ctx
+  RDI_Procedure *ip_procedure;
   
   // rjf: caches
   E_UsedTagMap *used_tag_map;
@@ -179,7 +199,6 @@ internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
 ////////////////////////////////
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
-internal E_IRCtx *e_selected_ir_ctx(void);
 internal void e_select_ir_ctx(E_IRCtx *ctx);
 
 ////////////////////////////////

@@ -137,11 +137,6 @@ struct E_MemberCacheSlot
 typedef struct E_TypeCtx E_TypeCtx;
 struct E_TypeCtx
 {
-  // rjf: instruction pointer info
-  U64 ip_vaddr;
-  U64 ip_voff; // (within `primary_module`)
-  
-  // rjf: debug info
   E_Module *modules;
   U64 modules_count;
   E_Module *primary_module;

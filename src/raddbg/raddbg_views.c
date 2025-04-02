@@ -2501,7 +2501,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         ui_color_from_name(str8_lit("code_local")),
       };
       U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
-      for(E_String2NumMapNode *n = e_parse_state->ctx->locals_map->first; n != 0; n = n->order_next)
+      for(E_String2NumMapNode *n = e_ir_state->ctx->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
         E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);

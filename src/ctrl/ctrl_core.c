@@ -4663,8 +4663,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   // rjf: build eval type context
   {
     E_TypeCtx *ctx = &scope->type_ctx;
-    ctx->ip_vaddr          = thread_rip_vaddr;
-    ctx->ip_voff           = thread_rip_voff;
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
@@ -4675,10 +4673,15 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   ProfScope("build eval parse context")
   {
     E_ParseCtx *ctx = &scope->parse_ctx;
-    ctx->ip_vaddr          = thread_rip_vaddr;
-    ctx->ip_voff           = thread_rip_voff;
-    ctx->ip_thread_space   = e_space_make(CTRL_EvalSpaceKind_Entity);
-    ctx->ip_thread_space.u64_0 = (U64)thread;
+    ctx->modules           = eval_modules;
+    ctx->modules_count     = eval_modules_count;
+    ctx->primary_module    = eval_modules_primary;
+  }
+  e_select_parse_ctx(&scope->parse_ctx);
+  
+  // rjf: build eval IR context
+  {
+    E_IRCtx *ctx = &scope->ir_ctx;
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
@@ -4686,12 +4689,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
     ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
     ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
-  }
-  e_select_parse_ctx(&scope->parse_ctx);
-  
-  // rjf: build eval IR context
-  {
-    E_IRCtx *ctx = &scope->ir_ctx;
     ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
     ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
     ctx->lookup_rule_map = push_array(arena, E_LookupRuleMap, 1);

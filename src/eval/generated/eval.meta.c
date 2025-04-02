@@ -134,7 +134,7 @@ U8 e_type_kind_basic_byte_size_table[56] =
 0,
 };
 
-String8 e_expr_kind_strings[51] =
+String8 e_expr_kind_strings[49] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -171,9 +171,7 @@ str8_lit_comp("LogOr"),
 str8_lit_comp("Ternary"),
 str8_lit_comp("Call"),
 str8_lit_comp("LeafBytecode"),
-str8_lit_comp("LeafMember"),
 str8_lit_comp("LeafStringLiteral"),
-str8_lit_comp("LeafBool"),
 str8_lit_comp("LeafU64"),
 str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
@@ -189,7 +187,7 @@ str8_lit_comp("Define"),
 str8_lit_comp("Tag"),
 };
 
-E_OpInfo e_expr_kind_op_info_table[51] =
+E_OpInfo e_expr_kind_op_info_table[49] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -225,8 +223,6 @@ E_OpInfo e_expr_kind_op_info_table[51] =
 { E_OpKind_Binary, 12, str8_lit_comp(""), str8_lit_comp("||"), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp("?"), str8_lit_comp(":") },
 { E_OpKind_Null, 0, str8_lit_comp("("), str8_lit_comp(","), str8_lit_comp(")") },
-{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
-{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },

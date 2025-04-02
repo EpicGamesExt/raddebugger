@@ -519,7 +519,7 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
     // rjf: push explicitly-attached tags (via key) next
     String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, key));
     E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
-    E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, &tag_expr_tokens);
+    E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, tag_expr_tokens);
     for(E_Expr *tag = tag_expr_parse.exprs.first, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
     {
       next = tag->next;
