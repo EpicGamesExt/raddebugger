@@ -2013,7 +2013,8 @@ lnk_build_base_relocs(TP_Context                  *tp,
       Assert(*block_size_ptr <= buf_size);
       
       // push page chunk
-      lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8_zero());
+      LNK_Chunk *page_chunk = lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8_zero());
+      lnk_chunk_set_debugf(base_reloc_sect->arena, page_chunk, "Base Reloc Page (VirtOff: %#x Size: %#x, Pads: %#x)", page->voff, block_size, pad_reloc_count);
       
       // purge voffs for next run
       hash_table_purge(voff_ht);
@@ -2278,11 +2279,11 @@ lnk_build_coff_section_table(LNK_SymbolTable *symtab, LNK_Section *header_sect, 
   }
   
   // push COFF header array chunk
-  LNK_Chunk *COFF_FileHeader_array_chunk = lnk_section_push_chunk_list(header_sect, parent_chunk, str8_zero());
-  lnk_chunk_set_debugf(header_sect->arena, COFF_FileHeader_array_chunk, LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME);
+  LNK_Chunk *coff_section_array_chunk = lnk_section_push_chunk_list(header_sect, parent_chunk, str8_zero());
+  lnk_chunk_set_debugf(header_sect->arena, coff_section_array_chunk, LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME);
   
   // define symbol for COFF header array
-  lnk_symbol_table_push_defined_chunk(symtab, str8_lit(LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, COFF_FileHeader_array_chunk, 0, 0, 0);
+  lnk_symbol_table_push_defined_chunk(symtab, str8_lit(LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, coff_section_array_chunk, 0, 0, 0);
   
   // push headers
   for (LNK_Section *sect = &sect_arr.v[0], *sect_opl = sect + sect_arr.count; sect < sect_opl; sect += 1) {
@@ -2292,38 +2293,39 @@ lnk_build_coff_section_table(LNK_SymbolTable *symtab, LNK_Section *header_sect, 
     if (!sect->has_layout) {
       continue;
     }
-    COFF_SectionHeader *COFF_FileHeader = push_array_no_zero(header_sect->arena, COFF_SectionHeader, 1);
+    COFF_SectionHeader *coff_section = push_array_no_zero(header_sect->arena, COFF_SectionHeader, 1);
     
     // TODO: for objs we can store long name in string table and write here /offset
-    if (sect->name.size > sizeof(COFF_FileHeader->name)) {
+    if (sect->name.size > sizeof(coff_section->name)) {
       lnk_error(LNK_Warning_LongSectionName, "not enough space in COFF section header to store entire name \"%S\"", sect->name);
     }
     
-    MemorySet(&COFF_FileHeader->name[0], 0, sizeof(COFF_FileHeader->name));
-    MemoryCopy(&COFF_FileHeader->name[0], sect->name.str, Min(sect->name.size, sizeof(COFF_FileHeader->name)));
-    COFF_FileHeader->vsize       = 0; // :vsize
-    COFF_FileHeader->voff        = 0; // :voff
-    COFF_FileHeader->fsize       = 0; // :fsize
-    COFF_FileHeader->foff        = 0; // :foff
-    COFF_FileHeader->relocs_foff = 0; // :relocs_foff
-    COFF_FileHeader->lines_foff  = 0; // obsolete
-    COFF_FileHeader->reloc_count = 0; // :reloc_count
-    COFF_FileHeader->line_count  = 0; // obsolete
-    COFF_FileHeader->flags       = sect->flags;
+    MemorySet(&coff_section->name[0], 0, sizeof(coff_section->name));
+    MemoryCopy(&coff_section->name[0], sect->name.str, Min(sect->name.size, sizeof(coff_section->name)));
+    coff_section->vsize       = 0; // :vsize
+    coff_section->voff        = 0; // :voff
+    coff_section->fsize       = 0; // :fsize
+    coff_section->foff        = 0; // :foff
+    coff_section->relocs_foff = 0; // :relocs_foff
+    coff_section->lines_foff  = 0; // obsolete
+    coff_section->reloc_count = 0; // :reloc_count
+    coff_section->line_count  = 0; // obsolete
+    coff_section->flags       = sect->flags;
     
     // push chunk
-    LNK_Chunk *COFF_FileHeader_chunk = lnk_section_push_chunk_raw(header_sect, COFF_FileHeader_array_chunk, COFF_FileHeader, sizeof(*COFF_FileHeader), str8_zero());
+    LNK_Chunk *coff_section_chunk = lnk_section_push_chunk_raw(header_sect, coff_section_array_chunk, coff_section, sizeof(*coff_section), str8_zero());
+    lnk_chunk_set_debugf(header_sect->arena, coff_section_chunk, "COFF_SECTION_HEADER %S", sect->name);
     
     // :vsize
-    lnk_section_push_reloc_undefined(header_sect, COFF_FileHeader_chunk, LNK_Reloc_CHUNK_SIZE_VIRT_32, OffsetOf(COFF_SectionHeader, vsize), sect->name, LNK_SymbolScopeFlag_Internal);
+    lnk_section_push_reloc_undefined(header_sect, coff_section_chunk, LNK_Reloc_CHUNK_SIZE_VIRT_32, OffsetOf(COFF_SectionHeader, vsize), sect->name, LNK_SymbolScopeFlag_Internal);
     // :voff
-    lnk_section_push_reloc_undefined(header_sect, COFF_FileHeader_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(COFF_SectionHeader, voff), sect->name, LNK_SymbolScopeFlag_Internal);
+    lnk_section_push_reloc_undefined(header_sect, coff_section_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(COFF_SectionHeader, voff), sect->name, LNK_SymbolScopeFlag_Internal);
     
     if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
       // :fsize
-      lnk_section_push_reloc_undefined(header_sect, COFF_FileHeader_chunk, LNK_Reloc_CHUNK_SIZE_FILE_32, OffsetOf(COFF_SectionHeader, fsize), sect->name, LNK_SymbolScopeFlag_Internal);
+      lnk_section_push_reloc_undefined(header_sect, coff_section_chunk, LNK_Reloc_CHUNK_SIZE_FILE_32, OffsetOf(COFF_SectionHeader, fsize), sect->name, LNK_SymbolScopeFlag_Internal);
       // :foff
-      lnk_section_push_reloc_undefined(header_sect, COFF_FileHeader_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, foff), sect->name, LNK_SymbolScopeFlag_Internal);
+      lnk_section_push_reloc_undefined(header_sect, coff_section_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, foff), sect->name, LNK_SymbolScopeFlag_Internal);
     }
     
     // TODO: :reloc_off
@@ -2331,10 +2333,10 @@ lnk_build_coff_section_table(LNK_SymbolTable *symtab, LNK_Section *header_sect, 
   }
   
   // push symbol for section header count
-  U64 header_count = COFF_FileHeader_array_chunk->u.list->count;
+  U64 header_count = coff_section_array_chunk->u.list->count;
   lnk_symbol_table_push_defined_va(symtab, str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, header_count);
   
-  return COFF_FileHeader_array_chunk;
+  return coff_section_array_chunk;
 }
 
 internal LNK_Chunk *
@@ -3223,13 +3225,14 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
       radsort(chunks, sect->layout.total_count, lnk_map_sort_on_chunk_file_off);
 
       str8_list_pushf(arena, &map, "%S\n", sect->name);
-      str8_list_pushf(arena, &map, "%-16s %-8s %-8s %-16s %-8s %s\n", "Sect:Offset", "VirtSize", "FileSize", "Blake3", "ChunkRef", "Source");
+      str8_list_pushf(arena, &map, "%-8s %-8s %-8s %-8s %-16s %-8s %s\n", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "ChunkRef", "Source");
       for (U64 chunk_idx = 0; chunk_idx < sect->layout.total_count; ++chunk_idx) {
         LNK_Chunk *chunk = chunks[chunk_idx];
-        if (chunk->type == LNK_Chunk_Leaf && chunk != g_null_chunk_ptr) {
+        if (chunk != g_null_chunk_ptr) {
           Temp temp = temp_begin(scratch.arena);
 
-          ISectOff   sc         = lnk_sc_from_chunk_ref(sect_id_map, chunk->ref);
+          U64        file_off   = lnk_file_off_from_chunk_ref(sect_id_map, chunk->ref);
+          U64        virt_off   = lnk_virt_off_from_chunk_ref(sect_id_map, chunk->ref);
           U64        virt_size  = lnk_virt_size_from_chunk_ref(sect_id_map, chunk->ref);
           U64        file_size  = lnk_file_size_from_chunk_ref(sect_id_map, chunk->ref);
           String8    chunk_data = lnk_data_from_chunk_ref(sect_id_map, image_data, chunk->ref);
@@ -3241,40 +3244,51 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
             blake3_hasher_finalize(&hasher, (U8 *)&chunk_hash, sizeof(chunk_hash));
           }
 
-          String8 address_str    = push_str8f(temp.arena, "%04x:%08x",   sc.isect, sc.off);
+          String8 file_off_str   = push_str8f(temp.arena, "%08x",        file_off);
+          String8 virt_off_str   = push_str8f(temp.arena, "%08x",        virt_off);
           String8 virt_size_str  = push_str8f(temp.arena, "%08x",        virt_size);
           String8 file_size_str  = push_str8f(temp.arena, "%08x",        file_size);
           String8 chunk_hash_str = push_str8f(temp.arena, "%08x%08x",    chunk_hash.u64[0], chunk_hash.u64[1]);
           String8 chunk_ref_str  = push_str8f(temp.arena, "{%llx,%llx}", chunk->ref.sect_id, chunk->ref.chunk_id);
-          String8 source_str     = {0};
-          if (chunk->obj) {
-            if (chunk->obj->lib_path.size) {
-              String8 lib_name = chunk->obj->lib_path;
-              lib_name         = str8_skip_last_slash(lib_name);
-              lib_name         = str8_chop_last_dot(lib_name);
+          String8 source_str;
+          {
+            String8List source_list = {0};
 
-              String8 obj_name = chunk->obj->path;
-              obj_name         = str8_skip_last_slash(obj_name);
+            // chunk type
+            str8_list_pushf(temp.arena, &source_list, "[%S]", lnk_string_from_chunk_type(chunk->type));
 
-              source_str = push_str8f(temp.arena, "%S:%S", lib_name, obj_name);
-            } else {
-              source_str = push_str8f(temp.arena, "%S", chunk->obj->path);
+            // location
+            if (chunk->obj) {
+              if (chunk->obj->lib_path.size) {
+                String8 lib_name = chunk->obj->lib_path;
+                lib_name         = str8_skip_last_slash(lib_name);
+                lib_name         = str8_chop_last_dot(lib_name);
+
+                String8 obj_name = chunk->obj->path;
+                obj_name         = str8_skip_last_slash(obj_name);
+
+                str8_list_pushf(temp.arena, &source_list, "%S:%S", lib_name, obj_name);
+              } else {
+                str8_list_push(temp.arena, &source_list, chunk->obj->path);
+              }
             }
-          }
+
+            // debug comment
 #if LNK_DEBUG_CHUNKS
-          if (chunk->debug.size) {
-            if (source_str.size) {
-              source_str = push_str8f(temp.arena, "%S (%S)", source_str, chunk->debug);
-            } else if (chunk->debug.size) {
-              source_str = push_str8f(temp.arena, "%S", chunk->debug);
+            if (chunk->debug.size) {
+              if (source_str.size) {
+                str8_list_pushf(temp.arena, &source_list, "(%S)", chunk->debug);
+              } else if (chunk->debug.size) {
+                str8_list_push(temp.arena, &source_list, chunk->debug);
+              }
             }
-          }
 #endif
-          if (source_str.size == 0) {
-            source_str = str8_lit("\?\?\?");
+
+            // string join
+            source_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
           }
 
-          str8_list_pushf(arena, &map, "%-16S %-8S %-8S %-16S %-8S %S\n", address_str, virt_size_str, file_size_str, chunk_hash_str, chunk_ref_str, source_str);
+          str8_list_pushf(arena, &map, "%-8S %-8S %-8S %-8S %-16S %-8S %S\n", file_off_str, virt_off_str, virt_size_str, file_size_str, chunk_hash_str, chunk_ref_str, source_str);
 
           temp_end(temp);
         }

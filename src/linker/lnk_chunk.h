@@ -206,3 +206,5 @@ internal LNK_ChunkNode * lnk_chunk_ptr_list_reserve(Arena *arena, LNK_ChunkList 
 internal String8Array    lnk_data_arr_from_chunk_ptr_list(Arena *arena, LNK_ChunkList list);
 internal String8Array *  lnk_data_arr_from_chunk_ptr_list_arr(Arena *arena, LNK_ChunkList *list_arr, U64 count);
 
+internal String8 lnk_string_from_chunk_type(LNK_ChunkType type);
+

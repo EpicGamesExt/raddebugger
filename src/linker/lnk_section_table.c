@@ -338,6 +338,7 @@ lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags fla
   sect->is_loose     = 1;
 
   lnk_chunk_set_debugf(sect->arena, sect->root, "root chunk for %S", name);
+  lnk_chunk_set_debugf(sect->arena, sect->nosort_chunk, "nosort chunk for %S", name);
   
   ProfEnd();
   return sect;

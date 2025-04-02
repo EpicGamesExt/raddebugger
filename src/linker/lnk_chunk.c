@@ -790,3 +790,15 @@ lnk_data_arr_from_chunk_ptr_list_arr(Arena *arena, LNK_ChunkList *list_arr, U64 
   return result;
 }
 
+internal String8
+lnk_string_from_chunk_type(LNK_ChunkType type)
+{
+  switch (type) {
+  case LNK_Chunk_Null:      return str8_lit("Null");
+  case LNK_Chunk_Leaf:      return str8_lit("Leaf");
+  case LNK_Chunk_LeafArray: return str8_lit("LeafArray");
+  case LNK_Chunk_List:      return str8_lit("List");
+  default: InvalidPath;
+  }
+  return str8_zero();
+}
