@@ -1139,7 +1139,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           try_u64_from_str8_c_rules(token_string, &val);
           atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
           atom->value.u64 = val;
-          break;
         }
         
         // rjf: presence of . => double or float
