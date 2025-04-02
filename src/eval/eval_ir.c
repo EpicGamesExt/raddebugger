@@ -2819,7 +2819,7 @@ E_IRGEN_FUNCTION_DEF(default)
       }
       
       //- rjf: try types
-      if(!string_mapped == 0 && (qualifier.size == 0 || str8_match(qualifier, str8_lit("type"), 0)))
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("type"), 0)))
       {
         mapped_type_key = e_leaf_type_from_name(string);
         if(!e_type_key_match(e_type_key_zero(), mapped_type_key))
