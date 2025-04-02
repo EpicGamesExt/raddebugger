@@ -2738,6 +2738,96 @@ E_IRGEN_FUNCTION_DEF(default)
         }
       }
       
+      //- rjf: try thread-locals
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("thread_local"), 0)))
+      {
+        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+        {
+          E_Module *module = &e_ir_state->ctx->modules[module_idx];
+          RDI_Parsed *rdi = module->rdi;
+          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
+          RDI_ParsedNameMap parsed_name_map = {0};
+          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+          U32 matches_count = 0;
+          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          for(String8Node *n = namespaceified_strings.first;
+              n != 0 && matches_count == 0;
+              n = n->next)
+          {
+            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+            matches_count = 0;
+            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          }
+          if(matches_count != 0)
+          {
+            U32 match_idx = matches[matches_count-1];
+            RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
+            U32 type_idx = thread_var->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
+            string_mapped = 1;
+            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = E_Mode_Offset;
+            mapped_bytecode_space = module->space;
+            break;
+          }
+        }
+      }
+      
+      //- rjf: try procedures
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("procedure"), 0)))
+      {
+        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+        {
+          E_Module *module = &e_ir_state->ctx->modules[module_idx];
+          RDI_Parsed *rdi = module->rdi;
+          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
+          RDI_ParsedNameMap parsed_name_map = {0};
+          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+          U32 matches_count = 0;
+          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          for(String8Node *n = namespaceified_strings.first;
+              n != 0 && matches_count == 0;
+              n = n->next)
+          {
+            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+            matches_count = 0;
+            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          }
+          if(matches_count != 0)
+          {
+            U32 match_idx = matches[matches_count-1];
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
+            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+            U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
+            U32 type_idx = procedure->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
+            string_mapped = 1;
+            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = E_Mode_Value;
+            mapped_bytecode_space = module->space;
+            break;
+          }
+        }
+      }
+      
+      //- rjf: try types
+      if(!string_mapped == 0 && (qualifier.size == 0 || str8_match(qualifier, str8_lit("type"), 0)))
+      {
+        mapped_type_key = e_leaf_type_from_name(string);
+        if(!e_type_key_match(e_type_key_zero(), mapped_type_key))
+        {
+          string_mapped = 1;
+        }
+      }
+      
       //- rjf: try registers
       if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
       {
@@ -2773,6 +2863,26 @@ E_IRGEN_FUNCTION_DEF(default)
         }
       }
       
+      //- rjf: try basic constants
+      if(!string_mapped && str8_match(string, str8_lit("true"), 0))
+      {
+        string_mapped = 1;
+        E_OpList oplist = {0};
+        e_oplist_push_uconst(arena, &oplist, 1);
+        mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+        mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+        mapped_bytecode_mode = E_Mode_Value;
+      }
+      if(!string_mapped && str8_match(string, str8_lit("false"), 0))
+      {
+        string_mapped = 1;
+        E_OpList oplist = {0};
+        e_oplist_push_uconst(arena, &oplist, 0);
+        mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+        mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+        mapped_bytecode_mode = E_Mode_Value;
+      }
+      
       //- rjf: generate IR trees for bytecode
       B32 generated = 0;
       if(!generated && mapped_bytecode.size != 0)
@@ -2783,6 +2893,14 @@ E_IRGEN_FUNCTION_DEF(default)
         result.root = root;
         result.type_key = mapped_type_key;
         result.mode = mapped_bytecode_mode;
+      }
+      
+      //- rjf: generate nil-IR trees w/ type for types
+      if(!generated && !e_type_key_match(e_type_key_zero(), mapped_type_key))
+      {
+        generated = 1;
+        result.type_key = mapped_type_key;
+        result.mode = E_Mode_Null;
       }
       
       //- rjf: generate IR trees for macros
@@ -2798,489 +2916,24 @@ E_IRGEN_FUNCTION_DEF(default)
         }
       }
       
+      //- rjf: extend generation with member access, if original string was an
+      // implicit member access
+      if(generated && string_is_implicit_member_name)
+      {
+        // TODO(rjf): @cfg
+#if 0
+        E_LookupRule *lookup_rule = &e_lookup_rule__default;
+        E_LookupInfo lookup_info = lookup_rule->info(arena, &result, &e_expr_nil, str8_zero());
+        E_LookupAccess lookup_access = lookup_rule->access(arena, E_ExprKind_MemberAccess, lhs, rhs, &e_expr_nil, lookup_info.user_data);
+        result = lookup_access.irtree_and_type;
+#endif
+      }
+      
       //- rjf: error on failure-to-generate
       if(!generated)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", string);
       }
-      
-      //- TODO(rjf):
-#if 0
-      B32 mapped_identifier = 0;
-      B32 identifier_is_constant_value = 0;
-      B32 identifier_looks_like_type_expr = 0;
-      RDI_LocationKind        loc_kind = RDI_LocationKind_NULL;
-      RDI_LocationReg         loc_reg = {0};
-      RDI_LocationRegPlusU16  loc_reg_u16 = {0};
-      String8                 loc_bytecode = {0};
-      U64                     constant_value = 0;
-      REGS_RegCode            reg_code = 0;
-      REGS_AliasCode          alias_code = 0;
-      E_TypeKey               type_key = zero_struct;
-      String8                 local_lookup_string = token_string;
-      E_Space                 space = {0};
-      Arch                    arch = Arch_Null;
-      
-      
-      //- rjf: identifiers surrounded by ``s should have those `s stripped
-      if(local_lookup_string.size >= 2 &&
-         local_lookup_string.str[0] == '`' &&
-         local_lookup_string.str[local_lookup_string.size-1] == '`')
-      {
-        token_string = local_lookup_string = str8_substr(local_lookup_string, r1u64(1, local_lookup_string.size-1));
-      }
-      
-      //- rjf: form namespaceified fallback versions of this lookup string
-      String8List namespaceified_token_strings = {0};
-      {
-        E_Module *module = e_parse_state->ctx->primary_module;
-        RDI_Parsed *rdi = module->rdi;
-        U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, e_parse_state->ctx->ip_voff);
-        RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-        U64 proc_idx = scope->proc_idx;
-        RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-        U64 name_size = 0;
-        U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-        String8 containing_procedure_name = str8(name_ptr, name_size);
-        U64 last_past_scope_resolution_pos = 0;
-        for(;;)
-        {
-          U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
-          U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
-          U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-          if(past_next_scope_resolution_pos >= containing_procedure_name.size)
-          {
-            break;
-          }
-          String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
-          String8 namespaceified_token_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, token_string);
-          str8_list_push_front(scratch.arena, &namespaceified_token_strings, namespaceified_token_string);
-          last_past_scope_resolution_pos = past_next_scope_resolution_pos;
-        }
-      }
-      
-      //- rjf: try members
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0))) ProfScope("try to map name as member")
-      {
-        U64 data_member_num = e_num_from_string(e_parse_state->ctx->member_map, token_string);
-        if(data_member_num != 0)
-        {
-          atom_implicit_member_name = token_string;
-          local_lookup_string = str8_lit("this");
-        }
-      }
-      
-      //- rjf: try locals
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0))) ProfScope("try to map name as local")
-      {
-        E_Module *module = e_parse_state->ctx->primary_module;
-        RDI_Parsed *rdi = module->rdi;
-        U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, local_lookup_string);
-        if(local_num != 0)
-        {
-          RDI_Local *local_var = rdi_element_from_name_idx(rdi, Locals, local_num-1);
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local_var->type_idx);
-          type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)(module - e_parse_state->ctx->modules));
-          
-          // rjf: grab location info
-          for(U32 loc_block_idx = local_var->location_first;
-              loc_block_idx < local_var->location_opl;
-              loc_block_idx += 1)
-          {
-            RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
-            if(block->scope_off_first <= e_parse_state->ctx->ip_voff && e_parse_state->ctx->ip_voff < block->scope_off_opl)
-            {
-              mapped_identifier = 1;
-              space = module->space;
-              arch = module->arch;
-              U64 all_location_data_size = 0;
-              U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
-              if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
-              {
-                loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
-                switch(loc_kind)
-                {
-                  default:{mapped_identifier = 0;}break;
-                  case RDI_LocationKind_ValBytecodeStream: goto bytecode_stream;
-                  case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
-                  bytecode_stream:;
-                  {
-                    U64 bytecode_size = 0;
-                    U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
-                    U64 off_opl = all_location_data_size;
-                    for(U64 off = off_first, next_off = off_opl;
-                        off < all_location_data_size;
-                        off = next_off)
-                    {
-                      next_off = off_opl;
-                      U8 op = all_location_data[off];
-                      if(op == 0)
-                      {
-                        break;
-                      }
-                      U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-                      U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                      bytecode_size += (1 + p_size);
-                      next_off = (off + 1 + p_size);
-                    }
-                    loc_bytecode = str8(all_location_data + off_first, bytecode_size);
-                  }break;
-                  case RDI_LocationKind_AddrRegPlusU16:
-                  case RDI_LocationKind_AddrAddrRegPlusU16:
-                  {
-                    MemoryCopy(&loc_reg_u16, (all_location_data + block->location_data_off), sizeof(loc_reg_u16));
-                  }break;
-                  case RDI_LocationKind_ValReg:
-                  {
-                    MemoryCopy(&loc_reg, (all_location_data + block->location_data_off), sizeof(loc_reg));
-                  }break;
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      //- rjf: try registers
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register")
-      {
-        U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, token_string);
-        if(reg_num != 0)
-        {
-          reg_code = reg_num;
-          type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_code);
-          mapped_identifier = 1;
-          space = e_parse_state->ctx->ip_thread_space;
-          arch = e_parse_state->ctx->primary_module->arch;
-        }
-      }
-      
-      //- rjf: try register aliases
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register alias")
-      {
-        U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, token_string);
-        if(alias_num != 0)
-        {
-          alias_code = (REGS_AliasCode)alias_num;
-          type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_code);
-          mapped_identifier = 1;
-          space = e_parse_state->ctx->ip_thread_space;
-          arch = e_parse_state->ctx->primary_module->arch;
-        }
-      }
-      
-      //- rjf: try global variables
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0))) ProfScope("try to map name as global variable")
-      {
-        for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_parse_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_token_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            // NOTE(rjf): apparently, PDBs can be produced such that they
-            // also keep stale *GLOBAL VARIABLE SYMBOLS* around too. I
-            // don't know of a magic hash table fixup path in PDBs, so
-            // in this case, I'm going to prefer the latest-added global.
-            U32 match_idx = matches[matches_count-1];
-            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
-            loc_kind = RDI_LocationKind_AddrBytecodeStream;
-            loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = global_var->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_identifier = 1;
-            space = module->space;
-            arch = module->arch;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try thread variables
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0))) ProfScope("try to map name as thread variable")
-      {
-        for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_parse_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_token_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            U32 match_idx = matches[0];
-            RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
-            loc_kind = RDI_LocationKind_AddrBytecodeStream;
-            loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = thread_var->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_identifier = 1;
-            space = module->space;
-            arch = module->arch;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try procedures
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0))) ProfScope("try to map name as procedure")
-      {
-        for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_parse_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_token_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            U32 match_idx = matches[0];
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
-            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
-            U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
-            loc_kind = RDI_LocationKind_ValBytecodeStream;
-            loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = procedure->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_identifier = 1;
-            space = module->space;
-            arch = module->arch;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try types
-      if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0))) ProfScope("try to map name as type")
-      {
-        type_key = e_leaf_type_from_name(token_string);
-        if(!e_type_key_match(e_type_key_zero(), type_key))
-        {
-          mapped_identifier = 1;
-          identifier_looks_like_type_expr = 1;
-          MemoryZeroStruct(&space);
-          arch = e_parse_state->ctx->primary_module->arch;
-        }
-      }
-      
-      //- rjf: try basic constants
-      if(mapped_identifier == 0 && str8_match(token_string, str8_lit("true"), 0))
-      {
-        mapped_identifier = 1;
-        identifier_is_constant_value = 1;
-        type_key = e_type_key_basic(E_TypeKind_Bool);
-        constant_value = 1;
-      }
-      if(mapped_identifier == 0 && str8_match(token_string, str8_lit("false"), 0))
-      {
-        mapped_identifier = 1;
-        identifier_is_constant_value = 1;
-        type_key = e_type_key_basic(E_TypeKind_Bool);
-        constant_value = 0;
-      }
-      
-      //- rjf: attach on map
-      if(mapped_identifier != 0) ProfScope("attach on map")
-      {
-        it += 1;
-        
-        // rjf: build atom
-        switch(loc_kind)
-        {
-          default:
-          {
-            if(identifier_is_constant_value)
-            {
-              atom = e_push_expr(arena, E_ExprKind_LeafBool, token_string.str);
-              atom->value.u64 = constant_value;
-              atom->type_key  = type_key;
-            }
-            else if(identifier_looks_like_type_expr)
-            {
-              E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, e_token_array_make_first_opl(it-1, it_opl));
-              E_Expr *type = type_parse.exprs.last;
-              e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
-              it = type_parse.last_token;
-              atom = type;
-            }
-            else if(reg_code != 0)
-            {
-              REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_code];
-              E_OpList oplist = {0};
-              e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
-              atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-              atom->mode     = E_Mode_Offset;
-              atom->space    = space;
-              atom->type_key = type_key;
-              atom->string   = token_string;
-              atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-            }
-            else if(alias_code != 0)
-            {
-              REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_code];
-              REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_slice.code];
-              E_OpList oplist = {0};
-              e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
-              atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-              atom->mode     = E_Mode_Offset;
-              atom->space    = space;
-              atom->type_key = type_key;
-              atom->string   = token_string;
-              atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-            }
-            else
-            {
-              e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, token_string.str, "Missing location information for `%S`.", token_string);
-            }
-          }break;
-          case RDI_LocationKind_AddrBytecodeStream:
-          {
-            atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-            atom->mode     = E_Mode_Offset;
-            atom->space    = space;
-            atom->type_key = type_key;
-            atom->string   = token_string;
-            atom->bytecode = loc_bytecode;
-          }break;
-          case RDI_LocationKind_ValBytecodeStream:
-          {
-            atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-            atom->mode     = E_Mode_Value;
-            atom->space    = space;
-            atom->type_key = type_key;
-            atom->string   = token_string;
-            atom->bytecode = loc_bytecode;
-          }break;
-          case RDI_LocationKind_AddrRegPlusU16:
-          {
-            E_OpList oplist = {0};
-            U64 byte_size = bit_size_from_arch(arch)/8;
-            U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-            atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-            atom->mode     = E_Mode_Offset;
-            atom->space    = space;
-            atom->type_key = type_key;
-            atom->string   = token_string;
-            atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-          }break;
-          case RDI_LocationKind_AddrAddrRegPlusU16:
-          {
-            E_OpList oplist = {0};
-            U64 byte_size = bit_size_from_arch(arch)/8;
-            U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
-            atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-            atom->mode     = E_Mode_Offset;
-            atom->space    = space;
-            atom->type_key = type_key;
-            atom->string   = token_string;
-            atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-          }break;
-          case RDI_LocationKind_ValReg:
-          {
-            REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc_reg.reg_code);
-            REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
-            E_OpList oplist = {0};
-            U64 byte_size = (U64)reg_rng.byte_size;
-            U64 byte_pos = 0;
-            U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-            atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-            atom->mode     = E_Mode_Value;
-            atom->space    = space;
-            atom->type_key = type_key;
-            atom->string   = token_string;
-            atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-          }break;
-        }
-        
-        // rjf: implicit local lookup -> attach member access node
-        if(atom_implicit_member_name.size != 0 && atom != &e_expr_nil)
-        {
-          E_Expr *member_container = atom;
-          E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, atom_implicit_member_name.str);
-          member_expr->string = atom_implicit_member_name;
-          atom = e_push_expr(arena, E_ExprKind_MemberAccess, atom_implicit_member_name.str);
-          atom->space = space;
-          e_expr_push_child(atom, member_container);
-          e_expr_push_child(atom, member_expr);
-        }
-      }
-      
-      //- rjf: map failure -> attach as leaf identifier, to be resolved later
-      if(!mapped_identifier)
-      {
-        atom = e_push_expr(arena, E_ExprKind_LeafIdentifier, token_string.str);
-        atom->string = token_string;
-        it += 1;
-      }
-      
-      
-      
-      
-      E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, expr->string);
-      if(macro_expr == &e_expr_nil)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
-      }
-      else
-      {
-        e_string2expr_map_inc_poison(e_ir_state->ctx->macro_map, expr->string);
-        result = e_irtree_and_type_from_expr(arena, macro_expr);
-        e_string2expr_map_dec_poison(e_ir_state->ctx->macro_map, expr->string);
-      }
-#endif
       
       scratch_end(scratch);
     }break;
