@@ -2699,6 +2699,45 @@ E_IRGEN_FUNCTION_DEF(default)
         }
       }
       
+      //- rjf: try globals
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))
+      {
+        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+        {
+          E_Module *module = &e_ir_state->ctx->modules[module_idx];
+          RDI_Parsed *rdi = module->rdi;
+          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
+          RDI_ParsedNameMap parsed_name_map = {0};
+          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+          U32 matches_count = 0;
+          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          for(String8Node *n = namespaceified_strings.first;
+              n != 0 && matches_count == 0;
+              n = n->next)
+          {
+            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+            matches_count = 0;
+            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+          }
+          if(matches_count != 0)
+          {
+            U32 match_idx = matches[matches_count-1];
+            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
+            U32 type_idx = global_var->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
+            string_mapped = 1;
+            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = E_Mode_Offset;
+            mapped_bytecode_space = module->space;
+            break;
+          }
+        }
+      }
+      
       //- rjf: generate IR trees for bytecode
       B32 generated = 0;
       if(!generated && mapped_bytecode.size != 0)
