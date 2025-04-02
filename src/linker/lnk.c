@@ -3202,15 +3202,17 @@ lnk_chunk_off_pair_array_bsearch(LNK_ChunkOffPair *arr, U64 count, U64 value)
 }
 
 internal String8List
-lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_ObjList objs, LNK_SectionTable *st, LNK_SymbolTable *symtab)
+lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_ObjList objs, LNK_LibList lib_index[LNK_InputSource_Count], LNK_SectionTable *st, LNK_SymbolTable *symtab)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
+
+  String8List map = {0};
 
   LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
 
-  String8List map = {0};
-  
-  str8_list_pushf(arena, &map, "# CHUNKS\n");
+  ProfBegin("SECTIONS");
+  str8_list_pushf(arena, &map, "# SECTIONS\n");
   for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
     LNK_Section *sect = &sect_n->data;
     if (sect->has_layout) {
@@ -3244,7 +3246,7 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
           String8 file_size_str  = push_str8f(temp.arena, "%08x",        file_size);
           String8 chunk_hash_str = push_str8f(temp.arena, "%08x%08x",    chunk_hash.u64[0], chunk_hash.u64[1]);
           String8 chunk_ref_str  = push_str8f(temp.arena, "{%llx,%llx}", chunk->ref.sect_id, chunk->ref.chunk_id);
-          String8 source_str     = str8_lit("\?\?\?");
+          String8 source_str     = {0};
           if (chunk->obj) {
             if (chunk->obj->lib_path.size) {
               String8 lib_name = chunk->obj->lib_path;
@@ -3259,6 +3261,18 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
               source_str = push_str8f(temp.arena, "%S", chunk->obj->path);
             }
           }
+#if LNK_DEBUG_CHUNKS
+          if (chunk->debug.size) {
+            if (source_str.size) {
+              source_str = push_str8f(temp.arena, "%S (%S)", source_str, chunk->debug);
+            } else if (chunk->debug.size) {
+              source_str = push_str8f(temp.arena, "%S", chunk->debug);
+            }
+          }
+#endif
+          if (source_str.size == 0) {
+            source_str = str8_lit("\?\?\?");
+          }
 
           str8_list_pushf(arena, &map, "%-16S %-8S %-8S %-16S %-8S %S\n", address_str, virt_size_str, file_size_str, chunk_hash_str, chunk_ref_str, source_str);
 
@@ -3268,7 +3282,10 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
       str8_list_pushf(arena, &map, "\n");
     }
   }
+  ProfEnd();
 
+
+  ProfBegin("SYMBOLS");
   str8_list_pushf(arena, &map, "# SYMBOLS\n");
   str8_list_pushf(arena, &map, "%-8s %s\n", "ChunkRef", "Symbol");
   for (LNK_ObjNode *obj_n = objs.first; obj_n != 0; obj_n = obj_n->next) {
@@ -3295,10 +3312,24 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
       }
     }
   }
- 
-  //str8_list_pushf(arena, &map, "%16s %30s %23s %10s\n\n", "Address", "Publics by Value", "Rva+Base", "Lib:Object");
+  str8_list_pushf(arena, &map, "\n");
+  ProfEnd();
 
+
+  ProfBegin("LIBS");
+  for (U64 input_source = 0; input_source < LNK_InputSource_Count; ++input_source) {
+    if (lib_index[input_source].count) {
+      str8_list_pushf(arena, &map, "# LIBS (%S)\n", lnk_string_from_input_source(input_source));
+      for (LNK_LibNode *lib_n = lib_index[input_source].first; lib_n != 0; lib_n = lib_n->next) {
+        str8_list_pushf(arena, &map, "%S\n", lib_n->data.path);
+      }
+    }
+  }
+  ProfEnd();
+
+ 
   scratch_end(scratch);
+  ProfEnd();
   return map;
 }
 
@@ -4288,7 +4319,7 @@ lnk_run(int argc, char **argv)
       } break;
       case State_BuildRadChunkMap: {
         ProfBegin("RAD Chunk Map");
-        String8List map = lnk_build_rad_chunk_map(scratch.arena, image_data, config->worker_count, obj_list, st, symtab);
+        String8List map = lnk_build_rad_chunk_map(scratch.arena, image_data, config->worker_count, obj_list, lib_index, st, symtab);
         lnk_write_data_list_to_file_path(config->rad_chunk_map_name, config->temp_rad_chunk_map_name, map);
         ProfEnd();
       } break;

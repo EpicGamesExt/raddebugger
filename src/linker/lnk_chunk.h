@@ -5,7 +5,13 @@
 
 ////////////////////////////////
 
-#define LNK_DEBUG_CHUNKS 0
+#define LNK_DEBUG_CHUNKS 1
+
+#if LNK_DEBUG_CHUNKS
+# define lnk_chunk_set_debugf(a, c, f, ...) do { (c)->debug = push_str8f((a), f, __VA_ARGS__); } while(0)
+#else
+# define lnk_chunk_set_debugf(a, c, f, ...) (void)(c)
+#endif
 
 ////////////////////////////////
 
@@ -199,10 +205,4 @@ internal void lnk_visit_chunks(U64 sect_id, LNK_Chunk *root, LNK_ChunkVisitorSig
 internal LNK_ChunkNode * lnk_chunk_ptr_list_reserve(Arena *arena, LNK_ChunkList *list, U64 count);
 internal String8Array    lnk_data_arr_from_chunk_ptr_list(Arena *arena, LNK_ChunkList list);
 internal String8Array *  lnk_data_arr_from_chunk_ptr_list_arr(Arena *arena, LNK_ChunkList *list_arr, U64 count);
-
-#if LNK_DEBUG_CHUNKS
-#define lnk_chunk_set_debugf(a, c, f, ...) do { (c)->debug = push_str8f((a), f, __VA_ARGS__); } while(0)
-#else
-#define lnk_chunk_set_debugf(a, c, f, ...) (void)(c)
-#endif
 
