@@ -527,6 +527,7 @@ struct RD_WindowState
   F32 last_dpi;
   B32 window_temporarily_focused_ipc;
   B32 window_layout_reset;
+  Rng2F32 last_window_rect;
   
   // rjf: theme (recomputed each frame)
   UI_Theme *theme;

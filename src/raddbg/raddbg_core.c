@@ -9094,6 +9094,8 @@ rd_window_frame(void)
     //- rjf: @window_ui_part animate panels
     //
     {
+      B32 window_is_resizing = (ws->last_window_rect.x1 != window_rect.x1 ||
+                                ws->last_window_rect.y1 != window_rect.y1);
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
       if(content_rect_dim.x > 0 && content_rect_dim.y > 0)
       {
@@ -9106,7 +9108,7 @@ rd_window_frame(void)
                                            target_rect_px.y0/content_rect_dim.y,
                                            target_rect_px.x1/content_rect_dim.x,
                                            target_rect_px.y1/content_rect_dim.y);
-          B32 reset = (ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
+          B32 reset = (window_is_resizing || ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
           ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0, .reset = reset);
           ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0, .reset = reset);
           ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1, .reset = reset);
@@ -10387,9 +10389,10 @@ rd_window_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: @window_frame_part increment per-window frame counter
+  //- rjf: @window_frame_part update per-window frame counters/info
   //
   ws->frames_alive += 1;
+  ws->last_window_rect = os_client_rect_from_window(ws->os);
   
   ProfEnd();
   scratch_end(scratch);
