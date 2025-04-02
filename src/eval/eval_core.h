@@ -639,4 +639,28 @@ internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
 
 internal E_Space e_space_make(E_SpaceKind kind);
 
+////////////////////////////////
+//~ rjf: Basic Map Functions
+
+//- rjf: string -> num
+internal E_String2NumMap e_string2num_map_make(Arena *arena, U64 slot_count);
+internal void e_string2num_map_insert(Arena *arena, E_String2NumMap *map, String8 string, U64 num);
+internal U64 e_num_from_string(E_String2NumMap *map, String8 string);
+internal E_String2NumMapNodeArray e_string2num_map_node_array_from_map(Arena *arena, E_String2NumMap *map);
+internal int e_string2num_map_node_qsort_compare__num_ascending(E_String2NumMapNode **a, E_String2NumMapNode **b);
+internal void e_string2num_map_node_array_sort__in_place(E_String2NumMapNodeArray *array);
+
+//- rjf: string -> expr
+internal E_String2ExprMap e_string2expr_map_make(Arena *arena, U64 slot_count);
+internal void e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_Expr *expr);
+internal void e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string);
+internal void e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string);
+internal E_Expr *e_string2expr_lookup(E_String2ExprMap *map, String8 string);
+
+////////////////////////////////
+//~ rjf: Debug-Info-Driven Map Building Functions
+
+internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
+internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
+
 #endif // EVAL_CORE_H
