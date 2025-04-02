@@ -132,6 +132,7 @@ global read_only struct
   { LNK_CmdSwitch_Rad_Age,                        "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
   { LNK_CmdSwitch_Rad_BuildInfo,                  "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                    },
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                              },
+  { LNK_CmdSwitch_Rad_ChunkMap,                   "RAD_CHUNK_MAP",                      ":FILENAME", "Emit file with the output image's layout description."                         },
   { LNK_CmdSwitch_Rad_Debug,                      "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                     },
   { LNK_CmdSwitch_Rad_DebugAltPath,               "RAD_DEBUGALTPATH",                   "", ""                                                                                       },
   { LNK_CmdSwitch_Rad_DebugName,                  "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                       },
@@ -1522,6 +1523,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_CheckUnusedDelayLoadDll);
   } break;
 
+  case LNK_CmdSwitch_Rad_ChunkMap: {
+    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_chunk_map_name);
+    config->rad_chunk_map = LNK_SwitchState_Yes;
+  } break;
+
   case LNK_CmdSwitch_Rad_Debug: {
     lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug);
   } break;
@@ -2060,9 +2066,10 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   // create temporary files names
   if (config->write_temp_files == LNK_SwitchState_Yes) {
-    config->temp_image_name     = push_str8f(arena, "%S.tmp%x", config->image_name,     config->time_stamp);
-    config->temp_pdb_name       = push_str8f(arena, "%S.tmp%x", config->pdb_name,       config->time_stamp);
-    config->temp_rad_debug_name = push_str8f(arena, "%S.tmp%x", config->rad_debug_name, config->time_stamp);
+    config->temp_rad_chunk_map_name = push_str8f(arena, "%S.tmp%x", config->rad_chunk_map_name, config->time_stamp);
+    config->temp_image_name         = push_str8f(arena, "%S.tmp%x", config->image_name,         config->time_stamp);
+    config->temp_pdb_name           = push_str8f(arena, "%S.tmp%x", config->pdb_name,           config->time_stamp);
+    config->temp_rad_debug_name     = push_str8f(arena, "%S.tmp%x", config->rad_debug_name,     config->time_stamp);
   }
 
   if (lnk_get_log_status(LNK_Log_Debug)) {

@@ -410,6 +410,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     chunk->input_idx    = LNK_MakeChunkInputIdx(obj_idx, sect_idx);
     chunk->flags        = coff_sect->flags;
     chunk->u.leaf       = data;
+    chunk->obj          = obj;
     lnk_chunk_set_debugf(arena, chunk, "%S: name: %S, obj_idx: 0x%llX isect: 0x%llX", cached_path, sect_name_arr[sect_idx], obj_idx, sect_idx);
   }
 
@@ -425,6 +426,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   master_common_block->flags        = LNK_BSS_SECTION_FLAGS;
   master_common_block->associate    = 0;
   master_common_block->u.list       = push_array(arena, LNK_ChunkList, 1);
+  master_common_block->obj          = obj;
   lnk_chunk_set_debugf(arena, master_common_block, "%S: master common block", cached_path);
 
   LNK_ChunkPtr *chunk_ptr_arr = push_array_no_zero(arena, LNK_ChunkPtr, chunk_count);
@@ -787,6 +789,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
             chunk_list->input_idx    = chunk->input_idx;
             chunk_list->flags        = chunk->flags;
             chunk_list->u.list       = push_array(arena, LNK_ChunkList, 1);
+            chunk_list->obj          = obj;
             lnk_chunk_set_debugf(arena, chunk_list, "%S: function chunk list for %S", obj_path, symbol.name);
 
             // update properties on first chunk
@@ -834,6 +837,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
             split_chunk->is_discarded = current->data->is_discarded;
             split_chunk->flags        = current->data->flags;
             split_chunk->u.leaf       = right_data;
+            split_chunk->obj          = obj;
             lnk_chunk_set_debugf(arena, split_chunk, "%S: chunk split on function %S SECT%x SPLIT_POS %#llx", obj_path, symbol.name, symbol.section_number, split_pos);
 
             LNK_ChunkNode *split_node = push_array(arena, LNK_ChunkNode, 1);
@@ -985,6 +989,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
         chunk->type      = LNK_Chunk_Leaf;
         chunk->flags     = master_common_block->flags;
         chunk->u.leaf    = str8(0, parsed_symbol.value);
+        chunk->obj       = obj;
         lnk_chunk_set_debugf(arena, chunk, "%S: common block %S", obj_path, parsed_symbol.name);
         lnk_chunk_list_push(arena, master_common_block->u.list, chunk);
 

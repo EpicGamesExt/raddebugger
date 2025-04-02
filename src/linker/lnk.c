@@ -3139,6 +3139,169 @@ LNK_CHUNK_VISITOR_SIG(lnk_max_tls_align)
   return 0;
 }
 
+global LNK_Section **g_rad_sort_sect_id_map = 0;
+
+typedef struct
+{
+  U64        off;
+  LNK_Chunk *chunk;
+} LNK_ChunkOffPair;
+
+internal int
+lnk_map_sort_on_chunk_file_off(void *raw_a, void *raw_b)
+{
+  LNK_Chunk **a = raw_a;
+  LNK_Chunk **b = raw_b;
+
+  U64 a_file_off = lnk_virt_off_from_chunk_ref(g_rad_sort_sect_id_map, (*a)->ref);
+  U64 b_file_off = lnk_virt_off_from_chunk_ref(g_rad_sort_sect_id_map, (*b)->ref);
+
+  int is_before = a_file_off < b_file_off;
+  return is_before;
+}
+
+internal int
+lnk_map_sort_on_chunk_off(void *raw_a, void *raw_b)
+{
+  LNK_ChunkOffPair *a = raw_a;
+  LNK_ChunkOffPair *b = raw_b;
+
+  int is_before = a->off < b->off;
+  return is_before;
+}
+
+internal U64
+lnk_chunk_off_pair_array_bsearch(LNK_ChunkOffPair *arr, U64 count, U64 value)
+{
+  if(count > 1 && arr[0].off <= value && value < arr[count-1].off)
+  {
+    U64 l = 0;
+    U64 r = count - 1;
+    for(; l <= r; )
+    {
+      U64 m = l + (r - l) / 2;
+      if(arr[m].off == value)
+      {
+        return m;
+      }
+      else if(arr[m].off < value)
+      {
+        l = m + 1;
+      }
+      else
+      {
+        r = m - 1;
+      }
+    }
+  }
+  else if (count == 1 && arr[0].off == value)
+  {
+    return 0;
+  }
+  return max_U64;
+}
+
+internal String8List
+lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_ObjList objs, LNK_SectionTable *st, LNK_SymbolTable *symtab)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
+
+  String8List map = {0};
+  
+  str8_list_pushf(arena, &map, "# CHUNKS\n");
+  for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
+    LNK_Section *sect = &sect_n->data;
+    if (sect->has_layout) {
+      LNK_Chunk     **chunks = push_array_no_zero(scratch.arena, LNK_Chunk *, sect->layout.total_count);
+      MemoryCopyTyped(chunks, sect->layout.chunk_ptr_array, sect->layout.total_count);
+
+      g_rad_sort_sect_id_map = sect_id_map; 
+      radsort(chunks, sect->layout.total_count, lnk_map_sort_on_chunk_file_off);
+
+      str8_list_pushf(arena, &map, "%S\n", sect->name);
+      str8_list_pushf(arena, &map, "%-16s %-8s %-8s %-16s %-8s %s\n", "Sect:Offset", "VirtSize", "FileSize", "Blake3", "ChunkRef", "Source");
+      for (U64 chunk_idx = 0; chunk_idx < sect->layout.total_count; ++chunk_idx) {
+        LNK_Chunk *chunk = chunks[chunk_idx];
+        if (chunk->type == LNK_Chunk_Leaf && chunk != g_null_chunk_ptr) {
+          Temp temp = temp_begin(scratch.arena);
+
+          ISectOff   sc         = lnk_sc_from_chunk_ref(sect_id_map, chunk->ref);
+          U64        virt_size  = lnk_virt_size_from_chunk_ref(sect_id_map, chunk->ref);
+          U64        file_size  = lnk_file_size_from_chunk_ref(sect_id_map, chunk->ref);
+          String8    chunk_data = lnk_data_from_chunk_ref(sect_id_map, image_data, chunk->ref);
+
+          U128 chunk_hash = {0};
+          if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
+            blake3_hasher hasher; blake3_hasher_init(&hasher);
+            blake3_hasher_update(&hasher, chunk_data.str, chunk_data.size);
+            blake3_hasher_finalize(&hasher, (U8 *)&chunk_hash, sizeof(chunk_hash));
+          }
+
+          String8 address_str    = push_str8f(temp.arena, "%04x:%08x",   sc.isect, sc.off);
+          String8 virt_size_str  = push_str8f(temp.arena, "%08x",        virt_size);
+          String8 file_size_str  = push_str8f(temp.arena, "%08x",        file_size);
+          String8 chunk_hash_str = push_str8f(temp.arena, "%08x%08x",    chunk_hash.u64[0], chunk_hash.u64[1]);
+          String8 chunk_ref_str  = push_str8f(temp.arena, "{%llx,%llx}", chunk->ref.sect_id, chunk->ref.chunk_id);
+          String8 source_str     = str8_lit("\?\?\?");
+          if (chunk->obj) {
+            if (chunk->obj->lib_path.size) {
+              String8 lib_name = chunk->obj->lib_path;
+              lib_name         = str8_skip_last_slash(lib_name);
+              lib_name         = str8_chop_last_dot(lib_name);
+
+              String8 obj_name = chunk->obj->path;
+              obj_name         = str8_skip_last_slash(obj_name);
+
+              source_str = push_str8f(temp.arena, "%S:%S", lib_name, obj_name);
+            } else {
+              source_str = push_str8f(temp.arena, "%S", chunk->obj->path);
+            }
+          }
+
+          str8_list_pushf(arena, &map, "%-16S %-8S %-8S %-16S %-8S %S\n", address_str, virt_size_str, file_size_str, chunk_hash_str, chunk_ref_str, source_str);
+
+          temp_end(temp);
+        }
+      }
+      str8_list_pushf(arena, &map, "\n");
+    }
+  }
+
+  str8_list_pushf(arena, &map, "# SYMBOLS\n");
+  str8_list_pushf(arena, &map, "%-8s %s\n", "ChunkRef", "Symbol");
+  for (LNK_ObjNode *obj_n = objs.first; obj_n != 0; obj_n = obj_n->next) {
+    LNK_Obj *obj = &obj_n->data;
+    for (LNK_SymbolNode *symbol_n = obj->symbol_list.first; symbol_n != 0; symbol_n = symbol_n->next) {
+      LNK_Symbol *symbol = symbol_n->data;
+      if (LNK_Symbol_IsDefined(symbol->type)) {
+        if (symbol->u.defined.value_type == LNK_DefinedSymbolValue_Chunk) {
+          LNK_Chunk *chunk = symbol->u.defined.u.chunk;
+          String8 chunk_ref_str = push_str8f(scratch.arena, "{%llx,%llx}", chunk->ref.sect_id, chunk->ref.chunk_id);
+
+          String8 lib_name = obj->lib_path;
+          lib_name = str8_skip_last_slash(lib_name);
+          lib_name = str8_chop_last_dot(lib_name);
+
+          String8 obj_name = obj->path;
+          obj_name = str8_skip_last_slash(obj_name);
+
+          str8_list_pushf(arena, &map, "%-8S (%S%s%S) %S\n",
+                          chunk_ref_str,
+                          lib_name, lib_name.size ? ":" : "", obj_name,
+                          symbol->name);
+        }
+      }
+    }
+  }
+ 
+  //str8_list_pushf(arena, &map, "%16s %30s %23s %10s\n\n", "Address", "Publics by Value", "Rva+Base", "Lib:Object");
+
+  scratch_end(scratch);
+  return map;
+}
+
 internal void
 lnk_run(int argc, char **argv)
 {
@@ -3167,6 +3330,7 @@ lnk_run(int argc, char **argv)
     State_BuildBaseRelocs,
     State_FinalizeImage,
     State_BuildImpLib,
+    State_BuildRadChunkMap,
     State_BuildDebugInfo,
   };
   struct StateNode {
@@ -3254,10 +3418,11 @@ lnk_run(int argc, char **argv)
   B32                  report_unresolved_symbols        = 1;
   B32                  check_unused_delay_loads         = !!(config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll);
   B32                  build_imp_lib                    = config->build_imp_lib;
+  B32                  build_rad_chunk_map              = (config->rad_chunk_map == LNK_SwitchState_Yes);
   LNK_ObjList          obj_list                         = {0};
   LNK_LibList          lib_index[LNK_InputSource_Count] = {0};
   String8              image_data                       = str8_zero();
-  OS_Handle         image_write_thread               = {0};
+  OS_Handle            image_write_thread               = {0};
   
   // init state machine
   struct StateList state_list = {0};
@@ -4121,6 +4286,12 @@ lnk_run(int argc, char **argv)
         lnk_timer_end(LNK_Timer_Lib);
         ProfEnd();
       } break;
+      case State_BuildRadChunkMap: {
+        ProfBegin("RAD Chunk Map");
+        String8List map = lnk_build_rad_chunk_map(scratch.arena, image_data, config->worker_count, obj_list, st, symtab);
+        lnk_write_data_list_to_file_path(config->rad_chunk_map_name, config->temp_rad_chunk_map_name, map);
+        ProfEnd();
+      } break;
       case State_BuildDebugInfo: {
         ProfBegin("Debug Info");
         lnk_timer_begin(LNK_Timer_Debug);
@@ -4318,6 +4489,11 @@ lnk_run(int argc, char **argv)
         state_list_push(scratch.arena, state_list, State_BuildImpLib);
         continue;
       }
+    }
+    if (build_rad_chunk_map) {
+      build_rad_chunk_map = 0;
+      state_list_push(scratch.arena, state_list, State_BuildRadChunkMap);
+      continue;
     }
     if (build_debug_info) {
       build_debug_info = 0;

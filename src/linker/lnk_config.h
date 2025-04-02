@@ -128,6 +128,7 @@ typedef enum
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_BuildInfo,
   LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,
+  LNK_CmdSwitch_Rad_ChunkMap,
   LNK_CmdSwitch_Rad_Debug,
   LNK_CmdSwitch_Rad_DebugName,
   LNK_CmdSwitch_Rad_DebugAltPath,
@@ -355,6 +356,8 @@ typedef struct LNK_Config
   String8                     manifest_ui_access;
   String8List                 manifest_dependency_list;
   LNK_SwitchState             rad_debug;
+  LNK_SwitchState             rad_chunk_map;
+  String8                     rad_chunk_map_name;
   String8                     rad_debug_name;
   String8                     rad_debug_alt_path;
   String8List                 include_symbol_list;
@@ -369,6 +372,7 @@ typedef struct LNK_Config
   String8                     temp_image_name;
   String8                     temp_pdb_name;
   String8                     temp_rad_debug_name;
+  String8                     temp_rad_chunk_map_name;
 } LNK_Config;
 
 typedef enum

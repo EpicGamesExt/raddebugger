@@ -40,6 +40,7 @@ typedef struct LNK_Chunk
     struct LNK_ChunkList  *list;
     struct LNK_ChunkArray *arr;
   } u;
+  struct LNK_Obj *obj;
 #if LNK_DEBUG_CHUNKS
   String8 debug;
 #endif
@@ -115,7 +116,7 @@ typedef struct LNK_ChunkPadArrayNode
 } LNK_ChunkPadArrayNode;
 typedef struct LNK_ChunkPadArrayList
 {
-  U64                      count;
+  U64                    count;
   LNK_ChunkPadArrayNode *first;
   LNK_ChunkPadArrayNode *last;
 } LNK_ChunkPadArrayList;
