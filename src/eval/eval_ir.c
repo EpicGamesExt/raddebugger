@@ -75,7 +75,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
   if(ctx->member_map == 0)    { ctx->member_map = &e_string2num_map_nil; }
   if(ctx->macro_map == 0)     {ctx->macro_map = &e_string2expr_map_nil;}
   e_ir_state->ctx = ctx;
-  e_ir_state->ip_procedure = rdi_procedure_from_voff(ctx->primary_module->rdi, ctx->ip_voff);
+  e_ir_state->thread_ip_procedure = rdi_procedure_from_voff(ctx->primary_module->rdi, ctx->thread_ip_voff);
   e_ir_state->used_tag_map = push_array(e_ir_state->arena, E_UsedTagMap, 1);
   e_ir_state->used_tag_map->slots_count = 64;
   e_ir_state->used_tag_map->slots = push_array(e_ir_state->arena, E_UsedTagSlot, e_ir_state->used_tag_map->slots_count);
@@ -2532,7 +2532,7 @@ E_IRGEN_FUNCTION_DEF(default)
       {
         E_Module *module = e_ir_state->ctx->primary_module;
         RDI_Parsed *rdi = module->rdi;
-        RDI_Procedure *procedure = e_ir_state->ip_procedure;
+        RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
         U64 name_size = 0;
         U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
         String8 containing_procedure_name = str8(name_ptr, name_size);
@@ -2561,7 +2561,7 @@ E_IRGEN_FUNCTION_DEF(default)
         E_Module *module = e_ir_state->ctx->primary_module;
         U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
         RDI_Parsed *rdi = module->rdi;
-        RDI_Procedure *procedure = e_ir_state->ip_procedure;
+        RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
         RDI_UDT *udt = rdi_container_udt_from_procedure(rdi, procedure);
         RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
         E_TypeKey container_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, module_idx);
@@ -2576,7 +2576,6 @@ E_IRGEN_FUNCTION_DEF(default)
       //- rjf: try locals
       if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("local"), 0)))
       {
-        U64 ip_voff = e_ir_state->ctx->ip_voff;
         E_Module *module = e_ir_state->ctx->primary_module;
         U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
         RDI_Parsed *rdi = module->rdi;
@@ -2590,6 +2589,7 @@ E_IRGEN_FUNCTION_DEF(default)
           mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local->type_idx, module_idx);
           
           // rjf: extract local's location block
+          U64 ip_voff = e_ir_state->ctx->thread_ip_voff;
           for(U32 loc_block_idx = local->location_first;
               loc_block_idx < local->location_opl;
               loc_block_idx += 1)
@@ -2735,6 +2735,41 @@ E_IRGEN_FUNCTION_DEF(default)
             mapped_bytecode_space = module->space;
             break;
           }
+        }
+      }
+      
+      //- rjf: try registers
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
+      {
+        U64 reg_num = e_num_from_string(e_ir_state->ctx->regs_map, string);
+        if(reg_num != 0)
+        {
+          string_mapped = 1;
+          REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_num];
+          E_OpList oplist = {0};
+          e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = E_Mode_Offset;
+          mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
+          mapped_type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_num);
+        }
+      }
+      
+      //- rjf: try register aliases
+      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
+      {
+        U64 alias_num = e_num_from_string(e_ir_state->ctx->reg_alias_map, string);
+        if(alias_num != 0)
+        {
+          string_mapped = 1;
+          REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_num];
+          REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_slice.code];
+          E_OpList oplist = {0};
+          e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = E_Mode_Offset;
+          mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
+          mapped_type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_num);
         }
       }
       

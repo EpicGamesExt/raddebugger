@@ -117,9 +117,9 @@ typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
 {
   // rjf: instruction pointer info
-  U64 ip_vaddr;
-  U64 ip_voff;
-  E_Space ip_thread_space;
+  U64 thread_ip_vaddr;
+  U64 thread_ip_voff;
+  E_Space thread_reg_space;
   
   // rjf: modules
   E_Module *modules;
@@ -152,7 +152,7 @@ struct E_IRState
   E_IRCtx *ctx;
   
   // rjf: unpacked ctx
-  RDI_Procedure *ip_procedure;
+  RDI_Procedure *thread_ip_procedure;
   
   // rjf: caches
   E_UsedTagMap *used_tag_map;

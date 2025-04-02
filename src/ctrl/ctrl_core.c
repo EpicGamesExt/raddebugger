@@ -4682,6 +4682,10 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   // rjf: build eval IR context
   {
     E_IRCtx *ctx = &scope->ir_ctx;
+    ctx->thread_ip_vaddr = thread_rip_vaddr;
+    ctx->thread_ip_voff  = thread_rip_voff;
+    ctx->thread_reg_space = e_space_make(CTRL_EvalSpaceKind_Entity);
+    ctx->thread_reg_space.u64_0 = (U64)thread;
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;

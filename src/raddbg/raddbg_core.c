@@ -13505,6 +13505,9 @@ rd_frame(void)
     if(e_ir_state != 0) { e_ir_state->ctx = 0; }
     {
       E_IRCtx *ctx = ir_ctx;
+      ctx->thread_ip_voff     = rip_voff;
+      ctx->thread_ip_vaddr    = rip_vaddr;
+      ctx->thread_reg_space   = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
       ctx->modules           = eval_modules;
       ctx->modules_count     = eval_modules_count;
       ctx->primary_module    = eval_modules_primary;
