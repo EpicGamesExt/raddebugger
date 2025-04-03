@@ -346,24 +346,29 @@ lnk_manifest_from_inputs(Arena       *arena,
                          String8List  input_manifest_path_list,
                          String8List  deps_list)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List unique_deps = remove_duplicates_str8_list(scratch.arena, deps_list);
+
   String8 manifest_data;
 
   if (input_manifest_path_list.node_count > 0) {
     ProfBegin("Merge Manifests");
-    Temp scratch = scratch_begin(&arena, 1);
     
-    String8 linker_manifest = lnk_make_linker_manifest(scratch.arena, manifest_uac, manifest_level, manifest_ui_access, deps_list);
+    String8 linker_manifest = lnk_make_linker_manifest(scratch.arena, manifest_uac, manifest_level, manifest_ui_access, unique_deps);
 
     // write linker manifest to temp file
     String8 linker_manifest_path = push_str8f(scratch.arena, "%S.manifest.temp", manifest_name);
     lnk_write_data_to_file_path(linker_manifest_path, str8_zero(), linker_manifest);
 
+    String8List unique_input_manifest_paths = remove_duplicates_str8_list(scratch.arena, input_manifest_path_list);
+
     // push linker manifest
-    str8_list_push(scratch.arena, &input_manifest_path_list, linker_manifest_path);
+    str8_list_push(scratch.arena, &unique_input_manifest_paths, linker_manifest_path);
 
     // launch mt.exe to merge input manifests
     String8 merged_manifest_path = push_str8f(scratch.arena, "%S.manifest.merged", manifest_name);
-    lnk_merge_manifest_files(mt_path, merged_manifest_path, input_manifest_path_list);
+    lnk_merge_manifest_files(mt_path, merged_manifest_path, unique_input_manifest_paths);
 
     // read mt.exe output from disk
     manifest_data = lnk_read_data_from_file_path(arena, merged_manifest_path);
@@ -375,12 +380,12 @@ lnk_manifest_from_inputs(Arena       *arena,
     os_delete_file_at_path(linker_manifest_path);
     os_delete_file_at_path(merged_manifest_path);
 
-    scratch_end(scratch);
     ProfEnd();
   } else {
-    manifest_data = lnk_make_linker_manifest(arena, manifest_uac, manifest_level, manifest_ui_access, deps_list);
+    manifest_data = lnk_make_linker_manifest(arena, manifest_uac, manifest_level, manifest_ui_access, unique_deps);
   }
 
+  scratch_end(scratch);
   return manifest_data;
 }
 

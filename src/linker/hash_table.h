@@ -86,5 +86,6 @@ internal void sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);
 
 ////////////////////////////////
 
-internal U64Array remove_duplicates_u64_array(Arena *arena, U64Array arr);
+internal U64Array    remove_duplicates_u64_array(Arena *arena, U64Array arr);
+internal String8List remove_duplicates_str8_list(Arena *arena, String8List list);
 

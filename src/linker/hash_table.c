@@ -356,3 +356,23 @@ remove_duplicates_u64_array(Arena *arena, U64Array arr)
   scratch_end(scratch);
   return result;
 }
+
+internal String8List
+remove_duplicates_str8_list(Arena *arena, String8List list)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List  result = {0};
+  HashTable   *ht     = hash_table_init(scratch.arena, list.node_count);
+
+  for (String8Node *node = list.first; node != 0; node = node->next) {
+    KeyValuePair *is_present = hash_table_search_string(ht, node->string);
+    if (!is_present) {
+      hash_table_push_string_raw(scratch.arena, ht, node->string, 0);
+      str8_list_push(arena, &result, node->string);
+    }
+  }
+
+  scratch_end(scratch);
+  return result;
+}
