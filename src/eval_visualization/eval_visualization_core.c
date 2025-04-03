@@ -94,7 +94,7 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
        kind == E_TypeKind_Union ||
        kind == E_TypeKind_Class ||
        kind == E_TypeKind_Array ||
-       kind == E_TypeKind_Set ||
+       kind == E_TypeKind_Stub ||
        (kind == E_TypeKind_Enum && mode == E_Mode_Null))
     {
       result = 1;

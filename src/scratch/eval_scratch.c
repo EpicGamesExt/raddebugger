@@ -60,7 +60,7 @@ entry_point(CmdLine *cmdline)
     }
     
     //- rjf: parse
-    E_Parse parse = e_parse_expr_from_text_tokens(arena, expr_text, &tokens);
+    E_Parse parse = e_parse_expr_from_text_tokens(arena, expr_text, tokens);
     {
       typedef struct Task Task;
       struct Task

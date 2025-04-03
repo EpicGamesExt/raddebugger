@@ -71,7 +71,7 @@ str8_lit_comp("class"),
 str8_lit_comp("enum"),
 str8_lit_comp("bitfield"),
 str8_lit_comp("variadic"),
-str8_lit_comp("set"),
+str8_lit_comp("stub"),
 };
 
 U8 e_type_kind_basic_byte_size_table[56] =
@@ -134,7 +134,7 @@ U8 e_type_kind_basic_byte_size_table[56] =
 0,
 };
 
-String8 e_expr_kind_strings[49] =
+String8 e_expr_kind_strings[48] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -184,10 +184,9 @@ str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
 str8_lit_comp("Define"),
-str8_lit_comp("Tag"),
 };
 
-E_OpInfo e_expr_kind_op_info_table[49] =
+E_OpInfo e_expr_kind_op_info_table[48] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -237,7 +236,6 @@ E_OpInfo e_expr_kind_op_info_table[49] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Binary, 13, str8_lit_comp(""), str8_lit_comp("="), str8_lit_comp("") },
-{ E_OpKind_Null, 0, str8_lit_comp("=>"), str8_lit_comp(","), str8_lit_comp("") },
 };
 
 String8 e_interpretation_code_display_strings[11] =

@@ -71,7 +71,7 @@ E_TypeKindTable:
   {IncompleteEnum            "enum"                0    }
   {Bitfield                  "bitfield"            0    }
   {Variadic                  "variadic"            0    }
-  {Set                       "set"                 0    }
+  {Stub                      "stub"                0    }
 }
 
 @table(name  op_kind  precedence  op_pre  op_sep  op_pos)
@@ -134,8 +134,6 @@ E_ExprKindTable:
   { Func                 Null                0        ""        ""        "" }
   
   { Define               Binary              13       ""        "="       "" }
-  
-  { Tag                  Null                0        "=>"      ","       "" }
 }
 
 @table(name display_string)

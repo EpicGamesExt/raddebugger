@@ -535,7 +535,7 @@ struct E_LookupRuleTagPair
 ////////////////////////////////
 //~ rjf: IR Generation Hooks
 
-#define E_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_Expr *tag)
+#define E_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr)
 #define E_IRGEN_FUNCTION_NAME(name) e_irgen_##name
 #define E_IRGEN_FUNCTION_DEF(name) internal E_IRGEN_FUNCTION_SIG(E_IRGEN_FUNCTION_NAME(name))
 typedef E_IRGEN_FUNCTION_SIG(E_IRGenFunctionType);

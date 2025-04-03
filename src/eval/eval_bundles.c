@@ -27,6 +27,7 @@ e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
     .space           = interp.space,
     .exprs           = exprs,
     .irtree          = irtree,
+    .bytecode        = bytecode,
     .lookup_rule_tag = lookup,
     .code            = interp.code,
   };

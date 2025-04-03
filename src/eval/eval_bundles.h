@@ -14,6 +14,7 @@ struct E_Eval
   E_Space space;
   E_ExprChain exprs;
   E_IRTreeAndType irtree;
+  String8 bytecode;
   E_LookupRuleTagPair lookup_rule_tag;
   E_InterpretationCode code;
   E_MsgList msgs;

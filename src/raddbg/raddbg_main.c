@@ -89,6 +89,12 @@
 ////////////////////////////////
 //~ rjf: feature cleanup, code dedup, code elimination pass:
 //
+// [ ] 'view rules' need to be rephrased as "function" calls in the expression language
+// [ ] need a formalization which takes unknown identifiers which are called, and tries
+//     to use that to apply a IR-generation rule, which is keyed by that unknown
+//     identifier
+// [ ] *ALL* expressions in watch windows need to be editable.
+//
 // [ ] config hot-reloading, using cfg wins
 // [ ] undo/redo, using cfg wins
 // [ ] back/forward, using cfg wins
