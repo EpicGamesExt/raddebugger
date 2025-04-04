@@ -9,12 +9,13 @@ typedef struct COFF_FileHeaderInfo
   B32              is_big_obj;
   COFF_MachineType machine;
   U64              header_size;
-  U64              section_array_off;
   U64              section_count_no_null;
-  U64              string_table_off;
   U64              symbol_size;
-  U64              symbol_off;
   U64              symbol_count;
+  Rng1U64          header_range;
+  Rng1U64          section_table_range;
+  Rng1U64          symbol_table_range;
+  Rng1U64          string_table_range;
 } COFF_FileHeaderInfo;
 
 ////////////////////////////////
@@ -249,8 +250,8 @@ internal COFF_FileHeaderInfo coff_file_header_info_from_data(String8 raw_coff);
 ////////////////////////////////
 // Symbol
 
-internal COFF_ParsedSymbol coff_parse_symbol32(String8 raw_coff, U64 string_table_off, COFF_Symbol32 *sym32);
-internal COFF_ParsedSymbol coff_parse_symbol16(String8 raw_coff, U64 string_table_off, COFF_Symbol16 *sym16);
+internal COFF_ParsedSymbol coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32);
+internal COFF_ParsedSymbol coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16);
 
 internal COFF_Symbol32Array coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
 internal COFF_Symbol32Array coff_symbol_array_from_data_32(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);

@@ -1101,15 +1101,16 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
     image_base = pe.image_base;
 
     // get image sections
-    String8             raw_sections  = str8_substr(in->image_data, rng_1u64(pe.section_array_off, pe.section_array_off+sizeof(COFF_SectionHeader)*pe.section_count));
+    String8             raw_sections  = str8_substr(in->image_data, pe.section_table_range);
     U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
-    COFF_SectionHeader *section_array = (COFF_SectionHeader *)raw_sections.str;
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_sections.str;
 
     // convert sections
-    binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, in->image_data, pe.string_table_off, section_count, section_array);
+    String8 string_table = str8_substr(in->image_data, pe.string_table_range);
+    binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, in->image_data, string_table, section_count, section_table);
 
     // make DWARF input
-    input = dw_input_from_coff_section_table(scratch.arena, in->image_data, pe.string_table_off, section_count, section_array);
+    input = dw_input_from_coff_section_table(scratch.arena, in->image_data, string_table, section_count, section_table);
   } else if (in->image == Image_Elf32 || in->image == Image_Elf64) {
     ELF_BinInfo elf = elf_bin_from_data(in->debug_data);
 

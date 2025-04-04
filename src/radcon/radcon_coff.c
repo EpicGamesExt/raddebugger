@@ -56,7 +56,7 @@ c2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 }
 
 internal RDIM_BinarySectionList
-c2r_rdi_binary_sections_from_coff_sections(Arena *arena, String8 image_data, U64 string_table_off, U64 sectab_count, COFF_SectionHeader *sectab)
+c2r_rdi_binary_sections_from_coff_sections(Arena *arena, String8 image_data, String8 string_table, U64 sectab_count, COFF_SectionHeader *sectab)
 {
   ProfBeginFunction();
 
@@ -66,7 +66,7 @@ c2r_rdi_binary_sections_from_coff_sections(Arena *arena, String8 image_data, U64
     COFF_SectionHeader *coff_sec = &sectab[isec];
     RDIM_BinarySection *sec      = rdim_binary_section_list_push(arena, &binary_sections);
 
-    sec->name       = coff_name_from_section_header(image_data, coff_sec, string_table_off);
+    sec->name       = coff_name_from_section_header(string_table, coff_sec);
     sec->flags      = c2r_rdi_binary_section_flags_from_coff_section_flags(coff_sec->flags);
     sec->voff_first = coff_sec->voff;
     sec->voff_opl   = coff_sec->voff + coff_sec->vsize;

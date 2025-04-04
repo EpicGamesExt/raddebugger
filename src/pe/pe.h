@@ -993,17 +993,17 @@ struct PE_HandlerScope
 typedef struct PE_BinInfo PE_BinInfo;
 struct PE_BinInfo
 {
+  Arch            arch;
   U64             image_base;
   U64             entry_point;
   B32             is_pe32;
   U64             virt_section_align;
   U64             file_section_align;
-  U64             section_array_off;
   U64             section_count;
-  U64             symbol_array_off;
   U64             symbol_count;
-  U64             string_table_off;
-  Arch            arch;
+  Rng1U64         section_table_range;
+  Rng1U64         symbol_table_range;
+  Rng1U64         string_table_range;
   Rng1U64        *data_dir_franges;
   U32             data_dir_count;
   PE_TLSHeader64  tls_header;
@@ -1085,9 +1085,6 @@ internal PE_ParsedTLS               pe_tls_from_data(Arena *arena, COFF_MachineT
 //~ rjf: Helpers
 
 internal U64                   pe_pdata_off_from_voff__binary_search_x8664(String8 raw_data, U64 voff);
-internal void *                pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal U64                   pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal void *                pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);
 internal U64                   pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal PE_BaseRelocBlockList pe_base_reloc_block_list_from_data(Arena *arena, String8 raw_relocs);
 internal Rng1U64               pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr);

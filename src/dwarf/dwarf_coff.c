@@ -3,15 +3,15 @@
 
 internal B32
 dw_is_dwarf_present_coff_section_table(String8             raw_image,
-                                       U64                 string_table_off,
+                                       String8             string_table,
                                        U64                 section_count,
-                                       COFF_SectionHeader *sections)
+                                       COFF_SectionHeader *section_table)
 {
   B32 is_dwarf_present = 0;
 
   for (U64 i = 0; i < section_count; ++i) {
-    COFF_SectionHeader *header = &sections[i];
-    String8             name   = coff_name_from_section_header(raw_image, header, string_table_off);
+    COFF_SectionHeader *header = &section_table[i];
+    String8             name   = coff_name_from_section_header(string_table, header);
 
     DW_SectionKind s = dw_section_kind_from_string(name);
     if (s == DW_Section_Null) {
@@ -30,17 +30,17 @@ dw_is_dwarf_present_coff_section_table(String8             raw_image,
 internal DW_Input
 dw_input_from_coff_section_table(Arena              *arena,
                                  String8             raw_image,
-                                 U64                 string_table_off,
+                                 String8             string_table,
                                  U64                 section_count,
-                                 COFF_SectionHeader *sections)
+                                 COFF_SectionHeader *section_table)
 {
   DW_Input input                              = {0};
   B32      sect_status[ArrayCount(input.sec)] = {0};
 
   for (U64 i = 0; i < section_count; ++i) {
-    COFF_SectionHeader *header         = &sections[i];
+    COFF_SectionHeader *header         = &section_table[i];
     Rng1U64             raw_data_range = rng_1u64(header->foff, header->foff + header->fsize);
-    String8             name           = coff_name_from_section_header(raw_image, header, string_table_off);
+    String8             name           = coff_name_from_section_header(string_table, header);
 
     DW_SectionKind s      = dw_section_kind_from_string(name);
     B32            is_dwo = 0;

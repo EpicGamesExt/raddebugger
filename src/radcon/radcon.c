@@ -208,11 +208,12 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     }
 
     if (driver == RC_Driver_Null || driver == RC_Driver_Dwarf) {
-      PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, pe_data);
-      String8             raw_sections  = str8_substr(pe_data, rng_1u64(pe.section_array_off, pe.section_array_off+sizeof(COFF_SectionHeader)*pe.section_count));
-      U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
-      COFF_SectionHeader *section_array = (COFF_SectionHeader *)raw_sections.str;
-      if (dw_is_dwarf_present_coff_section_table(pe_data, pe.string_table_off, section_count, section_array)) {
+      PE_BinInfo          pe                = pe_bin_info_from_data(scratch.arena, pe_data);
+      String8             raw_section_table = str8_substr(pe_data, pe.section_table_range);
+      String8             string_table      = str8_substr(pe_data, pe.string_table_range);
+      U64                 section_count     = raw_section_table.size / sizeof(COFF_SectionHeader);
+      COFF_SectionHeader *section_table     = (COFF_SectionHeader *)raw_section_table.str;
+      if (dw_is_dwarf_present_coff_section_table(pe_data, string_table, section_count, section_table)) {
         driver     = RC_Driver_Dwarf;
         debug_name = pe_name;
         debug_data = pe_data;

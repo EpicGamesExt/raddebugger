@@ -4,7 +4,7 @@
 #ifndef DWARF_COFF_H
 #define DWARF_COFF_H
 
-internal DW_Input dw_input_from_coff_section_table(Arena *arena, String8 raw_image, U64 string_table_off, U64 section_count, COFF_SectionHeader *sections);
+internal DW_Input dw_input_from_coff_section_table(Arena *arena, String8 raw_image, String8 string_table, U64 section_count, COFF_SectionHeader *section_table);
 
 #endif // DWARF_COFF_H
 

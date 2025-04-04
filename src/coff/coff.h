@@ -567,13 +567,13 @@ typedef struct COFF_ImportHeader
 internal U64               coff_align_size_from_section_flags(COFF_SectionFlags flags);
 internal COFF_SectionFlags coff_section_flag_from_align_size (U64 align);
 
-internal String8 coff_name_from_section_header(String8 raw_coff, COFF_SectionHeader *header, U64 string_table_off);
+internal String8 coff_name_from_section_header(String8 string_table, COFF_SectionHeader *header);
 internal void    coff_parse_section_name      (String8 full_name, String8 *name_out, String8 *postfix_out);
 
 ////////////////////////////////
 // Symbol
 
-internal String8 coff_read_symbol_name(String8 raw_coff, U64 string_table_off, COFF_SymbolName *name);
+internal String8 coff_read_symbol_name(String8 string_table, COFF_SymbolName *name);
 
 ////////////////////////////////
 // Reloc

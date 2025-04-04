@@ -128,21 +128,20 @@ typedef struct
 {
   LNK_SectionTable *st;
   LNK_ObjNode      *obj_arr;
-  U64             **chunk_count_arr_arr;
+  U64             **chunk_counts;
 } LNK_ChunkCounter;
 
 typedef struct
 {
   LNK_ChunkManager *cman;
-  U64             **chunk_id_arr_arr;
-  U64               obj_idx;
+  U64              *chunk_id;
 } LNK_ChunkRefAssign;
 
 typedef struct
 {
   LNK_SectionTable *st;
   Rng1U64          *range_arr;
-  U64             **chunk_id_arr_arr;
+  U64             **chunk_ids;
   LNK_ObjNode      *obj_arr;
   LNK_ChunkList   **nosort_chunk_list_arr_arr;
   LNK_ChunkList   **chunk_list_arr_arr;
@@ -202,7 +201,7 @@ internal LNK_ChunkList *  lnk_collect_obj_chunks(TP_Context *tp, TP_Arena *arena
 internal LNK_ObjNodeArray lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *tp_arena, LNK_ObjList *obj_list, LNK_SectionTable *st, U64 *function_pad_min, U64 input_count, LNK_InputObj **inputs);
 
 internal LNK_Chunk *       lnk_sect_chunk_array_from_coff(Arena *arena, U64 obj_id, String8 obj_path, String8 coff_data, U64 sect_count, COFF_SectionHeader *coff_sect_arr, String8 *sect_name_arr, String8 *sect_postfix_arr);
-internal LNK_SymbolArray   lnk_symbol_array_from_coff(Arena *arena, String8 coff_data, LNK_Obj *obj, String8 obj_path, String8 lib_path, B32 is_big_obj, U64 function_pad_min, U64 string_table_off, U64 sect_count, COFF_SectionHeader *coff_sect_arr, U64 coff_symbol_count, void *coff_symbols, LNK_ChunkPtr *chunk_ptr_arr, LNK_Chunk *master_common_block);
+internal LNK_SymbolArray lnk_symbol_array_from_coff(Arena *arena, LNK_Obj *obj, String8 obj_path, String8 lib_path, B32 is_big_obj, U64 function_pad_min, U64 sect_count, COFF_SectionHeader *section_table, U64 symbol_count, void *symbol_table, String8 string_table, LNK_ChunkPtr *chunk_table, LNK_Chunk *master_common_block);
 internal LNK_RelocList     lnk_reloc_list_from_coff_reloc_array(Arena *arena, COFF_MachineType machine, LNK_Chunk *chunk, LNK_SymbolArray symbol_array, COFF_Reloc *reloc_v, U64 reloc_count);
 internal LNK_RelocList *   lnk_reloc_list_array_from_coff(Arena *arena, COFF_MachineType machine, String8 coff_data, U64 sect_count, COFF_SectionHeader *coff_sect_arr, LNK_ChunkPtr *chunk_ptr_arr, LNK_SymbolArray symbol_array);
 internal LNK_DirectiveInfo lnk_directive_info_from_sections(Arena *arena, String8 obj_path, String8 lib_path, U64 chunk_count, LNK_RelocList *reloc_list_arr, String8 *sect_name_arr, LNK_Chunk *chunk_arr);

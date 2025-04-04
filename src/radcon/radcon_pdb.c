@@ -2366,7 +2366,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   //////////////////////////////////////////////////////////////
   //- rjf: build binary sections list
   //
-  RDIM_BinarySectionList binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, str8_zero(), 0, coff_sections.count, coff_sections.v);
+  RDIM_BinarySectionList binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, str8_zero(), str8_zero(), coff_sections.count, coff_sections.v);
   
   //////////////////////////////////////////////////////////////
   //- rjf: produce top-level-info

@@ -99,33 +99,33 @@ coff_file_header_info_from_data(String8 raw_coff)
     COFF_BigObjHeader *header32 = (COFF_BigObjHeader*)raw_coff.str;
     info.is_big_obj             = 1;
     info.machine                = header32->machine;
-    info.header_size            = sizeof(COFF_BigObjHeader);
-    info.section_array_off      = sizeof(COFF_BigObjHeader);
     info.section_count_no_null  = header32->section_count;
-    info.string_table_off       = header32->symbol_table_foff + sizeof(COFF_Symbol32) * header32->symbol_count;
-    info.symbol_size            = sizeof(COFF_Symbol32);
-    info.symbol_off             = header32->symbol_table_foff;
     info.symbol_count           = header32->symbol_count;
+    info.symbol_size            = sizeof(COFF_Symbol32);
+    info.header_range           = rng_1u64(0, sizeof(COFF_BigObjHeader));
+    info.section_table_range    = rng_1u64(info.header_range.max, info.header_range.max + sizeof(COFF_SectionHeader) * header32->section_count);
+    info.symbol_table_range     = rng_1u64(header32->symbol_table_foff, header32->symbol_table_foff + sizeof(COFF_Symbol32) * header32->symbol_count);
+    info.string_table_range     = rng_1u64(info.symbol_table_range.max, raw_coff.size);
   } else if (coff_is_obj(raw_coff)) {
     COFF_FileHeader *header16  = (COFF_FileHeader*)raw_coff.str;
     info.is_big_obj            = 0;
     info.machine               = header16->machine;
-    info.header_size           = sizeof(COFF_FileHeader);
-    info.section_array_off     = sizeof(COFF_FileHeader);
     info.section_count_no_null = header16->section_count;
-    info.string_table_off      = header16->symbol_table_foff + sizeof(COFF_Symbol16) * header16->symbol_count;
-    info.symbol_size           = sizeof(COFF_Symbol16);
-    info.symbol_off            = header16->symbol_table_foff;
     info.symbol_count          = header16->symbol_count;
+    info.symbol_size           = sizeof(COFF_Symbol16);
+    info.header_range          = rng_1u64(0, sizeof(COFF_FileHeader));
+    info.section_table_range   = rng_1u64(info.header_range.max, info.header_range.max + sizeof(COFF_SectionHeader) * header16->section_count);
+    info.symbol_table_range    = rng_1u64(header16->symbol_table_foff, header16->symbol_table_foff + sizeof(COFF_Symbol16) * header16->symbol_count);
+    info.string_table_range    = rng_1u64(info.symbol_table_range.max, raw_coff.size);
   }
   return info;
 }
 
 internal COFF_ParsedSymbol
-coff_parse_symbol32(String8 raw_coff, U64 string_table_off, COFF_Symbol32 *sym32)
+coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
 {
   COFF_ParsedSymbol result = {0};
-  result.name              = coff_read_symbol_name(raw_coff, string_table_off, &sym32->name);
+  result.name              = coff_read_symbol_name(string_table, &sym32->name);
   result.value             = sym32->value;
   result.section_number    = sym32->section_number;
   result.type              = sym32->type;
@@ -135,10 +135,10 @@ coff_parse_symbol32(String8 raw_coff, U64 string_table_off, COFF_Symbol32 *sym32
 }
 
 internal COFF_ParsedSymbol
-coff_parse_symbol16(String8 raw_coff, U64 string_table_off, COFF_Symbol16 *sym16)
+coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
 {
   COFF_ParsedSymbol result = {0};
-  result.name              = coff_read_symbol_name(raw_coff, string_table_off, &sym16->name);
+  result.name              = coff_read_symbol_name(string_table, &sym16->name);
   result.value             = sym16->value;
   if (sym16->section_number == COFF_Symbol_DebugSection16) {
     result.section_number = COFF_Symbol_DebugSection32;
