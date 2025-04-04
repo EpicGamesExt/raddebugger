@@ -954,8 +954,6 @@ lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
 internal void
 lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_name, String8List value_strings, String8 obj_path, String8 lib_path)
 {
-  Assert(cmd_name.size); // switch must have a defined name in the table
-
   Temp scratch = scratch_begin(&arena,1);
 
   LNK_CmdSwitchType cmd_switch = lnk_cmd_switch_type_from_string(cmd_name);
