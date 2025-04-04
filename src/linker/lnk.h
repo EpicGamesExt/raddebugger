@@ -204,7 +204,7 @@ typedef struct
 {
   String8            image_data;
   LNK_SymbolTable   *symtab;
-  LNK_SectionTable  *st;
+  LNK_SectionTable  *sectab;
   LNK_Section      **sect_id_map;
   U64                base_addr;
   LNK_Section      **sect_arr;
@@ -215,7 +215,7 @@ typedef struct
 {
   String8            image_data;
   LNK_SymbolTable   *symtab;
-  LNK_SectionTable  *st;
+  LNK_SectionTable  *sectab;
   LNK_Section      **sect_id_map;
   U64                base_addr;
   LNK_Obj          **obj_arr;
@@ -262,10 +262,10 @@ internal void    lnk_merge_manifest_files(String8 mt_path, String8 out_name, Str
 ////////////////////////////////
 // Resources
 
-internal void    lnk_serialize_pe_resource_tree(LNK_SectionTable *st, LNK_SymbolTable *symtab, PE_ResourceDir *root_dir);
-internal void    lnk_add_resource_debug_s(LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 obj_path, String8 cwd_path, String8 exe_path, CV_Arch arch, String8List res_file_list, MD5Hash *res_hash_array);
+internal void    lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, PE_ResourceDir *root_dir);
+internal void    lnk_add_resource_debug_s(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 obj_path, String8 cwd_path, String8 exe_path, CV_Arch arch, String8List res_file_list, MD5Hash *res_hash_array);
 internal String8 lnk_make_res_obj(TP_Context *tp, Arena *arena, PE_ResourceDir *root_dir, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 path, String8 cwd_path, String8 exe_path, String8List res_file_list, MD5Hash *res_hash_array);
-internal String8 lnk_obj_from_res_file_list(TP_Context *tp, Arena *arena, LNK_SectionTable *st, LNK_SymbolTable *symtab, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name); 
+internal String8 lnk_obj_from_res_file_list(TP_Context *tp, Arena *arena, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name); 
 
 ////////////////////////////////
 // Debug
@@ -275,10 +275,10 @@ internal String8 lnk_make_linker_coff_obj(TP_Context *tp, Arena *arena, COFF_Tim
 ////////////////////////////////
 // Win32 Image Helpers
 
-internal void        lnk_build_debug_pdb(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, U32 age, String8 pdb_path);
-internal void        lnk_build_debug_rdi(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, String8 rdi_path);
-internal void        lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
-internal void        lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType  machine, U64 page_size, PE_ImageFileCharacteristics file_chars, LNK_ObjList obj_list);
+internal void        lnk_build_debug_pdb(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, U32 age, String8 pdb_path);
+internal void        lnk_build_debug_rdi(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, String8 rdi_path);
+internal void        lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
+internal void        lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, COFF_MachineType  machine, U64 page_size, PE_ImageFileCharacteristics file_chars, LNK_ObjList obj_list);
 internal LNK_Chunk * lnk_build_dos_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent_chunk);
 internal LNK_Chunk * lnk_build_pe_magic(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent);
 internal LNK_Chunk * lnk_build_coff_file_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent, COFF_MachineType machine, COFF_TimeStamp time_stamp, PE_ImageFileCharacteristics file_characteristics);
@@ -290,15 +290,15 @@ internal LNK_Chunk * lnk_build_win32_image_header(LNK_SymbolTable *symtab, LNK_S
 ////////////////////////////////
 // Relocs
 
-internal void lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, String8 image_data, U64 base_addr);
-internal void lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, String8 image_data, U64 base_addr);
+internal void lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *sectab, LNK_Section **sect_id_map, String8 image_data, U64 base_addr);
+internal void lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *sectab, LNK_Section **sect_id_map, String8 image_data, U64 base_addr);
 
 internal void lnk_apply_reloc(U64 base_addr, U64 virt_align, U64 file_align, LNK_Section **sect_id_map, LNK_SymbolTable *symtab, String8 chunk_data, LNK_Reloc *reloc);
 
 ////////////////////////////////
 
-internal void lnk_log_size_breakdown(LNK_SectionTable *st, LNK_SymbolTable *symtab);
-internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *st);
+internal void lnk_log_size_breakdown(LNK_SectionTable *sectab, LNK_SymbolTable *symtab);
+internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *sectab);
 internal void lnk_log_timers(void);
 
 ////////////////////////////////

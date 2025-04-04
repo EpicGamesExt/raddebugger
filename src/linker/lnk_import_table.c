@@ -2,12 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_ImportTable *
-lnk_import_table_alloc_static(LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType machine)
+lnk_import_table_alloc_static(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, COFF_MachineType machine)
 {
   ProfBeginFunction();
   
-  LNK_Section *data_sect = lnk_section_table_push(st, str8_lit(".idata"), LNK_IDATA_SECTION_FLAGS);
-  LNK_Section *code_sect = lnk_section_table_search(st, str8_lit(".text"));
+  LNK_Section *data_sect = lnk_section_table_push(sectab, str8_lit(".idata"), LNK_IDATA_SECTION_FLAGS);
+  LNK_Section *code_sect = lnk_section_table_search(sectab, str8_lit(".text"));
   
   LNK_Chunk *dll_table_chunk = lnk_section_push_chunk_list(data_sect, data_sect->root, str8_zero());
   LNK_Chunk *int_chunk       = lnk_section_push_chunk_list(data_sect, data_sect->root, str8_zero());
@@ -47,12 +47,12 @@ lnk_import_table_alloc_static(LNK_SectionTable *st, LNK_SymbolTable *symtab, COF
 }
 
 internal LNK_ImportTable *
-lnk_import_table_alloc_delayed(LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType machine, B32 is_unloadable, B32 is_bindable)
+lnk_import_table_alloc_delayed(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, COFF_MachineType machine, B32 is_unloadable, B32 is_bindable)
 {
   ProfBeginFunction();
   
-  LNK_Section *data_sect = lnk_section_table_push(st, str8_lit(".didat"), LNK_DEBUG_DIR_SECTION_FLAGS);
-  LNK_Section *code_sect = lnk_section_table_search(st, str8_lit(".text"));
+  LNK_Section *data_sect = lnk_section_table_push(sectab, str8_lit(".didat"), LNK_DEBUG_DIR_SECTION_FLAGS);
+  LNK_Section *code_sect = lnk_section_table_search(sectab, str8_lit(".text"));
   
   LNK_Chunk *dll_table_chunk    = lnk_section_push_chunk_list(data_sect, data_sect->root, str8_zero());
   LNK_Chunk *int_chunk          = lnk_section_push_chunk_list(data_sect, data_sect->root, str8_zero());

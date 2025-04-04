@@ -271,33 +271,33 @@ lnk_section_table_alloc(U64 section_virt_off, U64 sect_align, U64 file_align)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
-  LNK_SectionTable *st = push_array(arena, LNK_SectionTable, 1);
-  st->arena            = arena;
-  st->section_virt_off = section_virt_off;
-  st->sect_align       = sect_align;
-  st->file_align       = file_align;
+  LNK_SectionTable *sectab = push_array(arena, LNK_SectionTable, 1);
+  sectab->arena            = arena;
+  sectab->section_virt_off = section_virt_off;
+  sectab->sect_align       = sect_align;
+  sectab->file_align       = file_align;
   ProfEnd();
-  return st;
+  return sectab;
 }
 
 internal void
 lnk_section_table_release(LNK_SectionTable **st_ptr)
 {
   ProfBeginFunction();
-  LNK_SectionTable *st = *st_ptr;
-  arena_release(st->arena);
+  LNK_SectionTable *sectab = *st_ptr;
+  arena_release(sectab->arena);
   *st_ptr = NULL;
   ProfEnd();
 }
 
 internal LNK_Section *
-lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags flags)
+lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags)
 {
   ProfBeginFunction();
-  LNK_SectionList *sect_list = &st->list;
+  LNK_SectionList *sect_list = &sectab->list;
   
-  LNK_SectionNode *sect_node  = push_array(st->arena, LNK_SectionNode, 1);
-  String8          sort_index = lnk_make_section_sort_index(st->arena, name, flags, st->id_max);
+  LNK_SectionNode *sect_node  = push_array(sectab->arena, LNK_SectionNode, 1);
+  String8          sort_index = lnk_make_section_sort_index(sectab->arena, name, flags, sectab->id_max);
   
   B32 found = 0;
   for (LNK_SectionNode *curr = sect_list->first, *prev = NULL; curr != NULL; prev = curr, curr = curr->next) {
@@ -320,8 +320,8 @@ lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags fla
   }
   sect_list->count += 1;
 
-  U64 sect_id = st->id_max;
-  st->id_max += 1;
+  U64 sect_id = sectab->id_max;
+  sectab->id_max += 1;
   
   LNK_Section *sect  = &sect_node->data;
   sect->arena        = arena_alloc();
@@ -329,7 +329,7 @@ lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags fla
   sect->name         = push_str8_copy(sect->arena, name);
   sect->sort_index   = sort_index;
   sect->flags        = flags;
-  sect->cman         = lnk_chunk_manager_alloc(sect->arena, sect_id, st->file_align);
+  sect->cman         = lnk_chunk_manager_alloc(sect->arena, sect_id, sectab->file_align);
   sect->root         = sect->cman->root;
   sect->nosort_chunk = lnk_chunk_push_list(sect->arena, sect->cman, sect->root, str8(0,0));
   sect->nosort_chunk->sort_chunk = 0;
@@ -345,12 +345,12 @@ lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags fla
 }
 
 internal LNK_Section *
-lnk_section_table_push_null(LNK_SectionTable *st)
+lnk_section_table_push_null(LNK_SectionTable *sectab)
 {
-  LNK_SectionList *list = &st->list;
-  SLLQueuePushFront(list->first, list->last, st->null_sect);
+  LNK_SectionList *list = &sectab->list;
+  SLLQueuePushFront(list->first, list->last, sectab->null_sect);
   list->count += 1;
-  return &st->null_sect->data;
+  return &sectab->null_sect->data;
 }
 
 LNK_CHUNK_VISITOR_SIG(lnk_chunk_has_leaf)
@@ -375,12 +375,12 @@ LNK_CHUNK_VISITOR_SIG(lnk_chunk_mark_discarded)
 }
 
 internal void
-lnk_section_table_remove(LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 name)
+lnk_section_table_remove(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 name)
 {
   ProfBeginFunction();
   
   // remove node from list
-  LNK_SectionNode *sect_node = lnk_section_list_remove(&st->list, name);
+  LNK_SectionNode *sect_node = lnk_section_list_remove(&sectab->list, name);
   LNK_Section *sect = &sect_node->data;
   
   // remove symbol for section root chunk
@@ -390,22 +390,22 @@ lnk_section_table_remove(LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 
   lnk_visit_chunks(sect->id, sect->root, lnk_chunk_mark_discarded, NULL);
   
   // push to empties
-  SLLQueuePush(st->empties_list.first, st->empties_list.last, sect_node);
-  st->empties_list.count += 1;
+  SLLQueuePush(sectab->empties_list.first, sectab->empties_list.last, sect_node);
+  sectab->empties_list.count += 1;
 
   ProfEnd();
 }
 
 internal LNK_Section *
-lnk_section_table_search(LNK_SectionTable *st, String8 name)
+lnk_section_table_search(LNK_SectionTable *sectab, String8 name)
 {
-  return lnk_section_list_search(&st->list, name);
+  return lnk_section_list_search(&sectab->list, name);
 }
 
 internal LNK_Section *
-lnk_section_table_search_id(LNK_SectionTable *st, U64 id)
+lnk_section_table_search_id(LNK_SectionTable *sectab, U64 id)
 {
-  for (LNK_SectionNode *node = st->list.first; node != NULL; node = node->next) {
+  for (LNK_SectionNode *node = sectab->list.first; node != NULL; node = node->next) {
     if (node->data.id == id) {
       return &node->data;
     }
@@ -414,16 +414,16 @@ lnk_section_table_search_id(LNK_SectionTable *st, U64 id)
 }
 
 internal void
-lnk_section_table_merge(LNK_SectionTable *st, LNK_MergeDirectiveList merge_list)
+lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_list)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  LNK_Section **src_dst = push_array(scratch.arena, LNK_Section *, st->id_max);
+  LNK_Section **src_dst = push_array(scratch.arena, LNK_Section *, sectab->id_max);
   for (LNK_MergeDirectiveNode *merge_node = merge_list.first; merge_node != NULL; merge_node = merge_node->next) {
     LNK_MergeDirective *merge = &merge_node->data;
     
     // are we trying to merge section that was already merged?
-    LNK_Section *merge_sect = lnk_section_list_search(&st->merge_list, merge->src);
+    LNK_Section *merge_sect = lnk_section_list_search(&sectab->merge_list, merge->src);
     if (merge_sect) {
       LNK_Section *dst = src_dst[merge_sect->id];
       B32 is_ambiguous_merge = !str8_match(dst->name, merge->dst, 0);
@@ -436,7 +436,7 @@ lnk_section_table_merge(LNK_SectionTable *st, LNK_MergeDirectiveList merge_list)
     }
     
     // find source seciton
-    LNK_Section *src = lnk_section_table_search(st, merge->src);
+    LNK_Section *src = lnk_section_table_search(sectab, merge->src);
     if (src == NULL) {
       lnk_error(LNK_Warning_IllData, "Can't find section \"%S\" to merge with \"%S\"", merge->src, merge->dst);
       // TODO: supplement obj path if applicable
@@ -444,7 +444,7 @@ lnk_section_table_merge(LNK_SectionTable *st, LNK_MergeDirectiveList merge_list)
     }
     
     // handle case where destination section doesn't exist
-    LNK_Section *dst = lnk_section_table_search(st, merge->dst);
+    LNK_Section *dst = lnk_section_table_search(sectab, merge->dst);
     if (dst == NULL) {
       src->name = push_str8_copy(src->arena, merge->dst);
       src_dst[src->id] = src;
@@ -458,24 +458,24 @@ lnk_section_table_merge(LNK_SectionTable *st, LNK_MergeDirectiveList merge_list)
     lnk_section_merge(dst, src);
     
     // remove from output section list
-    LNK_SectionNode *src_node = lnk_section_list_remove(&st->list, src->name);
+    LNK_SectionNode *src_node = lnk_section_list_remove(&sectab->list, src->name);
     
     // push section to merged list
-    SLLQueuePush(st->merge_list.first, st->merge_list.last, src_node);
-    st->merge_list.count += 1;
+    SLLQueuePush(sectab->merge_list.first, sectab->merge_list.last, src_node);
+    sectab->merge_list.count += 1;
   }
   scratch_end(scratch);
   ProfEnd();
 }
 
 internal void
-lnk_section_table_remove_empties(LNK_SectionTable *st, LNK_SymbolTable *symtab)
+lnk_section_table_remove_empties(LNK_SectionTable *sectab, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
   String8List name_list = {0};
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
+  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
     LNK_Section *sect = &sect_node->data;
     
     B32 no_data = 1;
@@ -488,28 +488,28 @@ lnk_section_table_remove_empties(LNK_SectionTable *st, LNK_SymbolTable *symtab)
   }
   
   for (String8Node *name = name_list.first; name != NULL; name = name->next) {
-    lnk_section_table_remove(st, symtab, name->string);
+    lnk_section_table_remove(sectab, symtab, name->string);
   }
   scratch_end(scratch);
   ProfEnd();
 }
 
 internal LNK_SectionArray
-lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *st)
+lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab)
 {
   LNK_SectionArray result = {0};
   result.count            = 0;
-  result.v                = push_array(arena, LNK_Section, st->list.count);
+  result.v                = push_array(arena, LNK_Section, sectab->list.count);
 
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != 0; sect_node = sect_node->next) {
+  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
     if (sect_node->data.emit_header && sect_node->data.has_layout) {
-      Assert(result.count < st->list.count);
+      Assert(result.count < sectab->list.count);
       result.v[result.count] = sect_node->data;
       result.count += 1;
     }
   }
 
-  U64 unused_entry_count = st->list.count - result.count;
+  U64 unused_entry_count = sectab->list.count - result.count;
   arena_pop(arena, unused_entry_count * sizeof(result.v[0]));
 
   return result;
@@ -526,12 +526,12 @@ THREAD_POOL_TASK_FUNC(lnk_section_data_builder)
 }
 
 internal void
-lnk_section_table_build_data(TP_Context *tp, LNK_SectionTable *st, COFF_MachineType machine)
+lnk_section_table_build_data(TP_Context *tp, LNK_SectionTable *sectab, COFF_MachineType machine)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
 
-  LNK_SectionPtrArray sect_arr = lnk_section_ptr_array_from_list(scratch.arena, st->list);
+  LNK_SectionPtrArray sect_arr = lnk_section_ptr_array_from_list(scratch.arena, sectab->list);
 
   LNK_SectionDataBuilder task = {0};
   task.machine                = machine;
@@ -544,32 +544,32 @@ lnk_section_table_build_data(TP_Context *tp, LNK_SectionTable *st, COFF_MachineT
 }
 
 internal void
-lnk_section_table_assign_virtual_offsets(LNK_SectionTable *st)
+lnk_section_table_assign_virtual_offsets(LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  U64           cursor      = st->section_virt_off;
+  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, sectab);
+  U64           cursor      = sectab->section_virt_off;
   Assert(cursor >= 0x1000);
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
-    if (sect_node == st->null_sect) continue;
+  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
+    if (sect_node == sectab->null_sect) continue;
     LNK_Section *sect = &sect_node->data;
     if (!sect->has_layout) continue;
     sect->virt_off = cursor;
     U64 sect_size = lnk_virt_size_from_chunk_ref(sect_id_map, sect->root->ref);
     cursor += sect_size;
-    cursor = AlignPow2(cursor, st->sect_align);
+    cursor = AlignPow2(cursor, sectab->sect_align);
   }
   scratch_end(scratch);
   ProfEnd();
 }
 
 internal void
-lnk_section_table_assign_file_offsets(LNK_SectionTable *st)
+lnk_section_table_assign_file_offsets(LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
   U64 cursor = 0;
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
+  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
     LNK_Section *sect = &sect_node->data;
     if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
       continue;
@@ -583,11 +583,11 @@ lnk_section_table_assign_file_offsets(LNK_SectionTable *st)
 }
 
 internal void
-lnk_section_table_assign_indices(LNK_SectionTable *st)
+lnk_section_table_assign_indices(LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
   U64 isect = 0;
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
+  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
     LNK_Section *sect = &sect_node->data;
     if (sect->emit_header) {
       sect->isect = isect++;
@@ -597,13 +597,13 @@ lnk_section_table_assign_indices(LNK_SectionTable *st)
 }
 
 internal String8
-lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, COFF_MachineType machine)
+lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *sectab, COFF_MachineType machine)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
 
   U64 image_size = 0;
-  for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
+  for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
     LNK_Section *sect = &sect_n->data;
     if (sect->has_layout) {
       U64 root_size = sect->layout.chunk_file_size_array[sect->root->ref.chunk_id];
@@ -615,7 +615,7 @@ lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, 
   String8  image        = str8(image_buffer, image_size);
   U64      image_cursor = 0;
 
-  for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
+  for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
     LNK_Section *sect = &sect_n->data;
     if (sect->has_layout) {
       if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
@@ -642,15 +642,15 @@ lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, 
 }
 
 internal LNK_ChunkPtr **
-lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *st)
+lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
-  LNK_ChunkPtr **chunk_id_map = push_array(arena, LNK_ChunkPtr *, st->id_max);
-  for (LNK_SectionNode *node = st->list.first; node != 0; node = node->next) {
+  LNK_ChunkPtr **chunk_id_map = push_array(arena, LNK_ChunkPtr *, sectab->id_max);
+  for (LNK_SectionNode *node = sectab->list.first; node != 0; node = node->next) {
     LNK_Section *sect = &node->data;
     chunk_id_map[sect->id] = lnk_make_chunk_id_map(arena, sect->cman);
   }
-  if (st->list.first->data.id != 0) {
+  if (sectab->list.first->data.id != 0) {
     chunk_id_map[0] = push_array(arena, LNK_ChunkPtr, 1);
     chunk_id_map[0][0] = g_null_chunk_ptr;
   }
@@ -659,15 +659,15 @@ lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *st)
 }
 
 internal LNK_Section **
-lnk_sect_id_map_from_section_table(Arena *arena, LNK_SectionTable *st)
+lnk_sect_id_map_from_section_table(Arena *arena, LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
-  LNK_Section **map = push_array(arena, LNK_Section *, st->id_max);
-  LNK_SectionList *list_arr[] = { &st->list, &st->merge_list, &st->empties_list };
+  LNK_Section **map = push_array(arena, LNK_Section *, sectab->id_max);
+  LNK_SectionList *list_arr[] = { &sectab->list, &sectab->merge_list, &sectab->empties_list };
   for (U64 list_idx = 0; list_idx < ArrayCount(list_arr); ++list_idx) {
     for (LNK_SectionNode *sect_node = list_arr[list_idx]->first; sect_node != NULL; sect_node = sect_node->next) {
       LNK_Section *sect = &sect_node->data;
-      Assert(sect->id < st->id_max);
+      Assert(sect->id < sectab->id_max);
       Assert(map[sect->id] == NULL);
       map[sect->id] = sect;
     }
@@ -880,12 +880,12 @@ lnk_file_size_from_symbol(LNK_Section **sect_id_map, LNK_Symbol *symbol)
 
 #if LNK_DEBUG_CHUNKS
 internal void
-lnk_dump_chunks(LNK_SectionTable *st)
+lnk_dump_chunks(LNK_SectionTable *sectab)
 {
   Temp scratch = scratch_begin(0, 0);
-  LNK_ChunkPtr **chunk_id_map = lnk_chunk_id_map_from_section_table(scratch.arena, st);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st); 
-  for (U64 sect_id = 0; sect_id < st->id_max; ++sect_id) {
+  LNK_ChunkPtr **chunk_id_map = lnk_chunk_id_map_from_section_table(scratch.arena, sectab);
+  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, sectab); 
+  for (U64 sect_id = 0; sect_id < sectab->id_max; ++sect_id) {
     LNK_Section *sect = sect_id_map[sect_id];
     if (!sect) continue;
     if (sect->is_merged) continue;

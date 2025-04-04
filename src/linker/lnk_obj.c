@@ -546,7 +546,7 @@ THREAD_POOL_TASK_FUNC(lnk_chunk_counter)
   for (U64 chunk_idx = 0; chunk_idx < obj->chunk_count; chunk_idx += 1) {
     String8      name  = obj->sect_name_arr[chunk_idx];
     LNK_Chunk   *chunk = obj->chunk_arr[chunk_idx];
-    LNK_Section *sect  = lnk_section_table_search(task->st, name);
+    LNK_Section *sect  = lnk_section_table_search(task->sectab, name);
 
     U64 count = 0;
     lnk_visit_chunks(0, chunk, lnk_chunk_get_count_cb, &count);
@@ -586,7 +586,7 @@ THREAD_POOL_TASK_FUNC(lnk_chunk_ref_assigner)
       LNK_Chunk *chunk = obj->chunk_arr[chunk_idx];
 
       // :find_chunk_section
-      LNK_Section *sect = lnk_section_table_search(task->st, name);
+      LNK_Section *sect = lnk_section_table_search(task->sectab, name);
 
       // :chunk_ref_assign
       LNK_ChunkRefAssign ctx = {0};
@@ -605,7 +605,7 @@ internal LNK_ObjNodeArray
 lnk_obj_list_push_parallel(TP_Context        *tp,
                            TP_Arena          *arena,
                            LNK_ObjList       *obj_list,
-                           LNK_SectionTable  *st,
+                           LNK_SectionTable  *sectab,
                            U64               *function_pad_min,
                            U64                input_count,
                            LNK_InputObj     **inputs)
@@ -627,7 +627,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
   }
   ProfEnd();
   
-  if (st) {
+  if (sectab) {
     ProfBegin("Section Table Update");
     {
       TP_Temp temp = tp_temp_begin(arena);
@@ -647,7 +647,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
 
 
       HashTable *ht = hash_table_init(arena->v[0], 128);
-      for (LNK_SectionNode *sect_node = st->list.first; sect_node != 0; sect_node = sect_node->next) {
+      for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
         LNK_Section *sect = &sect_node->data;
         hash_table_push_string_u64(arena->v[0], ht, sect->name, sect->flags);
       }
@@ -690,7 +690,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
 
       // push new sections for :find_chunk_section
       for (LNK_SectDefn *curr = new_list.first; curr != 0; curr = curr->next) {
-        lnk_section_table_push(st, curr->name, curr->flags & ~COFF_SectionFlags_LnkFlags);
+        lnk_section_table_push(sectab, curr->name, curr->flags & ~COFF_SectionFlags_LnkFlags);
       }
 
       tp_temp_end(temp);
@@ -700,20 +700,20 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
     ProfBegin("Count Chunks Per Section");
     U64 **chunk_ids;
     {
-      U64 **chunk_counts = push_array_no_zero(scratch.arena, U64 *, st->id_max);
-      for (U64 sect_idx = 0; sect_idx < st->id_max; sect_idx += 1) {
+      U64 **chunk_counts = push_array_no_zero(scratch.arena, U64 *, sectab->id_max);
+      for (U64 sect_idx = 0; sect_idx < sectab->id_max; sect_idx += 1) {
         chunk_counts[sect_idx] = push_array(scratch.arena, U64, obj_arr.count);
       }
 
       LNK_ChunkCounter task = {0};
-      task.st               = st;
+      task.sectab               = sectab;
       task.obj_arr          = obj_arr.v;
       task.chunk_counts     = chunk_counts;
       tp_for_parallel(tp, 0, obj_arr.count, lnk_chunk_counter, &task);
 
       chunk_ids = chunk_counts;
-      for (U64 sect_idx = 1; sect_idx < st->id_max; sect_idx += 1) {
-        LNK_Section *sect = lnk_section_table_search_id(st, sect_idx);
+      for (U64 sect_idx = 1; sect_idx < sectab->id_max; sect_idx += 1) {
+        LNK_Section *sect = lnk_section_table_search_id(sectab, sect_idx);
         if (!sect) continue;
         for (U64 obj_idx = 0; obj_idx < obj_arr.count; obj_idx += 1) {
           U64 chunk_id_base = sect->cman->total_chunk_count;
@@ -727,16 +727,16 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
     ProfBegin("Assign Chunk Refs");
     {
       LNK_ChunkRefAssigner task;
-      task.st                        = st;
+      task.sectab                        = sectab;
       task.range_arr                 = tp_divide_work(scratch.arena, obj_arr.count, tp->worker_count);
       task.chunk_ids                 = chunk_ids;
       task.obj_arr                   = obj_arr.v;
-      task.nosort_chunk_list_arr_arr = lnk_make_chunk_list_arr_arr(scratch.arena, st->id_max, tp->worker_count);
-      task.chunk_list_arr_arr        = lnk_make_chunk_list_arr_arr(scratch.arena, st->id_max, tp->worker_count);
+      task.nosort_chunk_list_arr_arr = lnk_make_chunk_list_arr_arr(scratch.arena, sectab->id_max, tp->worker_count);
+      task.chunk_list_arr_arr        = lnk_make_chunk_list_arr_arr(scratch.arena, sectab->id_max, tp->worker_count);
       tp_for_parallel(tp, arena, tp->worker_count, lnk_chunk_ref_assigner, &task);
 
       // merge chunks
-      for (LNK_SectionNode *sect_node = st->list.first; sect_node != 0; sect_node = sect_node->next) {
+      for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
         LNK_Section *sect = &sect_node->data;
         lnk_chunk_list_concat_in_place_arr(sect->nosort_chunk->u.list, task.nosort_chunk_list_arr_arr[sect->id], tp->worker_count);
         lnk_chunk_list_concat_in_place_arr(sect->root->u.list, task.chunk_list_arr_arr[sect->id], tp->worker_count);

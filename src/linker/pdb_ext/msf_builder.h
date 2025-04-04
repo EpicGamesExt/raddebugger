@@ -82,7 +82,7 @@ typedef struct MSF_Context
   MSF_PageList     root_page_list;
   MSF_PageList     st_page_list;
   MSF_PageList     page_pool;
-  MSF_StreamList   st;
+  MSF_StreamList   sectab;
 } MSF_Context;
 
 typedef enum MSF_Error

@@ -171,7 +171,7 @@ lnk_export_array_from_list(Arena *arena, LNK_ExportList list)
 }
 
 internal void
-lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 image_name, COFF_MachineType machine)
+lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 image_name, COFF_MachineType machine)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -195,7 +195,7 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
     }
   }
   
-  LNK_Section *edata = lnk_section_table_search(st, str8_lit(".edata"));
+  LNK_Section *edata = lnk_section_table_search(sectab, str8_lit(".edata"));
   
   // push header
   PE_ExportTableHeader *header       = push_array(edata->arena, PE_ExportTableHeader, 1);
