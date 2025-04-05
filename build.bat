@@ -52,14 +52,14 @@ set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%
 set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /pdbaltpath:%%%%_PDB%%%% -Xlinker /NATVIS:"%~dp0\src\natvis\base.natvis"
 set cl_out=        /out:
 set clang_out=     -o
-set cl_natvis=     /NATVIS:
-set clang_natvis=  -Xlinker /NATVIS:
+set cl_linker=     
+set clang_linker=  -Xlinker
 
 :: --- Per-Build Settings -----------------------------------------------------
 set link_dll=-DLL
 set link_icon=logo.res
-if "%msvc%"=="1"    set link_natvis=%cl_natvis%
-if "%clang%"=="1"   set link_natvis=%clang_natvis%
+if "%msvc%"=="1"    set linker=%cl_linker%
+if "%clang%"=="1"   set linker=%clang_linker%
 if "%msvc%"=="1"    set only_compile=/c
 if "%clang%"=="1"   set only_compile=-c
 if "%msvc%"=="1"    set EHsc=/EHsc
@@ -106,7 +106,7 @@ if not "%no_meta%"=="1" (
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
-if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%radcon%"=="1"                     set didbuild=1 && %compile% ..\src\radcon\radcon_main.c                               %compile_link% %out%radcon.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
