@@ -13661,7 +13661,6 @@ rd_frame(void)
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_module"), expr);
           }
         }
-        e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
       }
       
       //- rjf: add macro for 'call_stack' -> 'query:current_thread.callstack'
