@@ -773,7 +773,15 @@ fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px,
           info->subrect    = chosen_atlas_region;
           info->atlas_num  = chosen_atlas_num;
           info->raster_dim = raster.atlas_dim;
-          info->advance    = raster.advance;
+          info->advance = 0;
+          info->first_glyph_bitmap_top = 0;
+          if (raster.glyph_count > 0) {
+              info->first_glyph_bitmap_top = raster.metrics[0].bitmap_top;
+              for(U64 j = 0; j < raster.glyph_count; ++j)
+              {
+                  info->advance += raster.metrics[j].advance_x;
+              }
+          }
         }
       }
       
@@ -819,11 +827,12 @@ fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px,
                                   info->subrect.y0 + info->raster_dim.y);
           piece->advance = advance;
           piece->decode_size = piece_substring.size;
-          piece->offset = v2s16(0, -(hash2style_node->ascent + hash2style_node->descent));
+          piece->offset.x = 0;
+          piece->offset.y = -(info->first_glyph_bitmap_top);
         }
         base_align_px += advance;
         dim.x += piece->advance;
-        dim.y = Max(dim.y, info->raster_dim.y);
+        dim.y = Max(dim.y, (F32)(hash2style_node->ascent + hash2style_node->descent));
       }
     }
   }

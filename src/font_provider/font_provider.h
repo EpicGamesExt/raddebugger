@@ -32,12 +32,32 @@ struct FP_Metrics
   F32 capital_height;
 };
 
+typedef struct FP_GlyphMetrics FP_GlyphMetrics;
+struct FP_GlyphMetrics
+{
+    // Atlas Position & Size (Source Rect)
+    Rng2S16 src_rect_px; // Position (x0,y0) and dimensions (x1-x0, y1-y0) within the atlas texture
+
+    // Layout Metrics (relative to baseline & pen position)
+    S16 bitmap_left;     // Horizontal offset from pen_x to bitmap's left edge
+    S16 bitmap_top;      // Vertical offset from baseline up to bitmap's top edge
+    F32 advance_x;       // Horizontal advance width for this glyph (in pixels)
+
+    // Original Character Info (optional, but useful for debugging)
+    U32 codepoint;
+    U64 string_index;
+};
+
 typedef struct FP_RasterResult FP_RasterResult;
 struct FP_RasterResult
 {
-  Vec2S16 atlas_dim;
-  void *atlas;
-  F32 advance;
+    // Atlas Data
+    Vec2S16 atlas_dim;       // Dimensions of the atlas texture
+    void *atlas;             // Pixel data (RGBA8), aligned
+
+    // Per-Glyph Layout Information
+    U64 glyph_count;         // Number of glyphs in the metrics array
+    FP_GlyphMetrics *metrics; // Array of metrics for each glyph
 };
 
 ////////////////////////////////
