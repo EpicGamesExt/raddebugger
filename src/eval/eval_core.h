@@ -159,6 +159,96 @@ struct E_TypeKeyList
 #include "generated/eval.meta.h"
 
 ////////////////////////////////
+//~ rjf: Token Types
+
+typedef struct E_Token E_Token;
+struct E_Token
+{
+  E_TokenKind kind;
+  Rng1U64 range;
+};
+
+typedef struct E_TokenChunkNode E_TokenChunkNode;
+struct E_TokenChunkNode
+{
+  E_TokenChunkNode *next;
+  E_Token *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct E_TokenChunkList E_TokenChunkList;
+struct E_TokenChunkList
+{
+  E_TokenChunkNode *first;
+  E_TokenChunkNode *last;
+  U64 node_count;
+  U64 total_count;
+};
+
+typedef struct E_TokenArray E_TokenArray;
+struct E_TokenArray
+{
+  E_Token *v;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Evaluation Modes
+
+typedef enum E_Mode
+{
+  E_Mode_Null,
+  E_Mode_Value,
+  E_Mode_Offset,
+}
+E_Mode;
+
+////////////////////////////////
+//~ rjf: Expression Tree Types
+
+typedef struct E_Expr E_Expr;
+struct E_Expr
+{
+  E_Expr *first;
+  E_Expr *last;
+  E_Expr *next;
+  E_Expr *prev;
+  E_Expr *ref;
+  void *location;
+  E_ExprKind kind;
+  E_Mode mode;
+  E_Space space;
+  E_TypeKey type_key;
+  E_Value value;
+  String8 string;
+  String8 qualifier;
+  String8 bytecode;
+};
+
+typedef struct E_ExprChain E_ExprChain;
+struct E_ExprChain
+{
+  E_Expr *first;
+  E_Expr *last;
+};
+
+typedef struct E_ExprNode E_ExprNode;
+struct E_ExprNode
+{
+  E_ExprNode *next;
+  E_Expr *v;
+};
+
+typedef struct E_ExprList E_ExprList;
+struct E_ExprList
+{
+  E_ExprNode *first;
+  E_ExprNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Full Extracted Type Information Types
 
 typedef enum E_MemberKind
@@ -253,18 +343,8 @@ struct E_Type
   E_TypeKey *param_type_keys;
   E_Member *members;
   E_EnumVal *enum_vals;
+  E_Expr **args;
 };
-
-////////////////////////////////
-//~ rjf: Evaluation Modes
-
-typedef enum E_Mode
-{
-  E_Mode_Null,
-  E_Mode_Value,
-  E_Mode_Offset,
-}
-E_Mode;
 
 ////////////////////////////////
 //~ rjf: Modules
@@ -276,85 +356,6 @@ struct E_Module
   Rng1U64 vaddr_range;
   Arch arch;
   E_Space space;
-};
-
-////////////////////////////////
-//~ rjf: Token Types
-
-typedef struct E_Token E_Token;
-struct E_Token
-{
-  E_TokenKind kind;
-  Rng1U64 range;
-};
-
-typedef struct E_TokenChunkNode E_TokenChunkNode;
-struct E_TokenChunkNode
-{
-  E_TokenChunkNode *next;
-  E_Token *v;
-  U64 count;
-  U64 cap;
-};
-
-typedef struct E_TokenChunkList E_TokenChunkList;
-struct E_TokenChunkList
-{
-  E_TokenChunkNode *first;
-  E_TokenChunkNode *last;
-  U64 node_count;
-  U64 total_count;
-};
-
-typedef struct E_TokenArray E_TokenArray;
-struct E_TokenArray
-{
-  E_Token *v;
-  U64 count;
-};
-
-////////////////////////////////
-//~ rjf: Expression Tree Types
-
-typedef struct E_Expr E_Expr;
-struct E_Expr
-{
-  E_Expr *first;
-  E_Expr *last;
-  E_Expr *next;
-  E_Expr *prev;
-  E_Expr *ref;
-  void *location;
-  E_ExprKind kind;
-  E_Mode mode;
-  E_Space space;
-  E_TypeKey type_key;
-  E_Value value;
-  String8 string;
-  String8 qualifier;
-  String8 bytecode;
-};
-
-typedef struct E_ExprChain E_ExprChain;
-struct E_ExprChain
-{
-  E_Expr *first;
-  E_Expr *last;
-};
-
-typedef struct E_ExprNode E_ExprNode;
-struct E_ExprNode
-{
-  E_ExprNode *next;
-  E_Expr *v;
-};
-
-typedef struct E_ExprList E_ExprList;
-struct E_ExprList
-{
-  E_ExprNode *first;
-  E_ExprNode *last;
-  U64 count;
 };
 
 ////////////////////////////////

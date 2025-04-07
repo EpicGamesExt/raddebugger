@@ -46,6 +46,7 @@ struct E_ConsTypeParams
   U64 depth;
   E_Member *members;
   E_EnumVal *enum_vals;
+  E_Expr **args;
 };
 
 typedef struct E_ConsTypeNode E_ConsTypeNode;

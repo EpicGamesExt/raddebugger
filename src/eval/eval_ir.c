@@ -1210,13 +1210,6 @@ E_IRGEN_FUNCTION_DEF(array)
   return result;
 }
 
-E_IRGEN_FUNCTION_DEF(view_rule_noop)
-{
-  E_Expr *expr_arg = expr->first->next;
-  E_IRTreeAndType result = e_irtree_and_type_from_expr(arena, expr_arg);
-  return result;
-}
-
 internal E_IRGenRuleMap
 e_irgen_rule_map_make(Arena *arena, U64 slots_count)
 {
@@ -2423,24 +2416,39 @@ E_IRGEN_FUNCTION_DEF(default)
     {
       E_Expr *lhs = expr->first;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+      E_TypeKey lhs_type_key = lhs_irtree.type_key;
+      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
       
-      // rjf: map callee -> ir-generation rule
-      E_IRGenRule *irgen_rule = &e_irgen_rule__default;
+      // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
+      // a lens type, which preserves the name & arguments of the lens call expression
+      if(lhs_type->kind == E_TypeKind_Lens)
       {
-        E_TypeKey type_key = lhs_irtree.type_key;
-        E_Type *type = e_type_from_key__cached(type_key);
-        if(type->kind == E_TypeKind_Lens)
+        Temp scratch = scratch_begin(&arena, 1);
+        
+        // rjf: generate result via first argument to lens
+        result = e_irtree_and_type_from_expr(arena, lhs->next);
+        
+        // rjf: count extra arguments
+        U64 arg_count = 0;
+        for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next)
         {
-          String8 name = type->name;
-          irgen_rule = e_irgen_rule_from_string(name);
+          arg_count += 1;
         }
-      }
-      
-      // rjf: if we have a non-default ir-generation rule, then we can use that
-      // to generate the resultant IR tree
-      if(irgen_rule != &e_irgen_rule__default)
-      {
-        result = irgen_rule->irgen(arena, expr);
+        
+        // rjf: flatten extra arguments
+        E_Expr **args = push_array(scratch.arena, E_Expr *, arg_count);
+        {
+          U64 idx = 0;
+          for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next, idx += 1)
+          {
+            args[idx] = arg;
+          }
+        }
+        
+        // rjf: patch resultant type with a lens w/ args, pointing to the original type
+        result.type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .count = arg_count, .args = args, .direct_key = result.type_key, .name = lhs_type->name);
+        
+        scratch_end(scratch);
       }
       else
       {

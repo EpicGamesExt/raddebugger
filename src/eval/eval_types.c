@@ -418,6 +418,14 @@ e_type_key_cons_(E_ConsTypeParams *params)
       }
       node->byte_size = e_type_byte_size_from_key(node->params.direct_key);
     }
+    else if(params->args != 0)
+    {
+      node->params.args = push_array(e_type_state->arena, E_Expr *, params->count);
+      for EachIndex(idx, params->count)
+      {
+        node->params.args[idx] = e_expr_copy(e_type_state->arena, params->args[idx]);
+      }
+    }
     else switch(params->kind)
     {
       default:
@@ -629,6 +637,15 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             switch(type->kind)
             {
               default:{}break;
+              case E_TypeKind_Lens:
+              {
+                type->args = push_array(arena, E_Expr *, type->count);
+                MemoryCopy(type->args, node->params.args, sizeof(E_Expr *)*type->count);
+                for EachIndex(idx, type->count)
+                {
+                  type->args[idx] = e_expr_copy(arena, type->args[idx]);
+                }
+              }break;
               case E_TypeKind_Struct:
               case E_TypeKind_Union:
               case E_TypeKind_Class:
@@ -1684,6 +1701,25 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       {
         str8_list_push(arena, out, str8_lit("("));
       }
+    }break;
+    
+    case E_TypeKind_Lens:
+    {
+      E_Type *type = e_type_from_key__cached(key);
+      str8_list_pushf(arena, out, "%S(", type->name);
+      for EachIndex(idx, type->count)
+      {
+        String8 string = e_string_from_expr(arena, type->args[idx]);
+        str8_list_push(arena, out, string);
+        if(idx+1 < type->count)
+        {
+          str8_list_pushf(arena, out, ", ");
+        }
+      }
+      str8_list_pushf(arena, out, ") <- (");
+      E_TypeKey direct = e_type_direct_from_key(key);
+      e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
+      str8_list_pushf(arena, out, ")");
     }break;
     
     case E_TypeKind_Ptr:

@@ -13912,7 +13912,6 @@ rd_frame(void)
       {
         for EachElement(idx, view_ui_rule_table)
         {
-          e_irgen_rule_map_insert_new(scratch.arena, e_ir_state->ctx->irgen_rule_map, view_ui_rule_table[idx].name, E_IRGEN_FUNCTION_NAME(view_rule_noop));
           rd_view_ui_rule_map_insert(scratch.arena, rd_state->view_ui_rule_map, view_ui_rule_table[idx].name, view_ui_rule_table[idx].ui);
           if(view_ui_rule_table[idx].expand != 0)
           {
