@@ -1002,21 +1002,21 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: determine ctrl entity
-    if(block_type_kind == E_TypeKind_Stub && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
-                                              block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+    if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
+                                             block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
     {
       info.group_entity = rd_ctrl_entity_from_eval_space(info.eval.space);
     }
     
     // rjf: determine cfg group name / parent
-    if(block_type_kind == E_TypeKind_Stub && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
-                                              block_eval.space.kind == RD_EvalSpaceKind_MetaCfg))
+    if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
+                                             block_eval.space.kind == RD_EvalSpaceKind_MetaCfg))
     {
       info.group_cfg_parent = rd_cfg_from_eval_space(block_eval.space);
     }
     
     // rjf: determine group cfg name
-    if(block_type_kind == E_TypeKind_Stub)
+    if(block_type_kind == E_TypeKind_Set)
     {
       String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
       if(singular_name.size != 0)
@@ -1070,7 +1070,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.eval.space.kind == E_SpaceKind_FileSystem)
       {
         E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Stub)
+        if(type->kind == E_TypeKind_Set)
         {
           String8 file_path = e_string_from_id(info.eval.value.u64);
           DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
@@ -1226,7 +1226,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
         E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Stub)
+        if(type->kind == E_TypeKind_Set)
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = 0, .pct = 1.f);
         }
@@ -1282,7 +1282,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: procedures collections get only expr/value/view-rule
-      else if(block_type->kind == E_TypeKind_Stub && str8_match(block_type->name, str8_lit("procedures"), 0))
+      else if(block_type->kind == E_TypeKind_Set && str8_match(block_type->name, str8_lit("procedures"), 0))
       {
         info.cell_style_key = str8_lit("expr_value_viewrule");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -1565,7 +1565,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       else if(result.eval.space.kind == E_SpaceKind_FileSystem)
       {
         E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Stub)
+        if(type->kind == E_TypeKind_Set)
         {
           String8 file_path = e_string_from_id(result.eval.value.u64);
           result.fstrs = rd_title_fstrs_from_file_path(arena, file_path);
@@ -1633,7 +1633,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       else if(result.eval.space.kind == E_SpaceKind_FileSystem)
       {
         E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Stub)
+        if(type->kind == E_TypeKind_Set)
         {
           String8 file_path = e_string_from_id(result.eval.value.u64);
           result.fstrs = rd_title_fstrs_from_file_path(arena, file_path);

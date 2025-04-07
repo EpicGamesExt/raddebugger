@@ -107,7 +107,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(watches)
         {
           E_Eval eval = e_eval_from_string(scratch.arena, expr);
           E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-          if(type->kind != E_TypeKind_Stub)
+          if(type->kind != E_TypeKind_Set)
           {
             passes_filter = 0;
             FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr);
@@ -441,7 +441,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(schema)
       }
       else if(str8_match(child_schema->first->string, str8_lit("query"), 0))
       {
-        child_type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = child_schema->string);
+        child_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = child_schema->string);
       }
       
       //- rjf: evaluate
@@ -4706,7 +4706,7 @@ rd_view_ui(Rng2F32 rect)
                 E_IRTreeAndType block_irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
                 E_TypeKey block_type_key = block_irtree.type_key;
                 E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
-                if(block_type_kind == E_TypeKind_Stub)
+                if(block_type_kind == E_TypeKind_Set)
                 {
                   E_Type *block_type = e_type_from_key__cached(block_type_key);
                   group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
@@ -7514,8 +7514,10 @@ rd_window_frame(void)
         if(build_hover_eval)
         {
           // rjf: determine if we have a top-level visualizer
+#if 0 // TODO(rjf): @eval
           EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
-          RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
+#endif
+          RD_ViewUIRule *view_ui_rule = &rd_nil_view_ui_rule; // TODO(rjf): @eval rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
           
           // rjf: determine view name
           String8 view_name = str8_lit("watch");
@@ -10418,6 +10420,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   B32 no_addr = 0;
   B32 no_string = 0;
   B32 has_array = 0;
+#if 0 // TODO(rjf): @eval
   for(E_Expr *tag = root_eval.exprs.last->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     if(0){}
@@ -10436,6 +10439,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       min_digits = (U32)num_value_eval.value.u64;
     }
   }
+#endif
   if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCfg)
   {
@@ -10655,6 +10659,9 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
             {
               // rjf: unpack
               E_IRTreeAndType irtree = eval.irtree;
+              E_LookupRule *lookup_rule = &e_lookup_rule__default;
+              E_Expr *lookup_rule_tag = &e_expr_nil;
+#if 0 // TODO(rjf): @eval
               E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
               E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
               if(lookup_rule == &e_lookup_rule__default)
@@ -10662,6 +10669,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
                 lookup_rule = root_eval.lookup_rule_tag.rule;
                 lookup_rule_tag = root_eval.lookup_rule_tag.tag;
               }
+#endif
               E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
               U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
               String8 opener_string = str8_lit("[");
@@ -10788,11 +10796,14 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       case E_TypeKind_IncompleteStruct:
       case E_TypeKind_IncompleteUnion:
       case E_TypeKind_IncompleteClass:
-      case E_TypeKind_Stub:
+      case E_TypeKind_Set:
       arrays_and_sets_and_structs:
       {
         // rjf: unpack
         E_IRTreeAndType irtree = eval.irtree;
+        E_LookupRule *lookup_rule = &e_lookup_rule__default;
+        E_Expr *lookup_rule_tag = &e_expr_nil;
+#if 0 // TODO(rjf): @eval
         E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
         E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
         if(lookup_rule == &e_lookup_rule__default)
@@ -10800,6 +10811,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
           lookup_rule = root_eval.lookup_rule_tag.rule;
           lookup_rule_tag = root_eval.lookup_rule_tag.tag;
         }
+#endif
         E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
         U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
         String8 opener_string = str8_lit("{");
@@ -13533,7 +13545,7 @@ rd_frame(void)
       for EachElement(idx, rd_name_schema_info_table)
       {
         String8 name = rd_name_schema_info_table[idx].name;
-        E_TypeKey type_key = e_type_key_cons(.name = name, .kind = E_TypeKind_Stub);
+        E_TypeKey type_key = e_type_key_cons(.name = name, .kind = E_TypeKind_Set);
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(schema),
@@ -13662,7 +13674,7 @@ rd_frame(void)
       {
         String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = collection_name, .flags = E_TypeFlag_EditableChildren);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren);
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
@@ -13704,7 +13716,7 @@ rd_frame(void)
         {
           String8 collection_name = collection_infos[idx].name;
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = collection_name);
+          expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
           e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
           e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
                                        .info   = collection_infos[idx].lookup_info,
@@ -13724,7 +13736,7 @@ rd_frame(void)
       {
         String8 name = debug_info_table_collection_names[idx];
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = name);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
@@ -13739,7 +13751,7 @@ rd_frame(void)
       {
         String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
@@ -13757,7 +13769,7 @@ rd_frame(void)
       {
         String8 kind_name = evallable_ctrl_names[ctrl_name_idx];
         String8 collection_name = rd_plural_from_code_name(kind_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
@@ -13771,7 +13783,7 @@ rd_frame(void)
       //- rjf: add macro / lookup rules for unattached processes
       {
         String8 collection_name = str8_lit("unattached_processes");
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
@@ -13784,7 +13796,7 @@ rd_frame(void)
       //- rjf: add macro for commands
       {
         String8 name = str8_lit("commands");
-        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = name);
+        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
@@ -13912,8 +13924,7 @@ rd_frame(void)
       for EachElement(idx, view_ui_rule_table)
       {
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("view_rule"));
-        expr->value.u64 = e_id_from_string(view_ui_rule_table[idx].name);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .name = view_ui_rule_table[idx].name);
         e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, view_ui_rule_table[idx].name, expr);
       }
     }

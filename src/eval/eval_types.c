@@ -235,7 +235,8 @@ e_select_type_ctx(E_TypeCtx *ctx)
     e_type_state->arena = arena;
     e_type_state->arena_eval_start_pos = arena_pos(e_type_state->arena);
   }
-  if(ctx->primary_module == 0) {ctx->primary_module = &e_module_nil;}
+  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
+  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
   arena_pop_to(e_type_state->arena, e_type_state->arena_eval_start_pos);
   e_type_state->ctx = ctx;
   e_type_state->cons_id_gen = 0;

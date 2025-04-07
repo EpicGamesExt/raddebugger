@@ -315,7 +315,8 @@ e_select_parse_ctx(E_ParseCtx *ctx)
     e_parse_state->arena_eval_start_pos = arena_pos(arena);
   }
   arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
-  if(ctx->primary_module == 0){ ctx->primary_module = &e_module_nil; }
+  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
+  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
   e_parse_state->ctx = ctx;
 }
 
@@ -408,7 +409,6 @@ e_expr_copy(Arena *arena, E_Expr *src)
       E_Expr *dst_parent;
       E_Expr *src;
       B32 is_ref;
-      B32 is_tag;
     };
     Task start_task = {0, &e_expr_nil, src};
     Task *first_task = &start_task;
@@ -430,10 +430,6 @@ e_expr_copy(Arena *arena, E_Expr *src)
       else if(t->is_ref)
       {
         t->dst_parent->ref = dst;
-      }
-      else if(t->is_tag)
-      {
-        e_expr_push_tag(t->dst_parent, dst);
       }
       else
       {
@@ -1480,22 +1476,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
             e_expr_push_child(atom, lhs);
             e_expr_push_child(atom, mhs);
             e_expr_push_child(atom, rhs);
-          }
-        }
-      }
-      
-      //- rjf: parse tags
-      {
-        if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("=>"), 0))
-        {
-          it += 1;
-          E_Parse tags_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, max_U64);
-          e_msg_list_concat_in_place(&result.msgs, &tags_parse.msgs);
-          it = tags_parse.last_token;
-          for(E_Expr *tag = tags_parse.exprs.first, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
-          {
-            next = tag->next;
-            e_expr_push_tag(atom, tag);
           }
         }
       }

@@ -69,6 +69,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
     e_ir_state->arena_eval_start_pos = arena_pos(arena);
   }
   arena_pop_to(e_ir_state->arena, e_ir_state->arena_eval_start_pos);
+  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
   if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
   if(ctx->regs_map == 0)       { ctx->regs_map = &e_string2num_map_nil; }
   if(ctx->reg_alias_map == 0)  { ctx->reg_alias_map = &e_string2num_map_nil; }
@@ -97,8 +98,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
   for EachElement(idx, builtin_view_rule_names)
   {
     E_Expr *expr = e_push_expr(e_ir_state->arena, E_ExprKind_LeafOffset, 0);
-    expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("view_rule"));
-    expr->value.u64 = e_id_from_string(builtin_view_rule_names[idx]);
+    expr->type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .name = builtin_view_rule_names[idx]);
     e_string2expr_map_insert(e_ir_state->arena, ctx->macro_map, builtin_view_rule_names[idx], expr);
   }
 }
@@ -192,7 +192,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
       String8 folder_name = accel->folders.v[idx - 0];
       String8 folder_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", folder_name);
       expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("folder"));
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
       expr->value.u64 = e_id_from_string(folder_path);
       expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, folder_name));
@@ -202,7 +202,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(folder)
       String8 file_name = accel->files.v[idx - accel->folders.count];
       String8 file_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", file_name);
       expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("file"));
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
       expr->space = e_space_make(E_SpaceKind_FileSystem);
       expr->value.u64 = e_id_from_string(file_path);
       expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, file_name));
@@ -879,7 +879,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
       enum_type_key = lhs_type_key;
       do_enum_range = 1;
     }
-    else if(lhs_type_kind == E_TypeKind_Stub)
+    else if(lhs_type_kind == E_TypeKind_Set)
     {
       do_index_range = 1;
     }
@@ -1818,14 +1818,12 @@ E_IRGEN_FUNCTION_DEF(default)
       E_Expr *lhs = expr->first;
       E_Expr *rhs = lhs->next;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-      E_LookupRule *lookup_rule = e_lookup_rule_from_irtree(&lhs_irtree);
-      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule->name))
+      E_LookupRule *lookup_rule = &e_lookup_rule__default;
+      ProfScope("lookup via rule '%.*s'", str8_varg(lookup_rule->name))
       {
-        e_expr_poison(lhs_lookup_rule_and_tag.tag);
-        E_LookupInfo lookup_info = lhs_lookup_rule_and_tag.rule->info(arena, &lhs_irtree, lhs_lookup_rule_and_tag.tag, str8_zero());
-        E_LookupAccess lookup_access = lhs_lookup_rule_and_tag.rule->access(arena, expr->kind, lhs, rhs, lhs_lookup_rule_and_tag.tag, lookup_info.user_data);
+        E_LookupInfo lookup_info = lookup_rule->info(arena, &lhs_irtree, &e_expr_nil, str8_zero());
+        E_LookupAccess lookup_access = lookup_rule->access(arena, expr->kind, lhs, rhs, &e_expr_nil, lookup_info.user_data);
         result = lookup_access.irtree_and_type;
-        e_expr_unpoison(lhs_lookup_rule_and_tag.tag);
       }
       scratch_end(scratch);
     }break;
@@ -2429,18 +2427,13 @@ E_IRGEN_FUNCTION_DEF(default)
       // rjf: map callee -> ir-generation rule
       E_IRGenRule *irgen_rule = &e_irgen_rule__default;
       {
-        Temp scratch = scratch_begin(&arena, 1);
         E_TypeKey type_key = lhs_irtree.type_key;
         E_Type *type = e_type_from_key__cached(type_key);
-        if(type->kind == E_TypeKind_Stub)
+        if(type->kind == E_TypeKind_Lens)
         {
-          E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree.root);
-          String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
-          E_Interpretation interp = e_interpret(bytecode);
-          String8 name = e_string_from_id(interp.value.u64);
+          String8 name = type->name;
           irgen_rule = e_irgen_rule_from_string(name);
         }
-        scratch_end(scratch);
       }
       
       // rjf: if we have a non-default ir-generation rule, then we can use that
@@ -2451,7 +2444,7 @@ E_IRGEN_FUNCTION_DEF(default)
       }
       else
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not currently supported.");
+        e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");
       }
     }break;
     
@@ -2967,7 +2960,7 @@ E_IRGEN_FUNCTION_DEF(default)
       {
         E_Space space = e_space_make(E_SpaceKind_FileSystem);
         result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
-        result.type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("file"));
+        result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
         result.mode     = E_Mode_Value;
       }
       else
@@ -2978,7 +2971,7 @@ E_IRGEN_FUNCTION_DEF(default)
         {
           E_Space space = e_space_make(E_SpaceKind_FileSystem);
           result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(folder_path)));
-          result.type_key = e_type_key_cons(.kind = E_TypeKind_Stub, .name = str8_lit("folder"));
+          result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
           result.mode     = E_Mode_Value;
         }
       }
@@ -3346,30 +3339,7 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
 
-internal E_LookupRule *
-e_lookup_rule_from_irtree(E_IRTreeAndType *irtree)
-{
-  E_LookupRule *rule = &e_lookup_rule__default;
-  E_TypeKey type_key = irtree->type_key;
-  E_Type *type = e_type_from_key__cached(type_key);
-  
-  // rjf: first try implicit stub name -> rule mapping
-  if(rule == &e_lookup_rule__default && type->kind == E_TypeKind_Stub)
-  {
-    String8 name = type->name;
-    rule = e_lookup_rule_from_string(name);
-  }
-  
-  // rjf: try auto hook map
-  if(rule == &e_lookup_rule__default)
-  {
-    E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
-    
-  }
-  
-  return rule;
-}
-
+#if 0 // TODO(rjf): @eval
 internal E_LookupRuleTagPair
 e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
 {
@@ -3432,3 +3402,4 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
   }
   return result;
 }
+#endif

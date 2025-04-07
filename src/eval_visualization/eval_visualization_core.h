@@ -304,7 +304,9 @@ internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
 ////////////////////////////////
 //~ rjf: Upgrading Expressions w/ Tags From All Sources
 
+#if 0 // TODO(rjf): @eval
 internal void ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key, E_Expr *expr);
+#endif
 
 ////////////////////////////////
 //~ rjf: Block Building
@@ -345,6 +347,8 @@ internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Expand Rule
 
+#if 0 // TODO(rjf): @eval
 internal EV_ExpandRuleTagPair ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
+#endif
 
 #endif // EVAL_VISUALIZATION_CORE_H

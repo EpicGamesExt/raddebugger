@@ -17,7 +17,6 @@ e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
 {
   ProfBeginFunction();
   E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(arena, exprs.last);
-  E_LookupRuleTagPair lookup   = e_lookup_rule_tag_pair_from_expr_irtree(exprs.last, &irtree);
   E_OpList            oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8             bytecode = e_bytecode_from_oplist(arena, &oplist);
   E_Interpretation    interp   = e_interpret(bytecode);
@@ -28,7 +27,6 @@ e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
     .exprs           = exprs,
     .irtree          = irtree,
     .bytecode        = bytecode,
-    .lookup_rule_tag = lookup,
     .code            = interp.code,
   };
   e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
@@ -252,6 +250,136 @@ e_value_from_expr(E_Expr *expr)
   E_Eval eval = e_eval_from_expr(scratch.arena, expr);
   E_Eval value_eval = e_value_eval_from_eval(eval);
   E_Value result = value_eval.value;
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Debug Logging Functions
+
+internal String8
+e_debug_log_from_expr_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  char *indent_spaces = "                                                                                                                                ";
+  String8List strings = {0};
+  
+  //- rjf: begin expression
+  String8 expr_text = string;
+  str8_list_pushf(scratch.arena, &strings, "`%S`\n", expr_text);
+  
+  //- rjf: tokenize
+  E_TokenArray tokens = e_token_array_from_text(scratch.arena, expr_text);
+  str8_list_pushf(scratch.arena, &strings, "    tokens:\n");
+  for EachIndex(idx, tokens.count)
+  {
+    E_Token token = tokens.v[idx];
+    String8 token_string = str8_substr(expr_text, token.range);
+    str8_list_pushf(scratch.arena, &strings, "        %S: `%S`\n", e_token_kind_strings[token.kind], token_string);
+  }
+  
+  //- rjf: parse
+  E_Parse parse = e_parse_expr_from_text_tokens(scratch.arena, expr_text, tokens);
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_Expr *expr;
+      S32 indent;
+    };
+    str8_list_pushf(scratch.arena, &strings, "    expr:\n");
+    Task start_task = {0, parse.exprs.first, 2};
+    Task *first_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      E_Expr *expr = t->expr;
+      str8_list_pushf(scratch.arena, &strings, "%.*s%S", (int)t->indent*4, indent_spaces, e_expr_kind_strings[expr->kind]);
+      switch(expr->kind)
+      {
+        default:{}break;
+        case E_ExprKind_LeafU64:
+        {
+          str8_list_pushf(scratch.arena, &strings, " (%I64u)", expr->value.u64);
+        }break;
+        case E_ExprKind_LeafIdentifier:
+        {
+          str8_list_pushf(scratch.arena, &strings, " (`%S`)", expr->string);
+        }break;
+      }
+      str8_list_pushf(scratch.arena, &strings, "\n");
+      Task *last_task = t;
+      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->next = last_task->next;
+        last_task->next = task;
+        task->expr = child;
+        task->indent = t->indent+1;
+        last_task = task;
+      }
+    }
+  }
+  
+  //- rjf: type
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.first);
+  {
+    str8_list_pushf(scratch.arena, &strings, "    type:\n");
+    S32 indent = 2;
+    for(E_TypeKey type_key = irtree.type_key;
+        !e_type_key_match(e_type_key_zero(), type_key);
+        type_key = e_type_direct_from_key(type_key),
+        indent += 1)
+    {
+      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      str8_list_pushf(scratch.arena, &strings, "%.*s%S\n", (int)indent*4, indent_spaces, e_type_kind_basic_string_table[type->kind]);
+    }
+  }
+  
+  //- rjf: irtree
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_IRNode *irnode;
+      S32 indent;
+    };
+    str8_list_pushf(scratch.arena, &strings, "    ir_tree:\n");
+    Task start_task = {0, irtree.root, 2};
+    Task *first_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      E_IRNode *irnode = t->irnode;
+      str8_list_pushf(scratch.arena, &strings, "%.*s", (int)t->indent*4, indent_spaces);
+      switch(irnode->op)
+      {
+        default:{}break;
+#define X(name) case RDI_EvalOp_##name:{str8_list_pushf(scratch.arena, &strings, #name);}break;
+        RDI_EvalOp_XList
+#undef X
+      }
+      if(irnode->value.u64 != 0)
+      {
+        str8_list_pushf(scratch.arena, &strings, " (%I64u)", irnode->value.u64);
+      }
+      str8_list_pushf(scratch.arena, &strings, "\n");
+      Task *last_task = t;
+      for(E_IRNode *child = irnode->first; child != &e_irnode_nil; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->next = last_task->next;
+        last_task->next = task;
+        task->irnode = child;
+        task->indent = t->indent+1;
+        last_task = task;
+      }
+    }
+  }
+  
+  str8_list_pushf(scratch.arena, &strings, "\n");
+  
+  String8 result = str8_list_join(arena, &strings, 0);
   scratch_end(scratch);
   return result;
 }

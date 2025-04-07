@@ -94,7 +94,7 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
        kind == E_TypeKind_Union ||
        kind == E_TypeKind_Class ||
        kind == E_TypeKind_Array ||
-       kind == E_TypeKind_Stub ||
+       kind == E_TypeKind_Set ||
        (kind == E_TypeKind_Enum && mode == E_Mode_Null))
     {
       result = 1;
@@ -474,6 +474,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
 ////////////////////////////////
 //~ rjf: Upgrading Expressions w/ Tags From All Sources
 
+#if 0 // TODO(rjf): @eval
 internal void
 ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key, E_Expr *expr)
 {
@@ -528,6 +529,7 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
   }
   scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Block Building
@@ -544,7 +546,9 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
     EV_Key root_key = ev_key_root();
     EV_Key root_row_key = ev_key_make(ev_hash_from_key(root_key), 1);
     E_Expr *root_expr = e_expr_copy(arena, exprs.last);
+#if 0 // TODO(rjf): @eval
     ev_keyed_expr_push_tags(arena, view, &ev_nil_block, root_row_key, root_expr);
+#endif
     
     //- rjf: generate root block
     tree.root = push_array(arena, EV_Block, 1);
@@ -593,9 +597,9 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
       
       // rjf: get expr's expansion rule
-      EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      EV_ExpandRule *expand_rule = expand_rule_and_tag.rule;
-      E_Expr *expand_rule_tag = expand_rule_and_tag.tag;
+      // TODO(rjf): @eval EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      EV_ExpandRule *expand_rule = &ev_nil_expand_rule;
+      E_Expr *expand_rule_tag = &e_expr_nil;
       
       // rjf: skip if no expansion rule, & type info disallows expansion
       if(expand_rule == &ev_nil_expand_rule && !ev_type_key_and_mode_is_expandable(expr_irtree.type_key, expr_irtree.mode))
@@ -604,12 +608,12 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       }
       
       // rjf: get expr's lookup rule
-      E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-      E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+      // TODO(rjf): @eval E_LookupRuleTagPair lookup_rule_and_tag = &e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      E_LookupRule *lookup_rule = &e_lookup_rule__default;
+      E_Expr *lookup_rule_tag = &e_expr_nil;
       
       // rjf: get top-level lookup/expansion info
-      E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, lookup_rule_and_tag.tag, filter);
+      E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, lookup_rule_tag, filter);
       EV_ExpandInfo expand_info = expand_rule->info(arena, view, filter, t->expr, expand_rule_tag);
       
       // rjf: determine expansion info
@@ -733,7 +737,9 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
           if(child_expr != &e_expr_nil)
           {
             EV_Key child_key = child_keys[idx];
+#if 0 // TODO(rjf): @eval
             ev_keyed_expr_push_tags(arena, view, expansion_block, child_key, child_expr);
+#endif
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->parent_block       = expansion_block;
@@ -1046,7 +1052,9 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           U64 child_id = n->v.block->lookup_rule->id_from_num(child_num, n->v.block->lookup_rule_user_data);
           EV_Key row_key = ev_key_make(ev_hash_from_key(n->v.block->key), child_id);
           E_Expr *row_expr = range_exprs[idx];
+#if 0 // TODO(rjf): @eval
           ev_keyed_expr_push_tags(arena, view, n->v.block, row_key, row_expr);
+#endif
           EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
           SLLQueuePush(rows.first, rows.last, row_node);
           rows.count += 1;
@@ -1142,11 +1150,13 @@ ev_row_is_expandable(EV_Row *row)
     // rjf: determine if view rules force expandability
     if(!result)
     {
+#if 0 // TODO(rjf): @eval
       EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(row->expr, &irtree);
       if(expand_rule_and_tag.rule != &ev_nil_expand_rule)
       {
         result = 1;
       }
+#endif
     }
     
     // rjf: determine if type info force expandability
@@ -1573,6 +1583,7 @@ ev_escaped_from_raw_string(Arena *arena, String8 raw)
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Expand Rule
 
+#if 0 // TODO(rjf): @eval
 internal EV_ExpandRuleTagPair
 ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
 {
@@ -1611,3 +1622,4 @@ ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
   }
   return result;
 }
+#endif

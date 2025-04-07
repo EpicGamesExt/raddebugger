@@ -15,7 +15,6 @@ struct E_Eval
   E_ExprChain exprs;
   E_IRTreeAndType irtree;
   String8 bytecode;
-  E_LookupRuleTagPair lookup_rule_tag;
   E_InterpretationCode code;
   E_MsgList msgs;
 };
@@ -33,5 +32,10 @@ internal E_Eval e_value_eval_from_eval(E_Eval eval);
 internal E_Value e_value_from_string(String8 string);
 internal E_Value e_value_from_stringf(char *fmt, ...);
 internal E_Value e_value_from_expr(E_Expr *expr);
+
+////////////////////////////////
+//~ rjf: Debug Logging Functions
+
+internal String8 e_debug_log_from_expr_string(Arena *arena, String8 string);
 
 #endif // EVAL_BUNDLES_H
