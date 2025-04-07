@@ -329,6 +329,7 @@ internal Guid os_make_guid(void);
 // into the standard codebase program entry points, named "entry_point".
 
 #if BUILD_ENTRY_DEFINING_UNIT
+raddbg_entry_point(entry_point);
 internal void entry_point(CmdLine *cmdline);
 #endif
 
