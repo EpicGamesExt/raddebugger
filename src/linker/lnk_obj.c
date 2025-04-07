@@ -91,6 +91,80 @@ lnk_input_obj_list_from_string_list(Arena *arena, String8List list)
 
 ////////////////////////////////
 
+internal void
+lnk_parse_msvc_linker_directive(Arena *arena, String8 obj_path, String8 lib_path, LNK_DirectiveInfo *directive_info, String8 buffer)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  local_persist B32 init_table = 1;
+  local_persist B8  is_legal[LNK_CmdSwitch_Count];
+  if (init_table) {
+    init_table = 0;
+    is_legal[LNK_CmdSwitch_AlternateName]      = 1;
+    is_legal[LNK_CmdSwitch_DefaultLib]         = 1;
+    is_legal[LNK_CmdSwitch_DisallowLib]        = 1;
+    is_legal[LNK_CmdSwitch_EditAndContinue]    = 1;
+    is_legal[LNK_CmdSwitch_Entry]              = 1;
+    is_legal[LNK_CmdSwitch_Export]             = 1;
+    is_legal[LNK_CmdSwitch_FailIfMismatch]     = 1;
+    is_legal[LNK_CmdSwitch_GuardSym]           = 1;
+    is_legal[LNK_CmdSwitch_Include]            = 1;
+    is_legal[LNK_CmdSwitch_InferAsanLibs]      = 1;
+    is_legal[LNK_CmdSwitch_InferAsanLibsNo]    = 1;
+    is_legal[LNK_CmdSwitch_ManifestDependency] = 1;
+    is_legal[LNK_CmdSwitch_Merge]              = 1;
+    is_legal[LNK_CmdSwitch_NoDefaultLib]       = 1;
+    is_legal[LNK_CmdSwitch_Release]            = 1;
+    is_legal[LNK_CmdSwitch_Section]            = 1;
+    is_legal[LNK_CmdSwitch_Stack]              = 1;
+    is_legal[LNK_CmdSwitch_SubSystem]          = 1;
+    is_legal[LNK_CmdSwitch_ThrowingNew]        = 1;
+  }
+  
+  String8 to_parse;
+  {
+    local_persist const U8 bom_sig[]   = { 0xEF, 0xBB, 0xBF };
+    local_persist const U8 ascii_sig[] = { 0x20, 0x20, 0x20 };
+    if (MemoryMatch(buffer.str, &bom_sig[0], sizeof(bom_sig))) {
+      to_parse = str8_zero();
+      lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "TODO: support for BOM encoding");
+    } else if (MemoryMatch(buffer.str, &ascii_sig[0], sizeof(ascii_sig))) {
+      to_parse = str8_skip(buffer, sizeof(ascii_sig));
+    } else {
+      to_parse = buffer;
+    }
+  }
+  
+  String8List arg_list = lnk_arg_list_parse_windows_rules(scratch.arena, to_parse);
+  LNK_CmdLine cmd_line = lnk_cmd_line_parse_windows_rules(scratch.arena, arg_list);
+
+  for (LNK_CmdOption *opt = cmd_line.first_option; opt != 0; opt = opt->next) {
+    LNK_CmdSwitchType type = lnk_cmd_switch_type_from_string(opt->string);
+
+    if (type == LNK_CmdSwitch_Null) {
+      lnk_error_with_loc(LNK_Warning_UnknownDirective, obj_path, lib_path, "unknown directive \"%S\"", opt->string);
+      continue;
+    }
+    if (!is_legal[type]) {
+      lnk_error_with_loc(LNK_Warning_IllegalDirective, obj_path, lib_path, "illegal directive \"%S\"", opt->string);
+      continue;
+    }
+
+    LNK_Directive *directive = push_array_no_zero(arena, LNK_Directive, 1);
+    directive->next          = 0;
+    directive->id            = push_str8_copy(arena, opt->string);
+    directive->value_list    = str8_list_copy(arena, &opt->value_strings);
+
+    LNK_DirectiveList *directive_list = &directive_info->v[type];
+    SLLQueuePush(directive_list->first, directive_list->last, directive);
+    ++directive_list->count;
+  }
+  
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+
 internal LNK_Obj **
 lnk_obj_arr_from_list(Arena *arena, LNK_ObjList list)
 {
@@ -315,11 +389,13 @@ lnk_sect_defn_list_concat_in_place_arr(LNK_SectDefnList *list, LNK_SectDefnList 
 internal
 THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
   LNK_ObjIniter *task    = raw_task;
   LNK_InputObj  *input   = task->inputs[task_id];
   LNK_Obj       *obj     = &task->obj_node_arr[task_id].data;
   U64            obj_idx = task->obj_id_base + task_id;
-  
+
   //
   // parse obj header
   //
@@ -382,7 +458,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
     // read name
     String8 sect_name = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
-    
+
     // parse name
     coff_parse_section_name(sect_name, &sect_name_arr[sect_idx], &sect_sort_arr[sect_idx]);
 
@@ -450,7 +526,36 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   // parse directives
   //
-  LNK_DirectiveInfo directive_info = lnk_directive_info_from_sections(arena, input->path, input->lib_path, coff_info.section_count_no_null, reloc_list_arr, sect_name_arr, chunk_arr);
+
+  String8List drectve_data = {0};
+  for (U64 sect_idx = 0; sect_idx < coff_info.section_count_no_null; sect_idx += 1) {
+    COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
+
+    if (sect_header->flags & COFF_SectionFlag_LnkInfo) {
+      if (str8_match(sect_name_arr[sect_idx], str8_lit(".drectve"), 0)) {
+        if (sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, ".drectve section header has flag COFF_SectionFlag_CntUninitializedData");
+          break;
+        }
+        if (sect_header->fsize < 3) {
+          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "not enough bytes to parse .drectve");
+          break;
+        }
+        if (sect_header->reloc_count > 0) {
+          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, ".drectve must not have relocations");
+          break;
+        }
+    
+        Rng1U64 sect_range = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+        str8_list_push(scratch.arena, &drectve_data, str8_substr(input->data, sect_range));
+      }
+    }
+  }
+
+  LNK_DirectiveInfo directive_info = {0};
+  for (String8Node *drectve_n = drectve_data.first; drectve_n != 0; drectve_n = drectve_n->next) {
+    lnk_parse_msvc_linker_directive(arena, input->path, input->lib_path, &directive_info, drectve_n->string);
+  }
 
   // parse exports
   LNK_ExportParseList export_parse = {0};
@@ -497,6 +602,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->export_parse        = export_parse;
   obj->include_symbol_list = include_symbol_list;
   obj->alt_name_list       = alt_name_list;
+
+  scratch_end(scratch);
 }
 
 internal
@@ -1049,112 +1156,6 @@ lnk_reloc_list_array_from_coff(Arena *arena, COFF_MachineType machine, String8 c
     reloc_list_arr[sect_idx] = lnk_reloc_list_from_coff_reloc_array(arena, machine, sect_chunk, symbol_array, coff_reloc_v, coff_reloc_info.count);
   }
   return reloc_list_arr;
-}
-
-internal void
-lnk_parse_msvc_linker_directive(Arena *arena, String8 obj_path, String8 lib_path, LNK_DirectiveInfo *directive_info, String8 buffer)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-
-  local_persist B32 init_table = 1;
-  local_persist B8  is_legal[LNK_CmdSwitch_Count];
-  if (init_table) {
-    init_table = 0;
-    is_legal[LNK_CmdSwitch_AlternateName]      = 1;
-    is_legal[LNK_CmdSwitch_DefaultLib]         = 1;
-    is_legal[LNK_CmdSwitch_DisallowLib]        = 1;
-    is_legal[LNK_CmdSwitch_EditAndContinue]    = 1;
-    is_legal[LNK_CmdSwitch_Entry]              = 1;
-    is_legal[LNK_CmdSwitch_Export]             = 1;
-    is_legal[LNK_CmdSwitch_FailIfMismatch]     = 1;
-    is_legal[LNK_CmdSwitch_GuardSym]           = 1;
-    is_legal[LNK_CmdSwitch_Include]            = 1;
-    is_legal[LNK_CmdSwitch_InferAsanLibs]      = 1;
-    is_legal[LNK_CmdSwitch_InferAsanLibsNo]    = 1;
-    is_legal[LNK_CmdSwitch_ManifestDependency] = 1;
-    is_legal[LNK_CmdSwitch_Merge]              = 1;
-    is_legal[LNK_CmdSwitch_NoDefaultLib]       = 1;
-    is_legal[LNK_CmdSwitch_Release]            = 1;
-    is_legal[LNK_CmdSwitch_Section]            = 1;
-    is_legal[LNK_CmdSwitch_Stack]              = 1;
-    is_legal[LNK_CmdSwitch_SubSystem]          = 1;
-    is_legal[LNK_CmdSwitch_ThrowingNew]        = 1;
-  }
-  
-  String8 to_parse;
-  {
-    local_persist const U8 bom_sig[]   = { 0xEF, 0xBB, 0xBF };
-    local_persist const U8 ascii_sig[] = { 0x20, 0x20, 0x20 };
-    if (MemoryMatch(buffer.str, &bom_sig[0], sizeof(bom_sig))) {
-      to_parse = str8_zero();
-      lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "TODO: support for BOM encoding");
-    } else if (MemoryMatch(buffer.str, &ascii_sig[0], sizeof(ascii_sig))) {
-      to_parse = str8_skip(buffer, sizeof(ascii_sig));
-    } else {
-      to_parse = buffer;
-    }
-  }
-  
-  String8List arg_list = lnk_arg_list_parse_windows_rules(scratch.arena, to_parse);
-  LNK_CmdLine cmd_line = lnk_cmd_line_parse_windows_rules(scratch.arena, arg_list);
-
-  for (LNK_CmdOption *opt = cmd_line.first_option; opt != 0; opt = opt->next) {
-    LNK_CmdSwitchType type = lnk_cmd_switch_type_from_string(opt->string);
-
-    if (type == LNK_CmdSwitch_Null) {
-      lnk_error_with_loc(LNK_Warning_UnknownDirective, obj_path, lib_path, "unknown directive \"%S\"", opt->string);
-      continue;
-    }
-    if (!is_legal[type]) {
-      lnk_error_with_loc(LNK_Warning_IllegalDirective, obj_path, lib_path, "illegal directive \"%S\"", opt->string);
-      continue;
-    }
-
-    LNK_Directive *directive = push_array_no_zero(arena, LNK_Directive, 1);
-    directive->next          = 0;
-    directive->id            = push_str8_copy(arena, opt->string);
-    directive->value_list    = str8_list_copy(arena, &opt->value_strings);
-
-    LNK_DirectiveList *directive_list = &directive_info->v[type];
-    SLLQueuePush(directive_list->first, directive_list->last, directive);
-    ++directive_list->count;
-  }
-  
-  scratch_end(scratch);
-}
-
-internal LNK_DirectiveInfo
-lnk_directive_info_from_sections(Arena         *arena,
-                                 String8        obj_path,
-                                 String8        lib_path,
-                                 U64            chunk_count,
-                                 LNK_RelocList *reloc_list_arr,
-                                 String8       *sect_name_arr,
-                                 LNK_Chunk     *chunk_arr)
-{
-  LNK_DirectiveInfo directive_info = {0};
-  for (U64 chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
-    String8    sect_name  = sect_name_arr[chunk_idx];
-    LNK_Chunk *sect_chunk = chunk_arr + chunk_idx;
-    if (str8_match_lit(".drectve", sect_name, 0)) {
-      if (sect_chunk->type == LNK_Chunk_Leaf) {
-        if (sect_chunk->u.leaf.size >= 3) {
-          if (~sect_chunk->flags & COFF_SectionFlag_LnkInfo) {
-            lnk_error_with_loc(LNK_Warning_IllData, obj_path, lib_path, "%S missing COFF_SectionFlag_LnkInfo", sect_name);
-          }
-          if (reloc_list_arr[chunk_idx].count > 0) {
-            lnk_error_with_loc(LNK_Warning_DirectiveSectionWithRelocs, obj_path, lib_path, "directive section %S(%#x) has relocations", sect_name, (chunk_idx+1));
-          }
-          lnk_parse_msvc_linker_directive(arena, obj_path, lib_path, &directive_info, sect_chunk->u.leaf);
-        } else {
-          lnk_error_with_loc(LNK_Warning_IllData, obj_path, lib_path, "unable to parse %S", sect_name);
-        }
-      } else {
-        Assert(!"linker directive section chunk must be of leaf type");
-      }
-    }
-  }
-  return directive_info;
 }
 
 internal MSCRT_FeatFlags
