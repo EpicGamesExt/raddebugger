@@ -5403,15 +5403,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         
         //- rjf: unpack process/module info
         CTRL_Entity *process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, event->process));
-        CTRL_Entity *module = &ctrl_entity_nil;
-        for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
-        {
-          if(child->kind == CTRL_EntityKind_Module)
-          {
-            module = child;
-            break;
-          }
-        }
+        CTRL_Entity *module = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Module);
         U64 module_base_vaddr = module->vaddr_range.min;
         CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
         DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
@@ -5444,6 +5436,41 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               entries_found = 1;
               DMN_Trap trap = {process->handle.dmn_handle, module_base_vaddr + voff};
               dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+            }
+          }
+        }
+        
+        //- rjf: add traps for module-baked entry points, if specified
+        if(!entries_found)
+        {
+          String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
+          U8 split_char = 0;
+          String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
+          for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
+          {
+            String8 text = text_n->string;
+            MD_Node *root = md_tree_from_string(scratch.arena, text);
+            if(str8_match(root->first->string, str8_lit("entry_point"), 0))
+            {
+              String8 name = root->first->first->string;
+              U32 procedure_id = 0;
+              {
+                RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+                U32 id_count = 0;
+                U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+                if(id_count > 0)
+                {
+                  procedure_id = ids[0];
+                }
+              }
+              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+              U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
+              if(voff != 0)
+              {
+                entries_found = 1;
+                DMN_Trap trap = {process->handle.dmn_handle, module_base_vaddr + voff};
+                dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+              }
             }
           }
         }

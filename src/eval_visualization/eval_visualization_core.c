@@ -608,9 +608,10 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       }
       
       // rjf: get expr's lookup rule
-      // TODO(rjf): @eval E_LookupRuleTagPair lookup_rule_and_tag = &e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      E_LookupRule *lookup_rule = &e_lookup_rule__default;
-      E_Expr *lookup_rule_tag = &e_expr_nil;
+      // TODO(rjf): @eval E_LookupRuleExprPair lookup_rule_and_tag = &e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      E_LookupRuleExprPair lookup_rule_and_tag = e_lookup_rule_expr_pair_from_expr_irtree(t->expr, &expr_irtree);
+      E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+      E_Expr *lookup_rule_tag = lookup_rule_and_tag.expr;
       
       // rjf: get top-level lookup/expansion info
       E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, lookup_rule_tag, filter);

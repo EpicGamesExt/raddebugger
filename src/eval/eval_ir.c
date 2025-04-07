@@ -1818,11 +1818,11 @@ E_IRGEN_FUNCTION_DEF(default)
       E_Expr *lhs = expr->first;
       E_Expr *rhs = lhs->next;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-      E_LookupRule *lookup_rule = &e_lookup_rule__default;
-      ProfScope("lookup via rule '%.*s'", str8_varg(lookup_rule->name))
+      E_LookupRuleExprPair lhs_lookup_rule = e_lookup_rule_expr_pair_from_expr_irtree(lhs, &lhs_irtree);
+      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule.rule->name))
       {
-        E_LookupInfo lookup_info = lookup_rule->info(arena, &lhs_irtree, &e_expr_nil, str8_zero());
-        E_LookupAccess lookup_access = lookup_rule->access(arena, expr->kind, lhs, rhs, &e_expr_nil, lookup_info.user_data);
+        E_LookupInfo lookup_info = lhs_lookup_rule.rule->info(arena, &lhs_irtree, lhs_lookup_rule.expr, str8_zero());
+        E_LookupAccess lookup_access = lhs_lookup_rule.rule->access(arena, expr->kind, lhs, rhs, lhs_lookup_rule.expr, lookup_info.user_data);
         result = lookup_access.irtree_and_type;
       }
       scratch_end(scratch);
@@ -3339,11 +3339,31 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
 
+internal E_LookupRuleExprPair
+e_lookup_rule_expr_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
+{
+  E_LookupRuleExprPair result = {&e_lookup_rule__default, &e_expr_nil};
+  
+  // rjf: first, try set name -> rule mapping
+  if(result.rule == &e_lookup_rule__default && e_type_kind_from_key(irtree->type_key) == E_TypeKind_Set)
+  {
+    E_Type *type = e_type_from_key__cached(irtree->type_key);
+    String8 name = type->name;
+    E_LookupRule *candidate = e_lookup_rule_from_string(name);
+    if(candidate != &e_lookup_rule__nil)
+    {
+      result.rule = candidate;
+    }
+  }
+  
+  return result;
+}
+
 #if 0 // TODO(rjf): @eval
-internal E_LookupRuleTagPair
+internal E_LookupRuleExprPair
 e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
 {
-  E_LookupRuleTagPair result = {&e_lookup_rule__default, &e_expr_nil};
+  E_LookupRuleExprPair result = {&e_lookup_rule__default, &e_expr_nil};
   {
     // rjf: first try explicitly-stored tags
     B32 default_is_forced = 0;

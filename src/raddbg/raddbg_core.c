@@ -10053,7 +10053,7 @@ rd_window_frame(void)
         // rjf: hot effect extension
         if(box->flags & UI_BoxFlag_DrawHotEffects)
         {
-          B32 is_hot = ui_key_match(box->key, ui_hot_key());
+          B32 is_hot = !ui_key_match(box->key, ui_key_zero()) && ui_key_match(box->key, ui_hot_key());
           Vec4F32 hover_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
           
           // rjf: brighten
@@ -10264,7 +10264,7 @@ rd_window_frame(void)
             if(b->flags & UI_BoxFlag_DrawHotEffects)
             {
               Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("hover"));
-              if(!ui_key_match(b->key, ui_hot_key()))
+              if(ui_key_match(b->key, ui_key_zero()) || !ui_key_match(b->key, ui_hot_key()))
               {
                 color.w *= b->hot_t;
               }

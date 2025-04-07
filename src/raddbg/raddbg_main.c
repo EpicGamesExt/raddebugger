@@ -78,6 +78,9 @@
 //     code. This is used by the debugger UI, but does not show up anywhere
 //     other than the source code, so it can either be used as a macro (which
 //     expands to nothing), or in comments too.
+//   - `raddbg_entry_point(name)`, e.g. `raddbg_entry_point(entry_point)`:
+//     declares the entry point for an executable, which the debugger will use
+//     when stepping into a program, rather than the defaults (e.g. `main`).
 //   - `raddbg_auto_view_rule(<type|pattern>, <view_rule>)`, e.g.
 //     `raddbg_auto_view_rule(DynamicArray<?>, slice)`: declares an
 //     auto-view-rule from source code, rather than from debugger

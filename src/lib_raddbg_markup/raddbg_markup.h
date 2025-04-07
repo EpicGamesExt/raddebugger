@@ -25,7 +25,8 @@
 # define raddbg_watch(fmt, ...)                ((void)0)
 # define raddbg_pin(expr, ...)
 # define raddbg_log(fmt, ...)                  ((void)0)
-# define raddbg_auto_view_rule(type, ...)      struct raddbg_glue(raddbg_auto_view_rule_stub__, __COUNTER__){int __unused__}
+# define raddbg_entry_point(...)               struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_auto_view_rule(type, ...)      struct raddbg_gen_data_id(){int __unused__}
 #else
 # define raddbg_is_attached(...)               raddbg_is_attached__impl()
 # define raddbg_thread_name(fmt, ...)          raddbg_thread_name__impl((fmt), __VA_ARGS__)
@@ -36,7 +37,8 @@
 # define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
 # define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
 # define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
-# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_glue(raddbg_auto_view_rule_data__, __COUNTER__)[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+# define raddbg_entry_point(...)               raddbg_exe_data static char raddbg_gen_data_id()[] = ("entry_point: " #__VA_ARGS__)
+# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_gen_data_id()()[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
 #endif
 
 ////////////////////////////////
@@ -44,6 +46,7 @@
 
 #define raddbg_glue_(a, b) a##b
 #define raddbg_glue(a, b) raddbg_glue_(a, b)
+#define raddbg_gen_data_id() raddbg_glue(raddbg_data__, __COUNTER__)
 
 ////////////////////////////////
 //~ Win32 Implementations

@@ -523,11 +523,11 @@ struct E_LookupRuleMap
   U64 slots_count;
 };
 
-typedef struct E_LookupRuleTagPair E_LookupRuleTagPair;
-struct E_LookupRuleTagPair
+typedef struct E_LookupRuleExprPair E_LookupRuleExprPair;
+struct E_LookupRuleExprPair
 {
   E_LookupRule *rule;
-  E_Expr *tag;
+  E_Expr *expr;
 };
 
 ////////////////////////////////

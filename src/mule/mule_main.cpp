@@ -2685,6 +2685,8 @@ dynamic_step_test(void){
 
 ////////////////////////////////
 
+raddbg_entry_point(mule_main);
+
 int
 mule_main(int argc, char** argv)
 {
