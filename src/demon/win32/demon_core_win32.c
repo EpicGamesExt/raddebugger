@@ -1312,7 +1312,13 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     }
     else
     {
-      log_user_errorf("There was an error starting %S.", params->cmd_line.first->string);
+      DWORD error = GetLastError();
+      LPWSTR message = 0;
+      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, MAKELANGID(LANG_NEUTRAL,SUBLANG_NEUTRAL), (LPWSTR)&message, 0, 0);
+      String8 message8 = message ? str8_from_16(scratch.arena, str16_cstring(message)) : str8_lit("unknown error");
+      LocalFree(message);
+
+      log_user_errorf("There was an error starting %S: %S", params->cmd_line.first->string, message8);
     }
   }
   scratch_end(scratch);
