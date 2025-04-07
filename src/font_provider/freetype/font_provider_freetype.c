@@ -309,29 +309,31 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   total_width_fixed = pen_x;
   S32 total_width_pixels = (total_width_fixed + 63) >> 6;
 
-  // TODO: Re-evaluate this padding/alignment for clarity/necessity
-  total_width_pixels += 2;
-  total_width_pixels += 7;
-  total_width_pixels -= total_width_pixels % 8;
-
+  // Calculate total height based on maximum ascent/descent values recorded during layout.
   S32 total_height = max_ascent + max_descent;
+
+  // Handle cases like empty strings where calculated dimensions might be zero or negative.
+  // Return a valid result structure but indicate zero dimensions and no atlas data.
   if (total_width_pixels <= 0 || total_height <= 0)
   {
-    // Handle zero-size case more carefully
-    scratch_end(scratch);
+    scratch_end(scratch); // Release temporary memory.
     ProfEnd();
-    result.advance = (F32)(total_width_fixed >> 6); // Still report advance
-    result.atlas_dim = v2s16(0,0);
-    result.atlas = 0; // Or point to zero-size allocation? Original was unclear.
+    result.advance = (F32)(total_width_fixed >> 6); // Report the calculated advance.
+    result.atlas_dim = v2s16(0, 0); // Atlas dimensions are zero.
+    result.atlas = 0;               // No atlas buffer allocated.
     return result;
   }
 
-  //- dan: Allocate atlas buffer
+  // Allocate the atlas buffer using the precise, unpadded dimensions.
+  // Atlas format is RGBA8, requiring 4 bytes per pixel.
   result.atlas_dim = v2s16((S16)total_width_pixels, (S16)total_height);
-  result.atlas = push_array(arena, U8, total_width_pixels * total_height * 4);
-  MemoryZero(result.atlas, (U64)total_width_pixels * total_height * 4);
+  U64 atlas_bytes = (U64)total_width_pixels * (U64)total_height * 4;
+  // Use push_array, which allocates and zero-initializes the memory.
+  result.atlas = push_array(arena, U8, atlas_bytes);
+
+  // Calculate row pitch for blitting operations.
   U8 *out_base = (U8 *)result.atlas;
-  U64 out_pitch = (U64)total_width_pixels * 4;
+  U64 out_pitch = (U64)total_width_pixels * 4; // Bytes per row.
 
   //- dan: Second pass: Render and blit glyphs using stored positions
   U64 non_empty_pixel_count = 0;

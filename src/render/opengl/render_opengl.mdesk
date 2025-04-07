@@ -188,7 +188,7 @@ void main()
   vec4 albedo_sample = vec4(1.0);
   if(fs_in.omit_texture < 0.5) // Use < 0.5 for bool comparison
   {
-    // Assuming texture V is flipped if needed in VS
+    // REMOVED explicit V flip added previously. Use coords directly from VS.
     albedo_sample = texture(main_t2d, fs_in.texcoord_pct) * texture_sample_channel_map;
   }
 
@@ -226,17 +226,20 @@ void main()
     corner_sdf_t = 1.0 - smoothstep(0.0, corner_smooth_range, corner_sdf_s);
   }
 
-  // Form final color
-  FragColor = albedo_sample * tint;
+  // Form final color - Multiply tint and texture colors, combine alphas
+  FragColor.rgb = tint.rgb * albedo_sample.rgb; // Multiply RGB components
+  FragColor.a   = tint.a * albedo_sample.a;   // Multiply Alpha components
+
+  // Apply global opacity and SDF alpha factors
   FragColor.a *= opacity;
-  // Combine coverages - Base alpha on the outer shape coverage
   FragColor.a *= corner_sdf_t; // Multiply by corner coverage
-  FragColor.a *= border_sdf_t; // Multiply by 1.0 (no effect)
+  FragColor.a *= border_sdf_t; // Multiply by border coverage
+
   // Final discard if alpha is near zero
-   if (FragColor.a < 0.001)
-   {
-     discard;
-   }
+  if (FragColor.a < 0.001)
+  {
+    discard;
+  }
 }
 """
 

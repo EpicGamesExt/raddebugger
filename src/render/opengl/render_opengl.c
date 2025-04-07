@@ -1966,27 +1966,29 @@ r_gl_check_error("UI Bind Texture");
                                                                  texture->size.y > 0 ? texture->size.y : 1.f); // Avoid divide by zero
 
                             // Texture channel mapping based on format
+                            // DEFAULT TO IDENTITY for standard RGBA/BGRA formats.
                             Mat4x4F32 tex_map_matrix = m4x4f32(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1); // Identity
+
+                            // EXPLICITLY handle single-channel R8 format.
                             if(texture->format == R_Tex2DFormat_R8)
                             {
-                                // Map R channel to R,G,B,A (effectively grayscale for shader)
-                                // Shader: albedo_sample = texture(...) * texture_sample_channel_map;
-                                // Matrix should be column-major for GLSL. C=Row, GL=Col. Need transpose.
-                                // To get (R,R,R,R): First column of transposed matrix = (1,1,1,1).
-                                // C Row-Major Matrix:
-                                // [ 1 0 0 0 ] -> Col 0 -> GLSL sample.r
-                                // [ 1 0 0 0 ] -> Col 1 -> GLSL sample.g
-                                // [ 1 0 0 0 ] -> Col 2 -> GLSL sample.b
-                                // [ 1 0 0 0 ] -> Col 3 -> GLSL sample.a
+                                // Map R channel -> R,G,B,A for grayscale rendering in the shader.
+                                // GLSL matrix multiplication means the first column of the uniform matrix affects the result.
+                                // Target: (R,R,R,R) = Sample(R,G,B,A) * MapMatrix
                                 tex_map_matrix = m4x4f32(1,1,1,1, 0,0,0,0, 0,0,0,0, 0,0,0,0);
                             }
-                            Mat4x4F32 transposed = transpose_4x4f32(tex_map_matrix);
+                            // OPTIONAL: Add explicit handling for other formats like BGRA if necessary.
+                            // else if (texture->format == R_Tex2DFormat_BGRA8) { ...swizzle matrix... }
+
+                            // Transpose C row-major matrix -> GLSL std140 column-major format for the UBO.
+                            Mat4x4F32 transposed_tex_map = transpose_4x4f32(tex_map_matrix);
+                            // Assign the transposed matrix columns to the uniform structure fields.
                             for (int i = 0; i < 4; i++) {
                                 uniforms.texture_sample_channel_map[i] = v4f32(
-                                    transposed.v[i][0], 
-                                    transposed.v[i][1], 
-                                    transposed.v[i][2], 
-                                    transposed.v[i][3]
+                                    transposed_tex_map.v[i][0],
+                                    transposed_tex_map.v[i][1],
+                                    transposed_tex_map.v[i][2],
+                                    transposed_tex_map.v[i][3]
                                 );
                             }
 
