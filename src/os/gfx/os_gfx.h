@@ -91,6 +91,7 @@ struct OS_Event
   Vec2F32 pos;
   Vec2F32 delta;
   String8List strings;
+  U64 flags;
 };
 
 typedef struct OS_EventList OS_EventList;

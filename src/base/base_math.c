@@ -292,6 +292,20 @@ mul_4x4f32(Mat4x4F32 a, Mat4x4F32 b)
 }
 
 internal Mat4x4F32
+transpose_4x4f32(Mat4x4F32 m)
+{
+  Mat4x4F32 result;
+  for(int j = 0; j < 4; j += 1)
+  {
+    for(int i = 0; i < 4; i += 1)
+    {
+      result.v[i][j] = m.v[j][i];
+    }
+  }
+  return result;
+}
+
+internal Mat4x4F32
 scale_4x4f32(Mat4x4F32 m, F32 scale)
 {
   for(int j = 0; j < 4; j += 1)

@@ -540,6 +540,7 @@ internal Mat4x4F32 make_orthographic_4x4f32(F32 left, F32 right, F32 bottom, F32
 internal Mat4x4F32 make_look_at_4x4f32(Vec3F32 eye, Vec3F32 center, Vec3F32 up);
 internal Mat4x4F32 make_rotate_4x4f32(Vec3F32 axis, F32 turns);
 internal Mat4x4F32 mul_4x4f32(Mat4x4F32 a, Mat4x4F32 b);
+internal Mat4x4F32 transpose_4x4f32(Mat4x4F32 m);
 internal Mat4x4F32 scale_4x4f32(Mat4x4F32 m, F32 scale);
 internal Mat4x4F32 inverse_4x4f32(Mat4x4F32 m);
 internal Mat4x4F32 derotate_4x4f32(Mat4x4F32 mat);

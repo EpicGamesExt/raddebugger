@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Modern Windows SDK Functions
+//~ dan: Modern Windows SDK Functions
 //
 // (We must dynamically link to them, since they can be missing in older SDKs)
 
@@ -10,7 +10,7 @@ typedef HRESULT W32_SetThreadDescription_Type(HANDLE hThread, PCWSTR lpThreadDes
 global W32_SetThreadDescription_Type *w32_SetThreadDescription_func = 0;
 
 ////////////////////////////////
-//~ rjf: File Info Conversion Helpers
+//~ dan: File Info Conversion Helpers
 
 internal FilePropertyFlags
 os_w32_file_property_flags_from_dwFileAttributes(DWORD dwFileAttributes)
@@ -33,7 +33,7 @@ os_w32_file_properties_from_attribute_data(FileProperties *properties, WIN32_FIL
 }
 
 ////////////////////////////////
-//~ rjf: Time Conversion Helpers
+//~ dan: Time Conversion Helpers
 
 internal void
 os_w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in)
@@ -103,7 +103,7 @@ os_w32_unix_time_from_file_time(FILETIME file_time)
 }
 
 ////////////////////////////////
-//~ rjf: Entity Functions
+//~ dan: Entity Functions
 
 internal OS_W32_Entity *
 os_w32_entity_alloc(OS_W32_EntityKind kind)
@@ -137,7 +137,7 @@ os_w32_entity_release(OS_W32_Entity *entity)
 }
 
 ////////////////////////////////
-//~ rjf: Thread Entry Point
+//~ dan: Thread Entry Point
 
 internal DWORD
 os_w32_thread_entry_point(void *ptr)
@@ -153,7 +153,7 @@ os_w32_thread_entry_point(void *ptr)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks System/Process Info (Implemented Per-OS)
+//~ dan: @os_hooks System/Process Info (Implemented Per-OS)
 
 internal OS_SystemInfo *
 os_get_system_info(void)
@@ -195,7 +195,7 @@ os_get_process_start_time_unix(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
+//~ dan: @os_hooks Memory Allocation (Implemented Per-OS)
 
 //- rjf: basic
 
@@ -243,7 +243,7 @@ os_commit_large(void *ptr, U64 size)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Thread Info (Implemented Per-OS)
+//~ dan: @os_hooks Thread Info (Implemented Per-OS)
 
 internal U32
 os_tid(void)
@@ -298,7 +298,7 @@ os_set_thread_name(String8 name)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Aborting (Implemented Per-OS)
+//~ dan: @os_hooks Aborting (Implemented Per-OS)
 
 internal void
 os_abort(S32 exit_code)
@@ -307,7 +307,7 @@ os_abort(S32 exit_code)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks File System (Implemented Per-OS)
+//~ dan: @os_hooks File System (Implemented Per-OS)
 
 //- rjf: files
 
@@ -787,7 +787,7 @@ os_make_directory(String8 path)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Shared Memory (Implemented Per-OS)
+//~ dan: @os_hooks Shared Memory (Implemented Per-OS)
 
 internal OS_Handle
 os_shared_memory_alloc(U64 size, String8 name)
@@ -843,7 +843,7 @@ os_shared_memory_view_close(OS_Handle handle, void *ptr, Rng1U64 range)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Time (Implemented Per-OS)
+//~ dan: @os_hooks Time (Implemented Per-OS)
 
 internal U64
 os_now_microseconds(void)
@@ -913,7 +913,7 @@ os_sleep_milliseconds(U32 msec)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Child Processes (Implemented Per-OS)
+//~ dan: @os_hooks Child Processes (Implemented Per-OS)
 
 internal OS_Handle
 os_process_launch(OS_ProcessLaunchParams *params)
@@ -1032,7 +1032,7 @@ os_process_detach(OS_Handle handle)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Threads (Implemented Per-OS)
+//~ dan: @os_hooks Threads (Implemented Per-OS)
 
 internal OS_Handle
 os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params)
@@ -1072,7 +1072,7 @@ os_thread_detach(OS_Handle thread)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Synchronization Primitives (Implemented Per-OS)
+//~ dan: @os_hooks Synchronization Primitives (Implemented Per-OS)
 
 //- rjf: mutexes
 
@@ -1283,7 +1283,7 @@ os_semaphore_drop(OS_Handle semaphore)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
+//~ dan: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
 internal OS_Handle
 os_library_open(String8 path)
@@ -1315,7 +1315,7 @@ os_library_close(OS_Handle lib)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Safe Calls (Implemented Per-OS)
+//~ dan: @os_hooks Safe Calls (Implemented Per-OS)
 
 internal void
 os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, void *ptr)
@@ -1335,7 +1335,7 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks GUIDs (Implemented Per-OS)
+//~ dan: @os_hooks GUIDs (Implemented Per-OS)
 
 internal Guid
 os_make_guid(void)
@@ -1354,7 +1354,7 @@ os_make_guid(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Entry Points (Implemented Per-OS)
+//~ dan: @os_hooks Entry Points (Implemented Per-OS)
 
 #include <dbghelp.h>
 #undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside

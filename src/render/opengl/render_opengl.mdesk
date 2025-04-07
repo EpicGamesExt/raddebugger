@@ -1,0 +1,526 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+////////////////////////////////
+//~ dan: Pipeline Tables
+
+// NOTE: Input layouts are handled by VAO setup in GL, not directly tied to shaders like D3D11 ILAY.
+// We'll keep the table structure similar but omit ILAY tables for now.
+@table(name, vs_source, fs_source)
+R_GL_ShaderPairTable:
+{
+  {Rect            r_gl_g_rect_shader_vs_src             r_gl_g_rect_shader_fs_src           }
+  {Blur            r_gl_g_blur_shader_vs_src             r_gl_g_blur_shader_fs_src           }
+  {Mesh            r_gl_g_mesh_shader_vs_src             r_gl_g_mesh_shader_fs_src           }
+  // NOTE: Geo3DComposite and Finalize use a generic VS in the C code, embed FS only? Or embed the simple VS too?
+  // For now, let's assume a generic VS might be defined elsewhere or inline.
+  {Geo3DComposite  r_gl_g_finalize_shader_vs_src       r_gl_g_geo3dcomposite_shader_fs_src } // Using finalize VS for composite
+  {Finalize        r_gl_g_finalize_shader_vs_src       r_gl_g_finalize_shader_fs_src       }
+}
+
+// Separate tables for VS/FS might still be useful if some shaders are reused.
+@table(name, source)
+R_GL_VShadTable:
+{
+  {Rect           r_gl_g_rect_shader_vs_src}
+  {Blur           r_gl_g_blur_shader_vs_src}
+  {Mesh           r_gl_g_mesh_shader_vs_src}
+  {FullscreenQuad r_gl_g_finalize_shader_vs_src} // Generic fullscreen VS used by Composite/Finalize
+}
+
+@table(name, source)
+R_GL_PShadTable:
+{
+  {Rect           r_gl_g_rect_shader_fs_src}
+  {Blur           r_gl_g_blur_shader_fs_src}
+  {Mesh           r_gl_g_mesh_shader_fs_src}
+  {Geo3DComposite r_gl_g_geo3dcomposite_shader_fs_src}
+  {Finalize       r_gl_g_finalize_shader_fs_src}
+}
+
+@table(name)
+R_GL_UniformTypeTable:
+{
+  {Rect}
+  {Blur}
+  {Mesh}
+}
+
+////////////////////////////////
+//~ dan: UI Rectangle Shaders
+
+@embed_string r_gl_g_rect_shader_vs_src:
+"""
+#version 330 core
+// Instance inputs matching VAO setup (8 vec4s)
+layout(location = 0) in vec4 dst_rect_px_in;     // {x0, y0, x1, y1}
+layout(location = 1) in vec4 src_rect_px_in;     // {x0, y0, x1, y1}
+layout(location = 2) in vec4 color00_in;         // {r, g, b, a} BL
+layout(location = 3) in vec4 color01_in;         // {r, g, b, a} TL
+layout(location = 4) in vec4 color10_in;         // {r, g, b, a} BR
+layout(location = 5) in vec4 color11_in;         // {r, g, b, a} TR
+layout(location = 6) in vec4 corner_radii_px_in; // {bl, tl, br, tr} - CHECK ORDER vs D3D11
+layout(location = 7) in vec4 style_params_in;    // {border, soft, omit_tex, unused}
+
+// Uniforms (Unchanged)
+layout (std140) uniform R_GL_Uniforms_Rect { // Binding Point 0
+  vec2 viewport_size_px;
+  float opacity;
+  mat4 texture_sample_channel_map;
+  vec2 texture_t2d_size_px;
+  mat3 xform; // Column-major
+  vec2 xform_scale;
+};
+
+// Outputs to Fragment Shader (Matches D3D11 rect shader outputs)
+out VS_OUT {
+  vec2 rect_half_size_px;
+  vec2 texcoord_pct;
+  vec2 sdf_sample_pos;
+  vec4 tint;
+  float corner_radius_px;
+  flat float border_thickness_px;
+  flat float softness_px;
+  flat float omit_texture;
+} vs_out;
+
+void main() {
+  // Unpack instance data
+  vec2 dst_p0_px = dst_rect_px_in.xy;
+  vec2 dst_p1_px = dst_rect_px_in.zw;
+  vec2 src_p0_px = src_rect_px_in.xy;
+  vec2 src_p1_px = src_rect_px_in.zw;
+  vec2 dst_size_px = abs(dst_p1_px - dst_p0_px);
+
+  float border_thickness_px = style_params_in.x;
+  float softness_px         = style_params_in.y;
+  float omit_texture        = style_params_in.z;
+
+  // Generate standard CCW triangle strip quad vertex percentages (0,0), (1,0), (0,1), (1,1)
+  // gl_VertexID 0 -> (0,0) -> BL
+  // gl_VertexID 1 -> (1,0) -> BR
+  // gl_VertexID 2 -> (0,1) -> TL
+  // gl_VertexID 3 -> (1,1) -> TR
+  vec2 vertex_pct = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+
+  // Map vertex percentage to destination rect coordinates
+  vec2 current_dst_pos_px = mix(dst_p0_px, dst_p1_px, vertex_pct);
+
+  // Calculate output position
+  vec3 xformed_pos = xform * vec3(current_dst_pos_px, 1.0);
+  vec2 ndc_pos = (xformed_pos.xy / viewport_size_px) * 2.0 - 1.0;
+  ndc_pos.y = -ndc_pos.y; // Flip Y for GL NDC
+  gl_Position = vec4(ndc_pos, 0.0, 1.0);
+
+  // Map vertex percentage to source rect coordinates for texture coords
+  vec2 current_src_pos_px = mix(src_p0_px, src_p1_px, vertex_pct);
+  vs_out.texcoord_pct = current_src_pos_px / texture_t2d_size_px;
+
+  // Select color based on vertex ID (matching D3D11 logic for vertex IDs 0..3 -> TL, BL, TR, BR)
+  vec4 color_bl = color00_in; // Location 2
+  vec4 color_br = color10_in; // Location 4
+  vec4 color_tl = color01_in; // Location 3
+  vec4 color_tr = color11_in; // Location 5
+  vec4 colors[4] = vec4[4](color_bl, color_br, color_tl, color_tr); // GLSL array constructor syntax
+  vs_out.tint = colors[gl_VertexID];
+
+  // Select corner radius based on vertex ID (matching D3D11 logic)
+  // GL Vertex IDs 0, 1, 2, 3 correspond to BL, BR, TL, TR based on vertex_pct calc
+  // Input corner_radii_px_in (loc 6) is {bl, tl, br, tr} -> {x, y, z, w}
+  // D3D11 mapping (see thought process): ID 0 (BL)->x, ID 1 (BR)->z, ID 2 (TL)->y, ID 3 (TR)->w
+  float radii[4] = float[4](corner_radii_px_in.x, corner_radii_px_in.z, corner_radii_px_in.y, corner_radii_px_in.w); // GLSL array constructor syntax
+  vs_out.corner_radius_px = radii[gl_VertexID];
+
+  // Calculate SDF sample position based on vertex percentage relative to center
+  vs_out.rect_half_size_px    = dst_size_px / 2.0 * xform_scale;
+  vs_out.sdf_sample_pos       = (2.0 * vertex_pct - 1.0) * vs_out.rect_half_size_px;
+
+  // Pass through flat values
+  vs_out.border_thickness_px  = border_thickness_px;
+  vs_out.softness_px          = softness_px;
+  vs_out.omit_texture         = omit_texture;
+}
+"""
+@embed_string r_gl_g_rect_shader_fs_src:
+"""
+#version 330 core
+in VS_OUT {
+  vec2 rect_half_size_px;
+  vec2 texcoord_pct;
+  vec2 sdf_sample_pos;
+  vec4 tint;
+  float corner_radius_px;
+  flat float border_thickness_px;
+  flat float softness_px;
+  flat float omit_texture;
+} fs_in;
+
+layout (std140) uniform R_GL_Uniforms_Rect // Binding Point 0
+{
+  vec2 viewport_size_px;
+  float opacity;
+  // float _padding0_;
+  mat4 texture_sample_channel_map;
+  vec2 texture_t2d_size_px;
+  // vec2 translate;
+  mat3 xform;
+  vec2 xform_scale;
+  // vec2 _padding1_;
+};
+
+uniform sampler2D main_t2d; // Texture Unit 0
+
+out vec4 FragColor;
+
+// Corrected SDF function
+float rect_sdf(vec2 sample_pos, vec2 rect_half_size, float r)
+{
+  vec2 d = abs(sample_pos) - rect_half_size + r;
+  return length(max(d, 0.0)) - r;
+}
+
+void main()
+{
+  // Tint is already interpolated
+  vec4 tint = fs_in.tint;
+
+  // Sample texture
+  vec4 albedo_sample = vec4(1.0);
+  if(fs_in.omit_texture < 0.5) // Use < 0.5 for bool comparison
+  {
+    // Assuming texture V is flipped if needed in VS
+    albedo_sample = texture(main_t2d, fs_in.texcoord_pct) * texture_sample_channel_map;
+  }
+
+  // Determine SDF sample position (already interpolated)
+  vec2 sdf_sample_pos = fs_in.sdf_sample_pos; // Keep for potential future use
+
+  // Sample for borders
+  float border_sdf_t = 1.0; // Default to 1 (no border effect)
+  float softness_px = max(fs_in.softness_px, 0.01); // Ensure softness is positive
+  float border_thickness_px = fs_in.border_thickness_px;
+  if(border_thickness_px > 0.0)
+  {
+    // Adjust half size by softness before calculating SDF, matching D3D11
+    vec2 inner_half_size = fs_in.rect_half_size_px - vec2(softness_px * 2.0) - border_thickness_px;
+    float inner_radius = max(fs_in.corner_radius_px - border_thickness_px, 0.0);
+    float border_sdf_s = rect_sdf(sdf_sample_pos, inner_half_size, inner_radius);
+
+    float border_smooth_range = max(2.0 * softness_px, 1.0);
+    // Calculate coverage *outside* the inner edge (0 inside fill, ramps to 1 outside)
+    border_sdf_t = smoothstep(0.0, border_smooth_range, border_sdf_s);
+  }
+
+  // Sample for corners (outer edge)
+  float corner_sdf_t = 1.0; // Default to 1 (no corner effect)
+  // Check radius OR softness > 0.75 (D3D11 logic)
+  if(fs_in.corner_radius_px > 0.0 || softness_px > 0.75)
+  {
+    // Adjust half size by softness before calculating SDF, matching D3D11
+    vec2 outer_half_size = fs_in.rect_half_size_px - vec2(softness_px * 2.0);
+    float outer_radius = max(fs_in.corner_radius_px, 0.0);
+    float corner_sdf_s = rect_sdf(sdf_sample_pos, outer_half_size, outer_radius);
+
+    float corner_smooth_range = max(2.0 * softness_px, 1.0);
+    // Calculate coverage *inside* the outer edge (1 inside, ramps to 0 outside)
+    corner_sdf_t = 1.0 - smoothstep(0.0, corner_smooth_range, corner_sdf_s);
+  }
+
+  // Form final color
+  FragColor = albedo_sample * tint;
+  FragColor.a *= opacity;
+  // Combine coverages - Base alpha on the outer shape coverage
+  FragColor.a *= corner_sdf_t; // Multiply by corner coverage
+  FragColor.a *= border_sdf_t; // Multiply by 1.0 (no effect)
+  // Final discard if alpha is near zero
+   if (FragColor.a < 0.001)
+   {
+     discard;
+   }
+}
+"""
+
+////////////////////////////////
+//~ dan: Blur Shaders
+
+@embed_string r_gl_g_blur_shader_vs_src:
+"""
+#version 330 core
+// Define uniforms matching the FS for rect/corners
+layout (std140) uniform BlurUniforms // Binding Point 1 
+{
+  vec4 rect;                  // vec4(min.x, min.y, max.x, max.y) 
+  vec4 corner_radii_px;       // vec4(bl, tl, br, tr) 
+  vec2 direction;             // vec2(dx, dy) unit vector for blur pass 
+  vec2 viewport_size;         // vec2(width, height) of render target 
+  uint blur_count;            // Number of samples (adjusted for bilinear) 
+  // padding... 
+  vec4 kernel[32];            // vec4(weight, offset, unused, unused) 
+};
+
+// Define output block to pass SDF data to FS
+out VS_OUT {
+  vec2 sdf_sample_pos;
+  flat vec2 rect_half_size;
+  float corner_radius;
+} vs_out;
+
+out vec2 TexCoord;
+
+void main()
+{
+  // Fullscreen quad vertices (-1,-1), (1,-1), (-1, 1), (1, 1) using triangle strip
+  // VertexID: 0 -> (-1,-1), 1 -> (1,-1), 2 -> (-1, 1), 3 -> (1, 1)
+  vec2 pos = vec2( (gl_VertexID << 1) - 1.0, (gl_VertexID & 1) * 2.0 - 1.0 );
+  gl_Position = vec4(pos, 0.0, 1.0);
+  
+  // Texcoord (0,0) bottom-left to (1,1) top-right 
+  TexCoord = pos * 0.5 + 0.5; 
+  // TexCoord.y = 1.0 - TexCoord.y; // Y is already correct for fullscreen quad
+
+  // Calculate SDF inputs
+  vs_out.rect_half_size = (rect.zw - rect.xy) * 0.5;
+  
+  // Determine cornercoords based on vertex ID (0: BL, 1: BR, 2: TL, 3: TR)
+  vec2 cornercoords_pct = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1)); // Renamed from cornercoords__pct
+  vs_out.sdf_sample_pos = (2.0 * cornercoords_pct - 1.0) * vs_out.rect_half_size;
+
+  // Select corner radius based on vertex ID
+  // ID 0 (BL) -> radii.x
+  // ID 1 (BR) -> radii.z
+  // ID 2 (TL) -> radii.y
+  // ID 3 (TR) -> radii.w
+  if(gl_VertexID == 0) vs_out.corner_radius = corner_radii_px.x;
+  else if(gl_VertexID == 1) vs_out.corner_radius = corner_radii_px.z;
+  else if(gl_VertexID == 2) vs_out.corner_radius = corner_radii_px.y;
+  else /* ID 3 */          vs_out.corner_radius = corner_radii_px.w;
+
+  // D3D11 vertex shader passes rect_half_size - 2.0. Match this.
+  vs_out.rect_half_size -= 2.0; 
+}
+"""
+
+@embed_string r_gl_g_blur_shader_fs_src:
+"""
+#version 330 core
+in vec2 TexCoord;
+// Added input block matching the VS structure (even if VS isn't updated yet)
+in VS_OUT {
+  vec2 sdf_sample_pos;
+  flat vec2 rect_half_size;
+  float corner_radius;
+} fs_in;
+out vec4 FragColor;
+
+uniform sampler2D main_t2d; // Texture Unit 0 
+
+layout (std140) uniform BlurUniforms // Binding Point 1 
+{
+  vec4 rect;                  // vec4(min.x, min.y, max.x, max.y) 
+  vec4 corner_radii_px;       // vec4(bl, tl, br, tr) 
+  vec2 direction;             // vec2(dx, dy) unit vector for blur pass 
+  vec2 viewport_size;         // vec2(width, height) of render target 
+  uint blur_count;            // Number of samples (adjusted for bilinear) 
+  // padding... 
+  vec4 kernel[32];            // vec4(weight, offset, unused, unused) 
+};
+
+// SDF for rounded rectangle 
+float rect_sdf(vec2 sample_pos, vec2 rect_half_size, float r)
+{
+  vec2 d = abs(sample_pos) - rect_half_size + r;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+}
+
+void main()
+{
+  vec4 sum = vec4(0.0);
+  vec2 uv = TexCoord;
+  vec2 texelSize = 1.0 / viewport_size;
+  
+  // Apply first weight (at offset 0)
+  sum += texture(main_t2d, uv) * kernel[0].x;
+  
+  // Apply remaining weights using bilinear optimization
+  for(uint i = 1u; i < blur_count; ++i)
+  {
+    vec2 offset = direction * kernel[i].y * texelSize;
+    sum += texture(main_t2d, uv + offset) * kernel[i].x;
+    sum += texture(main_t2d, uv - offset) * kernel[i].x;
+  }
+  
+  // Clip to rounded rectangle using SDF
+  float corner_sdf_s = rect_sdf(fs_in.sdf_sample_pos, fs_in.rect_half_size, fs_in.corner_radius);
+  // D3D11 uses smoothstep(0, 2*softness, ...), let's use a small fixed softness for now
+  float softness = 1.0; 
+  float corner_sdf_t = 1.0 - smoothstep(-softness, softness, corner_sdf_s);
+
+  // Discard fragments outside the rounded rectangle (similar to D3D11)
+  if (corner_sdf_t < 0.001) // Use a small threshold instead of 0.9 check
+  {
+    discard;
+  }
+
+  FragColor = vec4(sum.rgb, 1.0); // Output color, force alpha to 1
+
+  // Optional: Apply coverage to alpha if needed later
+  // FragColor.a = corner_sdf_t; 
+}
+"""
+
+////////////////////////////////
+//~ dan: Mesh Shaders
+
+@embed_string r_gl_g_mesh_shader_vs_src:
+"""
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoord;
+layout (location = 3) in vec3 aColor;
+layout (location = 4) in mat4 instance_xform; // Per-instance transform 
+
+layout (std140) uniform R_GL_Uniforms_Mesh { // Use correct uniform block name matching C struct
+  mat4 view_proj_matrix; // Combined view * projection 
+};
+
+out vec3 FragPos;
+out vec3 Normal;
+out vec2 TexCoords;
+out vec3 VertexColor;
+
+void main()
+{
+  vec4 worldPos = instance_xform * vec4(aPos, 1.0);
+  gl_Position = view_proj_matrix * worldPos;
+  FragPos = vec3(worldPos);
+  Normal = mat3(transpose(inverse(instance_xform))) * aNormal; // Correct normal transformation
+  TexCoords = aTexCoord;
+  VertexColor = aColor;
+}
+"""
+
+@embed_string r_gl_g_mesh_shader_fs_src:
+"""
+#version 330 core
+out vec4 FragColor;
+
+in vec3 FragPos;
+in vec3 Normal;
+in vec2 TexCoords;
+in vec3 VertexColor;
+
+uniform sampler2D main_t2d; // Texture Unit 0 
+
+void main()
+{
+  // Simple: Output vertex color modulated by texture (if available) 
+  // vec4 texColor = texture(main_t2d, TexCoords); 
+  FragColor = vec4(VertexColor, 1.0); // * texColor; // Modulate later if needed 
+  // Add lighting calculations here if needed 
+}
+"""
+
+////////////////////////////////
+//~ dan: Geo3D Composition Shaders
+
+// NOTE: Geo3D Composite uses the same fullscreen VS as Finalize in the C code.
+// We will embed the FS here and reference the Finalize VS in the tables.
+@embed_string r_gl_g_geo3dcomposite_shader_fs_src:
+"""
+#version 330 core
+in vec2 TexCoord;
+uniform sampler2D main_t2d; // Renamed from stage_t2d 
+out vec4 FragColor;
+void main()
+{
+  FragColor = texture(main_t2d, TexCoord); // Use renamed uniform
+}
+"""
+
+////////////////////////////////
+//~ dan: Finalize Shaders
+
+@embed_string r_gl_g_finalize_shader_vs_src:
+"""
+#version 330 core
+out vec2 TexCoord;
+void main()
+{
+  // Correct way for (-1,-1), (1,-1), (-1, 1), (1, 1) triangle strip 
+  vec2 pos = vec2( (gl_VertexID & 1) * 2.0 - 1.0, (gl_VertexID & 2) - 1.0 ); 
+  gl_Position = vec4(pos, 0.0, 1.0);
+  // Texcoord (0,0) bottom-left to (1,1) top-right 
+  TexCoord = pos * 0.5 + 0.5;
+  // TexCoord.y = 1.0 - TexCoord.y; // Flip V if input texture requires it 
+}
+"""
+
+@embed_string r_gl_g_finalize_shader_fs_src:
+"""
+#version 330 core
+in vec2 TexCoord;
+uniform sampler2D main_t2d; // Renamed from stage_t2d 
+out vec4 FragColor;
+void main()
+{
+  FragColor = texture(main_t2d, TexCoord); // Use renamed uniform
+  FragColor.a = 1.0; // Force alpha to 1 for final output 
+}
+"""
+
+////////////////////////////////
+//~ dan: Table Generators
+
+// NOTE: Input layouts (VAOs) are configured separately in OpenGL C code.
+// The D3D11 `ilay_table` concept doesn't directly map here.
+// We'll generate tables for shader sources only.
+
+@enum R_GL_VShadKind:
+{
+  @expand(R_GL_VShadTable a) `$(a.name)`,
+  COUNT,
+}
+
+@enum R_GL_PShadKind:
+{
+  @expand(R_GL_PShadTable a) `$(a.name)`,
+  COUNT,
+}
+
+@enum R_GL_UniformTypeKind:
+{
+  @expand(R_GL_UniformTypeTable a) `$(a.name)`,
+  COUNT,
+}
+
+@c_file @data(`String8 *`) // Pointers to String8 global variables
+r_gl_g_vshad_kind_source_ptr_table:
+{
+  @expand(R_GL_VShadTable a) `&$(a.source)`;
+}
+
+@c_file @data(String8)
+r_gl_g_vshad_kind_source_name_table:
+{
+  @expand(R_GL_VShadTable a) `str8_lit_comp("$(a.source)")`;
+}
+
+@c_file @data(`String8 *`) // Pointers to String8 global variables
+r_gl_g_pshad_kind_source_ptr_table:
+{
+  @expand(R_GL_PShadTable a) `&$(a.source)`;
+}
+
+@c_file @data(String8)
+r_gl_g_pshad_kind_source_name_table:
+{
+  @expand(R_GL_PShadTable a) `str8_lit_comp("$(a.source)")`;
+}
+
+// Generate size table based on C struct definitions (defined in render_opengl.h)
+@c_file @data(U64)
+r_gl_g_uniform_type_kind_size_table:
+{
+  @expand(R_GL_UniformTypeTable a) `sizeof(R_GL_Uniforms_$(a.name))`;
+} 

@@ -379,6 +379,15 @@ str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMa
 }
 
 internal B32
+str8_starts_with(String8 string, String8 start, StringMatchFlags flags){
+    if(string.size < start.size) {
+        return 0;
+    }
+    String8 prefix = str8_prefix(string, start.size);
+    return str8_match(prefix, start, flags);
+}
+
+internal B32
 str8_ends_with(String8 string, String8 end, StringMatchFlags flags){
   String8 postfix = str8_postfix(string, end.size);
   B32 is_match = str8_match(end, postfix, flags);
