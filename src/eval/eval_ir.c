@@ -98,7 +98,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
   for EachElement(idx, builtin_view_rule_names)
   {
     E_Expr *expr = e_push_expr(e_ir_state->arena, E_ExprKind_LeafOffset, 0);
-    expr->type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .name = builtin_view_rule_names[idx]);
+    expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec, .name = builtin_view_rule_names[idx]);
     e_string2expr_map_insert(e_ir_state->arena, ctx->macro_map, builtin_view_rule_names[idx], expr);
   }
 }
@@ -2421,7 +2421,7 @@ E_IRGEN_FUNCTION_DEF(default)
       
       // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
       // a lens type, which preserves the name & arguments of the lens call expression
-      if(lhs_type->kind == E_TypeKind_Lens)
+      if(lhs_type->kind == E_TypeKind_LensSpec)
       {
         Temp scratch = scratch_begin(&arena, 1);
         
@@ -3346,6 +3346,17 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
 
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
+
+internal E_LookupRule *
+e_lookup_rule_from_type_key(E_TypeKey type_key)
+{
+  E_LookupRule *rule = &e_lookup_rule__default;
+  
+  // rjf: unpack type
+  E_Type *type = e_type_from_key__cached(type_key);
+  
+  return rule;
+}
 
 internal E_LookupRuleExprPair
 e_lookup_rule_expr_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)

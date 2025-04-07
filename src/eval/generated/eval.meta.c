@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_type_kind_basic_string_table[57] =
+String8 e_type_kind_basic_string_table[58] =
 {
 str8_lit_comp(""),
 str8_lit_comp("void"),
@@ -73,9 +73,10 @@ str8_lit_comp("bitfield"),
 str8_lit_comp("variadic"),
 str8_lit_comp("set"),
 str8_lit_comp("lens"),
+str8_lit_comp("lens_spec"),
 };
 
-U8 e_type_kind_basic_byte_size_table[57] =
+U8 e_type_kind_basic_byte_size_table[58] =
 {
 0,
 0,
@@ -113,6 +114,7 @@ U8 e_type_kind_basic_byte_size_table[57] =
 16,
 20,
 32,
+0,
 0,
 0,
 0,

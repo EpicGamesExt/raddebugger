@@ -288,6 +288,7 @@ internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *r
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
 
+internal E_LookupRule *e_lookup_rule_from_type_key(E_TypeKey type_key);
 internal E_LookupRuleExprPair e_lookup_rule_expr_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
 
 #if 0 // TODO(rjf): @eval

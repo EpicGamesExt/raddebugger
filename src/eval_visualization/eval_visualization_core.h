@@ -237,6 +237,32 @@ enum
 {
   EV_StringFlag_ReadOnlyDisplayRules = (1<<0),
   EV_StringFlag_PrettyNames          = (1<<1),
+  EV_StringFlag_DisableAddresses     = (1<<2),
+  EV_StringFlag_DisableStrings       = (1<<3),
+};
+
+typedef struct EV_StringParams EV_StringParams;
+struct EV_StringParams
+{
+  EV_StringFlags flags;
+  U32 radix;
+  U32 min_digits;
+};
+
+typedef struct EV_StringIterTask EV_StringIterTask;
+struct EV_StringIterTask
+{
+  EV_StringIterTask *next;
+  EV_StringParams params;
+  E_Eval eval;
+  U64 idx;
+};
+
+typedef struct EV_StringIter EV_StringIter;
+struct EV_StringIter
+{
+  EV_StringIterTask *top_task;
+  EV_StringIterTask *free_task;
 };
 
 ////////////////////////////////
@@ -341,8 +367,12 @@ internal B32 ev_row_is_editable(EV_Row *row);
 internal String8 ev_string_from_ascii_value(Arena *arena, U8 val);
 internal String8 ev_string_from_hresult_facility_code(U32 code);
 internal String8 ev_string_from_hresult_code(U32 code);
-internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval);
+internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval eval);
 internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
+
+//- rjf: tree stringification iterator
+internal EV_StringIter *ev_string_iter_begin(Arena *arena, E_Eval eval, EV_StringParams *params);
+internal B32 ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string);
 
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Expand Rule

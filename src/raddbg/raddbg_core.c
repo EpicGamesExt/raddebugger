@@ -6839,7 +6839,8 @@ rd_window_frame(void)
             E_Eval eval = e_eval_from_string(scratch.arena, rd_state->drag_drop_regs->expr);
             if(eval.irtree.mode != E_Mode_Null)
             {
-              String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), EV_StringFlag_ReadOnlyDisplayRules, 10, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
+              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
+              String8 value_string = rd_value_string_from_eval_NEW(scratch.arena, str8_zero(), &string_params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
               rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
             }
           }
@@ -10419,7 +10420,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   U32 min_digits = 0;
   B32 no_addr = 0;
   B32 no_string = 0;
-  B32 has_array = 0;
 #if 0 // TODO(rjf): @eval
   for(E_Expr *tag = root_eval.exprs.last->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
@@ -10430,7 +10430,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
     else if(str8_match(tag->string, str8_lit("oct"), 0)) {radix = 8; }
     else if(str8_match(tag->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
     else if(str8_match(tag->string, str8_lit("no_string"), 0)) {no_string = 1;}
-    else if(str8_match(tag->string, str8_lit("array"), 0)) {has_array = 1;}
     else if(str8_match(tag->string, str8_lit("digits"), 0))
     {
       E_Expr *num_expr = tag->first->next;
@@ -10440,22 +10439,12 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
     }
   }
 #endif
+  
+  //- rjf: force no_addr in non-address-spaces
   if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCfg)
   {
-    E_TypeKind kind = e_type_kind_from_key(eval.irtree.type_key);
-    if(kind != E_TypeKind_Ptr)
-    {
-      no_addr = 1;
-    }
-    else
-    {
-      E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-      if(!(type->flags & E_TypeFlag_External))
-      {
-        no_addr = 1;
-      }
-    }
+    no_addr = 1;
   }
   
   //- rjf: force no_string, if we are looking at padding members
@@ -10507,7 +10496,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       default:
       {
         E_Eval value_eval = e_value_eval_from_eval(eval);
-        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
+        String8 string = {0}; // ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, out, string);
       }break;
@@ -10624,7 +10613,7 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
             space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, left_paren).x;
             str8_list_push(arena, out, left_paren);
           }
-          String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
+          String8 string = {0}; // ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
           str8_list_push(arena, out, string);
           if(did_content)
@@ -10884,6 +10873,25 @@ rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringFlags flags, U3
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
   rd_append_value_strings_from_eval(scratch.arena, filter, flags, default_radix, font, font_size, max_size, 0, eval, eval, &strs);
+  String8 result = str8_list_join(arena, &strs, 0);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_value_string_from_eval_NEW(Arena *arena, String8 filter, EV_StringParams *params, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strs = {0};
+  {
+    EV_StringIter *iter = ev_string_iter_begin(scratch.arena, eval, params);
+    F32 space_taken_px = 0;
+    for(String8 string = {0}; ev_string_iter_next(scratch.arena, iter, &string) && space_taken_px < max_size;)
+    {
+      str8_list_push(scratch.arena, &strs, string);
+      space_taken_px += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+    }
+  }
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
@@ -13922,7 +13930,7 @@ rd_frame(void)
       for EachElement(idx, view_ui_rule_table)
       {
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .name = view_ui_rule_table[idx].name);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec, .name = view_ui_rule_table[idx].name);
         e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, view_ui_rule_table[idx].name, expr);
       }
     }

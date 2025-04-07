@@ -73,6 +73,7 @@ E_TypeKindTable:
   {Variadic                  "variadic"            0    }
   {Set                       "set"                 0    }
   {Lens                      "lens"                0    }
+  {LensSpec                  "lens_spec"           0    }
 }
 
 @table(name  op_kind  precedence  op_pre  op_sep  op_pos)

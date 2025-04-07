@@ -100,10 +100,9 @@ TypeKind;
 typedef U32 TypeFlags;
 enum
 {
-  TypeFlag_IsExternal  = (1<<0),
-  TypeFlag_IsPlainText = (1<<1),
-  TypeFlag_IsCodeText  = (1<<2),
-  TypeFlag_IsPathText  = (1<<3),
+  TypeFlag_IsPlainText = (1<<0),
+  TypeFlag_IsCodeText  = (1<<1),
+  TypeFlag_IsPathText  = (1<<2),
 };
 
 typedef U32 MemberFlags;

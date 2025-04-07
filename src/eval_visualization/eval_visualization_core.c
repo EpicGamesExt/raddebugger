@@ -1367,14 +1367,14 @@ ev_string_from_hresult_code(U32 code)
 }
 
 internal String8
-ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval)
+ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval eval)
 {
   String8 result = {0};
   E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   U64 type_byte_size = e_type_byte_size_from_key(type_key);
   U8 digit_group_separator = 0;
-  if(!(flags & EV_StringFlag_ReadOnlyDisplayRules))
+  if(!(params->flags & EV_StringFlag_ReadOnlyDisplayRules))
   {
     digit_group_separator = 0;
   }
@@ -1385,19 +1385,19 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     
     case E_TypeKind_Handle:
     {
-      result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
+      result = str8_from_s64(arena, eval.value.s64, params->radix, params->min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_HResult:
     {
-      if(flags & EV_StringFlag_ReadOnlyDisplayRules)
+      if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
       {
         Temp scratch = scratch_begin(&arena, 1);
         U32 hresult_value = (U32)eval.value.u64;
         U32 is_error   = !!(hresult_value & (1ull<<31));
         U32 error_code = (hresult_value);
         U32 facility   = (hresult_value & 0x7ff0000) >> 16;
-        String8 value_string = str8_from_s64(scratch.arena, eval.value.u64, radix, min_digits, digit_group_separator);
+        String8 value_string = str8_from_s64(scratch.arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
         String8 facility_string = ev_string_from_hresult_facility_code(facility);
         String8 error_string = ev_string_from_hresult_code(error_code);
         result = push_str8f(arena, "%S%s%s%S%s%s%S%s",
@@ -1413,7 +1413,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       }
       else
       {
-        result = str8_from_s64(arena, eval.value.u64, radix, min_digits, digit_group_separator);
+        result = str8_from_s64(arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
       }
     }break;
     
@@ -1428,11 +1428,11 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       String8 char_str = ev_string_from_ascii_value(arena, eval.value.s64);
       if(char_str.size != 0)
       {
-        if(flags & EV_StringFlag_ReadOnlyDisplayRules)
+        if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
         {
           String8 imm_string = (type_is_unsigned
-                                ? str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator)
-                                : str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator));
+                                ? str8_from_u64(arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator)
+                                : str8_from_s64(arena, eval.value.s64, params->radix, params->min_digits, digit_group_separator));
           result = push_str8f(arena, "'%S' (%S)", char_str, imm_string);
         }
         else
@@ -1443,8 +1443,8 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       else
       {
         result = (type_is_unsigned
-                  ? str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator)
-                  : str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator));
+                  ? str8_from_u64(arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator)
+                  : str8_from_s64(arena, eval.value.s64, params->radix, params->min_digits, digit_group_separator));
       }
     }break;
     
@@ -1453,7 +1453,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_S32:
     case E_TypeKind_S64:
     {
-      result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
+      result = str8_from_s64(arena, eval.value.s64, params->radix, params->min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_U8:
@@ -1461,14 +1461,14 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_U32:
     case E_TypeKind_U64:
     {
-      result = str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator);
+      result = str8_from_u64(arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_U128:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      String8 upper64 = str8_from_u64(scratch.arena, eval.value.u128.u64[0], radix, min_digits, digit_group_separator);
-      String8 lower64 = str8_from_u64(scratch.arena, eval.value.u128.u64[1], radix, min_digits, digit_group_separator);
+      String8 upper64 = str8_from_u64(scratch.arena, eval.value.u128.u64[0], params->radix, params->min_digits, digit_group_separator);
+      String8 lower64 = str8_from_u64(scratch.arena, eval.value.u128.u64[1], params->radix, params->min_digits, digit_group_separator);
       result = push_str8f(arena, "%S:%S", upper64, lower64);
       scratch_end(scratch);
     }break;
@@ -1477,7 +1477,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_F64:{f64 = eval.value.f64;}goto f64_path;
     f64_path:;
     {
-      result = push_str8f(arena, "%.*f", min_digits ? min_digits : 16, f64);
+      result = push_str8f(arena, "%.*f", params->min_digits ? params->min_digits : 16, f64);
       U64 num_to_chop = 0;
       for(U64 num_trimmed = 0; num_trimmed < result.size; num_trimmed += 1)
       {
@@ -1512,8 +1512,8 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
           break;
         }
       }
-      String8 numeric_value_string = str8_from_u64(scratch.arena, eval.value.u64, radix, min_digits, digit_group_separator);
-      if(flags & EV_StringFlag_ReadOnlyDisplayRules)
+      String8 numeric_value_string = str8_from_u64(scratch.arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
+      if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
       {
         if(constant_name.size != 0)
         {
@@ -1578,6 +1578,159 @@ ev_escaped_from_raw_string(Arena *arena, String8 raw)
   StringJoin join = {0};
   String8 result = str8_list_join(arena, &parts, &join);
   scratch_end(scratch);
+  return result;
+}
+
+//- rjf: tree stringification iterator
+
+internal EV_StringIter *
+ev_string_iter_begin(Arena *arena, E_Eval eval, EV_StringParams *params)
+{
+  EV_StringIter *it = push_array(arena, EV_StringIter, 1);
+  it->top_task = push_array(arena, EV_StringIterTask, 1);
+  it->top_task->eval = eval;
+  MemoryCopyStruct(&it->top_task->params, params);
+  return it;
+}
+
+internal B32
+ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
+{
+  B32 result = 0;
+  
+  //- rjf: make progress on top task
+  MemoryZeroStruct(out_string);
+  B32 need_pop = 1;
+  B32 need_new_task = 0;
+  EV_StringIterTask new_task = {0};
+  if(it->top_task != 0)
+  {
+    result = 1;
+    
+    //- rjf: unpack task
+    U64 task_idx = it->top_task->idx;
+    EV_StringParams *params = &it->top_task->params;
+    E_Eval eval = it->top_task->eval;
+    E_TypeKey type_key = eval.irtree.type_key;
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    
+    //- rjf: type evaluations -> display type string
+    if(eval.irtree.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
+    {
+      *out_string = e_type_string_from_key(arena, type_key);
+    }
+    
+    //- rjf: non-type evaluations
+    else switch(type_kind)
+    {
+      //- rjf: default - leaf cases
+      default:
+      {
+        E_Eval value_eval = e_value_eval_from_eval(eval);
+        *out_string = ev_string_from_simple_typed_eval(arena, params, value_eval);
+      }break;
+      
+      //- rjf: lenses
+      case E_TypeKind_Lens:
+      switch(task_idx)
+      {
+        default:{}break;
+        
+        // rjf: step 0 -> generate lens description, then descend to same evaluation w/ direct type
+        case 0:
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          String8List strings = {0};
+          {
+            E_Type *type = e_type_from_key__cached(type_key);
+            str8_list_pushf(scratch.arena, &strings, "%S(", type->name);
+            for EachIndex(idx, type->count)
+            {
+              String8 string = e_string_from_expr(scratch.arena, type->args[idx]);
+              str8_list_push(scratch.arena, &strings, string);
+              if(idx+1 < type->count)
+              {
+                str8_list_pushf(scratch.arena, &strings, ", ");
+              }
+            }
+            str8_list_pushf(scratch.arena, &strings, ") <- (");
+          }
+          *out_string = str8_list_join(arena, &strings, 0);
+          need_new_task = 1;
+          new_task.params = *params;
+          new_task.eval = eval;
+          new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+          scratch_end(scratch);
+        }break;
+        
+        // rjf: step 1 -> close
+        case 1:
+        {
+          *out_string = str8_lit(")");
+        }break;
+      }break;
+      
+      //- rjf: pointers
+      case E_TypeKind_Function:
+      case E_TypeKind_Ptr:
+      case E_TypeKind_LRef:
+      case E_TypeKind_RRef:
+      {
+        
+      }break;
+      
+      //- rjf: arrays
+      case E_TypeKind_Array:
+      {
+        
+      }break;
+      
+      //- rjf: non-string-arrays/structs/sets
+      case E_TypeKind_Struct:
+      case E_TypeKind_Union:
+      case E_TypeKind_Class:
+      case E_TypeKind_IncompleteStruct:
+      case E_TypeKind_IncompleteUnion:
+      case E_TypeKind_IncompleteClass:
+      case E_TypeKind_Set:
+      arrays_and_sets_and_structs:
+      {
+        
+      }break;
+    }
+  }
+  
+  //- rjf: bump task counter
+  if(it->top_task != 0)
+  {
+    it->top_task->idx += 1;
+  }
+  
+  //- rjf: if result is good, and we have a new task? -> push
+  if(result && need_new_task)
+  {
+    EV_StringIterTask *new_t = it->free_task;
+    if(new_t != 0)
+    {
+      SLLStackPop(it->free_task);
+    }
+    else
+    {
+      new_t = push_array(arena, EV_StringIterTask, 1);
+    }
+    MemoryCopyStruct(new_t, &new_task);
+    SLLStackPush(it->top_task, new_t);
+    new_t->idx = 0;
+  }
+  
+  //- rjf: if result is good, but we don't have a new task? -> pop
+  else if(result && need_pop)
+  {
+    EV_StringIterTask *task = it->top_task;
+    SLLStackPop(it->top_task);
+    SLLStackPush(it->free_task, task);
+  }
+  
   return result;
 }
 

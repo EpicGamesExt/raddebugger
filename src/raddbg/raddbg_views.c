@@ -1503,7 +1503,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: generate strings/flags based on that expression & fill
-      result.string   = rd_value_string_from_eval(arena, rd_view_query_input(), string_flags, default_radix, font, font_size, max_size_px, result.eval);
+      EV_StringParams string_params = {.flags = string_flags, .radix = default_radix};
+      result.string   = rd_value_string_from_eval_NEW(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.irtree.type_key) && result.eval.irtree.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
       if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
