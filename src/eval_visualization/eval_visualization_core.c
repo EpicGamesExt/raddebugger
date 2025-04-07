@@ -509,7 +509,7 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
     // rjf: push tags inferred from the type
     {
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree.type_key);
+      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree.type_key);
       for(E_ExprNode *n = tags.first; n != 0; n = n->next)
       {
         e_expr_push_tag(expr, e_expr_copy(arena, n->v));
@@ -1596,7 +1596,7 @@ ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     // rjf: next try auto hook map
     if(result.rule == &ev_nil_expand_rule)
     {
-      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
+      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
       for(E_ExprNode *n = tags.first; n != 0; n = n->next)
       {
         EV_ExpandRule *candidate = ev_expand_rule_from_string(n->v->string);

@@ -93,6 +93,11 @@
 // [ ] need a formalization which takes unknown identifiers which are called, and tries
 //     to use that to apply a IR-generation rule, which is keyed by that unknown
 //     identifier
+// [ ] we need to select expressions as "parents" when possible, so that when using an
+//     auto-view-rule (or similar context), leaf identifiers referring to e.g. members
+//     of an expression's type resolve correctly (e.g. bitmap(base, width, height) being
+//     used as a shorthand for bitmap(foo.base, foo.width, foo.height) when evaluating
+//     foo).
 // [ ] *ALL* expressions in watch windows need to be editable.
 //
 // [ ] config hot-reloading, using cfg wins

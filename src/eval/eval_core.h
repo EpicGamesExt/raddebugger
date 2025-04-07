@@ -321,8 +321,6 @@ struct E_Expr
 {
   E_Expr *first;
   E_Expr *last;
-  E_Expr *first_tag;
-  E_Expr *last_tag;
   E_Expr *next;
   E_Expr *prev;
   E_Expr *ref;

@@ -341,7 +341,7 @@ internal E_Expr *
 e_push_expr(Arena *arena, E_ExprKind kind, void *location)
 {
   E_Expr *e = push_array(arena, E_Expr, 1);
-  e->first = e->last = e->next = e->prev = e->ref = e->first_tag = e->last_tag = &e_expr_nil;
+  e->first = e->last = e->next = e->prev = e->ref = &e_expr_nil;
   e->location = location;
   e->kind = kind;
   return e;
@@ -363,12 +363,6 @@ internal void
 e_expr_remove_child(E_Expr *parent, E_Expr *child)
 {
   DLLRemove_NPZ(&e_expr_nil, parent->first, parent->last, child, next, prev);
-}
-
-internal void
-e_expr_push_tag(E_Expr *parent, E_Expr *child)
-{
-  DLLPushBack_NPZ(&e_expr_nil, parent->first_tag, parent->last_tag, child, next, prev);
 }
 
 internal E_Expr *
@@ -458,14 +452,6 @@ e_expr_copy(Arena *arena, E_Expr *src)
         Task *task = push_array(scratch.arena, Task, 1);
         task->dst_parent = dst;
         task->src = src_child;
-        SLLQueuePush(first_task, last_task, task);
-      }
-      for(E_Expr *src_child = t->src->first_tag; src_child != &e_expr_nil; src_child = src_child->next)
-      {
-        Task *task = push_array(scratch.arena, Task, 1);
-        task->dst_parent = dst;
-        task->src = src_child;
-        task->is_tag = 1;
         SLLQueuePush(first_task, last_task, task);
       }
     }

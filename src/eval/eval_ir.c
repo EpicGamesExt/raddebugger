@@ -77,9 +77,9 @@ e_select_ir_ctx(E_IRCtx *ctx)
   if(ctx->macro_map == 0)      { ctx->macro_map = push_array(e_ir_state->arena, E_String2ExprMap, 1); ctx->macro_map[0] = e_string2expr_map_make(e_ir_state->arena, 512); }
   e_ir_state->ctx = ctx;
   e_ir_state->thread_ip_procedure = rdi_procedure_from_voff(ctx->primary_module->rdi, ctx->thread_ip_voff);
-  e_ir_state->used_tag_map = push_array(e_ir_state->arena, E_UsedTagMap, 1);
-  e_ir_state->used_tag_map->slots_count = 64;
-  e_ir_state->used_tag_map->slots = push_array(e_ir_state->arena, E_UsedTagSlot, e_ir_state->used_tag_map->slots_count);
+  e_ir_state->used_expr_map = push_array(e_ir_state->arena, E_UsedExprMap, 1);
+  e_ir_state->used_expr_map->slots_count = 64;
+  e_ir_state->used_expr_map->slots = push_array(e_ir_state->arena, E_UsedExprSlot, e_ir_state->used_expr_map->slots_count);
   e_ir_state->type_auto_hook_cache_map = push_array(e_ir_state->arena, E_TypeAutoHookCacheMap, 1);
   e_ir_state->type_auto_hook_cache_map->slots_count = 256;
   e_ir_state->type_auto_hook_cache_map->slots = push_array(e_ir_state->arena, E_TypeAutoHookCacheSlot, e_ir_state->type_auto_hook_cache_map->slots_count);
@@ -1304,7 +1304,7 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
 }
 
 internal E_ExprList
-e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
+e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
 {
   ProfBeginFunction();
   E_ExprList exprs = {0};
@@ -1371,7 +1371,7 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
 }
 
 internal E_ExprList
-e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key)
+e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key)
 {
   E_ExprList exprs = {0};
   if(e_ir_state != 0 && e_ir_state->ctx != 0 && e_ir_state->type_auto_hook_cache_map != 0 && e_ir_state->type_auto_hook_cache_map->slots_count != 0)
@@ -1393,7 +1393,7 @@ e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key)
       node = push_array(e_ir_state->arena, E_TypeAutoHookCacheNode, 1);
       SLLQueuePush(e_ir_state->type_auto_hook_cache_map->slots[slot_idx].first, e_ir_state->type_auto_hook_cache_map->slots[slot_idx].last, node);
       node->key = type_key;
-      node->exprs = e_auto_hook_tag_exprs_from_type_key(e_type_state->arena, type_key);
+      node->exprs = e_auto_hook_exprs_from_type_key(e_type_state->arena, type_key);
     }
     exprs = node->exprs;
   }
@@ -1759,14 +1759,14 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
 //- rjf: rule tag poison checking
 
 internal B32
-e_tag_is_poisoned(E_Expr *tag)
+e_expr_is_poisoned(E_Expr *expr)
 {
   B32 tag_is_poisoned = 0;
-  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-  for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+  U64 hash = e_hash_from_string(5381, str8_struct(&expr));
+  U64 slot_idx = hash%e_ir_state->used_expr_map->slots_count;
+  for(E_UsedExprNode *n = e_ir_state->used_expr_map->slots[slot_idx].first; n != 0; n = n->next)
   {
-    if(n->tag == tag)
+    if(n->expr == expr)
     {
       tag_is_poisoned = 1;
       break;
@@ -1776,25 +1776,25 @@ e_tag_is_poisoned(E_Expr *tag)
 }
 
 internal void
-e_tag_poison(E_Expr *tag)
+e_expr_poison(E_Expr *expr)
 {
-  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-  E_UsedTagNode *n = push_array(e_ir_state->arena, E_UsedTagNode, 1);
-  n->tag = tag;
-  DLLPushBack(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
+  U64 hash = e_hash_from_string(5381, str8_struct(&expr));
+  U64 slot_idx = hash%e_ir_state->used_expr_map->slots_count;
+  E_UsedExprNode *n = push_array(e_ir_state->arena, E_UsedExprNode, 1);
+  n->expr = expr;
+  DLLPushBack(e_ir_state->used_expr_map->slots[slot_idx].first, e_ir_state->used_expr_map->slots[slot_idx].last, n);
 }
 
 internal void
-e_tag_unpoison(E_Expr *tag)
+e_expr_unpoison(E_Expr *expr)
 {
-  U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-  U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
-  for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+  U64 hash = e_hash_from_string(5381, str8_struct(&expr));
+  U64 slot_idx = hash%e_ir_state->used_expr_map->slots_count;
+  for(E_UsedExprNode *n = e_ir_state->used_expr_map->slots[slot_idx].first; n != 0; n = n->next)
   {
-    if(n->tag == tag)
+    if(n->expr == expr)
     {
-      DLLRemove(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
+      DLLRemove(e_ir_state->used_expr_map->slots[slot_idx].first, e_ir_state->used_expr_map->slots[slot_idx].last, n);
       break;
     }
   }
@@ -1818,14 +1818,14 @@ E_IRGEN_FUNCTION_DEF(default)
       E_Expr *lhs = expr->first;
       E_Expr *rhs = lhs->next;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-      E_LookupRuleTagPair lhs_lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(lhs, &lhs_irtree);
-      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule_and_tag.rule->name))
+      E_LookupRule *lookup_rule = e_lookup_rule_from_irtree(&lhs_irtree);
+      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule->name))
       {
-        e_tag_poison(lhs_lookup_rule_and_tag.tag);
+        e_expr_poison(lhs_lookup_rule_and_tag.tag);
         E_LookupInfo lookup_info = lhs_lookup_rule_and_tag.rule->info(arena, &lhs_irtree, lhs_lookup_rule_and_tag.tag, str8_zero());
         E_LookupAccess lookup_access = lhs_lookup_rule_and_tag.rule->access(arena, expr->kind, lhs, rhs, lhs_lookup_rule_and_tag.tag, lookup_info.user_data);
         result = lookup_access.irtree_and_type;
-        e_tag_unpoison(lhs_lookup_rule_and_tag.tag);
+        e_expr_unpoison(lhs_lookup_rule_and_tag.tag);
       }
       scratch_end(scratch);
     }break;
@@ -2425,25 +2425,29 @@ E_IRGEN_FUNCTION_DEF(default)
     {
       E_Expr *lhs = expr->first;
       E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-      E_TypeKey lhs_type_key = lhs_irtree.type_key;
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      if(lhs_type->kind == E_TypeKind_Stub)
+      
+      // rjf: map callee -> ir-generation rule
+      E_IRGenRule *irgen_rule = &e_irgen_rule__default;
       {
         Temp scratch = scratch_begin(&arena, 1);
-        E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree.root);
-        String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
-        E_Interpretation interp = e_interpret(bytecode);
-        String8 name = e_string_from_id(interp.value.u64);
-        E_IRGenRule *irgen_rule = e_irgen_rule_from_string(name);
-        if(irgen_rule != &e_irgen_rule__default)
+        E_TypeKey type_key = lhs_irtree.type_key;
+        E_Type *type = e_type_from_key__cached(type_key);
+        if(type->kind == E_TypeKind_Stub)
         {
-          result = irgen_rule->irgen(arena, expr);
-        }
-        else
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "There is no rule named `%S`.", name);
+          E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree.root);
+          String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+          E_Interpretation interp = e_interpret(bytecode);
+          String8 name = e_string_from_id(interp.value.u64);
+          irgen_rule = e_irgen_rule_from_string(name);
         }
         scratch_end(scratch);
+      }
+      
+      // rjf: if we have a non-default ir-generation rule, then we can use that
+      // to generate the resultant IR tree
+      if(irgen_rule != &e_irgen_rule__default)
+      {
+        result = irgen_rule->irgen(arena, expr);
       }
       else
       {
@@ -3024,76 +3028,38 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     expr = expr->ref;
   }
   
-  //- rjf: pick the ir-generation rule from explicitly-stored expressions
-  B32 default_is_forced = 0;
-  E_IRGenRule *explicit_irgen_rule = &e_irgen_rule__default;
-  E_Expr *explicit_irgen_rule_tag = &e_expr_nil;
-  for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
-  {
-    String8 name = tag->string;
-    E_IRGenRule *irgen_rule_candidate = e_irgen_rule_from_string(name);
-    if(str8_match(name, e_irgen_rule__default.name, 0))
-    {
-      default_is_forced = 1;
-      break;
-    }
-    if(irgen_rule_candidate != &e_irgen_rule__default)
-    {
-      B32 tag_is_poisoned = e_tag_is_poisoned(tag);
-      if(!tag_is_poisoned)
-      {
-        explicit_irgen_rule = irgen_rule_candidate;
-        explicit_irgen_rule_tag = tag;
-      }
-    }
-  }
-  
   //- rjf: apply all ir-generation steps
   typedef struct Task Task;
   struct Task
   {
     Task *next;
-    E_IRGenRule *rule;
-    E_Expr *tag;
+    E_Expr *expr;
   };
-  Task start_task = {0, explicit_irgen_rule, explicit_irgen_rule_tag};
+  Task start_task = {0, expr};
   Task *first_task = &start_task;
   Task *last_task = first_task;
   for(Task *t = first_task; t != 0; t = t->next)
   {
     // rjf: poison the tag we are about to use, so we don't recursively use it
-    e_tag_poison(t->tag);
+    e_expr_poison(t->expr);
     
     // rjf: do this rule's generation
-    ProfScope("irgen rule '%.*s'", str8_varg(t->rule->name))
-    {
-      result = t->rule->irgen(arena, expr);
-      if(result.root == &e_irnode_nil && t->rule != &e_irgen_rule__default)
-      {
-        result = e_irgen_rule__default.irgen(arena, expr);
-      }
-    }
+    result = e_irgen_rule__default.irgen(arena, t->expr);
     
     // rjf: find any auto hooks according to this generation's type
-    if(!default_is_forced)
     {
-      E_ExprList exprs = e_auto_hook_tag_exprs_from_type_key__cached(result.type_key);
+      E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
       {
-        for(E_Expr *tag = n->v; tag != &e_expr_nil; tag = tag->next)
+        for(E_Expr *e = n->v; e != &e_expr_nil; e = e->next)
         {
-          B32 tag_is_poisoned = e_tag_is_poisoned(tag);
-          if(!tag_is_poisoned)
+          B32 e_is_poisoned = e_expr_is_poisoned(e);
+          if(!e_is_poisoned)
           {
-            E_IRGenRule *rule = e_irgen_rule_from_string(tag->string);
-            if(rule != &e_irgen_rule__default)
-            {
-              Task *task = push_array(scratch.arena, Task, 1);
-              SLLQueuePush(first_task, last_task, task);
-              task->rule = rule;
-              task->tag = tag;
-              break;
-            }
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->expr = e;
+            break;
           }
         }
       }
@@ -3103,7 +3069,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   //- rjf: unpoison the tags we used
   for(Task *t = first_task; t != 0; t = t->next)
   {
-    e_tag_unpoison(t->tag);
+    e_expr_unpoison(t->expr);
   }
   
   scratch_end(scratch);
@@ -3378,7 +3344,31 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
 }
 
 ////////////////////////////////
-//~ rjf: Expression & IR-Tree => Lookup Rule
+//~ rjf: Expression & IR-Tree => Rules
+
+internal E_LookupRule *
+e_lookup_rule_from_irtree(E_IRTreeAndType *irtree)
+{
+  E_LookupRule *rule = &e_lookup_rule__default;
+  E_TypeKey type_key = irtree->type_key;
+  E_Type *type = e_type_from_key__cached(type_key);
+  
+  // rjf: first try implicit stub name -> rule mapping
+  if(rule == &e_lookup_rule__default && type->kind == E_TypeKind_Stub)
+  {
+    String8 name = type->name;
+    rule = e_lookup_rule_from_string(name);
+  }
+  
+  // rjf: try auto hook map
+  if(rule == &e_lookup_rule__default)
+  {
+    E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
+    
+  }
+  
+  return rule;
+}
 
 internal E_LookupRuleTagPair
 e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
@@ -3391,7 +3381,7 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     {
       for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
       {
-        if(e_tag_is_poisoned(tag)) { continue; }
+        if(e_expr_is_poisoned(tag)) { continue; }
         if(str8_match(tag->string, e_lookup_rule__default.name, 0))
         {
           result.rule = &e_lookup_rule__default;
@@ -3427,10 +3417,10 @@ e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
     // rjf: next try auto hook map
     if(!default_is_forced && result.rule == &e_lookup_rule__default)
     {
-      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
+      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
       for(E_ExprNode *n = tags.first; n != 0; n = n->next)
       {
-        if(e_tag_is_poisoned(n->v)) { continue; }
+        if(e_expr_is_poisoned(n->v)) { continue; }
         E_LookupRule *candidate = e_lookup_rule_from_string(n->v->string);
         if(candidate != &e_lookup_rule__nil)
         {

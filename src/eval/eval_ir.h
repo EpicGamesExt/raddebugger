@@ -35,26 +35,26 @@ struct E_OpList
 ////////////////////////////////
 //~ rjf: Used Tag Map Data Structure
 
-typedef struct E_UsedTagNode E_UsedTagNode;
-struct E_UsedTagNode
+typedef struct E_UsedExprNode E_UsedExprNode;
+struct E_UsedExprNode
 {
-  E_UsedTagNode *next;
-  E_UsedTagNode *prev;
-  E_Expr *tag;
+  E_UsedExprNode *next;
+  E_UsedExprNode *prev;
+  E_Expr *expr;
 };
 
-typedef struct E_UsedTagSlot E_UsedTagSlot;
-struct E_UsedTagSlot
+typedef struct E_UsedExprSlot E_UsedExprSlot;
+struct E_UsedExprSlot
 {
-  E_UsedTagNode *first;
-  E_UsedTagNode *last;
+  E_UsedExprNode *first;
+  E_UsedExprNode *last;
 };
 
-typedef struct E_UsedTagMap E_UsedTagMap;
-struct E_UsedTagMap
+typedef struct E_UsedExprMap E_UsedExprMap;
+struct E_UsedExprMap
 {
   U64 slots_count;
-  E_UsedTagSlot *slots;
+  E_UsedExprSlot *slots;
 };
 
 ////////////////////////////////
@@ -155,7 +155,7 @@ struct E_IRState
   RDI_Procedure *thread_ip_procedure;
   
   // rjf: caches
-  E_UsedTagMap *used_tag_map;
+  E_UsedExprMap *used_expr_map;
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
   U64 string_id_gen;
   E_StringIDMap *string_id_map;
@@ -225,8 +225,8 @@ internal E_IRGenRule *e_irgen_rule_from_string(String8 string);
 internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
 internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params);
 #define e_auto_hook_map_insert_new(arena, map, ...) e_auto_hook_map_insert_new_((arena), (map), &(E_AutoHookParams){.type_key = zero_struct, __VA_ARGS__})
-internal E_ExprList e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
-internal E_ExprList e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key);
+internal E_ExprList e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
+internal E_ExprList e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: Evaluated String IDs
@@ -266,10 +266,10 @@ internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key)
 internal E_IRNode *e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in);
 internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
 
-//- rjf: rule tag poison checking
-internal B32 e_tag_is_poisoned(E_Expr *tag);
-internal void e_tag_poison(E_Expr *tag);
-internal void e_tag_unpoison(E_Expr *tag);
+//- rjf: expression poison checking
+internal B32 e_expr_is_poisoned(E_Expr *expr);
+internal void e_expr_poison(E_Expr *expr);
+internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
 internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
@@ -286,8 +286,9 @@ internal E_Expr *e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *
 internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key);
 
 ////////////////////////////////
-//~ rjf: Expression & IR-Tree => Lookup Rule
+//~ rjf: Expression & IR-Tree => Rules
 
+internal E_LookupRule *e_lookup_rule_from_irtree(E_IRTreeAndType *irtree);
 internal E_LookupRuleTagPair e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
 
 #endif // EVAL_IR_H
