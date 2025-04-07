@@ -97,9 +97,10 @@ typedef struct F_RasterCacheInfo F_RasterCacheInfo;
 struct F_RasterCacheInfo
 {
   Rng2S16 subrect;
-  Vec2S16 raster_dim;
   S16 atlas_num;
+  Vec2S16 raster_dim;
   F32 advance;
+  S16 first_glyph_bitmap_top;
 };
 
 typedef struct F_Hash2InfoRasterCacheNode F_Hash2InfoRasterCacheNode;

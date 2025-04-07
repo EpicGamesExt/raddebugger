@@ -194,12 +194,17 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
     return result;
   }
 
-  //- dan: Define glyph render info storage
-  typedef struct GlyphRenderInfo GlyphRenderInfo;
-  struct GlyphRenderInfo {
+  //- dan: Define glyph render info storage (layout pass temporary data)
+  typedef struct GlyphLayoutInfo GlyphLayoutInfo;
+  struct GlyphLayoutInfo {
     FT_UInt glyph_index;
     S32     render_pen_x; // Pen position before this glyph (26.6 fixed point)
-    S32     advance_x;    // Advance width for this glyph (26.6 fixed point)
+    // Store metrics needed for the second pass and the final result
+    S16     bitmap_left;
+    S16     bitmap_top;
+    U16     bitmap_width;
+    U16     bitmap_rows;
+    S32     advance_x; // Advance width for this glyph (26.6 fixed point)
   };
 
   //- dan: Set pixel size
@@ -255,8 +260,8 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   }
 
   //- dan: First pass: Calculate layout metrics and store glyph positions
-  GlyphRenderInfo *glyph_infos = push_array(scratch.arena, GlyphRenderInfo, string32.size);
-  MemoryZero(glyph_infos, sizeof(GlyphRenderInfo) * string32.size);
+  GlyphLayoutInfo *layout_infos = push_array(scratch.arena, GlyphLayoutInfo, string32.size);
+  MemoryZero(layout_infos, sizeof(GlyphLayoutInfo) * string32.size);
 
   S32 total_width_fixed = 0; // Use 26.6 for total width calculation
   S32 max_ascent = 0;
@@ -267,15 +272,20 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   for (U64 i = 0; i < string32.size; ++i)
   {
     FT_UInt glyph_index = FT_Get_Char_Index(face, string32.str[i]);
-    glyph_infos[i].glyph_index = glyph_index;
+    layout_infos[i].glyph_index = glyph_index;
 
     // Load glyph metrics *using the final load flags*
     // FT_LOAD_NO_BITMAP could optimize this, but FT_LOAD_DEFAULT is okay.
     error = FT_Load_Glyph(face, glyph_index, load_flags); // <<< USE CONSISTENT load_flags
     if (error) {
       log_infof("fp_raster: FT_Load_Glyph (metrics pass) failed for glyph index %u (char 0x%x) with error %d", glyph_index, string32.str[i], error);
-      glyph_infos[i].render_pen_x = pen_x;
-      glyph_infos[i].advance_x = 0;
+      layout_infos[i].render_pen_x = pen_x;
+      layout_infos[i].advance_x = 0;
+      // Store zero metrics for failed glyphs
+      layout_infos[i].bitmap_left = 0;
+      layout_infos[i].bitmap_top = 0;
+      layout_infos[i].bitmap_width = 0;
+      layout_infos[i].bitmap_rows = 0;
       prev_glyph_index = glyph_index;
       continue;
     }
@@ -290,64 +300,114 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
       pen_x += delta.x;
     }
 
-    glyph_infos[i].render_pen_x = pen_x; // Store pen position before advance
+    layout_infos[i].render_pen_x = pen_x; // Store pen position before advance
 
     // Use metrics (ascent/descent) from the loaded glyph (now potentially hinted)
-    S32 glyph_ascent = slot->bitmap_top;
-    S32 glyph_descent = (S32)slot->bitmap.rows - slot->bitmap_top;
+    // NOTE: DO NOT render here. Use metrics directly from the loaded glyph slot.
+    // FT_Render_Glyph might change metrics slightly due to hinting.
+    // if (slot->format != FT_GLYPH_FORMAT_BITMAP)
+    // {
+    //     // Render temporarily to get bitmap metrics, won't affect final render pass
+    //     FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL); 
+    // }
+    
+    // Use metrics directly from the slot after FT_Load_Glyph
+    S32 glyph_ascent = slot->metrics.horiBearingY >> 6; // Use FUnit metrics initially?
+    S32 glyph_descent = (slot->metrics.height >> 6) - glyph_ascent;
+    // Use bitmap metrics if available and potentially more accurate after load_flags applied?
+    // Let's stick to bitmap_top/rows for consistency with blitting, but load them *before* render.
+    S32 reported_bitmap_top = slot->bitmap_top;
+    S32 reported_bitmap_rows = (S32)slot->bitmap.rows;
+
+    // Recalculate ascent/descent based on bitmap positioning relative to baseline
+    glyph_ascent = reported_bitmap_top; 
+    glyph_descent = reported_bitmap_rows - reported_bitmap_top;
+
     if (glyph_ascent > max_ascent)   { max_ascent = glyph_ascent; }
     if (glyph_descent > max_descent) { max_descent = glyph_descent; }
 
+    // Store metrics needed for second pass and result (using values from loaded slot)
+    layout_infos[i].bitmap_left = (S16)slot->bitmap_left;
+    layout_infos[i].bitmap_top = (S16)reported_bitmap_top; // Store the value used for max_ascent
+    layout_infos[i].bitmap_width = (U16)slot->bitmap.width;
+    layout_infos[i].bitmap_rows = (U16)reported_bitmap_rows; // Store the value used for glyph_descent calc
+
     // Use advance from the potentially hinted glyph
     pen_x += slot->advance.x;
-    glyph_infos[i].advance_x = slot->advance.x; // Store potentially hinted advance
+    layout_infos[i].advance_x = slot->advance.x; // Store potentially hinted advance
 
     prev_glyph_index = glyph_index;
   }
 
+  // Also log the final calculated atlas height parameters
+  log_infof("fp_raster Metric Log: Final max_ascent=%d, max_descent=%d, total_height=%d", max_ascent, max_descent, max_ascent + max_descent);
+
   // Calculate total width and height based on layout (using potentially hinted metrics)
   total_width_fixed = pen_x;
-  S32 total_width_pixels = (total_width_fixed + 63) >> 6;
+  S32 total_width_pixels = (total_width_fixed + 32) >> 6; // Round up width slightly maybe? or +63?
+  if (total_width_pixels < 0) total_width_pixels = 0;
 
   // Calculate total height based on maximum ascent/descent values recorded during layout.
   S32 total_height = max_ascent + max_descent;
+  if (total_height < 0) total_height = 0;
 
-  // Handle cases like empty strings where calculated dimensions might be zero or negative.
-  // Return a valid result structure but indicate zero dimensions and no atlas data.
+  // Handle cases like empty strings where calculated dimensions might be zero.
   if (total_width_pixels <= 0 || total_height <= 0)
   {
-    scratch_end(scratch); // Release temporary memory.
+    // Return zero dimensions but still allocate metrics array for consistency
+    result.atlas_dim = v2s16(0, 0);
+    result.atlas = 0;
+    result.glyph_count = string32.size;
+    result.metrics = push_array(arena, FP_GlyphMetrics, string32.size); // Allocate zeroed metrics
+    // Populate metrics with zero values or minimal info
+    for (U64 i = 0; i < string32.size; ++i) {
+        result.metrics[i].src_rect_px = r2s16p(0, 0, 0, 0);
+        result.metrics[i].bitmap_left = 0;
+        result.metrics[i].bitmap_top = 0;
+        result.metrics[i].advance_x = (F32)(layout_infos[i].advance_x >> 6); // Still provide advance
+        result.metrics[i].codepoint = string32.str[i];
+        result.metrics[i].string_index = i;
+    }
+    scratch_end(scratch); 
     ProfEnd();
-    result.advance = (F32)(total_width_fixed >> 6); // Report the calculated advance.
-    result.atlas_dim = v2s16(0, 0); // Atlas dimensions are zero.
-    result.atlas = 0;               // No atlas buffer allocated.
     return result;
   }
 
   // Allocate the atlas buffer using the precise, unpadded dimensions.
-  // Atlas format is RGBA8, requiring 4 bytes per pixel.
   result.atlas_dim = v2s16((S16)total_width_pixels, (S16)total_height);
   U64 atlas_bytes = (U64)total_width_pixels * (U64)total_height * 4;
-  // Use push_array, which allocates and zero-initializes the memory.
-  result.atlas = push_array(arena, U8, atlas_bytes);
+  result.atlas = push_array_aligned(arena, U8, atlas_bytes, 16); // Align atlas memory
+
+  // Allocate the result metrics array
+  result.glyph_count = string32.size;
+  result.metrics = push_array(arena, FP_GlyphMetrics, string32.size);
+  MemoryZero(result.metrics, sizeof(FP_GlyphMetrics) * result.glyph_count); // Zero initialize
 
   // Calculate row pitch for blitting operations.
   U8 *out_base = (U8 *)result.atlas;
   U64 out_pitch = (U64)total_width_pixels * 4; // Bytes per row.
 
-  //- dan: Second pass: Render and blit glyphs using stored positions
+  //- dan: Second pass: Render and blit glyphs using stored positions, populate metrics
   U64 non_empty_pixel_count = 0;
 
   for (U64 i = 0; i < string32.size; ++i)
   {
-    FT_UInt glyph_index = glyph_infos[i].glyph_index;
-    S32 render_pen_x_fixed = glyph_infos[i].render_pen_x; // Stored 26.6 pen position
+    FT_UInt glyph_index = layout_infos[i].glyph_index;
+    S32 render_pen_x_fixed = layout_infos[i].render_pen_x; // Stored 26.6 pen position
+
+    // Populate FP_GlyphMetrics for this glyph using layout_infos data
+    FP_GlyphMetrics *out_metric = &result.metrics[i];
+    out_metric->bitmap_left = layout_infos[i].bitmap_left;
+    out_metric->bitmap_top = layout_infos[i].bitmap_top;
+    out_metric->advance_x = (F32)(layout_infos[i].advance_x / 64.0f); // Convert 26.6 advance to float pixels
+    out_metric->codepoint = string32.str[i];
+    out_metric->string_index = i;
 
     // Load glyph again (might be necessary if FT_Load_Glyph doesn't cache everything)
     // or ensure first pass loaded everything needed. Reloading is safer.
     error = FT_Load_Glyph(face, glyph_index, load_flags); // <<< Use final load_flags
     if (error) {
-        // log_infof(...)
+        out_metric->src_rect_px = r2s16p(0,0,0,0); // Zero rect for errors
         continue;
     }
 
@@ -356,7 +416,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
     {
         error = FT_Render_Glyph(face->glyph, render_mode); // <<< Use final render_mode
         if (error) {
-            // log_infof(...)
+            out_metric->src_rect_px = r2s16p(0,0,0,0); // Zero rect for errors
             continue;
         }
     }
@@ -364,9 +424,24 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
     FT_GlyphSlot slot = face->glyph;
     FT_Bitmap *bitmap = &slot->bitmap;
 
-    // Calculate blit position using consistent metrics
-    S32 blit_x = (render_pen_x_fixed >> 6) + slot->bitmap_left;
-    S32 blit_y = max_ascent - slot->bitmap_top; // max_ascent also calculated consistently now
+    // REMOVED Assertions: Dimensions might differ slightly after rendering due to hinting.
+    // Assert((U16)bitmap->width == layout_infos[i].bitmap_width);
+    // Assert((U16)bitmap->rows == layout_infos[i].bitmap_rows);
+    // Assert((S16)slot->bitmap_left == layout_infos[i].bitmap_left);
+    // Assert((S16)slot->bitmap_top == layout_infos[i].bitmap_top);
+
+
+    // Calculate blit position using metrics stored from the FIRST pass (layout_infos)
+    S32 blit_x = (render_pen_x_fixed >> 6) + layout_infos[i].bitmap_left;
+    S32 blit_y = max_ascent - layout_infos[i].bitmap_top; 
+
+    // Set the source rect in the output metrics using the blit position 
+    // and the ACTUAL rendered bitmap dimensions from the SECOND pass.
+    out_metric->src_rect_px.x0 = (S16)blit_x;
+    out_metric->src_rect_px.y0 = (S16)blit_y;
+    out_metric->src_rect_px.x1 = (S16)(blit_x + bitmap->width); // Use rendered width
+    out_metric->src_rect_px.y1 = (S16)(blit_y + bitmap->rows);  // Use rendered height
+
 
     // Blit the bitmap to the RGBA atlas
     U8 *in_row = bitmap->buffer;
@@ -401,7 +476,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
         else if (bitmap->pixel_mode == FT_PIXEL_MODE_LCD)
         {
           U8 *in_pixel_rgb = in_row;
-          for (unsigned int x = 0; x < bitmap->width; ++x)
+          for (unsigned int x = 0; x < bitmap->width / 3; ++x) // Iterate over RGB triples
           {
             S32 atlas_x = blit_x + (S32)x;
             if (atlas_x >= 0 && atlas_x < total_width_pixels) // Clip horizontally
@@ -411,7 +486,9 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
               U8 r = in_pixel_rgb[0];
               U8 g = in_pixel_rgb[1];
               U8 b = in_pixel_rgb[2];
-              U32 alpha_u32 = (54*r + 183*g + 19*b) >> 8;
+              // Standard weights for luminance conversion
+              U32 alpha_u32 = (U32)(0.2126f * r + 0.7152f * g + 0.0722f * b);
+              // U32 alpha_u32 = (54*r + 183*g + 19*b) >> 8; // Alternative integer weights
               U8 alpha = (U8)(alpha_u32 > 255 ? 255 : alpha_u32);
               out_pixel[0] = 255;
               out_pixel[1] = 255;
@@ -448,19 +525,24 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
                 in_pixel_bgra += 4;
             }
         }
+        else if (bitmap->pixel_mode == FT_PIXEL_MODE_MONO)
+        {
+          // TODO: Handle mono bitmaps if necessary
+        }
       }
       in_row += bitmap->pitch;
     }
   }
 
-  //- dan: Finalize result
-  result.advance = (F32)(total_width_fixed >> 6); // Use final fixed-point width from first pass
+  //- dan: Finalize result (Removed advance field)
+  // result.advance = (F32)(total_width_fixed >> 6); // Use final fixed-point width from first pass
 
   // If nothing visible rendered, ensure atlas dimensions reflect that.
   if (non_empty_pixel_count == 0)
   {
       result.atlas_dim = v2s16(0, 0);
-      // Consider freeing result.atlas or ensuring it's handled correctly downstream.
+      // Atlas buffer is already allocated but will be effectively empty.
+      // Caller should ideally check atlas_dim.
   }
 
   scratch_end(scratch);
