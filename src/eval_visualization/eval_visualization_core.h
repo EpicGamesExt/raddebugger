@@ -247,6 +247,7 @@ struct EV_StringParams
   EV_StringFlags flags;
   U32 radix;
   U32 min_digits;
+  U8 digit_group_separator;
 };
 
 typedef struct EV_StringIterTask EV_StringIterTask;
@@ -256,6 +257,8 @@ struct EV_StringIterTask
   EV_StringParams params;
   E_Eval eval;
   U64 idx;
+  S32 depth;
+  void *user_data;
 };
 
 typedef struct EV_StringIter EV_StringIter;

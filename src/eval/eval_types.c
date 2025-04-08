@@ -1625,7 +1625,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
-      str8_list_push(arena, out, str8_lit(" "));
     }break;
     
     case E_TypeKind_Bitfield:
@@ -1663,7 +1662,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
-      str8_list_push(arena, out, str8_lit(" "));
     }break;
     
     case E_TypeKind_IncompleteStruct: keyword = str8_lit("struct"); goto fwd_udt;
@@ -1676,7 +1674,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       str8_list_push(arena, out, keyword);
       str8_list_push(arena, out, str8_lit(" "));
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
-      str8_list_push(arena, out, str8_lit(" "));
     }break;
     
     case E_TypeKind_Array:
@@ -1725,6 +1722,10 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
+      if(!e_type_kind_is_pointer_or_ref(e_type_kind_from_key(direct)))
+      {
+        str8_list_push(arena, out, str8_lit(" "));
+      }
       str8_list_push(arena, out, str8_lit("*"));
       E_Type *type = e_type_from_key__cached(key);
       if(type->count != 1)

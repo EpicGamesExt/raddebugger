@@ -609,9 +609,8 @@ ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChai
       
       // rjf: get expr's lookup rule
       // TODO(rjf): @eval E_LookupRuleExprPair lookup_rule_and_tag = &e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      E_LookupRuleExprPair lookup_rule_and_tag = e_lookup_rule_expr_pair_from_expr_irtree(t->expr, &expr_irtree);
-      E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
-      E_Expr *lookup_rule_tag = lookup_rule_and_tag.expr;
+      E_LookupRule *lookup_rule = e_lookup_rule_from_type_key(expr_irtree.type_key);
+      E_Expr *lookup_rule_tag = &e_expr_nil;
       
       // rjf: get top-level lookup/expansion info
       E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, lookup_rule_tag, filter);
@@ -1609,6 +1608,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
     
     //- rjf: unpack task
     U64 task_idx = it->top_task->idx;
+    S32 depth = it->top_task->depth;
     EV_StringParams *params = &it->top_task->params;
     E_Eval eval = it->top_task->eval;
     E_TypeKey type_key = eval.irtree.type_key;
@@ -1623,14 +1623,18 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
     //- rjf: non-type evaluations
     else switch(type_kind)
     {
+      //////////////////////////
       //- rjf: default - leaf cases
+      //
       default:
       {
         E_Eval value_eval = e_value_eval_from_eval(eval);
         *out_string = ev_string_from_simple_typed_eval(arena, params, value_eval);
       }break;
       
+      //////////////////////////
       //- rjf: lenses
+      //
       case E_TypeKind_Lens:
       switch(task_idx)
       {
@@ -1670,22 +1674,194 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         }break;
       }break;
       
+      //////////////////////////
       //- rjf: pointers
+      //
       case E_TypeKind_Function:
       case E_TypeKind_Ptr:
       case E_TypeKind_LRef:
       case E_TypeKind_RRef:
       {
-        
+        typedef struct EV_StringPtrData EV_StringPtrData;
+        struct EV_StringPtrData
+        {
+          E_Eval value_eval;
+          E_Type *type;
+          E_Type *direct_type;
+          B32 ptee_has_content;
+          B32 ptee_has_string;
+          B32 did_prefix_content;
+        };
+        EV_StringPtrData *ptr_data = it->top_task->user_data;
+        if(ptr_data == 0)
+        {
+          ptr_data = it->top_task->user_data = push_array(arena, EV_StringPtrData, 1);
+          ptr_data->value_eval = e_value_eval_from_eval(eval);
+          ptr_data->type = e_type_from_key__cached(type_key);
+          ptr_data->direct_type = e_type_from_key__cached(e_type_direct_from_key(type_key));
+          ptr_data->ptee_has_content = (ptr_data->direct_type->kind != E_TypeKind_Null && ptr_data->direct_type->kind != E_TypeKind_Void);
+          ptr_data->ptee_has_string  = ((E_TypeKind_Char8 <= ptr_data->direct_type->kind && ptr_data->direct_type->kind <= E_TypeKind_UChar32) ||
+                                        ptr_data->direct_type->kind == E_TypeKind_S8 ||
+                                        ptr_data->direct_type->kind == E_TypeKind_U8);
+        }
+        switch(task_idx)
+        {
+          default:{}break;
+          
+          //- rjf: step 0 -> try "prefix content", which we want to print before the pointer value,
+          // like strings or symbol names
+          case 0:
+          {
+            // rjf: try strings
+            if(!ptr_data->did_prefix_content && ptr_data->ptee_has_string && !(params->flags & EV_StringFlag_DisableStrings))
+            {
+              Temp scratch = scratch_begin(&arena, 1);
+              
+              // rjf: read string data
+              U64 string_memory_addr = ptr_data->value_eval.value.u64;
+              U64 string_buffer_size = 256;
+              U8 *string_buffer = push_array(scratch.arena, U8, string_buffer_size);
+              for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
+              {
+                B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+                if(read_good)
+                {
+                  break;
+                }
+              }
+              string_buffer[string_buffer_size-1] = 0;
+              
+              // rjf: check element size - if non-U8, assume UTF-16 or UTF-32 based on type, and convert
+              U64 element_size = ptr_data->direct_type->byte_size;
+              String8 string = {0};
+              switch(element_size)
+              {
+                default:{string = str8_cstring((char *)string_buffer);}break;
+                case 2: {string = str8_from_16(scratch.arena, str16_cstring((U16 *)string_buffer));}break;
+                case 4: {string = str8_from_32(scratch.arena, str32_cstring((U32 *)string_buffer));}break;
+              }
+              
+              // rjf: escape and quote
+              B32 string__is_escaped_and_quoted = (!(params->flags & EV_StringFlag_DisableAddresses) || depth > 0);
+              String8 string__escaped_and_quoted = string;
+              if(string__is_escaped_and_quoted)
+              {
+                String8 string_escaped = ev_escaped_from_raw_string(scratch.arena, string);
+                string__escaped_and_quoted = push_str8f(scratch.arena, "\"%S\"", string_escaped);
+              }
+              
+              // rjf: report
+              *out_string = push_str8_copy(arena, string__escaped_and_quoted);
+              ptr_data->did_prefix_content = 1;
+              
+              scratch_end(scratch);
+            }
+            
+            // rjf: try symbols
+            if(!ptr_data->did_prefix_content)
+            {
+              U64 vaddr = ptr_data->value_eval.value.u64;
+              E_Module *module = &e_module_nil;
+              U32 module_idx = 0;
+              for EachIndex(idx, e_type_state->ctx->modules_count)
+              {
+                if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vaddr))
+                {
+                  module = &e_type_state->ctx->modules[idx];
+                  module_idx = (U32)idx;
+                  break;
+                }
+              }
+              if(module != &e_module_nil)
+              {
+                U64 voff = vaddr - module->vaddr_range.min;
+                RDI_Procedure *procedure = rdi_procedure_from_voff(module->rdi, voff);
+                String8 procedure_name = {0};
+                procedure_name.str = rdi_name_from_procedure(module->rdi, procedure, &procedure_name.size);
+                if(procedure_name.size != 0)
+                {
+                  // NOTE(rjf): read-only -> generate non-parseable things, like type-info
+                  if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+                  {
+                    // TODO(rjf)
+                    *out_string = procedure_name;
+                  }
+                  
+                  // NOTE(rjf): non-read-only -> only generate thing which can be parsed, so just procedure name
+                  else
+                  {
+                    *out_string = procedure_name;
+                  }
+                  
+                  ptr_data->did_prefix_content = 1;
+                }
+              }
+            }
+            
+            need_pop = 0;
+          }break;
+          
+          //- rjf: step 1 -> do pointer value + descend if needed
+          case 1:
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            String8 ptr_value_string = str8_from_u64(scratch.arena, ptr_data->value_eval.value.u64, 16, 0, 0);
+            //
+            // NOTE(rjf): currently, we are not using the string-generation radix parameter when
+            // generating a pointer value - it is weird to want to change pointer value visualization
+            // to anything other than hex, so it is just not supported right now...
+            //
+            
+            // rjf: [read only] if we did prefix content, do a parenthesized pointer value
+            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->did_prefix_content)
+            {
+              *out_string = push_str8f(arena, " (%S)", ptr_value_string);
+            }
+            
+            // rjf: [read only] if we did *not* do any prefix content, do "<pointer value> -> " then descend
+            else if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && !ptr_data->did_prefix_content && ptr_data->ptee_has_content)
+            {
+              *out_string = push_str8f(arena, "%S -> ", ptr_value_string);
+              
+              // rjf: single-length pointers -> just gen new task for deref'd expr
+              if(ptr_data->type->count == 1)
+              {
+                E_Expr *deref_expr = e_expr_irext_deref(arena, eval.exprs.first, &eval.irtree);
+                E_Eval deref_eval = e_eval_from_expr(arena, deref_expr);
+                need_new_task = 1;
+                new_task.params = *params;
+                new_task.eval = deref_eval;
+              }
+              
+              // rjf: multi-length pointers -> expand like an array (try to dedup with array case)
+              else
+              {
+                // TODO(rjf)
+              }
+            }
+            
+            // rjf: [writeable, catchall] if we did *not* do any prefix content, do "<pointer value>"
+            else
+            {
+              *out_string = push_str8_copy(arena, ptr_value_string);
+            }
+            
+            scratch_end(scratch);
+          }break;
+        }
       }break;
       
+      //////////////////////////
       //- rjf: arrays
+      //
       case E_TypeKind_Array:
       {
-        
+        // TODO(rjf)
       }break;
       
+      //////////////////////////
       //- rjf: non-string-arrays/structs/sets
+      //
       case E_TypeKind_Struct:
       case E_TypeKind_Union:
       case E_TypeKind_Class:
@@ -1719,6 +1895,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       new_t = push_array(arena, EV_StringIterTask, 1);
     }
     MemoryCopyStruct(new_t, &new_task);
+    new_t->depth = it->top_task->depth+1;
     SLLStackPush(it->top_task, new_t);
     new_t->idx = 0;
   }

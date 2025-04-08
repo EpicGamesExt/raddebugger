@@ -492,10 +492,10 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
             sep_idx += 1;
           }
           str8_list_push(arena, out, seps[sep_idx]);
-          if(sep_idx == 0)
-          {
-            sep_idx += 1;
-          }
+        }
+        if(sep_idx == 0)
+        {
+          sep_idx += 1;
         }
         if(child == &e_expr_nil)
         {
