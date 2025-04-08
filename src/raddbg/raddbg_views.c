@@ -1406,7 +1406,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           case E_ExprKind_MemberAccess:
           {
             Temp scratch = scratch_begin(&arena, 1);
-            E_Member member = result.eval.irtree.member;
+            E_Member member = e_type_member_from_key_name__cached(result.eval.irtree.type_key, notable_expr->last->string);
             String8 member_name = member.name;
             if(member_name.size == 0)
             {

@@ -717,7 +717,6 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
         // rjf: fill
         result.irtree_and_type.root     = new_tree;
         result.irtree_and_type.type_key = r_type;
-        result.irtree_and_type.member   = member;
         result.irtree_and_type.mode     = mode;
       }
     }break;
@@ -1195,7 +1194,7 @@ E_IRGEN_FUNCTION_DEF(bswap)
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
   E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
   e_irnode_push_child(root, irtree.root);
-  E_IRTreeAndType result = {root, irtree.type_key, irtree.member, irtree.mode, irtree.msgs};
+  E_IRTreeAndType result = {root, irtree.type_key, irtree.mode, irtree.msgs};
   return result;
 }
 
@@ -1793,6 +1792,246 @@ e_expr_unpoison(E_Expr *expr)
   }
 }
 
+//- rjf: default type access hook
+
+E_TYPE_ACCESS_FUNCTION_DEF(default)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  switch(expr->kind)
+  {
+    default:{}break;
+    
+    //- rjf: member accessing (. operator)
+    case E_ExprKind_MemberAccess:
+    {
+      // rjf: unpack left/right expressions
+      E_Expr *exprl = expr->first;
+      E_Expr *exprr = exprl->next;
+      E_IRTreeAndType l = *lhs_irtree;
+      E_TypeKey l_restype = e_type_unwrap(l.type_key);
+      E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
+      E_TypeKey check_type_key = l_restype;
+      E_TypeKind check_type_kind = l_restype_kind;
+      if(l_restype_kind == E_TypeKind_Ptr ||
+         l_restype_kind == E_TypeKind_LRef ||
+         l_restype_kind == E_TypeKind_RRef)
+      {
+        check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
+        check_type_kind = e_type_kind_from_key(check_type_key);
+      }
+      e_msg_list_concat_in_place(&result.msgs, &l.msgs);
+      
+      // rjf: look up member
+      E_Member member = zero_struct;
+      B32 r_found = 0;
+      E_TypeKey r_type = zero_struct;
+      U64 r_value = 0;
+      String8 r_query_name = {0};
+      B32 r_is_constant_value = 0;
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_Member match = e_type_member_from_key_name__cached(check_type_key, exprr->string);
+        member = match;
+        if(match.kind != E_MemberKind_Null)
+        {
+          r_found = 1;
+          r_type = match.type_key;
+          r_value = match.off;
+        }
+        if(match.kind == E_MemberKind_Query)
+        {
+          r_query_name = exprr->string;
+        }
+        if(match.kind == E_MemberKind_Null)
+        {
+          E_Type *type = e_type_from_key__cached(check_type_key);
+          if(type->enum_vals != 0)
+          {
+            String8 lookup_string = exprr->string;
+            String8 lookup_string_append_1 = push_str8f(scratch.arena, "%S_%S", type->name, lookup_string);
+            String8 lookup_string_append_2 = push_str8f(scratch.arena, "%S%S", type->name, lookup_string);
+            E_EnumVal *enum_val_match = 0;
+            for EachIndex(idx, type->count)
+            {
+              if(str8_match(type->enum_vals[idx].name, lookup_string, 0) ||
+                 str8_match(type->enum_vals[idx].name, lookup_string_append_1, 0) ||
+                 str8_match(type->enum_vals[idx].name, lookup_string_append_2, 0))
+              {
+                enum_val_match = &type->enum_vals[idx];
+                break;
+              }
+            }
+            if(enum_val_match != 0)
+            {
+              r_found = 1;
+              r_type = check_type_key;
+              r_value = enum_val_match->val;
+              r_is_constant_value = 1;
+            }
+          }
+        }
+        scratch_end(scratch);
+      }
+      
+      // rjf: bad conditions? -> error if applicable, exit
+      if(e_type_key_match(e_type_key_zero(), check_type_key))
+      {
+        break;
+      }
+      else if(exprr->kind != E_ExprKind_LeafIdentifier)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Expected member name.");
+        break;
+      }
+      else if(!r_found)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
+        break;
+      }
+      else if(check_type_kind != E_TypeKind_Struct &&
+              check_type_kind != E_TypeKind_Class &&
+              check_type_kind != E_TypeKind_Union &&
+              check_type_kind != E_TypeKind_Enum)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
+        break;
+      }
+      
+      // rjf: generate
+      {
+        // rjf: build tree
+        E_IRNode *new_tree = l.root;
+        E_TypeKey new_tree_type = r_type;
+        E_Mode mode = l.mode;
+        if(l_restype_kind == E_TypeKind_Ptr ||
+           l_restype_kind == E_TypeKind_LRef ||
+           l_restype_kind == E_TypeKind_RRef)
+        {
+          new_tree = e_irtree_resolve_to_value(arena, l.mode, new_tree, l_restype);
+          mode = E_Mode_Offset;
+        }
+        if(r_value != 0 && !r_is_constant_value)
+        {
+          E_IRNode *const_tree = e_irtree_const_u(arena, r_value);
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
+        }
+        else if(r_is_constant_value)
+        {
+          new_tree = e_irtree_const_u(arena, r_value);
+          mode = E_Mode_Value;
+        }
+        
+        // rjf: fill
+        result.root     = new_tree;
+        result.type_key = r_type;
+        result.mode     = mode;
+      }
+    }break;
+    
+    //- rjf: indexing ([] operator)
+    case E_ExprKind_ArrayIndex:
+    {
+      // rjf: unpack left/right expressions
+      E_Expr *exprl = expr->first;
+      E_Expr *exprr = exprl->next;
+      E_IRTreeAndType l = *lhs_irtree;
+      E_IRTreeAndType r = e_irtree_and_type_from_expr(arena, exprr);
+      E_TypeKey l_restype = e_type_unwrap(l.type_key);
+      E_TypeKey r_restype = e_type_unwrap(r.type_key);
+      E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
+      E_TypeKind r_restype_kind = e_type_kind_from_key(r_restype);
+      if(e_type_kind_is_basic_or_enum(r_restype_kind))
+      {
+        r_restype = e_type_unwrap_enum(r_restype);
+        r_restype_kind = e_type_kind_from_key(r_restype);
+      }
+      E_TypeKey direct_type = e_type_unwrap(l_restype);
+      direct_type = e_type_direct_from_key(direct_type);
+      direct_type = e_type_unwrap(direct_type);
+      U64 direct_type_size = e_type_byte_size_from_key(direct_type);
+      e_msg_list_concat_in_place(&result.msgs, &l.msgs);
+      e_msg_list_concat_in_place(&result.msgs, &r.msgs);
+      
+      // rjf: bad conditions? -> error if applicable, exit
+      if(r.root->op == 0)
+      {
+        break;
+      }
+      else if(l_restype_kind != E_TypeKind_Ptr && l_restype_kind != E_TypeKind_Array)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot index into this type.");
+        break;
+      }
+      else if(!e_type_kind_is_integer(r_restype_kind))
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index with this type.");
+        break;
+      }
+      else if(l_restype_kind == E_TypeKind_Ptr && direct_type_size == 0)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into pointers of zero-sized types.");
+        break;
+      }
+      else if(l_restype_kind == E_TypeKind_Array && direct_type_size == 0)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into arrays of zero-sized types.");
+        break;
+      }
+      
+      // rjf: generate
+      E_IRNode *new_tree = &e_irnode_nil;
+      E_Mode mode = l.mode;
+      {
+        // rjf: reading from an array value -> read from stack value
+        if(l.mode == E_Mode_Value && l_restype_kind == E_TypeKind_Array)
+        {
+          // rjf: ops to compute the offset
+          E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
+          if(direct_type_size > 1)
+          {
+            E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+          }
+          
+          // rjf: ops to push stack value, push offset, + read from stack value
+          new_tree = e_push_irnode(arena, RDI_EvalOp_ValueRead);
+          new_tree->value.u64 = direct_type_size;
+          e_irnode_push_child(new_tree, offset_tree);
+          e_irnode_push_child(new_tree, l.root);
+        }
+        
+        // rjf: all other cases -> read from base offset
+        else
+        {
+          // rjf: ops to compute the offset
+          E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
+          if(direct_type_size > 1)
+          {
+            E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+          }
+          
+          // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
+          E_IRNode *base_tree = l.root;
+          if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
+          {
+            base_tree = e_irtree_resolve_to_value(arena, l.mode, base_tree, l_restype);
+          }
+          
+          // rjf: ops to compute the final address
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
+        }
+      }
+      
+      // rjf: fill
+      result.root     = new_tree;
+      result.type_key = direct_type;
+      result.mode     = mode;
+    }break;
+  }
+  return result;
+}
+
 //- rjf: top-level irtree/type extraction
 
 E_IRGEN_FUNCTION_DEF(default)
@@ -1807,18 +2046,20 @@ E_IRGEN_FUNCTION_DEF(default)
     case E_ExprKind_MemberAccess:
     case E_ExprKind_ArrayIndex:
     {
-      Temp scratch = scratch_begin(&arena, 1);
+      // rjf: unpack left-hand-size
       E_Expr *lhs = expr->first;
-      E_Expr *rhs = lhs->next;
-      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-      E_LookupRule *lhs_lookup_rule = e_lookup_rule_from_type_key(lhs_irtree.type_key);
-      ProfScope("lookup via rule '%.*s'", str8_varg(lhs_lookup_rule->name))
+      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+      
+      // rjf: pick access hook based on type
+      E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
+      E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+      if(lhs_access == 0)
       {
-        E_LookupInfo lookup_info = lhs_lookup_rule->info(arena, &lhs_irtree, &e_expr_nil, str8_zero());
-        E_LookupAccess lookup_access = lhs_lookup_rule->access(arena, expr->kind, lhs, rhs, &e_expr_nil, lookup_info.user_data);
-        result = lookup_access.irtree_and_type;
+        lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
       }
-      scratch_end(scratch);
+      
+      // rjf: call into hook to do access
+      result = lhs_access(arena, expr, &lhs_irtree);
     }break;
     
     //- rjf: dereference

@@ -625,14 +625,19 @@ e_type_from_key(Arena *arena, E_TypeKey key)
           if(e_type_key_match(node->key, key))
           {
             type = push_array(arena, E_Type, 1);
-            type->kind             = e_type_kind_from_key(node->key);
-            type->flags            = node->params.flags;
-            type->name             = push_str8_copy(arena, node->params.name);
-            type->direct_type_key  = node->params.direct_key;
-            type->count            = node->params.count;
-            type->depth            = node->params.depth;
-            type->arch             = node->params.arch;
-            type->byte_size        = node->byte_size;
+            type->kind               = e_type_kind_from_key(node->key);
+            type->flags              = node->params.flags;
+            type->name               = push_str8_copy(arena, node->params.name);
+            type->direct_type_key    = node->params.direct_key;
+            type->count              = node->params.count;
+            type->depth              = node->params.depth;
+            type->arch               = node->params.arch;
+            type->access             = node->params.access;
+            type->expand_info        = node->params.expand_info;
+            type->expand_range       = node->params.expand_range;
+            type->expand_id_from_num = node->params.expand_id_from_num;
+            type->expand_num_from_id = node->params.expand_num_from_id;
+            type->byte_size          = node->byte_size;
             switch(type->kind)
             {
               default:{}break;

@@ -249,6 +249,30 @@ struct E_ExprList
 };
 
 ////////////////////////////////
+//~ rjf: IR Tree Types
+
+typedef struct E_IRNode E_IRNode;
+struct E_IRNode
+{
+  E_IRNode *first;
+  E_IRNode *last;
+  E_IRNode *next;
+  RDI_EvalOp op;
+  E_Space space;
+  String8 string;
+  E_Value value;
+};
+
+typedef struct E_IRTreeAndType E_IRTreeAndType;
+struct E_IRTreeAndType
+{
+  E_IRNode *root;
+  E_TypeKey type_key;
+  E_Mode mode;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
 //~ rjf: Full Extracted Type Information Types
 
 typedef enum E_MemberKind
@@ -326,6 +350,38 @@ struct E_EnumValArray
   U64 count;
 };
 
+typedef struct E_TypeExpandInfo E_TypeExpandInfo;
+struct E_TypeExpandInfo
+{
+  void *user_data;
+  U64 expr_count;
+};
+
+#define E_TYPE_ACCESS_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_IRTreeAndType *lhs_irtree)
+#define E_TYPE_ACCESS_FUNCTION_NAME(name) e_type_access__##name
+#define E_TYPE_ACCESS_FUNCTION_DEF(name) internal E_TYPE_ACCESS_FUNCTION_SIG(E_TYPE_ACCESS_FUNCTION_NAME(name))
+typedef E_TYPE_ACCESS_FUNCTION_SIG(E_TypeAccessFunctionType);
+
+#define E_TYPE_EXPAND_INFO_FUNCTION_SIG(name) E_TypeExpandInfo name(Arena *arena, E_IRTreeAndType *irtree, String8 filter)
+#define E_TYPE_EXPAND_INFO_FUNCTION_NAME(name) e_type_expand_info__##name
+#define E_TYPE_EXPAND_INFO_FUNCTION_DEF(name) internal E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TYPE_EXPAND_INFO_FUNCTION_NAME(name))
+typedef E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TypeExpandInfoFunctionType);
+
+#define E_TYPE_EXPAND_RANGE_FUNCTION_SIG(name) void name(Arena *arena, void *user_data, E_Expr *expr, String8 filter, Rng1U64 idx_range, E_Expr **exprs_out, String8 *exprs_strings_out)
+#define E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name) e_type_expand_range__##name
+#define E_TYPE_EXPAND_RANGE_FUNCTION_DEF(name) internal E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name))
+typedef E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TypeExpandRangeFunctionType);
+
+#define E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_SIG(name) U64 name(void *user_data, U64 num)
+#define E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(name) e_type_expand_id_from_num__##name
+#define E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(name) internal E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_SIG(E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(name))
+typedef E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_SIG(E_TypeExpandIDFromNumFunctionType);
+
+#define E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_SIG(name) U64 name(void *user_data, U64 id)
+#define E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name) e_type_expand_num_from_id__##name
+#define E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(name) internal E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_SIG(E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name))
+typedef E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_SIG(E_TypeExpandNumFromIDFunctionType);
+
 typedef struct E_Type E_Type;
 struct E_Type
 {
@@ -343,6 +399,11 @@ struct E_Type
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
+  E_TypeAccessFunctionType *access;
+  E_TypeExpandInfoFunctionType *expand_info;
+  E_TypeExpandRangeFunctionType *expand_range;
+  E_TypeExpandIDFromNumFunctionType *expand_id_from_num;
+  E_TypeExpandNumFromIDFunctionType *expand_num_from_id;
 };
 
 ////////////////////////////////
@@ -355,31 +416,6 @@ struct E_Module
   Rng1U64 vaddr_range;
   Arch arch;
   E_Space space;
-};
-
-////////////////////////////////
-//~ rjf: IR Tree Types
-
-typedef struct E_IRNode E_IRNode;
-struct E_IRNode
-{
-  E_IRNode *first;
-  E_IRNode *last;
-  E_IRNode *next;
-  RDI_EvalOp op;
-  E_Space space;
-  String8 string;
-  E_Value value;
-};
-
-typedef struct E_IRTreeAndType E_IRTreeAndType;
-struct E_IRTreeAndType
-{
-  E_IRNode *root;
-  E_TypeKey type_key;
-  E_Member member;
-  E_Mode mode;
-  E_MsgList msgs;
 };
 
 ////////////////////////////////

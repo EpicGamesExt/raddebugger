@@ -47,6 +47,11 @@ struct E_ConsTypeParams
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
+  E_TypeAccessFunctionType *access;
+  E_TypeExpandInfoFunctionType *expand_info;
+  E_TypeExpandRangeFunctionType *expand_range;
+  E_TypeExpandIDFromNumFunctionType *expand_id_from_num;
+  E_TypeExpandNumFromIDFunctionType *expand_num_from_id;
 };
 
 typedef struct E_ConsTypeNode E_ConsTypeNode;
