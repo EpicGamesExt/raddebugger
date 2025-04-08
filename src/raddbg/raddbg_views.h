@@ -88,7 +88,6 @@ struct RD_WatchCellList
 typedef struct RD_WatchRowInfo RD_WatchRowInfo;
 struct RD_WatchRowInfo
 {
-  E_Eval eval;
   CTRL_Entity *module;
   B32 can_expand;
   B32 expr_is_editable;

@@ -134,8 +134,10 @@ struct E_IRCtx
   E_String2ExprMap *macro_map;
   
   // rjf: hook maps
+#if 0 // TODO(rjf): @eval
   E_LookupRuleMap *lookup_rule_map;
   E_IRGenRuleMap *irgen_rule_map;
+#endif
   E_AutoHookMap *auto_hook_map;
 };
 
@@ -164,6 +166,7 @@ struct E_IRState
 ////////////////////////////////
 //~ rjf: Globals
 
+#if 0 // TODO(rjf): @eval
 local_persist read_only E_LookupRule e_lookup_rule__nil =
 {
   str8_lit_comp("nil"),
@@ -187,6 +190,8 @@ local_persist read_only E_IRGenRule e_irgen_rule__default =
   str8_lit_comp("default"),
   E_IRGEN_FUNCTION_NAME(default),
 };
+#endif
+
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 thread_static E_IRState *e_ir_state = 0;
 
@@ -204,20 +209,24 @@ internal void e_select_ir_ctx(E_IRCtx *ctx);
 ////////////////////////////////
 //~ rjf: Lookups
 
+#if 0 // TODO(rjf): @eval
 internal E_LookupRuleMap e_lookup_rule_map_make(Arena *arena, U64 slots_count);
 internal void e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule);
 #define e_lookup_rule_map_insert_new(arena, map, name_, ...) e_lookup_rule_map_insert((arena), (map), &(E_LookupRule){.name = (name_), __VA_ARGS__})
 
 internal E_LookupRule *e_lookup_rule_from_string(String8 string);
+#endif
 
 ////////////////////////////////
 //~ rjf: IR Gen Rules
 
+#if 0 // TODO(rjf): @eval
 internal E_IRGenRuleMap e_irgen_rule_map_make(Arena *arena, U64 slots_count);
 internal void e_irgen_rule_map_insert(Arena *arena, E_IRGenRuleMap *map, E_IRGenRule *rule);
 #define e_irgen_rule_map_insert_new(arena, map, name_, ...) e_irgen_rule_map_insert((arena), (map), &(E_IRGenRule){.name = (name_), __VA_ARGS__})
 
 internal E_IRGenRule *e_irgen_rule_from_string(String8 string);
+#endif
 
 ////////////////////////////////
 //~ rjf: Auto Hooks
@@ -288,7 +297,9 @@ internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *r
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
 
+#if 0 // TODO(rjf): @eval
 internal E_LookupRule *e_lookup_rule_from_type_key(E_TypeKey type_key);
+#endif
 
 #if 0 // TODO(rjf): @eval
 internal E_LookupRuleExprPair e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);

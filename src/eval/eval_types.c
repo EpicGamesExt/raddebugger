@@ -396,6 +396,11 @@ e_type_key_cons_(E_ConsTypeParams *params)
     node->key = key;
     MemoryCopyStruct(&node->params, params);
     node->params.name = push_str8_copy(e_type_state->arena, params->name);
+    if(node->params.expand.info != 0)
+    {
+      if(node->params.expand.id_from_num == 0) {node->params.expand.id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);}
+      if(node->params.expand.num_from_id == 0) {node->params.expand.num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity);}
+    }
     if(params->members != 0)
     {
       node->params.members = push_array(e_type_state->arena, E_Member, params->count);
@@ -632,11 +637,9 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->count              = node->params.count;
             type->depth              = node->params.depth;
             type->arch               = node->params.arch;
+            type->irgen              = node->params.irgen;
             type->access             = node->params.access;
-            type->expand_info        = node->params.expand_info;
-            type->expand_range       = node->params.expand_range;
-            type->expand_id_from_num = node->params.expand_id_from_num;
-            type->expand_num_from_id = node->params.expand_num_from_id;
+            type->expand             = node->params.expand;
             type->byte_size          = node->byte_size;
             switch(type->kind)
             {
@@ -2066,4 +2069,448 @@ e_type_member_from_key_name__cached(E_TypeKey key, String8 name)
     }
   }
   return result;
+}
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) Default Hooks
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
+{
+  E_TypeExpandInfo result = {0};
+  {
+    E_TypeKey type_key = e_type_unwrap(irtree->type_key);
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    if(e_type_kind_is_pointer_or_ref(type_kind))
+    {
+      E_Type *type = e_type_from_key__cached(type_key);
+      result.expr_count = type->count;
+      if(type->count == 1)
+      {
+        E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
+        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+        if(direct_type_kind == E_TypeKind_Struct ||
+           direct_type_kind == E_TypeKind_Class ||
+           direct_type_kind == E_TypeKind_Union)
+        {
+          E_MemberArray data_members = e_type_data_members_from_key_filter__cached(direct_type_key, filter);
+          result.expr_count = data_members.count;
+        }
+        else if(direct_type_kind == E_TypeKind_Enum)
+        {
+          E_Type *direct_type = e_type_from_key__cached(direct_type_key);
+          result.expr_count = direct_type->count;
+        }
+      }
+    }
+    else if(type_kind == E_TypeKind_Struct ||
+            type_kind == E_TypeKind_Class ||
+            type_kind == E_TypeKind_Union)
+    {
+      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(type_key, filter);
+      result.expr_count = data_members.count;
+    }
+    else if(type_kind == E_TypeKind_Enum)
+    {
+      E_Type *direct_type = e_type_from_key__cached(type_key);
+      result.expr_count = direct_type->count;
+    }
+    else if(type_kind == E_TypeKind_Array)
+    {
+      E_Type *type = e_type_from_key__cached(type_key);
+      result.expr_count = type->count;
+    }
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    //- rjf: unpack type of expression
+    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+    E_TypeKey lhs_type_key = lhs_irtree.type_key;
+    E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
+    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_type_key));
+    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+    
+    //- rjf: pull out specific kinds of types
+    B32 do_struct_range = 0;
+    B32 do_enum_range = 0;
+    B32 do_index_range = 0;
+    E_TypeKey enum_type_key = zero_struct;
+    E_TypeKey struct_type_key = zero_struct;
+    E_TypeKind struct_type_kind = E_TypeKind_Null;
+    if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
+    {
+      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+      if(lhs_type->count == 1 &&
+         (direct_type_kind == E_TypeKind_Struct ||
+          direct_type_kind == E_TypeKind_Union ||
+          direct_type_kind == E_TypeKind_Class))
+      {
+        struct_type_key = direct_type_key;
+        struct_type_kind = direct_type_kind;
+        do_struct_range = 1;
+      }
+      else if(lhs_type->count == 1 && direct_type_kind == E_TypeKind_Enum)
+      {
+        do_enum_range = 1;
+        enum_type_key = direct_type_key;
+      }
+      else
+      {
+        do_index_range = 1;
+      }
+    }
+    else if(lhs_type_kind == E_TypeKind_Struct ||
+            lhs_type_kind == E_TypeKind_Union ||
+            lhs_type_kind == E_TypeKind_Class)
+    {
+      struct_type_key = lhs_type_key;
+      struct_type_kind = lhs_type_kind;
+      do_struct_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Enum)
+    {
+      enum_type_key = lhs_type_key;
+      do_enum_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Set)
+    {
+      do_index_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Array)
+    {
+      do_index_range = 1;
+    }
+    
+    //- rjf: struct case -> the lookup-range will return a range of members
+    if(do_struct_range)
+    {
+      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(struct_type_key, filter);
+      Rng1U64 legal_idx_range = r1u64(0, data_members.count);
+      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
+      U64 read_range_count = dim_1u64(read_range);
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
+      {
+        U64 member_idx = idx + read_range.min;
+        String8 member_name = data_members.v[member_idx].name;
+        exprs_out[idx] = e_expr_irext_member_access(arena, expr, &lhs_irtree, member_name);
+      }
+    }
+    
+    //- rjf: enum case -> the lookup-range will return a range of enum constants
+    else if(do_enum_range)
+    {
+      E_Type *type = e_type_from_key__cached(enum_type_key);
+      Rng1U64 legal_idx_range = r1u64(0, type->count);
+      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
+      U64 read_range_count = dim_1u64(read_range);
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
+      {
+        U64 member_idx = idx + read_range.min;
+        String8 member_name = type->enum_vals[member_idx].name;
+        exprs_out[idx] = e_expr_irext_member_access(arena, expr, &lhs_irtree, member_name);
+      }
+    }
+    
+    //- rjf: ptr case -> the lookup-range will return a range of dereferences
+    else if(do_index_range)
+    {
+      U64 read_range_count = dim_1u64(idx_range);
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
+      {
+        exprs_out[idx] = e_expr_irext_array_index(arena, expr, &lhs_irtree, idx_range.min + idx);
+      }
+    }
+  }
+  scratch_end(scratch);
+}
+
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity)
+{
+  return num;
+}
+
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
+{
+  return id;
+}
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `folder` type
+
+typedef struct E_FolderAccel E_FolderAccel;
+struct E_FolderAccel
+{
+  String8 folder_path;
+  String8Array folders;
+  String8Array files;
+};
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder)
+{
+  E_TypeExpandInfo info = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: evaluate lhs file path ID
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    E_Value lhs_value = lhs_interp.value;
+    U64 lhs_string_id = lhs_value.u64;
+    String8 folder_path = e_string_from_id(lhs_string_id);
+    
+    //- rjf: compute filter - omit common prefixes (common parent paths)
+    String8 local_filter = filter;
+    {
+      U64 folder_pos_in_filter = str8_find_needle(filter, 0, folder_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
+      if(folder_pos_in_filter < filter.size)
+      {
+        local_filter = str8_skip(local_filter, folder_pos_in_filter+folder_path.size);
+        local_filter = str8_skip_chop_slashes(local_filter);
+      }
+      else
+      {
+        MemoryZeroStruct(&local_filter);
+      }
+    }
+    
+    //- rjf: gather & filter files in this folder
+    String8List folder_paths = {0};
+    String8List file_paths = {0};
+    {
+      OS_FileIter *iter = os_file_iter_begin(scratch.arena, folder_path, 0);
+      for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, iter, &info);)
+      {
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, local_filter, info.name);
+        if(matches.count == matches.needle_part_count)
+        {
+          if(info.props.flags & FilePropertyFlag_IsFolder)
+          {
+            str8_list_push(scratch.arena, &folder_paths, push_str8_copy(arena, info.name));
+          }
+          else
+          {
+            str8_list_push(scratch.arena, &file_paths, push_str8_copy(arena, info.name));
+          }
+        }
+      }
+      os_file_iter_end(iter);
+    }
+    
+    //- rjf: build accelerator
+    E_FolderAccel *accel = push_array(arena, E_FolderAccel, 1);
+    accel->folder_path = push_str8_copy(arena, folder_path);
+    accel->folders = str8_array_from_list(arena, &folder_paths);
+    accel->files = str8_array_from_list(arena, &file_paths);
+    info.user_data = accel;
+    info.expr_count = accel->folders.count + accel->files.count;
+    scratch_end(scratch);
+  }
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(folder)
+{
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_Expr *expr = &e_expr_nil;
+    String8 expr_string = {0};
+    if(0 <= idx && idx < accel->folders.count)
+    {
+      String8 folder_name = accel->folders.v[idx - 0];
+      String8 folder_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", folder_name);
+      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
+      expr->space = e_space_make(E_SpaceKind_FileSystem);
+      expr->value.u64 = e_id_from_string(folder_path);
+      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, folder_name));
+    }
+    else if(accel->folders.count <= idx && idx < accel->folders.count + accel->files.count)
+    {
+      String8 file_name = accel->files.v[idx - accel->folders.count];
+      String8 file_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", file_name);
+      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
+      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
+      expr->space = e_space_make(E_SpaceKind_FileSystem);
+      expr->value.u64 = e_id_from_string(file_path);
+      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, file_name));
+    }
+    exprs_out[out_idx] = expr;
+    exprs_strings_out[out_idx] = expr_string;
+    scratch_end(scratch);
+  }
+}
+
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(folder)
+{
+  U64 id = 0;
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  String8 name = {0};
+  if(0 < num && num <= accel->folders.count)
+  {
+    name = accel->folders.v[num-1];
+  }
+  else if(accel->folders.count < num && num <= accel->folders.count+accel->files.count)
+  {
+    name = accel->files.v[num-accel->folders.count-1];
+  }
+  id = e_hash_from_string(5381, name);
+  return id;
+}
+
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(folder)
+{
+  U64 num = 0;
+  E_FolderAccel *accel = (E_FolderAccel *)user_data;
+  for(U64 idx = 0; idx < accel->folders.count+accel->files.count; idx += 1)
+  {
+    String8 name = {0};
+    if(0 <= idx && idx < accel->folders.count)
+    {
+      name = accel->folders.v[idx];
+    }
+    else if(accel->folders.count <= idx && idx < accel->folders.count+accel->files.count)
+    {
+      name = accel->files.v[idx-accel->folders.count];
+    }
+    U64 hash = e_hash_from_string(5381, name);
+    if(hash == id)
+    {
+      num = idx+1;
+      break;
+    }
+  }
+  return num;
+}
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `file` type
+
+typedef struct E_FileAccel E_FileAccel;
+struct E_FileAccel
+{
+  String8 file_path;
+  FileProperties props;
+  String8Array fields;
+};
+
+E_TYPE_IRGEN_FUNCTION_DEF(file)
+{
+  E_IRTreeAndType result = *irtree;
+  E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: evaluate lhs file path ID
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
+    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
+    E_Value lhs_value = lhs_interp.value;
+    U64 lhs_string_id = lhs_value.u64;
+    
+    //- rjf: get file path
+    String8 file_path = e_string_from_id(lhs_string_id);
+    
+    //- rjf: build field list
+    String8List fields = {0};
+    str8_list_pushf(arena, &fields, "size");
+    str8_list_pushf(arena, &fields, "last_modified_time");
+    str8_list_pushf(arena, &fields, "creation_time");
+    str8_list_pushf(arena, &fields, "data");
+    
+    //- rjf: fill accel
+    accel->file_path = push_str8_copy(arena, file_path);
+    accel->props = os_properties_from_file_path(file_path);
+    accel->fields = str8_array_from_list(arena, &fields);
+    
+    scratch_end(scratch);
+  }
+  result.user_data = accel;
+  return result;
+}
+
+E_TYPE_ACCESS_FUNCTION_DEF(file)
+{
+  E_IRTreeAndType result = {&e_irnode_nil}; 
+  E_FileAccel *accel = (E_FileAccel *)lhs_irtree->user_data;
+  if(expr->kind == E_ExprKind_MemberAccess)
+  {
+    E_Expr *rhs = expr->first->next;
+    String8 member_name = rhs->string;
+    if(str8_match(member_name, str8_lit("size"), 0))
+    {
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.size));
+      result.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("last_modified_time"), 0))
+    {
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.modified));
+      result.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("creation_time"), 0))
+    {
+      E_Space space = e_space_make(E_SpaceKind_FileSystem);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.created));
+      result.type_key = e_type_key_basic(E_TypeKind_U64);
+      result.mode = E_Mode_Value;
+    }
+    else if(str8_match(member_name, str8_lit("data"), 0))
+    {
+      E_Space space = e_space_make(E_SpaceKind_File);
+      space.u64_0 = e_id_from_string(accel->file_path);
+      result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+      result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size, 0);
+      result.mode = E_Mode_Offset;
+    }
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(file)
+{
+  E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    scratch_end(scratch);
+  }
+  E_TypeExpandInfo info = {accel, accel->fields.count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(file)
+{
+  E_FileAccel *accel = (E_FileAccel *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    E_Expr *expr = &e_expr_nil;
+    String8 string = {0};
+    if(0 <= idx && idx < accel->fields.count)
+    {
+      String8 name = accel->fields.v[idx];
+      expr = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
+      E_Expr *lhs = e_expr_ref(arena, expr);
+      E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, 0);
+      rhs->string = push_str8_copy(arena, name);
+      e_expr_push_child(expr, lhs);
+      e_expr_push_child(expr, rhs);
+    }
+    exprs_out[out_idx] = expr;
+    exprs_strings_out[out_idx] = string;
+  }
 }

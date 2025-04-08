@@ -268,6 +268,7 @@ struct E_IRTreeAndType
 {
   E_IRNode *root;
   E_TypeKey type_key;
+  void *user_data;
   E_Mode mode;
   E_MsgList msgs;
 };
@@ -288,7 +289,6 @@ typedef enum E_MemberKind
   E_MemberKind_VirtualBase,
   E_MemberKind_NestedType,
   E_MemberKind_Padding,
-  E_MemberKind_Query,
   E_MemberKind_COUNT
 }
 E_MemberKind;
@@ -357,6 +357,11 @@ struct E_TypeExpandInfo
   U64 expr_count;
 };
 
+#define E_TYPE_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_IRTreeAndType *irtree)
+#define E_TYPE_IRGEN_FUNCTION_NAME(name) e_type_irgen__##name
+#define E_TYPE_IRGEN_FUNCTION_DEF(name) internal E_TYPE_IRGEN_FUNCTION_SIG(E_TYPE_IRGEN_FUNCTION_NAME(name))
+typedef E_TYPE_IRGEN_FUNCTION_SIG(E_TypeIRGenFunctionType);
+
 #define E_TYPE_ACCESS_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_IRTreeAndType *lhs_irtree)
 #define E_TYPE_ACCESS_FUNCTION_NAME(name) e_type_access__##name
 #define E_TYPE_ACCESS_FUNCTION_DEF(name) internal E_TYPE_ACCESS_FUNCTION_SIG(E_TYPE_ACCESS_FUNCTION_NAME(name))
@@ -382,6 +387,15 @@ typedef E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_SIG(E_TypeExpandIDFromNumFunctionType
 #define E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(name) internal E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_SIG(E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name))
 typedef E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_SIG(E_TypeExpandNumFromIDFunctionType);
 
+typedef struct E_TypeExpandRule E_TypeExpandRule;
+struct E_TypeExpandRule
+{
+  E_TypeExpandInfoFunctionType *info;
+  E_TypeExpandRangeFunctionType *range;
+  E_TypeExpandIDFromNumFunctionType *id_from_num;
+  E_TypeExpandNumFromIDFunctionType *num_from_id;
+};
+
 typedef struct E_Type E_Type;
 struct E_Type
 {
@@ -399,11 +413,9 @@ struct E_Type
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
+  E_TypeIRGenFunctionType *irgen;
   E_TypeAccessFunctionType *access;
-  E_TypeExpandInfoFunctionType *expand_info;
-  E_TypeExpandRangeFunctionType *expand_range;
-  E_TypeExpandIDFromNumFunctionType *expand_id_from_num;
-  E_TypeExpandNumFromIDFunctionType *expand_num_from_id;
+  E_TypeExpandRule expand;
 };
 
 ////////////////////////////////
@@ -482,6 +494,8 @@ struct E_String2ExprMap
 
 ////////////////////////////////
 //~ rjf: Member/Index Lookup Hooks
+
+#if 0 // TODO(rjf): @eval
 
 typedef struct E_LookupInfo E_LookupInfo;
 struct E_LookupInfo
@@ -565,10 +579,12 @@ struct E_LookupRuleExprPair
   E_LookupRule *rule;
   E_Expr *expr;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: IR Generation Hooks
 
+#if 0 // TODO(rjf): @eval
 #define E_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr)
 #define E_IRGEN_FUNCTION_NAME(name) e_irgen_##name
 #define E_IRGEN_FUNCTION_DEF(name) internal E_IRGEN_FUNCTION_SIG(E_IRGEN_FUNCTION_NAME(name))
@@ -602,6 +618,7 @@ struct E_IRGenRuleMap
   U64 slots_count;
   E_IRGenRuleSlot *slots;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)

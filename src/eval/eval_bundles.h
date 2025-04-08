@@ -12,7 +12,7 @@ struct E_Eval
 {
   E_Value value;
   E_Space space;
-  E_ExprChain exprs;
+  E_Expr *expr;
   E_IRTreeAndType irtree;
   String8 bytecode;
   E_InterpretationCode code;
@@ -20,10 +20,14 @@ struct E_Eval
 };
 
 ////////////////////////////////
+//~ rjf: Globals
+
+read_only global E_Eval e_eval_nil = {zero_struct, zero_struct, &e_expr_nil, {&e_irnode_nil}};
+
+////////////////////////////////
 //~ rjf: Bundled Evaluation Functions
 
 internal E_Eval e_eval_from_expr(Arena *arena, E_Expr *expr);
-internal E_Eval e_eval_from_exprs(Arena *arena, E_ExprChain exprs);
 internal E_Eval e_eval_from_string(Arena *arena, String8 string);
 internal E_Eval e_eval_from_stringf(Arena *arena, char *fmt, ...);
 internal E_Eval e_autoresolved_eval_from_eval(E_Eval eval);

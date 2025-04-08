@@ -146,15 +146,13 @@ struct EV_Block
   // rjf: split index, relative to parent's space
   U64 split_relative_idx;
   
-  // rjf: expression / visualization info
+  // rjf: evaluation info
   String8 string;
-  E_Expr *expr;
-  E_Expr *lookup_tag;
-  E_Expr *expand_tag;
-  E_LookupRule *lookup_rule;
-  EV_ExpandRule *expand_rule;
-  void *lookup_rule_user_data;
-  void *expand_rule_user_data;
+  E_Eval eval;
+  E_TypeExpandInfo type_expand_info;
+  E_TypeExpandRule *type_expand_rule;
+  EV_ExpandInfo viz_expand_info;
+  EV_ExpandRule *viz_expand_rule;
   
   // rjf: expansion info
   U64 row_count;
@@ -202,7 +200,7 @@ struct EV_Row
   EV_Key key;
   U64 visual_size;
   String8 string;
-  E_Expr *expr;
+  E_Eval eval;
 };
 
 typedef struct EV_WindowedRowNode EV_WindowedRowNode;
@@ -282,7 +280,7 @@ global read_only EV_ExpandRule ev_nil_expand_rule =
   EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
 };
 thread_static EV_ExpandRuleTable *ev_view_rule_info_table = 0;
-global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_lookup_rule__nil, &ev_nil_expand_rule};
+global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, {zero_struct, zero_struct, &e_expr_nil, &e_irnode_nil}};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -340,12 +338,14 @@ internal void ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *blo
 ////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_exprs(Arena *arena, EV_View *view, String8 filter, E_ExprChain exprs);
+internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *expr);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////
 //~ rjf: Block Coordinate Spaces
 
+internal U64 ev_block_id_from_num(EV_Block *block, U64 num);
+internal U64 ev_block_num_from_id(EV_Block *block, U64 id);
 internal EV_BlockRangeList ev_block_range_list_from_tree(Arena *arena, EV_BlockTree *block_tree);
 internal EV_BlockRange ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num);
 internal EV_Key ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num);
@@ -359,7 +359,6 @@ internal U64    ev_num_from_vnum(EV_BlockRangeList *block_ranges, U64 vidx);
 internal EV_WindowedRowList ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 vnum_range);
 internal EV_Row *ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num);
 internal EV_WindowedRowList ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range);
-internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags flags);
 internal B32 ev_row_is_expandable(EV_Row *row);
 internal B32 ev_row_is_editable(EV_Row *row);
 

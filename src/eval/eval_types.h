@@ -47,11 +47,9 @@ struct E_ConsTypeParams
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
+  E_TypeIRGenFunctionType *irgen;
   E_TypeAccessFunctionType *access;
-  E_TypeExpandInfoFunctionType *expand_info;
-  E_TypeExpandRangeFunctionType *expand_range;
-  E_TypeExpandIDFromNumFunctionType *expand_id_from_num;
-  E_TypeExpandNumFromIDFunctionType *expand_num_from_id;
+  E_TypeExpandRule expand;
 };
 
 typedef struct E_ConsTypeNode E_ConsTypeNode;
@@ -180,6 +178,17 @@ struct E_TypeState
 
 global read_only E_Member e_member_nil = {E_MemberKind_Null};
 global read_only E_Type e_type_nil = {E_TypeKind_Null};
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(default);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default);
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
+global read_only E_TypeExpandRule e_type_expand_rule__default =
+{
+  E_TYPE_EXPAND_INFO_FUNCTION_NAME(default),
+  E_TYPE_EXPAND_RANGE_FUNCTION_NAME(default),
+  E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+  E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+};
 thread_static E_TypeState *e_type_state = 0;
 
 ////////////////////////////////

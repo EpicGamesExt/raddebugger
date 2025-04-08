@@ -7,16 +7,8 @@
 internal E_Eval
 e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
-  E_ExprChain exprs = {expr, expr};
-  E_Eval result = e_eval_from_exprs(arena, exprs);
-  return result;
-}
-
-internal E_Eval
-e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
-{
   ProfBeginFunction();
-  E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(arena, exprs.last);
+  E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(arena, expr);
   E_OpList            oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8             bytecode = e_bytecode_from_oplist(arena, &oplist);
   E_Interpretation    interp   = e_interpret(bytecode);
@@ -24,7 +16,7 @@ e_eval_from_exprs(Arena *arena, E_ExprChain exprs)
   {
     .value           = interp.value,
     .space           = interp.space,
-    .exprs           = exprs,
+    .expr            = expr,
     .irtree          = irtree,
     .bytecode        = bytecode,
     .code            = interp.code,
@@ -43,7 +35,7 @@ e_eval_from_string(Arena *arena, String8 string)
 {
   E_TokenArray     tokens   = e_token_array_from_text(arena, string);
   E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, tokens);
-  E_Eval           eval     = e_eval_from_exprs(arena, parse.exprs);
+  E_Eval           eval     = e_eval_from_expr(arena, parse.exprs.first);
   e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
   return eval;
 }

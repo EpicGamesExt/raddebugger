@@ -943,37 +943,32 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // rjf: unpack key & block
     EV_Block *block = row->block;
     EV_Key key = row->key;
-    E_IRTreeAndType parent_irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
-    E_Type *parent_type = e_type_from_key__cached(parent_irtree.type_key);
-    E_Eval block_eval = e_eval_from_expr(scratch.arena, row->block->expr);
+    E_Eval block_eval = row->block->eval;
     E_TypeKey block_type_key = block_eval.irtree.type_key;
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key__cached(block_type_key);
     
-    // rjf: fill row's eval
-    info.eval = e_eval_from_expr(arena, row->expr);
-    
     // rjf: determine if row's expression is editable
-    if(block_type->flags & E_TypeFlag_EditableChildren || row->expr == &e_expr_nil)
+    if(block_type->flags & E_TypeFlag_EditableChildren || row->eval.expr == &e_expr_nil)
     {
       info.expr_is_editable = 1;
     }
     
     // rjf: determine row's module
-    CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(info.eval.space);
+    CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
     CTRL_Entity *row_module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
-    if(info.eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+    if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
     {
       switch(row_ctrl_entity->kind)
       {
         default:
         case CTRL_EntityKind_Process:
-        if(info.eval.irtree.mode == E_Mode_Offset)
+        if(row->eval.irtree.mode == E_Mode_Offset)
         {
-          info.module = ctrl_module_from_process_vaddr(row_ctrl_entity, info.eval.value.u64);
+          info.module = ctrl_module_from_process_vaddr(row_ctrl_entity, row->eval.value.u64);
         }break;
         case CTRL_EntityKind_Thread:
-        if(info.eval.irtree.mode == E_Mode_Value)
+        if(row->eval.irtree.mode == E_Mode_Value)
         {
           CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
           info.module = ctrl_module_from_process_vaddr(process, d_query_cached_rip_from_thread(row_ctrl_entity));
@@ -988,7 +983,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(entity->kind == CTRL_EntityKind_Thread)
       {
         info.callstack_thread = entity;
-        U64 frame_num = block->lookup_rule->num_from_id(key.child_id, block->lookup_rule_user_data);
+        U64 frame_num = ev_block_num_from_id(block, key.child_id);
         CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
         CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, ctrl_process_from_entity(entity), &unwind);
         if(1 <= frame_num && frame_num <= call_stack.count)
@@ -1005,7 +1000,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
                                              block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
     {
-      info.group_entity = rd_ctrl_entity_from_eval_space(info.eval.space);
+      info.group_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
     }
     
     // rjf: determine cfg group name / parent
@@ -1037,8 +1032,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: determine cfgs/entities that this row is evaluating
-    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(info.eval.space);
-    CTRL_Entity *evalled_entity = (info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(info.eval.space) : &ctrl_entity_nil);
+    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
+    CTRL_Entity *evalled_entity = (row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(row->eval.space) : &ctrl_entity_nil);
     
     // rjf: determine if this cfg/entity evaluation is top-level - e.g. if we
     // are evaluating a cfg tree, or some descendant of it
@@ -1046,33 +1041,36 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     if(evalled_cfg != &rd_nil_cfg)
     {
       E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, evalled_cfg->string);
-      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.irtree.type_key));
+      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
     }
     if(evalled_entity != &ctrl_entity_nil)
     {
       String8 top_level_name = ctrl_entity_kind_code_name_table[evalled_entity->kind];
       E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, top_level_name);
-      is_top_level = (info.eval.value.u64 == 0 && e_type_key_match(top_level_type_key, info.eval.irtree.type_key));
+      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
     }
     
     // rjf: determine view ui rule
-    info.view_ui_rule = rd_view_ui_rule_from_string(row->block->expand_rule->string);
+    // TODO(rjf): @eval
+    info.view_ui_rule = &rd_nil_view_ui_rule; // rd_view_ui_rule_from_string(row->block->expand_rule->string);
+#if 0 // TODO(rjf): @eval
     if(info.view_ui_rule != &rd_nil_view_ui_rule)
     {
       info.view_ui_tag = row->block->expand_tag;
     }
+#endif
     
     // rjf: fill row's cells
     {
       if(0){}
       
       // rjf: folder / file rows
-      else if(info.eval.space.kind == E_SpaceKind_FileSystem)
+      else if(row->eval.space.kind == E_SpaceKind_FileSystem)
       {
-        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
+        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
         if(type->kind == E_TypeKind_Set)
         {
-          String8 file_path = e_string_from_id(info.eval.value.u64);
+          String8 file_path = e_string_from_id(row->eval.value.u64);
           DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
                                       .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
@@ -1098,13 +1096,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: singular button for unattached processes
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
+      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
       {
-        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
+        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
         if(str8_match(type->name, str8_lit("unattached_process"), 0))
         {
-          U64 pid = info.eval.value.u128.u64[0];
-          String8 name = e_string_from_id(info.eval.value.u128.u64[1]);
+          U64 pid = row->eval.value.u128.u64[0];
+          String8 name = e_string_from_id(row->eval.value.u128.u64[1]);
           DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
           DR_FStrList fstrs = {0};
           UI_TagF("weak")
@@ -1217,22 +1215,22 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: singular row for queries
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaQuery)
+      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
       
       // rjf: singular button for commands
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCmd)
       {
-        E_Type *type = e_type_from_key__cached(info.eval.irtree.type_key);
+        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
         if(type->kind == E_TypeKind_Set)
         {
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = 0, .pct = 1.f);
         }
         else
         {
-          String8 cmd_name = e_string_from_id(e_value_eval_from_eval(info.eval).value.u64);
+          String8 cmd_name = e_string_from_id(e_value_eval_from_eval(row->eval).value.u64);
           RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
           rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
         }
@@ -1245,28 +1243,28 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       
       // rjf: for 'add-new' rows in meta-cfg evaluation spaces, only do expr
-      else if(info.eval.exprs.last == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
+      else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
       
       // rjf: for meta-evaluation space booleans, only do expr
-      else if(e_type_kind_from_key(info.eval.irtree.type_key) == E_TypeKind_Bool &&
-              (info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-               info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-               info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+      else if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Bool &&
+              (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+               row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
       }
       
       // rjf: for meta-cfg evaluation spaces, only do expr/value
-      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-              info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-              info.eval.space.kind == E_SpaceKind_File)
+      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+              row->eval.space.kind == E_SpaceKind_File)
       {
-        if(e_type_kind_from_key(info.eval.irtree.type_key) == E_TypeKind_Array &&
-           e_type_kind_from_key(e_type_direct_from_key(info.eval.irtree.type_key)) == E_TypeKind_U8)
+        if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Array &&
+           e_type_kind_from_key(e_type_direct_from_key(row->eval.irtree.type_key)) == E_TypeKind_U8)
         {
           info.can_expand = 0;
         }
@@ -1371,11 +1369,11 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         result.flags |= RD_WatchCellFlag_CanEdit;
       }
-      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
+      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : row->eval);
       result.string = row->string;
       if(result.string.size == 0)
       {
-        E_Expr *notable_expr = row->expr;
+        E_Expr *notable_expr = row->eval.expr;
         for(B32 good = 0; !good;)
         {
           switch(notable_expr->kind)
@@ -1451,7 +1449,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       
       //- rjf: use cell's wrap string to wrap row's expression
       String8 wrap_string = cell->string;
-      E_Expr *root_expr = row->expr;
+      E_Expr *root_expr = row->eval.expr;
       if(wrap_string.size != 0)
       {
         E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string).exprs.last;
@@ -1470,7 +1468,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         {
           if(t->expr->kind == E_ExprKind_LeafIdentifier && str8_match(t->expr->string, str8_lit("$expr"), 0))
           {
-            E_Expr *original_expr_ref = e_expr_ref(scratch.arena, row->expr);
+            E_Expr *original_expr_ref = e_expr_ref(scratch.arena, row->eval.expr);
             if(t->parent != &e_expr_nil)
             {
               e_expr_insert_child(t->parent, t->expr, original_expr_ref);
@@ -1526,7 +1524,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     //- rjf: view ui cells
     case RD_WatchCellKind_ViewUI:
     {
-      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, row->expr));
+      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : row->eval);
       result.view_ui_rule = row_info->view_ui_rule;
       result.view_ui_tag = row_info->view_ui_tag;
     }break;
@@ -1948,7 +1946,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   //
   B32 auto_selected = 0;
   E_Space auto_space = {0};
-  if(eval.exprs.last == &e_expr_nil)
+  if(eval.expr == &e_expr_nil)
   {
     if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
     {

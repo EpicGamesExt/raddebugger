@@ -104,267 +104,9 @@ e_select_ir_ctx(E_IRCtx *ctx)
 }
 
 ////////////////////////////////
-//~ rjf: File System Lookup Rules
-
-typedef struct E_FolderAccel E_FolderAccel;
-struct E_FolderAccel
-{
-  String8 folder_path;
-  String8Array folders;
-  String8Array files;
-};
-
-E_LOOKUP_INFO_FUNCTION_DEF(folder)
-{
-  E_LookupInfo info = {0};
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    
-    //- rjf: evaluate lhs file path ID
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
-    E_Value lhs_value = lhs_interp.value;
-    U64 lhs_string_id = lhs_value.u64;
-    String8 folder_path = e_string_from_id(lhs_string_id);
-    
-    //- rjf: compute filter - omit common prefixes (common parent paths)
-    String8 local_filter = filter;
-    {
-      U64 folder_pos_in_filter = str8_find_needle(filter, 0, folder_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
-      if(folder_pos_in_filter < filter.size)
-      {
-        local_filter = str8_skip(local_filter, folder_pos_in_filter+folder_path.size);
-        local_filter = str8_skip_chop_slashes(local_filter);
-      }
-      else
-      {
-        MemoryZeroStruct(&local_filter);
-      }
-    }
-    
-    //- rjf: gather & filter files in this folder
-    String8List folder_paths = {0};
-    String8List file_paths = {0};
-    {
-      OS_FileIter *iter = os_file_iter_begin(scratch.arena, folder_path, 0);
-      for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, iter, &info);)
-      {
-        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, local_filter, info.name);
-        if(matches.count == matches.needle_part_count)
-        {
-          if(info.props.flags & FilePropertyFlag_IsFolder)
-          {
-            str8_list_push(scratch.arena, &folder_paths, push_str8_copy(arena, info.name));
-          }
-          else
-          {
-            str8_list_push(scratch.arena, &file_paths, push_str8_copy(arena, info.name));
-          }
-        }
-      }
-      os_file_iter_end(iter);
-    }
-    
-    //- rjf: build accelerator
-    E_FolderAccel *accel = push_array(arena, E_FolderAccel, 1);
-    accel->folder_path = push_str8_copy(arena, folder_path);
-    accel->folders = str8_array_from_list(arena, &folder_paths);
-    accel->files = str8_array_from_list(arena, &file_paths);
-    info.user_data = accel;
-    info.idxed_expr_count = accel->folders.count + accel->files.count;
-    scratch_end(scratch);
-  }
-  return info;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(folder)
-{
-  E_FolderAccel *accel = (E_FolderAccel *)user_data;
-  U64 out_idx = 0;
-  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = &e_expr_nil;
-    String8 expr_string = {0};
-    if(0 <= idx && idx < accel->folders.count)
-    {
-      String8 folder_name = accel->folders.v[idx - 0];
-      String8 folder_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", folder_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
-      expr->space = e_space_make(E_SpaceKind_FileSystem);
-      expr->value.u64 = e_id_from_string(folder_path);
-      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, folder_name));
-    }
-    else if(accel->folders.count <= idx && idx < accel->folders.count + accel->files.count)
-    {
-      String8 file_name = accel->files.v[idx - accel->folders.count];
-      String8 file_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", file_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
-      expr->space = e_space_make(E_SpaceKind_FileSystem);
-      expr->value.u64 = e_id_from_string(file_path);
-      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, file_name));
-    }
-    exprs[out_idx] = expr;
-    exprs_strings[out_idx] = expr_string;
-    scratch_end(scratch);
-  }
-}
-
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(folder)
-{
-  U64 id = 0;
-  E_FolderAccel *accel = (E_FolderAccel *)user_data;
-  String8 name = {0};
-  if(0 < num && num <= accel->folders.count)
-  {
-    name = accel->folders.v[num-1];
-  }
-  else if(accel->folders.count < num && num <= accel->folders.count+accel->files.count)
-  {
-    name = accel->files.v[num-accel->folders.count-1];
-  }
-  id = e_hash_from_string(5381, name);
-  return id;
-}
-
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(folder)
-{
-  U64 num = 0;
-  E_FolderAccel *accel = (E_FolderAccel *)user_data;
-  for(U64 idx = 0; idx < accel->folders.count+accel->files.count; idx += 1)
-  {
-    String8 name = {0};
-    if(0 <= idx && idx < accel->folders.count)
-    {
-      name = accel->folders.v[idx];
-    }
-    else if(accel->folders.count <= idx && idx < accel->folders.count+accel->files.count)
-    {
-      name = accel->files.v[idx-accel->folders.count];
-    }
-    U64 hash = e_hash_from_string(5381, name);
-    if(hash == id)
-    {
-      num = idx+1;
-      break;
-    }
-  }
-  return num;
-}
-
-typedef struct E_FileAccel E_FileAccel;
-struct E_FileAccel
-{
-  String8 file_path;
-  FileProperties props;
-  String8Array fields;
-};
-
-E_LOOKUP_INFO_FUNCTION_DEF(file)
-{
-  E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    
-    //- rjf: evaluate lhs file path ID
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
-    E_Value lhs_value = lhs_interp.value;
-    U64 lhs_string_id = lhs_value.u64;
-    
-    //- rjf: get file path
-    String8 file_path = e_string_from_id(lhs_string_id);
-    
-    //- rjf: build field list
-    String8List fields = {0};
-    str8_list_pushf(arena, &fields, "size");
-    str8_list_pushf(arena, &fields, "last_modified_time");
-    str8_list_pushf(arena, &fields, "creation_time");
-    str8_list_pushf(arena, &fields, "data");
-    
-    //- rjf: fill accel
-    accel->file_path = push_str8_copy(arena, file_path);
-    accel->props = os_properties_from_file_path(file_path);
-    accel->fields = str8_array_from_list(arena, &fields);
-    
-    scratch_end(scratch);
-  }
-  E_LookupInfo info = {accel, accel->fields.count};
-  return info;
-}
-
-E_LOOKUP_ACCESS_FUNCTION_DEF(file)
-{
-  E_LookupAccess result = {{&e_irnode_nil}}; 
-  if(kind == E_ExprKind_MemberAccess)
-  {
-    E_FileAccel *accel = (E_FileAccel *)user_data;
-    String8 member_name = rhs->string;
-    if(str8_match(member_name, str8_lit("size"), 0))
-    {
-      E_Space space = e_space_make(E_SpaceKind_FileSystem);
-      space.u64_0 = e_id_from_string(accel->file_path);
-      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.size));
-      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
-      result.irtree_and_type.mode = E_Mode_Value;
-    }
-    else if(str8_match(member_name, str8_lit("last_modified_time"), 0))
-    {
-      E_Space space = e_space_make(E_SpaceKind_FileSystem);
-      space.u64_0 = e_id_from_string(accel->file_path);
-      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.modified));
-      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
-      result.irtree_and_type.mode = E_Mode_Value;
-    }
-    else if(str8_match(member_name, str8_lit("creation_time"), 0))
-    {
-      E_Space space = e_space_make(E_SpaceKind_FileSystem);
-      space.u64_0 = e_id_from_string(accel->file_path);
-      result.irtree_and_type.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, accel->props.created));
-      result.irtree_and_type.type_key = e_type_key_basic(E_TypeKind_U64);
-      result.irtree_and_type.mode = E_Mode_Value;
-    }
-    else if(str8_match(member_name, str8_lit("data"), 0))
-    {
-      E_Space space = e_space_make(E_SpaceKind_File);
-      space.u64_0 = e_id_from_string(accel->file_path);
-      result.irtree_and_type.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), accel->props.size, 0);
-      result.irtree_and_type.mode = E_Mode_Offset;
-    }
-  }
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(file)
-{
-  E_FileAccel *accel = (E_FileAccel *)user_data;
-  U64 out_idx = 0;
-  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
-  {
-    E_Expr *expr = &e_expr_nil;
-    String8 string = {0};
-    if(0 <= idx && idx < accel->fields.count)
-    {
-      String8 name = accel->fields.v[idx];
-      expr = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
-      E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, 0);
-      rhs->string = push_str8_copy(arena, name);
-      e_expr_push_child(expr, e_expr_ref(arena, lhs));
-      e_expr_push_child(expr, rhs);
-    }
-    exprs[out_idx] = expr;
-    exprs_strings[out_idx] = string;
-  }
-}
-
-////////////////////////////////
 //~ rjf: Slice Lookup Rules
 
+#if 0 // TODO(rjf): @eval
 typedef struct E_SliceAccel E_SliceAccel;
 struct E_SliceAccel
 {
@@ -529,55 +271,6 @@ E_LOOKUP_RANGE_FUNCTION_DEF(slice)
   }
 }
 
-E_LOOKUP_INFO_FUNCTION_DEF(default)
-{
-  E_LookupInfo lookup_info = {0};
-  {
-    E_TypeKey lhs_type_key = e_type_unwrap(lhs->type_key);
-    E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-    if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
-    {
-      E_Type *type = e_type_from_key__cached(lhs_type_key);
-      lookup_info.idxed_expr_count = type->count;
-      if(type->count == 1)
-      {
-        E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
-        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-        if(direct_type_kind == E_TypeKind_Struct ||
-           direct_type_kind == E_TypeKind_Class ||
-           direct_type_kind == E_TypeKind_Union)
-        {
-          E_MemberArray data_members = e_type_data_members_from_key_filter__cached(direct_type_key, filter);
-          lookup_info.named_expr_count = data_members.count;
-        }
-        else if(direct_type_kind == E_TypeKind_Enum)
-        {
-          E_Type *direct_type = e_type_from_key__cached(direct_type_key);
-          lookup_info.named_expr_count = direct_type->count;
-        }
-      }
-    }
-    else if(lhs_type_kind == E_TypeKind_Struct ||
-            lhs_type_kind == E_TypeKind_Class ||
-            lhs_type_kind == E_TypeKind_Union)
-    {
-      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(lhs_type_key, filter);
-      lookup_info.named_expr_count = data_members.count;
-    }
-    else if(lhs_type_kind == E_TypeKind_Enum)
-    {
-      E_Type *direct_type = e_type_from_key__cached(lhs_type_key);
-      lookup_info.named_expr_count = direct_type->count;
-    }
-    else if(lhs_type_kind == E_TypeKind_Array)
-    {
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      lookup_info.idxed_expr_count = lhs_type->count;
-    }
-  }
-  return lookup_info;
-}
-
 E_LOOKUP_ACCESS_FUNCTION_DEF(default)
 {
   //
@@ -619,7 +312,6 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
       B32 r_found = 0;
       E_TypeKey r_type = zero_struct;
       U64 r_value = 0;
-      String8 r_query_name = {0};
       B32 r_is_constant_value = 0;
       {
         Temp scratch = scratch_begin(&arena, 1);
@@ -630,10 +322,6 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
           r_found = 1;
           r_type = match.type_key;
           r_value = match.off;
-        }
-        if(match.kind == E_MemberKind_Query)
-        {
-          r_query_name = exprr->string;
         }
         if(match.kind == E_MemberKind_Null)
         {
@@ -825,111 +513,6 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
   return result;
 }
 
-E_LOOKUP_RANGE_FUNCTION_DEF(default)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  {
-    //- rjf: unpack type of expression
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-    E_TypeKey lhs_type_key = lhs_irtree.type_key;
-    E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_type_key));
-    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-    
-    //- rjf: pull out specific kinds of types
-    B32 do_struct_range = 0;
-    B32 do_enum_range = 0;
-    B32 do_index_range = 0;
-    E_TypeKey enum_type_key = zero_struct;
-    E_TypeKey struct_type_key = zero_struct;
-    E_TypeKind struct_type_kind = E_TypeKind_Null;
-    if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
-    {
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      if(lhs_type->count == 1 &&
-         (direct_type_kind == E_TypeKind_Struct ||
-          direct_type_kind == E_TypeKind_Union ||
-          direct_type_kind == E_TypeKind_Class))
-      {
-        struct_type_key = direct_type_key;
-        struct_type_kind = direct_type_kind;
-        do_struct_range = 1;
-      }
-      else if(lhs_type->count == 1 && direct_type_kind == E_TypeKind_Enum)
-      {
-        do_enum_range = 1;
-        enum_type_key = direct_type_key;
-      }
-      else
-      {
-        do_index_range = 1;
-      }
-    }
-    else if(lhs_type_kind == E_TypeKind_Struct ||
-            lhs_type_kind == E_TypeKind_Union ||
-            lhs_type_kind == E_TypeKind_Class)
-    {
-      struct_type_key = lhs_type_key;
-      struct_type_kind = lhs_type_kind;
-      do_struct_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Enum)
-    {
-      enum_type_key = lhs_type_key;
-      do_enum_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Set)
-    {
-      do_index_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Array)
-    {
-      do_index_range = 1;
-    }
-    
-    //- rjf: struct case -> the lookup-range will return a range of members
-    if(do_struct_range)
-    {
-      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(struct_type_key, filter);
-      Rng1U64 legal_idx_range = r1u64(0, data_members.count);
-      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
-      U64 read_range_count = dim_1u64(read_range);
-      for(U64 idx = 0; idx < read_range_count; idx += 1)
-      {
-        U64 member_idx = idx + read_range.min;
-        String8 member_name = data_members.v[member_idx].name;
-        exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
-      }
-    }
-    
-    //- rjf: enum case -> the lookup-range will return a range of enum constants
-    else if(do_enum_range)
-    {
-      E_Type *type = e_type_from_key__cached(enum_type_key);
-      Rng1U64 legal_idx_range = r1u64(0, type->count);
-      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
-      U64 read_range_count = dim_1u64(read_range);
-      for(U64 idx = 0; idx < read_range_count; idx += 1)
-      {
-        U64 member_idx = idx + read_range.min;
-        String8 member_name = type->enum_vals[member_idx].name;
-        exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
-      }
-    }
-    
-    //- rjf: ptr case -> the lookup-range will return a range of dereferences
-    else if(do_index_range)
-    {
-      U64 read_range_count = dim_1u64(idx_range);
-      for(U64 idx = 0; idx < read_range_count; idx += 1)
-      {
-        exprs[idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, idx_range.min + idx);
-      }
-    }
-  }
-  scratch_end(scratch);
-}
-
 E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default)
 {
   return num;
@@ -939,10 +522,12 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default)
 {
   return id;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Member Filtering Lookup Rules
 
+#if 0 // TODO(rjf): @eval
 typedef struct E_MemberFilterAccel E_MemberFilterAccel;
 struct E_MemberFilterAccel
 {
@@ -1112,10 +697,12 @@ E_LOOKUP_RANGE_FUNCTION_DEF(only_and_omit)
     scratch_end(scratch);
   }
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Lookups
 
+#if 0 // TODO(rjf): @eval
 internal E_LookupRuleMap
 e_lookup_rule_map_make(Arena *arena, U64 slots_count)
 {
@@ -1185,10 +772,12 @@ e_lookup_rule_from_string(String8 string)
   }
   return result;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: IR Gen Rules
 
+#if 0 // TODO(rjf): @eval
 E_IRGEN_FUNCTION_DEF(bswap)
 {
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
@@ -1252,6 +841,7 @@ e_irgen_rule_from_string(String8 string)
   }
   return rule;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Auto Hooks
@@ -1838,10 +1428,6 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           r_type = match.type_key;
           r_value = match.off;
         }
-        if(match.kind == E_MemberKind_Query)
-        {
-          r_query_name = exprr->string;
-        }
         if(match.kind == E_MemberKind_Null)
         {
           E_Type *type = e_type_from_key__cached(check_type_key);
@@ -2034,1261 +1620,1268 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
 
 //- rjf: top-level irtree/type extraction
 
-E_IRGEN_FUNCTION_DEF(default)
-{
-  E_IRTreeAndType result = {&e_irnode_nil};
-  E_ExprKind kind = expr->kind;
-  switch(kind)
-  {
-    default:{}break;
-    
-    //- rjf: accesses
-    case E_ExprKind_MemberAccess:
-    case E_ExprKind_ArrayIndex:
-    {
-      // rjf: unpack left-hand-size
-      E_Expr *lhs = expr->first;
-      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-      
-      // rjf: pick access hook based on type
-      E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-      E_TypeAccessFunctionType *lhs_access = lhs_type->access;
-      if(lhs_access == 0)
-      {
-        lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
-      }
-      
-      // rjf: call into hook to do access
-      result = lhs_access(arena, expr, &lhs_irtree);
-    }break;
-    
-    //- rjf: dereference
-    case E_ExprKind_Deref:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      E_TypeKey r_type_direct = e_type_direct_from_key(r_type);
-      U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(r_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(r_type_direct_size == 0 &&
-              (r_type_kind == E_TypeKind_Ptr ||
-               r_type_kind == E_TypeKind_LRef ||
-               r_type_kind == E_TypeKind_RRef))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference pointers of zero-sized types.");
-        break;
-      }
-      else if(r_type_direct_size == 0 && r_type_kind == E_TypeKind_Array)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference arrays of zero-sized types.");
-        break;
-      }
-      else if(r_type_kind != E_TypeKind_Array &&
-              r_type_kind != E_TypeKind_Ptr &&
-              r_type_kind != E_TypeKind_LRef &&
-              r_type_kind != E_TypeKind_RRef)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference this type.");
-        break;
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *new_tree = r_tree.root;
-        if(r_tree.mode != E_Mode_Value &&
-           (r_type_kind == E_TypeKind_Ptr ||
-            r_type_kind == E_TypeKind_LRef ||
-            r_type_kind == E_TypeKind_RRef))
-        {
-          new_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-        }
-        result.root     = new_tree;
-        result.type_key = r_type_direct;
-        result.mode     = E_Mode_Offset;
-      }
-    }break;
-    
-    //- rjf: address-of
-    case E_ExprKind_Address:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      E_TypeKey r_type = r_tree.type_key;
-      E_TypeKey r_type_unwrapped = e_type_unwrap(r_type);
-      E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(r_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(e_type_key_match(e_type_key_zero(), r_type_unwrapped))
-      {
-        break;
-      }
-      
-      // rjf: generate
-      result.root     = r_tree.root;
-      result.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, r_type_unwrapped, 1, 0);
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: cast
-    case E_ExprKind_Cast:
-    {
-      // rjf: unpack operands
-      E_Expr *cast_type_expr = expr->first;
-      E_Expr *casted_expr = cast_type_expr->next;
-      E_TypeKey cast_type = e_type_from_expr(cast_type_expr);
-      E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
-      U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
-      E_IRTreeAndType casted_tree = e_irtree_and_type_from_expr(arena, casted_expr);
-      e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
-      E_TypeKey casted_type = e_type_unwrap(casted_tree.type_key);
-      E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
-      U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
-      U8 in_group  = e_type_group_from_kind(casted_type_kind);
-      U8 out_group = e_type_group_from_kind(cast_type_kind);
-      RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(casted_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(cast_type_kind == E_TypeKind_Null)
-      {
-        break;
-      }
-      else if(conversion_rule != RDI_EvalConversionKind_Noop &&
-              conversion_rule != RDI_EvalConversionKind_Legal)
-      {
-        String8 text = str8_lit("Unknown cast conversion rule.");
-        if(conversion_rule < RDI_EvalConversionKind_COUNT)
-        {
-          text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
-        }
-        e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
-        break;
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, casted_tree.mode, casted_tree.root, casted_type);
-        E_IRNode *new_tree = in_tree;
-        if(conversion_rule == RDI_EvalConversionKind_Legal)
-        {
-          new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
-        }
-        if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
-        {
-          new_tree = e_irtree_trunc(arena, in_tree, cast_type);
-        }
-        result.root     = new_tree;
-        result.type_key = cast_type;
-        result.mode     = E_Mode_Value;
-      }
-    }break;
-    
-    //- rjf: sizeof
-    case E_ExprKind_Sizeof:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_TypeKey r_type = zero_struct;
-      E_Space space = r_expr->space;
-      switch(r_expr->kind)
-      {
-        case E_ExprKind_TypeIdent:
-        case E_ExprKind_Ptr:
-        case E_ExprKind_Array:
-        case E_ExprKind_Func:
-        {
-          r_type = e_type_from_expr(r_expr);
-        }break;
-        default:
-        {
-          E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-          e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-          r_type = r_tree.type_key;
-        }break;
-      }
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(e_type_key_match(r_type, e_type_key_zero()))
-      {
-        break;
-      }
-      else if(e_type_kind_from_key(r_type) == E_TypeKind_Null)
-      {
-        break;
-      }
-      
-      // rjf: generate
-      {
-        U64 r_type_byte_size = e_type_byte_size_from_key(r_type);
-        result.root     = e_irtree_const_u(arena, r_type_byte_size);
-        result.type_key = e_type_key_basic(E_TypeKind_U64);
-        result.mode     = E_Mode_Value;
-      }
-    }break;
-    
-    //- rjf: typeof
-    case E_ExprKind_Typeof:
-    {
-      // rjf: evaluate operand tree
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      
-      // rjf: fill output
-      result.root     = e_irtree_const_u(arena, 0);
-      result.type_key = r_tree.type_key;
-      result.mode     = E_Mode_Null;
-    }break;
-    
-    //- rjf: byteswap
-    case E_ExprKind_ByteSwap:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      U64 r_type_size = e_type_byte_size_from_key(r_type);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(!e_type_kind_is_integer(r_type_kind) || (r_type_size != 8 && r_type_size != 4 && r_type_size != 2))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Byteswapping this type is not supported.");
-        break;
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *node = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
-        E_IRNode *rhs = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-        e_irnode_push_child(node, rhs);
-        node->value.u64 = r_type_size;
-        result.root = node;
-        result.mode = E_Mode_Value;
-        result.type_key = r_type;
-      }
-    }break;
-    
-    //- rjf: unary operations
-    case E_ExprKind_Pos:
-    {
-      result = e_irtree_and_type_from_expr(arena, expr->first);
-    }break;
-    case E_ExprKind_Neg:
-    case E_ExprKind_BitNot:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
-      E_TypeKey r_type_promoted = e_type_promote(r_type);
-      RDI_EvalOp op = e_opcode_from_expr_kind(kind);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(r_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
-        break;
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-        in_tree = e_irtree_convert_hi(arena, in_tree, r_type_promoted, r_type);
-        E_IRNode *new_tree = e_irtree_unary_op(arena, op, r_type_group, in_tree);
-        result.root     = new_tree;
-        result.type_key = r_type_promoted;
-        result.mode     = E_Mode_Value;
-      }
-    }break;
-    case E_ExprKind_LogNot:
-    {
-      // rjf: unpack operand
-      E_Expr *r_expr = expr->first;
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
-      E_TypeKey r_type_promoted = e_type_key_basic(E_TypeKind_Bool);
-      RDI_EvalOp op = e_opcode_from_expr_kind(kind);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(r_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
-        break;
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-        in_tree = e_irtree_convert_hi(arena, in_tree, r_type_promoted, r_type);
-        E_IRNode *new_tree = e_irtree_unary_op(arena, op, r_type_group, in_tree);
-        result.root     = new_tree;
-        result.type_key = r_type_promoted;
-        result.mode     = E_Mode_Value;
-      }
-    }break;
-    
-    //- rjf: binary operations
-    case E_ExprKind_Mul:
-    case E_ExprKind_Div:
-    case E_ExprKind_Mod:
-    case E_ExprKind_Add:
-    case E_ExprKind_Sub:
-    case E_ExprKind_LShift:
-    case E_ExprKind_RShift:
-    case E_ExprKind_Less:
-    case E_ExprKind_LsEq:
-    case E_ExprKind_Grtr:
-    case E_ExprKind_GrEq:
-    case E_ExprKind_EqEq:
-    case E_ExprKind_NtEq:
-    case E_ExprKind_BitAnd:
-    case E_ExprKind_BitXor:
-    case E_ExprKind_BitOr:
-    case E_ExprKind_LogAnd:
-    case E_ExprKind_LogOr:
-    {
-      // rjf: unpack operands
-      RDI_EvalOp op = e_opcode_from_expr_kind(kind);
-      B32 is_comparison = e_expr_kind_is_comparison(kind);
-      E_Expr *l_expr = expr->first;
-      E_Expr *r_expr = l_expr->next;
-      E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      E_TypeKey l_type = e_type_unwrap_enum(e_type_unwrap(l_tree.type_key));
-      E_TypeKey r_type = e_type_unwrap_enum(e_type_unwrap(r_tree.type_key));
-      E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      if(l_type.kind == E_TypeKeyKind_Reg)
-      {
-        l_type_kind = E_TypeKind_U64;
-        l_type = e_type_key_basic(l_type_kind);
-      }
-      if(r_type.kind == E_TypeKeyKind_Reg)
-      {
-        r_type_kind = E_TypeKind_U64;
-        r_type = e_type_key_basic(r_type_kind);
-      }
-      B32 l_is_pointer      = (l_type_kind == E_TypeKind_Ptr);
-      B32 l_is_decay        = (l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Offset);
-      B32 l_is_pointer_like = (l_is_pointer || l_is_decay);
-      B32 r_is_pointer      = (r_type_kind == E_TypeKind_Ptr);
-      B32 r_is_decay        = (r_type_kind == E_TypeKind_Array && r_tree.mode == E_Mode_Offset);
-      B32 r_is_pointer_like = (r_is_pointer || r_is_decay);
-      RDI_EvalTypeGroup l_type_group = e_type_group_from_kind(l_type_kind);
-      RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(l_tree.root->op == 0 || r_tree.root->op == 0)
-      {
-        break;
-      }
-      
-      // rjf: determine arithmetic path
-#define E_ArithPath_Normal          0
-#define E_ArithPath_PtrAdd          1
-#define E_ArithPath_PtrSub          2
-#define E_ArithPath_PtrArrayCompare 3
-      B32 ptr_arithmetic_mul_rptr = 0;
-      U32 arith_path = E_ArithPath_Normal;
-      if(kind == E_ExprKind_Add)
-      {
-        if(l_is_pointer_like && e_type_kind_is_integer(r_type_kind))
-        {
-          arith_path = E_ArithPath_PtrAdd;
-        }
-        if(l_is_pointer_like && e_type_kind_is_integer(l_type_kind))
-        {
-          arith_path = E_ArithPath_PtrAdd;
-          ptr_arithmetic_mul_rptr = 1;
-        }
-      }
-      else if(kind == E_ExprKind_Sub)
-      {
-        if(l_is_pointer_like && e_type_kind_is_integer(r_type_kind))
-        {
-          arith_path = E_ArithPath_PtrAdd;
-        }
-        if(l_is_pointer_like && r_is_pointer_like)
-        {
-          E_TypeKey l_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
-          E_TypeKey r_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(r_type)));
-          U64 l_type_direct_byte_size = e_type_byte_size_from_key(l_type_direct);
-          U64 r_type_direct_byte_size = e_type_byte_size_from_key(r_type_direct);
-          if(l_type_direct_byte_size == r_type_direct_byte_size)
-          {
-            arith_path = E_ArithPath_PtrSub;
-          }
-        }
-      }
-      else if(kind == E_ExprKind_EqEq)
-      {
-        if(l_type_kind == E_TypeKind_Array && (r_type_kind == E_TypeKind_Ptr || r_is_decay))
-        {
-          arith_path = E_ArithPath_PtrArrayCompare;
-        }
-        if(r_type_kind == E_TypeKind_Array && (l_type_kind == E_TypeKind_Ptr || l_is_decay))
-        {
-          arith_path = E_ArithPath_PtrArrayCompare;
-        }
-      }
-      
-      // rjf: generate according to arithmetic path
-      switch(arith_path)
-      {
-        //- rjf: normal arithmetic
-        case E_ArithPath_Normal:
-        {
-          // rjf: bad conditions? -> error if applicable, exit
-          if(!rdi_eval_op_typegroup_are_compatible(op, l_type_group) ||
-             !rdi_eval_op_typegroup_are_compatible(op, r_type_group))
-          {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
-            break;
-          }
-          
-          // rjf: generate
-          {
-            E_TypeKey final_type_key = is_comparison ? e_type_key_basic(E_TypeKind_Bool) : l_type;
-            E_IRNode *l_value_tree = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_type);
-            E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-            l_value_tree = e_irtree_convert_hi(arena, l_value_tree, l_type, l_type);
-            r_value_tree = e_irtree_convert_hi(arena, r_value_tree, l_type, r_type);
-            E_IRNode *new_tree = e_irtree_binary_op(arena, op, l_type_group, l_value_tree, r_value_tree);
-            result.root     = new_tree;
-            result.type_key = final_type_key;
-            result.mode     = E_Mode_Value;
-          }
-        }break;
-        
-        //- rjf: pointer addition
-        case E_ArithPath_PtrAdd:
-        {
-          // rjf: map l/r to ptr/int
-          E_IRTreeAndType *ptr_tree = &l_tree;
-          E_IRTreeAndType *int_tree = &r_tree;
-          B32 ptr_is_decay = l_is_decay;
-          if(ptr_arithmetic_mul_rptr)
-          {
-            ptr_tree = &r_tree;
-            int_tree = &l_tree;
-            ptr_is_decay = r_is_decay;
-          }
-          
-          // rjf: unpack type
-          E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(ptr_tree->type_key)));
-          U64 direct_type_size = e_type_byte_size_from_key(direct_type);
-          
-          // rjf: generate
-          {
-            E_IRNode *ptr_root = ptr_tree->root;
-            if(!ptr_is_decay)
-            {
-              ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->mode, ptr_root, ptr_tree->type_key);
-            }
-            E_IRNode *int_root = int_tree->root;
-            int_root = e_irtree_resolve_to_value(arena, int_tree->mode, int_root, int_tree->type_key);
-            if(direct_type_size > 1)
-            {
-              E_IRNode *const_root = e_irtree_const_u(arena, direct_type_size);
-              int_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, int_root, const_root);
-            }
-            E_TypeKey ptr_type = ptr_tree->type_key;
-            if(ptr_is_decay)
-            {
-              ptr_type = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, direct_type, 1, 0);
-            }
-            E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_root, int_root);
-            result.root     = new_root;
-            result.type_key = ptr_type;
-            result.mode     = E_Mode_Value;
-          }
-        }break;
-        
-        //- rjf: pointer subtraction
-        case E_ArithPath_PtrSub:
-        {
-          // rjf: unpack type
-          E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
-          U64 direct_type_size = e_type_byte_size_from_key(direct_type);
-          
-          // rjf: generate
-          E_IRNode *l_root = l_tree.root;
-          E_IRNode *r_root = r_tree.root;
-          if(!l_is_decay)
-          {
-            l_root = e_irtree_resolve_to_value(arena, l_tree.mode, l_root, l_type);
-          }
-          if(!r_is_decay)
-          {
-            r_root = e_irtree_resolve_to_value(arena, r_tree.mode, r_root, r_type);
-          }
-          E_IRNode *op_tree = e_irtree_binary_op_u(arena, op, l_root, r_root);
-          E_IRNode *new_tree = op_tree;
-          if(direct_type_size > 1)
-          {
-            E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-            new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Div, new_tree, const_tree);
-          }
-          result.root     = new_tree;
-          result.type_key = e_type_key_basic(E_TypeKind_U64);
-          result.mode     = E_Mode_Value;
-        }break;
-        
-        //- rjf: pointer array comparison
-        case E_ArithPath_PtrArrayCompare:
-        {
-          // rjf: map l/r to pointer/array
-          B32 ptr_is_decay = l_is_decay;
-          E_IRTreeAndType *ptr_tree = &l_tree;
-          E_IRTreeAndType *arr_tree = &r_tree;
-          if(l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Value)
-          {
-            ptr_is_decay = r_is_decay;
-            ptr_tree = &r_tree;
-            arr_tree = &l_tree;
-          }
-          
-          // rjf: resolve pointer to value, sized same as array
-          E_IRNode *ptr_root = ptr_tree->root;
-          E_IRNode *arr_root = arr_tree->root;
-          if(!ptr_is_decay)
-          {
-            ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->mode, ptr_tree->root, ptr_tree->type_key);
-          }
-          
-          // rjf: read from pointer into value, to compare with array
-          E_IRNode *mem_root = e_irtree_mem_read_type(arena, ptr_root, arr_tree->type_key);
-          
-          // rjf: generate
-          result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
-          result.type_key = e_type_key_basic(E_TypeKind_Bool);
-          result.mode     = E_Mode_Value;
-        }break;
-      }
-    }break;
-    
-    //- rjf: ternary operators
-    case E_ExprKind_Ternary:
-    {
-      // rjf: unpack operands
-      E_Expr *c_expr = expr->first;
-      E_Expr *l_expr = c_expr->next;
-      E_Expr *r_expr = l_expr->next;
-      E_IRTreeAndType c_tree = e_irtree_and_type_from_expr(arena, c_expr);
-      E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
-      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-      e_msg_list_concat_in_place(&result.msgs, &c_tree.msgs);
-      e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
-      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      E_TypeKey c_type = e_type_unwrap(c_tree.type_key);
-      E_TypeKey l_type = e_type_unwrap(l_tree.type_key);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
-      E_TypeKind c_type_kind = e_type_kind_from_key(c_type);
-      E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
-      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-      E_TypeKey result_type = l_type;
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(c_tree.root->op == 0 || l_tree.root->op == 0 || r_tree.root->op == 0)
-      {
-        break;
-      }
-      else if(!e_type_kind_is_integer(c_type_kind) && c_type_kind != E_TypeKind_Bool)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Conditional term must be an integer or boolean type.");
-      }
-      else if(!e_type_match(l_type, r_type))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left and right terms must have matching types.");
-      }
-      
-      // rjf: generate
-      {
-        E_IRNode *c_value_tree = e_irtree_resolve_to_value(arena, c_tree.mode, c_tree.root, c_type);
-        E_IRNode *l_value_tree = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_type);
-        E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
-        l_value_tree = e_irtree_convert_hi(arena, l_value_tree, result_type, l_type);
-        r_value_tree = e_irtree_convert_hi(arena, r_value_tree, result_type, r_type);
-        E_IRNode *new_tree = e_irtree_conditional(arena, c_value_tree, l_value_tree, r_value_tree);
-        result.root     = new_tree;
-        result.type_key = result_type;
-        result.mode     = E_Mode_Value;
-      }
-    }break;
-    
-    //- rjf: call
-    case E_ExprKind_Call:
-    {
-      E_Expr *lhs = expr->first;
-      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-      E_TypeKey lhs_type_key = lhs_irtree.type_key;
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      
-      // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
-      // a lens type, which preserves the name & arguments of the lens call expression
-      if(lhs_type->kind == E_TypeKind_LensSpec)
-      {
-        Temp scratch = scratch_begin(&arena, 1);
-        
-        // rjf: generate result via first argument to lens
-        result = e_irtree_and_type_from_expr(arena, lhs->next);
-        
-        // rjf: count extra arguments
-        U64 arg_count = 0;
-        for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next)
-        {
-          arg_count += 1;
-        }
-        
-        // rjf: flatten extra arguments
-        E_Expr **args = push_array(scratch.arena, E_Expr *, arg_count);
-        {
-          U64 idx = 0;
-          for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next, idx += 1)
-          {
-            args[idx] = arg;
-          }
-        }
-        
-        // rjf: patch resultant type with a lens w/ args, pointing to the original type
-        result.type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .count = arg_count, .args = args, .direct_key = result.type_key, .name = lhs_type->name);
-        
-        scratch_end(scratch);
-      }
-      else
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");
-      }
-    }break;
-    
-    //- rjf: leaf bytecode
-    case E_ExprKind_LeafBytecode:
-    {
-      E_IRNode *new_tree = e_irtree_bytecode_no_copy(arena, expr->bytecode);
-      new_tree->space = expr->space;
-      E_TypeKey final_type_key = expr->type_key;
-      result.root     = new_tree;
-      result.type_key = final_type_key;
-      result.mode     = expr->mode;
-    }break;
-    
-    //- rjf: leaf string literal
-    case E_ExprKind_LeafStringLiteral:
-    {
-      String8 string = expr->string;
-      E_TypeKey type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_UChar8), string.size, 0);
-      E_IRNode *new_tree = e_irtree_string_literal(arena, string);
-      result.root     = new_tree;
-      result.type_key = type_key;
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: leaf U64s
-    case E_ExprKind_LeafU64:
-    {
-      U64 val = expr->value.u64;
-      E_IRNode *new_tree = e_irtree_const_u(arena, val);
-      E_TypeKey type_key = zero_struct;
-      if(0){}
-      else if(val <= max_S32){type_key = e_type_key_basic(E_TypeKind_S32);}
-      else if(val <= max_S64){type_key = e_type_key_basic(E_TypeKind_S64);}
-      else                   {type_key = e_type_key_basic(E_TypeKind_U64);}
-      result.root     = new_tree;
-      result.type_key = type_key;
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: leaf F64s
-    case E_ExprKind_LeafF64:
-    {
-      U64 val = expr->value.u64;
-      E_IRNode *new_tree = e_irtree_const_u(arena, val);
-      result.root     = new_tree;
-      result.type_key = e_type_key_basic(E_TypeKind_F64);
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: leaf F32s
-    case E_ExprKind_LeafF32:
-    {
-      U32 val = expr->value.u32;
-      E_IRNode *new_tree = e_irtree_const_u(arena, val);
-      result.root     = new_tree;
-      result.type_key = e_type_key_basic(E_TypeKind_F32);
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: leaf identifiers
-    case E_ExprKind_LeafIdentifier:
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      String8 qualifier = expr->qualifier;
-      String8 string = expr->string;
-      String8 string__redirected = string;
-      B32 string_mapped = 0;
-      E_TypeKey mapped_type_key = zero_struct;
-      E_Module *mapped_location_block_module = &e_module_nil;
-      RDI_LocationBlock *mapped_location_block = 0;
-      
-      //- rjf: form namespaceified fallback versions of this lookup string
-      String8List namespaceified_strings = {0};
-      {
-        E_Module *module = e_ir_state->ctx->primary_module;
-        RDI_Parsed *rdi = module->rdi;
-        RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
-        U64 name_size = 0;
-        U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-        String8 containing_procedure_name = str8(name_ptr, name_size);
-        U64 last_past_scope_resolution_pos = 0;
-        for(;;)
-        {
-          U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
-          U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
-          U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-          if(past_next_scope_resolution_pos >= containing_procedure_name.size)
-          {
-            break;
-          }
-          String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
-          String8 namespaceified_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, string);
-          str8_list_push_front(scratch.arena, &namespaceified_strings, namespaceified_string);
-          last_past_scope_resolution_pos = past_next_scope_resolution_pos;
-        }
-      }
-      
-      //- rjf: try to map name as member - if found, string__redirected := "this", and turn
-      // on later implicit-member-lookup generation
-      B32 string_is_implicit_member_name = 0;
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("member"), 0)))
-      {
-        E_Module *module = e_ir_state->ctx->primary_module;
-        U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
-        RDI_Parsed *rdi = module->rdi;
-        RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
-        RDI_UDT *udt = rdi_container_udt_from_procedure(rdi, procedure);
-        RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
-        E_TypeKey container_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, module_idx);
-        E_Member member = e_type_member_from_key_name__cached(container_type_key, string);
-        if(member.kind != E_MemberKind_Null)
-        {
-          string_is_implicit_member_name = 1;
-          string__redirected = str8_lit("this");
-        }
-      }
-      
-      //- rjf: try locals
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("local"), 0)))
-      {
-        E_Module *module = e_ir_state->ctx->primary_module;
-        U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
-        RDI_Parsed *rdi = module->rdi;
-        U64 local_num = e_num_from_string(e_ir_state->ctx->locals_map, string__redirected);
-        if(local_num != 0)
-        {
-          RDI_Local *local = rdi_element_from_name_idx(rdi, Locals, local_num-1);
-          
-          // rjf: extract local's type key
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local->type_idx);
-          mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local->type_idx, module_idx);
-          
-          // rjf: extract local's location block
-          U64 ip_voff = e_ir_state->ctx->thread_ip_voff;
-          for(U32 loc_block_idx = local->location_first;
-              loc_block_idx < local->location_opl;
-              loc_block_idx += 1)
-          {
-            RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
-            if(block->scope_off_first <= ip_voff && ip_voff < block->scope_off_opl)
-            {
-              mapped_location_block_module = module;
-              mapped_location_block = block;
-            }
-          }
-        }
-      }
-      
-      //- rjf: mapped to location block -> extract or produce bytecode for this mapping
-      E_Mode mapped_bytecode_mode = E_Mode_Offset;
-      E_Space mapped_bytecode_space = zero_struct;
-      String8 mapped_bytecode = {0};
-      if(mapped_location_block != 0)
-      {
-        E_Module *module = mapped_location_block_module;
-        E_Space space = module->space;
-        Arch arch = module->arch;
-        RDI_Parsed *rdi = module->rdi;
-        RDI_LocationBlock *block = mapped_location_block;
-        U64 all_location_data_size = 0;
-        U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
-        if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
-        {
-          RDI_LocationKind loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
-          switch(loc_kind)
-          {
-            default:{}break;
-            case RDI_LocationKind_ValBytecodeStream: {mapped_bytecode_mode = E_Mode_Value;}goto bytecode_stream;
-            case RDI_LocationKind_AddrBytecodeStream:{mapped_bytecode_mode = E_Mode_Offset;}goto bytecode_stream;
-            bytecode_stream:;
-            {
-              string_mapped = 1;
-              U64 bytecode_size = 0;
-              U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
-              U64 off_opl = all_location_data_size;
-              for(U64 off = off_first, next_off = off_opl;
-                  off < all_location_data_size;
-                  off = next_off)
-              {
-                next_off = off_opl;
-                U8 op = all_location_data[off];
-                if(op == 0)
-                {
-                  break;
-                }
-                U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-                U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                bytecode_size += (1 + p_size);
-                next_off = (off + 1 + p_size);
-              }
-              mapped_bytecode = str8(all_location_data + off_first, bytecode_size);
-            }break;
-            case RDI_LocationKind_AddrRegPlusU16:
-            if(block->location_data_off + sizeof(RDI_LocationRegPlusU16) <= all_location_data_size)
-            {
-              string_mapped = 1;
-              RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
-              E_OpList oplist = {0};
-              U64 byte_size = bit_size_from_arch(arch)/8;
-              U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = E_Mode_Offset;
-              mapped_bytecode_space = space;
-            }break;
-            case RDI_LocationKind_AddrAddrRegPlusU16:
-            {
-              string_mapped = 1;
-              RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
-              E_OpList oplist = {0};
-              U64 byte_size = bit_size_from_arch(arch)/8;
-              U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = E_Mode_Offset;
-              mapped_bytecode_space = space;
-            }break;
-            case RDI_LocationKind_ValReg:
-            if(block->location_data_off + sizeof(RDI_LocationReg) <= all_location_data_size)
-            {
-              string_mapped = 1;
-              RDI_LocationReg loc = *(RDI_LocationReg *)(all_location_data + block->location_data_off);
-              
-              REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc.reg_code);
-              REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
-              E_OpList oplist = {0};
-              U64 byte_size = (U64)reg_rng.byte_size;
-              U64 byte_pos = 0;
-              U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, byte_pos);
-              e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = E_Mode_Value;
-              mapped_bytecode_space = space;
-            }break;
-          }
-        }
-      }
-      
-      //- rjf: try globals
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))
-      {
-        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_ir_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            U32 match_idx = matches[matches_count-1];
-            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
-            U32 type_idx = global_var->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
-            string_mapped = 1;
-            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            mapped_bytecode_mode = E_Mode_Offset;
-            mapped_bytecode_space = module->space;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try thread-locals
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("thread_local"), 0)))
-      {
-        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_ir_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            U32 match_idx = matches[matches_count-1];
-            RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
-            U32 type_idx = thread_var->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
-            string_mapped = 1;
-            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            mapped_bytecode_mode = E_Mode_Offset;
-            mapped_bytecode_space = module->space;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try procedures
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("procedure"), 0)))
-      {
-        for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
-        {
-          E_Module *module = &e_ir_state->ctx->modules[module_idx];
-          RDI_Parsed *rdi = module->rdi;
-          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
-          RDI_ParsedNameMap parsed_name_map = {0};
-          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
-          U32 matches_count = 0;
-          U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          for(String8Node *n = namespaceified_strings.first;
-              n != 0 && matches_count == 0;
-              n = n->next)
-          {
-            node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-            matches_count = 0;
-            matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-          }
-          if(matches_count != 0)
-          {
-            U32 match_idx = matches[matches_count-1];
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
-            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
-            U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
-            U32 type_idx = procedure->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
-            string_mapped = 1;
-            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            mapped_bytecode_mode = E_Mode_Value;
-            mapped_bytecode_space = module->space;
-            break;
-          }
-        }
-      }
-      
-      //- rjf: try types
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("type"), 0)))
-      {
-        mapped_type_key = e_leaf_type_from_name(string);
-        if(!e_type_key_match(e_type_key_zero(), mapped_type_key))
-        {
-          string_mapped = 1;
-        }
-      }
-      
-      //- rjf: try registers
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
-      {
-        U64 reg_num = e_num_from_string(e_ir_state->ctx->regs_map, string);
-        if(reg_num != 0)
-        {
-          string_mapped = 1;
-          REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_num];
-          E_OpList oplist = {0};
-          e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
-          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-          mapped_bytecode_mode = E_Mode_Offset;
-          mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
-          mapped_type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_num);
-        }
-      }
-      
-      //- rjf: try register aliases
-      if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
-      {
-        U64 alias_num = e_num_from_string(e_ir_state->ctx->reg_alias_map, string);
-        if(alias_num != 0)
-        {
-          string_mapped = 1;
-          REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_num];
-          REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_slice.code];
-          E_OpList oplist = {0};
-          e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
-          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-          mapped_bytecode_mode = E_Mode_Offset;
-          mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
-          mapped_type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_num);
-        }
-      }
-      
-      //- rjf: try basic constants
-      if(!string_mapped && str8_match(string, str8_lit("true"), 0))
-      {
-        string_mapped = 1;
-        E_OpList oplist = {0};
-        e_oplist_push_uconst(arena, &oplist, 1);
-        mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
-        mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-        mapped_bytecode_mode = E_Mode_Value;
-      }
-      if(!string_mapped && str8_match(string, str8_lit("false"), 0))
-      {
-        string_mapped = 1;
-        E_OpList oplist = {0};
-        e_oplist_push_uconst(arena, &oplist, 0);
-        mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
-        mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-        mapped_bytecode_mode = E_Mode_Value;
-      }
-      
-      //- rjf: generate IR trees for bytecode
-      B32 generated = 0;
-      if(!generated && mapped_bytecode.size != 0)
-      {
-        generated = 1;
-        E_IRNode *root = e_irtree_bytecode_no_copy(arena, mapped_bytecode);
-        root->space = mapped_bytecode_space;
-        result.root = root;
-        result.type_key = mapped_type_key;
-        result.mode = mapped_bytecode_mode;
-      }
-      
-      //- rjf: generate nil-IR trees w/ type for types
-      if(!generated && !e_type_key_match(e_type_key_zero(), mapped_type_key))
-      {
-        generated = 1;
-        result.type_key = mapped_type_key;
-        result.mode = E_Mode_Null;
-      }
-      
-      //- rjf: generate IR trees for macros
-      if(!generated)
-      {
-        E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, string);
-        if(macro_expr != &e_expr_nil)
-        {
-          generated = 1;
-          e_string2expr_map_inc_poison(e_ir_state->ctx->macro_map, string);
-          result = e_irtree_and_type_from_expr(arena, macro_expr);
-          e_string2expr_map_dec_poison(e_ir_state->ctx->macro_map, string);
-        }
-      }
-      
-      //- rjf: extend generation with member access, if original string was an
-      // implicit member access
-      if(generated && string_is_implicit_member_name)
-      {
-        // TODO(rjf): @cfg
-#if 0
-        E_LookupRule *lookup_rule = &e_lookup_rule__default;
-        E_LookupInfo lookup_info = lookup_rule->info(arena, &result, &e_expr_nil, str8_zero());
-        E_LookupAccess lookup_access = lookup_rule->access(arena, E_ExprKind_MemberAccess, lhs, rhs, &e_expr_nil, lookup_info.user_data);
-        result = lookup_access.irtree_and_type;
-#endif
-      }
-      
-      //- rjf: error on failure-to-generate
-      if(!generated)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", string);
-      }
-      
-      scratch_end(scratch);
-    }break;
-    
-    //- rjf: leaf offsets
-    case E_ExprKind_LeafOffset:
-    {
-      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
-      new_tree->value = expr->value;
-      new_tree->space = expr->space;
-      result.root     = new_tree;
-      result.type_key = expr->type_key;
-      result.mode     = E_Mode_Offset;
-    }break;
-    
-    //- rjf: leaf values
-    case E_ExprKind_LeafValue:
-    {
-      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU128);
-      new_tree->value = expr->value;
-      new_tree->space = expr->space;
-      result.root     = new_tree;
-      result.type_key = expr->type_key;
-      result.mode     = E_Mode_Value;
-    }break;
-    
-    //- rjf: leaf file paths
-    case E_ExprKind_LeafFilePath:
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      String8 file_path = expr->string;
-      FileProperties props = os_properties_from_file_path(file_path);
-      if(!str8_match(expr->qualifier, str8_lit("folder"), 0) && !(props.flags & FilePropertyFlag_IsFolder) && file_path.size != 0)
-      {
-        E_Space space = e_space_make(E_SpaceKind_FileSystem);
-        result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
-        result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
-        result.mode     = E_Mode_Value;
-      }
-      else
-      {
-        String8 folder_path = str8_chop_last_slash(file_path);
-        props = os_properties_from_file_path(folder_path);
-        if(props.flags & FilePropertyFlag_IsFolder || folder_path.size == 0 || str8_match(folder_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
-        {
-          E_Space space = e_space_make(E_SpaceKind_FileSystem);
-          result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(folder_path)));
-          result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
-          result.mode     = E_Mode_Value;
-        }
-      }
-      scratch_end(scratch);
-    }break;
-    
-    //- rjf: types
-    case E_ExprKind_TypeIdent:
-    {
-      result.root = e_irtree_const_u(arena, 0);
-      result.root->space = expr->space;
-      result.type_key = expr->type_key;
-      result.mode = E_Mode_Null;
-    }break;
-    
-    //- rjf: (unexpected) type expressions
-    case E_ExprKind_Ptr:
-    case E_ExprKind_Array:
-    case E_ExprKind_Func:
-    {
-      e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Type expression not expected.");
-    }break;
-    
-    //- rjf: definitions
-    case E_ExprKind_Define:
-    {
-      E_Expr *lhs = expr->first;
-      E_Expr *rhs = lhs->next;
-      result = e_irtree_and_type_from_expr(arena, rhs);
-      if(lhs->kind != E_ExprKind_LeafIdentifier)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
-      }
-    }break;
-  }
-  return result;
-}
-
 internal E_IRTreeAndType
-e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
+e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   E_IRTreeAndType result = {&e_irnode_nil};
-  if(expr->kind == E_ExprKind_Ref)
-  {
-    expr = expr->ref;
-  }
   
+  //////////////////////////////
   //- rjf: apply all ir-generation steps
+  //
   typedef struct Task Task;
   struct Task
   {
     Task *next;
     E_Expr *expr;
+    E_Expr *parent_expr;
+    E_IRTreeAndType parent_irtree_and_type;
   };
-  Task start_task = {0, expr};
+  Task start_task = {0, root_expr, &e_expr_nil, {&e_irnode_nil}};
   Task *first_task = &start_task;
   Task *last_task = first_task;
   for(Task *t = first_task; t != 0; t = t->next)
   {
-    // rjf: poison the tag we are about to use, so we don't recursively use it
-    e_expr_poison(t->expr);
+    E_Expr *expr = t->expr;
     
-    // rjf: do this rule's generation
-    result = e_irgen_rule__default.irgen(arena, t->expr);
+    //- rjf: poison the expression we are about to use, so we don't recursively use it
+    e_expr_poison(expr);
     
-    // rjf: find any auto hooks according to this generation's type
+    //- rjf: do expr -> irtree generation for this expression
+    if(expr->kind == E_ExprKind_Ref)
+    {
+      expr = expr->ref;
+    }
+    E_ExprKind kind = expr->kind;
+    switch(kind)
+    {
+      default:{}break;
+      
+      //- rjf: accesses
+      case E_ExprKind_MemberAccess:
+      case E_ExprKind_ArrayIndex:
+      {
+        // rjf: unpack left-hand-size
+        E_Expr *lhs = expr->first;
+        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        
+        // rjf: pick access hook based on type
+        E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
+        E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+        if(lhs_access == 0)
+        {
+          lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
+        }
+        
+        // rjf: call into hook to do access
+        result = lhs_access(arena, expr, &lhs_irtree);
+      }break;
+      
+      //- rjf: dereference
+      case E_ExprKind_Deref:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        E_TypeKey r_type_direct = e_type_direct_from_key(r_type);
+        U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(r_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(r_type_direct_size == 0 &&
+                (r_type_kind == E_TypeKind_Ptr ||
+                 r_type_kind == E_TypeKind_LRef ||
+                 r_type_kind == E_TypeKind_RRef))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference pointers of zero-sized types.");
+          break;
+        }
+        else if(r_type_direct_size == 0 && r_type_kind == E_TypeKind_Array)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference arrays of zero-sized types.");
+          break;
+        }
+        else if(r_type_kind != E_TypeKind_Array &&
+                r_type_kind != E_TypeKind_Ptr &&
+                r_type_kind != E_TypeKind_LRef &&
+                r_type_kind != E_TypeKind_RRef)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference this type.");
+          break;
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *new_tree = r_tree.root;
+          if(r_tree.mode != E_Mode_Value &&
+             (r_type_kind == E_TypeKind_Ptr ||
+              r_type_kind == E_TypeKind_LRef ||
+              r_type_kind == E_TypeKind_RRef))
+          {
+            new_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+          }
+          result.root     = new_tree;
+          result.type_key = r_type_direct;
+          result.mode     = E_Mode_Offset;
+        }
+      }break;
+      
+      //- rjf: address-of
+      case E_ExprKind_Address:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_TypeKey r_type = r_tree.type_key;
+        E_TypeKey r_type_unwrapped = e_type_unwrap(r_type);
+        E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(r_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(e_type_key_match(e_type_key_zero(), r_type_unwrapped))
+        {
+          break;
+        }
+        
+        // rjf: generate
+        result.root     = r_tree.root;
+        result.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, r_type_unwrapped, 1, 0);
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: cast
+      case E_ExprKind_Cast:
+      {
+        // rjf: unpack operands
+        E_Expr *cast_type_expr = expr->first;
+        E_Expr *casted_expr = cast_type_expr->next;
+        E_TypeKey cast_type = e_type_from_expr(cast_type_expr);
+        E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
+        U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
+        E_IRTreeAndType casted_tree = e_irtree_and_type_from_expr(arena, casted_expr);
+        e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
+        E_TypeKey casted_type = e_type_unwrap(casted_tree.type_key);
+        E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
+        U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
+        U8 in_group  = e_type_group_from_kind(casted_type_kind);
+        U8 out_group = e_type_group_from_kind(cast_type_kind);
+        RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(casted_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(cast_type_kind == E_TypeKind_Null)
+        {
+          break;
+        }
+        else if(conversion_rule != RDI_EvalConversionKind_Noop &&
+                conversion_rule != RDI_EvalConversionKind_Legal)
+        {
+          String8 text = str8_lit("Unknown cast conversion rule.");
+          if(conversion_rule < RDI_EvalConversionKind_COUNT)
+          {
+            text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
+          }
+          e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
+          break;
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *in_tree = e_irtree_resolve_to_value(arena, casted_tree.mode, casted_tree.root, casted_type);
+          E_IRNode *new_tree = in_tree;
+          if(conversion_rule == RDI_EvalConversionKind_Legal)
+          {
+            new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
+          }
+          if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
+          {
+            new_tree = e_irtree_trunc(arena, in_tree, cast_type);
+          }
+          result.root     = new_tree;
+          result.type_key = cast_type;
+          result.mode     = E_Mode_Value;
+        }
+      }break;
+      
+      //- rjf: sizeof
+      case E_ExprKind_Sizeof:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_TypeKey r_type = zero_struct;
+        E_Space space = r_expr->space;
+        switch(r_expr->kind)
+        {
+          case E_ExprKind_TypeIdent:
+          case E_ExprKind_Ptr:
+          case E_ExprKind_Array:
+          case E_ExprKind_Func:
+          {
+            r_type = e_type_from_expr(r_expr);
+          }break;
+          default:
+          {
+            E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+            e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+            r_type = r_tree.type_key;
+          }break;
+        }
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(e_type_key_match(r_type, e_type_key_zero()))
+        {
+          break;
+        }
+        else if(e_type_kind_from_key(r_type) == E_TypeKind_Null)
+        {
+          break;
+        }
+        
+        // rjf: generate
+        {
+          U64 r_type_byte_size = e_type_byte_size_from_key(r_type);
+          result.root     = e_irtree_const_u(arena, r_type_byte_size);
+          result.type_key = e_type_key_basic(E_TypeKind_U64);
+          result.mode     = E_Mode_Value;
+        }
+      }break;
+      
+      //- rjf: typeof
+      case E_ExprKind_Typeof:
+      {
+        // rjf: evaluate operand tree
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        
+        // rjf: fill output
+        result.root     = e_irtree_const_u(arena, 0);
+        result.type_key = r_tree.type_key;
+        result.mode     = E_Mode_Null;
+      }break;
+      
+      //- rjf: byteswap
+      case E_ExprKind_ByteSwap:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        U64 r_type_size = e_type_byte_size_from_key(r_type);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(!e_type_kind_is_integer(r_type_kind) || (r_type_size != 8 && r_type_size != 4 && r_type_size != 2))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Byteswapping this type is not supported.");
+          break;
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *node = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
+          E_IRNode *rhs = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+          e_irnode_push_child(node, rhs);
+          node->value.u64 = r_type_size;
+          result.root = node;
+          result.mode = E_Mode_Value;
+          result.type_key = r_type;
+        }
+      }break;
+      
+      //- rjf: unary operations
+      case E_ExprKind_Pos:
+      {
+        result = e_irtree_and_type_from_expr(arena, expr->first);
+      }break;
+      case E_ExprKind_Neg:
+      case E_ExprKind_BitNot:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
+        E_TypeKey r_type_promoted = e_type_promote(r_type);
+        RDI_EvalOp op = e_opcode_from_expr_kind(kind);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(r_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+          break;
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *in_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+          in_tree = e_irtree_convert_hi(arena, in_tree, r_type_promoted, r_type);
+          E_IRNode *new_tree = e_irtree_unary_op(arena, op, r_type_group, in_tree);
+          result.root     = new_tree;
+          result.type_key = r_type_promoted;
+          result.mode     = E_Mode_Value;
+        }
+      }break;
+      case E_ExprKind_LogNot:
+      {
+        // rjf: unpack operand
+        E_Expr *r_expr = expr->first;
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
+        E_TypeKey r_type_promoted = e_type_key_basic(E_TypeKind_Bool);
+        RDI_EvalOp op = e_opcode_from_expr_kind(kind);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(r_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+          break;
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *in_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+          in_tree = e_irtree_convert_hi(arena, in_tree, r_type_promoted, r_type);
+          E_IRNode *new_tree = e_irtree_unary_op(arena, op, r_type_group, in_tree);
+          result.root     = new_tree;
+          result.type_key = r_type_promoted;
+          result.mode     = E_Mode_Value;
+        }
+      }break;
+      
+      //- rjf: binary operations
+      case E_ExprKind_Mul:
+      case E_ExprKind_Div:
+      case E_ExprKind_Mod:
+      case E_ExprKind_Add:
+      case E_ExprKind_Sub:
+      case E_ExprKind_LShift:
+      case E_ExprKind_RShift:
+      case E_ExprKind_Less:
+      case E_ExprKind_LsEq:
+      case E_ExprKind_Grtr:
+      case E_ExprKind_GrEq:
+      case E_ExprKind_EqEq:
+      case E_ExprKind_NtEq:
+      case E_ExprKind_BitAnd:
+      case E_ExprKind_BitXor:
+      case E_ExprKind_BitOr:
+      case E_ExprKind_LogAnd:
+      case E_ExprKind_LogOr:
+      {
+        // rjf: unpack operands
+        RDI_EvalOp op = e_opcode_from_expr_kind(kind);
+        B32 is_comparison = e_expr_kind_is_comparison(kind);
+        E_Expr *l_expr = expr->first;
+        E_Expr *r_expr = l_expr->next;
+        E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        E_TypeKey l_type = e_type_unwrap_enum(e_type_unwrap(l_tree.type_key));
+        E_TypeKey r_type = e_type_unwrap_enum(e_type_unwrap(r_tree.type_key));
+        E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        if(l_type.kind == E_TypeKeyKind_Reg)
+        {
+          l_type_kind = E_TypeKind_U64;
+          l_type = e_type_key_basic(l_type_kind);
+        }
+        if(r_type.kind == E_TypeKeyKind_Reg)
+        {
+          r_type_kind = E_TypeKind_U64;
+          r_type = e_type_key_basic(r_type_kind);
+        }
+        B32 l_is_pointer      = (l_type_kind == E_TypeKind_Ptr);
+        B32 l_is_decay        = (l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Offset);
+        B32 l_is_pointer_like = (l_is_pointer || l_is_decay);
+        B32 r_is_pointer      = (r_type_kind == E_TypeKind_Ptr);
+        B32 r_is_decay        = (r_type_kind == E_TypeKind_Array && r_tree.mode == E_Mode_Offset);
+        B32 r_is_pointer_like = (r_is_pointer || r_is_decay);
+        RDI_EvalTypeGroup l_type_group = e_type_group_from_kind(l_type_kind);
+        RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(l_tree.root->op == 0 || r_tree.root->op == 0)
+        {
+          break;
+        }
+        
+        // rjf: determine arithmetic path
+#define E_ArithPath_Normal          0
+#define E_ArithPath_PtrAdd          1
+#define E_ArithPath_PtrSub          2
+#define E_ArithPath_PtrArrayCompare 3
+        B32 ptr_arithmetic_mul_rptr = 0;
+        U32 arith_path = E_ArithPath_Normal;
+        if(kind == E_ExprKind_Add)
+        {
+          if(l_is_pointer_like && e_type_kind_is_integer(r_type_kind))
+          {
+            arith_path = E_ArithPath_PtrAdd;
+          }
+          if(l_is_pointer_like && e_type_kind_is_integer(l_type_kind))
+          {
+            arith_path = E_ArithPath_PtrAdd;
+            ptr_arithmetic_mul_rptr = 1;
+          }
+        }
+        else if(kind == E_ExprKind_Sub)
+        {
+          if(l_is_pointer_like && e_type_kind_is_integer(r_type_kind))
+          {
+            arith_path = E_ArithPath_PtrAdd;
+          }
+          if(l_is_pointer_like && r_is_pointer_like)
+          {
+            E_TypeKey l_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
+            E_TypeKey r_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(r_type)));
+            U64 l_type_direct_byte_size = e_type_byte_size_from_key(l_type_direct);
+            U64 r_type_direct_byte_size = e_type_byte_size_from_key(r_type_direct);
+            if(l_type_direct_byte_size == r_type_direct_byte_size)
+            {
+              arith_path = E_ArithPath_PtrSub;
+            }
+          }
+        }
+        else if(kind == E_ExprKind_EqEq)
+        {
+          if(l_type_kind == E_TypeKind_Array && (r_type_kind == E_TypeKind_Ptr || r_is_decay))
+          {
+            arith_path = E_ArithPath_PtrArrayCompare;
+          }
+          if(r_type_kind == E_TypeKind_Array && (l_type_kind == E_TypeKind_Ptr || l_is_decay))
+          {
+            arith_path = E_ArithPath_PtrArrayCompare;
+          }
+        }
+        
+        // rjf: generate according to arithmetic path
+        switch(arith_path)
+        {
+          //- rjf: normal arithmetic
+          case E_ArithPath_Normal:
+          {
+            // rjf: bad conditions? -> error if applicable, exit
+            if(!rdi_eval_op_typegroup_are_compatible(op, l_type_group) ||
+               !rdi_eval_op_typegroup_are_compatible(op, r_type_group))
+            {
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+              break;
+            }
+            
+            // rjf: generate
+            {
+              E_TypeKey final_type_key = is_comparison ? e_type_key_basic(E_TypeKind_Bool) : l_type;
+              E_IRNode *l_value_tree = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_type);
+              E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+              l_value_tree = e_irtree_convert_hi(arena, l_value_tree, l_type, l_type);
+              r_value_tree = e_irtree_convert_hi(arena, r_value_tree, l_type, r_type);
+              E_IRNode *new_tree = e_irtree_binary_op(arena, op, l_type_group, l_value_tree, r_value_tree);
+              result.root     = new_tree;
+              result.type_key = final_type_key;
+              result.mode     = E_Mode_Value;
+            }
+          }break;
+          
+          //- rjf: pointer addition
+          case E_ArithPath_PtrAdd:
+          {
+            // rjf: map l/r to ptr/int
+            E_IRTreeAndType *ptr_tree = &l_tree;
+            E_IRTreeAndType *int_tree = &r_tree;
+            B32 ptr_is_decay = l_is_decay;
+            if(ptr_arithmetic_mul_rptr)
+            {
+              ptr_tree = &r_tree;
+              int_tree = &l_tree;
+              ptr_is_decay = r_is_decay;
+            }
+            
+            // rjf: unpack type
+            E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(ptr_tree->type_key)));
+            U64 direct_type_size = e_type_byte_size_from_key(direct_type);
+            
+            // rjf: generate
+            {
+              E_IRNode *ptr_root = ptr_tree->root;
+              if(!ptr_is_decay)
+              {
+                ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->mode, ptr_root, ptr_tree->type_key);
+              }
+              E_IRNode *int_root = int_tree->root;
+              int_root = e_irtree_resolve_to_value(arena, int_tree->mode, int_root, int_tree->type_key);
+              if(direct_type_size > 1)
+              {
+                E_IRNode *const_root = e_irtree_const_u(arena, direct_type_size);
+                int_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, int_root, const_root);
+              }
+              E_TypeKey ptr_type = ptr_tree->type_key;
+              if(ptr_is_decay)
+              {
+                ptr_type = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, direct_type, 1, 0);
+              }
+              E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_root, int_root);
+              result.root     = new_root;
+              result.type_key = ptr_type;
+              result.mode     = E_Mode_Value;
+            }
+          }break;
+          
+          //- rjf: pointer subtraction
+          case E_ArithPath_PtrSub:
+          {
+            // rjf: unpack type
+            E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
+            U64 direct_type_size = e_type_byte_size_from_key(direct_type);
+            
+            // rjf: generate
+            E_IRNode *l_root = l_tree.root;
+            E_IRNode *r_root = r_tree.root;
+            if(!l_is_decay)
+            {
+              l_root = e_irtree_resolve_to_value(arena, l_tree.mode, l_root, l_type);
+            }
+            if(!r_is_decay)
+            {
+              r_root = e_irtree_resolve_to_value(arena, r_tree.mode, r_root, r_type);
+            }
+            E_IRNode *op_tree = e_irtree_binary_op_u(arena, op, l_root, r_root);
+            E_IRNode *new_tree = op_tree;
+            if(direct_type_size > 1)
+            {
+              E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+              new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Div, new_tree, const_tree);
+            }
+            result.root     = new_tree;
+            result.type_key = e_type_key_basic(E_TypeKind_U64);
+            result.mode     = E_Mode_Value;
+          }break;
+          
+          //- rjf: pointer array comparison
+          case E_ArithPath_PtrArrayCompare:
+          {
+            // rjf: map l/r to pointer/array
+            B32 ptr_is_decay = l_is_decay;
+            E_IRTreeAndType *ptr_tree = &l_tree;
+            E_IRTreeAndType *arr_tree = &r_tree;
+            if(l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Value)
+            {
+              ptr_is_decay = r_is_decay;
+              ptr_tree = &r_tree;
+              arr_tree = &l_tree;
+            }
+            
+            // rjf: resolve pointer to value, sized same as array
+            E_IRNode *ptr_root = ptr_tree->root;
+            E_IRNode *arr_root = arr_tree->root;
+            if(!ptr_is_decay)
+            {
+              ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->mode, ptr_tree->root, ptr_tree->type_key);
+            }
+            
+            // rjf: read from pointer into value, to compare with array
+            E_IRNode *mem_root = e_irtree_mem_read_type(arena, ptr_root, arr_tree->type_key);
+            
+            // rjf: generate
+            result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
+            result.type_key = e_type_key_basic(E_TypeKind_Bool);
+            result.mode     = E_Mode_Value;
+          }break;
+        }
+      }break;
+      
+      //- rjf: ternary operators
+      case E_ExprKind_Ternary:
+      {
+        // rjf: unpack operands
+        E_Expr *c_expr = expr->first;
+        E_Expr *l_expr = c_expr->next;
+        E_Expr *r_expr = l_expr->next;
+        E_IRTreeAndType c_tree = e_irtree_and_type_from_expr(arena, c_expr);
+        E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &c_tree.msgs);
+        e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        E_TypeKey c_type = e_type_unwrap(c_tree.type_key);
+        E_TypeKey l_type = e_type_unwrap(l_tree.type_key);
+        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKind c_type_kind = e_type_kind_from_key(c_type);
+        E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
+        E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        E_TypeKey result_type = l_type;
+        
+        // rjf: bad conditions? -> error if applicable, exit
+        if(c_tree.root->op == 0 || l_tree.root->op == 0 || r_tree.root->op == 0)
+        {
+          break;
+        }
+        else if(!e_type_kind_is_integer(c_type_kind) && c_type_kind != E_TypeKind_Bool)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Conditional term must be an integer or boolean type.");
+        }
+        else if(!e_type_match(l_type, r_type))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left and right terms must have matching types.");
+        }
+        
+        // rjf: generate
+        {
+          E_IRNode *c_value_tree = e_irtree_resolve_to_value(arena, c_tree.mode, c_tree.root, c_type);
+          E_IRNode *l_value_tree = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_type);
+          E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_type);
+          l_value_tree = e_irtree_convert_hi(arena, l_value_tree, result_type, l_type);
+          r_value_tree = e_irtree_convert_hi(arena, r_value_tree, result_type, r_type);
+          E_IRNode *new_tree = e_irtree_conditional(arena, c_value_tree, l_value_tree, r_value_tree);
+          result.root     = new_tree;
+          result.type_key = result_type;
+          result.mode     = E_Mode_Value;
+        }
+      }break;
+      
+      //- rjf: call
+      case E_ExprKind_Call:
+      {
+        E_Expr *lhs = expr->first;
+        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        E_TypeKey lhs_type_key = lhs_irtree.type_key;
+        E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+        
+        // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
+        // a lens type, which preserves the name & arguments of the lens call expression
+        if(lhs_type->kind == E_TypeKind_LensSpec)
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          
+          // rjf: generate result via first argument to lens
+          result = e_irtree_and_type_from_expr(arena, lhs->next);
+          
+          // rjf: count extra arguments
+          U64 arg_count = 0;
+          for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next)
+          {
+            arg_count += 1;
+          }
+          
+          // rjf: flatten extra arguments
+          E_Expr **args = push_array(scratch.arena, E_Expr *, arg_count);
+          {
+            U64 idx = 0;
+            for(E_Expr *arg = lhs->next->next; arg != &e_expr_nil; arg = arg->next, idx += 1)
+            {
+              args[idx] = arg;
+            }
+          }
+          
+          // rjf: patch resultant type with a lens w/ args, pointing to the original type
+          result.type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .count = arg_count, .args = args, .direct_key = result.type_key, .name = lhs_type->name);
+          
+          scratch_end(scratch);
+        }
+        else
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");
+        }
+      }break;
+      
+      //- rjf: leaf bytecode
+      case E_ExprKind_LeafBytecode:
+      {
+        E_IRNode *new_tree = e_irtree_bytecode_no_copy(arena, expr->bytecode);
+        new_tree->space = expr->space;
+        E_TypeKey final_type_key = expr->type_key;
+        result.root     = new_tree;
+        result.type_key = final_type_key;
+        result.mode     = expr->mode;
+      }break;
+      
+      //- rjf: leaf string literal
+      case E_ExprKind_LeafStringLiteral:
+      {
+        String8 string = expr->string;
+        E_TypeKey type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_UChar8), string.size, 0);
+        E_IRNode *new_tree = e_irtree_string_literal(arena, string);
+        result.root     = new_tree;
+        result.type_key = type_key;
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: leaf U64s
+      case E_ExprKind_LeafU64:
+      {
+        U64 val = expr->value.u64;
+        E_IRNode *new_tree = e_irtree_const_u(arena, val);
+        E_TypeKey type_key = zero_struct;
+        if(0){}
+        else if(val <= max_S32){type_key = e_type_key_basic(E_TypeKind_S32);}
+        else if(val <= max_S64){type_key = e_type_key_basic(E_TypeKind_S64);}
+        else                   {type_key = e_type_key_basic(E_TypeKind_U64);}
+        result.root     = new_tree;
+        result.type_key = type_key;
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: leaf F64s
+      case E_ExprKind_LeafF64:
+      {
+        U64 val = expr->value.u64;
+        E_IRNode *new_tree = e_irtree_const_u(arena, val);
+        result.root     = new_tree;
+        result.type_key = e_type_key_basic(E_TypeKind_F64);
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: leaf F32s
+      case E_ExprKind_LeafF32:
+      {
+        U32 val = expr->value.u32;
+        E_IRNode *new_tree = e_irtree_const_u(arena, val);
+        result.root     = new_tree;
+        result.type_key = e_type_key_basic(E_TypeKind_F32);
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: leaf identifiers
+      case E_ExprKind_LeafIdentifier:
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 qualifier = expr->qualifier;
+        String8 string = expr->string;
+        String8 string__redirected = string;
+        B32 string_mapped = 0;
+        E_TypeKey mapped_type_key = zero_struct;
+        E_Module *mapped_location_block_module = &e_module_nil;
+        RDI_LocationBlock *mapped_location_block = 0;
+        
+        //- rjf: form namespaceified fallback versions of this lookup string
+        String8List namespaceified_strings = {0};
+        {
+          E_Module *module = e_ir_state->ctx->primary_module;
+          RDI_Parsed *rdi = module->rdi;
+          RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
+          U64 name_size = 0;
+          U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
+          String8 containing_procedure_name = str8(name_ptr, name_size);
+          U64 last_past_scope_resolution_pos = 0;
+          for(;;)
+          {
+            U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
+            U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
+            U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
+            if(past_next_scope_resolution_pos >= containing_procedure_name.size)
+            {
+              break;
+            }
+            String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
+            String8 namespaceified_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, string);
+            str8_list_push_front(scratch.arena, &namespaceified_strings, namespaceified_string);
+            last_past_scope_resolution_pos = past_next_scope_resolution_pos;
+          }
+        }
+        
+        //- rjf: try to map name as member - if found, string__redirected := "this", and turn
+        // on later implicit-member-lookup generation
+        B32 string_is_implicit_member_name = 0;
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("member"), 0)))
+        {
+          E_Module *module = e_ir_state->ctx->primary_module;
+          U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
+          RDI_Parsed *rdi = module->rdi;
+          RDI_Procedure *procedure = e_ir_state->thread_ip_procedure;
+          RDI_UDT *udt = rdi_container_udt_from_procedure(rdi, procedure);
+          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+          E_TypeKey container_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, module_idx);
+          E_Member member = e_type_member_from_key_name__cached(container_type_key, string);
+          if(member.kind != E_MemberKind_Null)
+          {
+            string_is_implicit_member_name = 1;
+            string__redirected = str8_lit("this");
+          }
+        }
+        
+        //- rjf: try locals
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("local"), 0)))
+        {
+          E_Module *module = e_ir_state->ctx->primary_module;
+          U32 module_idx = (U32)(module - e_ir_state->ctx->modules);
+          RDI_Parsed *rdi = module->rdi;
+          U64 local_num = e_num_from_string(e_ir_state->ctx->locals_map, string__redirected);
+          if(local_num != 0)
+          {
+            RDI_Local *local = rdi_element_from_name_idx(rdi, Locals, local_num-1);
+            
+            // rjf: extract local's type key
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local->type_idx);
+            mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local->type_idx, module_idx);
+            
+            // rjf: extract local's location block
+            U64 ip_voff = e_ir_state->ctx->thread_ip_voff;
+            for(U32 loc_block_idx = local->location_first;
+                loc_block_idx < local->location_opl;
+                loc_block_idx += 1)
+            {
+              RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
+              if(block->scope_off_first <= ip_voff && ip_voff < block->scope_off_opl)
+              {
+                mapped_location_block_module = module;
+                mapped_location_block = block;
+              }
+            }
+          }
+        }
+        
+        //- rjf: mapped to location block -> extract or produce bytecode for this mapping
+        E_Mode mapped_bytecode_mode = E_Mode_Offset;
+        E_Space mapped_bytecode_space = zero_struct;
+        String8 mapped_bytecode = {0};
+        if(mapped_location_block != 0)
+        {
+          E_Module *module = mapped_location_block_module;
+          E_Space space = module->space;
+          Arch arch = module->arch;
+          RDI_Parsed *rdi = module->rdi;
+          RDI_LocationBlock *block = mapped_location_block;
+          U64 all_location_data_size = 0;
+          U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
+          if(block->location_data_off + sizeof(RDI_LocationKind) <= all_location_data_size)
+          {
+            RDI_LocationKind loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
+            switch(loc_kind)
+            {
+              default:{}break;
+              case RDI_LocationKind_ValBytecodeStream: {mapped_bytecode_mode = E_Mode_Value;}goto bytecode_stream;
+              case RDI_LocationKind_AddrBytecodeStream:{mapped_bytecode_mode = E_Mode_Offset;}goto bytecode_stream;
+              bytecode_stream:;
+              {
+                string_mapped = 1;
+                U64 bytecode_size = 0;
+                U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
+                U64 off_opl = all_location_data_size;
+                for(U64 off = off_first, next_off = off_opl;
+                    off < all_location_data_size;
+                    off = next_off)
+                {
+                  next_off = off_opl;
+                  U8 op = all_location_data[off];
+                  if(op == 0)
+                  {
+                    break;
+                  }
+                  U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+                  U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+                  bytecode_size += (1 + p_size);
+                  next_off = (off + 1 + p_size);
+                }
+                mapped_bytecode = str8(all_location_data + off_first, bytecode_size);
+              }break;
+              case RDI_LocationKind_AddrRegPlusU16:
+              if(block->location_data_off + sizeof(RDI_LocationRegPlusU16) <= all_location_data_size)
+              {
+                string_mapped = 1;
+                RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
+                E_OpList oplist = {0};
+                U64 byte_size = bit_size_from_arch(arch)/8;
+                U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
+                mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                mapped_bytecode_mode = E_Mode_Offset;
+                mapped_bytecode_space = space;
+              }break;
+              case RDI_LocationKind_AddrAddrRegPlusU16:
+              {
+                string_mapped = 1;
+                RDI_LocationRegPlusU16 loc = *(RDI_LocationRegPlusU16 *)(all_location_data + block->location_data_off);
+                E_OpList oplist = {0};
+                U64 byte_size = bit_size_from_arch(arch)/8;
+                U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, 0);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc.offset));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
+                mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                mapped_bytecode_mode = E_Mode_Offset;
+                mapped_bytecode_space = space;
+              }break;
+              case RDI_LocationKind_ValReg:
+              if(block->location_data_off + sizeof(RDI_LocationReg) <= all_location_data_size)
+              {
+                string_mapped = 1;
+                RDI_LocationReg loc = *(RDI_LocationReg *)(all_location_data + block->location_data_off);
+                
+                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc.reg_code);
+                REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
+                E_OpList oplist = {0};
+                U64 byte_size = (U64)reg_rng.byte_size;
+                U64 byte_pos = 0;
+                U64 regread_param = RDI_EncodeRegReadParam(loc.reg_code, byte_size, byte_pos);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                mapped_bytecode_mode = E_Mode_Value;
+                mapped_bytecode_space = space;
+              }break;
+            }
+          }
+        }
+        
+        //- rjf: try globals
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))
+        {
+          for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+          {
+            E_Module *module = &e_ir_state->ctx->modules[module_idx];
+            RDI_Parsed *rdi = module->rdi;
+            RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
+            RDI_ParsedNameMap parsed_name_map = {0};
+            rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+            U32 matches_count = 0;
+            U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            for(String8Node *n = namespaceified_strings.first;
+                n != 0 && matches_count == 0;
+                n = n->next)
+            {
+              node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+              matches_count = 0;
+              matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            }
+            if(matches_count != 0)
+            {
+              U32 match_idx = matches[matches_count-1];
+              RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
+              U32 type_idx = global_var->type_idx;
+              RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+              E_OpList oplist = {0};
+              e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
+              string_mapped = 1;
+              mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+              mapped_bytecode_mode = E_Mode_Offset;
+              mapped_bytecode_space = module->space;
+              break;
+            }
+          }
+        }
+        
+        //- rjf: try thread-locals
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("thread_local"), 0)))
+        {
+          for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+          {
+            E_Module *module = &e_ir_state->ctx->modules[module_idx];
+            RDI_Parsed *rdi = module->rdi;
+            RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
+            RDI_ParsedNameMap parsed_name_map = {0};
+            rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+            U32 matches_count = 0;
+            U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            for(String8Node *n = namespaceified_strings.first;
+                n != 0 && matches_count == 0;
+                n = n->next)
+            {
+              node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+              matches_count = 0;
+              matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            }
+            if(matches_count != 0)
+            {
+              U32 match_idx = matches[matches_count-1];
+              RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
+              U32 type_idx = thread_var->type_idx;
+              RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+              E_OpList oplist = {0};
+              e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
+              string_mapped = 1;
+              mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+              mapped_bytecode_mode = E_Mode_Offset;
+              mapped_bytecode_space = module->space;
+              break;
+            }
+          }
+        }
+        
+        //- rjf: try procedures
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("procedure"), 0)))
+        {
+          for(U64 module_idx = 0; module_idx < e_ir_state->ctx->modules_count; module_idx += 1)
+          {
+            E_Module *module = &e_ir_state->ctx->modules[module_idx];
+            RDI_Parsed *rdi = module->rdi;
+            RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
+            RDI_ParsedNameMap parsed_name_map = {0};
+            rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+            U32 matches_count = 0;
+            U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            for(String8Node *n = namespaceified_strings.first;
+                n != 0 && matches_count == 0;
+                n = n->next)
+            {
+              node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+              matches_count = 0;
+              matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+            }
+            if(matches_count != 0)
+            {
+              U32 match_idx = matches[matches_count-1];
+              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
+              RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+              U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
+              U32 type_idx = procedure->type_idx;
+              RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+              E_OpList oplist = {0};
+              e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
+              string_mapped = 1;
+              mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+              mapped_bytecode_mode = E_Mode_Value;
+              mapped_bytecode_space = module->space;
+              break;
+            }
+          }
+        }
+        
+        //- rjf: try types
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("type"), 0)))
+        {
+          mapped_type_key = e_leaf_type_from_name(string);
+          if(!e_type_key_match(e_type_key_zero(), mapped_type_key))
+          {
+            string_mapped = 1;
+          }
+        }
+        
+        //- rjf: try registers
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
+        {
+          U64 reg_num = e_num_from_string(e_ir_state->ctx->regs_map, string);
+          if(reg_num != 0)
+          {
+            string_mapped = 1;
+            REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_num];
+            E_OpList oplist = {0};
+            e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = E_Mode_Offset;
+            mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
+            mapped_type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_num);
+          }
+        }
+        
+        //- rjf: try register aliases
+        if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("reg"), 0)))
+        {
+          U64 alias_num = e_num_from_string(e_ir_state->ctx->reg_alias_map, string);
+          if(alias_num != 0)
+          {
+            string_mapped = 1;
+            REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_num];
+            REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_ir_state->ctx->primary_module->arch)[alias_slice.code];
+            E_OpList oplist = {0};
+            e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = E_Mode_Offset;
+            mapped_bytecode_space = e_ir_state->ctx->thread_reg_space;
+            mapped_type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_num);
+          }
+        }
+        
+        //- rjf: try basic constants
+        if(!string_mapped && str8_match(string, str8_lit("true"), 0))
+        {
+          string_mapped = 1;
+          E_OpList oplist = {0};
+          e_oplist_push_uconst(arena, &oplist, 1);
+          mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = E_Mode_Value;
+        }
+        if(!string_mapped && str8_match(string, str8_lit("false"), 0))
+        {
+          string_mapped = 1;
+          E_OpList oplist = {0};
+          e_oplist_push_uconst(arena, &oplist, 0);
+          mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = E_Mode_Value;
+        }
+        
+        //- rjf: generate IR trees for bytecode
+        B32 generated = 0;
+        if(!generated && mapped_bytecode.size != 0)
+        {
+          generated = 1;
+          E_IRNode *root = e_irtree_bytecode_no_copy(arena, mapped_bytecode);
+          root->space = mapped_bytecode_space;
+          result.root = root;
+          result.type_key = mapped_type_key;
+          result.mode = mapped_bytecode_mode;
+        }
+        
+        //- rjf: generate nil-IR trees w/ type for types
+        if(!generated && !e_type_key_match(e_type_key_zero(), mapped_type_key))
+        {
+          generated = 1;
+          result.type_key = mapped_type_key;
+          result.mode = E_Mode_Null;
+        }
+        
+        //- rjf: generate IR trees for macros
+        if(!generated)
+        {
+          E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, string);
+          if(macro_expr != &e_expr_nil)
+          {
+            generated = 1;
+            e_string2expr_map_inc_poison(e_ir_state->ctx->macro_map, string);
+            result = e_irtree_and_type_from_expr(arena, macro_expr);
+            e_string2expr_map_dec_poison(e_ir_state->ctx->macro_map, string);
+          }
+        }
+        
+        //- rjf: extend generation with member access, if original string was an
+        // implicit member access
+        if(generated && string_is_implicit_member_name)
+        {
+          // TODO(rjf): @cfg
+#if 0
+          E_LookupRule *lookup_rule = &e_lookup_rule__default;
+          E_LookupInfo lookup_info = lookup_rule->info(arena, &result, &e_expr_nil, str8_zero());
+          E_LookupAccess lookup_access = lookup_rule->access(arena, E_ExprKind_MemberAccess, lhs, rhs, &e_expr_nil, lookup_info.user_data);
+          result = lookup_access.irtree_and_type;
+#endif
+        }
+        
+        //- rjf: error on failure-to-generate
+        if(!generated)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", string);
+        }
+        
+        scratch_end(scratch);
+      }break;
+      
+      //- rjf: leaf offsets
+      case E_ExprKind_LeafOffset:
+      {
+        E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
+        new_tree->value = expr->value;
+        new_tree->space = expr->space;
+        result.root     = new_tree;
+        result.type_key = expr->type_key;
+        result.mode     = E_Mode_Offset;
+      }break;
+      
+      //- rjf: leaf values
+      case E_ExprKind_LeafValue:
+      {
+        E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU128);
+        new_tree->value = expr->value;
+        new_tree->space = expr->space;
+        result.root     = new_tree;
+        result.type_key = expr->type_key;
+        result.mode     = E_Mode_Value;
+      }break;
+      
+      //- rjf: leaf file paths
+      case E_ExprKind_LeafFilePath:
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 file_path = expr->string;
+        FileProperties props = os_properties_from_file_path(file_path);
+        if(!str8_match(expr->qualifier, str8_lit("folder"), 0) && !(props.flags & FilePropertyFlag_IsFolder) && file_path.size != 0)
+        {
+          E_Space space = e_space_make(E_SpaceKind_FileSystem);
+          result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
+          result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
+          result.mode     = E_Mode_Value;
+        }
+        else
+        {
+          String8 folder_path = str8_chop_last_slash(file_path);
+          props = os_properties_from_file_path(folder_path);
+          if(props.flags & FilePropertyFlag_IsFolder || folder_path.size == 0 || str8_match(folder_path, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+          {
+            E_Space space = e_space_make(E_SpaceKind_FileSystem);
+            result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(folder_path)));
+            result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
+            result.mode     = E_Mode_Value;
+          }
+        }
+        scratch_end(scratch);
+      }break;
+      
+      //- rjf: types
+      case E_ExprKind_TypeIdent:
+      {
+        result.root = e_irtree_const_u(arena, 0);
+        result.root->space = expr->space;
+        result.type_key = expr->type_key;
+        result.mode = E_Mode_Null;
+      }break;
+      
+      //- rjf: (unexpected) type expressions
+      case E_ExprKind_Ptr:
+      case E_ExprKind_Array:
+      case E_ExprKind_Func:
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Type expression not expected.");
+      }break;
+      
+      //- rjf: definitions
+      case E_ExprKind_Define:
+      {
+        E_Expr *lhs = expr->first;
+        E_Expr *rhs = lhs->next;
+        result = e_irtree_and_type_from_expr(arena, rhs);
+        if(lhs->kind != E_ExprKind_LeafIdentifier)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
+        }
+      }break;
+    }
+    
+    //- rjf: if the evaluated type has a hook for an extra layer of ir generation,
+    // call into it
+    E_Type *type = e_type_from_key__cached(result.type_key);
+    if(type->irgen != 0)
+    {
+      result = type->irgen(arena, &result);
+    }
+    
+    //- rjf: find any auto hooks according to this generation's type
     {
       E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
@@ -3301,6 +2894,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
+            task->parent_expr = expr;
+            task->parent_irtree_and_type = result;
             break;
           }
         }
@@ -3308,7 +2903,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     }
   }
   
+  //////////////////////////////
   //- rjf: unpoison the tags we used
+  //
   for(Task *t = first_task; t != 0; t = t->next)
   {
     e_expr_unpoison(t->expr);
@@ -3588,6 +3185,7 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
 ////////////////////////////////
 //~ rjf: Expression & IR-Tree => Rules
 
+#if 0 // TODO(rjf): @eval
 internal E_LookupRule *
 e_lookup_rule_from_type_key(E_TypeKey type_key)
 {
@@ -3608,6 +3206,7 @@ e_lookup_rule_from_type_key(E_TypeKey type_key)
   
   return rule;
 }
+#endif
 
 #if 0 // TODO(rjf): @eval
 internal E_LookupRuleExprPair

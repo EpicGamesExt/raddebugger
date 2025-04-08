@@ -37,8 +37,8 @@
 # define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
 # define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
 # define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
-# define raddbg_entry_point(...)               raddbg_exe_data static char raddbg_gen_data_id()[] = ("entry_point: " #__VA_ARGS__)
-# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_gen_data_id()()[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+# define raddbg_entry_point(...)               raddbg_exe_data static char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
+# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_gen_data_id()[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
 #endif
 
 ////////////////////////////////
