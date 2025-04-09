@@ -164,6 +164,10 @@ struct E_TypeState
   E_ConsTypeSlot *cons_content_slots;
   E_ConsTypeSlot *cons_key_slots;
   
+  // rjf: build-in constructed type keys
+  E_TypeKey file_type_key;
+  E_TypeKey folder_type_key;
+  
   // rjf: member cache table
   U64 member_cache_slots_count;
   E_MemberCacheSlot *member_cache_slots;
@@ -235,6 +239,8 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_base(Type *type);
+internal E_TypeKey e_type_key_file(void);
+internal E_TypeKey e_type_key_folder(void);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
@@ -274,5 +280,29 @@ internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
 internal E_MemberArray e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
 internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) Default Hooks
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(default);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default);
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `folder` type
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(folder);
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(folder);
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(folder);
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `file` type
+
+E_TYPE_IRGEN_FUNCTION_DEF(file);
+E_TYPE_ACCESS_FUNCTION_DEF(file);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(file);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(file);
 
 #endif // EVAL_TYPES_H

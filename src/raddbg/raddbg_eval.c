@@ -277,18 +277,45 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: Schema Type Hooks
 
-#if 0 // TODO(rjf): @eval
+typedef struct RD_SchemaIRExt RD_SchemaIRExt;
+struct RD_SchemaIRExt
+{
+  RD_Cfg *cfg;
+  CTRL_Entity *entity;
+  MD_Node *schema;
+};
+
+E_TYPE_IRGEN_FUNCTION_DEF(schema)
+{
+  E_IRTreeAndType result = *irtree;
+  RD_SchemaIRExt *ext = push_array(arena, RD_SchemaIRExt, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation interpret = e_interpret(bytecode);
+    E_TypeKey type_key = irtree->type_key;
+    E_Type *type = e_type_from_key__cached(type_key);
+    MD_Node *schema = rd_schema_from_name(type->name);
+    ext->cfg = rd_cfg_from_eval_space(interpret.space);
+    ext->entity = rd_ctrl_entity_from_eval_space(interpret.space);
+    ext->schema = schema;
+    scratch_end(scratch);
+  }
+  result.user_data = ext;
+  return result;
+}
 
 E_TYPE_ACCESS_FUNCTION_DEF(schema)
 {
-  RD_SchemaLookupAccel *accel = (RD_SchemaLookupAccel *)user_data;
+  RD_SchemaIRExt *ext = (RD_SchemaIRExt *)lhs_irtree->user_data;
   E_IRTreeAndType irtree = {&e_irnode_nil};
-  if(kind == E_ExprKind_MemberAccess)
+  if(expr->kind == E_ExprKind_MemberAccess)
   {
     MD_Node *child_schema = &md_nil_node;
-    for MD_EachNode(child, accel->schema->first)
+    for MD_EachNode(child, ext->schema->first)
     {
-      if(str8_match(child->string, rhs->string, 0))
+      if(str8_match(child->string, expr->first->next->string, 0))
       {
         child_schema = child;
         break;
@@ -296,8 +323,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
     }
     if(child_schema != &md_nil_node)
     {
-      RD_Cfg *cfg = accel->cfg;
-      CTRL_Entity *entity = accel->entity;
+      RD_Cfg *cfg = ext->cfg;
+      CTRL_Entity *entity = ext->entity;
       RD_Cfg *child = rd_cfg_child_from_string(cfg, child_schema->string);
       E_TypeKey child_type_key = zero_struct;
       if(0){}
@@ -380,16 +407,12 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       irtree.mode     = E_Mode_Offset;
     }
   }
-  E_LookupAccess access = {irtree};
-  return access;
+  return irtree;
 }
 
-typedef struct RD_SchemaLookupAccel RD_SchemaLookupAccel;
-struct RD_SchemaLookupAccel
+typedef struct RD_SchemaExpandAccel RD_SchemaExpandAccel;
+struct RD_SchemaExpandAccel
 {
-  RD_Cfg *cfg;
-  CTRL_Entity *entity;
-  MD_Node *schema;
   MD_Node **children;
   U64 children_count;
 };
@@ -401,12 +424,8 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     Temp scratch = scratch_begin(&arena, 1);
     
     // rjf: unpack
-    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
-    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
-    E_Interpretation interpret = e_interpret(bytecode);
-    E_TypeKey type_key = lhs->type_key;
-    E_Type *type = e_type_from_key__cached(type_key);
-    MD_Node *schema = rd_schema_from_name(type->name);
+    RD_SchemaIRExt *ext = (RD_SchemaIRExt *)irtree->user_data;
+    MD_Node *schema = ext->schema;
     
     // rjf: gather expansion children
     typedef struct ExpandChildNode ExpandChildNode;
@@ -444,10 +463,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     }
     
     // rjf: build accelerator for lookups
-    RD_SchemaLookupAccel *accel = push_array(arena, RD_SchemaLookupAccel, 1);
-    accel->cfg = rd_cfg_from_eval_space(interpret.space);
-    accel->entity = rd_ctrl_entity_from_eval_space(interpret.space);
-    accel->schema = schema;
+    RD_SchemaExpandAccel *accel = push_array(arena, RD_SchemaExpandAccel, 1);
     accel->children = children;
     accel->children_count = child_count;
     
@@ -460,17 +476,16 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
   return result;
 }
 
-E_LOOKUP_RANGE_FUNCTION_DEF(schema)
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema)
 {
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-  RD_SchemaLookupAccel *accel = (RD_SchemaLookupAccel *)user_data;
+  RD_SchemaExpandAccel *accel = (RD_SchemaExpandAccel *)user_data;
   U64 out_idx = 0;
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     if(0 <= idx && idx < accel->children_count)
     {
       MD_Node *child_schema = accel->children[idx];
-      exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, child_schema->string);
+      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, child_schema->string);
     }
   }
 }
@@ -478,62 +493,33 @@ E_LOOKUP_RANGE_FUNCTION_DEF(schema)
 ////////////////////////////////
 //~ rjf: Config Collection Type Hooks
 
-typedef struct RD_CfgCollectionLookupAccel RD_CfgCollectionLookupAccel;
-struct RD_CfgCollectionLookupAccel
+typedef struct RD_CfgsIRExt RD_CfgsIRExt;
+struct RD_CfgsIRExt
 {
+  String8 cfg_name;
   String8Array cmds;
   RD_CfgArray cfgs;
   Rng1U64 cmds_idx_range;
   Rng1U64 cfgs_idx_range;
 };
 
-E_LOOKUP_INFO_FUNCTION_DEF(cfgs)
+E_TYPE_IRGEN_FUNCTION_DEF(cfgs)
 {
-  E_LookupInfo result = {0};
-  Temp scratch = scratch_begin(&arena, 1);
+  E_IRTreeAndType result = *irtree;
+  RD_CfgsIRExt *ext = push_array(arena, RD_CfgsIRExt, 1);
   {
-    //- rjf: determine which cfg we'll use to scope the lookups
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
-    RD_Cfg *scoping_cfg = rd_cfg_from_eval_space(lhs_interp.space);
+    Temp scratch = scratch_begin(&arena, 1);
     
-    //- rjf: determine which kind of child we'll be gathering
-    E_TypeKey lhs_type_key = lhs->type_key;
-    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-    String8 cfg_name = rd_singular_from_code_name_plural(lhs_type->name);
+    //- rjf: determine which key we'll be gathering
+    E_TypeKey type_key = irtree->type_key;
+    E_Type *type = e_type_from_key__cached(type_key);
+    String8 cfg_name = rd_singular_from_code_name_plural(type->name);
     
     //- rjf: gather cfgs
-    RD_CfgList cfgs_list = {0};
-    if(scoping_cfg == &rd_nil_cfg)
-    {
-      cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
-    }
-    else
-    {
-      cfgs_list = rd_cfg_child_list_from_string(scratch.arena, scoping_cfg, cfg_name);
-    }
-    
-    //- rjf: filter cfgs
-    RD_CfgList cfgs_list__filtered = cfgs_list;
-    if(filter.size != 0)
-    {
-      MemoryZeroStruct(&cfgs_list__filtered);
-      for(RD_CfgNode *n = cfgs_list.first; n != 0; n = n->next)
-      {
-        DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, n->v);
-        String8 string = dr_string_from_fstrs(scratch.arena, &fstrs);
-        FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, filter, string);
-        if(fuzzy_matches.count == fuzzy_matches.needle_part_count)
-        {
-          rd_cfg_list_push(scratch.arena, &cfgs_list__filtered, n->v);
-        }
-      }
-    }
+    RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
     
     //- rjf: gather commands
     String8List cmds_list = {0};
-    if(filter.size == 0)
     {
       MD_Node *schema = rd_schema_from_name(cfg_name);
       MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
@@ -544,67 +530,107 @@ E_LOOKUP_INFO_FUNCTION_DEF(cfgs)
     }
     
     //- rjf: package & fill
-    RD_CfgCollectionLookupAccel *accel = push_array(arena, RD_CfgCollectionLookupAccel, 1);
-    accel->cfgs = rd_cfg_array_from_list(arena, &cfgs_list__filtered);
-    accel->cmds = str8_array_from_list(arena, &cmds_list);
-    accel->cmds_idx_range = r1u64(0, accel->cmds.count);
-    accel->cfgs_idx_range = r1u64(accel->cmds_idx_range.max, accel->cmds_idx_range.max + accel->cfgs.count);
-    result.user_data = accel;
-    result.idxed_expr_count = accel->cfgs.count + accel->cmds.count;
+    ext->cfg_name = cfg_name;
+    ext->cfgs = rd_cfg_array_from_list(arena, &cfgs_list);
+    ext->cmds = str8_array_from_list(arena, &cmds_list);
+    
+    scratch_end(scratch);
   }
-  scratch_end(scratch);
+  result.user_data = ext;
   return result;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(cfgs)
+E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = {{&e_irnode_nil}};
+  E_IRTreeAndType result = {&e_irnode_nil};
   RD_Cfg *cfg = &rd_nil_cfg;
-  if(kind == E_ExprKind_MemberAccess)
+  RD_CfgsIRExt *ext = (RD_CfgsIRExt *)lhs_irtree->user_data;
+  switch(expr->kind)
   {
-    String8 rhs_name = rhs->string;
-    RD_CfgID id = 0;
-    if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0) &&
-       try_u64_from_str8_c_rules(str8_skip(rhs_name, 1), &id))
+    default:{}break;
+    case E_ExprKind_ArrayIndex:
     {
-      cfg = rd_cfg_from_id(id);
-    }
-  }
-  else if(kind == E_ExprKind_ArrayIndex)
-  {
-    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
-    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
-    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
-    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
-    E_Value rhs_value = rhs_interp.value;
-    U64 rhs_idx = rhs_value.u64;
-    RD_CfgCollectionLookupAccel *accel = (RD_CfgCollectionLookupAccel *)user_data;
-    if(0 <= rhs_idx && rhs_idx < accel->cfgs.count)
+      E_Value rhs_value = e_value_from_expr(expr->first->next);
+      U64 rhs_idx = rhs_value.u64;
+      if(0 <= rhs_idx && rhs_idx < ext->cfgs.count)
+      {
+        cfg = ext->cfgs.v[rhs_idx];
+      }
+    }break;
+    case E_ExprKind_MemberAccess:
     {
-      cfg = accel->cfgs.v[rhs_idx];
-    }
+      String8 rhs_name = expr->first->next->string;
+      RD_CfgID id = 0;
+      if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0) &&
+         try_u64_from_str8_c_rules(str8_skip(rhs_name, 1), &id))
+      {
+        cfg = rd_cfg_from_id(id);
+      }
+    }break;
   }
   if(cfg != &rd_nil_cfg)
   {
-    E_Space cfg_space = rd_eval_space_from_cfg(cfg);
-    String8 cfg_name = cfg->string;
-    E_TypeKey cfg_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg_name);
-    result.irtree_and_type.root      = e_irtree_set_space(arena, cfg_space, e_irtree_const_u(arena, 0));
-    result.irtree_and_type.type_key  = cfg_type_key;
-    result.irtree_and_type.mode      = E_Mode_Offset;
+    result.root = e_irtree_set_space(arena, rd_eval_space_from_cfg(cfg), e_irtree_const_u(arena, 0));
+    result.mode = E_Mode_Offset;
+    result.type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ext->cfg_name);
   }
-  scratch_end(scratch);
   return result;
 }
 
-E_LOOKUP_RANGE_FUNCTION_DEF(cfgs)
+typedef struct RD_CfgsExpandAccel RD_CfgsExpandAccel;
+struct RD_CfgsExpandAccel
 {
-  RD_CfgCollectionLookupAccel *accel = (RD_CfgCollectionLookupAccel *)user_data;
+  String8Array cmds;
+  RD_CfgArray cfgs;
+  Rng1U64 cmds_idx_range;
+  Rng1U64 cfgs_idx_range;
+};
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs)
+{
+  RD_CfgsExpandAccel *accel = push_array(arena, RD_CfgsExpandAccel, 1);
+  E_TypeExpandInfo info = {accel};
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    //- rjf: unpack
+    RD_CfgsIRExt *ext = (RD_CfgsIRExt *)irtree->user_data;
+    
+    //- rjf: filter cfgs
+    RD_CfgArray cfgs__filtered = ext->cfgs;
+    if(filter.size != 0)
+    {
+      RD_CfgList cfgs_list__filtered = {0};
+      for EachIndex(idx, ext->cfgs.count)
+      {
+        RD_Cfg *cfg = ext->cfgs.v[idx];
+        DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg);
+        String8 string = dr_string_from_fstrs(scratch.arena, &fstrs);
+        FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, filter, string);
+        if(fuzzy_matches.count == fuzzy_matches.needle_part_count)
+        {
+          rd_cfg_list_push(scratch.arena, &cfgs_list__filtered, cfg);
+        }
+      }
+      cfgs__filtered = rd_cfg_array_from_list(arena, &cfgs_list__filtered);
+    }
+    
+    //- rjf: fill
+    accel->cmds = ext->cmds;
+    accel->cfgs = cfgs__filtered;
+    accel->cmds_idx_range = r1u64(0, accel->cmds.count);
+    accel->cfgs_idx_range = r1u64(accel->cmds_idx_range.max, accel->cmds_idx_range.max + accel->cfgs.count);
+    info.expr_count = (accel->cmds.count + accel->cfgs.count);
+  }
+  scratch_end(scratch);
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
+{
+  RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;
   Rng1U64 cmds_idx_range = accel->cmds_idx_range;
   Rng1U64 cfgs_idx_range = accel->cfgs_idx_range;
   U64 dst_idx = 0;
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
   
   // rjf: fill commands
   {
@@ -615,7 +641,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(cfgs)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       String8 cmd_name = accel->cmds.v[idx + read_range.min - cmds_idx_range.min];
-      exprs[dst_idx] = e_expr_irext_member_access(arena, commands, &commands_irtree, cmd_name);
+      exprs_out[dst_idx] = e_expr_irext_member_access(arena, commands, &commands_irtree, cmd_name);
     }
   }
   
@@ -626,15 +652,15 @@ E_LOOKUP_RANGE_FUNCTION_DEF(cfgs)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
-      exprs[dst_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, push_str8f(arena, "$%I64d", cfg->id));
+      exprs_out[dst_idx] = e_expr_irext_member_access(arena, expr, irtree, push_str8f(arena, "$%I64d", cfg->id));
     }
   }
 }
 
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(cfgs)
 {
   U64 id = 0;
-  RD_CfgCollectionLookupAccel *accel = (RD_CfgCollectionLookupAccel *)user_data;
+  RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;
   if(num != 0)
   {
     U64 idx = num-1;
@@ -652,10 +678,10 @@ E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(cfgs)
   return id;
 }
 
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs)
 {
   U64 num = 0;
-  RD_CfgCollectionLookupAccel *accel = (RD_CfgCollectionLookupAccel *)user_data;
+  RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;
   if(id != 0)
   {
     if(id & (1ull<<63))
@@ -675,6 +701,7 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(cfgs)
   return num;
 }
 
+#if 0 // TODO(rjf): @eval
 ////////////////////////////////
 //~ rjf: `call_stack` Type Hooks
 

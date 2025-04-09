@@ -9158,7 +9158,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
   U32 min_digits = 0;
   B32 no_addr = 0;
   B32 no_string = 0;
-#if 0 // TODO(rjf): @eval
   for(E_Expr *tag = root_eval.exprs.last->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     if(0){}
@@ -9176,7 +9175,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
       min_digits = (U32)num_value_eval.value.u64;
     }
   }
-#endif
   
   //- rjf: force no_addr in non-address-spaces
   if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
@@ -9388,7 +9386,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
               E_IRTreeAndType irtree = eval.irtree;
               E_LookupRule *lookup_rule = &e_lookup_rule__default;
               E_Expr *lookup_rule_tag = &e_expr_nil;
-#if 0 // TODO(rjf): @eval
               E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
               E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
               if(lookup_rule == &e_lookup_rule__default)
@@ -9396,7 +9393,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
                 lookup_rule = root_eval.lookup_rule_tag.rule;
                 lookup_rule_tag = root_eval.lookup_rule_tag.tag;
               }
-#endif
               E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
               U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
               String8 opener_string = str8_lit("[");
@@ -9530,7 +9526,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
         E_IRTreeAndType irtree = eval.irtree;
         E_LookupRule *lookup_rule = &e_lookup_rule__default;
         E_Expr *lookup_rule_tag = &e_expr_nil;
-#if 0 // TODO(rjf): @eval
         E_LookupRule *lookup_rule = eval.lookup_rule_tag.rule;
         E_Expr *lookup_rule_tag = eval.lookup_rule_tag.tag;
         if(lookup_rule == &e_lookup_rule__default)
@@ -9538,7 +9533,6 @@ rd_append_value_strings_from_eval(Arena *arena, String8 filter, EV_StringFlags f
           lookup_rule = root_eval.lookup_rule_tag.rule;
           lookup_rule_tag = root_eval.lookup_rule_tag.tag;
         }
-#endif
         E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, lookup_rule_tag, filter);
         U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
         String8 opener_string = str8_lit("{");
@@ -12459,17 +12453,16 @@ rd_frame(void)
       }
       
       //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
-#if 0 // TODO(rjf): @eval
       {
         struct
         {
           String8 name;
-          E_LookupInfoFunctionType *lookup_info;
-          E_LookupRangeFunctionType *lookup_range;
+          E_TypeExpandInfoFunctionType *info;
+          E_TypeExpandRangeFunctionType *range;
         }
         collection_infos[] =
         {
-#define Collection(name) {str8_lit_comp(#name), E_LOOKUP_INFO_FUNCTION_NAME(name), E_LOOKUP_RANGE_FUNCTION_NAME(name)}
+#define Collection(name) {str8_lit_comp(#name), E_TYPE_EXPAND_INFO_FUNCTION_NAME(name), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name)}
           Collection(locals),
           Collection(registers),
 #undef Collection
@@ -12478,14 +12471,17 @@ rd_frame(void)
         {
           String8 collection_name = collection_infos[idx].name;
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+          expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                           .name = collection_name,
+                                           .expand =
+                                           {
+                                             .info  = collection_infos[idx].info,
+                                             .range = collection_infos[idx].range,
+                                           });
+          expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
           e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-          e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                       .info   = collection_infos[idx].lookup_info,
-                                       .range  = collection_infos[idx].lookup_range);
         }
       }
-#endif
       
       //- rjf: add macros for debug info table collections
 #if 0 // TODO(rjf): @eval
@@ -12509,25 +12505,30 @@ rd_frame(void)
                                      .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(debug_info_table),
                                      .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(debug_info_table));
       }
+#endif
       
       //- rjf: add macros for all config collections
       for EachElement(cfg_name_idx, evallable_cfg_names)
       {
         String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+                                                        .irgen = E_TYPE_IRGEN_FUNCTION_NAME(cfgs),
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs),
+                                                        .expand =
+                                                        {
+                                                          .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs),
+                                                          .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs),
+                                                          .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs),
+                                                          .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs),
+                                                        });
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(cfgs),
-                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(cfgs),
-                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(cfgs),
-                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(cfgs),
-                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(cfgs));
       }
       
+#if 0 // TODO(rjf): @eval
       //- rjf: add macros for all ctrl entity collections
       for EachElement(ctrl_name_idx, evallable_ctrl_names)
       {

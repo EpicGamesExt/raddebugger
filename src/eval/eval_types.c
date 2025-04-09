@@ -248,6 +248,24 @@ e_select_type_ctx(E_TypeCtx *ctx)
   e_type_state->member_cache_slots = push_array(e_type_state->arena, E_MemberCacheSlot, e_type_state->member_cache_slots_count);
   e_type_state->type_cache_slots_count = 1024;
   e_type_state->type_cache_slots = push_array(e_type_state->arena, E_TypeCacheSlot, e_type_state->type_cache_slots_count);
+  e_type_state->file_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                .name = str8_lit("file"),
+                                                .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(file),
+                                                .access = E_TYPE_ACCESS_FUNCTION_NAME(file),
+                                                .expand =
+                                                {
+                                                  .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(file),
+                                                  .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(file),
+                                                });
+  e_type_state->folder_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                  .name = str8_lit("folder"),
+                                                  .expand =
+                                                  {
+                                                    .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(folder),
+                                                    .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(folder),
+                                                    .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(folder),
+                                                    .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(folder),
+                                                  });
 }
 
 ////////////////////////////////
@@ -517,6 +535,20 @@ e_type_key_cons_base(Type *type)
     }break;
   }
   return result;
+}
+
+internal E_TypeKey
+e_type_key_file(void)
+{
+  E_TypeKey key = e_type_state->file_type_key;
+  return key;
+}
+
+internal E_TypeKey
+e_type_key_folder(void)
+{
+  E_TypeKey key = e_type_state->folder_type_key;
+  return key;
 }
 
 //- rjf: basic type key functions
@@ -2128,7 +2160,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
   Temp scratch = scratch_begin(&arena, 1);
   {
     //- rjf: unpack type of expression
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+    E_IRTreeAndType lhs_irtree = *irtree;
     E_TypeKey lhs_type_key = lhs_irtree.type_key;
     E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
     E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_type_key));
@@ -2482,12 +2514,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(file)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(file)
 {
-  E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    
-    scratch_end(scratch);
-  }
+  E_FileAccel *accel = (E_FileAccel *)irtree->user_data;
   E_TypeExpandInfo info = {accel, accel->fields.count};
   return info;
 }

@@ -553,9 +553,11 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
     //- rjf: generate root block
     tree.root = push_array(arena, EV_Block, 1);
     MemoryCopyStruct(tree.root, &ev_nil_block);
-    tree.root->key        = root_key;
-    tree.root->string     = str8_zero();
-    tree.root->eval       = e_eval_from_expr(arena, root_expr);
+    tree.root->key              = root_key;
+    tree.root->string           = str8_zero();
+    tree.root->eval             = e_eval_from_expr(arena, root_expr);
+    tree.root->type_expand_rule = &e_type_expand_rule__default;
+    tree.root->viz_expand_rule  = &ev_nil_expand_rule;
     tree.root->row_count  = 1;
     tree.total_row_count += 1;
     tree.total_item_count += 1;
@@ -615,7 +617,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       }
       
       // rjf: get top-level lookup/expansion info
-      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, &t->eval.irtree, filter);
+      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval.expr, &t->eval.irtree, filter);
       EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr, viz_expand_rule_tag);
       
       // rjf: determine expansion info
@@ -731,7 +733,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
           Rng1U64 child_range = r1u64(split_relative_idx, split_relative_idx+1);
           E_Expr *child_expr = &e_expr_nil;
           String8 child_string = {0};
-          type_expand_rule->range(arena, type_expand_info.user_data, t->eval.expr, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string);
+          type_expand_rule->range(arena, type_expand_info.user_data, t->eval.expr, &t->eval.irtree, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string);
           if(child_expr != &e_expr_nil)
           {
             E_Eval child_eval = e_eval_from_expr(arena, child_expr);
@@ -1038,7 +1040,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         }
         else
         {
-          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval.expr, filter, block_relative_range__windowed, range_exprs, range_exprs_strings);
+          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval.expr, &n->v.block->eval.irtree, filter, block_relative_range__windowed, range_exprs, range_exprs_strings);
         }
         
         // rjf: no expansion operator applied -> push row for block expression; pass through block info

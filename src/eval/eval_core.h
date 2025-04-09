@@ -367,12 +367,12 @@ typedef E_TYPE_IRGEN_FUNCTION_SIG(E_TypeIRGenFunctionType);
 #define E_TYPE_ACCESS_FUNCTION_DEF(name) internal E_TYPE_ACCESS_FUNCTION_SIG(E_TYPE_ACCESS_FUNCTION_NAME(name))
 typedef E_TYPE_ACCESS_FUNCTION_SIG(E_TypeAccessFunctionType);
 
-#define E_TYPE_EXPAND_INFO_FUNCTION_SIG(name) E_TypeExpandInfo name(Arena *arena, E_IRTreeAndType *irtree, String8 filter)
+#define E_TYPE_EXPAND_INFO_FUNCTION_SIG(name) E_TypeExpandInfo name(Arena *arena, E_Expr *expr, E_IRTreeAndType *irtree, String8 filter)
 #define E_TYPE_EXPAND_INFO_FUNCTION_NAME(name) e_type_expand_info__##name
 #define E_TYPE_EXPAND_INFO_FUNCTION_DEF(name) internal E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TYPE_EXPAND_INFO_FUNCTION_NAME(name))
 typedef E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TypeExpandInfoFunctionType);
 
-#define E_TYPE_EXPAND_RANGE_FUNCTION_SIG(name) void name(Arena *arena, void *user_data, E_Expr *expr, String8 filter, Rng1U64 idx_range, E_Expr **exprs_out, String8 *exprs_strings_out)
+#define E_TYPE_EXPAND_RANGE_FUNCTION_SIG(name) void name(Arena *arena, void *user_data, E_Expr *expr, E_IRTreeAndType *irtree, String8 filter, Rng1U64 idx_range, E_Expr **exprs_out, String8 *exprs_strings_out)
 #define E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name) e_type_expand_range__##name
 #define E_TYPE_EXPAND_RANGE_FUNCTION_DEF(name) internal E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name))
 typedef E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TypeExpandRangeFunctionType);
