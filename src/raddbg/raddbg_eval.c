@@ -701,25 +701,24 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs)
   return num;
 }
 
-#if 0 // TODO(rjf): @eval
 ////////////////////////////////
 //~ rjf: `call_stack` Type Hooks
 
-typedef struct RD_CallStackLookupAccel RD_CallStackLookupAccel;
-struct RD_CallStackLookupAccel
+typedef struct RD_CallStackAccel RD_CallStackAccel;
+struct RD_CallStackAccel
 {
   Arch arch;
   CTRL_Handle process;
   CTRL_CallStack call_stack;
 };
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
+E_TYPE_IRGEN_FUNCTION_DEF(call_stack)
 {
-  E_TypeExpandInfo result = {0};
-  Temp scratch = scratch_begin(&arena, 1);
+  E_IRTreeAndType result = *irtree;
+  RD_CallStackAccel *accel = push_array(arena, RD_CallStackAccel, 1);
   {
-    RD_CallStackLookupAccel *accel = push_array(arena, RD_CallStackLookupAccel, 1);
-    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    Temp scratch = scratch_begin(&arena, 1);
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interp = e_interpret(bytecode);
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(interp.space);
@@ -730,39 +729,43 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
       accel->arch = entity->arch;
       accel->process = process->handle;
       accel->call_stack = ctrl_call_stack_from_unwind(arena, rd_state->frame_di_scope, process, &base_unwind);
-      result.expr_count = accel->call_stack.count;
     }
-    result.user_data = accel;
+    scratch_end(scratch);
   }
-  scratch_end(scratch);
+  result.user_data = accel;
   return result;
 }
 
 E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
 {
-  E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_ArrayIndex)
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
-    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
-    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
-    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
-    E_Value rhs_value = rhs_interp.value;
-    RD_CallStackLookupAccel *accel = (RD_CallStackLookupAccel *)user_data;
+    RD_CallStackAccel *accel = (RD_CallStackAccel *)lhs_irtree->user_data;
+    E_Value rhs_value = e_value_from_expr(expr->first->next);
     CTRL_CallStack *call_stack = &accel->call_stack;
     if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->count)
     {
       CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, accel->process);
       CTRL_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
-      result.irtree_and_type.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
-      result.irtree_and_type.type_key = e_type_key_cons(.arch = process->arch, .kind = E_TypeKind_Ptr, .direct_key = e_type_key_basic(E_TypeKind_Function), .count = 1, .depth = f->inline_depth);
-      result.irtree_and_type.mode = E_Mode_Value;
+      result.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
+      result.type_key = e_type_key_cons(.arch = process->arch, .kind = E_TypeKind_Ptr, .direct_key = e_type_key_basic(E_TypeKind_Function), .count = 1, .depth = f->inline_depth);
+      result.mode = E_Mode_Value;
     }
-    scratch_end(scratch);
   }
   return result;
 }
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
+{
+  RD_CallStackAccel *accel = (RD_CallStackAccel *)irtree->user_data;
+  E_TypeExpandInfo result = {0};
+  result.user_data = accel;
+  result.expr_count = accel->call_stack.count;
+  return result;
+}
+
+#if 0 // TODO(rjf): @eval
 
 ////////////////////////////////
 //~ rjf: `environment` Type Hooks
@@ -988,9 +991,49 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes)
     exprs_out[out_idx] = expr;
   }
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Control Entity List Type Hooks (`processes`, `threads`, etc.)
+
+E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  {
+    CTRL_Entity *entity = &ctrl_entity_nil;
+    switch(expr->kind)
+    {
+      case E_ExprKind_MemberAccess:
+      {
+        String8 rhs_name = expr->first->next->string;
+        CTRL_Handle handle = ctrl_handle_from_string(rhs_name);
+        entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+      }break;
+      case E_ExprKind_ArrayIndex:
+      {
+        E_Type *type = e_type_from_key__cached(lhs_irtree->type_key);
+        CTRL_EntityKind kind = ctrl_entity_kind_from_string(rd_singular_from_code_name_plural(type->name));
+        E_Value rhs_value = e_value_from_expr(expr->first->next);
+        U64 rhs_idx = rhs_value.u64;
+        CTRL_EntityArray entities = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, kind);
+        if(0 <= rhs_idx && rhs_idx < entities.count)
+        {
+          entity = entities.v[rhs_idx];
+        }
+      }break;
+    }
+    if(entity != &ctrl_entity_nil)
+    {
+      E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
+      String8 name = ctrl_entity_kind_code_name_table[entity->kind];
+      E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
+      result.root      = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+      result.type_key  = type_key;
+      result.mode      = E_Mode_Offset;
+    }
+  }
+  return result;
+}
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
 {
@@ -998,7 +1041,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
   Temp scratch = scratch_begin(&arena, 1);
   {
     //- rjf: determine which entity we're looking under
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
     String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
     E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
     CTRL_Entity *scoping_entity = &ctrl_entity_nil;
@@ -1008,27 +1051,20 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
     }
     
     //- rjf: determine which type of child we're gathering
-    E_TypeKey lhs_type_key = lhs->type_key;
+    E_TypeKey lhs_type_key = irtree->type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 name = rd_singular_from_code_name_plural(lhs_type->name);
-    CTRL_EntityKind entity_kind = CTRL_EntityKind_Null;
-    for EachNonZeroEnumVal(CTRL_EntityKind, k)
-    {
-      if(str8_match(name, ctrl_entity_kind_code_name_table[k], 0))
-      {
-        entity_kind = k;
-        break;
-      }
-    }
+    CTRL_EntityKind entity_kind = ctrl_entity_kind_from_string(name);
     
-    //- rjf: gather list of all entities which fit the bill
-    CTRL_EntityList list = {0};
+    //- rjf: gather array of all entities which fit the bill
+    CTRL_EntityArray array = {0};
     if(scoping_entity == &ctrl_entity_nil)
     {
-      list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, entity_kind);
+      array = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, entity_kind);
     }
     else
     {
+      CTRL_EntityList list = {0};
       for(CTRL_Entity *child = scoping_entity->first; child != &ctrl_entity_nil; child = child->next)
       {
         if(child->kind == entity_kind)
@@ -1036,16 +1072,17 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
           ctrl_entity_list_push(scratch.arena, &list, child);
         }
       }
+      array = ctrl_entity_array_from_list(arena, &list);
     }
     
-    //- rjf: filter the list
-    CTRL_EntityList list__filtered = list;
+    //- rjf: filter the array
+    CTRL_EntityArray array__filtered = array;
     if(filter.size != 0)
     {
-      MemoryZeroStruct(&list__filtered);
-      for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
+      CTRL_EntityList list__filtered = {0};
+      for EachIndex(idx, array.count)
       {
-        CTRL_Entity *entity = n->v;
+        CTRL_Entity *entity = array.v[idx];
         DR_FStrList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, entity, 1);
         String8 title_string = dr_string_from_fstrs(scratch.arena, &fstrs);
         FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title_string);
@@ -1054,67 +1091,29 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
           ctrl_entity_list_push(scratch.arena, &list__filtered, entity);
         }
       }
+      array__filtered = ctrl_entity_array_from_list(arena, &list__filtered);
     }
     
     //- rjf: list -> array & fill
-    CTRL_EntityArray *array = push_array(arena, CTRL_EntityArray, 1);
-    *array = ctrl_entity_array_from_list(arena, &list__filtered);
-    result.user_data = array;
-    result.idxed_expr_count = array->count;
+    CTRL_EntityArray *accel = push_array(arena, CTRL_EntityArray, 1);
+    *accel = array__filtered;
+    result.user_data = accel;
+    result.expr_count = accel->count;
   }
   scratch_end(scratch);
   return result;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(ctrl_entities)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupAccess result = {{&e_irnode_nil}};
-  CTRL_Entity *entity = &ctrl_entity_nil;
-  if(kind == E_ExprKind_MemberAccess)
-  {
-    String8 rhs_name = rhs->string;
-    CTRL_Handle handle = ctrl_handle_from_string(rhs_name);
-    entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
-  }
-  else if(kind == E_ExprKind_ArrayIndex)
-  {
-    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
-    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
-    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
-    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
-    E_Value rhs_value = rhs_interp.value;
-    U64 rhs_idx = rhs_value.u64;
-    CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
-    if(0 <= rhs_idx && rhs_idx < entities->count)
-    {
-      entity = entities->v[rhs_idx];
-    }
-  }
-  if(entity != &ctrl_entity_nil)
-  {
-    E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
-    String8 name = ctrl_entity_kind_code_name_table[entity->kind];
-    E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-    result.irtree_and_type.root      = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
-    result.irtree_and_type.type_key  = type_key;
-    result.irtree_and_type.mode      = E_Mode_Offset;
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(ctrl_entities)
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities)
 {
   CTRL_EntityArray *entities = (CTRL_EntityArray *)user_data;
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
   Rng1U64 legal_range = r1u64(0, entities->count);
   Rng1U64 read_range = intersect_1u64(legal_range, idx_range);
   U64 read_count = dim_1u64(read_range);
   for(U64 out_idx = 0; out_idx < read_count; out_idx += 1)
   {
     CTRL_Entity *entity = entities->v[out_idx + read_range.min];
-    exprs[out_idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, ctrl_string_from_handle(arena, entity->handle));
+    exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, ctrl_string_from_handle(arena, entity->handle));
   }
 }
 
@@ -1130,14 +1129,14 @@ struct RD_DebugInfoTableLookupAccel
   DI_SearchItemArray items;
 };
 
-E_LOOKUP_INFO_FUNCTION_DEF(debug_info_table)
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
   // rjf: determine which debug info section we're dealing with
   RDI_SectionKind section = RDI_SectionKind_NULL;
   {
-    E_TypeKey lhs_type_key = lhs->type_key;
+    E_TypeKey lhs_type_key = irtree->type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     if(0){}
     else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
@@ -1175,12 +1174,12 @@ E_LOOKUP_INFO_FUNCTION_DEF(debug_info_table)
       rd_request_frame();
     }
   }
-  E_LookupInfo info = {accel, 0, accel->items.count};
+  E_TypeExpandInfo info = {accel, accel->items.count};
   scratch_end(scratch);
   return info;
 }
 
-E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
 {
   RD_DebugInfoTableLookupAccel *accel = (RD_DebugInfoTableLookupAccel *)user_data;
   U64 needed_row_count = dim_1u64(idx_range);
@@ -1277,11 +1276,11 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
     }
     
     // rjf: fill
-    exprs[idx] = item_expr;
+    exprs_out[idx] = item_expr;
   }
 }
 
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
 {
   RD_DebugInfoTableLookupAccel *accel = (RD_DebugInfoTableLookupAccel *)user_data;
   U64 id = 0;
@@ -1292,10 +1291,9 @@ E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
   return id;
 }
 
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(debug_info_table)
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(debug_info_table)
 {
   RD_DebugInfoTableLookupAccel *accel = (RD_DebugInfoTableLookupAccel *)user_data;
   U64 num = di_search_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
   return num;
 }
-#endif

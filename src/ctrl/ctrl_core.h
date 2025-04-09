@@ -140,10 +140,10 @@ struct CTRL_EntityStore
   U64 hash_slots_count;
   CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
   U64 entity_kind_counts[CTRL_EntityKind_COUNT];
-  Arena *entity_kind_lists_arenas[CTRL_EntityKind_COUNT];
-  U64 entity_kind_lists_gens[CTRL_EntityKind_COUNT];
+  Arena *entity_kind_arrays_arenas[CTRL_EntityKind_COUNT];
+  U64 entity_kind_arrays_gens[CTRL_EntityKind_COUNT];
   U64 entity_kind_alloc_gens[CTRL_EntityKind_COUNT];
-  CTRL_EntityList entity_kind_lists[CTRL_EntityKind_COUNT];
+  CTRL_EntityArray entity_kind_arrays[CTRL_EntityKind_COUNT];
 };
 
 ////////////////////////////////
@@ -803,6 +803,7 @@ internal CTRL_EntityList ctrl_entity_list_from_handle_list(Arena *arena, CTRL_En
 
 //- rjf: entity array data structure
 internal CTRL_EntityArray ctrl_entity_array_from_list(Arena *arena, CTRL_EntityList *list);
+#define ctrl_entity_array_first(array) ((array)->count != 0 ? (array)->v[0] : &ctrl_entity_nil)
 
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
@@ -829,7 +830,7 @@ internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 v
 internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
 internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);
 internal CTRL_Entity *ctrl_module_from_thread_candidates(CTRL_EntityStore *store, CTRL_Entity *thread, CTRL_EntityList *candidates);
-internal CTRL_EntityList ctrl_entity_list_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind);
+internal CTRL_EntityArray ctrl_entity_array_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind);
 internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
 internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
 internal Rng1U64 ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range);

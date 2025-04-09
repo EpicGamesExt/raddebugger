@@ -49,13 +49,14 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs);
 E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(cfgs);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs);
 
-#if 0 // TODO(rjf): @eval
 ////////////////////////////////
 //~ rjf: `call_stack` Type Hooks
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack);
+E_TYPE_IRGEN_FUNCTION_DEF(call_stack);
 E_TYPE_ACCESS_FUNCTION_DEF(call_stack);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack);
 
+#if 0 // TODO(rjf): @eval
 ////////////////////////////////
 //~ rjf: `environment` Type Hooks
 
@@ -70,21 +71,21 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(environment);
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes);
+#endif
 
 ////////////////////////////////
 //~ rjf: Control Entity List Type Hooks (`processes`, `threads`, etc.)
 
+E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities);
-E_LOOKUP_ACCESS_FUNCTION_DEF(ctrl_entities);
-E_LOOKUP_RANGE_FUNCTION_DEF(ctrl_entities);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities);
 
 ////////////////////////////////
 //~ rjf: Debug Info Tables Eval Hooks
 
-E_LOOKUP_INFO_FUNCTION_DEF(debug_info_table);
-E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table);
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(debug_info_table);
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(debug_info_table);
-#endif
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table);
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table);
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(debug_info_table);
 
 #endif // RADDBG_EVAL_H

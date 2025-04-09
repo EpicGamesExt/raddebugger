@@ -416,6 +416,7 @@ e_type_key_cons_(E_ConsTypeParams *params)
     node->params.name = push_str8_copy(e_type_state->arena, params->name);
     if(node->params.expand.info != 0)
     {
+      if(node->params.expand.range == 0)       {node->params.expand.range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(default);}
       if(node->params.expand.id_from_num == 0) {node->params.expand.id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);}
       if(node->params.expand.num_from_id == 0) {node->params.expand.num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity);}
     }

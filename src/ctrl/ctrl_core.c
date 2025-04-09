@@ -669,7 +669,7 @@ ctrl_entity_store_alloc(void)
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
   for EachEnumVal(CTRL_EntityKind, k)
   {
-    store->entity_kind_lists_arenas[k] = arena_alloc();
+    store->entity_kind_arrays_arenas[k] = arena_alloc();
   }
   CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, ctrl_handle_zero(), 0);
   CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()), 0);
@@ -1029,10 +1029,10 @@ internal CTRL_EntityList
 ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key)
 {
   CTRL_EntityList list = {0};
-  CTRL_EntityList all_modules = ctrl_entity_list_from_kind(store, CTRL_EntityKind_Module);
-  for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next)
+  CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(store, CTRL_EntityKind_Module);
+  for EachIndex(idx, all_modules.count)
   {
-    CTRL_Entity *module = n->v;
+    CTRL_Entity *module = all_modules.v[idx];
     DI_Key module_dbgi_key = ctrl_dbgi_key_from_module(module);
     if(di_key_match(&module_dbgi_key, dbgi_key))
     {
@@ -1065,25 +1065,28 @@ ctrl_module_from_thread_candidates(CTRL_EntityStore *store, CTRL_Entity *thread,
   return module;
 }
 
-internal CTRL_EntityList
-ctrl_entity_list_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind)
+internal CTRL_EntityArray
+ctrl_entity_array_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind)
 {
-  if(store->entity_kind_lists_gens[kind] != store->entity_kind_alloc_gens[kind])
+  if(store->entity_kind_arrays_gens[kind] != store->entity_kind_alloc_gens[kind])
   {
-    arena_clear(store->entity_kind_lists_arenas[kind]);
-    MemoryZeroStruct(&store->entity_kind_lists[kind]);
+    Temp scratch = scratch_begin(0, 0);
+    CTRL_EntityList entities = {0};
     for(CTRL_Entity *e = store->root;
         e != &ctrl_entity_nil;
         e = ctrl_entity_rec_depth_first_pre(e, store->root).next)
     {
       if(e->kind == kind)
       {
-        ctrl_entity_list_push(store->entity_kind_lists_arenas[kind], &store->entity_kind_lists[kind], e);
+        ctrl_entity_list_push(scratch.arena, &entities, e);
       }
     }
-    store->entity_kind_lists_gens[kind] = store->entity_kind_alloc_gens[kind];
+    store->entity_kind_arrays_gens[kind] = store->entity_kind_alloc_gens[kind];
+    arena_clear(store->entity_kind_arrays_arenas[kind]);
+    store->entity_kind_arrays[kind] = ctrl_entity_array_from_list(store->entity_kind_arrays_arenas[kind], &entities);
+    scratch_end(scratch);
   }
-  return store->entity_kind_lists[kind];
+  return store->entity_kind_arrays[kind];
 }
 
 internal U64
@@ -1202,13 +1205,14 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         {
           ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
         }
-        CTRL_EntityList pending_thread_names = ctrl_entity_list_from_kind(store, CTRL_EntityKind_PendingThreadName);
-        for(CTRL_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+        CTRL_EntityArray pending_thread_names = ctrl_entity_array_from_kind(store, CTRL_EntityKind_PendingThreadName);
+        for EachIndex(idx, pending_thread_names.count)
         {
-          if(n->v->id == event->entity_id)
+          CTRL_Entity *entity = pending_thread_names.v[idx];
+          if(entity->id == event->entity_id)
           {
-            ctrl_entity_equip_string(store, thread, n->v->string);
-            ctrl_entity_release(store, n->v);
+            ctrl_entity_equip_string(store, thread, entity->string);
+            ctrl_entity_release(store, entity);
             break;
           }
         }
@@ -4920,7 +4924,7 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   U32 exit_code = msg->exit_code;
   
   //- rjf: gather all currently existing processes
-  CTRL_EntityList initial_processes = ctrl_entity_list_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+  CTRL_EntityArray initial_processes = ctrl_entity_array_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
   typedef struct Task Task;
   struct Task
   {
@@ -4930,10 +4934,11 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   };
   Task *first_task = 0;
   Task *last_task = 0;
-  for(CTRL_EntityNode *n = initial_processes.first; n != 0; n = n->next)
+  for EachIndex(idx, initial_processes.count)
   {
+    CTRL_Entity *entity = initial_processes.v[idx];
     Task *t = push_array(scratch.arena, Task, 1);
-    t->process = n->v;
+    t->process = entity;
     DLLPushBack(first_task, last_task, t);
   }
   
@@ -4974,7 +4979,7 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       }
       
       // rjf: end if all processes are gone
-      CTRL_EntityList processes = ctrl_entity_list_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+      CTRL_EntityArray processes = ctrl_entity_array_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
       if(processes.count == 0)
       {
         done = 1;

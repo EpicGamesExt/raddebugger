@@ -2280,7 +2280,7 @@ rd_view_ui(Rng2F32 rect)
         UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
       {
         RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-        CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+        CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
         
         //- rjf: icon & info
         UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
@@ -6072,7 +6072,7 @@ rd_window_frame(void)
             {
               rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
             }
-            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count != 0)
             {
               rd_cmd(RD_CmdKind_KillAll);
@@ -6091,7 +6091,7 @@ rd_window_frame(void)
             {
               rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
             }
-            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count != 0)
             {
               rd_cmd(RD_CmdKind_KillAll);
@@ -7075,7 +7075,7 @@ rd_window_frame(void)
         {
           Temp scratch = scratch_begin(0, 0);
           RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           B32 have_targets = (targets.count != 0);
           B32 can_send_signal = !d_ctrl_targets_running();
           B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
@@ -12201,7 +12201,7 @@ rd_frame(void)
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
     U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->handle);
-    CTRL_EntityList all_modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+    CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &eval_modules[0];
@@ -12210,10 +12210,9 @@ rd_frame(void)
     DI_Key primary_dbgi_key = {0};
     ProfScope("produce all eval modules")
     {
-      U64 eval_module_idx = 0;
-      for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
+      for EachIndex(eval_module_idx, all_modules.count)
       {
-        CTRL_Entity *m = n->v;
+        CTRL_Entity *m = all_modules.v[eval_module_idx];
         DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
         eval_modules[eval_module_idx].arch        = m->arch;
         eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_key, 0);
@@ -12376,11 +12375,11 @@ rd_frame(void)
       {
         String8 name = evallable_ctrl_names[idx];
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(name);
-        CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, kind);
+        CTRL_EntityArray array = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, kind);
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-        for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
+        for EachIndex(idx, array.count)
         {
-          CTRL_Entity *entity = n->v;
+          CTRL_Entity *entity = array.v[idx];
           E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
           expr->space    = space;
@@ -12446,9 +12445,18 @@ rd_frame(void)
                                                       .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(environment),
                                                       .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("call_stack"),
-                                    e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("call_stack")));
 #endif
+        e_string2typekey_map_insert(rd_frame_arena(),
+                                    rd_state->meta_name2type_map,
+                                    str8_lit("call_stack"),
+                                    e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .name = str8_lit("call_stack"),
+                                                    .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(call_stack),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(call_stack),
+                                                    .expand =
+                                                    {
+                                                      .info    = E_TYPE_EXPAND_INFO_FUNCTION_NAME(call_stack),
+                                                    }));
       }
       
       //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
@@ -12483,7 +12491,6 @@ rd_frame(void)
       }
       
       //- rjf: add macros for debug info table collections
-#if 0 // TODO(rjf): @eval
       String8 debug_info_table_collection_names[] =
       {
         str8_lit_comp("procedures"),
@@ -12495,16 +12502,18 @@ rd_frame(void)
       {
         String8 name = debug_info_table_collection_names[idx];
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                         .name = name,
+                                         .expand =
+                                         {
+                                           .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(debug_info_table),
+                                           .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(debug_info_table),
+                                           .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(debug_info_table),
+                                           .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(debug_info_table)
+                                         });
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
-                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(debug_info_table),
-                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(debug_info_table),
-                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(debug_info_table),
-                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(debug_info_table));
       }
-#endif
       
       //- rjf: add macros for all config collections
       for EachElement(cfg_name_idx, evallable_cfg_names)
@@ -12527,23 +12536,26 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
       }
       
-#if 0 // TODO(rjf): @eval
       //- rjf: add macros for all ctrl entity collections
       for EachElement(ctrl_name_idx, evallable_ctrl_names)
       {
         String8 kind_name = evallable_ctrl_names[ctrl_name_idx];
         String8 collection_name = rd_plural_from_code_name(kind_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                        .name = collection_name,
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(ctrl_entities),
+                                                        .expand =
+                                                        {
+                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(ctrl_entities),
+                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(ctrl_entities)
+                                                        });
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                     .info   = E_LOOKUP_INFO_FUNCTION_NAME(ctrl_entities),
-                                     .access = E_LOOKUP_ACCESS_FUNCTION_NAME(ctrl_entities),
-                                     .range  = E_LOOKUP_RANGE_FUNCTION_NAME(ctrl_entities));
       }
       
+#if 0 // TODO(rjf): @eval
       //- rjf: add macro / lookup rules for unattached processes
       {
         String8 collection_name = str8_lit("unattached_processes");
@@ -12556,21 +12568,24 @@ rd_frame(void)
                                      .info   = E_LOOKUP_INFO_FUNCTION_NAME(unattached_processes),
                                      .range  = E_LOOKUP_RANGE_FUNCTION_NAME(unattached_processes));
       }
+#endif
       
       //- rjf: add macro for commands
       {
         String8 name = str8_lit("commands");
-        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = name);
+        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                             .name = name,
+                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
+                                             .expand =
+                                             {
+                                               .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
+                                               .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
+                                             });
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, name,
-                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(commands),
-                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(commands),
-                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(commands));
       }
-#endif
       
       //- rjf: add macro for output log
       {
@@ -12606,17 +12621,18 @@ rd_frame(void)
       
       //- rjf: gather auto-view-rules from loaded modules
       RD_CfgList immediate_auto_view_rules = {0};
-      CTRL_EntityList modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
-      for(CTRL_EntityNode *n = modules.first; n != 0; n = n->next)
+      CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+      for EachIndex(idx, modules.count)
       {
-        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, n->v->handle);
+        CTRL_Entity *module = modules.v[idx];
+        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
         U8 split_char = 0;
         String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
         for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
         {
           String8 text = text_n->string;
           RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
-          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, n->v->handle));
+          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, module->handle));
           for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
           {
             rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
@@ -12757,7 +12773,7 @@ rd_frame(void)
           case RD_CmdKind_StepOver:
           case RD_CmdKind_Restart:
           {
-            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
               RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
@@ -12837,7 +12853,7 @@ rd_frame(void)
           {
             // rjf: if control processes are live, but this is not force-confirmed, then
             // get confirmation from user
-            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
             if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
@@ -16167,7 +16183,7 @@ Z(getting_started)
         case D_EventKind_ProcessEnd:
         if(rd_state->quit_after_success)
         {
-          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           if(evt->code == 0 && processes.count == 0)
           {
             rd_cmd(RD_CmdKind_Exit);
@@ -16204,8 +16220,8 @@ Z(getting_started)
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
           if(need_refocus && thread == &ctrl_entity_nil && selected_thread == &ctrl_entity_nil)
           {
-            CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
-            CTRL_Entity *first_available_thread = ctrl_entity_list_first(&threads);
+            CTRL_EntityArray threads = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+            CTRL_Entity *first_available_thread = ctrl_entity_array_first(&threads);
             rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle);
           }
           
