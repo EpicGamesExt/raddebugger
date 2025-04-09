@@ -4699,12 +4699,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->member_map    = e_push_member_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
     ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
     ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
-#if 0 // TODO(rjf): @eval
-    ctx->lookup_rule_map = push_array(arena, E_LookupRuleMap, 1);
-    ctx->lookup_rule_map[0] = e_lookup_rule_map_make(arena, 512);
-    ctx->irgen_rule_map = push_array(arena, E_IRGenRuleMap, 1);
-    ctx->irgen_rule_map[0] = e_irgen_rule_map_make(arena, 512);
-#endif
     ctx->auto_hook_map = push_array(arena, E_AutoHookMap, 1);
     ctx->auto_hook_map[0] = e_auto_hook_map_make(arena, 512);
   }

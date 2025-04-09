@@ -246,6 +246,7 @@ struct EV_StringParams
   U32 radix;
   U32 min_digits;
   U8 digit_group_separator;
+  String8 filter;
 };
 
 typedef struct EV_StringIterTask EV_StringIterTask;
@@ -256,6 +257,7 @@ struct EV_StringIterTask
   E_Eval eval;
   U64 idx;
   S32 depth;
+  B32 redirect_array_to_sets_and_structs;
   void *user_data;
 };
 
@@ -375,12 +377,5 @@ internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
 //- rjf: tree stringification iterator
 internal EV_StringIter *ev_string_iter_begin(Arena *arena, E_Eval eval, EV_StringParams *params);
 internal B32 ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string);
-
-////////////////////////////////
-//~ rjf: Expression & IR-Tree => Expand Rule
-
-#if 0 // TODO(rjf): @eval
-internal EV_ExpandRuleTagPair ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
-#endif
 
 #endif // EVAL_VISUALIZATION_CORE_H

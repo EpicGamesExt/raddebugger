@@ -9619,10 +9619,18 @@ rd_value_string_from_eval_NEW(Arena *arena, String8 filter, EV_StringParams *par
   {
     EV_StringIter *iter = ev_string_iter_begin(scratch.arena, eval, params);
     F32 space_taken_px = 0;
-    for(String8 string = {0}; ev_string_iter_next(scratch.arena, iter, &string) && space_taken_px < max_size;)
+    for(String8 string = {0}; ev_string_iter_next(scratch.arena, iter, &string);)
     {
-      str8_list_push(scratch.arena, &strs, string);
-      space_taken_px += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+      if(space_taken_px > max_size)
+      {
+        str8_list_push(scratch.arena, &strs, str8_lit("..."));
+        break;
+      }
+      else
+      {
+        str8_list_push(scratch.arena, &strs, string);
+        space_taken_px += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+      }
     }
   }
   String8 result = str8_list_join(arena, &strs, 0);
@@ -12272,12 +12280,6 @@ rd_frame(void)
       ctx->member_map    = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
       ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
       ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
-#if 0 // TODO(rjf): @eval
-      ctx->lookup_rule_map    = push_array(scratch.arena, E_LookupRuleMap, 1);
-      ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
-      ctx->irgen_rule_map    = push_array(scratch.arena, E_IRGenRuleMap, 1);
-      ctx->irgen_rule_map[0] = e_irgen_rule_map_make(scratch.arena, 512);
-#endif
       ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
       ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
       
@@ -12433,19 +12435,19 @@ rd_frame(void)
       
       //- rjf: add types for queries
       {
-#if 0 // TODO(rjf): @eval
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("environment"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .name = str8_lit("environment"),
                                                     .flags = E_TypeFlag_EditableChildren,
+                                                    .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(environment),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(environment),
                                                     .expand =
                                                     {
-                                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(environment),
-                                                      .range       = E_LOOKUP_RANGE_FUNCTION_NAME(environment),
-                                                      .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(environment),
-                                                      .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(environment),
+                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(environment),
+                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(environment),
+                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
+                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
-#endif
         e_string2typekey_map_insert(rd_frame_arena(),
                                     rd_state->meta_name2type_map,
                                     str8_lit("call_stack"),
@@ -12555,20 +12557,21 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
       }
       
-#if 0 // TODO(rjf): @eval
       //- rjf: add macro / lookup rules for unattached processes
       {
         String8 collection_name = str8_lit("unattached_processes");
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+                                                        .expand =
+                                                        {
+                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),
+                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(unattached_processes)
+                                                        });
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("unattached_processes"),
-                                     .info   = E_LOOKUP_INFO_FUNCTION_NAME(unattached_processes),
-                                     .range  = E_LOOKUP_RANGE_FUNCTION_NAME(unattached_processes));
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
-#endif
       
       //- rjf: add macro for commands
       {
@@ -12665,10 +12668,10 @@ rd_frame(void)
     e_select_ir_ctx(ir_ctx);
     
     ////////////////////////////
-    //- rjf: generate macros for all view ui rules
+    //- rjf: generate macros for all view rules
     //
     {
-      //- rjf: choose set of view ui rules
+      //- rjf: choose set of view rules
       // TODO(rjf): generate via metaprogram
       struct
       {
@@ -12678,6 +12681,11 @@ rd_frame(void)
       }
       view_ui_rule_table[] =
       {
+        {str8_lit("bin")},
+        {str8_lit("oct")},
+        {str8_lit("dec")},
+        {str8_lit("hex")},
+        {str8_lit("digits")},
         {str8_lit("text"),        RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
         {str8_lit("disasm"),      RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
         {str8_lit("memory"),      RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},

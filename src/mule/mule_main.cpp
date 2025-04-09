@@ -299,6 +299,10 @@ type_coverage_eval_tests(void)
     L"This is a string, but instead of being encoded in a stream of bytes,\n"
     L"it is encoded in a stream of 2-byte packages!\n";
   
+  const char *const_string = "Hello, World!";
+  const char const_string_array[] = "Hello, World!";
+  const char *const const_ptr_const_string = "Hello, World!";
+  
   void *pointer = &basics;
   Basics *pointer_to_basics = &basics;
   Basics **pointer_to_pointer_to_basics = &pointer_to_basics;

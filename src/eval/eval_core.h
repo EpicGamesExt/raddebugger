@@ -582,45 +582,6 @@ struct E_LookupRuleExprPair
 #endif
 
 ////////////////////////////////
-//~ rjf: IR Generation Hooks
-
-#if 0 // TODO(rjf): @eval
-#define E_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr)
-#define E_IRGEN_FUNCTION_NAME(name) e_irgen_##name
-#define E_IRGEN_FUNCTION_DEF(name) internal E_IRGEN_FUNCTION_SIG(E_IRGEN_FUNCTION_NAME(name))
-typedef E_IRGEN_FUNCTION_SIG(E_IRGenFunctionType);
-E_IRGEN_FUNCTION_DEF(default);
-
-typedef struct E_IRGenRule E_IRGenRule;
-struct E_IRGenRule
-{
-  String8 name;
-  E_IRGenFunctionType *irgen;
-};
-
-typedef struct E_IRGenRuleNode E_IRGenRuleNode;
-struct E_IRGenRuleNode
-{
-  E_IRGenRuleNode *next;
-  E_IRGenRule v;
-};
-
-typedef struct E_IRGenRuleSlot E_IRGenRuleSlot;
-struct E_IRGenRuleSlot
-{
-  E_IRGenRuleNode *first;
-  E_IRGenRuleNode *last;
-};
-
-typedef struct E_IRGenRuleMap E_IRGenRuleMap;
-struct E_IRGenRuleMap
-{
-  U64 slots_count;
-  E_IRGenRuleSlot *slots;
-};
-#endif
-
-////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)
 
 typedef struct E_AutoHookNode E_AutoHookNode;

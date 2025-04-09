@@ -1572,17 +1572,20 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
   B32 need_pop = 1;
   B32 need_new_task = 0;
   EV_StringIterTask new_task = {0};
+  S32 top_task_depth = 0;
   if(it->top_task != 0)
   {
     result = 1;
     
     //- rjf: unpack task
     U64 task_idx = it->top_task->idx;
-    S32 depth = it->top_task->depth;
+    S32 depth = top_task_depth = it->top_task->depth;
     EV_StringParams *params = &it->top_task->params;
     E_Eval eval = it->top_task->eval;
     E_TypeKey type_key = eval.irtree.type_key;
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    String8 expansion_opener_symbol = str8_lit("{");
+    String8 expansion_closer_symbol = str8_lit("}");
     
     //- rjf: type evaluations -> display type string
     if(eval.irtree.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
@@ -1606,42 +1609,81 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       //- rjf: lenses
       //
       case E_TypeKind_Lens:
-      switch(task_idx)
       {
-        default:{}break;
-        
-        // rjf: step 0 -> generate lens description, then descend to same evaluation w/ direct type
-        case 0:
+        E_Type *type = e_type_from_key__cached(type_key);
+        B32 lens_applied = 1;
+        EV_StringParams lens_params = *params;
+        if(0){}
+        else if(str8_match(type->name, str8_lit("bin"), 0)) { lens_params.radix = 2; }
+        else if(str8_match(type->name, str8_lit("oct"), 0)) { lens_params.radix = 8; }
+        else if(str8_match(type->name, str8_lit("dec"), 0)) { lens_params.radix = 10; }
+        else if(str8_match(type->name, str8_lit("hex"), 0)) { lens_params.radix = 16; }
+        else if(str8_match(type->name, str8_lit("digits"), 0) && type->count >= 1)
         {
-          Temp scratch = scratch_begin(&arena, 1);
-          String8List strings = {0};
-          {
-            E_Type *type = e_type_from_key__cached(type_key);
-            str8_list_pushf(scratch.arena, &strings, "%S(", type->name);
-            for EachIndex(idx, type->count)
-            {
-              String8 string = e_string_from_expr(scratch.arena, type->args[idx]);
-              str8_list_push(scratch.arena, &strings, string);
-              if(idx+1 < type->count)
-              {
-                str8_list_pushf(scratch.arena, &strings, ", ");
-              }
-            }
-            str8_list_pushf(scratch.arena, &strings, ") <- (");
-          }
-          *out_string = str8_list_join(arena, &strings, 0);
+          E_Value value = e_value_from_expr(type->args[0]);
+          lens_params.min_digits = value.u64;
+        }
+        else
+        {
+          lens_applied = 0;
+        }
+        if(lens_applied)
+        {
           need_new_task = 1;
-          new_task.params = *params;
+          need_pop = 1;
+          new_task.params = lens_params;
           new_task.eval = eval;
           new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
-          scratch_end(scratch);
-        }break;
-        
-        // rjf: step 1 -> close
-        case 1:
+        }
+        else switch(task_idx)
         {
-          *out_string = str8_lit(")");
-        }break;
+          default:{}break;
+          
+          // rjf: step 0 -> generate lens description, then descend to same evaluation w/ direct type
+          case 0:
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            String8List strings = {0};
+            {
+              str8_list_pushf(scratch.arena, &strings, "%S(", type->name);
+              for EachIndex(idx, type->count)
+              {
+                String8 string = e_string_from_expr(scratch.arena, type->args[idx]);
+                str8_list_push(scratch.arena, &strings, string);
+                if(idx+1 < type->count)
+                {
+                  str8_list_pushf(scratch.arena, &strings, ", ");
+                }
+              }
+              str8_list_pushf(scratch.arena, &strings, ") <- (");
+            }
+            *out_string = str8_list_join(arena, &strings, 0);
+            need_new_task = 1;
+            need_pop = 0;
+            new_task.params = *params;
+            new_task.eval = eval;
+            new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+            scratch_end(scratch);
+          }break;
+          
+          // rjf: step 1 -> close
+          case 1:
+          {
+            *out_string = str8_lit(")");
+          }break;
+        }
+      }break;
+      
+      //////////////////////////
+      //- rjf: modifiers
+      //
+      case E_TypeKind_Modifier:
+      {
+        need_pop = 1;
+        need_new_task = 1;
+        new_task.params = *params;
+        new_task.eval = eval;
+        new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
       }break;
       
       //////////////////////////
@@ -1651,7 +1693,14 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       case E_TypeKind_Ptr:
       case E_TypeKind_LRef:
       case E_TypeKind_RRef:
+      case E_TypeKind_Array:
       {
+        if(type_kind == E_TypeKind_Array && it->top_task->redirect_array_to_sets_and_structs)
+        {
+          expansion_opener_symbol = str8_lit("[");
+          expansion_closer_symbol = str8_lit("]");
+          goto arrays_and_sets_and_structs;
+        } 
         typedef struct EV_StringPtrData EV_StringPtrData;
         struct EV_StringPtrData
         {
@@ -1661,6 +1710,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           B32 ptee_has_content;
           B32 ptee_has_string;
           B32 did_prefix_content;
+          B32 did_redirect;
         };
         EV_StringPtrData *ptr_data = it->top_task->user_data;
         if(ptr_data == 0)
@@ -1668,13 +1718,17 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           ptr_data = it->top_task->user_data = push_array(arena, EV_StringPtrData, 1);
           ptr_data->value_eval = e_value_eval_from_eval(eval);
           ptr_data->type = e_type_from_key__cached(type_key);
-          ptr_data->direct_type = e_type_from_key__cached(e_type_direct_from_key(type_key));
+          ptr_data->direct_type = e_type_from_key__cached(e_type_unwrap(e_type_direct_from_key(e_type_unwrap(type_key))));
           ptr_data->ptee_has_content = (ptr_data->direct_type->kind != E_TypeKind_Null && ptr_data->direct_type->kind != E_TypeKind_Void);
           ptr_data->ptee_has_string  = ((E_TypeKind_Char8 <= ptr_data->direct_type->kind && ptr_data->direct_type->kind <= E_TypeKind_UChar32) ||
                                         ptr_data->direct_type->kind == E_TypeKind_S8 ||
                                         ptr_data->direct_type->kind == E_TypeKind_U8);
         }
-        switch(task_idx)
+        if(ptr_data->did_redirect)
+        {
+          need_pop = 1;
+        }
+        else switch(task_idx)
         {
           default:{}break;
           
@@ -1744,31 +1798,147 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               }
               if(module != &e_module_nil)
               {
+                RDI_Parsed *rdi = module->rdi;
                 U64 voff = vaddr - module->vaddr_range.min;
-                RDI_Procedure *procedure = rdi_procedure_from_voff(module->rdi, voff);
-                String8 procedure_name = {0};
-                procedure_name.str = rdi_name_from_procedure(module->rdi, procedure, &procedure_name.size);
-                if(procedure_name.size != 0)
+                B32 good_symbol_match = 0;
+                
+                // NOTE(rjf): read-only -> generate non-parseable things, like type-info / inlines
+                if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
                 {
-                  // NOTE(rjf): read-only -> generate non-parseable things, like type-info
-                  if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+                  // rjf: voff -> scope
+                  U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
+                  
+                  // rjf: scope -> # of max possible inline depth
+                  U64 inline_site_count = 0;
+                  for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
                   {
-                    // TODO(rjf)
-                    *out_string = procedure_name;
+                    RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
+                    s_idx_next = s->parent_scope_idx;
+                    if(s->inline_site_idx != 0)
+                    {
+                      inline_site_count += 1;
+                    }
+                    else
+                    {
+                      break;
+                    }
                   }
                   
-                  // NOTE(rjf): non-read-only -> only generate thing which can be parsed, so just procedure name
+                  // rjf: depth in [1, max]? -> form name from inline site
+                  if(0 < ptr_data->type->depth && ptr_data->type->depth <= inline_site_count)
+                  {
+                    RDI_InlineSite *inline_site = 0;
+                    U64 s_inline_depth = inline_site_count;
+                    for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
+                    {
+                      RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
+                      s_idx_next = s->parent_scope_idx;
+                      if(s_inline_depth == ptr_data->type->depth)
+                      {
+                        inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+                        break;
+                      }
+                      s_inline_depth -= 1;
+                      if(s_inline_depth == 0)
+                      {
+                        break;
+                      }
+                    }
+                    if(inline_site != 0)
+                    {
+                      E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, module_idx);
+                      String8 name = {0};
+                      name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                      if(inline_site->type_idx != 0)
+                      {
+                        Temp scratch = scratch_begin(&arena, 1);
+                        String8List list = {0};
+                        str8_list_pushf(scratch.arena, &list, "[inlined] ");
+                        e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+                        str8_list_push(scratch.arena, &list, name);
+                        e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+                        *out_string = str8_list_join(arena, &list, 0);
+                        scratch_end(scratch);
+                      }
+                      else
+                      {
+                        *out_string = push_str8_copy(arena, name);
+                      }
+                      good_symbol_match = (name.size != 0);
+                    }
+                  }
+                  
+                  // rjf: depth == 0 or depth >= max? -> form name from scope procedure
                   else
                   {
-                    *out_string = procedure_name;
+                    Temp scratch = scratch_begin(&arena, 1);
+                    RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
+                    U64 proc_idx = scope->proc_idx;
+                    RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+                    E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, module_idx);
+                    String8 name = {0};
+                    name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+                    if(procedure->type_idx != 0)
+                    {
+                      String8List list = {0};
+                      e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+                      str8_list_push(scratch.arena, &list, name);
+                      e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+                      *out_string = str8_list_join(arena, &list, 0);
+                    }
+                    else
+                    {
+                      *out_string = push_str8_copy(arena, name);
+                    }
+                    good_symbol_match = (out_string->size != 0);
+                    scratch_end(scratch);
                   }
-                  
-                  ptr_data->did_prefix_content = 1;
                 }
+                
+                // NOTE(rjf): non-read-only -> only generate thing which can be parsed, so just procedure name
+                else
+                {
+                  // rjf: voff -> scope
+                  U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
+                  RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+                  
+                  // rjf: scope -> procedure / string
+                  RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+                  String8 procedure_name = {0};
+                  procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
+                  
+                  *out_string = procedure_name;
+                  good_symbol_match = (procedure_name.size != 0);
+                }
+                
+                ptr_data->did_prefix_content = good_symbol_match;
               }
             }
             
-            need_pop = 0;
+            // rjf: if this is an array, and we do not have a prefix, then we need to
+            // generate a new task which redirects array types -> sets and structs.
+            if(type_kind == E_TypeKind_Array && !ptr_data->did_prefix_content)
+            {
+              need_new_task = 1;
+              need_pop = 0;
+              new_task.params = *params;
+              new_task.eval = eval;
+              new_task.redirect_array_to_sets_and_structs = 1;
+              ptr_data->did_redirect = 1;
+            }
+            
+            // rjf: if this is an array, and we *did* prefix content, then we are
+            // just done.
+            else if(type_kind == E_TypeKind_Array && ptr_data->did_prefix_content)
+            {
+              // NOTE(rjf): no-op, task is done.
+            }
+            
+            // rjf: otherwise, keep going on this task
+            else
+            {
+              need_pop = 0;
+            }
           }break;
           
           //- rjf: step 1 -> do pointer value + descend if needed
@@ -1799,6 +1969,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 E_Expr *deref_expr = e_expr_irext_deref(arena, eval.expr, &eval.irtree);
                 E_Eval deref_eval = e_eval_from_expr(arena, deref_expr);
                 need_new_task = 1;
+                need_pop = 0;
                 new_task.params = *params;
                 new_task.eval = deref_eval;
               }
@@ -1822,15 +1993,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       }break;
       
       //////////////////////////
-      //- rjf: arrays
-      //
-      case E_TypeKind_Array:
-      {
-        // TODO(rjf)
-      }break;
-      
-      //////////////////////////
-      //- rjf: non-string-arrays/structs/sets
+      //- rjf: non-string-arrays/structs, sets
       //
       case E_TypeKind_Struct:
       case E_TypeKind_Union:
@@ -1841,7 +2004,64 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       case E_TypeKind_Set:
       arrays_and_sets_and_structs:
       {
-        
+        typedef struct EV_ExpandedTypeData EV_ExpandedTypeData;
+        struct EV_ExpandedTypeData
+        {
+          E_Type *type;
+          E_TypeExpandRule *expand_rule;
+          E_TypeExpandInfo expand_info;
+        };
+        EV_ExpandedTypeData *expand_data = (EV_ExpandedTypeData *)it->top_task->user_data;
+        if(expand_data == 0)
+        {
+          expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
+          expand_data->type = e_type_from_key__cached(type_key);
+          expand_data->expand_rule = &e_type_expand_rule__default;
+          if(expand_data->type->expand.info != 0)
+          {
+            expand_data->expand_rule = &expand_data->type->expand;
+          }
+          expand_data->expand_info = expand_data->expand_rule->info(arena, eval.expr, &eval.irtree, params->filter);
+        }
+        switch(task_idx)
+        {
+          //- rjf: step 0 -> generate opener symbol
+          case 0:
+          {
+            need_pop = 0;
+            *out_string = expansion_opener_symbol;
+          }break;
+          
+          default:
+          //- rjf: last step -> generate closer symbol
+          if(task_idx == expand_data->expand_info.expr_count+1)
+          {
+            *out_string = expansion_closer_symbol;
+          }
+          
+          //- rjf: middle step -> generate new task for next thing in expansion
+          else
+          {
+            E_Expr *next_expr = &e_expr_nil;
+            String8 next_string = {0};
+            expand_data->expand_rule->range(arena, expand_data->expand_info.user_data, eval.expr, &eval.irtree, params->filter, r1u64(task_idx-1, task_idx), &next_expr, &next_string);
+            if(next_expr != &e_expr_nil)
+            {
+              need_new_task = 1;
+              need_pop = 0;
+              new_task.params = *params;
+              new_task.eval = e_eval_from_expr(arena, next_expr);
+              if(task_idx > 1)
+              {
+                *out_string = str8_lit(", ");
+              }
+            }
+            else
+            {
+              need_pop = 0;
+            }
+          }break;
+        }
       }break;
     }
   }
@@ -1850,6 +2070,14 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
   if(it->top_task != 0)
   {
     it->top_task->idx += 1;
+  }
+  
+  //- rjf: if result is good, and we want to pop? -> pop
+  if(result && need_pop)
+  {
+    EV_StringIterTask *task = it->top_task;
+    SLLStackPop(it->top_task);
+    SLLStackPush(it->free_task, task);
   }
   
   //- rjf: if result is good, and we have a new task? -> push
@@ -1865,62 +2093,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       new_t = push_array(arena, EV_StringIterTask, 1);
     }
     MemoryCopyStruct(new_t, &new_task);
-    new_t->depth = it->top_task->depth+1;
+    new_t->depth = top_task_depth+1;
     SLLStackPush(it->top_task, new_t);
     new_t->idx = 0;
   }
   
-  //- rjf: if result is good, but we don't have a new task? -> pop
-  else if(result && need_pop)
-  {
-    EV_StringIterTask *task = it->top_task;
-    SLLStackPop(it->top_task);
-    SLLStackPush(it->free_task, task);
-  }
-  
   return result;
 }
-
-////////////////////////////////
-//~ rjf: Expression & IR-Tree => Expand Rule
-
-#if 0 // TODO(rjf): @eval
-internal EV_ExpandRuleTagPair
-ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
-{
-  EV_ExpandRuleTagPair result = {&ev_nil_expand_rule, &e_expr_nil};
-  {
-    // rjf: first try explicitly-stored tags
-    if(result.rule == &ev_nil_expand_rule)
-    {
-      for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
-      {
-        EV_ExpandRule *candidate = ev_expand_rule_from_string(tag->string);
-        if(candidate != &ev_nil_expand_rule)
-        {
-          result.rule = candidate;
-          result.tag = tag;
-          break;
-        }
-      }
-    }
-    
-    // rjf: next try auto hook map
-    if(result.rule == &ev_nil_expand_rule)
-    {
-      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
-      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
-      {
-        EV_ExpandRule *candidate = ev_expand_rule_from_string(n->v->string);
-        if(candidate != &ev_nil_expand_rule)
-        {
-          result.rule = candidate;
-          result.tag = n->v;
-          break;
-        }
-      }
-    }
-  }
-  return result;
-}
-#endif

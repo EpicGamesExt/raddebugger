@@ -700,150 +700,6 @@ E_LOOKUP_RANGE_FUNCTION_DEF(only_and_omit)
 #endif
 
 ////////////////////////////////
-//~ rjf: Lookups
-
-#if 0 // TODO(rjf): @eval
-internal E_LookupRuleMap
-e_lookup_rule_map_make(Arena *arena, U64 slots_count)
-{
-  E_LookupRuleMap map = {0};
-  map.slots_count = slots_count;
-  map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("default"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(default),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(default),
-                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
-                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("folder"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(folder),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(folder),
-                               .id_from_num  = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(folder),
-                               .num_from_id  = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(folder));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("file"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(file),
-                               .access = E_LOOKUP_ACCESS_FUNCTION_NAME(file),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(file));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("slice"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(slice),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(slice));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("only"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(only),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(only_and_omit));
-  e_lookup_rule_map_insert_new(arena, &map, str8_lit("omit"),
-                               .info   = E_LOOKUP_INFO_FUNCTION_NAME(omit),
-                               .range  = E_LOOKUP_RANGE_FUNCTION_NAME(only_and_omit));
-  return map;
-}
-
-internal void
-e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
-{
-  U64 hash = e_hash_from_string(5381, rule->name);
-  U64 slot_idx = hash%map->slots_count;
-  E_LookupRuleNode *n = push_array(arena, E_LookupRuleNode, 1);
-  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
-  MemoryCopyStruct(&n->v, rule);
-  if(n->v.info == 0)       { n->v.info = E_LOOKUP_INFO_FUNCTION_NAME(default); }
-  if(n->v.access == 0)     { n->v.access = E_LOOKUP_ACCESS_FUNCTION_NAME(default); }
-  if(n->v.range == 0)      { n->v.range = E_LOOKUP_RANGE_FUNCTION_NAME(default); }
-  if(n->v.id_from_num == 0){ n->v.id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default); }
-  if(n->v.num_from_id == 0){ n->v.num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default); }
-  n->v.name = push_str8_copy(arena, n->v.name);
-}
-
-internal E_LookupRule *
-e_lookup_rule_from_string(String8 string)
-{
-  E_LookupRule *result = &e_lookup_rule__nil;
-  if(e_ir_state->ctx->lookup_rule_map != 0 && e_ir_state->ctx->lookup_rule_map->slots_count != 0)
-  {
-    U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%e_ir_state->ctx->lookup_rule_map->slots_count;
-    for(E_LookupRuleNode *n = e_ir_state->ctx->lookup_rule_map->slots[slot_idx].first;
-        n != 0;
-        n = n->next)
-    {
-      if(str8_match(n->v.name, string, 0))
-      {
-        result = &n->v;
-        break;
-      }
-    }
-  }
-  return result;
-}
-#endif
-
-////////////////////////////////
-//~ rjf: IR Gen Rules
-
-#if 0 // TODO(rjf): @eval
-E_IRGEN_FUNCTION_DEF(bswap)
-{
-  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
-  E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
-  e_irnode_push_child(root, irtree.root);
-  E_IRTreeAndType result = {root, irtree.type_key, irtree.mode, irtree.msgs};
-  return result;
-}
-
-E_IRGEN_FUNCTION_DEF(array)
-{
-  E_Expr *ptr_expr = expr->first->next;
-  E_Expr *count_expr = ptr_expr->next;
-  E_IRTreeAndType result = e_irtree_and_type_from_expr(arena, ptr_expr);
-  E_TypeKey element_type_key = e_type_ptee_from_key(result.type_key);
-  E_Value count_value = e_value_from_expr(count_expr);
-  result.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, element_type_key, count_value.u64, 0);
-  return result;
-}
-
-internal E_IRGenRuleMap
-e_irgen_rule_map_make(Arena *arena, U64 slots_count)
-{
-  E_IRGenRuleMap map = {0};
-  map.slots_count = slots_count;
-  map.slots = push_array(arena, E_IRGenRuleSlot, map.slots_count);
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("default"),  .irgen = E_IRGEN_FUNCTION_NAME(default));
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("bswap"),    .irgen = E_IRGEN_FUNCTION_NAME(bswap));
-  e_irgen_rule_map_insert_new(arena, &map, str8_lit("array"),    .irgen = E_IRGEN_FUNCTION_NAME(array));
-  return map;
-}
-
-internal void
-e_irgen_rule_map_insert(Arena *arena, E_IRGenRuleMap *map, E_IRGenRule *rule)
-{
-  U64 hash = e_hash_from_string(5381, rule->name);
-  U64 slot_idx = hash%map->slots_count;
-  E_IRGenRuleNode *n = push_array(arena, E_IRGenRuleNode, 1);
-  MemoryCopyStruct(&n->v, rule);
-  n->v.name = push_str8_copy(arena, n->v.name);
-  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
-}
-
-internal E_IRGenRule *
-e_irgen_rule_from_string(String8 string)
-{
-  E_IRGenRule *rule = &e_irgen_rule__default;
-  if(e_ir_state != 0 && e_ir_state->ctx != 0 && e_ir_state->ctx->irgen_rule_map != 0 && e_ir_state->ctx->irgen_rule_map->slots_count != 0)
-  {
-    E_IRGenRuleMap *map = e_ir_state->ctx->irgen_rule_map;
-    U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%map->slots_count;
-    for(E_IRGenRuleNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
-    {
-      if(str8_match(string, n->v.name, 0))
-      {
-        rule = &n->v;
-        break;
-      }
-    }
-  }
-  return rule;
-}
-#endif
-
-////////////////////////////////
 //~ rjf: Auto Hooks
 
 internal E_AutoHookMap
@@ -1658,8 +1514,47 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     {
       default:{}break;
       
-      //- rjf: accesses
+      //- rjf: member accesses
       case E_ExprKind_MemberAccess:
+      {
+        // rjf: unpack left-hand-size
+        E_Expr *lhs = expr->first;
+        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        
+        // rjf: if the right-hand-side is a call, then this is short-hand for
+        // the right-hand-side call, with the left-hand-side as the first argument.
+        E_Expr *rhs = lhs->next;
+        if(rhs->kind == E_ExprKind_Call)
+        {
+          E_Expr *rhs_copy = e_expr_copy(arena, rhs);
+          e_expr_insert_child(rhs_copy, rhs_copy->first, e_expr_ref(arena, lhs));
+          result = e_irtree_and_type_from_expr(arena, rhs_copy);
+        }
+        
+        // rjf: if the right-hand-side is a leaf identifier, then this is an
+        // "access" to the left-hand-side.
+        else if(rhs->kind == E_ExprKind_LeafIdentifier)
+        {
+          // rjf: pick access hook based on type
+          E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
+          E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+          if(lhs_access == 0)
+          {
+            lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
+          }
+          
+          // rjf: call into hook to do access
+          result = lhs_access(arena, expr, &lhs_irtree);
+        }
+        
+        // rjf: if the right-hand-side is anything else, this is an invalid formation.
+        else
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Expected identifier or call after `.`.");
+        }
+      }break;
+      
+      //- rjf: array indices
       case E_ExprKind_ArrayIndex:
       {
         // rjf: unpack left-hand-size
@@ -1686,7 +1581,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-        E_TypeKey r_type_direct = e_type_direct_from_key(r_type);
+        E_TypeKey r_type_direct = e_type_unwrap(e_type_direct_from_key(r_type));
         U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
@@ -3181,94 +3076,3 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
   e_expr_push_child(root, rhs_bytecode);
   return root;
 }
-
-////////////////////////////////
-//~ rjf: Expression & IR-Tree => Rules
-
-#if 0 // TODO(rjf): @eval
-internal E_LookupRule *
-e_lookup_rule_from_type_key(E_TypeKey type_key)
-{
-  E_LookupRule *rule = &e_lookup_rule__default;
-  
-  // rjf: unpack type
-  E_Type *type = e_type_from_key__cached(type_key);
-  
-  // rjf: sets / lenses -> try to implicitly map to a rule based on name
-  if(type->kind == E_TypeKind_Set || type->kind == E_TypeKind_Lens)
-  {
-    E_LookupRule *candidate = e_lookup_rule_from_string(type->name);
-    if(candidate != &e_lookup_rule__nil)
-    {
-      rule = candidate;
-    }
-  }
-  
-  return rule;
-}
-#endif
-
-#if 0 // TODO(rjf): @eval
-internal E_LookupRuleExprPair
-e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
-{
-  E_LookupRuleExprPair result = {&e_lookup_rule__default, &e_expr_nil};
-  {
-    // rjf: first try explicitly-stored tags
-    B32 default_is_forced = 0;
-    if(result.rule == &e_lookup_rule__default)
-    {
-      for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
-      {
-        if(e_expr_is_poisoned(tag)) { continue; }
-        if(str8_match(tag->string, e_lookup_rule__default.name, 0))
-        {
-          result.rule = &e_lookup_rule__default;
-          result.tag = &e_expr_nil;
-          default_is_forced = 1;
-          break;
-        }
-        E_LookupRule *candidate = e_lookup_rule_from_string(tag->string);
-        if(candidate != &e_lookup_rule__nil)
-        {
-          result.rule = candidate;
-          result.tag = tag;
-        }
-      }
-    }
-    
-    // rjf: next try implicit set name -> rule mapping
-    if(!default_is_forced && result.rule == &e_lookup_rule__default)
-    {
-      E_TypeKind type_kind = e_type_kind_from_key(irtree->type_key);
-      if(type_kind == E_TypeKind_Stub)
-      {
-        E_Type *type = e_type_from_key__cached(irtree->type_key);
-        String8 name = type->name;
-        E_LookupRule *candidate = e_lookup_rule_from_string(name);
-        if(candidate != &e_lookup_rule__nil)
-        {
-          result.rule = candidate;
-        }
-      }
-    }
-    
-    // rjf: next try auto hook map
-    if(!default_is_forced && result.rule == &e_lookup_rule__default)
-    {
-      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree->type_key);
-      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
-      {
-        if(e_expr_is_poisoned(n->v)) { continue; }
-        E_LookupRule *candidate = e_lookup_rule_from_string(n->v->string);
-        if(candidate != &e_lookup_rule__nil)
-        {
-          result.rule = candidate;
-          result.tag = n->v;
-        }
-      }
-    }
-  }
-  return result;
-}
-#endif

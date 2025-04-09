@@ -1289,7 +1289,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                               .default_pct = 0.65f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),    .default_pct = 0.20f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("hex((U64)($expr))"),      .default_pct = 0.20f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                                .default_pct = 0.15f, .pct = take_pct());
 #undef take_pct
       }
@@ -1313,7 +1313,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                    .default_pct = 0.05f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                              .default_pct = 0.55f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("(U64)($expr) => hex"),   .default_pct = 0.20f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("hex((U64)($expr))"),     .default_pct = 0.20f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .eval = module_eval,                         .default_pct = 0.20f, .pct = take_pct());
 #undef take_pct
       }

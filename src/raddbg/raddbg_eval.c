@@ -765,44 +765,26 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
   return result;
 }
 
-#if 0 // TODO(rjf): @eval
-
 ////////////////////////////////
 //~ rjf: `environment` Type Hooks
 
-E_TYPE_ACCESS_FUNCTION_DEF(environment)
+typedef struct RD_EnvironmentAccel RD_EnvironmentAccel;
+struct RD_EnvironmentAccel
 {
-  E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  RD_CfgArray cfgs;
+};
+
+E_TYPE_IRGEN_FUNCTION_DEF(environment)
+{
+  E_IRTreeAndType result = *irtree;
+  RD_EnvironmentAccel *accel = push_array(arena, RD_EnvironmentAccel, 1);
   {
     Temp scratch = scratch_begin(&arena, 1);
-    RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
-    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
-    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
-    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
-    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
-    E_Value rhs_value = rhs_interp.value;
-    if(0 <= rhs_value.u64 && rhs_value.u64 < cfgs->count)
-    {
-      RD_Cfg *cfg = cfgs->v[rhs_value.u64];
-      result.irtree_and_type.root      = e_irtree_set_space(arena, rd_eval_space_from_cfg(cfg), e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key  = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
-      result.irtree_and_type.mode      = E_Mode_Offset;
-    }
-    scratch_end(scratch);
-  }
-  return result;
-}
-
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment)
-{
-  E_TypeExpandInfo result = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  {
-    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interpret = e_interpret(bytecode);
-    RD_Cfg *target = rd_cfg_from_eval_space(interpret.space);
+    E_Space space = interpret.space;
+    RD_Cfg *target = rd_cfg_from_eval_space(space);
     RD_CfgList env_strings = {0};
     for(RD_Cfg *child = target->first; child != &rd_nil_cfg; child = child->next)
     {
@@ -811,57 +793,80 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment)
         rd_cfg_list_push(scratch.arena, &env_strings, child);
       }
     }
-    RD_CfgArray *accel = push_array(arena, RD_CfgArray, 1);
-    *accel = rd_cfg_array_from_list(arena, &env_strings);
-    result.user_data = accel;
-    result.idxed_expr_count = accel->count + 1;
+    accel->cfgs = rd_cfg_array_from_list(arena, &env_strings);
+    scratch_end(scratch);
   }
-  scratch_end(scratch);
+  result.user_data = accel;
+  return result;
+}
+
+E_TYPE_ACCESS_FUNCTION_DEF(environment)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_ArrayIndex)
+  {
+    RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)lhs_irtree->user_data;
+    RD_CfgArray *cfgs = &accel->cfgs;
+    E_Value rhs_value = e_value_from_expr(expr->first->next);
+    if(0 <= rhs_value.u64 && rhs_value.u64 < cfgs->count)
+    {
+      RD_Cfg *cfg = cfgs->v[rhs_value.u64];
+      result.root      = e_irtree_set_space(arena, rd_eval_space_from_cfg(cfg), e_irtree_const_u(arena, 0));
+      result.type_key  = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
+      result.mode      = E_Mode_Offset;
+    }
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment)
+{
+  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)irtree->user_data;
+  E_TypeExpandInfo result = {accel, accel->cfgs.count + 1};
   return result;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(environment)
 {
-  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
-  E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-  Rng1U64 legal_idx_range = r1u64(0, cfgs->count);
+  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)user_data;
+  Rng1U64 legal_idx_range = r1u64(0, accel->cfgs.count);
   Rng1U64 read_range = intersect_1u64(idx_range, legal_idx_range);
   U64 read_range_count = dim_1u64(read_range);
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
     U64 cfg_idx = read_range.min + idx;
-    if(cfg_idx < cfgs->count)
+    if(cfg_idx < accel->cfgs.count)
     {
-      exprs[idx] = e_expr_irext_array_index(arena, lhs, &lhs_irtree, cfg_idx);
+      exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, cfg_idx);
     }
   }
 }
 
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(environment)
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(environment)
 {
   U64 id = 0;
-  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
-  if(1 <= num && num <= cfgs->count)
+  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)user_data;
+  if(1 <= num && num <= accel->cfgs.count)
   {
     U64 idx = (num-1);
-    id = cfgs->v[idx]->id;
+    id = accel->cfgs.v[idx]->id;
   }
-  else if(num == cfgs->count+1)
+  else if(num == accel->cfgs.count+1)
   {
     id = max_U64;
   }
   return id;
 }
 
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(environment)
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(environment)
 {
   U64 num = 0;
-  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)user_data;
   if(id != 0 && id != max_U64)
   {
-    for EachIndex(idx, cfgs->count)
+    for EachIndex(idx, accel->cfgs.count)
     {
-      if(cfgs->v[idx]->id == id)
+      if(accel->cfgs.v[idx]->id == id)
       {
         num = idx+1;
         break;
@@ -870,7 +875,7 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(environment)
   }
   else if(id == max_U64)
   {
-    num = cfgs->count + 1;
+    num = accel->cfgs.count + 1;
   }
   return num;
 }
@@ -893,20 +898,21 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     Temp scratch = scratch_begin(&arena, 1);
     
     //- rjf: evaluate lhs machine, if we have one
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs->root);
+    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
     String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
     E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
     CTRL_Entity *lhs_entity = rd_ctrl_entity_from_eval_space(lhs_interp.space);
     
     //- rjf: gather all machines we're searching through
-    CTRL_EntityList machines = {0};
+    CTRL_EntityArray machines = {0};
     if(lhs_entity->kind == CTRL_EntityKind_Machine)
     {
-      ctrl_entity_list_push(scratch.arena, &machines, lhs_entity);
+      machines.v = &lhs_entity;
+      machines.count = 1;
     }
     else
     {
-      machines = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Machine);
+      machines = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Machine);
     }
     
     //- rjf: gather system processes from this machine
@@ -920,9 +926,9 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     Node *first = 0;
     Node *last = 0;
     U64 count = 0;
-    for(CTRL_EntityNode *n = machines.first; n != 0; n = n->next)
+    for EachIndex(idx, machines.count)
     {
-      CTRL_Entity *machine = n->v;
+      CTRL_Entity *machine = machines.v[idx];
       DMN_ProcessIter iter = {0};
       dmn_process_iter_begin(&iter);
       for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
@@ -970,7 +976,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     accel->infos_count = infos_count;
     accel->machines    = infos_machines;
     info.user_data = accel;
-    info.idxed_expr_count = infos_count;
+    info.expr_count = infos_count;
     scratch_end(scratch);
   }
   return info;
@@ -991,7 +997,6 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes)
     exprs_out[out_idx] = expr;
   }
 }
-#endif
 
 ////////////////////////////////
 //~ rjf: Control Entity List Type Hooks (`processes`, `threads`, etc.)

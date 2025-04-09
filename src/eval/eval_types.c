@@ -348,7 +348,8 @@ e_hash_from_cons_type_params(E_ConsTypeParams *params)
 internal B32
 e_cons_type_params_match(E_ConsTypeParams *l, E_ConsTypeParams *r)
 {
-  B32 result = (l->kind == r->kind &&
+  B32 result = (l->kind != E_TypeKind_Lens &&
+                l->kind == r->kind &&
                 l->flags == r->flags &&
                 str8_match(l->name, r->name, 0) &&
                 e_type_key_match(l->direct_key, r->direct_key) &&
@@ -1665,7 +1666,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     default:
     {
       E_Type *type = e_type_from_key__cached(key);
-      str8_list_push(arena, out, push_str8_copy(arena, type->name));
+      str8_list_pushf(arena, out, "%S ", type->name);
     }break;
     
     case E_TypeKind_Bitfield:
@@ -1702,7 +1703,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_Alias:
     {
       E_Type *type = e_type_from_key__cached(key);
-      str8_list_push(arena, out, push_str8_copy(arena, type->name));
+      str8_list_pushf(arena, out, "%S ", type->name);
     }break;
     
     case E_TypeKind_IncompleteStruct: keyword = str8_lit("struct"); goto fwd_udt;
@@ -1714,7 +1715,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, keyword);
       str8_list_push(arena, out, str8_lit(" "));
-      str8_list_push(arena, out, push_str8_copy(arena, type->name));
+      str8_list_pushf(arena, out, "%S ", type->name);
     }break;
     
     case E_TypeKind_Array:
@@ -1753,20 +1754,15 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
           str8_list_pushf(arena, out, ", ");
         }
       }
-      str8_list_pushf(arena, out, ") <- (");
+      str8_list_pushf(arena, out, ") <- ");
       E_TypeKey direct = e_type_direct_from_key(key);
-      e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
-      str8_list_pushf(arena, out, ")");
+      e_type_lhs_string_from_key(arena, direct, out, 2, skip_return);
     }break;
     
     case E_TypeKind_Ptr:
     {
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
-      if(!e_type_kind_is_pointer_or_ref(e_type_kind_from_key(direct)))
-      {
-        str8_list_push(arena, out, str8_lit(" "));
-      }
       str8_list_push(arena, out, str8_lit("*"));
       E_Type *type = e_type_from_key__cached(key);
       if(type->count != 1)
@@ -1878,6 +1874,12 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       }
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
+    }break;
+    
+    case E_TypeKind_Lens:
+    if(prec == 1)
+    {
+      str8_list_push(arena, out, str8_lit(")"));
     }break;
   }
 }
