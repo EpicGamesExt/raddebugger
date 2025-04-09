@@ -12285,12 +12285,12 @@ rd_frame(void)
       //- rjf: cache meta name -> type key correllation
       rd_state->meta_name2type_map = push_array(rd_frame_arena(), E_String2TypeKeyMap, 1);
       rd_state->meta_name2type_map[0] = e_string2typekey_map_make(rd_frame_arena(), 256);
-#if 0 // TODO(rjf): @eval
       for EachElement(idx, rd_name_schema_info_table)
       {
         String8 name = rd_name_schema_info_table[idx].name;
         E_TypeKey type_key = e_type_key_cons(.name = name,
                                              .kind = E_TypeKind_Set,
+                                             .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(schema),
                                              .access = E_TYPE_ACCESS_FUNCTION_NAME(schema),
                                              .expand =
                                              {
@@ -12299,7 +12299,6 @@ rd_frame(void)
                                              });
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
       }
-#endif
       
       //- rjf: add macros for evallable top-level config trees
       String8 evallable_cfg_names[] =
