@@ -399,10 +399,30 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   // parse obj header
   //
-  COFF_FileHeaderInfo coff_info              = coff_file_header_info_from_data(input->data);
-  String8             raw_coff_section_table = str8_substr(input->data, coff_info.section_table_range);
-  String8             raw_coff_symbol_table  = str8_substr(input->data, coff_info.symbol_table_range);
-  String8             raw_coff_string_table  = str8_substr(input->data, coff_info.string_table_range);
+  COFF_FileHeaderInfo coff_info = coff_file_header_info_from_data(input->data);
+
+  //
+  // set & check machine compatibility
+  //
+  {
+    if (task->machine == COFF_MachineType_Unknown) {
+      ins_atomic_u32_eval_assign(&task->machine, coff_info.machine);
+    }
+
+    if (coff_info.machine != COFF_MachineType_Unknown && task->machine != coff_info.machine) {
+      lnk_error_with_loc(LNK_Error_IncompatibleObj, input->path, input->lib_path,
+          "conflicting machine types expected %S but got %S",
+          coff_string_from_machine_type(task->machine),
+          coff_string_from_machine_type(coff_info.machine));
+    }
+  }
+
+  //
+  // extract COFF info
+  //
+  String8 raw_coff_section_table = str8_substr(input->data, coff_info.section_table_range);
+  String8 raw_coff_symbol_table  = str8_substr(input->data, coff_info.symbol_table_range);
+  String8 raw_coff_string_table  = str8_substr(input->data, coff_info.string_table_range);
 
   //
   // error check: section table / symbol table / string table
@@ -714,6 +734,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
                            LNK_ObjList       *obj_list,
                            LNK_SectionTable  *sectab,
                            U64               *function_pad_min,
+                           COFF_MachineType   machine,
                            U64                input_count,
                            LNK_InputObj     **inputs)
 {
@@ -730,6 +751,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
     task.obj_id_base      = obj_id_base;
     task.obj_node_arr     = obj_arr.v;
     task.function_pad_min = function_pad_min;
+    task.machine          = machine;
     tp_for_parallel(tp, arena, input_count, lnk_obj_initer, &task);
   }
   ProfEnd();

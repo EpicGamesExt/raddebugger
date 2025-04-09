@@ -189,8 +189,8 @@ lnk_input_import_is_before(void *raw_a, void *raw_b)
 int
 lnk_input_import_compar(const void *raw_a, const void *raw_b)
 {
-  const LNK_InputImport **a = (const LNK_InputImport **) raw_a;
-  const LNK_InputImport **b = (const LNK_InputImport **) raw_b;
+  LNK_InputImport * const *a = raw_a;
+  LNK_InputImport * const *b = raw_b;
   int cmp = str8_compar_ignore_case(&(*a)->import_header.dll_name, &(*b)->import_header.dll_name);
   if (cmp == 0) {
     cmp = str8_compar_case_sensitive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
@@ -3761,29 +3761,19 @@ lnk_run(int argc, char **argv)
         }
         ProfEnd();
         
-        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, sectab, config->function_pad_min, unique_obj_input_list.count, input_obj_arr);
-        
-        ProfBegin("Machine Compat Check");
-        for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; ++obj_idx) {
-          LNK_Obj *obj = &obj_node_arr.v[obj_idx].data;
-          
-          // derive machine from obj
-          if (config->machine == COFF_MachineType_Unknown) {
-            config->machine = obj->machine;
-          } else if (config->machine != COFF_MachineType_X64) {
-            lnk_error_with_loc(LNK_Error_UnsupportedMachine, obj->path, obj->lib_path, "%S machine is supported", coff_string_from_machine_type(obj->machine));
-          } else {
-            // is obj machine compatible? 
-            if (config->machine != obj->machine &&
-                obj->machine != COFF_MachineType_Unknown) { // obj with unknown machine type is compatible with any other machine type
-              lnk_error_obj(LNK_Error_IncompatibleObj, obj,
-                            "conflicting machine types expected %S but got %S",
-                            coff_string_from_machine_type(config->machine),
-                            coff_string_from_machine_type(obj->machine));
+        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, sectab, config->function_pad_min, config->machine, unique_obj_input_list.count, input_obj_arr);
+
+        //
+        // if the machine was omitted on the command line, derive machine from obj
+        //
+        if (config->machine == COFF_MachineType_Unknown) {
+          for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; obj_idx += 1) {
+            if (obj_node_arr.v[obj_idx].data.machine != COFF_MachineType_Unknown) {
+              config->machine = obj_node_arr.v[obj_idx].data.machine;
+              break;
             }
           }
         }
-        ProfEnd();
         
         ProfBegin("Collect Directives");
         for (U64 i = 0; i < obj_node_arr.count; ++i) {
