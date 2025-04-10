@@ -1745,18 +1745,16 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       E_Type *type = e_type_from_key__cached(key);
       str8_list_pushf(arena, out, "%S(", type->name);
+      E_TypeKey direct = e_type_direct_from_key(key);
+      String8 direct_string = e_type_string_from_key(arena, direct);
+      str8_list_push(arena, out, direct_string);
       for EachIndex(idx, type->count)
       {
         String8 string = e_string_from_expr(arena, type->args[idx]);
+        str8_list_pushf(arena, out, ", ");
         str8_list_push(arena, out, string);
-        if(idx+1 < type->count)
-        {
-          str8_list_pushf(arena, out, ", ");
-        }
       }
-      str8_list_pushf(arena, out, ") <- ");
-      E_TypeKey direct = e_type_direct_from_key(key);
-      e_type_lhs_string_from_key(arena, direct, out, 2, skip_return);
+      str8_list_pushf(arena, out, ")");
     }break;
     
     case E_TypeKind_Ptr:
@@ -1874,12 +1872,6 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       }
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
-    }break;
-    
-    case E_TypeKind_Lens:
-    if(prec == 1)
-    {
-      str8_list_push(arena, out, str8_lit(")"));
     }break;
   }
 }
@@ -2115,11 +2107,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
   {
     E_TypeKey type_key = e_type_unwrap(irtree->type_key);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    if(e_type_kind_is_pointer_or_ref(type_kind))
+    if(e_type_kind_is_pointer_or_ref(type_kind) ||
+       type_kind == E_TypeKind_Lens)
     {
       E_Type *type = e_type_from_key__cached(type_key);
       result.expr_count = type->count;
-      if(type->count == 1)
+      if(type->count == 1 || type_kind == E_TypeKind_Lens)
       {
         E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
@@ -2176,10 +2169,12 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
     E_TypeKey enum_type_key = zero_struct;
     E_TypeKey struct_type_key = zero_struct;
     E_TypeKind struct_type_kind = E_TypeKind_Null;
-    if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
+    if(e_type_kind_is_pointer_or_ref(lhs_type_kind) ||
+       lhs_type_kind == E_TypeKind_Lens)
     {
       E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      if(lhs_type->count == 1 &&
+      if((lhs_type->count == 1 ||
+          lhs_type_kind == E_TypeKind_Lens) &&
          (direct_type_kind == E_TypeKind_Struct ||
           direct_type_kind == E_TypeKind_Union ||
           direct_type_kind == E_TypeKind_Class))

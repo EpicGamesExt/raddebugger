@@ -1260,7 +1260,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_TypeKind check_type_kind = l_restype_kind;
       if(l_restype_kind == E_TypeKind_Ptr ||
          l_restype_kind == E_TypeKind_LRef ||
-         l_restype_kind == E_TypeKind_RRef)
+         l_restype_kind == E_TypeKind_RRef ||
+         l_restype_kind == E_TypeKind_Lens)
       {
         check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
         check_type_kind = e_type_kind_from_key(check_type_key);
