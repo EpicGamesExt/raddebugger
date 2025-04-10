@@ -1855,6 +1855,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         }
         else if(str8_match(child_schema->string, str8_lit("active"), 0))
         {
+          result = 1;
           B32 new_active = 0;
           MemoryCopy(&new_active, in, dim_1u64(range));
           if(!new_active)
