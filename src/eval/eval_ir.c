@@ -924,7 +924,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       }
       
       // rjf: bad conditions? -> error if applicable, exit
-      if(e_type_key_match(e_type_key_zero(), check_type_key))
+      if(l.root == &e_irnode_nil ||
+         e_type_key_match(e_type_key_zero(), check_type_key))
       {
         break;
       }
