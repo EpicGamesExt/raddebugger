@@ -1404,16 +1404,6 @@ rd_possible_overrides_from_file_path(Arena *arena, String8 file_path)
   return result;
 }
 
-internal E_Expr *
-rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg)
-{
-  E_Expr *expr = &e_expr_nil;
-  {
-    // TODO(rjf): @cfg
-  }
-  return expr;
-}
-
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
@@ -1949,7 +1939,7 @@ rd_whole_range_from_eval_space(E_Space space)
 //- rjf: writing values back to child processes
 
 internal B32
-rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping)
+rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
 {
   B32 result = 0;
   if(dst_eval.irtree.mode == E_Mode_Offset)
@@ -1984,17 +1974,14 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
          e_type_kind_is_integer(direct_type_kind))
       {
         B32 is_quoted = 0;
-        if(string_needs_unescaping)
+        if(string.size >= 1 && string.str[0] == '"')
         {
-          if(string.size >= 1 && string.str[0] == '"')
-          {
-            string = str8_skip(string, 1);
-            is_quoted = 1;
-          }
-          if(string.size >= 1 && string.str[string.size-1] == '"')
-          {
-            string = str8_chop(string, 1);
-          }
+          string = str8_skip(string, 1);
+          is_quoted = 1;
+        }
+        if(string.size >= 1 && string.str[string.size-1] == '"')
+        {
+          string = str8_chop(string, 1);
         }
         if(is_quoted)
         {
@@ -2652,7 +2639,7 @@ rd_view_ui(Rng2F32 rect)
             {
               UI_ScrollListRowBlock block = {0};
               block.row_count  = dim_1u64(n->v.range);
-              block.item_count = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
+              block.item_count = n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range);
               ui_scroll_list_row_block_chunk_list_push(scratch.arena, &row_block_chunks, 256, &block);
             }
             row_blocks = ui_scroll_list_row_block_array_from_chunk_list(scratch.arena, &row_block_chunks);
@@ -3134,7 +3121,7 @@ rd_view_ui(Rng2F32 rect)
                         if(should_commit_asap)
                         {
                           B32 success = 0;
-                          success = rd_commit_eval_value_string(cell_info.eval, new_string, 0);
+                          success = rd_commit_eval_value_string(cell_info.eval, new_string);
                           if(!success)
                           {
                             log_user_error(str8_lit("Could not commit value successfully."));
@@ -3268,7 +3255,7 @@ rd_view_ui(Rng2F32 rect)
                   case RD_WatchCellKind_Eval:
                   {
                     RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-                    rd_commit_eval_value_string(cell_info.eval, str8_zero(), 0);
+                    rd_commit_eval_value_string(cell_info.eval, str8_zero());
                   }break;
                 }
               }
@@ -4069,7 +4056,7 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: view ui contents
-                            cell_info.view_ui_rule->ui(cell_info.eval, cell_info.view_ui_tag, cell_rect);
+                            cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
                             
                             // rjf: loading fill
                             UI_Parent(loading_overlay_container)
@@ -4442,7 +4429,7 @@ rd_view_ui(Rng2F32 rect)
                     //
                     if(next_cell_toggled != cell_toggled)
                     {
-                      rd_commit_eval_value_string(cell_info.eval, next_cell_toggled ? str8_lit("1") : str8_lit("0"), 0);
+                      rd_commit_eval_value_string(cell_info.eval, next_cell_toggled ? str8_lit("1") : str8_lit("0"));
                     }
                     
                     ////////////
@@ -4488,8 +4475,7 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
-      E_Expr *tag = rd_tag_from_cfg(scratch.arena, view);
-      view_ui_rule->ui(expr_eval, tag, rect);
+      view_ui_rule->ui(expr_eval, rect);
       scratch_end(scratch);
     }
   }
@@ -4595,7 +4581,7 @@ rd_view_cfg_value_from_string(String8 string)
 internal U64
 rd_base_offset_from_eval(E_Eval eval)
 {
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(eval.irtree.type_key)))
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key))))
   {
     eval = e_value_eval_from_eval(eval);
   }
@@ -4603,15 +4589,20 @@ rd_base_offset_from_eval(E_Eval eval)
 }
 
 internal Rng1U64
-rd_range_from_eval_tag(E_Eval eval, E_Expr *tag)
+rd_range_from_eval(E_Eval eval)
 {
   U64 size = 0;
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("size"), 0))
+    for EachIndex(idx, type->count)
     {
-      size = e_value_from_expr(param->first->next).u64;
-      break;
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("size"), 0))
+      {
+        size = e_value_from_expr(arg->first->next).u64;
+        break;
+      }
     }
   }
   E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
@@ -4643,7 +4634,7 @@ rd_range_from_eval_tag(E_Eval eval, E_Expr *tag)
 }
 
 internal TXT_LangKind
-rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
+rd_lang_kind_from_eval(E_Eval eval)
 {
   TXT_LangKind lang_kind = TXT_LangKind_Null;
   Temp scratch = scratch_begin(0, 0);
@@ -4654,12 +4645,17 @@ rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
   }
   if(lang_kind == TXT_LangKind_Null)
   {
-    for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+    E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+    if(type->kind == E_TypeKind_Lens)
     {
-      if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("lang"), 0))
+      for EachIndex(idx, type->count)
       {
-        lang_kind = txt_lang_kind_from_extension(param->first->next->string);
-        break;
+        E_Expr *arg = type->args[idx];
+        if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("lang"), 0))
+        {
+          lang_kind = txt_lang_kind_from_extension(arg->first->next->string);
+          break;
+        }
       }
     }
   }
@@ -4668,7 +4664,7 @@ rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
 }
 
 internal Arch
-rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag)
+rd_arch_from_eval(E_Eval eval)
 {
   // rjf: try implicitly from either `eval` itself, or from context
   CTRL_Entity *ctrl_entity = rd_ctrl_entity_from_eval_space(eval.space);
@@ -4683,18 +4679,25 @@ rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag)
     arch = arch_from_context();
   }
   
-  // rjf: try arch parameters
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  // rjf: try arch arguments
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
   {
-    String8 param_arch_string = param->string;
-    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("arch"), 0))
+    for EachIndex(idx, type->count)
     {
-      param_arch_string = param->first->next->string;
-    }
-    if(str8_match(param->first->next->string, str8_lit("x64"), 0))
-    {
-      arch = Arch_x64;
-      break;
+      E_Expr *arg = type->args[idx];
+      {
+        String8 arg_arch_string = arg->string;
+        if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("arch"), 0))
+        {
+          arg_arch_string = arg->first->next->string;
+        }
+        if(str8_match(arg->first->next->string, str8_lit("x64"), 0))
+        {
+          arch = Arch_x64;
+          break;
+        }
+      }
     }
   }
   
@@ -4702,45 +4705,54 @@ rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag)
 }
 
 internal Vec2S32
-rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag)
+rd_dim2s32_from_eval(E_Eval eval)
 {
   Vec2S32 dim = v2s32(1, 1);
   B32 got_x = 0;
   B32 got_y = 0;
   
   // rjf: try explicitly passed dimensions
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(param->kind == E_ExprKind_Define)
+    for EachIndex(idx, type->count)
     {
-      if(str8_match(param->first->string, str8_lit("w"), 0))
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define)
       {
-        got_x = 1;
-        dim.x = e_value_from_expr(param->first->next).s64;
-      }
-      if(str8_match(param->first->string, str8_lit("h"), 0))
-      {
-        got_y = 1;
-        dim.y = e_value_from_expr(param->first->next).s64;
+        if(str8_match(arg->first->string, str8_lit("w"), 0))
+        {
+          got_x = 1;
+          dim.x = e_value_from_expr(arg->first->next).s64;
+        }
+        if(str8_match(arg->first->string, str8_lit("h"), 0))
+        {
+          got_y = 1;
+          dim.y = e_value_from_expr(arg->first->next).s64;
+        }
       }
     }
   }
   
   // rjf: try ordered non-define arguments
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(param->kind != E_ExprKind_Define)
+    for EachIndex(idx, type->count)
     {
-      if(!got_x)
+      E_Expr *arg = type->args[idx];
+      if(arg->kind != E_ExprKind_Define)
       {
-        got_x = 1;
-        dim.x = e_value_from_expr(param).s64;
-      }
-      else if(!got_y)
-      {
-        got_y = 1;
-        dim.y = e_value_from_expr(param).s64;
-        break;
+        if(!got_x)
+        {
+          got_x = 1;
+          dim.x = e_value_from_expr(arg).s64;
+        }
+        else if(!got_y)
+        {
+          got_y = 1;
+          dim.y = e_value_from_expr(arg).s64;
+          break;
+        }
       }
     }
   }
@@ -4749,39 +4761,48 @@ rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag)
 }
 
 internal R_Tex2DFormat
-rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag)
+rd_tex2dformat_from_eval(E_Eval eval)
 {
   R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8;
   B32 got_fmt = 0;
   
   // rjf: try explicitly passed formats
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("fmt"), 0))
+    for EachIndex(idx, type->count)
     {
-      got_fmt = 1;
-      for EachEnumVal(R_Tex2DFormat, f)
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("fmt"), 0))
       {
-        if(str8_match(param->first->next->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+        got_fmt = 1;
+        for EachEnumVal(R_Tex2DFormat, f)
         {
-          fmt = f;
-          break;
+          if(str8_match(arg->first->next->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+          {
+            fmt = f;
+            break;
+          }
         }
       }
     }
   }
   
   // rjf: try implicit non-define arguments
-  for(E_Expr *param = tag->first->next; param != &e_expr_nil && !got_fmt; param = param->next)
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(param->kind == E_ExprKind_LeafIdentifier)
+    for EachIndex(idx, type->count)
     {
-      for EachEnumVal(R_Tex2DFormat, f)
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_LeafIdentifier)
       {
-        if(str8_match(param->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+        for EachEnumVal(R_Tex2DFormat, f)
         {
-          fmt = f;
-          break;
+          if(str8_match(arg->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+          {
+            fmt = f;
+            break;
+          }
         }
       }
     }
@@ -4791,15 +4812,20 @@ rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag)
 }
 
 internal E_Value
-rd_value_from_eval_tag_key(E_Eval eval, E_Expr *tag, String8 key)
+rd_value_from_eval_key(E_Eval eval, String8 key)
 {
   E_Value value = zero_struct;
-  for(E_Expr *arg = tag->first->next; arg != &e_expr_nil; arg = arg->next)
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
   {
-    if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, key, 0))
+    for EachIndex(idx, type->count)
     {
-      value = e_value_from_expr(arg->first->next);
-      break;
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, key, 0))
+      {
+        value = e_value_from_expr(arg->first->next);
+        break;
+      }
     }
   }
   return value;
@@ -6253,10 +6279,8 @@ rd_window_frame(void)
         if(build_hover_eval)
         {
           // rjf: determine if we have a top-level visualizer
-#if 0 // TODO(rjf): @eval
-          EV_ExpandRuleTagPair expand_rule_tag = ev_expand_rule_tag_pair_from_expr_irtree(hover_eval.exprs.last, &hover_eval.irtree);
-#endif
-          RD_ViewUIRule *view_ui_rule = &rd_nil_view_ui_rule; // TODO(rjf): @eval rd_view_ui_rule_from_string(expand_rule_tag.rule->string);
+          EV_ExpandRule *expand_rule = ev_expand_rule_from_type_key(hover_eval.irtree.type_key);
+          RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule->string);
           
           // rjf: determine view name
           String8 view_name = str8_lit("watch");
@@ -12677,23 +12701,24 @@ rd_frame(void)
       struct
       {
         String8 name;
+        B32 inherited;
         RD_ViewUIFunctionType *ui;
         EV_ExpandRuleInfoHookFunctionType *expand;
       }
       view_ui_rule_table[] =
       {
-        {str8_lit("bin")},
-        {str8_lit("oct")},
-        {str8_lit("dec")},
-        {str8_lit("hex")},
-        {str8_lit("digits")},
-        {str8_lit("text"),        RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
-        {str8_lit("disasm"),      RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
-        {str8_lit("memory"),      RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
-        {str8_lit("bitmap"),      RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
-        {str8_lit("checkbox"),    RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
-        {str8_lit("color_rgba"),  RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
-        {str8_lit("geo3d"),       RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
+        {str8_lit("bin"),         1},
+        {str8_lit("oct"),         1},
+        {str8_lit("dec"),         1},
+        {str8_lit("hex"),         1},
+        {str8_lit("digits"),      1},
+        {str8_lit("text"),        0, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
+        {str8_lit("disasm"),      0, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
+        {str8_lit("memory"),      0, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
+        {str8_lit("bitmap"),      0, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
+        {str8_lit("checkbox"),    0, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
+        {str8_lit("color_rgba"),  0, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
+        {str8_lit("geo3d"),       0, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
       };
       
       //- rjf: fill view ui rules in expand rule map, view ui rule map
@@ -12712,8 +12737,13 @@ rd_frame(void)
       }
       for EachElement(idx, view_ui_rule_table)
       {
+        E_TypeFlags type_flags = 0;
+        if(view_ui_rule_table[idx].inherited)
+        {
+          type_flags |= E_TypeFlag_InheritedOnAccess;
+        }
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec, .name = view_ui_rule_table[idx].name);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec, .flags = type_flags, .name = view_ui_rule_table[idx].name);
         e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, view_ui_rule_table[idx].name, expr);
       }
     }

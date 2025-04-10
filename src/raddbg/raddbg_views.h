@@ -118,7 +118,6 @@ struct RD_WatchRowCellInfo
   String8 error_tooltip;
   String8 inheritance_tooltip;
   RD_ViewUIRule *view_ui_rule;
-  E_Expr *view_ui_tag;
 };
 
 typedef enum RD_WatchViewColumnKind

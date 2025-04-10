@@ -1337,7 +1337,8 @@ e_type_unwrap(E_TypeKey key)
     E_TypeKind kind = e_type_kind_from_key(result);
     if((E_TypeKind_FirstIncomplete <= kind && kind <= E_TypeKind_LastIncomplete) ||
        kind == E_TypeKind_Modifier ||
-       kind == E_TypeKind_Alias)
+       kind == E_TypeKind_Alias ||
+       kind == E_TypeKind_Lens)
     {
       result = e_type_direct_from_key(result);
     }
@@ -1889,6 +1890,91 @@ e_type_string_from_key(Arena *arena, E_TypeKey key)
   return result;
 }
 
+internal E_TypeKey
+e_default_expansion_type_from_key(E_TypeKey root_key)
+{
+  E_TypeKey type_key = zero_struct;
+  for(E_TypeKey key = root_key;
+      !e_type_key_match(e_type_key_zero(), key);
+      key = e_type_direct_from_key(key))
+  {
+    B32 done = 1;
+    E_TypeKind kind = e_type_kind_from_key(key);
+    
+    //- rjf: if we have pointers which point to a single thing (count = 1),
+    // or we have a lens, or we have a modifier node, then we will defer to
+    // the next type in the chain.
+    //
+    // if this pointer points to N things (count > 1), then we can use it for
+    // array-like expansion.
+    //
+    if(e_type_kind_is_pointer_or_ref(kind))
+    {
+      E_Type *type = e_type_from_key__cached(key);
+      if(!e_type_key_match(e_type_key_basic(E_TypeKind_Void), type->direct_type_key))
+      {
+        if(type->count == 1)
+        {
+          done = 0;
+        }
+        else if(type->count > 1)
+        {
+          type_key = key;
+        }
+      }
+    }
+    
+    //- rjf: if we have lenses or modifiers in the type chain, then we will
+    // defer to the next type in the chain.
+    //
+    // NOTE(rjf): while it may seem like a lens type needs to do something
+    // different, because lenses sometimes want to define their own expansion
+    // rules, they would've redirected to an entirely different expansion
+    // hook. if we are in the default expansion hook, then the lenses do not
+    // impact the expansion at all (e.g. they are for other cosmetic things,
+    // like visualizers or integer radix changes), and so in that case we
+    // want to ignore them.
+    //
+    else if(kind == E_TypeKind_Lens ||
+            kind == E_TypeKind_Modifier)
+    {
+      done = 0;
+    }
+    
+    //- rjf: if we've reached a struct-like, then we can use that for
+    // struct-like expansion.
+    else if(kind == E_TypeKind_Struct ||
+            kind == E_TypeKind_Union ||
+            kind == E_TypeKind_Class ||
+            kind == E_TypeKind_Set)
+    {
+      type_key = key;
+    }
+    
+    //- rjf: if we've reached an enum-like, then we can use that for
+    // enum-like expansion.
+    else if(kind == E_TypeKind_Enum)
+    {
+      type_key = key;
+    }
+    
+    //- rjf: if we've reached an array, then we can use that for array-like
+    // expansion.
+    else if(kind == E_TypeKind_Array)
+    {
+      type_key = key;
+    }
+    
+    //- rjf: if we're done, then just break.
+    if(done)
+    {
+      break;
+    }
+  }
+  
+  return type_key;
+}
+
 //- rjf: type key data structures
 
 internal void
@@ -1897,6 +1983,15 @@ e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
   E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
   n->v = key;
   SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal void
+e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
+{
+  E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
+  n->v = key;
+  SLLQueuePushFront(list->first, list->last, n);
   list->count += 1;
 }
 
@@ -2105,47 +2200,48 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
 {
   E_TypeExpandInfo result = {0};
   {
-    E_TypeKey type_key = e_type_unwrap(irtree->type_key);
-    E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    if(e_type_kind_is_pointer_or_ref(type_kind) ||
-       type_kind == E_TypeKind_Lens)
+    //- rjf: try to extract a struct-like type key, enum-like, or array-like
+    // type key, for expansion
+    E_TypeKey expand_type_key = e_default_expansion_type_from_key(irtree->type_key);
+    
+    //- rjf: struct type? -> use the struct type for expansion
+    B32 did_expansion = 0;
+    if(!did_expansion)
     {
-      E_Type *type = e_type_from_key__cached(type_key);
-      result.expr_count = type->count;
-      if(type->count == 1 || type_kind == E_TypeKind_Lens)
+      E_TypeKind struct_type_kind = e_type_kind_from_key(expand_type_key);
+      if(struct_type_kind == E_TypeKind_Struct ||
+         struct_type_kind == E_TypeKind_Class ||
+         struct_type_kind == E_TypeKind_Union)
       {
-        E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
-        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-        if(direct_type_kind == E_TypeKind_Struct ||
-           direct_type_kind == E_TypeKind_Class ||
-           direct_type_kind == E_TypeKind_Union)
-        {
-          E_MemberArray data_members = e_type_data_members_from_key_filter__cached(direct_type_key, filter);
-          result.expr_count = data_members.count;
-        }
-        else if(direct_type_kind == E_TypeKind_Enum)
-        {
-          E_Type *direct_type = e_type_from_key__cached(direct_type_key);
-          result.expr_count = direct_type->count;
-        }
+        E_MemberArray data_members = e_type_data_members_from_key_filter__cached(expand_type_key, filter);
+        result.expr_count = data_members.count;
+        did_expansion = 1;
       }
     }
-    else if(type_kind == E_TypeKind_Struct ||
-            type_kind == E_TypeKind_Class ||
-            type_kind == E_TypeKind_Union)
+    
+    //- rjf: array-like type? -> use the array-like for expansion
+    if(!did_expansion)
     {
-      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(type_key, filter);
-      result.expr_count = data_members.count;
+      E_TypeKind array_type_kind = e_type_kind_from_key(expand_type_key);
+      if(array_type_kind == E_TypeKind_Array ||
+         array_type_kind == E_TypeKind_Ptr)
+      {
+        E_Type *array_type = e_type_from_key__cached(expand_type_key);
+        result.expr_count = array_type->count;
+        did_expansion = 1;
+      }
     }
-    else if(type_kind == E_TypeKind_Enum)
+    
+    //- rjf: enum-like type? -> use the enum-like for expansion
+    if(!did_expansion)
     {
-      E_Type *direct_type = e_type_from_key__cached(type_key);
-      result.expr_count = direct_type->count;
-    }
-    else if(type_kind == E_TypeKind_Array)
-    {
-      E_Type *type = e_type_from_key__cached(type_key);
-      result.expr_count = type->count;
+      E_TypeKind enum_type_kind = e_type_kind_from_key(expand_type_key);
+      if(enum_type_kind == E_TypeKind_Enum)
+      {
+        E_Type *enum_type = e_type_from_key__cached(expand_type_key);
+        result.expr_count = enum_type->count;
+        did_expansion = 1;
+      }
     }
   }
   return result;
@@ -2155,70 +2251,17 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
 {
   Temp scratch = scratch_begin(&arena, 1);
   {
-    //- rjf: unpack type of expression
-    E_IRTreeAndType lhs_irtree = *irtree;
-    E_TypeKey lhs_type_key = lhs_irtree.type_key;
-    E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_type_key));
-    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-    
-    //- rjf: pull out specific kinds of types
-    B32 do_struct_range = 0;
-    B32 do_enum_range = 0;
-    B32 do_index_range = 0;
-    E_TypeKey enum_type_key = zero_struct;
-    E_TypeKey struct_type_key = zero_struct;
-    E_TypeKind struct_type_kind = E_TypeKind_Null;
-    if(e_type_kind_is_pointer_or_ref(lhs_type_kind) ||
-       lhs_type_kind == E_TypeKind_Lens)
-    {
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      if((lhs_type->count == 1 ||
-          lhs_type_kind == E_TypeKind_Lens) &&
-         (direct_type_kind == E_TypeKind_Struct ||
-          direct_type_kind == E_TypeKind_Union ||
-          direct_type_kind == E_TypeKind_Class))
-      {
-        struct_type_key = direct_type_key;
-        struct_type_kind = direct_type_kind;
-        do_struct_range = 1;
-      }
-      else if(lhs_type->count == 1 && direct_type_kind == E_TypeKind_Enum)
-      {
-        do_enum_range = 1;
-        enum_type_key = direct_type_key;
-      }
-      else
-      {
-        do_index_range = 1;
-      }
-    }
-    else if(lhs_type_kind == E_TypeKind_Struct ||
-            lhs_type_kind == E_TypeKind_Union ||
-            lhs_type_kind == E_TypeKind_Class)
-    {
-      struct_type_key = lhs_type_key;
-      struct_type_kind = lhs_type_kind;
-      do_struct_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Enum)
-    {
-      enum_type_key = lhs_type_key;
-      do_enum_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Set)
-    {
-      do_index_range = 1;
-    }
-    else if(lhs_type_kind == E_TypeKind_Array)
-    {
-      do_index_range = 1;
-    }
+    //- rjf: try to extract a struct-like type key, enum-like, or array-like
+    // type key, for expansion
+    E_TypeKey expand_type_key = e_default_expansion_type_from_key(irtree->type_key);
+    E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
     
     //- rjf: struct case -> the lookup-range will return a range of members
-    if(do_struct_range)
+    if(expand_type_kind == E_TypeKind_Struct ||
+       expand_type_kind == E_TypeKind_Class ||
+       expand_type_kind == E_TypeKind_Union)
     {
-      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(struct_type_key, filter);
+      E_MemberArray data_members = e_type_data_members_from_key_filter__cached(expand_type_key, filter);
       Rng1U64 legal_idx_range = r1u64(0, data_members.count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
@@ -2226,14 +2269,14 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = data_members.v[member_idx].name;
-        exprs_out[idx] = e_expr_irext_member_access(arena, expr, &lhs_irtree, member_name);
+        exprs_out[idx] = e_expr_irext_member_access(arena, expr, irtree, member_name);
       }
     }
     
     //- rjf: enum case -> the lookup-range will return a range of enum constants
-    else if(do_enum_range)
+    else if(expand_type_kind == E_TypeKind_Enum)
     {
-      E_Type *type = e_type_from_key__cached(enum_type_key);
+      E_Type *type = e_type_from_key__cached(expand_type_key);
       Rng1U64 legal_idx_range = r1u64(0, type->count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
@@ -2241,17 +2284,19 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = type->enum_vals[member_idx].name;
-        exprs_out[idx] = e_expr_irext_member_access(arena, expr, &lhs_irtree, member_name);
+        exprs_out[idx] = e_expr_irext_member_access(arena, expr, irtree, member_name);
       }
     }
     
     //- rjf: ptr case -> the lookup-range will return a range of dereferences
-    else if(do_index_range)
+    else if(expand_type_kind == E_TypeKind_Ptr ||
+            expand_type_kind == E_TypeKind_Array ||
+            expand_type_kind == E_TypeKind_Set)
     {
       U64 read_range_count = dim_1u64(idx_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
-        exprs_out[idx] = e_expr_irext_array_index(arena, expr, &lhs_irtree, idx_range.min + idx);
+        exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
       }
     }
   }

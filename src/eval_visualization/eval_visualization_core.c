@@ -83,29 +83,18 @@ internal B32
 ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
-  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
   {
-    E_TypeKind kind = e_type_kind_from_key(t);
-    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
-    {
-      break;
-    }
-    if(kind == E_TypeKind_Struct ||
-       kind == E_TypeKind_Union ||
-       kind == E_TypeKind_Class ||
-       kind == E_TypeKind_Array ||
-       kind == E_TypeKind_Set ||
-       (kind == E_TypeKind_Enum && mode == E_Mode_Null))
+    E_TypeKey expand_type_key = e_default_expansion_type_from_key(type_key);
+    E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
+    if(expand_type_kind == E_TypeKind_Struct ||
+       expand_type_kind == E_TypeKind_Union ||
+       expand_type_kind == E_TypeKind_Class ||
+       expand_type_kind == E_TypeKind_Array ||
+       expand_type_kind == E_TypeKind_Set ||
+       e_type_kind_is_pointer_or_ref(expand_type_kind) ||
+       (expand_type_kind == E_TypeKind_Enum && mode == E_Mode_Null))
     {
       result = 1;
-    }
-    if(kind == E_TypeKind_Ptr)
-    {
-      E_Type *type = e_type_from_key__cached(t);
-      if(type->count > 1)
-      {
-        result = 1;
-      }
     }
   }
   return result;
@@ -396,6 +385,27 @@ ev_expand_rule_from_string(String8 string)
   return info;
 }
 
+internal EV_ExpandRule *
+ev_expand_rule_from_type_key(E_TypeKey type_key)
+{
+  EV_ExpandRule *rule = &ev_nil_expand_rule;
+  {
+    E_TypeKey k = type_key;
+    E_TypeKind kind = e_type_kind_from_key(k);
+    for(;kind == E_TypeKind_Lens; k = e_type_direct_from_key(k), kind = e_type_kind_from_key(k))
+    {
+      E_Type *type = e_type_from_key__cached(k);
+      EV_ExpandRule *candidate = ev_expand_rule_from_string(type->name);
+      if(candidate != &ev_nil_expand_rule)
+      {
+        rule = candidate;
+        break;
+      }
+    }
+  }
+  return rule;
+}
+
 ////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
@@ -472,66 +482,6 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
 #endif
 
 ////////////////////////////////
-//~ rjf: Upgrading Expressions w/ Tags From All Sources
-
-#if 0 // TODO(rjf): @eval
-internal void
-ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key, E_Expr *expr)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  if(expr != &e_expr_nil)
-  {
-    // rjf: push inherited tags first (we want these to be found first, since tags are applied
-    // in order, and explicit ones should always be strongest)
-    {
-      for(E_Expr *src_tag = block->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
-      {
-        B32 is_inherited = 0;
-        // TODO(rjf): table-drive this
-        if(str8_match(src_tag->string, str8_lit("hex"), 0) ||
-           str8_match(src_tag->string, str8_lit("oct"), 0) ||
-           str8_match(src_tag->string, str8_lit("bin"), 0) ||
-           str8_match(src_tag->string, str8_lit("dec"), 0) ||
-           str8_match(src_tag->string, str8_lit("no_addr"), 0) ||
-           str8_match(src_tag->string, str8_lit("digits"), 0) ||
-           str8_match(src_tag->string, str8_lit("no_string"), 0) ||
-           str8_match(src_tag->string, str8_lit("only"), 0) ||
-           str8_match(src_tag->string, str8_lit("omit"), 0))
-        {
-          is_inherited = 1;
-        }
-        if(is_inherited)
-        {
-          e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
-        }
-      }
-    }
-    
-    // rjf: push tags inferred from the type
-    {
-      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-      E_ExprList tags = e_auto_hook_exprs_from_type_key__cached(irtree.type_key);
-      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
-      {
-        e_expr_push_tag(expr, e_expr_copy(arena, n->v));
-      }
-    }
-    
-    // rjf: push explicitly-attached tags (via key) next
-    String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, key));
-    E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
-    E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, tag_expr_tokens);
-    for(E_Expr *tag = tag_expr_parse.exprs.first, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
-    {
-      next = tag->next;
-      e_expr_push_tag(expr, tag);
-    }
-  }
-  scratch_end(scratch);
-}
-#endif
-
-////////////////////////////////
 //~ rjf: Block Building
 
 internal EV_BlockTree
@@ -546,9 +496,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
     EV_Key root_key = ev_key_root();
     EV_Key root_row_key = ev_key_make(ev_hash_from_key(root_key), 1);
     E_Expr *root_expr = e_expr_copy(arena, expr);
-#if 0 // TODO(rjf): @eval
-    ev_keyed_expr_push_tags(arena, view, &ev_nil_block, root_row_key, root_expr);
-#endif
     
     //- rjf: generate root block
     tree.root = push_array(arena, EV_Block, 1);
@@ -606,9 +553,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       }
       
       // rjf: get eval's visualization expansion rule
-      // TODO(rjf): @eval EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      EV_ExpandRule *viz_expand_rule = &ev_nil_expand_rule;
-      E_Expr *viz_expand_rule_tag = &e_expr_nil;
+      EV_ExpandRule *viz_expand_rule = ev_expand_rule_from_type_key(type_key);
       
       // rjf: skip if no expansion rule, & type info disallows expansion
       if(viz_expand_rule == &ev_nil_expand_rule && !ev_type_key_and_mode_is_expandable(type_key, mode))
@@ -618,7 +563,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       
       // rjf: get top-level lookup/expansion info
       E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval.expr, &t->eval.irtree, filter);
-      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr, viz_expand_rule_tag);
+      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr);
       
       // rjf: determine expansion info
       U64 expansion_row_count = type_expand_info.expr_count;
@@ -738,9 +683,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
           {
             E_Eval child_eval = e_eval_from_expr(arena, child_expr);
             EV_Key child_key = child_keys[idx];
-#if 0 // TODO(rjf): @eval
-            ev_keyed_expr_push_tags(arena, view, expansion_block, child_key, child_expr);
-#endif
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->parent_block       = expansion_block;
@@ -857,7 +799,7 @@ ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num)
   U64 base_num = 1;
   for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
+    U64 range_size = n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
@@ -880,7 +822,7 @@ ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num)
   U64 base_num = 1;
   for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
+    U64 range_size = n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
@@ -906,14 +848,14 @@ ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key)
     if(hash == key.parent_hash)
     {
       U64 relative_num = ev_block_num_from_id(n->v.block, key.child_id);
-      Rng1U64 num_range = r1u64(n->v.range.min, n->v.block->single_item ? (n->v.range.min+1) : n->v.range.max);
+      Rng1U64 num_range = r1u64(n->v.range.min, n->v.block->viz_expand_info.single_item ? (n->v.range.min+1) : n->v.range.max);
       if(contains_1u64(num_range, relative_num-1))
       {
         result = base_num + (relative_num - 1 - n->v.range.min);
         break;
       }
     }
-    base_num += n->v.block->single_item ? 1 : dim_1u64(n->v.range);
+    base_num += n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range);
   }
   return result;
 }
@@ -927,10 +869,10 @@ ev_vnum_from_num(EV_BlockRangeList *block_ranges, U64 num)
     U64 base_num = 1;
     for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
-      U64 next_base_num = base_num + (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
+      U64 next_base_num = base_num + (n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range));
       if(base_num <= num && num < next_base_num)
       {
-        U64 relative_vnum = (n->v.block->single_item ? 0 : (num - base_num));
+        U64 relative_vnum = (n->v.block->viz_expand_info.single_item ? 0 : (num - base_num));
         vnum = base_vnum + relative_vnum;
         break;
       }
@@ -957,12 +899,12 @@ ev_num_from_vnum(EV_BlockRangeList *block_ranges, U64 vnum)
       U64 next_base_vnum = base_vnum + dim_1u64(n->v.range);
       if(base_vnum <= vnum && vnum < next_base_vnum)
       {
-        U64 relative_num = (n->v.block->single_item ? 0 : (vnum - base_vnum));
+        U64 relative_num = (n->v.block->viz_expand_info.single_item ? 0 : (vnum - base_vnum));
         num = base_num + relative_num;
         break;
       }
       base_vnum = next_base_vnum;
-      base_num += (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
+      base_num += (n->v.block->viz_expand_info.single_item ? 1 : dim_1u64(n->v.range));
     }
   }
   return num;
@@ -1009,7 +951,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
       rows.count_before_visual += num_skipped;
       if(block_num_visual_rows != 0 && num_skipped != 0)
       {
-        if(n->v.block->single_item)
+        if(n->v.block->viz_expand_info.single_item)
         {
           if(num_skipped >= block_num_visual_rows)
           {
@@ -1034,7 +976,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         {
           range_exprs[idx] = &e_expr_nil;
         }
-        if(n->v.block->single_item || n->v.block->parent == &ev_nil_block)
+        if(n->v.block->viz_expand_info.single_item || n->v.block->parent == &ev_nil_block)
         {
           is_standalone_row = 1;
         }
@@ -1054,7 +996,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           EV_Row *row = &row_node->row;
           row->block         = n->v.block;
           row->key           = ev_key_make(ev_hash_from_key(row->block->key), 1);
-          row->visual_size   = n->v.block->single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
+          row->visual_size   = n->v.block->viz_expand_info.single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
           row->string        = n->v.block->string;
           row->eval          = n->v.block->eval;
         }
@@ -1067,9 +1009,6 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           EV_Key row_key = ev_key_make(ev_hash_from_key(n->v.block->key), child_id);
           E_Expr *row_expr = range_exprs[idx];
           E_Eval row_eval = e_eval_from_expr(arena, row_expr);
-#if 0 // TODO(rjf): @eval
-          ev_keyed_expr_push_tags(arena, view, n->v.block, row_key, row_expr);
-#endif
           EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
           SLLQueuePush(rows.first, rows.last, row_node);
           rows.count += 1;
@@ -1121,16 +1060,14 @@ ev_row_is_expandable(EV_Row *row)
   {
     E_IRTreeAndType irtree = row->eval.irtree;
     
-    // rjf: determine if view rules force expandability
+    // rjf: determine if lenses force expandability
     if(!result)
     {
-#if 0 // TODO(rjf): @eval
-      EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(row->expr, &irtree);
-      if(expand_rule_and_tag.rule != &ev_nil_expand_rule)
+      EV_ExpandRule *expand_rule = ev_expand_rule_from_type_key(irtree.type_key);
+      if(expand_rule != &ev_nil_expand_rule)
       {
         result = 1;
       }
-#endif
     }
     
     // rjf: determine if type info force expandability
@@ -1736,13 +1673,16 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           case 0:
           {
             // rjf: try strings
-            if(!ptr_data->did_prefix_content && ptr_data->ptee_has_string && !(params->flags & EV_StringFlag_DisableStrings))
+            if(!ptr_data->did_prefix_content && ptr_data->ptee_has_string &&
+               !(params->flags & EV_StringFlag_DisableStrings) &&
+               (type_kind == E_TypeKind_Array ||
+                params->flags & EV_StringFlag_ReadOnlyDisplayRules))
             {
               Temp scratch = scratch_begin(&arena, 1);
               
               // rjf: read string data
               U64 string_memory_addr = ptr_data->value_eval.value.u64;
-              U64 string_buffer_size = 256;
+              U64 string_buffer_size = 4096;
               U8 *string_buffer = push_array(scratch.arena, U8, string_buffer_size);
               for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
               {
@@ -1765,7 +1705,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               }
               
               // rjf: escape and quote
-              B32 string__is_escaped_and_quoted = (!(params->flags & EV_StringFlag_DisableAddresses) || depth > 0);
+              B32 string__is_escaped_and_quoted = (!(params->flags & EV_StringFlag_DisableStringQuotes) || depth > 0);
               String8 string__escaped_and_quoted = string;
               if(string__is_escaped_and_quoted)
               {

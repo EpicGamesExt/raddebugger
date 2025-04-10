@@ -264,9 +264,11 @@ internal E_Member *e_type_member_from_array_name(E_MemberArray *members, String8
 internal void e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec, B32 skip_return);
 internal void e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec);
 internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
+internal E_TypeKey e_default_expansion_type_from_key(E_TypeKey key);
 
 //- rjf: type key data structures
 internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
+internal void e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
 internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);

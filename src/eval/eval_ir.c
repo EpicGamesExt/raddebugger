@@ -1242,6 +1242,7 @@ e_expr_unpoison(E_Expr *expr)
 
 E_TYPE_ACCESS_FUNCTION_DEF(default)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   E_IRTreeAndType result = {&e_irnode_nil};
   switch(expr->kind)
   {
@@ -1260,8 +1261,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_TypeKind check_type_kind = l_restype_kind;
       if(l_restype_kind == E_TypeKind_Ptr ||
          l_restype_kind == E_TypeKind_LRef ||
-         l_restype_kind == E_TypeKind_RRef ||
-         l_restype_kind == E_TypeKind_Lens)
+         l_restype_kind == E_TypeKind_RRef)
       {
         check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
         check_type_kind = e_type_kind_from_key(check_type_key);
@@ -1472,6 +1472,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       result.mode     = mode;
     }break;
   }
+  scratch_end(scratch);
   return result;
 }
 
@@ -1482,6 +1483,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
+  E_TypeKeyList inherited_lenses = {0};
   E_IRTreeAndType result = {&e_irnode_nil};
   
   //////////////////////////////
@@ -1519,9 +1521,25 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       case E_ExprKind_MemberAccess:
       case E_ExprKind_ArrayIndex:
       {
-        // rjf: unpack left-hand-size
+        // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
         E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        
+        // rjf: gather inherited lenses from the left-hand-side
+        {
+          E_TypeKey k = lhs_irtree.type_key;
+          E_TypeKind kind = e_type_kind_from_key(k);
+          for(;kind == E_TypeKind_Lens;)
+          {
+            E_Type *lens_type = e_type_from_key__cached(k);
+            if(lens_type->flags & E_TypeFlag_InheritedOnAccess)
+            {
+              e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
+            }
+            k = e_type_direct_from_key(k);
+            kind = e_type_kind_from_key(k);
+          }
+        }
         
         // rjf: pick access hook based on type
         E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
@@ -2180,7 +2198,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
           
           // rjf: patch resultant type with a lens w/ args, pointing to the original type
-          result.type_key = e_type_key_cons(.kind = E_TypeKind_Lens, .count = arg_count, .args = args, .direct_key = result.type_key, .name = lhs_type->name);
+          result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
+                                            .flags      = lhs_type->flags,
+                                            .count      = arg_count,
+                                            .args       = args,
+                                            .direct_key = result.type_key,
+                                            .name       = lhs_type->name);
           
           scratch_end(scratch);
         }
@@ -2788,6 +2811,28 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   for(Task *t = first_task; t != 0; t = t->next)
   {
     e_expr_unpoison(t->expr);
+  }
+  
+  //////////////////////////////
+  //- rjf: apply inherited lenses to the resultant type
+  //
+  if(inherited_lenses.count != 0)
+  {
+    E_Type *result_type = e_type_from_key__cached(result.type_key);
+    for(E_TypeKeyNode *n = inherited_lenses.first; n != 0; n = n->next)
+    {
+      E_Type *src_type = e_type_from_key__cached(n->v);
+      E_TypeKey dst_type_key = e_type_key_cons(.kind   = src_type->kind,
+                                               .flags  = src_type->flags,
+                                               .name   = src_type->name,
+                                               .count  = src_type->count,
+                                               .args   = src_type->args,
+                                               .irgen  = src_type->irgen,
+                                               .access = src_type->access,
+                                               .expand = src_type->expand,
+                                               .direct_key = result.type_key);
+      result.type_key = dst_type_key;
+    }
   }
   
   scratch_end(scratch);

@@ -87,7 +87,7 @@ struct EV_ExpandInfo
   B32 rows_default_expanded;
 };
 
-#define EV_EXPAND_RULE_INFO_FUNCTION_SIG(name) EV_ExpandInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, E_Expr *tag)
+#define EV_EXPAND_RULE_INFO_FUNCTION_SIG(name) EV_ExpandInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr)
 #define EV_EXPAND_RULE_INFO_FUNCTION_NAME(name) ev_expand_rule_info__##name
 #define EV_EXPAND_RULE_INFO_FUNCTION_DEF(name) internal EV_EXPAND_RULE_INFO_FUNCTION_SIG(EV_EXPAND_RULE_INFO_FUNCTION_NAME(name))
 typedef EV_EXPAND_RULE_INFO_FUNCTION_SIG(EV_ExpandRuleInfoHookFunctionType);
@@ -156,8 +156,6 @@ struct EV_Block
   
   // rjf: expansion info
   U64 row_count;
-  B32 single_item;
-  B32 rows_default_expanded;
 };
 
 typedef struct EV_BlockTree EV_BlockTree;
@@ -237,6 +235,7 @@ enum
   EV_StringFlag_PrettyNames          = (1<<1),
   EV_StringFlag_DisableAddresses     = (1<<2),
   EV_StringFlag_DisableStrings       = (1<<3),
+  EV_StringFlag_DisableStringQuotes  = (1<<4),
 };
 
 typedef struct EV_StringParams EV_StringParams;
@@ -282,7 +281,22 @@ global read_only EV_ExpandRule ev_nil_expand_rule =
   EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
 };
 thread_static EV_ExpandRuleTable *ev_view_rule_info_table = 0;
-global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, {zero_struct, zero_struct, &e_expr_nil, &e_irnode_nil}};
+global read_only EV_Block ev_nil_block =
+{
+  &ev_nil_block,
+  &ev_nil_block,
+  &ev_nil_block,
+  &ev_nil_block,
+  &ev_nil_block,
+  {0},
+  0,
+  {0},
+  {zero_struct, zero_struct, &e_expr_nil, &e_irnode_nil},
+  {0},
+  &e_type_expand_rule__default,
+  {0},
+  &ev_nil_expand_rule,
+};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -322,19 +336,13 @@ internal void ev_expand_rule_table_push(Arena *arena, EV_ExpandRuleTable *table,
 #define ev_expand_rule_table_push_new(arena, table, ...) ev_expand_rule_table_push((arena), (table), &(EV_ExpandRule){__VA_ARGS__})
 internal void ev_select_expand_rule_table(EV_ExpandRuleTable *table);
 internal EV_ExpandRule *ev_expand_rule_from_string(String8 string);
+internal EV_ExpandRule *ev_expand_rule_from_type_key(E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
 #if 0 // TODO(rjf): @cfg (dynamic type resolution)
 internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
-#endif
-
-////////////////////////////////
-//~ rjf: Upgrading Expressions w/ Tags From All Sources
-
-#if 0 // TODO(rjf): @eval
-internal void ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key, E_Expr *expr);
 #endif
 
 ////////////////////////////////

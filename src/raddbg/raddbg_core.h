@@ -92,7 +92,7 @@ enum
 ////////////////////////////////
 //~ rjf: View UI Hook Types
 
-#define RD_VIEW_UI_FUNCTION_SIG(name) void name(E_Eval eval, E_Expr *tag, Rng2F32 rect)
+#define RD_VIEW_UI_FUNCTION_SIG(name) void name(E_Eval eval, Rng2F32 rect)
 #define RD_VIEW_UI_FUNCTION_NAME(name) rd_view_ui__##name
 #define RD_VIEW_UI_FUNCTION_DEF(name) internal RD_VIEW_UI_FUNCTION_SIG(RD_VIEW_UI_FUNCTION_NAME(name))
 typedef RD_VIEW_UI_FUNCTION_SIG(RD_ViewUIFunctionType);
@@ -908,8 +908,6 @@ internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
 internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
-internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
-
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
@@ -941,7 +939,7 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 //~ rjf: Evaluation Visualization
 
 //- rjf: writing values back to child processes
-internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
+internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string);
 
 //- rjf: eval <-> file path
 internal String8 rd_file_path_from_eval(Arena *arena, E_Eval eval);
@@ -971,12 +969,12 @@ internal E_Value rd_view_cfg_value_from_string(String8 string);
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 internal U64 rd_base_offset_from_eval(E_Eval eval);
-internal Rng1U64 rd_range_from_eval_tag(E_Eval eval, E_Expr *tag);
-internal TXT_LangKind rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag);
-internal Arch rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag);
-internal Vec2S32 rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag);
-internal R_Tex2DFormat rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag);
-internal E_Value rd_value_from_eval_tag_key(E_Eval eval, E_Expr *tag, String8 key);
+internal Rng1U64 rd_range_from_eval(E_Eval eval);
+internal TXT_LangKind rd_lang_kind_from_eval(E_Eval eval);
+internal Arch rd_arch_from_eval(E_Eval eval);
+internal Vec2S32 rd_dim2s32_from_eval(E_Eval eval);
+internal R_Tex2DFormat rd_tex2dformat_from_eval(E_Eval eval);
+internal E_Value rd_value_from_eval_key(E_Eval eval, String8 key);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);

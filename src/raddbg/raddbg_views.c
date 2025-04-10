@@ -1051,14 +1051,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: determine view ui rule
-    // TODO(rjf): @eval
-    info.view_ui_rule = &rd_nil_view_ui_rule; // rd_view_ui_rule_from_string(row->block->expand_rule->string);
-#if 0 // TODO(rjf): @eval
-    if(info.view_ui_rule != &rd_nil_view_ui_rule)
-    {
-      info.view_ui_tag = row->block->expand_tag;
-    }
-#endif
+    info.view_ui_rule = rd_view_ui_rule_from_string(row->block->viz_expand_rule->string);
     
     // rjf: fill row's cells
     {
@@ -1311,9 +1304,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                    .default_pct = 0.05f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                              .default_pct = 0.55f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((U64)($expr))"),     .default_pct = 0.20f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                         .default_pct = 0.05f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                   .default_pct = 0.55f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((uint64)($expr))"),  .default_pct = 0.20f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
                                     .eval = (module == &ctrl_entity_nil ? (E_Eval)zero_struct : module_eval),
                                     .string = str8_lit(" "),
@@ -1332,7 +1325,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                                 .default_pct = 0.25f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                 .default_pct = 0.35f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr => default)"), .default_pct = 0.15f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),            .default_pct = 0.15f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                                  .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
       }
@@ -1353,7 +1346,6 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   
   //- rjf: fill basics/defaults
   result.view_ui_rule = &rd_nil_view_ui_rule;
-  result.view_ui_tag = &e_expr_nil;
   result.fstrs = cell->fstrs;
   result.flags = cell->flags;
   result.cfg = &rd_nil_cfg;
@@ -1495,16 +1487,22 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: evaluate wrapped expression
       result.eval     = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
       
-      //- rjf: determine default radix
-      U32 default_radix = 10;
-      if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
-         rd_ctrl_entity_from_eval_space(result.eval.space)->kind == CTRL_EntityKind_Module)
+      //- rjf: determine string generation parameters based on evaluation
+      EV_StringParams string_params = {string_flags, 10};
       {
-        default_radix = 16;
+        if(result.eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+           result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+        {
+          string_params.flags |= EV_StringFlag_DisableStringQuotes;
+        }
+        if(result.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
+           rd_ctrl_entity_from_eval_space(result.eval.space)->kind == CTRL_EntityKind_Module)
+        {
+          string_params.radix = 16;
+        }
       }
       
       //- rjf: generate strings/flags based on that expression & fill
-      EV_StringParams string_params = {.flags = string_flags, .radix = default_radix};
       result.string   = rd_value_string_from_eval_NEW(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.irtree.type_key) && result.eval.irtree.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
@@ -1529,7 +1527,6 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     {
       result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : row->eval);
       result.view_ui_rule = row_info->view_ui_rule;
-      result.view_ui_tag = row_info->view_ui_tag;
     }break;
   }
   
@@ -1743,9 +1740,9 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
-  Rng1U64 range = rd_range_from_eval_tag(eval, tag);
+  Rng1U64 range = rd_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval_tag(eval, tag);
+  rd_regs()->lang_kind = rd_lang_kind_from_eval(eval);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -2002,8 +1999,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  Rng1U64 range = rd_range_from_eval_tag(eval, tag);
-  Arch arch = rd_arch_from_eval_tag(eval, tag);
+  Rng1U64 range = rd_range_from_eval(eval);
+  Arch arch = rd_arch_from_eval(eval);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
   DI_Key dbgi_key = {0};
@@ -2170,7 +2167,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  Rng1U64 space_range = rd_range_from_eval_tag(eval, tag);
+  Rng1U64 space_range = rd_range_from_eval(eval);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
@@ -3085,8 +3082,8 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: evaluate expression
   //
-  Vec2S32 dim = rd_dim2s32_from_eval_tag(eval, tag);
-  R_Tex2DFormat fmt = rd_tex2dformat_from_eval_tag(eval, tag);
+  Vec2S32 dim = rd_dim2s32_from_eval(eval);
+  R_Tex2DFormat fmt = rd_tex2dformat_from_eval(eval);
   U64 base_offset = rd_base_offset_from_eval(eval);
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
@@ -3283,7 +3280,7 @@ RD_VIEW_UI_FUNCTION_DEF(checkbox)
   E_Eval value_eval = e_value_eval_from_eval(eval);
   if(ui_clicked(rd_icon_buttonf(value_eval.value.u64 == 0 ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled, 0, "###check")))
   {
-    rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"), 0);
+    rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
   }
 }
 
@@ -3484,9 +3481,9 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 count        = rd_value_from_eval_tag_key(eval, tag, str8_lit("count")).u64;
-  U64 vtx_base_off = rd_value_from_eval_tag_key(eval, tag, str8_lit("vtx")).u64;
-  U64 vtx_size     = rd_value_from_eval_tag_key(eval, tag, str8_lit("vtx_size")).u64;
+  U64 count        = rd_value_from_eval_key(eval, str8_lit("count")).u64;
+  U64 vtx_base_off = rd_value_from_eval_key(eval, str8_lit("vtx")).u64;
+  U64 vtx_size     = rd_value_from_eval_key(eval, str8_lit("vtx_size")).u64;
   F32 yaw_target   = rd_view_cfg_value_from_string(str8_lit("yaw")).f32;
   F32 pitch_target = rd_view_cfg_value_from_string(str8_lit("pitch")).f32;
   F32 zoom_target  = rd_view_cfg_value_from_string(str8_lit("zoom")).f32;
