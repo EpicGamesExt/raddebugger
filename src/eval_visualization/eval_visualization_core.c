@@ -1034,7 +1034,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         {
           range_exprs[idx] = &e_expr_nil;
         }
-        if(n->v.block->single_item)
+        if(n->v.block->single_item || n->v.block->parent == &ev_nil_block)
         {
           is_standalone_row = 1;
         }
