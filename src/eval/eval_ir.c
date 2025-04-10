@@ -90,6 +90,8 @@ e_select_ir_ctx(E_IRCtx *ctx)
   e_ir_state->string_id_map->id_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->id_slots_count);
   e_ir_state->string_id_map->hash_slots_count = 1024;
   e_ir_state->string_id_map->hash_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->hash_slots_count);
+  e_ir_state->top_parent = 0;
+  e_ir_state->free_parent = 0;
   String8 builtin_view_rule_names[] =
   {
     str8_lit_comp("bswap"),
@@ -817,6 +819,32 @@ e_expr_unpoison(E_Expr *expr)
   }
 }
 
+//- rjf: irtree parent selection
+
+internal void
+e_push_irtree_parent(E_IRTreeAndType parent)
+{
+  E_IRParentNode *parent_n = e_ir_state->free_parent;
+  if(parent_n != 0)
+  {
+    SLLStackPop(e_ir_state->free_parent);
+  }
+  else
+  {
+    parent_n = push_array(e_ir_state->arena, E_IRParentNode, 1);
+  }
+  parent_n->v = parent;
+  SLLStackPush(e_ir_state->top_parent, parent_n);
+}
+
+internal void
+e_pop_irtree_parent(void)
+{
+  E_IRParentNode *popped = e_ir_state->top_parent;
+  SLLStackPop(e_ir_state->top_parent);
+  SLLStackPush(e_ir_state->free_parent, popped);
+}
+
 //- rjf: default type access hook
 
 E_TYPE_ACCESS_FUNCTION_DEF(default)
@@ -1073,12 +1101,11 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   {
     Task *next;
     E_Expr *expr;
-    E_Expr *parent_expr;
-    E_IRTreeAndType parent_irtree_and_type;
   };
-  Task start_task = {0, root_expr, &e_expr_nil, {&e_irnode_nil}};
+  Task start_task = {0, root_expr};
   Task *first_task = &start_task;
   Task *last_task = first_task;
+  U64 num_parents = 0;
   for(Task *t = first_task; t != 0; t = t->next)
   {
     E_Expr *expr = t->expr;
@@ -2038,6 +2065,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
         }
         
+        //- rjf: try to map name as parent expression signifier ('$')
+        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->top_parent != 0)
+        {
+          E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->top_parent->v.root);
+          string_mapped = 1;
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = e_ir_state->top_parent->v.mode;
+          mapped_type_key = e_ir_state->top_parent->v.type_key;
+        }
+        
         //- rjf: try globals
         if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))
         {
@@ -2384,8 +2421,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
-            task->parent_expr = expr;
-            task->parent_irtree_and_type = result;
+            e_push_irtree_parent(result);
+            num_parents += 1;
             break;
           }
         }
@@ -2399,6 +2436,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   for(Task *t = first_task; t != 0; t = t->next)
   {
     e_expr_unpoison(t->expr);
+  }
+  
+  //////////////////////////////
+  //- rjf: pop all the parents that we used
+  //
+  for EachIndex(idx, num_parents)
+  {
+    e_pop_irtree_parent();
   }
   
   //////////////////////////////
