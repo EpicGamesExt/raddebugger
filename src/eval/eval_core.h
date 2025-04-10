@@ -352,6 +352,12 @@ struct E_EnumValArray
   U64 count;
 };
 
+typedef struct E_IRExt E_IRExt;
+struct E_IRExt
+{
+  void *user_data;
+};
+
 typedef struct E_TypeExpandInfo E_TypeExpandInfo;
 struct E_TypeExpandInfo
 {
@@ -359,10 +365,10 @@ struct E_TypeExpandInfo
   U64 expr_count;
 };
 
-#define E_TYPE_IRGEN_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_IRTreeAndType *irtree)
-#define E_TYPE_IRGEN_FUNCTION_NAME(name) e_type_irgen__##name
-#define E_TYPE_IRGEN_FUNCTION_DEF(name) internal E_TYPE_IRGEN_FUNCTION_SIG(E_TYPE_IRGEN_FUNCTION_NAME(name))
-typedef E_TYPE_IRGEN_FUNCTION_SIG(E_TypeIRGenFunctionType);
+#define E_TYPE_IREXT_FUNCTION_SIG(name) E_IRExt name(Arena *arena, E_Expr *expr, E_IRTreeAndType *irtree)
+#define E_TYPE_IREXT_FUNCTION_NAME(name) e_type_irext__##name
+#define E_TYPE_IREXT_FUNCTION_DEF(name) internal E_TYPE_IREXT_FUNCTION_SIG(E_TYPE_IREXT_FUNCTION_NAME(name))
+typedef E_TYPE_IREXT_FUNCTION_SIG(E_TypeIRExtFunctionType);
 
 #define E_TYPE_ACCESS_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_IRTreeAndType *lhs_irtree)
 #define E_TYPE_ACCESS_FUNCTION_NAME(name) e_type_access__##name
@@ -415,7 +421,7 @@ struct E_Type
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
-  E_TypeIRGenFunctionType *irgen;
+  E_TypeIRExtFunctionType *irext;
   E_TypeAccessFunctionType *access;
   E_TypeExpandRule expand;
 };

@@ -229,6 +229,7 @@ internal void e_expr_poison(E_Expr *expr);
 internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
+E_TYPE_ACCESS_FUNCTION_DEF(default);
 internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
 
 //- rjf: irtree -> linear ops/bytecode

@@ -1546,6 +1546,12 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       //
       case E_TypeKind_Lens:
       {
+        if(it->top_task->redirect_to_sets_and_structs)
+        {
+          expansion_opener_symbol = str8_lit("[");
+          expansion_closer_symbol = str8_lit("]");
+          goto arrays_and_sets_and_structs;
+        }
         E_Type *type = e_type_from_key__cached(type_key);
         B32 lens_applied = 1;
         EV_StringParams lens_params = *params;
@@ -1578,6 +1584,14 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           new_task.params = lens_params;
           new_task.eval = eval;
           new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+        }
+        else if(type->expand.info != 0)
+        {
+          need_new_task = 1;
+          need_pop = 1;
+          new_task.params = *params;
+          new_task.eval = eval;
+          new_task.redirect_to_sets_and_structs = 1;
         }
         else switch(task_idx)
         {
@@ -1639,7 +1653,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       case E_TypeKind_RRef:
       case E_TypeKind_Array:
       {
-        if(type_kind == E_TypeKind_Array && it->top_task->redirect_array_to_sets_and_structs)
+        if(type_kind == E_TypeKind_Array && it->top_task->redirect_to_sets_and_structs)
         {
           expansion_opener_symbol = str8_lit("[");
           expansion_closer_symbol = str8_lit("]");
@@ -1876,7 +1890,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               need_pop = 0;
               new_task.params = *params;
               new_task.eval = eval;
-              new_task.redirect_array_to_sets_and_structs = 1;
+              new_task.redirect_to_sets_and_structs = 1;
               ptr_data->did_redirect = 1;
             }
             

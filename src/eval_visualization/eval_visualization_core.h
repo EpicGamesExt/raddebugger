@@ -256,7 +256,7 @@ struct EV_StringIterTask
   E_Eval eval;
   U64 idx;
   S32 depth;
-  B32 redirect_array_to_sets_and_structs;
+  B32 redirect_to_sets_and_structs;
   void *user_data;
 };
 

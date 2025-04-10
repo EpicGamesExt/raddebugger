@@ -285,9 +285,8 @@ struct RD_SchemaIRExt
   MD_Node *schema;
 };
 
-E_TYPE_IRGEN_FUNCTION_DEF(schema)
+E_TYPE_IREXT_FUNCTION_DEF(schema)
 {
-  E_IRTreeAndType result = *irtree;
   RD_SchemaIRExt *ext = push_array(arena, RD_SchemaIRExt, 1);
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -302,7 +301,7 @@ E_TYPE_IRGEN_FUNCTION_DEF(schema)
     ext->schema = schema;
     scratch_end(scratch);
   }
-  result.user_data = ext;
+  E_IRExt result = {ext};
   return result;
 }
 
@@ -503,9 +502,8 @@ struct RD_CfgsIRExt
   Rng1U64 cfgs_idx_range;
 };
 
-E_TYPE_IRGEN_FUNCTION_DEF(cfgs)
+E_TYPE_IREXT_FUNCTION_DEF(cfgs)
 {
-  E_IRTreeAndType result = *irtree;
   RD_CfgsIRExt *ext = push_array(arena, RD_CfgsIRExt, 1);
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -536,7 +534,7 @@ E_TYPE_IRGEN_FUNCTION_DEF(cfgs)
     
     scratch_end(scratch);
   }
-  result.user_data = ext;
+  E_IRExt result = {ext};
   return result;
 }
 
@@ -712,9 +710,8 @@ struct RD_CallStackAccel
   CTRL_CallStack call_stack;
 };
 
-E_TYPE_IRGEN_FUNCTION_DEF(call_stack)
+E_TYPE_IREXT_FUNCTION_DEF(call_stack)
 {
-  E_IRTreeAndType result = *irtree;
   RD_CallStackAccel *accel = push_array(arena, RD_CallStackAccel, 1);
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -732,7 +729,7 @@ E_TYPE_IRGEN_FUNCTION_DEF(call_stack)
     }
     scratch_end(scratch);
   }
-  result.user_data = accel;
+  E_IRExt result = {accel};
   return result;
 }
 
@@ -774,9 +771,8 @@ struct RD_EnvironmentAccel
   RD_CfgArray cfgs;
 };
 
-E_TYPE_IRGEN_FUNCTION_DEF(environment)
+E_TYPE_IREXT_FUNCTION_DEF(environment)
 {
-  E_IRTreeAndType result = *irtree;
   RD_EnvironmentAccel *accel = push_array(arena, RD_EnvironmentAccel, 1);
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -796,7 +792,7 @@ E_TYPE_IRGEN_FUNCTION_DEF(environment)
     accel->cfgs = rd_cfg_array_from_list(arena, &env_strings);
     scratch_end(scratch);
   }
-  result.user_data = accel;
+  E_IRExt result = {accel};
   return result;
 }
 

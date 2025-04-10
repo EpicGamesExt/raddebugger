@@ -11850,7 +11850,7 @@ rd_frame(void)
         String8 name = rd_name_schema_info_table[idx].name;
         E_TypeKey type_key = e_type_key_cons(.name = name,
                                              .kind = E_TypeKind_Set,
-                                             .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(schema),
+                                             .irext  = E_TYPE_IREXT_FUNCTION_NAME(schema),
                                              .access = E_TYPE_ACCESS_FUNCTION_NAME(schema),
                                              .expand =
                                              {
@@ -11998,7 +11998,7 @@ rd_frame(void)
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .name = str8_lit("environment"),
                                                     .flags = E_TypeFlag_EditableChildren,
-                                                    .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(environment),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(environment),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(environment),
                                                     .expand =
                                                     {
@@ -12012,7 +12012,7 @@ rd_frame(void)
                                     str8_lit("call_stack"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .name = str8_lit("call_stack"),
-                                                    .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(call_stack),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(call_stack),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(call_stack),
                                                     .expand =
                                                     {
@@ -12082,7 +12082,7 @@ rd_frame(void)
         String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
-                                                        .irgen = E_TYPE_IRGEN_FUNCTION_NAME(cfgs),
+                                                        .irext = E_TYPE_IREXT_FUNCTION_NAME(cfgs),
                                                         .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs),
                                                         .expand =
                                                         {
@@ -12227,60 +12227,74 @@ rd_frame(void)
     e_select_ir_ctx(ir_ctx);
     
     ////////////////////////////
-    //- rjf: generate macros for all view rules
+    //- rjf: generate macros for all lenses
     //
     {
-      //- rjf: choose set of view rules
+      //- rjf: choose set of lenses
       // TODO(rjf): generate via metaprogram
       struct
       {
         String8 name;
         B32 inherited;
+        E_TypeIRExtFunctionType *irext;
+        E_TypeAccessFunctionType *access;
+        E_TypeExpandRule expand;
         RD_ViewUIFunctionType *ui;
-        EV_ExpandRuleInfoHookFunctionType *expand;
+        EV_ExpandRuleInfoHookFunctionType *ev_expand;
       }
-      view_ui_rule_table[] =
+      lens_table[] =
       {
-        {str8_lit("bin"),         1},
-        {str8_lit("oct"),         1},
-        {str8_lit("dec"),         1},
-        {str8_lit("hex"),         1},
-        {str8_lit("digits"),      1},
-        {str8_lit("no_string"),   1},
-        {str8_lit("no_addr"),     1},
-        {str8_lit("text"),        0, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
-        {str8_lit("disasm"),      0, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
-        {str8_lit("memory"),      0, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
-        {str8_lit("bitmap"),      0, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
-        {str8_lit("checkbox"),    0, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
-        {str8_lit("color_rgba"),  0, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
-        {str8_lit("geo3d"),       0, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
+        {str8_lit("bin"),         1, 0, 0, {0}},
+        {str8_lit("oct"),         1, 0, 0, {0}},
+        {str8_lit("dec"),         1, 0, 0, {0}},
+        {str8_lit("hex"),         1, 0, 0, {0}},
+        {str8_lit("digits"),      1, 0, 0, {0}},
+        {str8_lit("no_string"),   1, 0, 0, {0}},
+        {str8_lit("no_addr"),     1, 0, 0, {0}},
+        {str8_lit("slice"),       0, E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},
+        {str8_lit("text"),        0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
+        {str8_lit("disasm"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
+        {str8_lit("memory"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
+        {str8_lit("bitmap"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
+        {str8_lit("checkbox"),    0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
+        {str8_lit("color_rgba"),  0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
+        {str8_lit("geo3d"),       0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
       };
       
-      //- rjf: fill view ui rules in expand rule map, view ui rule map
+      //- rjf: fill lenses in ev expand rule map, rd view ui rule map
       EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
       ev_select_expand_rule_table(expand_rule_table);
       rd_state->view_ui_rule_map = rd_view_ui_rule_map_make(scratch.arena, 512);
       {
-        for EachElement(idx, view_ui_rule_table)
+        for EachElement(idx, lens_table)
         {
-          rd_view_ui_rule_map_insert(scratch.arena, rd_state->view_ui_rule_map, view_ui_rule_table[idx].name, view_ui_rule_table[idx].ui);
-          if(view_ui_rule_table[idx].expand != 0)
+          if(lens_table[idx].ui != 0)
           {
-            ev_expand_rule_table_push_new(scratch.arena, expand_rule_table, view_ui_rule_table[idx].name, view_ui_rule_table[idx].expand);
+            rd_view_ui_rule_map_insert(scratch.arena, rd_state->view_ui_rule_map, lens_table[idx].name, lens_table[idx].ui);
+          }
+          if(lens_table[idx].ev_expand != 0)
+          {
+            ev_expand_rule_table_push_new(scratch.arena, expand_rule_table, lens_table[idx].name, lens_table[idx].ev_expand);
           }
         }
       }
-      for EachElement(idx, view_ui_rule_table)
+      
+      //- rjf: fill macros w/ types for lenses
+      for EachElement(idx, lens_table)
       {
         E_TypeFlags type_flags = 0;
-        if(view_ui_rule_table[idx].inherited)
+        if(lens_table[idx].inherited)
         {
           type_flags |= E_TypeFlag_InheritedOnAccess;
         }
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec, .flags = type_flags, .name = view_ui_rule_table[idx].name);
-        e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, view_ui_rule_table[idx].name, expr);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec,
+                                         .flags = type_flags,
+                                         .name = lens_table[idx].name,
+                                         .irext = lens_table[idx].irext,
+                                         .access = lens_table[idx].access,
+                                         .expand = lens_table[idx].expand);
+        e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, lens_table[idx].name, expr);
       }
     }
     

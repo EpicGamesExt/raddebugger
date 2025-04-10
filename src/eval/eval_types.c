@@ -250,7 +250,7 @@ e_select_type_ctx(E_TypeCtx *ctx)
   e_type_state->type_cache_slots = push_array(e_type_state->arena, E_TypeCacheSlot, e_type_state->type_cache_slots_count);
   e_type_state->file_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
                                                 .name = str8_lit("file"),
-                                                .irgen  = E_TYPE_IRGEN_FUNCTION_NAME(file),
+                                                .irext  = E_TYPE_IREXT_FUNCTION_NAME(file),
                                                 .access = E_TYPE_ACCESS_FUNCTION_NAME(file),
                                                 .expand =
                                                 {
@@ -671,7 +671,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->count              = node->params.count;
             type->depth              = node->params.depth;
             type->arch               = node->params.arch;
-            type->irgen              = node->params.irgen;
+            type->irext              = node->params.irext;
             type->access             = node->params.access;
             type->expand             = node->params.expand;
             type->byte_size          = node->byte_size;
@@ -2314,6 +2314,188 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 }
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `slice` lens
+
+typedef struct E_SliceAccel E_SliceAccel;
+struct E_SliceAccel
+{
+  Arch arch;
+  U64 count;
+  U64 base_ptr_vaddr;
+  E_TypeKey element_type_key;
+};
+
+E_TYPE_IREXT_FUNCTION_DEF(slice)
+{
+  E_SliceAccel *accel = push_array(arena, E_SliceAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    // rjf: unpack struct type
+    E_TypeKey struct_type_key = e_type_unwrap(irtree->type_key);
+    for(;;)
+    {
+      if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(struct_type_key)))
+      {
+        struct_type_key = e_type_unwrap(e_type_direct_from_key(struct_type_key));
+      }
+      else
+      {
+        break;
+      }
+    }
+    
+    // rjf: build info from struct type
+    E_TypeKind type_kind = e_type_kind_from_key(struct_type_key);
+    if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
+    {
+      // rjf: unpack members
+      E_MemberArray members = e_type_data_members_from_key__cached(struct_type_key);
+      
+      // rjf: choose base pointer & count members
+      E_Member *base_ptr_member = 0;
+      E_Member *opl_ptr_member = 0;
+      E_Member *count_member = 0;
+      for(U64 idx = 0; idx < members.count; idx += 1)
+      {
+        E_Member *member = &members.v[idx];
+        E_TypeKey member_type = e_type_unwrap(member->type_key);
+        E_TypeKind member_type_kind = e_type_kind_from_key(member_type);
+        if(count_member == 0 && e_type_kind_is_integer(member_type_kind))
+        {
+          count_member = member;
+        }
+        if(base_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
+        {
+          base_ptr_member = &members.v[idx];
+        }
+        else if(base_ptr_member != 0 && opl_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
+        {
+          opl_ptr_member = &members.v[idx];
+        }
+        if(count_member != 0 && base_ptr_member != 0)
+        {
+          break;
+        }
+        else if(base_ptr_member != 0 && opl_ptr_member != 0)
+        {
+          break;
+        }
+      }
+      
+      // rjf: determine architecture
+      Arch arch = e_type_state->ctx->primary_module->arch;
+      if(base_ptr_member != 0)
+      {
+        E_Type *type = e_type_from_key__cached(base_ptr_member->type_key);
+        arch = type->arch;
+      }
+      
+      // rjf: evaluate count member, determine count
+      U64 count = 0;
+      if(count_member != 0)
+      {
+        E_Expr *count_member_expr = e_expr_irext_member_access(arena, expr, irtree, count_member->name);
+        E_Value count_member_value = e_value_from_expr(count_member_expr);
+        count = count_member_value.u64;
+      }
+      
+      // rjf: evaluate base ptr member, determine base address
+      U64 base_ptr_vaddr = 0;
+      if(base_ptr_member != 0)
+      {
+        E_Expr *base_ptr_member_expr = e_expr_irext_member_access(arena, expr, irtree, base_ptr_member->name);
+        E_Value base_ptr_member_value = e_value_from_expr(base_ptr_member_expr);
+        base_ptr_vaddr = base_ptr_member_value.u64;
+      }
+      
+      // rjf: evaluate opl ptr member, determine opl address
+      U64 opl_ptr_vaddr = 0;
+      if(count_member == 0 && opl_ptr_member != 0)
+      {
+        E_Expr *opl_ptr_member_expr = e_expr_irext_member_access(arena, expr, irtree, opl_ptr_member->name);
+        E_Value opl_ptr_member_value = e_value_from_expr(opl_ptr_member_expr);
+        opl_ptr_vaddr = opl_ptr_member_value.u64;
+      }
+      
+      // rjf: determine element type
+      E_TypeKey element_type_key = zero_struct;
+      if(base_ptr_member != 0)
+      {
+        element_type_key = e_type_direct_from_key(base_ptr_member->type_key);
+      }
+      
+      // rjf: if no count, but base/opl, swap base/opl if needed, and measure count
+      if(count_member == 0 && opl_ptr_member != 0 && base_ptr_member != 0)
+      {
+        U64 min_vaddr = Min(base_ptr_vaddr, opl_ptr_vaddr);
+        U64 max_vaddr = Max(base_ptr_vaddr, opl_ptr_vaddr);
+        base_ptr_vaddr = min_vaddr;
+        opl_ptr_vaddr = max_vaddr;
+        count = (opl_ptr_vaddr - base_ptr_vaddr) / e_type_byte_size_from_key(element_type_key);
+      }
+      
+      // rjf: fill
+      if((count_member || opl_ptr_member) && base_ptr_member)
+      {
+        accel->arch = arch;
+        accel->count = count;
+        accel->base_ptr_vaddr = base_ptr_vaddr;
+        accel->element_type_key = element_type_key;
+      }
+    }
+    scratch_end(scratch);
+  }
+  E_IRExt result = {accel};
+  return result;
+}
+
+E_TYPE_ACCESS_FUNCTION_DEF(slice)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  E_SliceAccel *accel = (E_SliceAccel *)lhs_irtree->user_data;
+  switch(expr->kind)
+  {
+    default:
+    case E_ExprKind_MemberAccess:
+    {
+      result = E_TYPE_ACCESS_FUNCTION_NAME(default)(arena, expr, lhs_irtree);
+    }break;
+    case E_ExprKind_ArrayIndex:
+    {
+      E_Value rhs_value = e_value_from_expr(expr->first->next);
+      U64 rhs_idx = rhs_value.u64;
+      if(0 <= rhs_idx && rhs_idx < accel->count)
+      {
+        E_Type *element_type = e_type_from_key__cached(accel->element_type_key);
+        U64 offset = element_type->byte_size*rhs_idx;
+        U64 vaddr = accel->base_ptr_vaddr + offset;
+        result.root = e_irtree_const_u(arena, vaddr);
+        result.type_key = accel->element_type_key;
+        result.mode = E_Mode_Offset;
+      }
+    }break;
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice)
+{
+  E_SliceAccel *accel = (E_SliceAccel *)irtree->user_data;
+  E_TypeExpandInfo info = {accel, accel->count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(slice)
+{
+  U64 read_range_count = dim_1u64(idx_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
+  {
+    exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
+  }
+}
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `folder` type
 
 typedef struct E_FolderAccel E_FolderAccel;
@@ -2476,7 +2658,7 @@ struct E_FileAccel
   String8Array fields;
 };
 
-E_TYPE_IRGEN_FUNCTION_DEF(file)
+E_TYPE_IREXT_FUNCTION_DEF(file)
 {
   E_IRTreeAndType result = *irtree;
   E_FileAccel *accel = push_array(arena, E_FileAccel, 1);
@@ -2507,8 +2689,8 @@ E_TYPE_IRGEN_FUNCTION_DEF(file)
     
     scratch_end(scratch);
   }
-  result.user_data = accel;
-  return result;
+  E_IRExt ext = {accel};
+  return ext;
 }
 
 E_TYPE_ACCESS_FUNCTION_DEF(file)

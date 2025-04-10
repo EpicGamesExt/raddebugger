@@ -2203,7 +2203,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
                                             .count      = arg_count,
                                             .args       = args,
                                             .direct_key = result.type_key,
-                                            .name       = lhs_type->name);
+                                            .name       = lhs_type->name,
+                                            .irext      = lhs_type->irext,
+                                            .access     = lhs_type->access,
+                                            .expand     = lhs_type->expand);
           
           scratch_end(scratch);
         }
@@ -2727,7 +2730,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         {
           E_Space space = e_space_make(E_SpaceKind_FileSystem);
           result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(file_path)));
-          result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
+          result.type_key = e_type_state->file_type_key;
           result.mode     = E_Mode_Value;
         }
         else
@@ -2738,7 +2741,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           {
             E_Space space = e_space_make(E_SpaceKind_FileSystem);
             result.root     = e_irtree_set_space(arena, space, e_irtree_const_u(arena, e_id_from_string(folder_path)));
-            result.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
+            result.type_key = e_type_state->folder_type_key;
             result.mode     = E_Mode_Value;
           }
         }
@@ -2778,9 +2781,15 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     //- rjf: if the evaluated type has a hook for an extra layer of ir generation,
     // call into it
     E_Type *type = e_type_from_key__cached(result.type_key);
-    if(type->irgen != 0)
+    if(type->kind != E_TypeKind_LensSpec && type->irext != 0)
     {
-      result = type->irgen(arena, &result);
+      E_IRTreeAndType irtree_stripped = result;
+      if(type->kind == E_TypeKind_Lens)
+      {
+        irtree_stripped.type_key = e_type_direct_from_key(irtree_stripped.type_key);
+      }
+      E_IRExt ext = type->irext(arena, expr, &irtree_stripped);
+      result.user_data = ext.user_data;
     }
     
     //- rjf: find any auto hooks according to this generation's type
@@ -2827,7 +2836,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
                                                .name   = src_type->name,
                                                .count  = src_type->count,
                                                .args   = src_type->args,
-                                               .irgen  = src_type->irgen,
+                                               .irext  = src_type->irext,
                                                .access = src_type->access,
                                                .expand = src_type->expand,
                                                .direct_key = result.type_key);

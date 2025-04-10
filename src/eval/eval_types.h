@@ -47,7 +47,7 @@ struct E_ConsTypeParams
   E_Member *members;
   E_EnumVal *enum_vals;
   E_Expr **args;
-  E_TypeIRGenFunctionType *irgen;
+  E_TypeIRExtFunctionType *irext;
   E_TypeAccessFunctionType *access;
   E_TypeExpandRule expand;
 };
@@ -292,6 +292,13 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `slice` lens
+
+E_TYPE_IREXT_FUNCTION_DEF(slice);
+E_TYPE_ACCESS_FUNCTION_DEF(slice);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice);
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `folder` type
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder);
@@ -302,7 +309,7 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(folder);
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `file` type
 
-E_TYPE_IRGEN_FUNCTION_DEF(file);
+E_TYPE_IREXT_FUNCTION_DEF(file);
 E_TYPE_ACCESS_FUNCTION_DEF(file);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(file);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(file);

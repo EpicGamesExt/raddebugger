@@ -34,7 +34,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers);
 ////////////////////////////////
 //~ rjf: Schema Type Hooks
 
-E_TYPE_IRGEN_FUNCTION_DEF(schema);
+E_TYPE_IREXT_FUNCTION_DEF(schema);
 E_TYPE_ACCESS_FUNCTION_DEF(schema);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema);
@@ -42,7 +42,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema);
 ////////////////////////////////
 //~ rjf: Config Collection Type Hooks
 
-E_TYPE_IRGEN_FUNCTION_DEF(cfgs);
+E_TYPE_IREXT_FUNCTION_DEF(cfgs);
 E_TYPE_ACCESS_FUNCTION_DEF(cfgs);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs);
@@ -52,14 +52,14 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs);
 ////////////////////////////////
 //~ rjf: `call_stack` Type Hooks
 
-E_TYPE_IRGEN_FUNCTION_DEF(call_stack);
+E_TYPE_IREXT_FUNCTION_DEF(call_stack);
 E_TYPE_ACCESS_FUNCTION_DEF(call_stack);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack);
 
 ////////////////////////////////
 //~ rjf: `environment` Type Hooks
 
-E_TYPE_IRGEN_FUNCTION_DEF(environment);
+E_TYPE_IREXT_FUNCTION_DEF(environment);
 E_TYPE_ACCESS_FUNCTION_DEF(environment);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(environment);
