@@ -1979,7 +1979,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
             {
               EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
-              eval_string = rd_value_string_from_eval_NEW(scratch.arena, str8_zero(), &string_params, params->font, params->font_size, params->font_size*60.f, eval);
+              eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, params->font, params->font_size, params->font_size*60.f, eval);
             }
             ui_spacer(ui_em(1.5f, 1.f));
             ui_set_next_pref_width(ui_children_sum(1));

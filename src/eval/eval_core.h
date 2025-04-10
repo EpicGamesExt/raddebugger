@@ -301,8 +301,9 @@ enum
   E_TypeFlag_IsPlainText       = (1<<2),
   E_TypeFlag_IsCodeText        = (1<<3),
   E_TypeFlag_IsPathText        = (1<<4),
-  E_TypeFlag_EditableChildren  = (1<<5),
-  E_TypeFlag_InheritedOnAccess = (1<<6),
+  E_TypeFlag_IsNotText         = (1<<5),
+  E_TypeFlag_EditableChildren  = (1<<6),
+  E_TypeFlag_InheritedOnAccess = (1<<7),
 };
 
 typedef struct E_Member E_Member;
@@ -492,95 +493,6 @@ struct E_String2ExprMap
   U64 slots_count;
   E_String2ExprMapSlot *slots;
 };
-
-////////////////////////////////
-//~ rjf: Member/Index Lookup Hooks
-
-#if 0 // TODO(rjf): @eval
-
-typedef struct E_LookupInfo E_LookupInfo;
-struct E_LookupInfo
-{
-  void *user_data;
-  U64 named_expr_count;
-  U64 idxed_expr_count;
-};
-
-typedef struct E_LookupAccess E_LookupAccess;
-struct E_LookupAccess
-{
-  E_IRTreeAndType irtree_and_type;
-};
-
-#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_IRTreeAndType *lhs, E_Expr *tag, String8 filter)
-#define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
-#define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
-typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
-E_LOOKUP_INFO_FUNCTION_DEF(default);
-
-#define E_LOOKUP_ACCESS_FUNCTION_SIG(name) E_LookupAccess name(Arena *arena, E_ExprKind kind, E_Expr *lhs, E_Expr *rhs, E_Expr *tag, void *user_data)
-#define E_LOOKUP_ACCESS_FUNCTION_NAME(name) e_lookup_access_##name
-#define E_LOOKUP_ACCESS_FUNCTION_DEF(name) internal E_LOOKUP_ACCESS_FUNCTION_SIG(E_LOOKUP_ACCESS_FUNCTION_NAME(name))
-typedef E_LOOKUP_ACCESS_FUNCTION_SIG(E_LookupAccessFunctionType);
-E_LOOKUP_ACCESS_FUNCTION_DEF(default);
-
-#define E_LOOKUP_RANGE_FUNCTION_SIG(name) void name(Arena *arena, E_Expr *lhs, E_Expr *tag, String8 filter, Rng1U64 idx_range, E_Expr **exprs, String8 *exprs_strings, void *user_data)
-#define E_LOOKUP_RANGE_FUNCTION_NAME(name) e_lookup_range_##name
-#define E_LOOKUP_RANGE_FUNCTION_DEF(name) internal E_LOOKUP_RANGE_FUNCTION_SIG(E_LOOKUP_RANGE_FUNCTION_NAME(name))
-typedef E_LOOKUP_RANGE_FUNCTION_SIG(E_LookupRangeFunctionType);
-E_LOOKUP_RANGE_FUNCTION_DEF(default);
-
-#define E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(name) U64 name(U64 num, void *user_data)
-#define E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name) e_lookup_id_from_num_##name
-#define E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(name) internal E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name))
-typedef E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LookupIDFromNumFunctionType);
-E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default);
-
-#define E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(name) U64 name(U64 id, void *user_data)
-#define E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name) e_lookup_num_from_id_##name
-#define E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(name) internal E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name))
-typedef E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LookupNumFromIDFunctionType);
-E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default);
-
-typedef struct E_LookupRule E_LookupRule;
-struct E_LookupRule
-{
-  String8 name;
-  E_LookupInfoFunctionType *info;
-  E_LookupAccessFunctionType *access;
-  E_LookupRangeFunctionType *range;
-  E_LookupIDFromNumFunctionType *id_from_num;
-  E_LookupNumFromIDFunctionType *num_from_id;
-};
-
-typedef struct E_LookupRuleNode E_LookupRuleNode;
-struct E_LookupRuleNode
-{
-  E_LookupRuleNode *next;
-  E_LookupRule v;
-};
-
-typedef struct E_LookupRuleSlot E_LookupRuleSlot;
-struct E_LookupRuleSlot
-{
-  E_LookupRuleNode *first;
-  E_LookupRuleNode *last;
-};
-
-typedef struct E_LookupRuleMap E_LookupRuleMap;
-struct E_LookupRuleMap
-{
-  E_LookupRuleSlot *slots;
-  U64 slots_count;
-};
-
-typedef struct E_LookupRuleExprPair E_LookupRuleExprPair;
-struct E_LookupRuleExprPair
-{
-  E_LookupRule *rule;
-  E_Expr *expr;
-};
-#endif
 
 ////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)

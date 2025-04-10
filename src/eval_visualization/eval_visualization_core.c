@@ -1559,6 +1559,14 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           E_Value value = e_value_from_expr(type->args[0]);
           lens_params.min_digits = value.u64;
         }
+        else if(str8_match(type->name, str8_lit("no_string"), 0))
+        {
+          lens_params.flags |= EV_StringFlag_DisableStrings;
+        }
+        else if(str8_match(type->name, str8_lit("no_addr"), 0))
+        {
+          lens_params.flags |= EV_StringFlag_DisableAddresses;
+        }
         else
         {
           lens_applied = 0;
@@ -1673,7 +1681,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           case 0:
           {
             // rjf: try strings
-            if(!ptr_data->did_prefix_content && ptr_data->ptee_has_string &&
+            if(!(ptr_data->type->flags & E_TypeFlag_IsNotText) &&
+               !ptr_data->did_prefix_content && ptr_data->ptee_has_string &&
                !(params->flags & EV_StringFlag_DisableStrings) &&
                (type_kind == E_TypeKind_Array ||
                 params->flags & EV_StringFlag_ReadOnlyDisplayRules))
@@ -1897,15 +1906,19 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             //
             
             // rjf: [read only] if we did prefix content, do a parenthesized pointer value
-            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->did_prefix_content)
+            if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->did_prefix_content)
             {
               *out_string = push_str8f(arena, " (%S)", ptr_value_string);
             }
             
-            // rjf: [read only] if we did *not* do any prefix content, do "<pointer value> -> " then descend
+            // rjf: [read only] if we did *not* do any prefix content, but we have content,
+            // do "<pointer value> -> " then descend
             else if(params->flags & EV_StringFlag_ReadOnlyDisplayRules && !ptr_data->did_prefix_content && ptr_data->ptee_has_content)
             {
-              *out_string = push_str8f(arena, "%S -> ", ptr_value_string);
+              if(!(params->flags & EV_StringFlag_DisableAddresses))
+              {
+                *out_string = push_str8f(arena, "%S -> ", ptr_value_string);
+              }
               
               // rjf: single-length pointers -> just gen new task for deref'd expr
               if(ptr_data->type->count == 1)
@@ -1926,7 +1939,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             }
             
             // rjf: [writeable, catchall] if we did *not* do any prefix content, do "<pointer value>"
-            else
+            else if(!ptr_data->did_prefix_content)
             {
               *out_string = push_str8_copy(arena, ptr_value_string);
             }

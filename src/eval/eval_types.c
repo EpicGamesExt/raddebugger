@@ -1159,7 +1159,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u8s");
-              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), reg_byte_count, 0);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), reg_byte_count, E_TypeFlag_IsNotText);
             }
             if(type->byte_size > 4 && type->byte_size%4 == 0)
             {
@@ -1628,7 +1628,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
       E_Member *padding_member = &new_members.v[n->prev_member_idx+padding_idx+1];
       MemoryZeroStruct(padding_member);
       padding_member->kind = E_MemberKind_Padding;
-      padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size, 0);
+      padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size, E_TypeFlag_IsNotText);
       padding_member->off = n->off;
       padding_member->name = push_str8f(arena, "[padding %I64u]", padding_idx);
       padding_idx += 1;

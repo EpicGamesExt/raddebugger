@@ -1500,10 +1500,15 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         {
           string_params.radix = 16;
         }
+        if(result.eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
+           rd_ctrl_entity_from_eval_space(result.eval.space)->kind == CTRL_EntityKind_Thread)
+        {
+          string_params.radix = 16;
+        }
       }
       
       //- rjf: generate strings/flags based on that expression & fill
-      result.string   = rd_value_string_from_eval_NEW(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, result.eval);
+      result.string   = rd_value_string_from_eval(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, result.eval);
       result.flags   |= !!(ev_type_key_is_editable(result.eval.irtree.type_key) && result.eval.irtree.mode == E_Mode_Offset) * RD_WatchCellFlag_CanEdit;
       E_Type *type = e_type_from_key__cached(result.eval.irtree.type_key);
       if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
