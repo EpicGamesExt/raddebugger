@@ -1514,47 +1514,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     {
       default:{}break;
       
-      //- rjf: member accesses
+      //- rjf: member accesses & array indexing expressions
       case E_ExprKind_MemberAccess:
-      {
-        // rjf: unpack left-hand-size
-        E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
-        
-        // rjf: if the right-hand-side is a call, then this is short-hand for
-        // the right-hand-side call, with the left-hand-side as the first argument.
-        E_Expr *rhs = lhs->next;
-        if(rhs->kind == E_ExprKind_Call)
-        {
-          E_Expr *rhs_copy = e_expr_copy(arena, rhs);
-          e_expr_insert_child(rhs_copy, rhs_copy->first, e_expr_ref(arena, lhs));
-          result = e_irtree_and_type_from_expr(arena, rhs_copy);
-        }
-        
-        // rjf: if the right-hand-side is a leaf identifier, then this is an
-        // "access" to the left-hand-side.
-        else if(rhs->kind == E_ExprKind_LeafIdentifier)
-        {
-          // rjf: pick access hook based on type
-          E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-          E_TypeAccessFunctionType *lhs_access = lhs_type->access;
-          if(lhs_access == 0)
-          {
-            lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
-          }
-          
-          // rjf: call into hook to do access
-          result = lhs_access(arena, expr, &lhs_irtree);
-        }
-        
-        // rjf: if the right-hand-side is anything else, this is an invalid formation.
-        else
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Expected identifier or call after `.`.");
-        }
-      }break;
-      
-      //- rjf: array indices
       case E_ExprKind_ArrayIndex:
       {
         // rjf: unpack left-hand-size
@@ -2171,9 +2132,29 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
         
+        // rjf: calling an unresolved leaf-identifier member access, and we can determine
+        // that that identifer maps to a type? -> generate a call expression with the
+        // left-hand-side of the dot operator as the first argument. this is a fast path
+        // which prevents paren nesting in simple cases, to easily chain multiple
+        // calls - for example, bin(2).digits(4)
+        if(lhs_type == &e_type_nil &&
+           lhs->kind == E_ExprKind_MemberAccess)
+        {
+          E_Expr *callee = lhs->first->next;
+          E_Expr *first_arg = e_expr_ref(arena, lhs->first);
+          E_Expr *call = e_push_expr(arena, E_ExprKind_Call, 0);
+          e_expr_push_child(call, callee);
+          e_expr_push_child(call, first_arg);
+          for(E_Expr *arg = lhs->next; arg != &e_expr_nil; arg = arg->next)
+          {
+            e_expr_push_child(call, e_expr_ref(arena, arg));
+          }
+          result = e_irtree_and_type_from_expr(arena, call);
+        }
+        
         // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
         // a lens type, which preserves the name & arguments of the lens call expression
-        if(lhs_type->kind == E_TypeKind_LensSpec)
+        else if(lhs_type->kind == E_TypeKind_LensSpec)
         {
           Temp scratch = scratch_begin(&arena, 1);
           
@@ -2202,6 +2183,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           
           scratch_end(scratch);
         }
+        
+        // rjf: calling any other type? -> not valid
         else
         {
           e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");

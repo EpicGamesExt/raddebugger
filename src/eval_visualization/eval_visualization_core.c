@@ -1531,7 +1531,6 @@ ev_escaped_from_raw_string(Arena *arena, String8 raw)
       case '\v': {separator_replace = str8_lit("\\v");}break;
       case '\\': {separator_replace = str8_lit("\\\\");}break;
       case '"':  {separator_replace = str8_lit("\\\"");}break;
-      case '?':  {separator_replace = str8_lit("\\?");}break;
     }
     if(split)
     {
@@ -1796,123 +1795,128 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   break;
                 }
               }
-              if(module != &e_module_nil)
+              RDI_Parsed *rdi = module->rdi;
+              U64 voff = vaddr - module->vaddr_range.min;
+              B32 good_symbol_match = 0;
+              
+              // NOTE(rjf): read-only -> generate non-parseable things, like type-info / inlines
+              if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
               {
-                RDI_Parsed *rdi = module->rdi;
-                U64 voff = vaddr - module->vaddr_range.min;
-                B32 good_symbol_match = 0;
+                // rjf: voff -> scope
+                U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
                 
-                // NOTE(rjf): read-only -> generate non-parseable things, like type-info / inlines
-                if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+                // rjf: scope -> # of max possible inline depth
+                U64 inline_site_count = 0;
+                for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
                 {
-                  // rjf: voff -> scope
-                  U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
-                  
-                  // rjf: scope -> # of max possible inline depth
-                  U64 inline_site_count = 0;
+                  RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
+                  s_idx_next = s->parent_scope_idx;
+                  if(s->inline_site_idx != 0)
+                  {
+                    inline_site_count += 1;
+                  }
+                  else
+                  {
+                    break;
+                  }
+                }
+                
+                // rjf: depth in [1, max]? -> form name from inline site
+                if(0 < ptr_data->type->depth && ptr_data->type->depth <= inline_site_count)
+                {
+                  RDI_InlineSite *inline_site = 0;
+                  U64 s_inline_depth = inline_site_count;
                   for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
                   {
                     RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
                     s_idx_next = s->parent_scope_idx;
-                    if(s->inline_site_idx != 0)
+                    if(s_inline_depth == ptr_data->type->depth)
                     {
-                      inline_site_count += 1;
+                      inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+                      break;
                     }
-                    else
+                    s_inline_depth -= 1;
+                    if(s_inline_depth == 0)
                     {
                       break;
                     }
                   }
-                  
-                  // rjf: depth in [1, max]? -> form name from inline site
-                  if(0 < ptr_data->type->depth && ptr_data->type->depth <= inline_site_count)
+                  if(inline_site != 0)
                   {
-                    RDI_InlineSite *inline_site = 0;
-                    U64 s_inline_depth = inline_site_count;
-                    for(U64 s_idx = scope_idx, s_idx_next = 0; s_idx != 0; s_idx = s_idx_next)
-                    {
-                      RDI_Scope *s = rdi_element_from_name_idx(rdi, Scopes, s_idx);
-                      s_idx_next = s->parent_scope_idx;
-                      if(s_inline_depth == ptr_data->type->depth)
-                      {
-                        inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
-                        break;
-                      }
-                      s_inline_depth -= 1;
-                      if(s_inline_depth == 0)
-                      {
-                        break;
-                      }
-                    }
-                    if(inline_site != 0)
-                    {
-                      E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, module_idx);
-                      String8 name = {0};
-                      name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-                      if(inline_site->type_idx != 0)
-                      {
-                        Temp scratch = scratch_begin(&arena, 1);
-                        String8List list = {0};
-                        str8_list_pushf(scratch.arena, &list, "[inlined] ");
-                        e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
-                        str8_list_push(scratch.arena, &list, name);
-                        e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
-                        *out_string = str8_list_join(arena, &list, 0);
-                        scratch_end(scratch);
-                      }
-                      else
-                      {
-                        *out_string = push_str8_copy(arena, name);
-                      }
-                      good_symbol_match = (name.size != 0);
-                    }
-                  }
-                  
-                  // rjf: depth == 0 or depth >= max? -> form name from scope procedure
-                  else
-                  {
-                    Temp scratch = scratch_begin(&arena, 1);
-                    RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-                    U64 proc_idx = scope->proc_idx;
-                    RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-                    E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, module_idx);
+                    E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, module_idx);
                     String8 name = {0};
-                    name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
-                    if(procedure->type_idx != 0)
+                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                    if(inline_site->type_idx != 0)
                     {
+                      Temp scratch = scratch_begin(&arena, 1);
                       String8List list = {0};
+                      str8_list_pushf(scratch.arena, &list, "[inlined] ");
                       e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
                       str8_list_push(scratch.arena, &list, name);
                       e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
                       *out_string = str8_list_join(arena, &list, 0);
+                      scratch_end(scratch);
                     }
                     else
                     {
                       *out_string = push_str8_copy(arena, name);
                     }
-                    good_symbol_match = (out_string->size != 0);
-                    scratch_end(scratch);
+                    good_symbol_match = (name.size != 0);
                   }
                 }
                 
-                // NOTE(rjf): non-read-only -> only generate thing which can be parsed, so just procedure name
+                // rjf: depth == 0 or depth >= max? -> form name from scope procedure
                 else
                 {
-                  // rjf: voff -> scope
-                  U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
-                  RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+                  Temp scratch = scratch_begin(&arena, 1);
+                  RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
+                  U64 proc_idx = scope->proc_idx;
+                  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+                  E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, module_idx);
+                  String8 name = {0};
+                  name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+                  if(procedure->type_idx != 0)
+                  {
+                    String8List list = {0};
+                    e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+                    str8_list_push(scratch.arena, &list, name);
+                    e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+                    *out_string = str8_list_join(arena, &list, 0);
+                  }
+                  else
+                  {
+                    *out_string = push_str8_copy(arena, name);
+                  }
                   
-                  // rjf: scope -> procedure / string
-                  RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
-                  String8 procedure_name = {0};
-                  procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
-                  
-                  *out_string = procedure_name;
-                  good_symbol_match = (procedure_name.size != 0);
+                  good_symbol_match = (out_string->size != 0);
+                  scratch_end(scratch);
                 }
                 
-                ptr_data->did_prefix_content = good_symbol_match;
+                // rjf: if we have a function type, but we did not generate any name, then just put a ???
+                if(out_string->size == 0 && e_type_kind_from_key(ptr_data->type->direct_type_key) == E_TypeKind_Function)
+                {
+                  *out_string = str8_lit("???");
+                  good_symbol_match = 1;
+                }
               }
+              
+              // NOTE(rjf): non-read-only -> only generate thing which can be parsed, so just procedure name
+              else
+              {
+                // rjf: voff -> scope
+                U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
+                RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+                
+                // rjf: scope -> procedure / string
+                RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+                String8 procedure_name = {0};
+                procedure_name.str = rdi_name_from_procedure(rdi, procedure, &procedure_name.size);
+                
+                *out_string = procedure_name;
+                good_symbol_match = (procedure_name.size != 0);
+              }
+              
+              ptr_data->did_prefix_content = good_symbol_match;
             }
             
             // rjf: if this is an array, and we do not have a prefix, then we need to

@@ -1218,29 +1218,31 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         // rjf: advance past operator
         it += 1;
         
-        // rjf: parse right-hand-side
-        E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), 0, 1);
-        e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
-        E_Expr *rhs = rhs_expr_parse.exprs.last;
-        it = rhs_expr_parse.last_token;
+        // rjf: look for member name
+        E_Token member_name_maybe = e_token_at_it(it, &tokens);
+        String8 member_name_maybe_string = str8_substr(text, member_name_maybe.range);
         
-        // rjf: produce member access expr
-        if(rhs == &e_expr_nil)
+        // rjf: if we have a member name, build dot-operator tree
+        if(member_name_maybe.kind == E_TokenKind_Identifier)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of `.`.");
-        }
-        else
-        {
+          it += 1;
           E_Expr *lhs = atom;
+          E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, member_name_maybe_string.str);
+          rhs->string = member_name_maybe_string;
           atom = e_push_expr(arena, E_ExprKind_MemberAccess, token_string.str);
           e_expr_push_child(atom, lhs);
           e_expr_push_child(atom, rhs);
         }
+        
+        // rjf: no identifier after `.`? -> error
+        else
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing identifier after `.`.");
+        }
       }
       
       // rjf: array index
-      if(max_precedence >= 1 &&
-         token.kind == E_TokenKind_Symbol &&
+      if(token.kind == E_TokenKind_Symbol &&
          str8_match(token_string, str8_lit("["), 0))
       {
         is_postfix_unary = 1;
@@ -1279,8 +1281,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
       }
       
       // rjf: calls
-      if(max_precedence >= 0 &&
-         token.kind == E_TokenKind_Symbol &&
+      if(token.kind == E_TokenKind_Symbol &&
          str8_match(token_string, str8_lit("("), 0))
       {
         is_postfix_unary = 1;

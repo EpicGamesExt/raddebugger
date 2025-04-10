@@ -1970,7 +1970,6 @@ escaped_from_raw_str8(Arena *arena, String8 string)
       case '\v': {separator_replace = str8_lit("\\v");}break;
       case '\\': {separator_replace = str8_lit("\\\\");}break;
       case '"':  {separator_replace = str8_lit("\\\"");}break;
-      case '?':  {separator_replace = str8_lit("\\?");}break;
     }
     if(split)
     {
