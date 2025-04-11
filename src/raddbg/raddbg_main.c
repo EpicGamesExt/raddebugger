@@ -73,11 +73,11 @@
 //     `raddbg_thread_color_hex(0xff0000ff)`: Sets the calling thread's color.
 //     - Also can be done with individual `[0, 1]` color components:
 //       `raddbg_thread_color_rgba(1.f, 0.f, 0.f, 1.f)`
-//   - `raddbg_pin(<expr>, <view_rule>)`, e.g.
-//     `raddbg_pin(dynamic_array, slice)`: Like watch pins, but defined in source
-//     code. This is used by the debugger UI, but does not show up anywhere
-//     other than the source code, so it can either be used as a macro (which
-//     expands to nothing), or in comments too.
+//   - `raddbg_pin(<expr>)`, e.g.
+//     `raddbg_pin(slice(dynamic_array))`: Like watch pins, but defined in
+//     source code. This is used by the debugger UI, but does not show up
+//     anywhere other than the source code, so it can either be used as a macro
+//     (which expands to nothing), or in comments too.
 //   - `raddbg_entry_point(name)`, e.g. `raddbg_entry_point(entry_point)`:
 //     declares the entry point for an executable, which the debugger will use
 //     when stepping into a program, rather than the defaults (e.g. `main`).

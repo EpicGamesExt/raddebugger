@@ -1933,14 +1933,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         
         // rjf: extract fixed arguments
         String8 expr_string = {0};
-        String8 view_rule_string = {0};
         if(args.first != 0)
         {
           expr_string = args.first->string;
-        }
-        if(args.first->next != 0)
-        {
-          view_rule_string = args.first->next->string;
         }
         
         // rjf: build immediate pin for this markup
@@ -1949,9 +1944,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("markup_pin_%I64x_%I64x", line_num, off);
           RD_Cfg *pin = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("watch_pin"));
           RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(pin, str8_lit("expression"));
-          RD_Cfg *view_rule = rd_cfg_child_from_string_or_alloc(pin, str8_lit("view_rule"));
           rd_cfg_new_replace(expr, expr_string);
-          rd_cfg_new_replace(view_rule, view_rule_string);
           rd_cfg_list_push(scratch.arena, &immediate_pins, pin);
         }
       }

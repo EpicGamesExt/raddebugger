@@ -337,7 +337,7 @@ type_coverage_eval_tests(void)
   raddbg_pin(basics);
   raddbg_pin(fixed);
   raddbg_pin(pointer);
-  raddbg_pin(dynamic, slice);
+  raddbg_pin(dynamic);
   
   Struct_With_Embedded_Arrays swea = {0};
   {
@@ -1668,9 +1668,9 @@ fancy_viz_eval_tests(void)
                        "  return 0;\n"
                        "}\n\n");
   int x1 = 0;
-  raddbg_pin(long_string,          text);
-  raddbg_pin(code_string,          text(lang=c));
-  raddbg_pin(fancy_viz_eval_tests, disasm);
+  raddbg_pin(text(long_string));
+  raddbg_pin(text(code_string, lang=c));
+  raddbg_pin(disasm(fancy_viz_eval_tests));
   
   //- rjf: bitmaps
   unsigned int background_color = 0x00000000;
@@ -1681,7 +1681,7 @@ fancy_viz_eval_tests(void)
   unsigned int cl = mule_bswap_u32(main_color);
   unsigned int sn = mule_bswap_u32(shine_color);
   unsigned int sh = mule_bswap_u32(shadow_color);
-  unsigned int bitmap[] =
+  unsigned int pixels[] =
   {
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
@@ -1702,38 +1702,38 @@ fancy_viz_eval_tests(void)
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
     bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg, bg,
   };
-  raddbg_pin(bitmap, bitmap(18, 18));
-  for(int i = 0; i < sizeof(bitmap)/sizeof(bitmap[0]); i += 1)
+  raddbg_pin(bitmap(pixels, 18, 18));
+  for(int i = 0; i < sizeof(pixels)/sizeof(pixels[0]); i += 1)
   {
-    unsigned int r = bitmap[i]&0x000000ff;
-    unsigned int a = bitmap[i]&0xff000000;
-    bitmap[i] = bitmap[i]>>8;
-    bitmap[i] &= ~0xffff0000;
-    bitmap[i] |= (r<<16);
-    bitmap[i] |= (a);
+    unsigned int r = pixels[i]&0x000000ff;
+    unsigned int a = pixels[i]&0xff000000;
+    pixels[i] = pixels[i]>>8;
+    pixels[i] &= ~0xffff0000;
+    pixels[i] |= (r<<16);
+    pixels[i] |= (a);
   }
-  for(int i = 0; i < sizeof(bitmap)/sizeof(bitmap[0]); i += 1)
+  for(int i = 0; i < sizeof(pixels)/sizeof(pixels[0]); i += 1)
   {
-    unsigned int r = bitmap[i]&0x000000ff;
-    unsigned int a = bitmap[i]&0xff000000;
-    bitmap[i] = bitmap[i]>>8;
-    bitmap[i] &= ~0xffff0000;
-    bitmap[i] |= (r<<16);
-    bitmap[i] |= (a);
+    unsigned int r = pixels[i]&0x000000ff;
+    unsigned int a = pixels[i]&0xff000000;
+    pixels[i] = pixels[i]>>8;
+    pixels[i] &= ~0xffff0000;
+    pixels[i] |= (r<<16);
+    pixels[i] |= (a);
   }
-  for(int i = 0; i < sizeof(bitmap)/sizeof(bitmap[0]); i += 1)
+  for(int i = 0; i < sizeof(pixels)/sizeof(pixels[0]); i += 1)
   {
-    unsigned int r = bitmap[i]&0x000000ff;
-    unsigned int a = bitmap[i]&0xff000000;
-    bitmap[i] = bitmap[i]>>8;
-    bitmap[i] &= ~0xffff0000;
-    bitmap[i] |= (r<<16);
-    bitmap[i] |= (a);
+    unsigned int r = pixels[i]&0x000000ff;
+    unsigned int a = pixels[i]&0xff000000;
+    pixels[i] = pixels[i]>>8;
+    pixels[i] &= ~0xffff0000;
+    pixels[i] |= (r<<16);
+    pixels[i] |= (a);
   }
   int x2 = 0;
   
   //- rjf: auto-view-rule'd bitmaps
-  Bitmap foo = {(unsigned char *)&bitmap[0], 18, 18};
+  Bitmap foo = {(unsigned char *)&pixels[0], 18, 18};
   raddbg_pin(foo);
   
   //- rjf: 3D geometry
@@ -1923,7 +1923,10 @@ fancy_viz_eval_tests(void)
     136, 137, 138, 138, 139, 136, 140, 141, 142, 142, 143, 140, 144, 145, 146, 146, 147, 144, 148, 149, 150, 150, 151, 148,
     152, 153, 154, 154, 155, 152, 156, 157, 158, 158, 159, 156, 160, 161, 162, 162, 163, 160, 164, 165, 166, 166, 167, 164,
   };
-  raddbg_pin(index_data, "geo3d(count = (sizeof index_data/4), vtx = (vertex_data), vtx_size = (sizeof vertex_data))");
+  int count = (sizeof index_data/4);
+  float *vtx = vertex_data;
+  int vtx_size = sizeof vertex_data;
+  raddbg_pin(geo3d(index_data, count = count, vtx = vtx, vtx_size = vtx_size));
   int x3 = 0;
 }
 
