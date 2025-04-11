@@ -1078,7 +1078,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   Task start_task = {0, root_expr};
   Task *first_task = &start_task;
   Task *last_task = first_task;
-  U64 num_parents = 0;
   for(Task *t = first_task; t != 0; t = t->next)
   {
     E_Expr *expr = t->expr;
@@ -2396,8 +2395,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
-            e_push_irtree_parent(result);
-            num_parents += 1;
             break;
           }
         }
@@ -2411,14 +2408,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   for(Task *t = first_task; t != 0; t = t->next)
   {
     e_expr_unpoison(t->expr);
-  }
-  
-  //////////////////////////////
-  //- rjf: pop all the parents that we used
-  //
-  for EachIndex(idx, num_parents)
-  {
-    e_pop_irtree_parent();
   }
   
   //////////////////////////////
