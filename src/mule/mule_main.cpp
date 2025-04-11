@@ -1649,6 +1649,16 @@ fancy_viz_eval_tests(void)
   (void)error_code;
 #endif
   
+  //- rjf: booleans (checkboxes)
+  bool bool1 = 0; raddbg_pin(bool1);
+  bool bool2 = 1; raddbg_pin(bool2);
+  bool bool3 = 0; raddbg_pin(bool3);
+  
+  //- rjf: sliders
+  float slide1 = 500.f; raddbg_pin(range1(slide1, 0, 1000));
+  double slide2 = 0.75; raddbg_pin(range1(slide2, 0, 1.0));
+  int slide3 = 25;      raddbg_pin(range1(slide3, 0, 100));
+  
   //- rjf: colors
   float example_color_4f32[4] = {1.00f, 0.85f, 0.25f, 1.00f};
   unsigned int example_color_u32 = 0xff6f30ff;

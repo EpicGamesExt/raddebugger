@@ -1727,6 +1727,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_TypeKey mapped_type_key = zero_struct;
         E_Module *mapped_location_block_module = &e_module_nil;
         RDI_LocationBlock *mapped_location_block = 0;
+        E_Mode mapped_bytecode_mode = E_Mode_Offset;
+        E_Space mapped_bytecode_space = zero_struct;
+        String8 mapped_bytecode = {0};
         
         //- rjf: form namespaceified fallback versions of this lookup string
         String8List namespaceified_strings = {0};
@@ -1751,6 +1754,32 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             String8 namespaceified_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, string);
             str8_list_push_front(scratch.arena, &namespaceified_strings, namespaceified_string);
             last_past_scope_resolution_pos = past_next_scope_resolution_pos;
+          }
+        }
+        
+        //- rjf: try to map name as overridden expression signifier ('$')
+        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->overridden_irtree != 0)
+        {
+          E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->overridden_irtree->root);
+          string_mapped = 1;
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = e_ir_state->overridden_irtree->mode;
+          mapped_type_key = e_ir_state->overridden_irtree->type_key;
+          allow_autohooks = 0;
+        }
+        
+        //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
+        if(!string_mapped && e_ir_state->overridden_irtree != 0)
+        {
+          E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, e_ir_state->overridden_irtree, string);
+          E_IRTreeAndType access_irtree = e_irtree_and_type_from_expr(scratch.arena, access);
+          if(access_irtree.root != &e_irnode_nil)
+          {
+            string_mapped = 1;
+            E_OpList oplist = e_oplist_from_irtree(scratch.arena, access_irtree.root);
+            mapped_type_key = access_irtree.type_key;
+            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+            mapped_bytecode_mode = access_irtree.mode;
           }
         }
         
@@ -1806,9 +1835,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         }
         
         //- rjf: mapped to location block -> extract or produce bytecode for this mapping
-        E_Mode mapped_bytecode_mode = E_Mode_Offset;
-        E_Space mapped_bytecode_space = zero_struct;
-        String8 mapped_bytecode = {0};
         if(mapped_location_block != 0)
         {
           E_Module *module = mapped_location_block_module;
@@ -1898,17 +1924,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
               }break;
             }
           }
-        }
-        
-        //- rjf: try to map name as overridden expression signifier ('$')
-        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->overridden_irtree != 0)
-        {
-          E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->overridden_irtree->root);
-          string_mapped = 1;
-          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-          mapped_bytecode_mode = e_ir_state->overridden_irtree->mode;
-          mapped_type_key = e_ir_state->overridden_irtree->type_key;
-          allow_autohooks = 0;
         }
         
         //- rjf: try globals
