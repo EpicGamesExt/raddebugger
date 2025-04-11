@@ -140,13 +140,6 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: IR State
 
-typedef struct E_IRParentNode E_IRParentNode;
-struct E_IRParentNode
-{
-  E_IRParentNode *next;
-  E_IRTreeAndType v;
-};
-
 typedef struct E_IRState E_IRState;
 struct E_IRState
 {
@@ -158,10 +151,6 @@ struct E_IRState
   
   // rjf: unpacked ctx
   RDI_Procedure *thread_ip_procedure;
-  
-  // rjf: parent stack
-  E_IRParentNode *top_parent;
-  E_IRParentNode *free_parent;
   
   // rjf: caches
   E_UsedExprMap *used_expr_map;
@@ -238,11 +227,6 @@ internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_I
 internal B32 e_expr_is_poisoned(E_Expr *expr);
 internal void e_expr_poison(E_Expr *expr);
 internal void e_expr_unpoison(E_Expr *expr);
-
-//- rjf: irtree parent selection
-internal void e_push_irtree_parent(E_IRTreeAndType parent);
-internal void e_pop_irtree_parent(void);
-#define E_IRTreeParentScope(p) DeferLoop(e_push_irtree_parent(p), e_pop_irtree_parent())
 
 //- rjf: top-level irtree/type extraction
 E_TYPE_ACCESS_FUNCTION_DEF(default);

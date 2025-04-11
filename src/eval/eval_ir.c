@@ -90,8 +90,6 @@ e_select_ir_ctx(E_IRCtx *ctx)
   e_ir_state->string_id_map->id_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->id_slots_count);
   e_ir_state->string_id_map->hash_slots_count = 1024;
   e_ir_state->string_id_map->hash_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->hash_slots_count);
-  e_ir_state->top_parent = 0;
-  e_ir_state->free_parent = 0;
   String8 builtin_view_rule_names[] =
   {
     str8_lit_comp("bswap"),
@@ -817,32 +815,6 @@ e_expr_unpoison(E_Expr *expr)
       break;
     }
   }
-}
-
-//- rjf: irtree parent selection
-
-internal void
-e_push_irtree_parent(E_IRTreeAndType parent)
-{
-  E_IRParentNode *parent_n = e_ir_state->free_parent;
-  if(parent_n != 0)
-  {
-    SLLStackPop(e_ir_state->free_parent);
-  }
-  else
-  {
-    parent_n = push_array(e_ir_state->arena, E_IRParentNode, 1);
-  }
-  parent_n->v = parent;
-  SLLStackPush(e_ir_state->top_parent, parent_n);
-}
-
-internal void
-e_pop_irtree_parent(void)
-{
-  E_IRParentNode *popped = e_ir_state->top_parent;
-  SLLStackPop(e_ir_state->top_parent);
-  SLLStackPush(e_ir_state->free_parent, popped);
 }
 
 //- rjf: default type access hook
@@ -2067,6 +2039,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         }
         
         //- rjf: try to map name as parent expression signifier ('$')
+#if 0
         if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->top_parent != 0)
         {
           E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->top_parent->v.root);
@@ -2075,6 +2048,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           mapped_bytecode_mode = e_ir_state->top_parent->v.mode;
           mapped_type_key = e_ir_state->top_parent->v.type_key;
         }
+#endif
         
         //- rjf: try globals
         if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))

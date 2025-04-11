@@ -4056,10 +4056,7 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: view ui contents
-                            E_IRTreeParentScope(cell_info.eval.irtree)
-                            {
-                              cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
-                            }
+                            cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
                             
                             // rjf: loading fill
                             UI_Parent(loading_overlay_container)
@@ -4478,10 +4475,7 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
-      E_IRTreeParentScope(expr_eval.irtree)
-      {
-        view_ui_rule->ui(expr_eval, rect);
-      }
+      view_ui_rule->ui(expr_eval, rect);
       scratch_end(scratch);
     }
   }
