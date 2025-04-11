@@ -4056,7 +4056,10 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: view ui contents
+                            E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+                            e_ir_state->overridden_irtree = cell_info.eval.irtree.prev;
                             cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
+                            e_ir_state->overridden_irtree = prev_overridden_irtree;
                             
                             // rjf: loading fill
                             UI_Parent(loading_overlay_container)
@@ -4475,7 +4478,10 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
+      E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+      e_ir_state->overridden_irtree = expr_eval.irtree.prev;
       view_ui_rule->ui(expr_eval, rect);
+      e_ir_state->overridden_irtree = prev_overridden_irtree;
       scratch_end(scratch);
     }
   }

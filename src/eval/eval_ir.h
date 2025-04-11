@@ -152,6 +152,9 @@ struct E_IRState
   // rjf: unpacked ctx
   RDI_Procedure *thread_ip_procedure;
   
+  // rjf: overridden irtree
+  E_IRTreeAndType *overridden_irtree;
+  
   // rjf: caches
   E_UsedExprMap *used_expr_map;
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;

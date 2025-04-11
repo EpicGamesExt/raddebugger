@@ -271,6 +271,7 @@ struct E_IRTreeAndType
   void *user_data;
   E_Mode mode;
   E_MsgList msgs;
+  E_IRTreeAndType *prev;
 };
 
 ////////////////////////////////

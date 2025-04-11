@@ -896,12 +896,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       }
       
       // rjf: bad conditions? -> error if applicable, exit
-      if(l.root == &e_irnode_nil ||
-         e_type_key_match(e_type_key_zero(), check_type_key))
-      {
-        break;
-      }
-      else if(exprr->kind != E_ExprKind_LeafIdentifier)
+      if(exprr->kind != E_ExprKind_LeafIdentifier)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Expected member name.");
         break;
@@ -909,6 +904,11 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       else if(!r_found)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
+        break;
+      }
+      else if(l.root == &e_irnode_nil ||
+              e_type_key_match(e_type_key_zero(), check_type_key))
+      {
         break;
       }
       else if(check_type_kind != E_TypeKind_Struct &&
@@ -1074,8 +1074,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   {
     Task *next;
     E_Expr *expr;
+    E_IRTreeAndType *prev;
   };
-  Task start_task = {0, root_expr};
+  E_IRTreeAndType *start_prev = e_ir_state->overridden_irtree;
+  Task start_task = {0, root_expr, e_ir_state->overridden_irtree};
   Task *first_task = &start_task;
   Task *last_task = first_task;
   for(Task *t = first_task; t != 0; t = t->next)
@@ -1085,11 +1087,18 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     //- rjf: poison the expression we are about to use, so we don't recursively use it
     e_expr_poison(expr);
     
+    //- rjf: select the task's previous ir-tree-and-type as the overridden tree
+    if(t->prev != 0)
+    {
+      e_ir_state->overridden_irtree = t->prev;
+    }
+    
     //- rjf: do expr -> irtree generation for this expression
     if(expr->kind == E_ExprKind_Ref)
     {
       expr = expr->ref;
     }
+    B32 allow_autohooks = 1;
     E_ExprKind kind = expr->kind;
     switch(kind)
     {
@@ -1103,32 +1112,42 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *lhs = expr->first;
         E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
         
-        // rjf: gather inherited lenses from the left-hand-side
+        // rjf: try all IR trees in chain
+        for(E_IRTreeAndType *lhs_irtree_try = &lhs_irtree; lhs_irtree_try != 0; lhs_irtree_try = lhs_irtree_try->prev)
         {
-          E_TypeKey k = lhs_irtree.type_key;
-          E_TypeKind kind = e_type_kind_from_key(k);
-          for(;kind == E_TypeKind_Lens;)
+          // rjf: gather inherited lenses from the left-hand-side
           {
-            E_Type *lens_type = e_type_from_key__cached(k);
-            if(lens_type->flags & E_TypeFlag_InheritedOnAccess)
+            E_TypeKey k = lhs_irtree_try->type_key;
+            E_TypeKind kind = e_type_kind_from_key(k);
+            for(;kind == E_TypeKind_Lens;)
             {
-              e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
+              E_Type *lens_type = e_type_from_key__cached(k);
+              if(lens_type->flags & E_TypeFlag_InheritedOnAccess)
+              {
+                e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
+              }
+              k = e_type_direct_from_key(k);
+              kind = e_type_kind_from_key(k);
             }
-            k = e_type_direct_from_key(k);
-            kind = e_type_kind_from_key(k);
+          }
+          
+          // rjf: pick access hook based on type
+          E_Type *lhs_type = e_type_from_key__cached(lhs_irtree_try->type_key);
+          E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+          if(lhs_access == 0)
+          {
+            lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
+          }
+          
+          // rjf: call into hook to do access
+          result = lhs_access(arena, expr, lhs_irtree_try);
+          
+          // rjf: end chain if we found a result
+          if(result.root != &e_irnode_nil)
+          {
+            break;
           }
         }
-        
-        // rjf: pick access hook based on type
-        E_Type *lhs_type = e_type_from_key__cached(lhs_irtree.type_key);
-        E_TypeAccessFunctionType *lhs_access = lhs_type->access;
-        if(lhs_access == 0)
-        {
-          lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
-        }
-        
-        // rjf: call into hook to do access
-        result = lhs_access(arena, expr, &lhs_irtree);
       }break;
       
       //- rjf: dereference
@@ -2037,17 +2056,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
         }
         
-        //- rjf: try to map name as parent expression signifier ('$')
-#if 0
-        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->top_parent != 0)
+        //- rjf: try to map name as overridden expression signifier ('$')
+        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && e_ir_state->overridden_irtree != 0)
         {
-          E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->top_parent->v.root);
+          E_OpList oplist = e_oplist_from_irtree(arena, e_ir_state->overridden_irtree->root);
           string_mapped = 1;
           mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-          mapped_bytecode_mode = e_ir_state->top_parent->v.mode;
-          mapped_type_key = e_ir_state->top_parent->v.type_key;
+          mapped_bytecode_mode = e_ir_state->overridden_irtree->mode;
+          mapped_type_key = e_ir_state->overridden_irtree->type_key;
+          allow_autohooks = 0;
         }
-#endif
         
         //- rjf: try globals
         if(!string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("global"), 0)))
@@ -2368,7 +2386,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       }break;
     }
     
-    //- rjf: if the evaluated type has a hook for an extra layer of ir generation,
+    //- rjf: if the evaluated type has a hook for an extra layer of ir extension,
     // call into it
     E_Type *type = e_type_from_key__cached(result.type_key);
     if(type->kind != E_TypeKind_LensSpec && type->irext != 0)
@@ -2382,7 +2400,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       result.user_data = ext.user_data;
     }
     
+    //- rjf: equip previous task's irtree
+    if(t->prev != 0)
+    {
+      result.prev = t->prev;
+    }
+    
     //- rjf: find any auto hooks according to this generation's type
+    if(allow_autohooks)
     {
       E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
@@ -2395,12 +2420,19 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
+            task->prev = push_array(arena, E_IRTreeAndType, 1);
+            task->prev[0] = result;
             break;
           }
         }
       }
     }
   }
+  
+  //////////////////////////////
+  //- rjf: reset the overridden irtree to whatever it was before this task list
+  //
+  e_ir_state->overridden_irtree = start_prev;
   
   //////////////////////////////
   //- rjf: unpoison the tags we used

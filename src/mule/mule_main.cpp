@@ -1624,7 +1624,7 @@ struct Bitmap
   int width;
   int height;
 };
-// raddbg_auto_view_rule(Bitmap, bitmap(base, width, height));
+raddbg_auto_view_rule(Bitmap, lens:bitmap($.base, $.width, $.height));
 
 static unsigned int
 mule_bswap_u32(unsigned int x)
