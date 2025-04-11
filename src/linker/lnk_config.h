@@ -167,6 +167,15 @@ typedef enum
   LNK_CmdSwitch_Count
 } LNK_CmdSwitchType;
 
+typedef struct LNK_CmdSwitch
+{
+  LNK_CmdSwitchType type;
+  B32               is_legal_directive;
+  char             *name;
+  char             *args;
+  char             *desc;
+} LNK_CmdSwitch;
+
 typedef enum
 {
   LNK_SwitchState_Null,
@@ -233,10 +242,10 @@ typedef struct LNK_AltNameList
 
 typedef struct LNK_ExportParse
 {
-  struct LNK_ExportParse *next;
   String8                 name;
   String8                 alias;
   String8                 type;
+  struct LNK_ExportParse *next;
 } LNK_ExportParse;
 
 typedef struct LNK_ExportParseList
@@ -264,8 +273,6 @@ typedef struct LNK_MergeDirectiveList
   LNK_MergeDirectiveNode *first;
   LNK_MergeDirectiveNode *last;
 } LNK_MergeDirectiveList;
-
-
 
 typedef enum
 {
@@ -362,6 +369,7 @@ typedef struct LNK_Config
   String8                     rad_debug_alt_path;
   String8List                 include_symbol_list;
   LNK_AltNameList             alt_name_list;
+  LNK_MergeDirectiveList      merge_list;
   U64                         symbol_table_cap_defined;
   U64                         symbol_table_cap_internal;
   U64                         symbol_table_cap_weak;
@@ -512,7 +520,8 @@ typedef enum
 // Enum <-> String
 
 internal String8              lnk_string_cmd_switch_type(LNK_CmdSwitchType type);
-internal LNK_CmdSwitchType    lnk_cmd_switch_from_string(String8 string);
+internal LNK_CmdSwitchType    lnk_cmd_switch_type_from_string(String8 string);
+internal LNK_CmdSwitch *      lnk_cmd_switch_from_string(String8 string);
 internal LNK_InputType        lnk_input_type_from_string(String8 string);
 internal LNK_DebugMode        lnk_debug_mode_from_string(String8 string);
 internal LNK_TypeNameHashMode lnk_type_name_hash_mode_from_string(String8 string);

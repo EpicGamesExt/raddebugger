@@ -4,168 +4,163 @@
 ////////////////////////////////
 // Enum <-> String
 
-global read_only struct
-{
-  LNK_CmdSwitchType type;
-  char             *name;
-  char             *args;
-  char             *desc;
-} g_cmd_switch_map[] = {
-  { LNK_CmdSwitch_Null,               "",                     "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "NOT_IMPLEMENTED",      "", ""                                                                                                      },
-  { LNK_CmdSwitch_Align,              "ALIGN",                ":#", ""                                                                                                    },
-  { LNK_CmdSwitch_AllowBind,          "ALLOWBIND",            "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_AllowIsolation,     "ALLOWISOLATION",       "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_AlternateName,      "ALTERNATENAME",        "Creates an a symbol alias \"FROM=TO\"."                                                                    },
-  { LNK_CmdSwitch_AppContainer,       "APPCONTAINER",         "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_NotImplemented,     "ASSEMBLYDEBUG",        "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "ASSEMBLYLINKRESOURCE", "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "ASSEMBLYMODULE",       "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "ASSEMBLYRESOURCE",     "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_Base,               "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", ""                                                                        },
-  { LNK_CmdSwitch_NotImplemented,     "CLRIMAGETYPE",         "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "CLRLOADEROPTIMIZATION","", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "CLRSUPPORTLASTERROR",  "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "CLRTHREADATTRIBUTE",   "", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_NotImplemented,     "CLRUNMANAGEDCODECHECK","", ""                                                                                                      }, // .NET
-  { LNK_CmdSwitch_Debug,              "DEBUG",                "[:{FULL|NONE}]", ""                                                                                        },
-  { LNK_CmdSwitch_Dump,               "DUMP",                 "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "DEF",                  ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_DefaultLib,         "DEFAULTLIB",           ":LIBNAME", ""                                                                                              },
-  { LNK_CmdSwitch_Delay,              "DELAY",                ":{NOBIND|UNLOAD}", ""                                                                                      },
-  { LNK_CmdSwitch_DelayLoad,          "DELAYLOAD",            ":DLL", ""                                                                                                  },
-  { LNK_CmdSwitch_NotImplemented,     "DELAYSIGN",            "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "DEPENDENTLOADFLAG",    "", ""                                                                                                      },
-  { LNK_CmdSwitch_Dll,                "DLL",                  "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "DRIVER",               "", ""                                                                                                      },
-  { LNK_CmdSwitch_DisallowLib,        "DISALLOWLIB",          ":LIBRARY", "",                                                                                             },
-  { LNK_CmdSwitch_EditAndContinue,    "EDITANDCONTINUE",      "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_DynamicBase,        "DYNAMICBASE",          "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_NotImplemented,     "EMITVOLATILEMETADATA", "", ""                                                                                                      },
-  { LNK_CmdSwitch_Entry,              "ENTRY",                ":FUNCTION", ""                                                                                             },
-  { LNK_CmdSwitch_Null,               "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
-  { LNK_CmdSwitch_Export,             "EXPORT",               ":SYMBOL", ""                                                                                               },
-  { LNK_CmdSwitch_NotImplemented,     "EXPORTADMIN",          "", ""                                                                                                      },
-  { LNK_CmdSwitch_FastFail,           "FASTFAIL",             "", "Not used."                                                                                             },
-  { LNK_CmdSwitch_NotImplemented,     "FASTGENPROFILE",       "", ""                                                                                                      },
-  { LNK_CmdSwitch_FailIfMismatch,     "FAILIFMISMATCH",       "", ""                                                                                                      },
-  { LNK_CmdSwitch_FileAlign,          "FILEALIGN",            ":#", ""                                                                                                    },
-  { LNK_CmdSwitch_Fixed,              "FIXED",                "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_NotImplemented,     "FORCE",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_FunctionPadMin,     "FUNCTIONPADMIN",      ":#", "Not Implemented"                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "GUARD",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_GuardSym,           "GUARDSYM",             "", "",                                                                                                     },
-  { LNK_CmdSwitch_NotImplemented,     "GENPROFILE",           "", ""                                                                                                      },
-  { LNK_CmdSwitch_Heap,               "HEAP",                 "RESERVE[,COMMIT]", ""                                                                                      },
-  { LNK_CmdSwitch_HighEntropyVa,      "HIGHENTROPYVA",        "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_NotImplemented,     "IDLOUT",               "", ""                                                                                                      },
-  { LNK_CmdSwitch_Ignore,             "IGNORE",               ":#", ""                                                                                                    },
-  { LNK_CmdSwitch_NotImplemented,     "IGNOREIDL",            "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "ILK",                  "", ""                                                                                                      },
-  { LNK_CmdSwitch_ImpLib,             "IMPLIB",               ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_Include,            "INCLUDE",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_Incremental,        "INCREMENTAL",          "[:NO]", "Incremental linking is not supported."                                                            },
-  { LNK_CmdSwitch_NotImplemented,     "INTEGRITYCHECK",       "", ""                                                                                                      },
-  { LNK_CmdSwitch_InferAsanLibs,      "INFERASANLIBS",        "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_InferAsanLibsNo,    "INFERASANLIBSNO",      "", "",                                                                                                     },
-  { LNK_CmdSwitch_NotImplemented,     "KERNEL",               "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "KEYCONTAINER",         "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "KEYFILE",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_LargeAddressAware,  "LARGEADDRESSAWARE",    "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_Lib,                "LIB",                  ""                                                                                                          },
-  { LNK_CmdSwitch_LibPath,            "LIBPATH",              ":DIR", ""                                                                                                  },
-  { LNK_CmdSwitch_NotImplemented,     "LINKERREPO",           "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "LINKERREPOTARGET",     "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "LTCG",                 "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "LTCGOUT",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_Machine,            "MACHINE",              ":{X64|X86}", ""                                                                                            },
-  { LNK_CmdSwitch_Manifest,           "MANIFEST",             "[:{EMBED[,ID=#]|NO]", ""                                                                                   },
-  { LNK_CmdSwitch_ManifestDependency, "MANIFESTDEPENDENCY",   ":\"manifest dependency XML string\"", ""                                                                   },
-  { LNK_CmdSwitch_ManifestFile,       "MANIFESTFILE",         ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_ManifestInput,      "MANIFESTINPUT",        ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_ManifestUac,        "MANIFESTUAC",          ":{NO|{'level'={'asInvoker'|'highestAvailable'|'requireAdministrator'} ['uiAccess'={'true'|'false'}]}}", "" },
-  { LNK_CmdSwitch_NotImplemented,     "MAP",                  "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "MAPINFO",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_Merge,              "MERGE",                ":from=to", ""                                                                                              },
-  { LNK_CmdSwitch_NotImplemented,     "MIDL",                 "", ""                                                                                                      },
-  { LNK_CmdSwitch_Natvis,             "NATVIS",               ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_NotImplemented,     "NOASSEMBLY",           "", ""                                                                                                      },
-  { LNK_CmdSwitch_NoDefaultLib,       "NODEFAULTLIB",         ":LIBNAME", ""                                                                                              },
-  { LNK_CmdSwitch_NoDefaultLib,       "NOD",                  ":LIBNAME", ""                                                                                              },
-  { LNK_CmdSwitch_NotImplemented,     "NOENTRY",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NoExp,              "NOEXP",                "", ".exp is not supported."                                                                                },
-  { LNK_CmdSwitch_NoImpLib,           "NOIMPLIB",             "", ""                                                                                                      },
-  { LNK_CmdSwitch_NoLogo,             "NOLOGO",               "", ""                                                                                                      },
-  { LNK_CmdSwitch_NxCompat,           "NXCOMPAT",             "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_Opt,                "OPT",                  "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "ORDER",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_Out,                "OUT",                  ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_Pdb,                "PDB",                  ":FILENAME", ""                                                                                             },
-  { LNK_CmdSwitch_PdbAltPath,         "PDBALTPATH",           "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "PDBSTRIPPED",          "", ""                                                                                                      },
-  { LNK_CmdSwitch_PdbPageSize,        "PDBPAGESIZE",          ":#", "Page size must be power of two"                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "PROFILE",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_Release,            "RELEASE",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "SAFESEH",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "SECTION",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "SOURCELINK",           "", ""                                                                                                      },
-  { LNK_CmdSwitch_Stack,              "STACK",                ":RESERVE[,COMMIT]", ""                                                                                     },
-  { LNK_CmdSwitch_NotImplemented,     "STUB",                 "", ""                                                                                                      },
-  { LNK_CmdSwitch_SubSystem,          "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", ""                                                                    },
-  { LNK_CmdSwitch_NotImplemented,     "SWAPRUN",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "TLBID",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "TLBOUT",               "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "TIME",                 "", ""                                                                                                      },
-  { LNK_CmdSwitch_TsAware,            "TSAWARE",              "[:NO]", ""                                                                                                 },
-  { LNK_CmdSwitch_ThrowingNew,        "THROWINGNEW",          "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "USERPROFILE",          "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "VERBOSE",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_Version,            "VERSION",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WINMD",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WINMDDELAYSIGN",       "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WINMDKEYCONTAINER",    "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WINMDKEYFILE",         "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WHOLEARCHIVE",         "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "WX",                   "", ""                                                                                                      },
+global read_only LNK_CmdSwitch g_cmd_switch_map[] = {
+  { LNK_CmdSwitch_Null,               0, "",                     "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "NOT_IMPLEMENTED",      "", ""                                                                                                      },
+  { LNK_CmdSwitch_Align,              0, "ALIGN",                ":#", ""                                                                                                    },
+  { LNK_CmdSwitch_AllowBind,          0, "ALLOWBIND",            "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_AllowIsolation,     0, "ALLOWISOLATION",       "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_AlternateName,      1, "ALTERNATENAME",        "Creates an a symbol alias \"FROM=TO\"."                                                                    },
+  { LNK_CmdSwitch_AppContainer,       0, "APPCONTAINER",         "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYDEBUG",        "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYLINKRESOURCE", "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYMODULE",       "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "ASSEMBLYRESOURCE",     "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_Base,               0, "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", ""                                                                        },
+  { LNK_CmdSwitch_NotImplemented,     0, "CLRIMAGETYPE",         "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "CLRLOADEROPTIMIZATION","", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "CLRSUPPORTLASTERROR",  "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "CLRTHREADATTRIBUTE",   "", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_NotImplemented,     0, "CLRUNMANAGEDCODECHECK","", ""                                                                                                      }, // .NET
+  { LNK_CmdSwitch_Debug,              0, "DEBUG",                "[:{FULL|NONE}]", ""                                                                                        },
+  { LNK_CmdSwitch_Dump,               0, "DUMP",                 "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "DEF",                  ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_DefaultLib,         1, "DEFAULTLIB",           ":LIBNAME", ""                                                                                              },
+  { LNK_CmdSwitch_Delay,              0, "DELAY",                ":{NOBIND|UNLOAD}", ""                                                                                      },
+  { LNK_CmdSwitch_DelayLoad,          0, "DELAYLOAD",            ":DLL", ""                                                                                                  },
+  { LNK_CmdSwitch_NotImplemented,     0, "DELAYSIGN",            "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "DEPENDENTLOADFLAG",    "", ""                                                                                                      },
+  { LNK_CmdSwitch_Dll,                0, "DLL",                  "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "DRIVER",               "", ""                                                                                                      },
+  { LNK_CmdSwitch_DisallowLib,        1, "DISALLOWLIB",          ":LIBRARY", "",                                                                                             },
+  { LNK_CmdSwitch_EditAndContinue,    1, "EDITANDCONTINUE",      "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_DynamicBase,        0, "DYNAMICBASE",          "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_NotImplemented,     0, "EMITVOLATILEMETADATA", "", ""                                                                                                      },
+  { LNK_CmdSwitch_Entry,              1, "ENTRY",                ":FUNCTION", ""                                                                                             },
+  { LNK_CmdSwitch_Null,               0, "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
+  { LNK_CmdSwitch_Export,             1, "EXPORT",               ":SYMBOL", ""                                                                                               },
+  { LNK_CmdSwitch_NotImplemented,     0, "EXPORTADMIN",          "", ""                                                                                                      },
+  { LNK_CmdSwitch_FastFail,           0, "FASTFAIL",             "", "Not used."                                                                                             },
+  { LNK_CmdSwitch_NotImplemented,     0, "FASTGENPROFILE",       "", ""                                                                                                      },
+  { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "", ""                                                                                                      },
+  { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#", ""                                                                                                    },
+  { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_NotImplemented,     0, "FORCE",                "", ""                                                                                                      },
+  { LNK_CmdSwitch_FunctionPadMin,     0, "FUNCTIONPADMIN",      ":#", "Not Implemented"                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "GUARD",                "", ""                                                                                                      },
+  { LNK_CmdSwitch_GuardSym,           1, "GUARDSYM",             "", "",                                                                                                     },
+  { LNK_CmdSwitch_NotImplemented,     0, "GENPROFILE",           "", ""                                                                                                      },
+  { LNK_CmdSwitch_Heap,               0, "HEAP",                 "RESERVE[,COMMIT]", ""                                                                                      },
+  { LNK_CmdSwitch_HighEntropyVa,      0, "HIGHENTROPYVA",        "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_NotImplemented,     0, "IDLOUT",               "", ""                                                                                                      },
+  { LNK_CmdSwitch_Ignore,             0, "IGNORE",               ":#", ""                                                                                                    },
+  { LNK_CmdSwitch_NotImplemented,     0, "IGNOREIDL",            "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "ILK",                  "", ""                                                                                                      },
+  { LNK_CmdSwitch_ImpLib,             0, "IMPLIB",               ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_Include,            1, "INCLUDE",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Incremental,        0, "INCREMENTAL",          "[:NO]", "Incremental linking is not supported."                                                            },
+  { LNK_CmdSwitch_NotImplemented,     0, "INTEGRITYCHECK",       "", ""                                                                                                      },
+  { LNK_CmdSwitch_InferAsanLibs,      1, "INFERASANLIBS",        "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_InferAsanLibsNo,    1, "INFERASANLIBSNO",      "", "",                                                                                                     },
+  { LNK_CmdSwitch_NotImplemented,     0, "KERNEL",               "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "KEYCONTAINER",         "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "KEYFILE",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_LargeAddressAware,  0, "LARGEADDRESSAWARE",    "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_Lib,                0, "LIB",                  ""                                                                                                          },
+  { LNK_CmdSwitch_LibPath,            0, "LIBPATH",              ":DIR", ""                                                                                                  },
+  { LNK_CmdSwitch_NotImplemented,     0, "LINKERREPO",           "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "LINKERREPOTARGET",     "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "LTCG",                 "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "LTCGOUT",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Machine,            0, "MACHINE",              ":{X64|X86}", ""                                                                                            },
+  { LNK_CmdSwitch_Manifest,           0, "MANIFEST",             "[:{EMBED[,ID=#]|NO]", ""                                                                                   },
+  { LNK_CmdSwitch_ManifestDependency, 1, "MANIFESTDEPENDENCY",   ":\"manifest dependency XML string\"", ""                                                                   },
+  { LNK_CmdSwitch_ManifestFile,       0, "MANIFESTFILE",         ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_ManifestInput,      0, "MANIFESTINPUT",        ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_ManifestUac,        0, "MANIFESTUAC",          ":{NO|{'level'={'asInvoker'|'highestAvailable'|'requireAdministrator'} ['uiAccess'={'true'|'false'}]}}", "" },
+  { LNK_CmdSwitch_NotImplemented,     0, "MAP",                  "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "MAPINFO",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Merge,              1, "MERGE",                ":from=to", ""                                                                                              },
+  { LNK_CmdSwitch_NotImplemented,     0, "MIDL",                 "", ""                                                                                                      },
+  { LNK_CmdSwitch_Natvis,             0, "NATVIS",               ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_NotImplemented,     0, "NOASSEMBLY",           "", ""                                                                                                      },
+  { LNK_CmdSwitch_NoDefaultLib,       1, "NODEFAULTLIB",         ":LIBNAME", ""                                                                                              },
+  { LNK_CmdSwitch_NoDefaultLib,       0, "NOD",                  ":LIBNAME", ""                                                                                              },
+  { LNK_CmdSwitch_NotImplemented,     0, "NOENTRY",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_NoExp,              0, "NOEXP",                "", ".exp is not supported."                                                                                },
+  { LNK_CmdSwitch_NoImpLib,           0, "NOIMPLIB",             "", ""                                                                                                      },
+  { LNK_CmdSwitch_NoLogo,             0, "NOLOGO",               "", ""                                                                                                      },
+  { LNK_CmdSwitch_NxCompat,           0, "NXCOMPAT",             "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_Opt,                0, "OPT",                  "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "ORDER",                "", ""                                                                                                      },
+  { LNK_CmdSwitch_Out,                0, "OUT",                  ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_Pdb,                0, "PDB",                  ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_PdbAltPath,         0, "PDBALTPATH",           "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "PDBSTRIPPED",          "", ""                                                                                                      },
+  { LNK_CmdSwitch_PdbPageSize,        0, "PDBPAGESIZE",          ":#", "Page size must be power of two"                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "PROFILE",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Release,            1, "RELEASE",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "SAFESEH",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Section,            1, "SECTION",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "SOURCELINK",           "", ""                                                                                                      },
+  { LNK_CmdSwitch_Stack,              1, "STACK",                ":RESERVE[,COMMIT]", ""                                                                                     },
+  { LNK_CmdSwitch_NotImplemented,     0, "STUB",                 "", ""                                                                                                      },
+  { LNK_CmdSwitch_SubSystem,          1, "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", ""                                                                    },
+  { LNK_CmdSwitch_NotImplemented,     0, "SWAPRUN",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "TLBID",                "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "TLBOUT",               "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "TIME",                 "", ""                                                                                                      },
+  { LNK_CmdSwitch_TsAware,            0, "TSAWARE",              "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_ThrowingNew,        1, "THROWINGNEW",          "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "USERPROFILE",          "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "VERBOSE",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_Version,            0, "VERSION",              "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WINMD",                "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WINMDDELAYSIGN",       "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WINMDKEYCONTAINER",    "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WINMDKEYFILE",         "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WHOLEARCHIVE",         "", ""                                                                                                      },
+  { LNK_CmdSwitch_NotImplemented,     0, "WX",                   "", ""                                                                                                      },
 
   //- internal switches
-  { LNK_CmdSwitch_Rad_Age,                        "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
-  { LNK_CmdSwitch_Rad_BuildInfo,                  "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                    },
-  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                              },
-  { LNK_CmdSwitch_Rad_ChunkMap,                   "RAD_CHUNK_MAP",                      ":FILENAME", "Emit file with the output image's layout description."                         },
-  { LNK_CmdSwitch_Rad_Debug,                      "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                     },
-  { LNK_CmdSwitch_Rad_DebugAltPath,               "RAD_DEBUGALTPATH",                   "", ""                                                                                       },
-  { LNK_CmdSwitch_Rad_DebugName,                  "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                       },
-  { LNK_CmdSwitch_Rad_DelayBind,                  "RAD_DELAY_BIND",                     "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_DoMerge,                    "RAD_DO_MERGE",                       "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_EnvLib,                     "RAD_ENV_LIB",                        "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Exe,                        "RAD_EXE",                            "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Guid,                       "RAD_GUID",                           ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                },
-  { LNK_CmdSwitch_Rad_LargePages,                 "RAD_LARGE_PAGES",                    "[:NO]",     "Disabled by default on Windows."                                               },
-  { LNK_CmdSwitch_Rad_LinkVer,                    "RAD_LINK_VER",                       ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_Log,                        "RAD_LOG",                            ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
-  { LNK_CmdSwitch_Rad_MtPath,                     "RAD_MT_PATH",                        ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
-  { LNK_CmdSwitch_Rad_OsVer,                      "RAD_OS_VER",                         ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_PageSize,                   "RAD_PAGE_SIZE",                      ":#",        "Must be power of two."                                                         },
-  { LNK_CmdSwitch_Rad_PathStyle,                  "RAD_PATH_STYLE",                     ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,      "RAD_PDB_HASH_TYPE_NAME_LENGTH",      ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                             },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNames,           "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
-  { LNK_CmdSwitch_Rad_SectVirtOff,                "RAD_SECT_VIRT_OFF",                  ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
-  { LNK_CmdSwitch_Rad_SharedThreadPool,           "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
-  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                              },
-  { LNK_CmdSwitch_Rad_SuppressError,              "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                              },
-  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
-  { LNK_CmdSwitch_Rad_SymbolTableCapLib,          "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
-  { LNK_CmdSwitch_Rad_TargetOs,                   "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                       },
-  { LNK_CmdSwitch_Rad_WriteTempFiles,             "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
-  { LNK_CmdSwitch_Rad_TimeStamp,                  "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                            },
-  { LNK_CmdSwitch_Rad_Version,                    "RAD_VERSION",                        "",          "Print version and exit."                                                       },
-  { LNK_CmdSwitch_Rad_Workers,                    "RAD_WORKERS",                        ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
-  { LNK_CmdSwitch_Help, "HELP", "", "" },
-  { LNK_CmdSwitch_Help, "?",    "", "" },
+  { LNK_CmdSwitch_Rad_Age,                        0, "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
+  { LNK_CmdSwitch_Rad_BuildInfo,                  0, "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                    },
+  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                              },
+  { LNK_CmdSwitch_Rad_ChunkMap,                   0, "RAD_CHUNK_MAP",                      ":FILENAME", "Emit file with the output image's layout description."                         },
+  { LNK_CmdSwitch_Rad_Debug,                      0, "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                     },
+  { LNK_CmdSwitch_Rad_DebugAltPath,               0, "RAD_DEBUGALTPATH",                   "", ""                                                                                       },
+  { LNK_CmdSwitch_Rad_DebugName,                  0, "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                       },
+  { LNK_CmdSwitch_Rad_DelayBind,                  0, "RAD_DELAY_BIND",                     "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_DoMerge,                    0, "RAD_DO_MERGE",                       "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_EnvLib,                     0, "RAD_ENV_LIB",                        "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_Exe,                        0, "RAD_EXE",                            "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_Guid,                       0, "RAD_GUID",                           ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                },
+  { LNK_CmdSwitch_Rad_LargePages,                 0, "RAD_LARGE_PAGES",                    "[:NO]",     "Disabled by default on Windows."                                               },
+  { LNK_CmdSwitch_Rad_LinkVer,                    0, "RAD_LINK_VER",                       ":##,##", ""                                                                                 },
+  { LNK_CmdSwitch_Rad_Log,                        0, "RAD_LOG",                            ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
+  { LNK_CmdSwitch_Rad_MtPath,                     0, "RAD_MT_PATH",                        ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
+  { LNK_CmdSwitch_Rad_OsVer,                      0, "RAD_OS_VER",                         ":##,##", ""                                                                                 },
+  { LNK_CmdSwitch_Rad_PageSize,                   0, "RAD_PAGE_SIZE",                      ":#",        "Must be power of two."                                                         },
+  { LNK_CmdSwitch_Rad_PathStyle,                  0, "RAD_PATH_STYLE",                     ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,      0, "RAD_PDB_HASH_TYPE_NAME_LENGTH",      ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         0, "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                             },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNames,           0, "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
+  { LNK_CmdSwitch_Rad_SectVirtOff,                0, "RAD_SECT_VIRT_OFF",                  ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
+  { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
+  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                              },
+  { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                              },
+  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      0, "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
+  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     0, "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
+  { LNK_CmdSwitch_Rad_SymbolTableCapLib,          0, "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
+  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         0, "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
+  { LNK_CmdSwitch_Rad_TargetOs,                   0, "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                       },
+  { LNK_CmdSwitch_Rad_WriteTempFiles,             0, "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
+  { LNK_CmdSwitch_Rad_TimeStamp,                  0, "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                            },
+  { LNK_CmdSwitch_Rad_Version,                    0, "RAD_VERSION",                        "",          "Print version and exit."                                                       },
+  { LNK_CmdSwitch_Rad_Workers,                    0, "RAD_WORKERS",                        ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
+
+  { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
+  { LNK_CmdSwitch_Help, 0, "?",    "", "" },
 };
 
 global read_only struct
@@ -213,15 +208,33 @@ lnk_cmd_switch_type_from_string(String8 name)
   return LNK_CmdSwitch_Null;
 }
 
-internal String8
-lnk_string_from_cmd_switch_type(LNK_CmdSwitchType type)
+internal LNK_CmdSwitch *
+lnk_cmd_switch_from_string(String8 name)
+{
+  for (U64 i = 0; i < ArrayCount(g_cmd_switch_map); i += 1) {
+    if (str8_match_cstr(g_cmd_switch_map[i].name, name, StringMatchFlag_CaseInsensitive)) {
+      return &g_cmd_switch_map[i];
+    }
+  }
+  return 0;
+}
+
+internal LNK_CmdSwitch *
+lnk_cmd_switch_from_type(LNK_CmdSwitchType type)
 {
   for (U64 cmd_idx = 0; cmd_idx < ArrayCount(g_cmd_switch_map); cmd_idx += 1) {
     if (g_cmd_switch_map[cmd_idx].type == type) {
-      return str8_cstring(g_cmd_switch_map[cmd_idx].name);
+      return &g_cmd_switch_map[cmd_idx];
     }
   }
-  return str8_zero();
+  return 0;
+}
+
+internal String8
+lnk_string_from_cmd_switch_type(LNK_CmdSwitchType type)
+{
+  LNK_CmdSwitch *cmd_switch = lnk_cmd_switch_from_type(type);
+  return cmd_switch ? str8_cstring(cmd_switch->name) : str8_zero();
 }
 
 internal LNK_InputType
@@ -784,6 +797,12 @@ lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameLis
   return 0;
 }
 
+internal void
+lnk_export_parse_list_concat_in_place(LNK_ExportParseList *list, LNK_ExportParseList *to_concat)
+{
+  SLLConcatInPlace(list, to_concat);
+}
+
 internal LNK_ExportParse *
 lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List value_list, String8 obj_path, String8 lib_path)
 {
@@ -964,7 +983,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     lnk_error_with_loc(LNK_Warning_UnknownSwitch, obj_path, lib_path, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
   } break;
 
-  default: { InvalidPath; } break;
+  default: break;
 
   case LNK_CmdSwitch_NotImplemented: {
     String8 value = str8_list_join(scratch.arena, &value_strings, &(StringJoin){.sep=str8_lit_comp(",")});
@@ -2095,6 +2114,13 @@ lnk_build_config(Arena *arena, int argc, char **argv)
 
   // init config
   LNK_Config *config = lnk_config_from_cmd_line(arena, raw_cmd_line);
+
+#if PROFILE_TELEMETRY
+  {
+    String8 cmdl = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
+    tmMessage(0, TMMF_ICON_NOTE, "Command Line: %.*s", str8_varg(cmdl));
+  }
+#endif
 
   scratch_end(scratch);
   return config;

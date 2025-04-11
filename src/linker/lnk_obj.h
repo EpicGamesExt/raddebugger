@@ -62,10 +62,6 @@ typedef struct LNK_Obj
   LNK_RelocList      *sect_reloc_list_arr;
   LNK_ChunkPtr       *chunk_arr;
   LNK_SymbolList      symbol_list;
-  LNK_DirectiveInfo   directive_info;
-  LNK_ExportParseList export_parse;
-  String8List         include_symbol_list;
-  LNK_AltNameList     alt_name_list;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode

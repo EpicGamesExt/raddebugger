@@ -2891,34 +2891,6 @@ lnk_init_section_table(LNK_SymbolTable *symtab, U64 section_virt_off, U64 sect_a
   return sectab;
 }
 
-internal LNK_MergeDirectiveList
-lnk_init_merge_directive_list(Arena *arena, LNK_ObjList obj_list)
-{
-  ProfBeginFunction();
-  
-  LNK_MergeDirectiveList result = {0};
-  
-  lnk_merge_directive_list_push(arena, &result, (LNK_MergeDirective){ str8_lit_comp(".xdata") , str8_lit_comp(".rdata") });
-  //lnk_merge_directive_list_push(arena, &result, (LNK_MergeDirective){ str8_lit_comp(".tls"),    str8_lit_comp(".data") });
-  
-  // collect merge directives from objs
-  for (LNK_ObjNode *obj_node = obj_list.first; obj_node != 0; obj_node = obj_node->next) {
-    LNK_Obj *obj = &obj_node->data;
-    for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Merge].first; dir != 0; dir = dir->next) {
-      for (String8Node *value_node = dir->value_list.first; value_node != 0; value_node = value_node->next) {
-        LNK_MergeDirective merge_dir;
-        if (lnk_parse_merge_directive(value_node->string, &merge_dir)) { lnk_merge_directive_list_push(arena, &result, merge_dir);
-        } else {
-          lnk_error_obj(LNK_Warning_IllData, obj, "can't parse merge directive \"%S\"", value_node->string);
-        }
-      }
-    }
-  }
-  
-  ProfEnd();
-  return result;
-}
-
 internal void
 lnk_discard_meta_data_sections(LNK_SectionTable *sectab)
 {
@@ -3391,29 +3363,25 @@ lnk_run(int argc, char **argv)
   ProfBeginFunction();
   
   Temp scratch = scratch_begin(0, 0);
+
+  lnk_init_error_handler();
   
-  LNK_Config *config = lnk_build_config(scratch.arena, argc, argv);
-  
+  LNK_Config *config   = lnk_build_config(scratch.arena, argc, argv);
   TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
   
-#if PROFILE_TELEMETRY
-  {
-    String8 cmdl = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    tmMessage(0, TMMF_ICON_NOTE, "Command Line: %.*s", str8_varg(cmdl));
-  }
-#endif
-  
   // inputs
-  String8List         include_symbol_list               = config->include_symbol_list;
-  String8List         input_disallow_lib_list           = config->disallow_lib_list;
-  String8List         input_manifest_path_list          = str8_list_copy(tp_arena->v[0], &config->input_list[LNK_Input_Manifest]);
-  String8List         manifest_dep_list                 = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
-  LNK_AltNameList     alt_name_list                     = config->alt_name_list;
-  LNK_InputLibList    input_libs[LNK_InputSource_Count] = {0};
-  LNK_InputObjList    input_obj_list                    = {0};
-  LNK_InputImportList input_import_list                 = {0};
-  LNK_SymbolList      input_weak_list                   = {0};
+  String8List            include_symbol_list               = config->include_symbol_list;
+  String8List            input_disallow_lib_list           = config->disallow_lib_list;
+  String8List            input_manifest_path_list          = str8_list_copy(tp_arena->v[0], &config->input_list[LNK_Input_Manifest]);
+  String8List            manifest_dep_list                 = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
+  LNK_ExportParseList    export_symbol_list                = config->export_symbol_list;
+  LNK_MergeDirectiveList merge_list                        = config->merge_list;
+  LNK_AltNameList        alt_name_list                     = config->alt_name_list;
+  LNK_InputLibList       input_libs[LNK_InputSource_Count] = {0};
+  LNK_InputObjList       input_obj_list                    = {0};
+  LNK_InputImportList    input_import_list                 = {0};
+  LNK_SymbolList         input_weak_list                   = {0};
   
   // :null_obj
   lnk_input_obj_list_push(scratch.arena, &input_obj_list);
@@ -3427,39 +3395,39 @@ lnk_run(int argc, char **argv)
   input_libs[LNK_InputSource_Default] = config->input_default_lib_list;
   
   // state
-  LNK_SymbolTable     *symtab                           = lnk_symbol_table_init(tp_arena);
-  LNK_SectionTable    *sectab                           = lnk_init_section_table(symtab, config->section_virt_off, config->sect_align, config->file_align);
-  LNK_ImportTable     *imptab_static                    = 0;
-  LNK_ImportTable     *imptab_delayed                   = 0;
-  LNK_ExportTable     *exptab                           = lnk_export_table_alloc();
-  Arena               *ht_arena                         = arena_alloc();
-  HashTable           *disallow_lib_ht                  = hash_table_init(scratch.arena, 0x100);
-  HashTable           *delay_load_dll_ht                = hash_table_init(scratch.arena, 0x100);
-  HashTable           *loaded_lib_ht                    = hash_table_init(scratch.arena, 0x100);
-  HashTable           *missing_lib_ht                   = hash_table_init(scratch.arena, 0x100);
-  HashTable           *loaded_obj_ht                    = hash_table_init(scratch.arena, 0x4000);
-  LNK_SymbolList       lookup_undef_list                = {0};
-  LNK_SymbolList       lookup_weak_list                 = {0};
-  LNK_SymbolList       unresolved_undef_list            = {0};
-  LNK_SymbolList       unresolved_weak_list             = {0};
-  U64                  entry_search_attempts            = 0;
-  B32                  build_debug_info                 = lnk_do_debug_info(config);
-  B32                  build_linker_obj                 = build_debug_info;
-  B32                  build_debug_directory            = build_debug_info;
-  B32                  build_res_obj                    = 1;
-  B32                  discard_meta_data_sections       = 1;
-  B32                  merge_sections                   = !!(config->flags & LNK_ConfigFlag_Merge);
-  B32                  build_cf_guards                  = 0; // (config->flags != LNK_Guard_NONE);
-  B32                  build_export_table               = 1;
-  B32                  build_base_relocs                = !(config->flags & LNK_ConfigFlag_Fixed);
-  B32                  report_unresolved_symbols        = 1;
-  B32                  check_unused_delay_loads         = !!(config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll);
-  B32                  build_imp_lib                    = config->build_imp_lib;
-  B32                  build_rad_chunk_map              = (config->rad_chunk_map == LNK_SwitchState_Yes);
-  LNK_ObjList          obj_list                         = {0};
-  LNK_LibList          lib_index[LNK_InputSource_Count] = {0};
-  String8              image_data                       = str8_zero();
-  OS_Handle            image_write_thread               = {0};
+  LNK_SymbolTable  *symtab                           = lnk_symbol_table_init(tp_arena);
+  LNK_SectionTable *sectab                           = lnk_init_section_table(symtab, config->section_virt_off, config->sect_align, config->file_align);
+  LNK_ImportTable  *imptab_static                    = 0;
+  LNK_ImportTable  *imptab_delayed                   = 0;
+  LNK_ExportTable  *exptab                           = lnk_export_table_alloc();
+  Arena            *ht_arena                         = arena_alloc();
+  HashTable        *disallow_lib_ht                  = hash_table_init(scratch.arena, 0x100);
+  HashTable        *delay_load_dll_ht                = hash_table_init(scratch.arena, 0x100);
+  HashTable        *loaded_lib_ht                    = hash_table_init(scratch.arena, 0x100);
+  HashTable        *missing_lib_ht                   = hash_table_init(scratch.arena, 0x100);
+  HashTable        *loaded_obj_ht                    = hash_table_init(scratch.arena, 0x4000);
+  LNK_SymbolList    lookup_undef_list                = {0};
+  LNK_SymbolList    lookup_weak_list                 = {0};
+  LNK_SymbolList    unresolved_undef_list            = {0};
+  LNK_SymbolList    unresolved_weak_list             = {0};
+  U64               entry_search_attempts            = 0;
+  B32               build_debug_info                 = lnk_do_debug_info(config);
+  B32               build_linker_obj                 = build_debug_info;
+  B32               build_debug_directory            = build_debug_info;
+  B32               build_res_obj                    = 1;
+  B32               discard_meta_data_sections       = 1;
+  B32               merge_sections                   = !!(config->flags & LNK_ConfigFlag_Merge);
+  B32               build_cf_guards                  = 0; // (config->flags != LNK_Guard_NONE);
+  B32               build_export_table               = 1;
+  B32               build_base_relocs                = !(config->flags & LNK_ConfigFlag_Fixed);
+  B32               report_unresolved_symbols        = 1;
+  B32               check_unused_delay_loads         = !!(config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll);
+  B32               build_imp_lib                    = config->build_imp_lib;
+  B32               build_rad_chunk_map              = (config->rad_chunk_map == LNK_SwitchState_Yes);
+  LNK_ObjList       obj_list                         = {0};
+  LNK_LibList       lib_index[LNK_InputSource_Count] = {0};
+  String8           image_data                       = str8_zero();
+  OS_Handle         image_write_thread               = {0};
   
   // init state machine
   struct StateList state_list = {0};
@@ -3478,6 +3446,9 @@ lnk_run(int argc, char **argv)
   if (config->guard_flags != LNK_Guard_None) {
     state_list_push(scratch.arena, state_list, State_PushLoadConfigUndefSymbol);
   }
+
+  // default section merges
+  lnk_merge_directive_list_push(scratch.arena, &merge_list, (LNK_MergeDirective){ str8_lit_comp(".xdata") , str8_lit_comp(".rdata") });
   
   ProfBegin("Image"); // :EndImage
   ProfBegin("Build"); // :EndBuild
@@ -3761,7 +3732,20 @@ lnk_run(int argc, char **argv)
         }
         ProfEnd();
         
-        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, sectab, config->function_pad_min, config->machine, unique_obj_input_list.count, input_obj_arr);
+        if (lnk_get_log_status(LNK_Log_InputObj)) {
+          U64 input_size = 0;
+          for (U64 i = 0; i < unique_obj_input_list.count; ++i) { input_size += input_obj_arr[i]->data.size; }
+          lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
+        }
+        
+        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp,
+                                                                   tp_arena,
+                                                                   &obj_list,
+                                                                   sectab,
+                                                                   config->function_pad_min,
+                                                                   config->machine,
+                                                                   unique_obj_input_list.count,
+                                                                   input_obj_arr);
 
         //
         // if the machine was omitted on the command line, derive machine from obj
@@ -3774,40 +3758,113 @@ lnk_run(int argc, char **argv)
             }
           }
         }
-        
-        ProfBegin("Collect Directives");
-        for (U64 i = 0; i < obj_node_arr.count; ++i) {
-          LNK_Obj *obj = &obj_node_arr.v[i].data;
 
-          str8_list_concat_in_place(&include_symbol_list, &obj->include_symbol_list);
+        ProfBegin("Handle Directives");
+        for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; obj_idx += 1) {
+          LNK_Obj *obj = &obj_node_arr.v[obj_idx].data;
 
-          lnk_alt_name_list_concat_in_place(&alt_name_list, &obj->alt_name_list);
+          LNK_DirectiveInfo directive_info = {0};
+          {
+            COFF_FileHeaderInfo coff_info          = coff_file_header_info_from_data(obj->data);
+            COFF_SectionHeader *coff_section_table = (COFF_SectionHeader *)str8_substr(obj->data, coff_info.section_table_range).str;
 
-          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_DisallowLib].first; dir != 0; dir = dir->next) {
+            String8List drectve_data = {0};
+            for (U64 sect_idx = 0; sect_idx < coff_info.section_count_no_null; sect_idx += 1) {
+              COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
+              if (sect_header->flags & COFF_SectionFlag_LnkInfo) {
+                String8 sect_name = str8_cstring_capped(sect_header->name, sect_header->name + sizeof(sect_header->name));
+                if (str8_match(sect_name, str8_lit(".drectve"), 0)) {
+                  if (sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+                    lnk_error_obj(LNK_Error_IllData, obj, ".drectve section header has flag COFF_SectionFlag_CntUninitializedData");
+                    break;
+                  }
+                  if (sect_header->fsize < 3) {
+                    lnk_error_obj(LNK_Error_IllData, obj, "not enough bytes to parse .drectve");
+                    break;
+                  }
+                  if (sect_header->reloc_count > 0) {
+                    lnk_error_obj(LNK_Error_IllData, obj, ".drectve must not have relocations");
+                    break;
+                  }
+                  Rng1U64 sect_range = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+                  str8_list_push(scratch.arena, &drectve_data, str8_substr(obj->data, sect_range));
+                }
+              }
+            }
+
+            for (String8Node *drectve_n = drectve_data.first; drectve_n != 0; drectve_n = drectve_n->next) {
+              lnk_parse_msvc_linker_directive(scratch.arena, obj, &directive_info, drectve_n->string);
+            }
+          }
+
+          // /EXPORT
+          {
+            LNK_ExportParseList obj_exports = {0};
+            for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
+              lnk_parse_export_directive(scratch.arena, &obj_exports, dir->value_list, obj->path, obj->lib_path);
+            }
+            for (LNK_ExportParse *exp = obj_exports.first; exp != 0; exp = exp->next) {
+              str8_list_push(scratch.arena, &include_symbol_list, exp->name);
+            }
+            lnk_export_parse_list_concat_in_place(&export_symbol_list, &obj_exports);
+          }
+
+          // /INCLUDESYMBOL
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Include].first; dir != 0; dir = dir->next) {
+            str8_list_concat_in_place(&include_symbol_list, &dir->value_list);
+          }
+
+          // /MERGE
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Merge].first; dir != 0; dir = dir->next) {
+            for (String8Node *value_n = dir->value_list.first; value_n != 0; value_n = value_n->next) {
+              LNK_MergeDirective merge_dir;
+              if (lnk_parse_merge_directive(value_n->string, &merge_dir)) {
+                lnk_merge_directive_list_push(scratch.arena, &merge_list, merge_dir);
+              } else {
+                lnk_error_obj(LNK_Warning_IllData, obj, "can't parse merge directive \"%S\"", value_n->string);
+              }
+            }
+          }
+
+          // /MANIFESTDEPENDENCY
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_ManifestDependency].first; dir != 0; dir = dir->next) {
+            str8_list_concat_in_place(&manifest_dep_list, &dir->value_list);
+          }
+
+          // /DISALLOWLIB
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_DisallowLib].first; dir != 0; dir = dir->next) {
             str8_list_concat_in_place(&input_disallow_lib_list, &dir->value_list);
           }
 
-          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Entry].first; dir != 0; dir = dir->next) {
+          // /DEFAULTLIB
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_DefaultLib].first; dir != 0; dir = dir->next) {
+            str8_list_concat_in_place(&input_libs[LNK_InputSource_Obj], &dir->value_list);
+          }
+
+          // /ALTERNATENAME
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
+            String8 *invalid_string = lnk_parse_alt_name_directive_list(scratch.arena, dir->value_list, &alt_name_list);
+            if (invalid_string) {
+              lnk_error_obj(LNK_Error_Cmdl, obj, "invalid syntax \"%S\", expected format \"FROM=TO\"", *invalid_string);
+            }
+          }
+
+          // /ENTRY
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Entry].first; dir != 0; dir = dir->next) {
             lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
           }
 
-          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_SubSystem].first; dir != 0; dir = dir->next) {
+          // /SUBSYSTEM
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_SubSystem].first; dir != 0; dir = dir->next) {
             lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
           }
 
-          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Stack].first; dir != 0; dir = dir->next) {
+          // /STACK
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Stack].first; dir != 0; dir = dir->next) {
             lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
           }
         }
         ProfEnd();
-
-        // collect manifest dependencies
-        String8List obj_dep_list = lnk_collect_manifest_dependency_list(tp, tp_arena, obj_node_arr);
-        str8_list_concat_in_place(&manifest_dep_list, &obj_dep_list);
-        
-        // collect libs for input
-        LNK_InputLibList lib_list = lnk_collect_default_lib_obj_arr(tp, tp_arena, obj_node_arr); // TODO: put these on temp arena
-        str8_list_concat_in_place(&input_libs[LNK_InputSource_Obj], &lib_list);
 
         // update symbol table
         lnk_push_defined_symbols(tp, symtab, obj_node_arr);
@@ -3822,14 +3879,6 @@ lnk_run(int argc, char **argv)
         
         // reset input objs
         MemoryZeroStruct(&input_obj_list);
-        
-        if (lnk_get_log_status(LNK_Log_InputObj)) {
-          U64 input_size = 0;
-          for (U64 i = 0; i < obj_node_arr.count; ++i) {
-            input_size += obj_node_arr.v[i].data.data.size;
-          }
-          lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
-        }
         
         ProfEnd();
       } break;
@@ -4112,13 +4161,11 @@ lnk_run(int argc, char **argv)
       case State_BuildExportTable: {
         ProfBegin("Build Export Table");
 
-        // push exports from command line
-        for (LNK_ExportParse *exp_parse = config->export_symbol_list.first; exp_parse != 0; exp_parse = exp_parse->next) {
+        ProfBeginV("Push Exports [Count %u]", export_symbol_list.count);
+        for (LNK_ExportParse *exp_parse = export_symbol_list.first; exp_parse != 0; exp_parse = exp_parse->next) {
           lnk_export_table_push_export(exptab, symtab, exp_parse);
         }
-
-        // push exports from obj directives
-        lnk_collect_exports_from_obj_directives(exptab, obj_list, symtab);
+        ProfEnd();
 
         // build export table section
         lnk_build_edata(exptab, sectab, symtab, config->image_name, config->machine);
@@ -4127,7 +4174,6 @@ lnk_run(int argc, char **argv)
       } break;
       case State_MergeSections: {
         ProfBegin("Merge Sections");
-        LNK_MergeDirectiveList merge_list = lnk_init_merge_directive_list(scratch.arena, obj_list);
         lnk_section_table_merge(sectab, merge_list);
         ProfEnd();
       } break;
@@ -4564,7 +4610,6 @@ lnk_run(int argc, char **argv)
 internal void
 entry_point(CmdLine *cmdline)
 {
-  lnk_init_error_handler();
   lnk_run(cmdline->argc, cmdline->argv);
 }
 
