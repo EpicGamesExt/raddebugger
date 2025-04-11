@@ -1592,6 +1592,13 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             e_expr_push_child(call, e_expr_ref(arena, arg));
           }
           result = e_irtree_and_type_from_expr(arena, call);
+          
+          // rjf: is "raw"? -> strip all lens types from result; disallow auto-hooks
+          if(str8_match(callee->string, str8_lit("raw"), 0))
+          {
+            result.type_key = e_type_unwrap(result.type_key);
+            allow_autohooks = 0;
+          }
         }
         
         // rjf: calling a lens? -> generate IR for the first argument; wrap the type in
@@ -1620,16 +1627,27 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
           }
           
-          // rjf: patch resultant type with a lens w/ args, pointing to the original type
-          result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
-                                            .flags      = lhs_type->flags,
-                                            .count      = arg_count,
-                                            .args       = args,
-                                            .direct_key = result.type_key,
-                                            .name       = lhs_type->name,
-                                            .irext      = lhs_type->irext,
-                                            .access     = lhs_type->access,
-                                            .expand     = lhs_type->expand);
+          // rjf: is "raw"? -> strip all lens types from result; disallow auto-hooks
+          if(str8_match(lhs_type->name, str8_lit("raw"), 0))
+          {
+            result = e_irtree_and_type_from_expr(arena, lhs->next);
+            result.type_key = e_type_unwrap(result.type_key);
+            allow_autohooks = 0;
+          }
+          
+          // rjf: is non-raw -> patch resultant type with a lens w/ args, pointing to the original type
+          else
+          {
+            result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
+                                              .flags      = lhs_type->flags,
+                                              .count      = arg_count,
+                                              .args       = args,
+                                              .direct_key = result.type_key,
+                                              .name       = lhs_type->name,
+                                              .irext      = lhs_type->irext,
+                                              .access     = lhs_type->access,
+                                              .expand     = lhs_type->expand);
+          }
           
           scratch_end(scratch);
         }
