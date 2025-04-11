@@ -92,42 +92,17 @@ lnk_input_obj_list_from_string_list(Arena *arena, String8List list)
 ////////////////////////////////
 
 internal void
-lnk_parse_msvc_linker_directive(Arena *arena, String8 obj_path, String8 lib_path, LNK_DirectiveInfo *directive_info, String8 buffer)
+lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *directive_info, String8 buffer)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  local_persist B32 init_table = 1;
-  local_persist B8  is_legal[LNK_CmdSwitch_Count];
-  if (init_table) {
-    init_table = 0;
-    is_legal[LNK_CmdSwitch_AlternateName]      = 1;
-    is_legal[LNK_CmdSwitch_DefaultLib]         = 1;
-    is_legal[LNK_CmdSwitch_DisallowLib]        = 1;
-    is_legal[LNK_CmdSwitch_EditAndContinue]    = 1;
-    is_legal[LNK_CmdSwitch_Entry]              = 1;
-    is_legal[LNK_CmdSwitch_Export]             = 1;
-    is_legal[LNK_CmdSwitch_FailIfMismatch]     = 1;
-    is_legal[LNK_CmdSwitch_GuardSym]           = 1;
-    is_legal[LNK_CmdSwitch_Include]            = 1;
-    is_legal[LNK_CmdSwitch_InferAsanLibs]      = 1;
-    is_legal[LNK_CmdSwitch_InferAsanLibsNo]    = 1;
-    is_legal[LNK_CmdSwitch_ManifestDependency] = 1;
-    is_legal[LNK_CmdSwitch_Merge]              = 1;
-    is_legal[LNK_CmdSwitch_NoDefaultLib]       = 1;
-    is_legal[LNK_CmdSwitch_Release]            = 1;
-    is_legal[LNK_CmdSwitch_Section]            = 1;
-    is_legal[LNK_CmdSwitch_Stack]              = 1;
-    is_legal[LNK_CmdSwitch_SubSystem]          = 1;
-    is_legal[LNK_CmdSwitch_ThrowingNew]        = 1;
-  }
-  
   String8 to_parse;
   {
     local_persist const U8 bom_sig[]   = { 0xEF, 0xBB, 0xBF };
     local_persist const U8 ascii_sig[] = { 0x20, 0x20, 0x20 };
     if (MemoryMatch(buffer.str, &bom_sig[0], sizeof(bom_sig))) {
       to_parse = str8_zero();
-      lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "TODO: support for BOM encoding");
+      lnk_error_obj(LNK_Error_IllData, obj, "TODO: support for BOM encoding");
     } else if (MemoryMatch(buffer.str, &ascii_sig[0], sizeof(ascii_sig))) {
       to_parse = str8_skip(buffer, sizeof(ascii_sig));
     } else {
@@ -139,23 +114,23 @@ lnk_parse_msvc_linker_directive(Arena *arena, String8 obj_path, String8 lib_path
   LNK_CmdLine cmd_line = lnk_cmd_line_parse_windows_rules(scratch.arena, arg_list);
 
   for (LNK_CmdOption *opt = cmd_line.first_option; opt != 0; opt = opt->next) {
-    LNK_CmdSwitchType type = lnk_cmd_switch_type_from_string(opt->string);
+    LNK_CmdSwitch *cmd_switch = lnk_cmd_switch_from_string(opt->string);
 
-    if (type == LNK_CmdSwitch_Null) {
-      lnk_error_with_loc(LNK_Warning_UnknownDirective, obj_path, lib_path, "unknown directive \"%S\"", opt->string);
+    if (cmd_switch == 0) {
+      lnk_error_obj(LNK_Warning_UnknownDirective, obj, "unknown directive \"%S\"", opt->string);
       continue;
     }
-    if (!is_legal[type]) {
-      lnk_error_with_loc(LNK_Warning_IllegalDirective, obj_path, lib_path, "illegal directive \"%S\"", opt->string);
+    if (!cmd_switch->is_legal_directive) {
+      lnk_error_obj(LNK_Warning_IllegalDirective, obj, "illegal directive \"%S\"", opt->string);
       continue;
     }
 
     LNK_Directive *directive = push_array_no_zero(arena, LNK_Directive, 1);
     directive->next          = 0;
-    directive->id            = push_str8_copy(arena, opt->string);
+    directive->id            = str8_cstring(cmd_switch->name);
     directive->value_list    = str8_list_copy(arena, &opt->value_strings);
 
-    LNK_DirectiveList *directive_list = &directive_info->v[type];
+    LNK_DirectiveList *directive_list = &directive_info->v[cmd_switch->type];
     SLLQueuePush(directive_list->first, directive_list->last, directive);
     ++directive_list->count;
   }
@@ -286,74 +261,6 @@ lnk_run_symbol_collector(TP_Context *tp, TP_Arena *arena, LNK_ObjNodeArray arr, 
   return list;
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_default_lib_collector)
-{
-  LNK_DefaultLibCollector *task   = raw_task;
-  Rng1U64                  range  = task->range_arr[task_id];
-  String8List             *result = &task->out_arr[task_id];
-  for (U64 obj_idx = range.min; obj_idx < range.max; obj_idx += 1) {
-    LNK_Obj *obj = &task->in_arr.v[obj_idx].data;
-    for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_DefaultLib].first; dir != 0; dir = dir->next) {
-      str8_list_concat_in_place(result, &dir->value_list);
-    }
-  }
-}
-
-internal LNK_InputLibList
-lnk_collect_default_lib_obj_arr(TP_Context *tp, TP_Arena *arena, LNK_ObjNodeArray arr)
-{
-  Temp scratch = scratch_begin(0,0);
-
-  LNK_DefaultLibCollector task_data;
-  task_data.range_arr = tp_divide_work(scratch.arena, arr.count, tp->worker_count);
-  task_data.in_arr    = arr;
-  task_data.out_arr   = push_array(scratch.arena, LNK_InputLibList, tp->worker_count);
-  tp_for_parallel(tp, arena, tp->worker_count, lnk_default_lib_collector, &task_data);
-
-  String8List result = str8_list_arr_concat(task_data.out_arr, tp->worker_count);
-
-  scratch_end(scratch);
-  return result;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_manifest_dependency_collector)
-{
-  LNK_ManifestDependencyCollector *task  = raw_task;
-  Rng1U64                          range = task->range_arr[task_id];
-  String8List                     *list  = &task->out_arr[task_id];
-
-  LNK_ObjNode *obj_ptr = &task->in_arr[range.min];
-  LNK_ObjNode *obj_opl = &task->in_arr[range.max];
-
-  for (; obj_ptr < obj_opl; obj_ptr += 1) {
-    LNK_Obj           *obj  = &obj_ptr->data;
-    LNK_DirectiveList *dirs = &obj->directive_info.v[LNK_CmdSwitch_ManifestDependency];
-    for (LNK_Directive *dir = dirs->first; dir != 0; dir = dir->next) {
-      String8List dep = str8_list_copy(arena, &dir->value_list);
-      str8_list_concat_in_place(list, &dep);
-    }
-  }
-}
-
-internal String8List
-lnk_collect_manifest_dependency_list(TP_Context *tp, TP_Arena *arena, LNK_ObjNodeArray obj_node_arr)
-{
-  Temp scratch = scratch_begin(arena->v, arena->count);
-
-  LNK_ManifestDependencyCollector task_data = {0};
-  task_data.in_arr                          = obj_node_arr.v;
-  task_data.out_arr                         = push_array(scratch.arena, String8List, tp->worker_count);
-  task_data.range_arr                       = tp_divide_work(scratch.arena, obj_node_arr.count, tp->worker_count);
-  tp_for_parallel(tp, arena, tp->worker_count, lnk_manifest_dependency_collector, &task_data);
-
-  String8List result = str8_list_arr_concat(task_data.out_arr, tp->worker_count);
-
-  scratch_end(scratch);
-  return result;
-}
-
 internal void
 lnk_sect_defn_list_push_node(LNK_SectDefnList *list, LNK_SectDefn *node)
 {
@@ -437,7 +344,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read string table");
   }
 
-  U64          chunk_count    = coff_info.section_count_no_null + /* :common_block */ 1;
+  U64           chunk_count   = coff_info.section_count_no_null + /* :common_block */ 1;
   String8      *sect_name_arr = push_array_no_zero(arena, String8,      chunk_count);
   String8      *sect_sort_arr = push_array_no_zero(arena, String8,      chunk_count);
   LNK_Chunk    *chunk_arr     = push_array(arena,         LNK_Chunk,    chunk_count);
@@ -543,68 +450,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   LNK_SymbolList   symbol_list       = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList   *reloc_list_arr    = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_section_table, chunk_ptr_arr, symbol_arr);
 
-  //
-  // parse directives
-  //
-
-  String8List drectve_data = {0};
-  for (U64 sect_idx = 0; sect_idx < coff_info.section_count_no_null; sect_idx += 1) {
-    COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
-
-    if (sect_header->flags & COFF_SectionFlag_LnkInfo) {
-      if (str8_match(sect_name_arr[sect_idx], str8_lit(".drectve"), 0)) {
-        if (sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, ".drectve section header has flag COFF_SectionFlag_CntUninitializedData");
-          break;
-        }
-        if (sect_header->fsize < 3) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "not enough bytes to parse .drectve");
-          break;
-        }
-        if (sect_header->reloc_count > 0) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, ".drectve must not have relocations");
-          break;
-        }
-    
-        Rng1U64 sect_range = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
-        str8_list_push(scratch.arena, &drectve_data, str8_substr(input->data, sect_range));
-      }
-    }
-  }
-
-  LNK_DirectiveInfo directive_info = {0};
-  for (String8Node *drectve_n = drectve_data.first; drectve_n != 0; drectve_n = drectve_n->next) {
-    lnk_parse_msvc_linker_directive(arena, input->path, input->lib_path, &directive_info, drectve_n->string);
-  }
-
-  // parse exports
-  LNK_ExportParseList export_parse = {0};
-  for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
-    lnk_parse_export_directive(arena, &export_parse, dir->value_list, input->path, input->lib_path);
-  }
-
-  // push /export symbols
-  for (LNK_ExportParse *exp = export_parse.first; exp != 0; exp = exp->next) {
-    LNK_Symbol *symbol = lnk_make_undefined_symbol(arena, exp->name, LNK_SymbolScopeFlag_Main);
-    lnk_symbol_list_push(arena, &symbol_list, symbol);
-  }
-
-  // push /include symbols 
-  String8List include_symbol_list = {0};
-  for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Include].first; dir != 0; dir = dir->next) {
-    str8_list_concat_in_place(&include_symbol_list, &dir->value_list);
-  }
-
-  // parse /alternatename
-  LNK_AltNameList alt_name_list = {0};
-  for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
-    String8 *invalid_string = lnk_parse_alt_name_directive_list(arena, dir->value_list, &alt_name_list);
-    if (invalid_string != 0) {
-      lnk_error_with_loc(LNK_Error_Cmdl, input->path, input->lib_path, "invalid syntax \"%S\", expected format \"FROM=TO\"", *invalid_string);
-    }
-  }
-
-
   // fill out obj
   obj->data                = input->data;
   obj->path                = push_str8_copy(arena, input->path);
@@ -618,10 +463,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->chunk_arr           = chunk_ptr_arr;
   obj->symbol_list         = symbol_list;
   obj->sect_reloc_list_arr = reloc_list_arr;
-  obj->directive_info      = directive_info;
-  obj->export_parse        = export_parse;
-  obj->include_symbol_list = include_symbol_list;
-  obj->alt_name_list       = alt_name_list;
 
   scratch_end(scratch);
 }

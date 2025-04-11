@@ -287,16 +287,4 @@ exit:;
   ProfEnd();
 }
 
-internal void
-lnk_collect_exports_from_obj_directives(LNK_ExportTable *exptab, LNK_ObjList obj_list, LNK_SymbolTable *symtab)
-{
-  ProfBeginFunction();
-  for (LNK_ObjNode *obj_node = obj_list.first; obj_node != 0; obj_node = obj_node->next) {
-    for (LNK_ExportParse *exp_parse = obj_node->data.export_parse.first; exp_parse != 0; exp_parse = exp_parse->next) {
-      lnk_export_table_push_export(exptab, symtab, exp_parse);
-    }
-  }
-  ProfEnd();
-}
-
 
