@@ -106,7 +106,7 @@ void optimized_struct_parameters_eval_tests(void);
 #include <vector>
 #include <stdint.h>
 
-raddbg_auto_view_rule(std::vector<?>, slice($._Mypair._Myval2));
+raddbg_auto_view_rule(std::vector<?>, slice(_Mypair._Myval2));
 
 struct Basics{
   char a;
@@ -1624,7 +1624,7 @@ struct Bitmap
   int width;
   int height;
 };
-raddbg_auto_view_rule(Bitmap, lens:bitmap($.base, $.width, $.height));
+raddbg_auto_view_rule(Bitmap, lens:bitmap(base, width, height));
 
 static unsigned int
 mule_bswap_u32(unsigned int x)
