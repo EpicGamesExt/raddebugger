@@ -54,8 +54,7 @@ struct RD_CellParams
   B32 *toggled_out;
   
   //- rjf: slider info r/w info
-  Rng1U64 slider_value_range;
-  U64 *slider_value_out;
+  F32 *slider_value_out;
   
   //- rjf: text editing r/w info
   TxtPt *cursor;

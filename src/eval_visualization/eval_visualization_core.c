@@ -1597,42 +1597,52 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           new_task.eval = eval;
           new_task.redirect_to_sets_and_structs = 1;
         }
-        else switch(task_idx)
+        else
         {
-          default:{}break;
-          
-          // rjf: step 0 -> generate lens description, then descend to same evaluation w/ direct type
-          case 0:
+          need_new_task = 1;
+          need_pop = 1;
+          new_task.params = lens_params;
+          new_task.eval = eval;
+          new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+#if 0 // NOTE(rjf): will explicitly visualize lenses in value strings. does not seem useful for now?
+          switch(task_idx)
           {
-            Temp scratch = scratch_begin(&arena, 1);
-            String8List strings = {0};
+            default:{}break;
+            
+            // rjf: step 0 -> generate lens description, then descend to same evaluation w/ direct type
+            case 0:
             {
-              str8_list_pushf(scratch.arena, &strings, "%S(", type->name);
-              for EachIndex(idx, type->count)
+              Temp scratch = scratch_begin(&arena, 1);
+              String8List strings = {0};
               {
-                String8 string = e_string_from_expr(scratch.arena, type->args[idx]);
-                str8_list_push(scratch.arena, &strings, string);
-                if(idx+1 < type->count)
+                str8_list_pushf(scratch.arena, &strings, "%S(", type->name);
+                for EachIndex(idx, type->count)
                 {
-                  str8_list_pushf(scratch.arena, &strings, ", ");
+                  String8 string = e_string_from_expr(scratch.arena, type->args[idx]);
+                  str8_list_push(scratch.arena, &strings, string);
+                  if(idx+1 < type->count)
+                  {
+                    str8_list_pushf(scratch.arena, &strings, ", ");
+                  }
                 }
+                str8_list_pushf(scratch.arena, &strings, ") <- (");
               }
-              str8_list_pushf(scratch.arena, &strings, ") <- (");
-            }
-            *out_string = str8_list_join(arena, &strings, 0);
-            need_new_task = 1;
-            need_pop = 0;
-            new_task.params = *params;
-            new_task.eval = eval;
-            new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
-            scratch_end(scratch);
-          }break;
-          
-          // rjf: step 1 -> close
-          case 1:
-          {
-            *out_string = str8_lit(")");
-          }break;
+              *out_string = str8_list_join(arena, &strings, 0);
+              need_new_task = 1;
+              need_pop = 0;
+              new_task.params = *params;
+              new_task.eval = eval;
+              new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+              scratch_end(scratch);
+            }break;
+            
+            // rjf: step 1 -> close
+            case 1:
+            {
+              *out_string = str8_lit(")");
+            }break;
+          }
+#endif
         }
       }break;
       

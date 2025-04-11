@@ -297,16 +297,16 @@ E_MemberKind;
 typedef U32 E_TypeFlags;
 enum
 {
-  E_TypeFlag_Const               = (1<<0),
-  E_TypeFlag_Volatile            = (1<<1),
-  E_TypeFlag_IsPlainText         = (1<<2),
-  E_TypeFlag_IsCodeText          = (1<<3),
-  E_TypeFlag_IsPathText          = (1<<4),
-  E_TypeFlag_IsNotText           = (1<<5),
-  E_TypeFlag_EditableChildren    = (1<<6),
-  E_TypeFlag_InheritedByMembers  = (1<<7),
-  E_TypeFlag_InheritedByElements = (1<<8),
-  E_TypeFlag_ArrayLikeExpansion  = (1<<9),
+  E_TypeFlag_Const                  = (1<<0),
+  E_TypeFlag_Volatile               = (1<<1),
+  E_TypeFlag_IsPlainText            = (1<<2),
+  E_TypeFlag_IsCodeText             = (1<<3),
+  E_TypeFlag_IsPathText             = (1<<4),
+  E_TypeFlag_IsNotText              = (1<<5),
+  E_TypeFlag_EditableChildren       = (1<<6),
+  E_TypeFlag_InheritedByMembers     = (1<<7),
+  E_TypeFlag_InheritedByElements    = (1<<8),
+  E_TypeFlag_ArrayLikeExpansion     = (1<<9),
 };
 
 typedef struct E_Member E_Member;

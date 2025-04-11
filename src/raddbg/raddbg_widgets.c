@@ -3279,6 +3279,62 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build slider
+  //
+  if(params->flags & RD_CellFlag_Slider && !is_focus_active)
+    UI_Parent(box)
+  {
+    F32 padding_px = floor_f32(ui_top_font_size()*0.65f);
+    F32 height_px = ui_top_px_height() - padding_px*2.f;
+    UI_PrefWidth(ui_children_sum(1.f))
+      UI_HeightFill
+      UI_Column UI_Padding(ui_px(padding_px, 1.f))
+      UI_Row UI_Padding(ui_px(padding_px, 1.f))
+      UI_PrefWidth(ui_pct(0.5f, 0.f))
+      UI_PrefHeight(ui_px(height_px, 1.f))
+      UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
+    {
+      ui_set_next_hover_cursor(OS_Cursor_LeftRight);
+      UI_Box *slider_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "slider");
+      UI_Parent(slider_box) UI_TagF("good_pop")
+      {
+        UI_Signal sig = ui_signal_from_box(slider_box);
+        if(ui_dragging(sig))
+        {
+          if(ui_pressed(sig))
+          {
+            ui_store_drag_struct(params->slider_value_out);
+          }
+          F32 initial_pct = *ui_get_drag_struct(F32);
+          F32 current_pct = initial_pct + (ui_drag_delta().x / dim_2f32(slider_box->rect).x);
+          params->slider_value_out[0] = current_pct;
+        }
+        UI_Box *fill_box = &ui_nil_box;
+        UI_PrefWidth(ui_pct(Clamp(0, params->slider_value_out[0], 1), 0.f))
+          fill_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+        UI_Parent(fill_box)
+        {
+          UI_BackgroundColor(ui_color_from_name(str8_lit("text")))
+            UI_PrefWidth(ui_px(height_px, 1.f))
+          {
+            ui_spacer(ui_pct(1.f, 0.f));
+            F32 extratoggler_padding_px = floor_f32(ui_top_font_size()*0.35f);
+            F32 toggler_size_px = height_px - extratoggler_padding_px*2.f;
+            UI_Column UI_Padding(ui_px(extratoggler_padding_px, 1.f))
+              UI_Row UI_Padding(ui_px(extratoggler_padding_px, 1.f))
+              UI_PrefWidth(ui_px(toggler_size_px, 1.f))
+              UI_PrefHeight(ui_px(toggler_size_px, 1.f))
+              UI_CornerRadius(floor_f32(toggler_size_px/2.f - 1.f))
+            {
+              UI_Box *nub = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: do non-textual edits (delete, copy, cut)
   //
   B32 commit = 0;

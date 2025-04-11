@@ -3927,10 +3927,53 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
                     B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
                     RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+                    E_Type *cell_type = e_type_from_key__cached(cell_info.eval.irtree.type_key);
+                    E_Eval cell_value_eval = e_value_eval_from_eval(cell_info.eval);
                     F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
                     F32 next_cell_x_px = cell_x_px + cell_width_px;
-                    B32 cell_toggled = (e_value_eval_from_eval(cell_info.eval).value.u64 != 0);
+                    B32 cell_toggled = (cell_value_eval.value.u64 != 0);
                     B32 next_cell_toggled = cell_toggled;
+                    
+                    ////////////
+                    //- rjf: compute slider parameters
+                    //
+                    E_Value cell_slider_min = zero_struct;
+                    E_Value cell_slider_max = zero_struct;
+                    E_TypeKind slider_value_type_kind = E_TypeKind_Null;
+                    F32 cell_slider_value = 0.f;
+                    if(str8_match(cell_type->name, str8_lit("range1"), 0) && cell_type->args != 0 && cell_type->count >= 2)
+                    {
+                      E_Expr *min_expr = cell_type->args[0];
+                      E_Expr *max_expr = cell_type->args[1];
+                      E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+                      e_ir_state->overridden_irtree = &cell_info.eval.irtree;
+                      {
+                        E_TypeKey slider_value_type = e_type_unwrap(cell_type->direct_type_key);
+                        slider_value_type_kind = e_type_kind_from_key(slider_value_type);
+                        E_Expr *min_casted = e_expr_ref_cast(scratch.arena, slider_value_type, min_expr);
+                        E_Expr *max_casted = e_expr_ref_cast(scratch.arena, slider_value_type, max_expr);
+                        cell_slider_min = e_value_from_expr(min_casted);
+                        cell_slider_max = e_value_from_expr(max_casted);
+                      }
+                      e_ir_state->overridden_irtree = prev_overridden_irtree;
+                    }
+                    switch(slider_value_type_kind)
+                    {
+                      default:
+                      if(e_type_kind_is_integer(slider_value_type_kind))
+                      {
+                        cell_slider_value = ((F32)(cell_value_eval.value.s64 - cell_slider_min.s64)) / (cell_slider_max.s64 - cell_slider_min.s64);
+                      }break;
+                      case E_TypeKind_F32:
+                      {
+                        cell_slider_value = (cell_value_eval.value.f32 - cell_slider_min.f32) / (cell_slider_max.f32 - cell_slider_min.f32);
+                      }break;
+                      case E_TypeKind_F64:
+                      {
+                        cell_slider_value = (F32)((cell_value_eval.value.f64 - cell_slider_min.f64) / (cell_slider_max.f64 - cell_slider_min.f64));
+                      }break;
+                    }
+                    F32 next_cell_slider_value = cell_slider_value;
                     
                     ////////////
                     //- rjf: determine cell's palette
@@ -4097,9 +4140,12 @@ rd_view_ui(Rng2F32 rect)
                       else
                       {
                         // rjf: compute visual params
+                        B32 fancy_editors_in_expr = (row_info->cells.count == 1);
+                        B32 cell_has_fancy_editors = (cell->kind != RD_WatchCellKind_Expr || fancy_editors_in_expr);
                         B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
                         B32 has_background = !!(cell_info.flags & RD_WatchCellFlag_Background);
-                        B32 is_toggle_switch = (cell_info.eval.irtree.mode != E_Mode_Null && e_type_kind_from_key(cell_info.eval.irtree.type_key) == E_TypeKind_Bool);
+                        B32 is_toggle_switch = (cell_has_fancy_editors && cell_info.eval.irtree.mode != E_Mode_Null && cell_type->kind == E_TypeKind_Bool);
+                        B32 is_slider = (cell_has_fancy_editors && cell_info.eval.irtree.mode != E_Mode_Null && cell_type->kind == E_TypeKind_Lens && str8_match(cell_type->name, str8_lit("range1"), 0));
                         B32 is_activated_on_single_click = !!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick);
                         B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
                         String8 ghost_text = {0};
@@ -4199,6 +4245,13 @@ rd_view_ui(Rng2F32 rect)
                           {
                             cell_params.flags |= RD_CellFlag_ToggleSwitch;
                             cell_params.toggled_out = &next_cell_toggled;
+                          }
+                          
+                          // rjf: apply slider
+                          if(is_slider)
+                          {
+                            cell_params.flags |= RD_CellFlag_Slider;
+                            cell_params.slider_value_out = &next_cell_slider_value;
                           }
                         }
                         
@@ -4433,6 +4486,37 @@ rd_view_ui(Rng2F32 rect)
                     if(next_cell_toggled != cell_toggled)
                     {
                       rd_commit_eval_value_string(cell_info.eval, next_cell_toggled ? str8_lit("1") : str8_lit("0"));
+                    }
+                    
+                    ////////////
+                    //- rjf: commit slider changes
+                    //
+                    if(next_cell_slider_value != cell_slider_value)
+                    {
+                      String8 new_value_string = {0};
+                      switch(slider_value_type_kind)
+                      {
+                        default:
+                        if(e_type_kind_is_integer(slider_value_type_kind))
+                        {
+                          S64 new_value = (S64)((next_cell_slider_value * (cell_slider_max.s64 - cell_slider_min.s64)) + cell_slider_min.s64);
+                          new_value = Clamp(cell_slider_min.s64, new_value, cell_slider_max.s64);
+                          new_value_string = push_str8f(scratch.arena, "%I64d", new_value);
+                        }break;
+                        case E_TypeKind_F32:
+                        {
+                          F32 new_value = (next_cell_slider_value * (cell_slider_max.f32 - cell_slider_min.f32)) + cell_slider_min.f32;
+                          new_value = Clamp(cell_slider_min.f32, new_value, cell_slider_max.f32);
+                          new_value_string = push_str8f(scratch.arena, "%f", new_value);
+                        }break;
+                        case E_TypeKind_F64:
+                        {
+                          F64 new_value = (F64)((next_cell_slider_value * (cell_slider_max.f64 - cell_slider_min.f64)) + cell_slider_min.f64);
+                          new_value = Clamp(cell_slider_min.f64, new_value, cell_slider_max.f64);
+                          new_value_string = push_str8f(scratch.arena, "%f", new_value);
+                        }break;
+                      }
+                      rd_commit_eval_value_string(cell_info.eval, new_value_string);
                     }
                     
                     ////////////
