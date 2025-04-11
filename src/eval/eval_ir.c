@@ -104,181 +104,6 @@ e_select_ir_ctx(E_IRCtx *ctx)
 }
 
 ////////////////////////////////
-//~ rjf: Member Filtering Lookup Rules
-
-#if 0 // TODO(rjf): @eval
-typedef struct E_MemberFilterAccel E_MemberFilterAccel;
-struct E_MemberFilterAccel
-{
-  E_MemberArray members;
-};
-
-E_LOOKUP_INFO_FUNCTION_DEF(only)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupInfo lookup_info = {0};
-  {
-    //- rjf: extract struct type
-    E_TypeKey struct_type_key = zero_struct;
-    {
-      E_TypeKey lhs_type_key = e_type_unwrap(lhs->type_key);
-      E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-      if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
-      {
-        E_Type *type = e_type_from_key__cached(lhs_type_key);
-        if(type->count == 1)
-        {
-          E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
-          E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-          if(direct_type_kind == E_TypeKind_Struct ||
-             direct_type_kind == E_TypeKind_Class ||
-             direct_type_kind == E_TypeKind_Union)
-          {
-            struct_type_key = direct_type_key;
-          }
-        }
-      }
-      else if(lhs_type_kind == E_TypeKind_Struct ||
-              lhs_type_kind == E_TypeKind_Class ||
-              lhs_type_kind == E_TypeKind_Union)
-      {
-        struct_type_key = lhs_type_key;
-      }
-    }
-    
-    //- rjf: not struct -> fall back on default
-    if(e_type_key_match(struct_type_key, e_type_key_zero()))
-    {
-      lookup_info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, tag, filter);
-    }
-    
-    //- struct -> filter
-    else
-    {
-      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
-      E_MemberList data_members_list__filtered = {0};
-      for EachIndex(idx, data_members.count)
-      {
-        B32 fits_filter = 0;
-        for(E_Expr *name = tag->first->next; name != &e_expr_nil; name = name->next)
-        {
-          if(str8_match(name->string, data_members.v[idx].name, 0))
-          {
-            fits_filter = 1;
-            break;
-          }
-        }
-        if(fits_filter)
-        {
-          e_member_list_push(scratch.arena, &data_members_list__filtered, &data_members.v[idx]);
-        }
-      }
-      E_MemberFilterAccel *accel = push_array(arena, E_MemberFilterAccel, 1);
-      accel->members = e_member_array_from_list(arena, &data_members_list__filtered);
-      lookup_info.user_data = accel;
-      lookup_info.named_expr_count = accel->members.count;
-    }
-  }
-  scratch_end(scratch);
-  return lookup_info;
-}
-
-E_LOOKUP_INFO_FUNCTION_DEF(omit)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  E_LookupInfo lookup_info = {0};
-  {
-    //- rjf: extract struct type
-    E_TypeKey struct_type_key = zero_struct;
-    {
-      E_TypeKey lhs_type_key = e_type_unwrap(lhs->type_key);
-      E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-      if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
-      {
-        E_Type *type = e_type_from_key__cached(lhs_type_key);
-        if(type->count == 1)
-        {
-          E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
-          E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-          if(direct_type_kind == E_TypeKind_Struct ||
-             direct_type_kind == E_TypeKind_Class ||
-             direct_type_kind == E_TypeKind_Union)
-          {
-            struct_type_key = direct_type_key;
-          }
-        }
-      }
-      else if(lhs_type_kind == E_TypeKind_Struct ||
-              lhs_type_kind == E_TypeKind_Class ||
-              lhs_type_kind == E_TypeKind_Union)
-      {
-        struct_type_key = lhs_type_key;
-      }
-    }
-    
-    //- rjf: not struct -> fall back on default
-    if(e_type_key_match(struct_type_key, e_type_key_zero()))
-    {
-      lookup_info = E_LOOKUP_INFO_FUNCTION_NAME(default)(arena, lhs, tag, filter);
-    }
-    
-    //- struct -> filter
-    else
-    {
-      E_MemberArray data_members = e_type_data_members_from_key__cached(struct_type_key);
-      E_MemberList data_members_list__filtered = {0};
-      for EachIndex(idx, data_members.count)
-      {
-        B32 fits_filter = 1;
-        for(E_Expr *name = tag->first->next; name != &e_expr_nil; name = name->next)
-        {
-          if(str8_match(name->string, data_members.v[idx].name, 0))
-          {
-            fits_filter = 0;
-            break;
-          }
-        }
-        if(fits_filter)
-        {
-          e_member_list_push(scratch.arena, &data_members_list__filtered, &data_members.v[idx]);
-        }
-      }
-      E_MemberFilterAccel *accel = push_array(arena, E_MemberFilterAccel, 1);
-      accel->members = e_member_array_from_list(arena, &data_members_list__filtered);
-      lookup_info.user_data = accel;
-      lookup_info.named_expr_count = accel->members.count;
-    }
-  }
-  scratch_end(scratch);
-  return lookup_info;
-}
-
-E_LOOKUP_RANGE_FUNCTION_DEF(only_and_omit)
-{
-  if(user_data == 0)
-  {
-    E_LOOKUP_RANGE_FUNCTION_NAME(default)(arena, lhs, tag, filter, idx_range, exprs, exprs_strings, user_data);
-  }
-  else
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-    E_MemberFilterAccel *accel = (E_MemberFilterAccel *)user_data;
-    Rng1U64 legal_idx_range = r1u64(0, accel->members.count);
-    Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
-    U64 read_range_count = dim_1u64(read_range);
-    for(U64 idx = 0; idx < read_range_count; idx += 1)
-    {
-      U64 member_idx = idx + read_range.min;
-      String8 member_name = accel->members.v[member_idx].name;
-      exprs[idx] = e_expr_irext_member_access(arena, lhs, &lhs_irtree, member_name);
-    }
-    scratch_end(scratch);
-  }
-}
-#endif
-
-////////////////////////////////
 //~ rjf: Auto Hooks
 
 internal E_AutoHookMap
@@ -1122,7 +947,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             for(;kind == E_TypeKind_Lens;)
             {
               E_Type *lens_type = e_type_from_key__cached(k);
-              if(lens_type->flags & E_TypeFlag_InheritedOnAccess)
+              if((lens_type->flags & E_TypeFlag_InheritedByMembers && expr->kind == E_ExprKind_MemberAccess) ||
+                 (lens_type->flags & E_TypeFlag_InheritedByElements && expr->kind == E_ExprKind_ArrayIndex))
               {
                 e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
               }
@@ -2407,7 +2233,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     }
     
     //- rjf: find any auto hooks according to this generation's type
-    if(allow_autohooks)
+    if(allow_autohooks && result.mode != E_Mode_Null)
     {
       E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)

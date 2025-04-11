@@ -299,6 +299,12 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice);
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `only`, `omit` lenses
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(only_and_omit);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only_and_omit);
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `folder` type
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder);

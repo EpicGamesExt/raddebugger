@@ -1548,8 +1548,12 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       {
         if(it->top_task->redirect_to_sets_and_structs)
         {
-          expansion_opener_symbol = str8_lit("[");
-          expansion_closer_symbol = str8_lit("]");
+          E_Type *type = e_type_from_key__cached(type_key);
+          if(type->flags & E_TypeFlag_ArrayLikeExpansion)
+          {
+            expansion_opener_symbol = str8_lit("[");
+            expansion_closer_symbol = str8_lit("]");
+          }
           goto arrays_and_sets_and_structs;
         }
         E_Type *type = e_type_from_key__cached(type_key);
@@ -1677,7 +1681,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           ptr_data->value_eval = e_value_eval_from_eval(eval);
           ptr_data->type = e_type_from_key__cached(type_key);
           ptr_data->direct_type = e_type_from_key__cached(e_type_unwrap(e_type_direct_from_key(e_type_unwrap(type_key))));
-          ptr_data->ptee_has_content = (ptr_data->direct_type->kind != E_TypeKind_Null && ptr_data->direct_type->kind != E_TypeKind_Void);
+          ptr_data->ptee_has_content = (ptr_data->value_eval.value.u64 != 0 && ptr_data->direct_type->kind != E_TypeKind_Null && ptr_data->direct_type->kind != E_TypeKind_Void);
           ptr_data->ptee_has_string  = ((E_TypeKind_Char8 <= ptr_data->direct_type->kind && ptr_data->direct_type->kind <= E_TypeKind_UChar32) ||
                                         ptr_data->direct_type->kind == E_TypeKind_S8 ||
                                         ptr_data->direct_type->kind == E_TypeKind_U8);

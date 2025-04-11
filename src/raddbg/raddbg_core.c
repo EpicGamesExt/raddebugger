@@ -12241,7 +12241,9 @@ rd_frame(void)
       struct
       {
         String8 name;
-        B32 inherited;
+        B32 inherited_by_members;
+        B32 inherited_by_elements;
+        B32 array_like;
         E_TypeIRExtFunctionType *irext;
         E_TypeAccessFunctionType *access;
         E_TypeExpandRule expand;
@@ -12250,21 +12252,23 @@ rd_frame(void)
       }
       lens_table[] =
       {
-        {str8_lit("bin"),         1, 0, 0, {0}},
-        {str8_lit("oct"),         1, 0, 0, {0}},
-        {str8_lit("dec"),         1, 0, 0, {0}},
-        {str8_lit("hex"),         1, 0, 0, {0}},
-        {str8_lit("digits"),      1, 0, 0, {0}},
-        {str8_lit("no_string"),   1, 0, 0, {0}},
-        {str8_lit("no_addr"),     1, 0, 0, {0}},
-        {str8_lit("slice"),       0, E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},
-        {str8_lit("text"),        0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
-        {str8_lit("disasm"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
-        {str8_lit("memory"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
-        {str8_lit("bitmap"),      0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
-        {str8_lit("checkbox"),    0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
-        {str8_lit("color_rgba"),  0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
-        {str8_lit("geo3d"),       0, 0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
+        {str8_lit("bin"),         1, 1, 0,        0, 0, {0}},
+        {str8_lit("oct"),         1, 1, 0,        0, 0, {0}},
+        {str8_lit("dec"),         1, 1, 0,        0, 0, {0}},
+        {str8_lit("hex"),         1, 1, 0,        0, 0, {0}},
+        {str8_lit("digits"),      1, 1, 0,        0, 0, {0}},
+        {str8_lit("no_string"),   1, 1, 0,        0, 0, {0}},
+        {str8_lit("no_addr"),     1, 1, 0,        0, 0, {0}},
+        {str8_lit("slice"),       0, 0, 1,        E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},
+        {str8_lit("only"),        0, 1, 0,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(only_and_omit), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(only_and_omit)}},
+        {str8_lit("omit"),        0, 1, 0,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(only_and_omit), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(only_and_omit)}},
+        {str8_lit("text"),        0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
+        {str8_lit("disasm"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
+        {str8_lit("memory"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
+        {str8_lit("bitmap"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
+        {str8_lit("checkbox"),    0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
+        {str8_lit("color_rgba"),  0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
+        {str8_lit("geo3d"),       0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
       };
       
       //- rjf: fill lenses in ev expand rule map, rd view ui rule map
@@ -12289,9 +12293,17 @@ rd_frame(void)
       for EachElement(idx, lens_table)
       {
         E_TypeFlags type_flags = 0;
-        if(lens_table[idx].inherited)
+        if(lens_table[idx].inherited_by_members)
         {
-          type_flags |= E_TypeFlag_InheritedOnAccess;
+          type_flags |= E_TypeFlag_InheritedByMembers;
+        }
+        if(lens_table[idx].inherited_by_elements)
+        {
+          type_flags |= E_TypeFlag_InheritedByElements;
+        }
+        if(lens_table[idx].array_like)
+        {
+          type_flags |= E_TypeFlag_ArrayLikeExpansion;
         }
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec,

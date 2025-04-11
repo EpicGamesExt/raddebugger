@@ -51,7 +51,7 @@ frame(void)
     }
   }
   r_begin_frame();
-  dr_begin_frame();
+  dr_begin_frame(fnt_tag_zero());
   r_window_begin_frame(os_window, r_window);
   DR_Bucket *bucket = dr_bucket_make();
   DR_BucketScope(bucket) ProfScope("draw")
@@ -77,7 +77,7 @@ frame(void)
 internal void
 entry_point(CmdLine *cmdline)
 {
-  os_window = os_window_open(v2f32(1600, 900), 0, str8_lit("textperf"));
+  os_window = os_window_open(r2f32p(0, 0, 1600, 900), OS_WindowFlag_UseDefaultPosition, str8_lit("textperf"));
   r_window = r_window_equip(os_window);
   os_window_first_paint(os_window);
   for(;!update(););
