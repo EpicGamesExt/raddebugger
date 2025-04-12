@@ -1602,7 +1602,23 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               SLLQueuePush(first_flagged_trap_task, last_flagged_trap_task, task);
               task->process = trap->process;
             }
-            dmn_trap_chunk_list_push(scratch.arena, &task->traps, 8, trap);
+            B32 already_in_task = 0;
+            for(DMN_TrapChunkNode *n = task->traps.first; n != 0; n = n->next)
+            {
+              for(U64 n_idx = 0; n_idx < n->count; n_idx += 1)
+              {
+                if(n->v[n_idx].id == trap->id)
+                {
+                  already_in_task = 1;
+                  goto end_look_for_existing_trap_in_task;
+                }
+              }
+            }
+            end_look_for_existing_trap_in_task:;
+            if(!already_in_task)
+            {
+              dmn_trap_chunk_list_push(scratch.arena, &task->traps, 8, trap);
+            }
           }
         }
       }
