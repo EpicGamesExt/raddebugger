@@ -281,6 +281,7 @@ struct CTRL_UserBreakpoint
 {
   CTRL_UserBreakpointKind kind;
   CTRL_UserBreakpointFlags flags;
+  U64 id;
   String8 string;
   TxtPt pt;
   U64 size;

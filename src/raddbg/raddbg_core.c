@@ -15804,6 +15804,7 @@ Z(getting_started)
         //- rjf: fill breakpoint
         D_Breakpoint *dst_bp = &breakpoints.v[idx];
         dst_bp->flags       = flags;
+        dst_bp->id          = src_bp->id;
         dst_bp->file_path   = src_bp_loc.file_path;
         dst_bp->pt          = src_bp_loc.pt;
         dst_bp->vaddr_expr  = src_bp_loc.expr;
@@ -15944,31 +15945,13 @@ Z(getting_started)
           // rjf: increment breakpoint hit counts
           if(evt->cause == D_EventCause_UserBreakpoint)
           {
-            RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-            for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+            RD_Cfg *bp = rd_cfg_from_id(evt->id);
+            if(bp != &rd_nil_cfg)
             {
-              RD_Cfg *bp = n->v;
               RD_Cfg *hit_count_root = rd_cfg_child_from_string_or_alloc(bp, str8_lit("hit_count"));
               U64 hit_count = 0;
               try_u64_from_str8_c_rules(hit_count_root->first->string, &hit_count);
-              RD_Location loc = rd_location_from_cfg(bp);
-              D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc.file_path, loc.pt.line);
-              E_Value loc_value = e_value_from_string(loc.expr);
-              if(loc_lines.first != 0)
-              {
-                for(D_LineNode *n = loc_lines.first; n != 0; n = n->next)
-                {
-                  if(contains_1u64(n->v.voff_range, voff))
-                  {
-                    hit_count += 1;
-                    break;
-                  }
-                }
-              }
-              else if(loc_value.u64 != 0 && vaddr == loc_value.u64)
-              {
-                hit_count += 1;
-              }
+              hit_count += 1;
               rd_cfg_new_replacef(hit_count_root, "%I64u", hit_count);
             }
           }

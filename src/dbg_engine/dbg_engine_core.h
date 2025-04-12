@@ -40,6 +40,7 @@ typedef struct D_Breakpoint D_Breakpoint;
 struct D_Breakpoint
 {
   D_BreakpointFlags flags;
+  U64 id;
   String8 file_path;
   TxtPt pt;
   String8 vaddr_expr;
@@ -98,6 +99,7 @@ struct D_Event
   CTRL_Handle thread;
   U64 vaddr;
   U64 code;
+  U64 id;
 };
 
 typedef struct D_EventNode D_EventNode;

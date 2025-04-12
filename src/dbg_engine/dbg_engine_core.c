@@ -1795,6 +1795,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             evt->cause  = cause;
             evt->thread = thread->kind == CTRL_EntityKind_Thread ? thread->handle : ctrl_handle_zero();
             evt->vaddr  = event->rip_vaddr;
+            evt->id     = event->u64_code;
           }
         }break;
         
@@ -2417,6 +2418,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 {
                   CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
                   ctrl_user_bp.flags     = ctrl_bp_flags;
+                  ctrl_user_bp.id        = bp->id;
                   ctrl_user_bp.string    = n->string;
                   ctrl_user_bp.pt        = bp->pt;
                   ctrl_user_bp.condition = bp->condition;
@@ -2430,6 +2432,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               {
                 CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_Expression};
                 ctrl_user_bp.flags     = ctrl_bp_flags;
+                ctrl_user_bp.id        = bp->id;
                 ctrl_user_bp.string    = bp->vaddr_expr;
                 ctrl_user_bp.condition = bp->condition;
                 ctrl_user_bp.size      = bp->size;

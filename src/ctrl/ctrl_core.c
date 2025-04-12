@@ -396,6 +396,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         CTRL_UserBreakpoint *bp = &n->v;
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->kind);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->flags);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->id);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->string.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->string.str, bp->string.size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->pt);
@@ -518,6 +519,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         CTRL_UserBreakpoint *bp = &n->v;
         read_off += str8_deserial_read_struct(string, read_off, &bp->kind);
         read_off += str8_deserial_read_struct(string, read_off, &bp->flags);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->id);
         read_off += str8_deserial_read_struct(string, read_off, &bp->string.size);
         bp->string.str = push_array_no_zero(arena, U8, bp->string.size);
         read_off += str8_deserial_read(string, read_off, bp->string.str, bp->string.size, 1);
@@ -5731,21 +5733,28 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }
         
         // rjf: user breakpoints
-        for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
         {
-          DMN_Trap *trap = n->v;
-          DMN_Trap *opl = n->v + n->count;
-          for(;trap < opl; trap += 1)
+          if(event->user_data != 0)
           {
-            if(dmn_handle_match(trap->process, event->process) &&
-               trap->vaddr == event->instruction_pointer &&
-               (!dmn_handle_match(event->thread, target_thread.dmn_handle) || !target_thread_is_on_user_bp_and_trap_net_trap))
+            CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)event->user_data;
+            hit_user_bp = 1;
+          }
+          for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
+          {
+            DMN_Trap *trap = n->v;
+            DMN_Trap *opl = n->v + n->count;
+            for(;trap < opl; trap += 1)
             {
-              CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
-              hit_user_bp = 1;
-              if(user_bp != 0 && user_bp->condition.size != 0)
+              if(dmn_handle_match(trap->process, event->process) &&
+                 trap->vaddr == event->instruction_pointer &&
+                 (!dmn_handle_match(event->thread, target_thread.dmn_handle) || !target_thread_is_on_user_bp_and_trap_net_trap))
               {
-                str8_list_push(temp.arena, &conditions, user_bp->condition);
+                CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
+                hit_user_bp = 1;
+                if(user_bp != 0 && user_bp->condition.size != 0)
+                {
+                  str8_list_push(temp.arena, &conditions, user_bp->condition);
+                }
               }
             }
           }
@@ -6090,6 +6099,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     event->exception_kind = ctrl_exception_kind_from_dmn(stop_event->exception_kind);
     event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
     event->rip_vaddr = stop_event->instruction_pointer;
+    if(stop_cause == CTRL_EventCause_UserBreakpoint && stop_event->user_data != 0)
+    {
+      CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)stop_event->user_data;
+      event->u64_code = user_bp->id;
+    }
     ctrl_c2u_push_events(&evts);
   }
   
