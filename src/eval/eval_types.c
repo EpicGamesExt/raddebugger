@@ -2320,6 +2320,37 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 }
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `array` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
+{
+  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  U64 count = 1;
+  if(type->args != 0 && type->count > 0)
+  {
+    E_Expr *count_expr = type->args[0];
+    E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+    e_ir_state->overridden_irtree = irtree;
+    {
+      E_Value count_value = e_value_from_expr(count_expr);
+      count = count_value.u64;
+    }
+    e_ir_state->overridden_irtree = prev_overridden_irtree;
+  }
+  E_TypeExpandInfo info = {0, count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(array)
+{
+  U64 read_range_count = dim_1u64(idx_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
+  {
+    exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
+  }
+}
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `slice` lens
 
 typedef struct E_SliceAccel E_SliceAccel;

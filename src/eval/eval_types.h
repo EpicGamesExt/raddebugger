@@ -292,11 +292,18 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `array` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(array);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(array);
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `slice` lens
 
 E_TYPE_IREXT_FUNCTION_DEF(slice);
 E_TYPE_ACCESS_FUNCTION_DEF(slice);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(slice);
 
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `only`, `omit` lenses

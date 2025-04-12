@@ -93,7 +93,6 @@ e_select_ir_ctx(E_IRCtx *ctx)
   String8 builtin_view_rule_names[] =
   {
     str8_lit_comp("bswap"),
-    str8_lit_comp("array"),
   };
   for EachElement(idx, builtin_view_rule_names)
   {
