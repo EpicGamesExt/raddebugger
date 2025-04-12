@@ -13,6 +13,53 @@ typedef U64 CTRL_MachineID;
 #define CTRL_MachineID_Local (1)
 
 ////////////////////////////////
+//~ rjf: User Breakpoint Types
+
+typedef U32 CTRL_UserBreakpointFlags;
+enum
+{
+  CTRL_UserBreakpointFlag_BreakOnWrite   = (1<<0),
+  CTRL_UserBreakpointFlag_BreakOnRead    = (1<<1),
+  CTRL_UserBreakpointFlag_BreakOnExecute = (1<<2),
+};
+
+typedef enum CTRL_UserBreakpointKind
+{
+  CTRL_UserBreakpointKind_Null,
+  CTRL_UserBreakpointKind_FileNameAndLineColNumber,
+  CTRL_UserBreakpointKind_Expression,
+  CTRL_UserBreakpointKind_COUNT
+}
+CTRL_UserBreakpointKind;
+
+typedef struct CTRL_UserBreakpoint CTRL_UserBreakpoint;
+struct CTRL_UserBreakpoint
+{
+  CTRL_UserBreakpointKind kind;
+  CTRL_UserBreakpointFlags flags;
+  U64 id;
+  String8 string;
+  TxtPt pt;
+  U64 size;
+  String8 condition;
+};
+
+typedef struct CTRL_UserBreakpointNode CTRL_UserBreakpointNode;
+struct CTRL_UserBreakpointNode
+{
+  CTRL_UserBreakpointNode *next;
+  CTRL_UserBreakpoint v;
+};
+
+typedef struct CTRL_UserBreakpointList CTRL_UserBreakpointList;
+struct CTRL_UserBreakpointList
+{
+  CTRL_UserBreakpointNode *first;
+  CTRL_UserBreakpointNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Entity Handle Types
 
 typedef struct CTRL_Handle CTRL_Handle;
@@ -62,6 +109,7 @@ struct CTRL_Entity
   Rng1U64 vaddr_range;
   U64 stack_base;
   U64 timestamp;
+  CTRL_UserBreakpointFlags bp_flags;
   String8 string;
 };
 
@@ -254,53 +302,6 @@ struct CTRL_Spoof
   DMN_Handle thread;
   U64 vaddr;
   U64 new_ip_value;
-};
-
-////////////////////////////////
-//~ rjf: User Breakpoint Types
-
-typedef U32 CTRL_UserBreakpointFlags;
-enum
-{
-  CTRL_UserBreakpointFlag_BreakOnWrite   = (1<<0),
-  CTRL_UserBreakpointFlag_BreakOnRead    = (1<<1),
-  CTRL_UserBreakpointFlag_BreakOnExecute = (1<<2),
-};
-
-typedef enum CTRL_UserBreakpointKind
-{
-  CTRL_UserBreakpointKind_Null,
-  CTRL_UserBreakpointKind_FileNameAndLineColNumber,
-  CTRL_UserBreakpointKind_Expression,
-  CTRL_UserBreakpointKind_COUNT
-}
-CTRL_UserBreakpointKind;
-
-typedef struct CTRL_UserBreakpoint CTRL_UserBreakpoint;
-struct CTRL_UserBreakpoint
-{
-  CTRL_UserBreakpointKind kind;
-  CTRL_UserBreakpointFlags flags;
-  U64 id;
-  String8 string;
-  TxtPt pt;
-  U64 size;
-  String8 condition;
-};
-
-typedef struct CTRL_UserBreakpointNode CTRL_UserBreakpointNode;
-struct CTRL_UserBreakpointNode
-{
-  CTRL_UserBreakpointNode *next;
-  CTRL_UserBreakpoint v;
-};
-
-typedef struct CTRL_UserBreakpointList CTRL_UserBreakpointList;
-struct CTRL_UserBreakpointList
-{
-  CTRL_UserBreakpointNode *first;
-  CTRL_UserBreakpointNode *last;
-  U64 count;
 };
 
 ////////////////////////////////

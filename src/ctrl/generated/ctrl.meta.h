@@ -17,6 +17,7 @@ CTRL_EntityKind_Module,
 CTRL_EntityKind_EntryPoint,
 CTRL_EntityKind_DebugInfoPath,
 CTRL_EntityKind_PendingThreadName,
+CTRL_EntityKind_Breakpoint,
 CTRL_EntityKind_COUNT,
 } CTRL_EntityKind;
 
@@ -64,8 +65,8 @@ CTRL_ExceptionCodeKind_COUNT,
 } CTRL_ExceptionCodeKind;
 
 C_LINKAGE_BEGIN
-extern String8 ctrl_entity_kind_code_name_table[9];
-extern String8 ctrl_entity_kind_display_string_table[9];
+extern String8 ctrl_entity_kind_code_name_table[10];
+extern String8 ctrl_entity_kind_display_string_table[10];
 extern U32 ctrl_exception_code_kind_code_table[38];
 extern String8 ctrl_exception_code_kind_display_string_table[38];
 extern String8 ctrl_exception_code_kind_lowercase_code_string_table[38];

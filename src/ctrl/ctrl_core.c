@@ -1312,6 +1312,30 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         ctrl_entity_equip_string(store, debug_info_path, event->string);
         debug_info_path->timestamp = event->timestamp;
       }break;
+      
+      //- rjf: dynamic, program-created breakpoints
+      case CTRL_EventKind_SetBreakpoint:
+      {
+        CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
+        CTRL_Entity *bp = ctrl_entity_alloc(store, process, CTRL_EntityKind_Breakpoint, Arch_Null, ctrl_handle_zero(), 0);
+        bp->vaddr_range = event->vaddr_rng;
+        bp->bp_flags = event->bp_flags;
+      }break;
+      case CTRL_EventKind_UnsetBreakpoint:
+      {
+        CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
+        for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+        {
+          if(child->kind == CTRL_EntityKind_Breakpoint &&
+             child->vaddr_range.min == event->vaddr_rng.min &&
+             child->vaddr_range.max == event->vaddr_rng.max &&
+             child->bp_flags == event->bp_flags)
+          {
+            ctrl_entity_release(store, child);
+            break;
+          }
+        }
+      }break;
     }
   }
 }
@@ -4369,6 +4393,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       out_evt->kind       = CTRL_EventKind_SetBreakpoint;
+      out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
+      out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->bp_flags   = ctrl_user_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
@@ -4376,6 +4402,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       out_evt->kind       = CTRL_EventKind_UnsetBreakpoint;
+      out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
+      out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->bp_flags   = ctrl_user_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
