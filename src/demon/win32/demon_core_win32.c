@@ -749,12 +749,12 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->fs.u16  = ctx->SegFs;
       dst->gs.u16  = ctx->SegGs;
       dst->ss.u16  = ctx->SegSs;
-      dst->dr0.u32 = ctx->Dr0;
-      dst->dr1.u32 = ctx->Dr1;
-      dst->dr2.u32 = ctx->Dr2;
-      dst->dr3.u32 = ctx->Dr3;
-      dst->dr6.u32 = ctx->Dr6;
-      dst->dr7.u32 = ctx->Dr7;
+      dst->dr0.u64 = ctx->Dr0;
+      dst->dr1.u64 = ctx->Dr1;
+      dst->dr2.u64 = ctx->Dr2;
+      dst->dr3.u64 = ctx->Dr3;
+      dst->dr6.u64 = ctx->Dr6;
+      dst->dr7.u64 = ctx->Dr7;
       // NOTE(rjf): this bit is "supposed to always be 1", according to old info.
       // may need to be investigated.
       dst->rflags.u64 = ctx->EFlags | 0x2;
@@ -1020,12 +1020,12 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       ctx->SegFs = src->fs.u16;
       ctx->SegGs = src->gs.u16;
       ctx->SegSs = src->ss.u16;
-      ctx->Dr0 = src->dr0.u32;
-      ctx->Dr1 = src->dr1.u32;
-      ctx->Dr2 = src->dr2.u32;
-      ctx->Dr3 = src->dr3.u32;
-      ctx->Dr6 = src->dr6.u32;
-      ctx->Dr7 = src->dr7.u32;
+      ctx->Dr0 = src->dr0.u64;
+      ctx->Dr1 = src->dr1.u64;
+      ctx->Dr2 = src->dr2.u64;
+      ctx->Dr3 = src->dr3.u64;
+      ctx->Dr6 = src->dr6.u64;
+      ctx->Dr7 = src->dr7.u64;
       ctx->EFlags = src->rflags.u64;
       fxsave->ControlWord = src->fcw.u16;
       fxsave->StatusWord = src->fsw.u16;
@@ -1317,7 +1317,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, MAKELANGID(LANG_NEUTRAL,SUBLANG_NEUTRAL), (LPWSTR)&message, 0, 0);
       String8 message8 = message ? str8_from_16(scratch.arena, str16_cstring(message)) : str8_lit("unknown error");
       LocalFree(message);
-
+      
       log_user_errorf("There was an error starting %S: %S", params->cmd_line.first->string, message8);
     }
   }
@@ -1557,10 +1557,140 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
           {
             DMN_Trap *trap = n->v+n_idx;
-            trap_swap_bytes[trap_idx] = 0xCC;
-            dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
-            U8 int3 = 0xCC;
-            dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
+            if(trap->flags == 0)
+            {
+              trap_swap_bytes[trap_idx] = 0xCC;
+              dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
+              U8 int3 = 0xCC;
+              dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: write all debug register states, for flagged-traps
+      //
+      ProfScope("write all debug register states, for flagged-traps")
+      {
+        //- rjf: gather all flagged traps, bucketed by process
+        typedef struct DMN_FlaggedTrapTask DMN_FlaggedTrapTask;
+        struct DMN_FlaggedTrapTask
+        {
+          DMN_FlaggedTrapTask *next;
+          DMN_Handle process;
+          DMN_TrapChunkList traps;
+        };
+        DMN_FlaggedTrapTask *first_task = 0;
+        DMN_FlaggedTrapTask *last_task = 0;
+        for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
+        {
+          for(U64 n_idx = 0; n_idx < n->count; n_idx += 1)
+          {
+            DMN_Trap *trap = n->v+n_idx;
+            if(trap->flags != 0)
+            {
+              DMN_FlaggedTrapTask *task = 0;
+              for(DMN_FlaggedTrapTask *t = first_task; t != 0; t = t->next)
+              {
+                if(dmn_handle_match(t->process, trap->process))
+                {
+                  task = t;
+                  break;
+                }
+              }
+              if(task == 0)
+              {
+                task = push_array(scratch.arena, DMN_FlaggedTrapTask, 1);
+                SLLQueuePush(first_task, last_task, task);
+                task->process = trap->process;
+              }
+              dmn_trap_chunk_list_push(scratch.arena, &task->traps, 8, trap);
+            }
+          }
+        }
+        
+        //- rjf: for each flagged trap task, iterate all threads in the
+        // associated process, and prepare debug registers accordingly
+        for(DMN_FlaggedTrapTask *t = first_task; t != 0; t = t->next)
+        {
+          DMN_Handle process = t->process;
+          DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+          for(DMN_W32_Entity *child = process_entity->first;
+              child != &dmn_w32_entity_nil;
+              child = child->next)
+          {
+            if(child->kind == DMN_W32_EntityKind_Thread)
+            {
+              switch(child->arch)
+              {
+                default:{}break;
+                
+                //- rjf: x64
+                case Arch_x64:
+                {
+                  REGS_RegBlockX64 regs = {0};
+                  dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
+                  {
+                    U64 trap_idx = 0;
+                    for(DMN_TrapChunkNode *n = t->traps.first; n != 0; n = n->next)
+                    {
+                      for(U64 n_idx = 0; n_idx < n->count && trap_idx < 4; n_idx += 1, trap_idx += 1)
+                      {
+                        DMN_Trap *trap = &n->v[n_idx];
+                        REGS_Reg64 *addr_reg = &regs.dr0;
+                        switch(trap_idx)
+                        {
+                          default:{}break;
+                          case 0:{addr_reg = &regs.dr0;}break;
+                          case 1:{addr_reg = &regs.dr1;}break;
+                          case 2:{addr_reg = &regs.dr2;}break;
+                          case 3:{addr_reg = &regs.dr3;}break;
+                        }
+                        addr_reg->u64 = trap->vaddr;
+                        regs.dr7.u64 |= (1ull << (trap_idx*4));
+                        regs.dr7.u64 &= ~((U64)(bit16|bit17|bit18|bit19) << (trap_idx*4));
+                        switch(trap->flags)
+                        {
+                          case DMN_TrapFlag_BreakOnExecute:
+                          default:{}break;
+                          case DMN_TrapFlag_BreakOnWrite:
+                          case DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
+                          {
+                            regs.dr7.u64 |= ((U64)bit16) << (trap_idx*4);
+                          }break;
+                          case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
+                          case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite:
+                          {
+                            regs.dr7.u64 |= (((U64)bit16) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit17) << (trap_idx*4));
+                          }break;
+                        }
+                        switch(trap->length)
+                        {
+                          case 1:
+                          default:{}break;
+                          case 2:
+                          {
+                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
+                          }break;
+                          case 4:
+                          {
+                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                          }break;
+                          case 8:
+                          {
+                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                          }break;
+                        }
+                      }
+                    }
+                  }
+                  dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
+                }break;
+              }
+            }
           }
         }
       }
@@ -2485,10 +2615,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
           {
             DMN_Trap *trap = n->v+n_idx;
-            U8 og_byte = trap_swap_bytes[trap_idx];
-            if(og_byte != 0xCC)
+            if(trap->flags == 0)
             {
-              dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &og_byte);
+              U8 og_byte = trap_swap_bytes[trap_idx];
+              if(og_byte != 0xCC)
+              {
+                dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &og_byte);
+              }
             }
           }
         }

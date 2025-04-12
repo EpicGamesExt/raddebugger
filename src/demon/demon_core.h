@@ -100,12 +100,22 @@ struct DMN_EventList
 ////////////////////////////////
 //~ rjf: Run Control Types
 
+typedef U32 DMN_TrapFlags;
+enum
+{
+  DMN_TrapFlag_BreakOnWrite   = (1<<0),
+  DMN_TrapFlag_BreakOnRead    = (1<<1),
+  DMN_TrapFlag_BreakOnExecute = (1<<2),
+};
+
 typedef struct DMN_Trap DMN_Trap;
 struct DMN_Trap
 {
   DMN_Handle process;
   U64 vaddr;
   U64 id;
+  DMN_TrapFlags flags;
+  U32 length;
 };
 
 typedef struct DMN_TrapChunkNode DMN_TrapChunkNode;
