@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 dmn_event_kind_string_table[18] =
+String8 dmn_event_kind_string_table[20] =
 {
 str8_lit_comp("Null"),
 str8_lit_comp("Error"),
@@ -24,6 +24,8 @@ str8_lit_comp("Memory"),
 str8_lit_comp("DebugString"),
 str8_lit_comp("SetThreadName"),
 str8_lit_comp("SetThreadColor"),
+str8_lit_comp("SetBreakpoint"),
+str8_lit_comp("UnsetBreakpoint"),
 };
 
 String8 dmn_exception_kind_string_table[5] =

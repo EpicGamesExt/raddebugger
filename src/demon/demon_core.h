@@ -73,7 +73,7 @@ struct DMN_Event
   U64 size;
   String8 string;
   U32 code; // code gives pid & tid on CreateProcess and CreateThread (respectfully)
-  U32 flags;
+  U32 flags; // DMN_TrapFlags, if `DMN_EventKind_SetBreakpoint`
   S32 signo;
   S32 sigcode;
   U64 instruction_pointer;

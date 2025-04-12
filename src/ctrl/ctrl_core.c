@@ -131,6 +131,16 @@ ctrl_dmn_trap_flags_from_user_breakpoint_flags(CTRL_UserBreakpointFlags flags)
   return result;
 }
 
+internal CTRL_UserBreakpointFlags
+ctrl_user_breakpoint_flags_from_dmn_trap_flags(DMN_TrapFlags flags)
+{
+  CTRL_UserBreakpointFlags result = 0;
+  if(flags & DMN_TrapFlag_BreakOnWrite)    { result |= CTRL_UserBreakpointFlag_BreakOnWrite; }
+  if(flags & DMN_TrapFlag_BreakOnRead)     { result |= CTRL_UserBreakpointFlag_BreakOnRead; }
+  if(flags & DMN_TrapFlag_BreakOnExecute)  { result |= CTRL_UserBreakpointFlag_BreakOnExecute; }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions
 
@@ -588,8 +598,9 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max)
     str8_serial_push_struct(scratch.arena, &srl, &event->stack_base);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_root);
     str8_serial_push_struct(scratch.arena, &srl, &event->timestamp);
-    str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
+    str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
+    str8_serial_push_struct(scratch.arena, &srl, &event->bp_flags);
     String8 string = event->string;
     string.size = Min(string.size, max-srl.total_size);
     str8_serial_push_struct(scratch.arena, &srl, &string.size);
@@ -620,8 +631,9 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.stack_base);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_root);
     read_off += str8_deserial_read_struct(string, read_off, &event.timestamp);
-    read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
+    read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
+    read_off += str8_deserial_read_struct(string, read_off, &event.bp_flags);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
     read_off += str8_deserial_read(string, read_off, event.string.str, event.string.size, 1);
@@ -4352,6 +4364,20 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
       out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
       out_evt->rgba       = event->code;
+    }break;
+    case DMN_EventKind_SetBreakpoint:
+    {
+      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+      out_evt->kind       = CTRL_EventKind_SetBreakpoint;
+      out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
+      out_evt->bp_flags   = ctrl_user_breakpoint_flags_from_dmn_trap_flags(event->flags);
+    }break;
+    case DMN_EventKind_UnsetBreakpoint:
+    {
+      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+      out_evt->kind       = CTRL_EventKind_UnsetBreakpoint;
+      out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
+      out_evt->bp_flags   = ctrl_user_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
   }
   ctrl_c2u_push_events(&evts);

@@ -1941,7 +1941,24 @@ fancy_viz_eval_tests(void)
 }
 
 ////////////////////////////////
-// NOTE(allen): Function Overload Resolution
+//~ rjf: Markup Tests
+
+static void
+markup_tests(void)
+{
+  int x = 0;
+  raddbg_add_breakpoint(&x, sizeof(x), 0, 1, 0);
+  for(int i = 0; i < 10000; i += 1)
+  {
+    if(i == 5000)
+    {
+      x += 1;
+    }
+  }
+}
+
+////////////////////////////////
+//~ NOTE(allen): Function Overload Resolution
 
 static int
 overloaded_function(float y){
@@ -2746,6 +2763,8 @@ mule_main(int argc, char** argv)
   optimized_struct_parameters_eval_tests();
   
   fancy_viz_eval_tests();
+  
+  markup_tests();
   
   // NOTE(allen): Stepping Tests
   control_flow_stepping_tests();

@@ -406,10 +406,12 @@ typedef enum CTRL_EventKind
   //- rjf: debug info changes
   CTRL_EventKind_ModuleDebugInfoPathChange,
   
-  //- rjf: debug strings / decorations
+  //- rjf: debug strings / decorations / markup
   CTRL_EventKind_DebugString,
   CTRL_EventKind_ThreadName,
   CTRL_EventKind_ThreadColor,
+  CTRL_EventKind_SetBreakpoint,
+  CTRL_EventKind_UnsetBreakpoint,
   
   //- rjf: memory
   CTRL_EventKind_MemReserve,
@@ -465,6 +467,7 @@ struct CTRL_Event
   U64 timestamp;
   U32 exception_code;
   U32 rgba;
+  CTRL_UserBreakpointFlags bp_flags;
   String8 string;
 };
 
@@ -755,6 +758,7 @@ internal String8 ctrl_string_from_event_kind(CTRL_EventKind kind);
 internal String8 ctrl_string_from_msg_kind(CTRL_MsgKind kind);
 internal CTRL_EntityKind ctrl_entity_kind_from_string(String8 string);
 internal DMN_TrapFlags ctrl_dmn_trap_flags_from_user_breakpoint_flags(CTRL_UserBreakpointFlags flags);
+internal CTRL_UserBreakpointFlags ctrl_user_breakpoint_flags_from_dmn_trap_flags(DMN_TrapFlags flags);
 
 ////////////////////////////////
 //~ rjf: Handle Type Functions

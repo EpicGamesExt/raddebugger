@@ -16,29 +16,33 @@
 //~ Usage Macros
 
 #if defined(RADDBG_MARKUP_STUBS)
-# define raddbg_is_attached(...)               (0)
-# define raddbg_thread_name(fmt, ...)          ((void)0)
-# define raddbg_thread_color_hex(hexcode)      ((void)0)
-# define raddbg_thread_color_rgba(r, g, b, a)  ((void)0)
-# define raddbg_break(...)                     ((void)0)
-# define raddbg_break_if(expr, ...)            ((void)expr)
-# define raddbg_watch(fmt, ...)                ((void)0)
+# define raddbg_is_attached(...)                      (0)
+# define raddbg_thread_name(fmt, ...)                 ((void)0)
+# define raddbg_thread_color_hex(hexcode)             ((void)0)
+# define raddbg_thread_color_rgba(r, g, b, a)         ((void)0)
+# define raddbg_break(...)                            ((void)0)
+# define raddbg_break_if(expr, ...)                   ((void)expr)
+# define raddbg_watch(fmt, ...)                       ((void)0)
 # define raddbg_pin(expr, ...)
-# define raddbg_log(fmt, ...)                  ((void)0)
-# define raddbg_entry_point(...)               struct raddbg_gen_data_id(){int __unused__}
-# define raddbg_auto_view_rule(type, ...)      struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_log(fmt, ...)                         ((void)0)
+# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_auto_view_rule(type, ...)             struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
+# define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
 #else
-# define raddbg_is_attached(...)               raddbg_is_attached__impl()
-# define raddbg_thread_name(fmt, ...)          raddbg_thread_name__impl((fmt), __VA_ARGS__)
-# define raddbg_thread_color_hex(hexcode)      raddbg_thread_color__impl((hexcode))
-# define raddbg_thread_color_rgba(r, g, b, a)  raddbg_thread_color__impl(((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
-# define raddbg_break(...)                     raddbg_break__impl()
-# define raddbg_break_if(expr, ...)            ((expr) ? raddbg_break__impl() : (void)0)
-# define raddbg_watch(fmt, ...)                raddbg_watch__impl((fmt), __VA_ARGS__)
-# define raddbg_pin(expr, ...)                 /* NOTE(rjf): inspected by debugger ui - does not change program execution */
-# define raddbg_log(fmt, ...)                  raddbg_log__impl((fmt), __VA_ARGS__)
-# define raddbg_entry_point(...)               raddbg_exe_data static char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
-# define raddbg_auto_view_rule(type, ...)      raddbg_exe_data static char raddbg_gen_data_id()[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+# define raddbg_is_attached(...)                      raddbg_is_attached__impl()
+# define raddbg_thread_name(fmt, ...)                 raddbg_thread_name__impl((fmt), __VA_ARGS__)
+# define raddbg_thread_color_hex(hexcode)             raddbg_thread_color__impl((hexcode))
+# define raddbg_thread_color_rgba(r, g, b, a)         raddbg_thread_color__impl(((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
+# define raddbg_break(...)                            raddbg_break__impl()
+# define raddbg_break_if(expr, ...)                   ((expr) ? raddbg_break__impl() : (void)0)
+# define raddbg_watch(fmt, ...)                       raddbg_watch__impl((fmt), __VA_ARGS__)
+# define raddbg_pin(expr, ...)                        /* NOTE(rjf): inspected by debugger ui - does not change program execution */
+# define raddbg_log(fmt, ...)                         raddbg_log__impl((fmt), __VA_ARGS__)
+# define raddbg_entry_point(...)                      raddbg_exe_data static char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
+# define raddbg_auto_view_rule(type, ...)             raddbg_exe_data static char raddbg_gen_data_id()[] = ("auto_view_rule: {type: \"" #type "\", view_rule: \"" #__VA_ARGS__ "\"}")
+# define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
+# define raddbg_remove_breakpoint(ptr, size, r, w, x) raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
 #endif
 
 ////////////////////////////////
@@ -337,6 +341,43 @@ raddbg_log__impl(char *fmt, ...)
   
   // rjf: output debug string
   OutputDebugStringA(buffer);
+}
+
+static inline void
+raddbg_add_or_remove_breakpoint__impl(void *ptr, int set, int size, int r, int w, int x)
+{
+  if(raddbg_is_attached())
+  {
+#pragma pack(push, 8)
+    typedef struct RADDBG_AddBreakpointInfo RADDBG_AddBreakpointInfo;
+    struct RADDBG_AddBreakpointInfo
+    {
+      unsigned __int64 vaddr;
+      unsigned __int64 size;
+      unsigned __int64 r;
+      unsigned __int64 w;
+      unsigned __int64 x;
+      unsigned __int64 add;
+    };
+#pragma pack(pop)
+    RADDBG_AddBreakpointInfo info;
+    info.vaddr = (unsigned __int64)ptr;
+    info.size  = size;
+    info.r     = r;
+    info.w     = w;
+    info.x     = x;
+    info.add   = set;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x00524145u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except(1)
+    {
+    }
+#pragma warning(pop)
+  }
 }
 
 #endif // defined(_WIN32)

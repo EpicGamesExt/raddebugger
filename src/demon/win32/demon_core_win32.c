@@ -2527,6 +2527,23 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     e->code = exception->ExceptionInformation[1];
                   }break;
                   
+                  //- rjf: fill set-data-breakpoint info
+                  case DMN_W32_EXCEPTION_RADDBG_SET_BREAKPOINT:
+                  {
+                    U64 vaddr = exception->ExceptionInformation[0];
+                    U64 size  = exception->ExceptionInformation[1];
+                    U64 read  = exception->ExceptionInformation[2];
+                    U64 write = exception->ExceptionInformation[3];
+                    U64 exec  = exception->ExceptionInformation[4];
+                    U64 set   = exception->ExceptionInformation[5];
+                    e->kind = set ? DMN_EventKind_SetBreakpoint : DMN_EventKind_UnsetBreakpoint;
+                    e->address = vaddr;
+                    e->size    = size;
+                    if(read)  { e->flags |= DMN_TrapFlag_BreakOnRead; }
+                    if(write) { e->flags |= DMN_TrapFlag_BreakOnWrite; }
+                    if(exec)  { e->flags |= DMN_TrapFlag_BreakOnExecute; }
+                  }break;
+                  
                   //- rjf: unhandled exception case
                   default:
                   {
