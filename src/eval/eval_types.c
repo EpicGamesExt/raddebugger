@@ -1894,6 +1894,7 @@ internal E_TypeKey
 e_default_expansion_type_from_key(E_TypeKey root_key)
 {
   E_TypeKey type_key = zero_struct;
+  B32 hit_1ptr = 0;
   for(E_TypeKey key = root_key;
       !e_type_key_match(e_type_key_zero(), key);
       key = e_type_direct_from_key(key))
@@ -1913,8 +1914,13 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
       E_Type *type = e_type_from_key__cached(key);
       if(!e_type_key_match(e_type_key_basic(E_TypeKind_Void), type->direct_type_key))
       {
-        if(type->count == 1)
+        if(type->count == 1 && hit_1ptr)
         {
+          type_key = key;
+        }
+        else if(type->count == 1 && !hit_1ptr)
+        {
+          hit_1ptr = 1;
           done = 0;
         }
         else if(type->count > 1)
