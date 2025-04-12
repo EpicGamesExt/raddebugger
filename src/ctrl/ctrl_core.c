@@ -121,6 +121,16 @@ ctrl_entity_kind_from_string(String8 string)
   return result;
 }
 
+internal DMN_TrapFlags
+ctrl_dmn_trap_flags_from_user_breakpoint_flags(CTRL_UserBreakpointFlags flags)
+{
+  DMN_TrapFlags result = 0;
+  if(flags & CTRL_UserBreakpointFlag_BreakOnWrite)    { result |= DMN_TrapFlag_BreakOnWrite; }
+  if(flags & CTRL_UserBreakpointFlag_BreakOnRead)     { result |= DMN_TrapFlag_BreakOnRead; }
+  if(flags & CTRL_UserBreakpointFlag_BreakOnExecute)  { result |= DMN_TrapFlag_BreakOnExecute; }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions
 
@@ -389,7 +399,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->string.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->string.str, bp->string.size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->pt);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->u64);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->condition.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->condition.str, bp->condition.size);
       }
@@ -512,7 +522,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         bp->string.str = push_array_no_zero(arena, U8, bp->string.size);
         read_off += str8_deserial_read(string, read_off, bp->string.str, bp->string.size, 1);
         read_off += str8_deserial_read_struct(string, read_off, &bp->pt);
-        read_off += str8_deserial_read_struct(string, read_off, &bp->u64);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->size);
         read_off += str8_deserial_read_struct(string, read_off, &bp->condition.size);
         bp->condition.str = push_array_no_zero(arena, U8, bp->condition.size);
         read_off += str8_deserial_read(string, read_off, bp->condition.str, bp->condition.size, 1);
@@ -3561,6 +3571,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
         if(value.u64 != 0)
         {
           DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
+          trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
+          trap.size = bp->size;
           dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
         }
       }break;
@@ -3582,6 +3594,8 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope 
       if(value.u64 != 0)
       {
         DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
+        trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
+        trap.size = bp->size;
         dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
       }
     }

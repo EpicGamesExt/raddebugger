@@ -115,7 +115,7 @@ struct DMN_Trap
   U64 vaddr;
   U64 id;
   DMN_TrapFlags flags;
-  U32 length;
+  U32 size;
 };
 
 typedef struct DMN_TrapChunkNode DMN_TrapChunkNode;

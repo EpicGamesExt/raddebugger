@@ -1630,7 +1630,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 case Arch_x64:
                 {
                   REGS_RegBlockX64 regs = {0};
-                  dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
+                  dmn_w32_thread_read_reg_block(child->arch, child->handle, &regs);
                   {
                     U64 trap_idx = 0;
                     for(DMN_TrapChunkNode *n = t->traps.first; n != 0; n = n->next)
@@ -1648,8 +1648,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           case 3:{addr_reg = &regs.dr3;}break;
                         }
                         addr_reg->u64 = trap->vaddr;
-                        regs.dr7.u64 |= (1ull << (trap_idx*4));
-                        regs.dr7.u64 &= ~((U64)(bit16|bit17|bit18|bit19) << (trap_idx*4));
+                        regs.dr7.u64 |= (1ull << (trap_idx*2));
+                        regs.dr7.u64 |= (1ull << (trap_idx*2+1));
+                        regs.dr7.u64 &= ~((U64)(bit17|bit18|bit19|bit20) << (trap_idx*4));
                         switch(trap->flags)
                         {
                           case DMN_TrapFlag_BreakOnExecute:
@@ -1657,37 +1658,37 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           case DMN_TrapFlag_BreakOnWrite:
                           case DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
                           {
-                            regs.dr7.u64 |= ((U64)bit16) << (trap_idx*4);
+                            regs.dr7.u64 |= ((U64)bit17) << (trap_idx*4);
                           }break;
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite:
                           {
-                            regs.dr7.u64 |= (((U64)bit16) << (trap_idx*4));
                             regs.dr7.u64 |= (((U64)bit17) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
                           }break;
                         }
-                        switch(trap->length)
+                        switch(trap->size)
                         {
                           case 1:
                           default:{}break;
                           case 2:
                           {
-                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
                           }break;
                           case 4:
                           {
-                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
                             regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
                           }break;
                           case 8:
                           {
-                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
                           }break;
                         }
                       }
                     }
                   }
-                  dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
+                  dmn_w32_thread_write_reg_block(child->arch, child->handle, &regs);
                 }break;
               }
             }

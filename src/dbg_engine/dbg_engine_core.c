@@ -2420,6 +2420,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                   ctrl_user_bp.string    = n->string;
                   ctrl_user_bp.pt        = bp->pt;
                   ctrl_user_bp.condition = bp->condition;
+                  ctrl_user_bp.size      = bp->size;
                   ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
                 }
               }
@@ -2431,6 +2432,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 ctrl_user_bp.flags     = ctrl_bp_flags;
                 ctrl_user_bp.string    = bp->vaddr_expr;
                 ctrl_user_bp.condition = bp->condition;
+                ctrl_user_bp.size      = bp->size;
                 ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
               }
             }

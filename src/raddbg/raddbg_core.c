@@ -15793,6 +15793,13 @@ Z(getting_started)
           flags |= D_BreakpointFlag_BreakOnExecute;
         }
         
+        //- rjf: compute address range size
+        U64 addr_range_size = 0;
+        {
+          RD_Cfg *address_range_size_cfg = rd_cfg_child_from_string(src_bp, str8_lit("address_range_size"));
+          try_u64_from_str8_c_rules(address_range_size_cfg->first->string, &addr_range_size);
+        }
+        
         //- rjf: fill breakpoint
         D_Breakpoint *dst_bp = &breakpoints.v[idx];
         dst_bp->flags       = flags;
@@ -15800,6 +15807,7 @@ Z(getting_started)
         dst_bp->pt          = src_bp_loc.pt;
         dst_bp->vaddr_expr  = src_bp_loc.expr;
         dst_bp->condition   = non_ctrl_thread_static_condition;
+        dst_bp->size        = addr_range_size;
         idx += 1;
       }
     }

@@ -283,7 +283,7 @@ struct CTRL_UserBreakpoint
   CTRL_UserBreakpointFlags flags;
   String8 string;
   TxtPt pt;
-  U64 u64;
+  U64 size;
   String8 condition;
 };
 
@@ -753,6 +753,7 @@ internal CTRL_ExceptionKind ctrl_exception_kind_from_dmn(DMN_ExceptionKind kind)
 internal String8 ctrl_string_from_event_kind(CTRL_EventKind kind);
 internal String8 ctrl_string_from_msg_kind(CTRL_MsgKind kind);
 internal CTRL_EntityKind ctrl_entity_kind_from_string(String8 string);
+internal DMN_TrapFlags ctrl_dmn_trap_flags_from_user_breakpoint_flags(CTRL_UserBreakpointFlags flags);
 
 ////////////////////////////////
 //~ rjf: Handle Type Functions

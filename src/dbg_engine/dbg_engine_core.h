@@ -44,6 +44,7 @@ struct D_Breakpoint
   TxtPt pt;
   String8 vaddr_expr;
   String8 condition;
+  U64 size;
 };
 
 typedef struct D_BreakpointArray D_BreakpointArray;
