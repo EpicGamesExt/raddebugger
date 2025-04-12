@@ -2371,10 +2371,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           {
                             e->kind = DMN_EventKind_Breakpoint;
                             if(0){}
-                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 1; }
-                            else if(regs.dr7.u64 & (1ull<<1) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 2; }
-                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 3; }
-                            else if(regs.dr7.u64 & (1ull<<3) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; }
+                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 0; }
+                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 1; }
+                            else if(regs.dr7.u64 & (1ull<<4) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 2; }
+                            else if(regs.dr7.u64 & (1ull<<8) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; }
                           }
                         }break;
                       }
@@ -2403,10 +2403,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                             if(trap_idx == flagged_trap_idx)
                             {
                               trap = &n->v[n_idx];
-                              break;
+                              goto break_search_for_flagged_trap;
                             }
                           }
                         }
+                        break_search_for_flagged_trap:;
                       }
                       
                       // rjf: fill event based on trap
