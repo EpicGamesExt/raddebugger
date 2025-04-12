@@ -15778,8 +15778,24 @@ Z(getting_started)
           continue;
         }
         
+        //- rjf: compute breakpoint flags
+        D_BreakpointFlags flags = 0;
+        if(str8_match(rd_cfg_child_from_string(src_bp, str8_lit("break_on_write"))->first->string, str8_lit("1"), 0))
+        {
+          flags |= D_BreakpointFlag_BreakOnWrite;
+        }
+        if(str8_match(rd_cfg_child_from_string(src_bp, str8_lit("break_on_read"))->first->string, str8_lit("1"), 0))
+        {
+          flags |= D_BreakpointFlag_BreakOnRead;
+        }
+        if(str8_match(rd_cfg_child_from_string(src_bp, str8_lit("break_on_execute"))->first->string, str8_lit("1"), 0))
+        {
+          flags |= D_BreakpointFlag_BreakOnExecute;
+        }
+        
         //- rjf: fill breakpoint
         D_Breakpoint *dst_bp = &breakpoints.v[idx];
+        dst_bp->flags       = flags;
         dst_bp->file_path   = src_bp_loc.file_path;
         dst_bp->pt          = src_bp_loc.pt;
         dst_bp->vaddr_expr  = src_bp_loc.expr;

@@ -259,6 +259,14 @@ struct CTRL_Spoof
 ////////////////////////////////
 //~ rjf: User Breakpoint Types
 
+typedef U32 CTRL_UserBreakpointFlags;
+enum
+{
+  CTRL_UserBreakpointFlag_BreakOnWrite   = (1<<0),
+  CTRL_UserBreakpointFlag_BreakOnRead    = (1<<1),
+  CTRL_UserBreakpointFlag_BreakOnExecute = (1<<2),
+};
+
 typedef enum CTRL_UserBreakpointKind
 {
   CTRL_UserBreakpointKind_Null,
@@ -272,6 +280,7 @@ typedef struct CTRL_UserBreakpoint CTRL_UserBreakpoint;
 struct CTRL_UserBreakpoint
 {
   CTRL_UserBreakpointKind kind;
+  CTRL_UserBreakpointFlags flags;
   String8 string;
   TxtPt pt;
   U64 u64;

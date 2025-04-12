@@ -2403,6 +2403,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               // rjf: unpack user breakpoint entity
               D_Breakpoint *bp = &batch_breakpoints->v[idx];
               
+              // rjf: d -> ctrl flags
+              CTRL_UserBreakpointFlags ctrl_bp_flags = 0;
+              if(bp->flags & D_BreakpointFlag_BreakOnWrite)    { ctrl_bp_flags |= CTRL_UserBreakpointFlag_BreakOnWrite; }
+              if(bp->flags & D_BreakpointFlag_BreakOnRead)     { ctrl_bp_flags |= CTRL_UserBreakpointFlag_BreakOnRead; }
+              if(bp->flags & D_BreakpointFlag_BreakOnExecute)  { ctrl_bp_flags |= CTRL_UserBreakpointFlag_BreakOnExecute; }
+              
               // rjf: textual location -> add breakpoints for all possible override locations
               if(bp->file_path.size != 0 && bp->pt.line != 0)
               {
@@ -2410,6 +2416,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 for(String8Node *n = overrides.first; n != 0; n = n->next)
                 {
                   CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
+                  ctrl_user_bp.flags     = ctrl_bp_flags;
                   ctrl_user_bp.string    = n->string;
                   ctrl_user_bp.pt        = bp->pt;
                   ctrl_user_bp.condition = bp->condition;
@@ -2421,6 +2428,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               else if(bp->vaddr_expr.size != 0)
               {
                 CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_Expression};
+                ctrl_user_bp.flags     = ctrl_bp_flags;
                 ctrl_user_bp.string    = bp->vaddr_expr;
                 ctrl_user_bp.condition = bp->condition;
                 ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);

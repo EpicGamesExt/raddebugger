@@ -28,9 +28,18 @@ struct D_TargetArray
   U64 count;
 };
 
+typedef U32 D_BreakpointFlags;
+enum
+{
+  D_BreakpointFlag_BreakOnWrite   = (1<<0),
+  D_BreakpointFlag_BreakOnRead    = (1<<1),
+  D_BreakpointFlag_BreakOnExecute = (1<<2),
+};
+
 typedef struct D_Breakpoint D_Breakpoint;
 struct D_Breakpoint
 {
+  D_BreakpointFlags flags;
   String8 file_path;
   TxtPt pt;
   String8 vaddr_expr;

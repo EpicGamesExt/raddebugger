@@ -385,6 +385,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       {
         CTRL_UserBreakpoint *bp = &n->v;
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->kind);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->flags);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->string.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->string.str, bp->string.size);
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->pt);
@@ -506,6 +507,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         msg->user_bps.count += 1;
         CTRL_UserBreakpoint *bp = &n->v;
         read_off += str8_deserial_read_struct(string, read_off, &bp->kind);
+        read_off += str8_deserial_read_struct(string, read_off, &bp->flags);
         read_off += str8_deserial_read_struct(string, read_off, &bp->string.size);
         bp->string.str = push_array_no_zero(arena, U8, bp->string.size);
         read_off += str8_deserial_read(string, read_off, bp->string.str, bp->string.size, 1);
