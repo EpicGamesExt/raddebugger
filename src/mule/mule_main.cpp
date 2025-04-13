@@ -1955,6 +1955,7 @@ markup_tests(void)
       x += 1;
     }
   }
+  raddbg_remove_breakpoint(&x, sizeof(x), 0, 1, 0);
 }
 
 ////////////////////////////////

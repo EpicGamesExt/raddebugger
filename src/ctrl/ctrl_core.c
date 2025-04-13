@@ -3640,6 +3640,21 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope 
   }
 }
 
+internal void
+ctrl_thread__append_program_defined_bp_traps(Arena *arena, CTRL_Entity *bp, DMN_TrapChunkList *traps_out)
+{
+  CTRL_Entity *process = bp->parent;
+  DMN_Trap trap =
+  {
+    .process = process->handle.dmn_handle,
+    .vaddr = bp->vaddr_range.min,
+    .id = ((U64)bp|bit64),
+    .flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->bp_flags),
+    .size = (U32)dim_1u64(bp->vaddr_range),
+  };
+  dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
+}
+
 //- rjf: module lifetime open/close work
 
 internal void
@@ -5153,6 +5168,13 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, process->handle, module->handle, &msg->user_bps, &user_traps);
         }
         
+        // rjf: push process-declared breakpoins
+        for(CTRL_Entity *bp = process->first; bp != &ctrl_entity_nil; bp = bp->next)
+        {
+          if(bp->kind != CTRL_EntityKind_Breakpoint) { continue; }
+          ctrl_thread__append_program_defined_bp_traps(scratch.arena, bp, &user_traps);
+        }
+        
         // rjf: push virtual-address user breakpoints per-process
         ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, process->handle, &msg->user_bps, &user_traps);
       }
@@ -5463,6 +5485,31 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
           }
           ctrl_thread__eval_scope_end(eval_scope);
+        }break;
+        case DMN_EventKind_SetBreakpoint:
+        {
+          CTRL_Entity *bp = &ctrl_entity_nil;
+          {
+            CTRL_Entity *process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+            for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+            {
+              if(child->kind == CTRL_EntityKind_Breakpoint &&
+                 child->vaddr_range.min == event->address &&
+                 child->vaddr_range.max == event->address + event->size &&
+                 child->bp_flags == ctrl_user_breakpoint_flags_from_dmn_trap_flags(event->flags))
+              {
+                bp = child;
+                break;
+              }
+            }
+          }
+          if(bp != &ctrl_entity_nil)
+          {
+            DMN_TrapChunkList new_traps = {0};
+            ctrl_thread__append_program_defined_bp_traps(scratch.arena, bp, &new_traps);
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
+            dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
+          }
         }break;
       }
       
@@ -5790,7 +5837,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         {
           if(event->user_data != 0)
           {
-            CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)event->user_data;
             hit_user_bp = 1;
           }
           for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
@@ -5805,7 +5851,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               {
                 CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
                 hit_user_bp = 1;
-                if(user_bp != 0 && user_bp->condition.size != 0)
+                if(user_bp != 0 && !(trap->id & bit64) && user_bp->condition.size != 0)
                 {
                   str8_list_push(temp.arena, &conditions, user_bp->condition);
                 }
@@ -6155,8 +6201,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     event->rip_vaddr = stop_event->instruction_pointer;
     if(stop_cause == CTRL_EventCause_UserBreakpoint && stop_event->user_data != 0)
     {
-      CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)stop_event->user_data;
-      event->u64_code = user_bp->id;
+      if(!(stop_event->user_data & bit64))
+      {
+        CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)stop_event->user_data;
+        event->u64_code = user_bp->id;
+      }
     }
     ctrl_c2u_push_events(&evts);
   }
