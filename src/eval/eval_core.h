@@ -74,6 +74,7 @@ struct E_OpInfo
   String8 pre;
   String8 sep;
   String8 post;
+  String8 chain;
 };
 
 ////////////////////////////////

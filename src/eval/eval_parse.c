@@ -485,16 +485,13 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
       U64 sep_idx = 0;
       for(E_Expr *child = expr->first;; child = child->next)
       {
-        if(seps[sep_idx].size != 0)
+        if(sep_idx == ArrayCount(seps)-1 && child != &e_expr_nil)
         {
-          if(sep_idx == 1 && child == &e_expr_nil)
-          {
-            sep_idx += 1;
-          }
-          str8_list_push(arena, out, seps[sep_idx]);
+          str8_list_push(arena, out, op_info->chain);
         }
-        if(sep_idx == 0)
+        else
         {
+          str8_list_push(arena, out, seps[sep_idx]);
           sep_idx += 1;
         }
         if(child == &e_expr_nil)
@@ -914,7 +911,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         for EachNonZeroEnumVal(E_ExprKind, k)
         {
           E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
-          if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(op_info->pre, token_string, 0))
+          if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(str8_skip_chop_whitespace(op_info->pre), token_string, 0))
           {
             prefix_unary_precedence = op_info->precedence;
             prefix_unary_kind = k;
@@ -1376,7 +1373,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         for EachNonZeroEnumVal(E_ExprKind, k)
         {
           E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
-          if(op_info->kind == E_OpKind_Binary && str8_match(op_info->sep, token_string, 0))
+          if(op_info->kind == E_OpKind_Binary && str8_match(str8_skip_chop_whitespace(op_info->sep), token_string, 0))
           {
             binary_precedence = op_info->precedence;
             binary_kind = k;
