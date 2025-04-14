@@ -1760,7 +1760,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
     //- rjf: meta-config writes
     case RD_EvalSpaceKind_MetaCfg:
     {
-      Temp scratch = scratch_begin(0, 0);
+      result = 1;
       
       // rjf: unpack write info
       String8 write_string = str8_cstring_capped(in, (U8 *)in + dim_1u64(range));
@@ -1768,78 +1768,19 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       // rjf: unpack cfg
       RD_Cfg *root_cfg = rd_cfg_from_eval_space(space);
       String8 child_key = e_string_from_id(space.u64s[1]);
-      RD_Cfg *cfg = root_cfg;
-      if(child_key.size != 0)
+      
+      // rjf: zero-range? delete child
+      if(range.min == range.max)
       {
-        cfg = rd_cfg_child_from_string(root_cfg, child_key);
+        rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
       }
       
-      // rjf: perform write, based on child type in schema
-      if(child_key.size != 0)
+      // rjf: non-zero-range? create child if needed & write value
+      else
       {
-        MD_Node *root_schema = rd_schema_from_name(root_cfg->string);
-        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
-        String8 child_type_name = child_schema->first->string;
-        if(str8_match(child_type_name, str8_lit("path_pt"), 0))
-        {
-          result = 0;
-        }
-        else if(str8_match(child_type_name, str8_lit("path"), 0) ||
-                str8_match(child_type_name, str8_lit("code_string"), 0) ||
-                str8_match(child_type_name, str8_lit("string"), 0))
-        {
-          RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
-          rd_cfg_new_replace(child, write_string);
-          result = 1;
-        }
-        else if(str8_match(child_type_name, str8_lit("bool"), 0))
-        {
-          if(range.max == range.min)
-          {
-            rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
-          }
-          else
-          {
-            U64 value = 0;
-            MemoryCopy(&value, in, dim_1u64(range));
-            RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
-            rd_cfg_new_replacef(child, "%I64u", !!value);
-          }
-          result = 1;
-        }
-        else if(str8_match(child_type_name, str8_lit("u64"), 0))
-        {
-          if(range.max == range.min)
-          {
-            rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
-          }
-          else
-          {
-            U64 value = 0;
-            MemoryCopy(&value, in, dim_1u64(range));
-            RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
-            rd_cfg_new_replacef(child, "%I64u", value);
-          }
-          result = 1;
-        }
-        else if(str8_match(child_type_name, str8_lit("f32"), 0))
-        {
-          if(range.max == range.min)
-          {
-            rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
-          }
-          else
-          {
-            F32 value = 0;
-            MemoryCopy(&value, in, dim_1u64(range));
-            RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
-            rd_cfg_new_replacef(child, "%f", value);
-          }
-          result = 1;
-        }
+        RD_Cfg *child_cfg = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
+        rd_cfg_new_replace(child_cfg, write_string);
       }
-      
-      scratch_end(scratch);
     }break;
     
     case RD_EvalSpaceKind_MetaCtrlEntity:
@@ -1970,34 +1911,56 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
   if(dst_eval.irtree.mode == E_Mode_Offset)
   {
     Temp scratch = scratch_begin(0, 0);
+    
+    //- rjf: unpack type of destination
     E_TypeKey type_key = e_type_unwrap(dst_eval.irtree.type_key);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
     E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.irtree.type_key)));
     E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+    
+    //- rjf: determine data we'll write
+    B32 got_commit_data = 0;
     String8 commit_data = {0};
     B32 commit_at_ptr_dest = 0;
-    if((E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic) ||
-       type_kind == E_TypeKind_Enum)
+    if(!e_type_key_match(e_type_key_zero(), type_key))
     {
-      E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
-      E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
-      E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
-      commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-      commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
-    }
-    else if(type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array)
-    {
-      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
-      E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
-      E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.irtree.type_key);
-      if(direct_type_kind == E_TypeKind_Char8 ||
-         direct_type_kind == E_TypeKind_Char16 ||
-         direct_type_kind == E_TypeKind_Char32 ||
-         direct_type_kind == E_TypeKind_UChar8 ||
-         direct_type_kind == E_TypeKind_UChar16 ||
-         direct_type_kind == E_TypeKind_UChar32 ||
-         e_type_kind_is_integer(direct_type_kind))
+      
+      //- rjf: meta evaluations? -> always treat string as textual content, as-is,
+      // and commit that.
+      if(!got_commit_data && dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
       {
+        got_commit_data = 1;
+        commit_data = string;
+      }
+      
+      //- rjf: basic types or enums? treat string as an expression, cast to the
+      // destination type, and compute commit data as being the binary representation
+      // of the new value.
+      if(!got_commit_data &&
+         ((E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic) ||
+          type_kind == E_TypeKind_Enum))
+      {
+        got_commit_data = 1;
+        E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
+        E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
+        E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
+        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
+        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+      }
+      
+      //- rjf: pointer or array to characters/integers? -> try to treat
+      // new value string as textual data
+      if(!got_commit_data &&
+         ((type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array) &&
+          direct_type_kind == E_TypeKind_Char8 ||
+          direct_type_kind == E_TypeKind_Char16 ||
+          direct_type_kind == E_TypeKind_Char32 ||
+          direct_type_kind == E_TypeKind_UChar8 ||
+          direct_type_kind == E_TypeKind_UChar16 ||
+          direct_type_kind == E_TypeKind_UChar32 ||
+          e_type_kind_is_integer(direct_type_kind)))
+      {
+        got_commit_data = 1;
         B32 is_quoted = 0;
         if(string.size >= 1 && string.str[0] == '"')
         {
@@ -2042,26 +2005,39 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
           }break;
         }
       }
-      else if(type_kind == E_TypeKind_Ptr &&
-              (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
-               e_type_kind_is_integer(src_eval_value_type_kind)) &&
-              src_eval_value.irtree.mode == E_Mode_Value)
+      
+      //- rjf: pointer? -> try to treat new value as numeric value
+      if(!got_commit_data && type_kind == E_TypeKind_Ptr)
       {
-        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.irtree.type_key));
-        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+        E_Eval src_eval = e_eval_from_string(scratch.arena, string);
+        E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
+        E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.irtree.type_key);
+        if((e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
+            e_type_kind_is_integer(src_eval_value_type_kind)) &&
+           src_eval_value.irtree.mode == E_Mode_Value)
+        {
+          got_commit_data = 1;
+          commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
+          commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.irtree.type_key));
+          commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+        }
       }
     }
-    if(commit_data.size != 0 && !e_type_key_match(e_type_key_zero(), type_key))
+    
+    //- rjf: determine destination offset we'll write the new data to
+    U64 dst_offset = dst_eval.value.u64;
+    if(got_commit_data && commit_at_ptr_dest)
     {
-      U64 dst_offset = dst_eval.value.u64;
-      if(dst_eval.irtree.mode == E_Mode_Offset && commit_at_ptr_dest)
-      {
-        E_Eval dst_value_eval = e_value_eval_from_eval(dst_eval);
-        dst_offset = dst_value_eval.value.u64;
-      }
+      E_Eval dst_value_eval = e_value_eval_from_eval(dst_eval);
+      dst_offset = dst_value_eval.value.u64;
+    }
+    
+    //- rjf: if we have commit data, then write that data to the destination offset
+    if(got_commit_data)
+    {
       result = e_space_write(dst_eval.space, commit_data.str, r1u64(dst_offset, dst_offset + commit_data.size));
     }
+    
     scratch_end(scratch);
   }
   return result;
