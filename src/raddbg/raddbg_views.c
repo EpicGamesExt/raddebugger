@@ -2180,10 +2180,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   {
     space_range = r1u64(0, 0x7FFFFFFFFFFFull);
   }
-  U64 cursor          = rd_view_cfg_value_from_string(str8_lit("cursor_vaddr")).u64;
-  U64 mark            = rd_view_cfg_value_from_string(str8_lit("mark_vaddr")).u64;
-  U64 bytes_per_cell  = rd_view_cfg_value_from_string(str8_lit("bytes_per_cell")).u64;
-  U64 num_columns     = rd_view_cfg_value_from_string(str8_lit("num_columns")).u64;
+  U64 cursor          = rd_view_cfg_u64_from_string(str8_lit("cursor_vaddr"));
+  U64 mark            = rd_view_cfg_u64_from_string(str8_lit("mark_vaddr"));
+  U64 bytes_per_cell  = rd_view_cfg_u64_from_string(str8_lit("bytes_per_cell"));
+  U64 num_columns     = rd_view_cfg_u64_from_string(str8_lit("num_columns"));
   if(num_columns == 0)
   {
     num_columns = 16;

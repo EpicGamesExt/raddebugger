@@ -204,7 +204,7 @@ RD_VocabTable:
       x:
     {
       'size':        code_string,
-      @default(16) 'num_columns': @range[1, 64] u64,
+      @default(16) 'num_columns': @range[1, 256] u64,
     }
     ```
   }
@@ -213,8 +213,8 @@ RD_VocabTable:
     ```
       x:
     {
-      @order(0) 'w': code_string,
-      @order(1) 'h': code_string,
+      @order(0) 'w': u64,
+      @order(1) 'h': u64,
       'fmt': tex2dformat,
     }
     ```
@@ -227,9 +227,9 @@ RD_VocabTable:
       'count': code_string,
       'vtx': code_string,
       'vtx_size': code_string,
-      'yaw': f32,
-      'pitch': f32,
-      'zoom': f32,
+      'yaw': @range[0, 1] f32,
+      'pitch': @range[-0.5, 0] f32,
+      'zoom': @range[0, 100] f32,
     }
     ```
   }

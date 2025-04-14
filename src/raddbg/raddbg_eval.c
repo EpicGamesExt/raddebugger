@@ -392,6 +392,26 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         child_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, child_schema->string);
       }
       
+      //- rjf: extend child type with ranges
+      MD_Node *range = md_tag_from_string(child_schema->first, str8_lit("range"), 0);
+      if(!md_node_is_nil(range))
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_Expr *min_bound = e_parse_expr_from_text(scratch.arena, range->first->string).exprs.first;
+        E_Expr *max_bound = e_parse_expr_from_text(scratch.arena, range->first->next->string).exprs.first;
+        E_Expr *args[] =
+        {
+          min_bound,
+          max_bound,
+        };
+        child_type_key = e_type_key_cons(.kind = E_TypeKind_Lens,
+                                         .name = str8_lit("range1"),
+                                         .direct_key = child_type_key,
+                                         .count = 2,
+                                         .args = args);
+        scratch_end(scratch);
+      }
+      
       //- rjf: evaluate
       E_Space child_eval_space = zero_struct;
       if(cfg != &rd_nil_cfg)
