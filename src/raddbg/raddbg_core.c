@@ -1924,7 +1924,6 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
     B32 commit_at_ptr_dest = 0;
     if(!e_type_key_match(e_type_key_zero(), type_key))
     {
-      
       //- rjf: meta evaluations? -> always treat string as textual content, as-is,
       // and commit that.
       if(!got_commit_data && dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
@@ -2115,7 +2114,15 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   Temp scratch = scratch_begin(0, 0);
   E_TypeKey type_key = eval.irtree.type_key;
   E_Type *type = e_type_from_key__cached(type_key);
-  String8 schema_name = type->name;
+  String8 schema_name = str8_lit("watch");
+  if(type->kind == E_TypeKind_Lens)
+  {
+    RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(type->name);
+    if(view_ui_rule != &rd_nil_view_ui_rule)
+    {
+      schema_name = type->name;
+    }
+  }
   RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {

@@ -104,39 +104,50 @@ internal B32
 ev_type_key_is_editable(E_TypeKey type_key)
 {
   B32 result = 0;
-  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
+  B32 done = 0;
+  for(E_TypeKey t = type_key; !result && !done; t = e_type_direct_from_key(t))
   {
     E_TypeKind kind = e_type_kind_from_key(t);
-    if(kind == E_TypeKind_Array)
+    switch(kind)
     {
-      E_TypeKind element_kind = e_type_kind_from_key(e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))));
-      if(element_kind != E_TypeKind_U8 &&
-         element_kind != E_TypeKind_U16 &&
-         element_kind != E_TypeKind_U32 &&
-         element_kind != E_TypeKind_S8 &&
-         element_kind != E_TypeKind_S16 &&
-         element_kind != E_TypeKind_S32 &&
-         element_kind != E_TypeKind_UChar8 &&
-         element_kind != E_TypeKind_UChar16 &&
-         element_kind != E_TypeKind_UChar32 &&
-         element_kind != E_TypeKind_Char8 &&
-         element_kind != E_TypeKind_Char16 &&
-         element_kind != E_TypeKind_Char32)
+      case E_TypeKind_Null:
+      case E_TypeKind_Function:
       {
-        break;
-      }
-      else
+        result = 0;
+        done = 1;
+      }break;
+      default:
+      if((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || e_type_kind_is_pointer_or_ref(kind))
       {
         result = 1;
-      }
-    }
-    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
-    {
-      break;
-    }
-    if((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || e_type_kind_is_pointer_or_ref(kind))
-    {
-      result = 1;
+        done = 1;
+      }break;
+      case E_TypeKind_Array:
+      {
+        E_Type *type = e_type_from_key__cached(t);
+        if(type->flags & E_TypeFlag_IsNotText)
+        {
+          result = 0;
+          done = 1;
+        }
+        else
+        {
+          E_TypeKind element_kind = e_type_kind_from_key(e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))));
+          result = (element_kind == E_TypeKind_U8 ||
+                    element_kind == E_TypeKind_U16 ||
+                    element_kind == E_TypeKind_U32 ||
+                    element_kind == E_TypeKind_S8 ||
+                    element_kind == E_TypeKind_S16 ||
+                    element_kind == E_TypeKind_S32 ||
+                    element_kind == E_TypeKind_UChar8 ||
+                    element_kind == E_TypeKind_UChar16 ||
+                    element_kind == E_TypeKind_UChar32 ||
+                    element_kind == E_TypeKind_Char8 ||
+                    element_kind == E_TypeKind_Char16 ||
+                    element_kind == E_TypeKind_Char32);
+          done = 1;
+        }
+      }break;
     }
   }
   return result;
