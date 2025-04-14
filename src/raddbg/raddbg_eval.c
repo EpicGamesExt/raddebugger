@@ -369,6 +369,10 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       {
         child_type_key = e_type_key_basic(E_TypeKind_U64);
       }
+      else if(str8_match(child_schema->first->string, str8_lit("f32"), 0))
+      {
+        child_type_key = e_type_key_basic(E_TypeKind_F32);
+      }
       else if(str8_match(child_schema->first->string, str8_lit("bool"), 0))
       {
         child_type_key = e_type_key_basic(E_TypeKind_Bool);

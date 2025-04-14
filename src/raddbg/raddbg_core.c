@@ -1648,6 +1648,16 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           try_u64_from_str8_c_rules(value_string, &value);
           read_data = push_str8_copy(scratch.arena, str8_struct(&value));
         }
+        else if(str8_match(child_type_name, str8_lit("f32"), 0))
+        {
+          String8 value_string = cfg->first->string;
+          if(value_string.size == 0)
+          {
+            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+          }
+          F32 value = (F32)f64_from_str8(value_string);
+          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+        }
       }
       
       // rjf: perform read
@@ -1809,6 +1819,21 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
             MemoryCopy(&value, in, dim_1u64(range));
             RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
             rd_cfg_new_replacef(child, "%I64u", value);
+          }
+          result = 1;
+        }
+        else if(str8_match(child_type_name, str8_lit("f32"), 0))
+        {
+          if(range.max == range.min)
+          {
+            rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
+          }
+          else
+          {
+            F32 value = 0;
+            MemoryCopy(&value, in, dim_1u64(range));
+            RD_Cfg *child = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
+            rd_cfg_new_replacef(child, "%f", value);
           }
           result = 1;
         }

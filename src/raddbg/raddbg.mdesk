@@ -227,9 +227,9 @@ RD_VocabTable:
       'count': code_string,
       'vtx': code_string,
       'vtx_size': code_string,
-      'yaw': code_string,
-      'pitch': code_string,
-      'zoom': code_string,
+      'yaw': f32,
+      'pitch': f32,
+      'zoom': f32,
     }
     ```
   }
