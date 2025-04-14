@@ -154,6 +154,7 @@ struct E_IRState
   
   // rjf: overridden irtree
   E_IRTreeAndType *overridden_irtree;
+  B32 disallow_autohooks;
   
   // rjf: caches
   E_UsedExprMap *used_expr_map;

@@ -901,6 +901,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     E_IRTreeAndType *prev;
   };
   E_IRTreeAndType *start_prev = e_ir_state->overridden_irtree;
+  B32 start_disallow_autohooks = e_ir_state->disallow_autohooks;
   Task start_task = {0, root_expr, e_ir_state->overridden_irtree};
   Task *first_task = &start_task;
   Task *last_task = first_task;
@@ -922,7 +923,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     {
       expr = expr->ref;
     }
-    B32 allow_autohooks = 1;
     E_ExprKind kind = expr->kind;
     switch(kind)
     {
@@ -1592,11 +1592,19 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
           result = e_irtree_and_type_from_expr(arena, call);
           
-          // rjf: is "raw"? -> strip all lens types from result; disallow auto-hooks
+          // rjf: is "raw"? -> try to return overridden tree, otherwise strip all
+          // lens types from result; disallow auto-hooks
           if(str8_match(callee->string, str8_lit("raw"), 0))
           {
-            result.type_key = e_type_unwrap(result.type_key);
-            allow_autohooks = 0;
+            e_ir_state->disallow_autohooks = 1;
+            if(e_ir_state->overridden_irtree != 0)
+            {
+              result = *e_ir_state->overridden_irtree;
+            }
+            else
+            {
+              result.type_key = e_type_unwrap(result.type_key);
+            }
           }
         }
         
@@ -1626,12 +1634,20 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
           }
           
-          // rjf: is "raw"? -> strip all lens types from result; disallow auto-hooks
+          // rjf: is "raw"? -> try to return overridden tree, otherwise strip all
+          // lens types from result; disallow auto-hooks
           if(str8_match(lhs_type->name, str8_lit("raw"), 0))
           {
-            result = e_irtree_and_type_from_expr(arena, lhs->next);
-            result.type_key = e_type_unwrap(result.type_key);
-            allow_autohooks = 0;
+            e_ir_state->disallow_autohooks = 1;
+            if(e_ir_state->overridden_irtree != 0)
+            {
+              result = *e_ir_state->overridden_irtree;
+            }
+            else
+            {
+              result = e_irtree_and_type_from_expr(arena, lhs->next);
+              result.type_key = e_type_unwrap(result.type_key);
+            }
           }
           
           // rjf: is non-raw -> patch resultant type with a lens w/ args, pointing to the original type
@@ -1764,7 +1780,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
           mapped_bytecode_mode = e_ir_state->overridden_irtree->mode;
           mapped_type_key = e_ir_state->overridden_irtree->type_key;
-          allow_autohooks = 0;
+          e_ir_state->disallow_autohooks = 1;
         }
         
         //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
@@ -2265,7 +2281,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     }
     
     //- rjf: find any auto hooks according to this generation's type
-    if(allow_autohooks && result.mode != E_Mode_Null)
+    if(!e_ir_state->disallow_autohooks && result.mode != E_Mode_Null)
     {
       E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
       for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
@@ -2288,9 +2304,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
   }
   
   //////////////////////////////
-  //- rjf: reset the overridden irtree to whatever it was before this task list
+  //- rjf: reset the overridden settings to whatever they were before this task list
   //
   e_ir_state->overridden_irtree = start_prev;
+  e_ir_state->disallow_autohooks = start_disallow_autohooks;
   
   //////////////////////////////
   //- rjf: unpoison the tags we used
