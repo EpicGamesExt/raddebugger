@@ -3298,7 +3298,7 @@ rd_cell(RD_CellParams *params, String8 string)
       F32 toggler_size_px = height_px - extratoggler_padding_px*2.f;
       ui_set_next_hover_cursor(OS_Cursor_LeftRight);
       UI_Box *slider_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "slider");
-      UI_Parent(slider_box) UI_TagF("good_pop")
+      UI_Parent(slider_box) UI_TagF("pop")
       {
         UI_Signal sig = ui_signal_from_box(slider_box);
         if(ui_dragging(sig))
@@ -3307,18 +3307,19 @@ rd_cell(RD_CellParams *params, String8 string)
           {
             ui_store_drag_struct(params->slider_value_out);
           }
-          F32 draggable_region_size_px = dim_2f32(slider_box->rect).x;
+          F32 draggable_region_size_px = dim_2f32(slider_box->rect).x - (extratoggler_padding_px*2 + toggler_size_px);
           F32 initial_pct = *ui_get_drag_struct(F32);
           F32 current_pct = initial_pct + (ui_drag_delta().x / draggable_region_size_px);
           params->slider_value_out[0] = current_pct;
         }
+        
         UI_Box *fill_box = &ui_nil_box;
-        UI_PrefWidth(ui_pct(Clamp(0, params->slider_value_out[0], 1), 0.f))
+        UI_PrefWidth(ui_children_sum(0))
           UI_MinWidth(toggler_size_px + extratoggler_padding_px*2)
           fill_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
         UI_Parent(fill_box)
         {
-          ui_spacer(ui_pct(1, 0));
+          ui_spacer(ui_pct(Clamp(0, params->slider_value_out[0], 1), 0.f));
           UI_BackgroundColor(ui_color_from_name(str8_lit("text")))
             UI_PrefWidth(ui_px(height_px, 1.f))
           {
@@ -3332,6 +3333,7 @@ rd_cell(RD_CellParams *params, String8 string)
             }
           }
         }
+        ui_spacer(ui_pct(1-Clamp(0, params->slider_value_out[0], 1), 0.f));
       }
     }
   }
