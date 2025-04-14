@@ -1757,7 +1757,6 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
         }
       }
     }
-    
   }
   
   //- rjf: fixup children sizes (in the direction of the layout axis)
@@ -1823,6 +1822,12 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
         child->fixed_size.v[axis] = root->fixed_size.v[axis] * child->pref_size[axis].value;
       }
     }
+  }
+  
+  //- rjf: enforce clamps
+  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+  {
+    child->fixed_size.v[axis] = Max(child->fixed_size.v[axis], child->min_size.v[axis]);
   }
   
   //- rjf: recurse
@@ -2424,6 +2429,8 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     {
       box->pref_size[Axis2_Y] = ui_state->pref_height_stack.top->v;
     }
+    box->min_size.v[Axis2_X] = ui_state->min_width_stack.top->v;
+    box->min_size.v[Axis2_Y] = ui_state->min_height_stack.top->v;
     
     B32 is_auto_focus_active = ui_is_key_auto_focus_active(key);
     B32 is_auto_focus_hot    = ui_is_key_auto_focus_hot(key);

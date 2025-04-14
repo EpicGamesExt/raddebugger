@@ -390,6 +390,7 @@ struct UI_Box
   UI_TextAlign text_align;
   Vec2F32 fixed_position;
   Vec2F32 fixed_size;
+  Vec2F32 min_size;
   UI_Size pref_size[Axis2_COUNT];
   Axis2 child_layout_axis;
   OS_Cursor hover_cursor;
@@ -1129,6 +1130,8 @@ internal F32      ui_top_px_height(void);
 #define UI_FixedHeight(v) DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
 #define UI_PrefWidth(v) DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
 #define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
+#define UI_MinWidth(v) DeferLoop(ui_push_min_width(v), ui_pop_min_width())
+#define UI_MinHeight(v) DeferLoop(ui_push_min_height(v), ui_pop_min_height())
 #define UI_PermissionFlags(v) DeferLoop(ui_push_permission_flags(v), ui_pop_permission_flags())
 #define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
 #define UI_OmitFlags(v) DeferLoop(ui_push_omit_flags(v), ui_pop_omit_flags())

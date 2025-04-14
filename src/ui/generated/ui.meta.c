@@ -12,6 +12,8 @@
 #define UI_FixedHeight(v) DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
 #define UI_PrefWidth(v) DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
 #define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
+#define UI_MinWidth(v) DeferLoop(ui_push_min_width(v), ui_pop_min_width())
+#define UI_MinHeight(v) DeferLoop(ui_push_min_height(v), ui_pop_min_height())
 #define UI_PermissionFlags(v) DeferLoop(ui_push_permission_flags(v), ui_pop_permission_flags())
 #define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
 #define UI_OmitFlags(v) DeferLoop(ui_push_omit_flags(v), ui_pop_omit_flags())
@@ -45,6 +47,8 @@ internal F32 ui_top_fixed_width(void) { UI_StackTopImpl(ui_state, FixedWidth, fi
 internal F32 ui_top_fixed_height(void) { UI_StackTopImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_top_pref_width(void) { UI_StackTopImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_top_pref_height(void) { UI_StackTopImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_top_min_width(void) { UI_StackTopImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_top_min_height(void) { UI_StackTopImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_top_permission_flags(void) { UI_StackTopImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_top_flags(void) { UI_StackTopImpl(ui_state, Flags, flags) }
 internal UI_BoxFlags ui_top_omit_flags(void) { UI_StackTopImpl(ui_state, OmitFlags, omit_flags) }
@@ -76,6 +80,8 @@ internal F32 ui_bottom_fixed_width(void) { UI_StackBottomImpl(ui_state, FixedWid
 internal F32 ui_bottom_fixed_height(void) { UI_StackBottomImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_bottom_pref_width(void) { UI_StackBottomImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_bottom_pref_height(void) { UI_StackBottomImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_bottom_min_width(void) { UI_StackBottomImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_bottom_min_height(void) { UI_StackBottomImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_bottom_permission_flags(void) { UI_StackBottomImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_bottom_flags(void) { UI_StackBottomImpl(ui_state, Flags, flags) }
 internal UI_BoxFlags ui_bottom_omit_flags(void) { UI_StackBottomImpl(ui_state, OmitFlags, omit_flags) }
@@ -107,6 +113,8 @@ internal F32 ui_push_fixed_width(F32 v) { UI_StackPushImpl(ui_state, FixedWidth,
 internal F32 ui_push_fixed_height(F32 v) { UI_StackPushImpl(ui_state, FixedHeight, fixed_height, F32, v) }
 internal UI_Size ui_push_pref_width(UI_Size v) { UI_StackPushImpl(ui_state, PrefWidth, pref_width, UI_Size, v) }
 internal UI_Size ui_push_pref_height(UI_Size v) { UI_StackPushImpl(ui_state, PrefHeight, pref_height, UI_Size, v) }
+internal F32 ui_push_min_width(F32 v) { UI_StackPushImpl(ui_state, MinWidth, min_width, F32, v) }
+internal F32 ui_push_min_height(F32 v) { UI_StackPushImpl(ui_state, MinHeight, min_height, F32, v) }
 internal UI_PermissionFlags ui_push_permission_flags(UI_PermissionFlags v) { UI_StackPushImpl(ui_state, PermissionFlags, permission_flags, UI_PermissionFlags, v) }
 internal UI_BoxFlags ui_push_flags(UI_BoxFlags v) { UI_StackPushImpl(ui_state, Flags, flags, UI_BoxFlags, v) }
 internal UI_BoxFlags ui_push_omit_flags(UI_BoxFlags v) { UI_StackPushImpl(ui_state, OmitFlags, omit_flags, UI_BoxFlags, v) }
@@ -138,6 +146,8 @@ internal F32 ui_pop_fixed_width(void) { UI_StackPopImpl(ui_state, FixedWidth, fi
 internal F32 ui_pop_fixed_height(void) { UI_StackPopImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_pop_pref_width(void) { UI_StackPopImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_pop_pref_height(void) { UI_StackPopImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_pop_min_width(void) { UI_StackPopImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_pop_min_height(void) { UI_StackPopImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_pop_permission_flags(void) { UI_StackPopImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_pop_flags(void) { UI_StackPopImpl(ui_state, Flags, flags) }
 internal UI_BoxFlags ui_pop_omit_flags(void) { UI_StackPopImpl(ui_state, OmitFlags, omit_flags) }
@@ -169,6 +179,8 @@ internal F32 ui_set_next_fixed_width(F32 v) { UI_StackSetNextImpl(ui_state, Fixe
 internal F32 ui_set_next_fixed_height(F32 v) { UI_StackSetNextImpl(ui_state, FixedHeight, fixed_height, F32, v) }
 internal UI_Size ui_set_next_pref_width(UI_Size v) { UI_StackSetNextImpl(ui_state, PrefWidth, pref_width, UI_Size, v) }
 internal UI_Size ui_set_next_pref_height(UI_Size v) { UI_StackSetNextImpl(ui_state, PrefHeight, pref_height, UI_Size, v) }
+internal F32 ui_set_next_min_width(F32 v) { UI_StackSetNextImpl(ui_state, MinWidth, min_width, F32, v) }
+internal F32 ui_set_next_min_height(F32 v) { UI_StackSetNextImpl(ui_state, MinHeight, min_height, F32, v) }
 internal UI_PermissionFlags ui_set_next_permission_flags(UI_PermissionFlags v) { UI_StackSetNextImpl(ui_state, PermissionFlags, permission_flags, UI_PermissionFlags, v) }
 internal UI_BoxFlags ui_set_next_flags(UI_BoxFlags v) { UI_StackSetNextImpl(ui_state, Flags, flags, UI_BoxFlags, v) }
 internal UI_BoxFlags ui_set_next_omit_flags(UI_BoxFlags v) { UI_StackSetNextImpl(ui_state, OmitFlags, omit_flags, UI_BoxFlags, v) }

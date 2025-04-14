@@ -19,6 +19,8 @@ UI_StackTable:
   { FixedHeight                        fixed_height                  F32                   0                                  }
   { PrefWidth                          pref_width                    UI_Size               `ui_px(250.f, 1.f)`                }
   { PrefHeight                         pref_height                   UI_Size               `ui_px(30.f, 1.f)`                 }
+  { MinWidth                           min_width                     F32                   0                                  }
+  { MinHeight                          min_height                    F32                   0                                  }
   
   //- rjf: flags
   { PermissionFlags                    permission_flags              UI_PermissionFlags    UI_PermissionFlag_All              }
