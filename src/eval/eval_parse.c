@@ -653,12 +653,12 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_Bool);
     }
-    else if(Case("float") || Case("f32") || Case("F32") || Case("r32") || Case("R32"))
+    else if(Case("float") || Case("float32") || Case("f32") || Case("F32") || Case("r32") || Case("R32"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_F32);
     }
-    else if(Case("double") || Case("f64") || Case("F64") || Case("r64") || Case("R64"))
+    else if(Case("double") || Case("float64") || Case("f64") || Case("F64") || Case("r64") || Case("R64"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_F64);

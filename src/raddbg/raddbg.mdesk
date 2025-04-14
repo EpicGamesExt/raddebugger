@@ -116,6 +116,9 @@ RD_VocabTable:
   {break_on_read        ""                          "Break On Read"             ""                    Null                                           }
   {break_on_write       ""                          "Break On Write"            ""                    Null                                           }
   {break_on_execute     ""                          "Break On Execution"        ""                    Null                                           }
+  {yaw                  ""                          "Yaw"                       ""                    Null                                           }
+  {pitch                ""                          "Pitch"                     ""                    Null                                           }
+  {zoom                 ""                          "Zoom"                      ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -210,9 +213,23 @@ RD_VocabTable:
     ```
       x:
     {
-      'w': code_string,
-      'h': code_string,
+      @order(0) 'w': code_string,
+      @order(1) 'h': code_string,
       'fmt': tex2dformat,
+    }
+    ```
+  }
+  {
+    geo3d,
+    ```
+      x:
+    {
+      'count': code_string,
+      'vtx': code_string,
+      'vtx_size': code_string,
+      'yaw': code_string,
+      'pitch': code_string,
+      'zoom': code_string,
     }
     ```
   }
@@ -253,7 +270,7 @@ RD_VocabTable:
       'source_location':  path_pt,
       'address_location': code_string,
       'hit_count':        u64,
-      'address_range_size': @or(1, 2, 4, 8) u64,
+      'address_range_size': @or(0, 1, 2, 4, 8) u64,
       'break_on_write':   bool,
       'break_on_read':    bool,
       'break_on_execute': bool,

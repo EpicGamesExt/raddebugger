@@ -952,6 +952,7 @@ internal String8 rd_query_from_eval_string(Arena *arena, String8 string);
 ////////////////////////////////
 //~ rjf: View Functions
 
+internal RD_Cfg *rd_view_from_eval(RD_Cfg *parent, E_Eval eval);
 internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
 internal void rd_view_ui(Rng2F32 rect);
 
@@ -966,13 +967,12 @@ internal String8 rd_view_query_cmd(void);
 internal String8 rd_view_query_input(void);
 internal RD_Cfg *rd_view_cfg_from_string(String8 string);
 internal E_Value rd_view_cfg_value_from_string(String8 string);
+internal U64 rd_view_cfg_u64_from_string(String8 string);
+internal F32 rd_view_cfg_f32_from_string(String8 string);
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
-internal U64 rd_base_offset_from_eval(E_Eval eval);
-internal Rng1U64 rd_range_from_eval(E_Eval eval);
 internal TXT_LangKind rd_lang_kind_from_eval(E_Eval eval);
 internal Arch rd_arch_from_eval(E_Eval eval);
-internal Vec2S32 rd_dim2s32_from_eval(E_Eval eval);
 internal R_Tex2DFormat rd_tex2dformat_from_eval(E_Eval eval);
 internal E_Value rd_value_from_eval_key(E_Eval eval, String8 key);
 

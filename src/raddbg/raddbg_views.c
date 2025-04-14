@@ -1743,7 +1743,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
-  Rng1U64 range = rd_range_from_eval(eval);
+  Rng1U64 range = e_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
   rd_regs()->lang_kind = rd_lang_kind_from_eval(eval);
   U128 hash = {0};
@@ -2002,7 +2002,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  Rng1U64 range = rd_range_from_eval(eval);
+  Rng1U64 range = e_range_from_eval(eval);
   Arch arch = rd_arch_from_eval(eval);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
@@ -2170,7 +2170,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  Rng1U64 space_range = rd_range_from_eval(eval);
+  Rng1U64 space_range = e_range_from_eval(eval);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
@@ -3085,9 +3085,9 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: evaluate expression
   //
-  Vec2S32 dim = rd_dim2s32_from_eval(eval);
+  Vec2S32 dim = v2s32((S32)rd_view_cfg_u64_from_string(str8_lit("w")), (S32)rd_view_cfg_u64_from_string(str8_lit("h")));
   R_Tex2DFormat fmt = rd_tex2dformat_from_eval(eval);
-  U64 base_offset = rd_base_offset_from_eval(eval);
+  U64 base_offset = e_base_offset_from_eval(eval);
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
   
@@ -3484,17 +3484,17 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 count        = rd_value_from_eval_key(eval, str8_lit("count")).u64;
-  U64 vtx_base_off = rd_value_from_eval_key(eval, str8_lit("vtx")).u64;
-  U64 vtx_size     = rd_value_from_eval_key(eval, str8_lit("vtx_size")).u64;
-  F32 yaw_target   = rd_view_cfg_value_from_string(str8_lit("yaw")).f32;
-  F32 pitch_target = rd_view_cfg_value_from_string(str8_lit("pitch")).f32;
-  F32 zoom_target  = rd_view_cfg_value_from_string(str8_lit("zoom")).f32;
+  U64 count        = rd_view_cfg_u64_from_string(str8_lit("count"));
+  U64 vtx_base_off = rd_view_cfg_u64_from_string(str8_lit("vtx"));
+  U64 vtx_size     = rd_view_cfg_u64_from_string(str8_lit("vtx_size"));
+  F32 yaw_target   = rd_view_cfg_f32_from_string(str8_lit("yaw"));
+  F32 pitch_target = rd_view_cfg_f32_from_string(str8_lit("pitch"));
+  F32 zoom_target  = rd_view_cfg_f32_from_string(str8_lit("zoom"));
   
   //////////////////////////////
   //- rjf: evaluate & unpack expression
   //
-  U64 base_offset = rd_base_offset_from_eval(eval);
+  U64 base_offset = e_base_offset_from_eval(eval);
   Rng1U64 idxs_range = r1u64(base_offset, base_offset+count*sizeof(U32));
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
   U128 idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);

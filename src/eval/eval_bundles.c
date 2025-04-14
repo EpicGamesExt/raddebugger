@@ -246,6 +246,62 @@ e_value_from_expr(E_Expr *expr)
   return result;
 }
 
+internal U64
+e_base_offset_from_eval(E_Eval eval)
+{
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key))))
+  {
+    eval = e_value_eval_from_eval(eval);
+  }
+  return eval.value.u64;
+}
+
+internal Rng1U64
+e_range_from_eval(E_Eval eval)
+{
+  U64 size = 0;
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
+  {
+    for EachIndex(idx, type->count)
+    {
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("size"), 0))
+      {
+        size = e_value_from_expr(arg->first->next).u64;
+        break;
+      }
+    }
+  }
+  E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.irtree.type_key));
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
+                                                               direct_type_kind == E_TypeKind_Union ||
+                                                               direct_type_kind == E_TypeKind_Class ||
+                                                               direct_type_kind == E_TypeKind_Array))
+  {
+    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.irtree.type_key)));
+  }
+  if(size == 0 && eval.irtree.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
+                                                        type_kind == E_TypeKind_Union ||
+                                                        type_kind == E_TypeKind_Class ||
+                                                        type_kind == E_TypeKind_Array))
+  {
+    size = e_type_byte_size_from_key(e_type_unwrap(eval.irtree.type_key));
+  }
+  if(size == 0)
+  {
+    size = KB(16);
+  }
+  Rng1U64 result = {0};
+  result.min = e_base_offset_from_eval(eval);
+  result.max = result.min + size;
+  return result;
+}
+
+
 ////////////////////////////////
 //~ rjf: Debug Logging Functions
 

@@ -2108,6 +2108,63 @@ rd_query_from_eval_string(Arena *arena, String8 string)
 ////////////////////////////////
 //~ rjf: View Functions
 
+internal RD_Cfg *
+rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 schema_name = eval.expr->first->string;
+  RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
+  rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
+  {
+    MD_Node *schema = rd_schema_from_name(schema_name);
+    E_Expr *primary_expr = eval.expr;
+    E_Expr *first_arg = &e_expr_nil;
+    if(eval.expr->kind == E_ExprKind_Call)
+    {
+      primary_expr = eval.expr->first->next;
+      first_arg = primary_expr->next;
+    }
+    RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+    rd_cfg_new_replace(expr_root, e_string_from_expr(scratch.arena, primary_expr));
+    {
+      U64 unnamed_order_idx = 0;
+      for(E_Expr *arg = first_arg; arg != &e_expr_nil; arg = arg->next)
+      {
+        String8 param_name = {0};
+        E_Expr *arg_expr = arg;
+        if(arg->kind == E_ExprKind_Define)
+        {
+          param_name = arg->first->string;
+          arg_expr = arg->first->next;
+        }
+        else
+        {
+          for MD_EachNode(schema_child, schema->first)
+          {
+            MD_Node *order_tag = md_tag_from_string(schema_child, str8_lit("order"), 0);
+            if(order_tag != &md_nil_node)
+            {
+              U64 schema_child_order_idx = 0;
+              try_u64_from_str8_c_rules(order_tag->first->string, &schema_child_order_idx);
+              if(schema_child_order_idx == unnamed_order_idx)
+              {
+                param_name = schema_child->string;
+                arg_expr = arg;
+                break;
+              }
+            }
+          }
+          unnamed_order_idx += 1;
+        }
+        RD_Cfg *arg_root = rd_cfg_child_from_string_or_alloc(view, param_name);
+        rd_cfg_new_replace(arg_root, e_string_from_expr(scratch.arena, arg_expr));
+      }
+    }
+  }
+  scratch_end(scratch);
+  return view;
+}
+
 internal RD_ViewState *
 rd_view_state_from_cfg(RD_Cfg *cfg)
 {
@@ -2421,7 +2478,6 @@ rd_view_ui(Rng2F32 rect)
       }
       
       // rjf: unpack view's target expression & hash
-      String8 expr_string = rd_expr_from_cfg(view);
       E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
       Rng1U64 range = r1u64(0, 1024);
       U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
@@ -4050,68 +4106,62 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: cell has hook? -> build ui by calling hook
                       else if(cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                       {
+                        RD_Cfg *root = rd_immediate_cfg_from_keyf("view_%I64x_%I64x", rd_regs()->view, row_hash);
+                        RD_Cfg *view = rd_view_from_eval(root, cell_info.eval);
                         Rng2F32 cell_rect = r2f32p(cell_x_px, 0, next_cell_x_px, row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
                         ui_set_next_fixed_y(-1.f * (row_node->visual_size_skipped) * row_height_px);
                         ui_set_next_fixed_height((row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped) * row_height_px);
                         UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_FloatingY, "###val_%I64x", row_hash);
                         UI_Parent(box)
-                        {
-                          RD_Cfg *root = rd_immediate_cfg_from_keyf("view_%I64x_%I64x", rd_regs()->view, row_hash);
-                          RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, cell_info.view_ui_rule->name);
-                          RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-                          rd_cfg_new(expr, e_string_from_expr(scratch.arena, cell_info.eval.expr));
-                          rd_cfg_new(view, str8_lit("selected"));
                           RD_RegsScope(.view = view->id, .file_path = rd_file_path_from_eval(scratch.arena, cell_info.eval))
-                            UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
-                            UI_Flags(0)
+                          UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
+                          UI_Flags(0)
+                        {
+                          // rjf: 'pull out' button
+                          UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
+                                                                     ui_top_font_size()*1.5f,
+                                                                     ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
+                                                                     ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
+                            UI_CornerRadius(ui_top_font_size()*1.5f)
+                            UI_TextAlignment(UI_TextAlign_Center)
+                            RD_Font(RD_FontSlot_Icons)
+                            UI_FontSize(ui_top_font_size()*0.8f)
                           {
-                            // rjf: 'pull out' button
-                            UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
-                                                                       ui_top_font_size()*1.5f,
-                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
-                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
-                              UI_CornerRadius(ui_top_font_size()*1.5f)
-                              UI_TextAlignment(UI_TextAlign_Center)
-                              RD_Font(RD_FontSlot_Icons)
-                              UI_FontSize(ui_top_font_size()*0.8f)
+                            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                                    UI_BoxFlag_Floating|
+                                                                    UI_BoxFlag_DrawText|
+                                                                    UI_BoxFlag_DrawBorder|
+                                                                    UI_BoxFlag_DrawBackground|
+                                                                    UI_BoxFlag_DrawActiveEffects|
+                                                                    UI_BoxFlag_DrawHotEffects,
+                                                                    "%S###pull_out",
+                                                                    rd_icon_kind_text_table[RD_IconKind_Window]);
+                            UI_Signal sig = ui_signal_from_box(box);
+                            if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
                             {
-                              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                                      UI_BoxFlag_Floating|
-                                                                      UI_BoxFlag_DrawText|
-                                                                      UI_BoxFlag_DrawBorder|
-                                                                      UI_BoxFlag_DrawBackground|
-                                                                      UI_BoxFlag_DrawActiveEffects|
-                                                                      UI_BoxFlag_DrawHotEffects,
-                                                                      "%S###pull_out",
-                                                                      rd_icon_kind_text_table[RD_IconKind_Window]);
-                              UI_Signal sig = ui_signal_from_box(box);
-                              if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
-                              {
-                                rd_drag_begin(RD_RegSlot_View);
-                              }
-                            }
-                            
-                            // rjf: loading animation container
-                            UI_Box *loading_overlay_container = &ui_nil_box;
-                            UI_Parent(box) UI_WidthFill UI_HeightFill
-                            {
-                              loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
-                            }
-                            
-                            // rjf: view ui contents
-                            E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-                            e_ir_state->overridden_irtree = cell_info.eval.irtree.prev;
-                            cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
-                            e_ir_state->overridden_irtree = prev_overridden_irtree;
-                            
-                            // rjf: loading fill
-                            UI_Parent(loading_overlay_container)
-                            {
-                              RD_ViewState *vs = rd_view_state_from_cfg(view);
-                              rd_loading_overlay(cell_rect, vs->loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
+                              rd_drag_begin(RD_RegSlot_View);
                             }
                           }
                           
+                          // rjf: loading animation container
+                          UI_Box *loading_overlay_container = &ui_nil_box;
+                          UI_Parent(box) UI_WidthFill UI_HeightFill
+                          {
+                            loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+                          }
+                          
+                          // rjf: view ui contents
+                          E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+                          e_ir_state->overridden_irtree = cell_info.eval.irtree.prev;
+                          cell_info.view_ui_rule->ui(cell_info.eval, cell_rect);
+                          e_ir_state->overridden_irtree = prev_overridden_irtree;
+                          
+                          // rjf: loading fill
+                          UI_Parent(loading_overlay_container)
+                          {
+                            RD_ViewState *vs = rd_view_state_from_cfg(view);
+                            rd_loading_overlay(cell_rect, vs->loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
+                          }
                         }
                         sig = ui_signal_from_box(box);
                       }
@@ -4666,62 +4716,31 @@ rd_view_cfg_value_from_string(String8 string)
   return result;
 }
 
-//- rjf: evaluation & tag (a view's 'call') parameter extraction
-
 internal U64
-rd_base_offset_from_eval(E_Eval eval)
+rd_view_cfg_u64_from_string(String8 string)
 {
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key))))
-  {
-    eval = e_value_eval_from_eval(eval);
-  }
-  return eval.value.u64;
-}
-
-internal Rng1U64
-rd_range_from_eval(E_Eval eval)
-{
-  U64 size = 0;
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("size"), 0))
-      {
-        size = e_value_from_expr(arg->first->next).u64;
-        break;
-      }
-    }
-  }
-  E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
-  E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.irtree.type_key));
-  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
-                                                               direct_type_kind == E_TypeKind_Union ||
-                                                               direct_type_kind == E_TypeKind_Class ||
-                                                               direct_type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.irtree.type_key)));
-  }
-  if(size == 0 && eval.irtree.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
-                                                        type_kind == E_TypeKind_Union ||
-                                                        type_kind == E_TypeKind_Class ||
-                                                        type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_unwrap(eval.irtree.type_key));
-  }
-  if(size == 0)
-  {
-    size = KB(16);
-  }
-  Rng1U64 result = {0};
-  result.min = rd_base_offset_from_eval(eval);
-  result.max = result.min + size;
+  Temp scratch = scratch_begin(0, 0);
+  RD_Cfg *root = rd_view_cfg_from_string(string);
+  String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", root->first->string);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  U64 result = e_value_eval_from_eval(eval).value.u64;
+  scratch_end(scratch);
   return result;
 }
+
+internal F32
+rd_view_cfg_f32_from_string(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  RD_Cfg *root = rd_view_cfg_from_string(string);
+  String8 expr = push_str8f(scratch.arena, "(float32)(%S)", root->first->string);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  F32 result = e_value_eval_from_eval(eval).value.f32;
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: evaluation & tag (a view's 'call') parameter extraction
 
 internal TXT_LangKind
 rd_lang_kind_from_eval(E_Eval eval)
@@ -4792,62 +4811,6 @@ rd_arch_from_eval(E_Eval eval)
   }
   
   return arch;
-}
-
-internal Vec2S32
-rd_dim2s32_from_eval(E_Eval eval)
-{
-  Vec2S32 dim = v2s32(1, 1);
-  B32 got_x = 0;
-  B32 got_y = 0;
-  
-  // rjf: try explicitly passed dimensions
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind == E_ExprKind_Define)
-      {
-        if(str8_match(arg->first->string, str8_lit("w"), 0))
-        {
-          got_x = 1;
-          dim.x = e_value_from_expr(arg->first->next).s64;
-        }
-        if(str8_match(arg->first->string, str8_lit("h"), 0))
-        {
-          got_y = 1;
-          dim.y = e_value_from_expr(arg->first->next).s64;
-        }
-      }
-    }
-  }
-  
-  // rjf: try ordered non-define arguments
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind != E_ExprKind_Define)
-      {
-        if(!got_x)
-        {
-          got_x = 1;
-          dim.x = e_value_from_expr(arg).s64;
-        }
-        else if(!got_y)
-        {
-          got_y = 1;
-          dim.y = e_value_from_expr(arg).s64;
-          break;
-        }
-      }
-    }
-  }
-  
-  return dim;
 }
 
 internal R_Tex2DFormat
@@ -6381,7 +6344,7 @@ rd_window_frame(void)
           
           // rjf: build view
           RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
-          RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, view_name);
+          RD_Cfg *view = rd_view_from_eval(root, hover_eval);
           RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
           rd_cfg_new_replace(explicit_root, str8_lit("1"));
           
