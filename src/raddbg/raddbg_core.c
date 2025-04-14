@@ -1634,7 +1634,8 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           {
             value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
           }
-          B32 value = str8_match(value_string, str8_lit("1"), 0);
+          String8 value_string_casted = push_str8f(scratch.arena, "(bool)(%S)", value_string);
+          B32 value = !!e_value_from_string(value_string_casted).u64;
           read_data = push_str8_copy(scratch.arena, str8_struct(&value));
         }
         else if(str8_match(child_type_name, str8_lit("u64"), 0))
@@ -1644,8 +1645,8 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           {
             value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
           }
-          U64 value = 0;
-          try_u64_from_str8_c_rules(value_string, &value);
+          String8 value_string_casted = push_str8f(scratch.arena, "(uint64)(%S)", value_string);
+          U64 value = e_value_from_string(value_string_casted).u64;
           read_data = push_str8_copy(scratch.arena, str8_struct(&value));
         }
         else if(str8_match(child_type_name, str8_lit("f32"), 0))
@@ -1655,7 +1656,8 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           {
             value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
           }
-          F32 value = (F32)f64_from_str8(value_string);
+          String8 value_string_casted = push_str8f(scratch.arena, "(float32)(%S)", value_string);
+          F32 value = e_value_from_string(value_string_casted).f32;
           read_data = push_str8_copy(scratch.arena, str8_struct(&value));
         }
       }
@@ -4368,7 +4370,8 @@ rd_view_ui(Rng2F32 rect)
                       }
                       
                       // rjf: dragging -> drag/drop
-                      if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
+                      if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()) &&
+                         (!cell_selected || !ewv->text_editing))
                       {
                         if(cell_info.eval.space.kind == E_SpaceKind_FileSystem)
                         {

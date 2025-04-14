@@ -110,6 +110,7 @@ RD_VocabTable:
   {show_line_numbers    ""                          "Show Line Numbers"         ""                    Null                                           }
   {syntax               syntaxes                    "Syntax"                    "Syntaxes"            Null                                           }
   {num_columns          ""                          "Number of Columns"         ""                    Null                                           }
+  {bytes_per_cell       ""                          "Bytes Per Cell"            ""                    Null                                           }
   {bitmap               _                           "Bitmap"                    _                     Bitmap                                         }
   {geo3d                ""                          "Geometry (3D)"             ""                    Cube                                           }
   {address_range_size   _                           "Address Range Size"        _                     Null                                           }
@@ -203,8 +204,9 @@ RD_VocabTable:
     ```
       x:
     {
-      'size':        code_string,
+      'size': code_string,
       @default(16) 'num_columns': @range[1, 256] u64,
+      @default(1)  'bytes_per_cell': @range[1, 16] u64,
     }
     ```
   }

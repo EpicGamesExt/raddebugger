@@ -2960,8 +2960,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   rd_store_view_param_u64(str8_lit("cursor_vaddr"), cursor);
   rd_store_view_param_u64(str8_lit("mark_vaddr"), mark);
-  rd_store_view_param_u64(str8_lit("bytes_per_cell"), bytes_per_cell);
-  rd_store_view_param_u64(str8_lit("num_columns"), num_columns);
   rd_store_view_scroll_pos(scroll_pos);
   
   hs_scope_close(hs_scope);
