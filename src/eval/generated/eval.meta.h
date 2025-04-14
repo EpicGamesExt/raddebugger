@@ -77,6 +77,7 @@ E_TypeKind_Variadic,
 E_TypeKind_Set,
 E_TypeKind_Lens,
 E_TypeKind_LensSpec,
+E_TypeKind_MetaExpr,
 E_TypeKind_COUNT,
 E_TypeKind_FirstBasic      = E_TypeKind_Void,
 E_TypeKind_LastBasic       = E_TypeKind_ComplexF128,
@@ -162,8 +163,8 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_type_kind_basic_string_table[58];
-extern U8 e_type_kind_basic_byte_size_table[58];
+extern String8 e_type_kind_basic_string_table[59];
+extern U8 e_type_kind_basic_byte_size_table[59];
 extern String8 e_expr_kind_strings[48];
 extern E_OpInfo e_expr_kind_op_info_table[48];
 extern String8 e_interpretation_code_display_strings[11];

@@ -1658,6 +1658,38 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       }break;
       
       //////////////////////////
+      //- rjf: meta-expression tags
+      //
+      case E_TypeKind_MetaExpr:
+      {
+        if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+        {
+          switch(task_idx)
+          {
+            default:{}break;
+            case 0:
+            {
+              need_pop = 0;
+              need_new_task = 1;
+              new_task.params = *params;
+              new_task.eval = eval;
+              new_task.eval.irtree.type_key = e_type_direct_from_key(eval.irtree.type_key);
+            }break;
+            case 1:
+            {
+              E_Type *type = e_type_from_key__cached(type_key);
+              *out_string = push_str8f(arena, " (%S)", type->name);
+            }break;
+          }
+        }
+        else
+        {
+          E_Type *type = e_type_from_key__cached(type_key);
+          *out_string = type->name;
+        }
+      }break;
+      
+      //////////////////////////
       //- rjf: modifiers
       //
       case E_TypeKind_Modifier:

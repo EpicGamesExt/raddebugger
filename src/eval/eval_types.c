@@ -1338,7 +1338,8 @@ e_type_unwrap(E_TypeKey key)
     if((E_TypeKind_FirstIncomplete <= kind && kind <= E_TypeKind_LastIncomplete) ||
        kind == E_TypeKind_Modifier ||
        kind == E_TypeKind_Alias ||
-       kind == E_TypeKind_Lens)
+       kind == E_TypeKind_Lens ||
+       kind == E_TypeKind_MetaExpr)
     {
       result = e_type_direct_from_key(result);
     }
@@ -1800,6 +1801,12 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       }
       str8_list_push(arena, out, str8_lit("::*"));
     }break;
+    
+    case E_TypeKind_MetaExpr:
+    {
+      E_TypeKey direct = e_type_direct_from_key(key);
+      e_type_lhs_string_from_key(arena, direct, out, prec, skip_return);
+    }break;
   }
 }
 
@@ -1874,6 +1881,12 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
     }break;
+    
+    case E_TypeKind_MetaExpr:
+    {
+      E_TypeKey direct = e_type_direct_from_key(key);
+      e_type_rhs_string_from_key(arena, direct, out, prec);
+    }break;
   }
 }
 
@@ -1943,6 +1956,13 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
     //
     else if(kind == E_TypeKind_Lens ||
             kind == E_TypeKind_Modifier)
+    {
+      done = 0;
+    }
+    
+    //- rjf: if we have meta-expression tags in the type chain, defer
+    // to the next type in the chain.
+    else if(kind == E_TypeKind_MetaExpr)
     {
       done = 0;
     }

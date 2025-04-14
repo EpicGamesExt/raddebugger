@@ -74,6 +74,7 @@ E_TypeKindTable:
   {Set                       "set"                 0    }
   {Lens                      "lens"                0    }
   {LensSpec                  "lens_spec"           0    }
+  {MetaExpr                  "meta_expr"           0    }
 }
 
 @table(name  op_kind  precedence  op_pre  op_sep  op_pos  op_chain)
