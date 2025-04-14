@@ -2112,24 +2112,32 @@ internal RD_Cfg *
 rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
 {
   Temp scratch = scratch_begin(0, 0);
-  String8 schema_name = eval.expr->first->string;
+  E_TypeKey type_key = eval.irtree.type_key;
+  E_Type *type = e_type_from_key__cached(type_key);
+  String8 schema_name = type->name;
   RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {
     MD_Node *schema = rd_schema_from_name(schema_name);
     E_Expr *primary_expr = eval.expr;
-    E_Expr *first_arg = &e_expr_nil;
+    E_Expr **args = 0;
+    U64 args_count = 0;
     if(eval.expr->kind == E_ExprKind_Call)
     {
       primary_expr = eval.expr->first->next;
-      first_arg = primary_expr->next;
+    }
+    if(type->args != 0)
+    {
+      args = type->args;
+      args_count = type->count;
     }
     RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
     rd_cfg_new_replace(expr_root, e_string_from_expr(scratch.arena, primary_expr));
     {
       U64 unnamed_order_idx = 0;
-      for(E_Expr *arg = first_arg; arg != &e_expr_nil; arg = arg->next)
+      for EachIndex(arg_idx, args_count)
       {
+        E_Expr *arg = args[arg_idx];
         String8 param_name = {0};
         E_Expr *arg_expr = arg;
         if(arg->kind == E_ExprKind_Define)
