@@ -1404,7 +1404,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         result.flags |= RD_WatchCellFlag_CanEdit;
       }
-      result.eval = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : row->eval);
+      result.eval = (!e_type_key_match(cell->eval.irtree.type_key, e_type_key_zero()) ? cell->eval : row->eval);
       result.string = row->string;
       if(result.string.size == 0)
       {
@@ -1525,7 +1525,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       
       //- rjf: evaluate wrapped expression
-      result.eval     = (cell->eval.irtree.mode != E_Mode_Null ? cell->eval : e_eval_from_expr(arena, root_expr));
+      result.eval = (!e_type_key_match(cell->eval.irtree.type_key, e_type_key_zero()) ? cell->eval : e_eval_from_expr(arena, root_expr));
       
       //- rjf: determine string generation parameters based on evaluation
       EV_StringParams string_params = {string_flags, 10};

@@ -562,6 +562,16 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       {
         type_expand_rule = &type->expand;
       }
+      for(E_Type *lens_type = type;
+          lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
+          lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+      {
+        if(lens_type->expand.info != 0)
+        {
+          type_expand_rule = &lens_type->expand;
+          break;
+        }
+      }
       
       // rjf: get eval's visualization expansion rule
       EV_ExpandRule *viz_expand_rule = ev_expand_rule_from_type_key(type_key);

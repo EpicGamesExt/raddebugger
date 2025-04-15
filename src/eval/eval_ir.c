@@ -946,6 +946,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           // rjf: pick access hook based on type
           E_Type *lhs_type = e_type_from_key__cached(lhs_irtree_try->type_key);
           E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+          for(E_Type *lens_type = lhs_type;
+              lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
+              lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+          {
+            if(lens_type->access != 0)
+            {
+              lhs_access = lens_type->access;
+              break;
+            }
+          }
           if(lhs_access == 0)
           {
             lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
@@ -2302,15 +2312,26 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     //- rjf: if the evaluated type has a hook for an extra layer of ir extension,
     // call into it
     E_Type *type = e_type_from_key__cached(result.type_key);
-    if(type->kind != E_TypeKind_LensSpec && type->irext != 0)
     {
-      E_IRTreeAndType irtree_stripped = result;
-      if(type->kind == E_TypeKind_Lens)
+      E_TypeIRExtFunctionType *irext = type->irext;
+      for(E_Type *t = type; t->kind == E_TypeKind_Lens || t->kind == E_TypeKind_Set; t = e_type_from_key__cached(t->direct_type_key))
       {
-        irtree_stripped.type_key = e_type_key_direct(irtree_stripped.type_key);
+        if(t->irext != 0)
+        {
+          irext = t->irext;
+          break;
+        }
       }
-      E_IRExt ext = type->irext(arena, expr, &irtree_stripped);
-      result.user_data = ext.user_data;
+      if(irext != 0)
+      {
+        E_IRTreeAndType irtree_stripped = result;
+        if(type->kind == E_TypeKind_Lens)
+        {
+          irtree_stripped.type_key = e_type_key_direct(irtree_stripped.type_key);
+        }
+        E_IRExt ext = irext(arena, expr, &irtree_stripped);
+        result.user_data = ext.user_data;
+      }
     }
     
     //- rjf: equip previous task's irtree
