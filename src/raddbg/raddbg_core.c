@@ -12492,18 +12492,11 @@ rd_frame(void)
 #endif
           }break;
           
-          //- rjf: top-level lister
+          //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
-            RD_ListerFlags lister_flags = (RD_ListerFlag_LineEdit|
-                                           RD_ListerFlag_Descriptions|
-                                           RD_ListerFlag_KindLabel|
-                                           RD_ListerFlag_Procedures|
-                                           RD_ListerFlag_Files|
-                                           RD_ListerFlag_Commands|
-                                           RD_ListerFlag_Settings|
-                                           RD_ListerFlag_SystemProcesses);
-            rd_cmd(RD_CmdKind_PushQuery, .lister_flags = lister_flags);
+            String8 expr = push_str8f(scratch.arena, "query:commands, query:recent_files, query:recent_projects, query:procedures, query:$%I64x", rd_regs()->view);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1);
           }break;
           
           //- rjf: command fast path

@@ -520,7 +520,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
     tree.total_row_count += 1;
     tree.total_item_count += 1;
     
-    //- rjf: iterate all expansions & generate blocks for each
+    //- rjf: generate initial task, for root's evaluation
     typedef struct Task Task;
     struct Task
     {
@@ -534,6 +534,8 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
     Task start_task = {0, tree.root, tree.root->eval, 1, 0};
     Task *first_task = &start_task;
     Task *last_task = first_task;
+    
+    //- rjf: iterate all expansions & generate blocks for each
     for(Task *t = first_task; t != 0; t = t->next)
     {
       // rjf: get task key
@@ -714,6 +716,19 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
           }
         }
       }
+      
+      // rjf: if this expr has a sibling, push another task to continue the chain
+      if(t->eval.expr->next != &e_expr_nil)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->next = t->next;
+        t->next = task;
+        task->parent_block       = t->parent_block;
+        task->eval               = e_eval_from_expr(arena, t->eval.expr->next);
+        task->child_id           = t->child_id;
+        task->split_relative_idx = 0;
+        task->default_expanded   = t->default_expanded;
+      }
     }
     scratch_end(scratch);
   }
@@ -797,7 +812,7 @@ ev_block_range_list_from_tree(Arena *arena, EV_BlockTree *block_tree)
         
         // rjf: generate task for post-child rows, if any, after children
         Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx+1, t->block_relative_range.max);
-        if(remainder_range.max > remainder_range.min)
+        if(remainder_range.max >= remainder_range.min)
         {
           BlockTask *remainder_task = push_array(scratch.arena, BlockTask, 1);
           remainder_task->next = child_task->next;

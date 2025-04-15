@@ -29,7 +29,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
   }
   else
   {
-    result.expr_count = RD_CmdKind_COUNT;
+    result.expr_count = RD_CmdKind_COUNT - 1;
   }
   return result;
 }
@@ -67,7 +67,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
   {
     for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
     {
-      RD_CmdKind cmd_kind = (RD_CmdKind)idx;
+      RD_CmdKind cmd_kind = (RD_CmdKind)(idx+1);
       String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
       E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
       expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));

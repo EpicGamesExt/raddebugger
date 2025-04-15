@@ -409,6 +409,7 @@ e_expr_copy(Arena *arena, E_Expr *src)
       E_Expr *dst_parent;
       E_Expr *src;
       B32 is_ref;
+      B32 is_sib;
     };
     Task start_task = {0, &e_expr_nil, src};
     Task *first_task = &start_task;
@@ -431,9 +432,22 @@ e_expr_copy(Arena *arena, E_Expr *src)
       {
         t->dst_parent->ref = dst;
       }
+      else if(t->is_sib)
+      {
+        t->dst_parent->next = dst;
+        dst->prev = t->dst_parent;
+      }
       else
       {
         e_expr_push_child(t->dst_parent, dst);
+      }
+      if(t->src->next != &e_expr_nil)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->dst_parent = dst;
+        task->src = t->src->next;
+        task->is_sib = 1;
+        SLLQueuePush(first_task, last_task, task);
       }
       if(t->src->ref != &e_expr_nil)
       {

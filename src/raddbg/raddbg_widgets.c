@@ -3235,8 +3235,8 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     B32 is_toggled = !!params->toggled_out[0];
     F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled);
-    F32 padding_px = floor_f32(ui_top_font_size()*0.65f);
-    F32 height_px = ui_top_px_height() - padding_px*2.f;
+    F32 height_px = ui_top_font_size() * 1.75f;
+    F32 padding_px = (ui_top_px_height() - height_px) / 2.f;
     UI_PrefWidth(ui_children_sum(1.f))
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))
