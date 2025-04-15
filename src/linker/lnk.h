@@ -272,7 +272,7 @@ internal String8 lnk_obj_from_res_file_list(TP_Context *tp, Arena *arena, LNK_Se
 ////////////////////////////////
 // Debug
 
-internal String8 lnk_make_linker_coff_obj(TP_Context *tp, Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 cwd_path, String8 exe_path, String8 pdb_path, String8 cmd_line, String8 obj_name);
+internal String8 lnk_make_linker_coff_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 cwd_path, String8 exe_path, String8 pdb_path, String8 cmd_line, String8 obj_name);
 
 ////////////////////////////////
 // Win32 Image Helpers
