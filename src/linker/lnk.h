@@ -89,6 +89,8 @@
 #define LNK_IDATA_SECTION_FLAGS     LNK_DATA_SECTION_FLAGS
 #define LNK_DEBUG_DIR_SECTION_FLAGS LNK_DATA_SECTION_FLAGS
 #define LNK_RSRC_SECTION_FLAGS      LNK_DATA_SECTION_FLAGS
+#define LNK_RSRC1_SECTION_FLAGS     (LNK_DATA_SECTION_FLAGS | COFF_SectionFlags_PackAlign(COFF_SectionAlign_4Bytes))
+#define LNK_RSRC2_SECTION_FLAGS     (LNK_DATA_SECTION_FLAGS | COFF_SectionFlags_PackAlign(COFF_SectionAlign_4Bytes))
 #define LNK_XDATA_SECTION_FLAGS     LNK_RDATA_SECTION_FLAGS
 #define LNK_PDATA_SECTION_FLAGS     LNK_RDATA_SECTION_FLAGS
 #define LNK_EDATA_SECTION_FLAGS     LNK_RDATA_SECTION_FLAGS
@@ -262,9 +264,9 @@ internal void    lnk_merge_manifest_files(String8 mt_path, String8 out_name, Str
 ////////////////////////////////
 // Resources
 
-internal void    lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, PE_ResourceDir *root_dir);
-internal void    lnk_add_resource_debug_s(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 obj_path, String8 cwd_path, String8 exe_path, CV_Arch arch, String8List res_file_list, MD5Hash *res_hash_array);
-internal String8 lnk_make_res_obj(TP_Context *tp, Arena *arena, PE_ResourceDir *root_dir, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 path, String8 cwd_path, String8 exe_path, String8List res_file_list, MD5Hash *res_hash_array);
+internal void    lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_dir);
+internal void    lnk_add_resource_debug_s(COFF_ObjWriter *obj_writer, String8 obj_path, String8 cwd_path, String8 exe_path, CV_Arch arch, String8List res_file_list, MD5Hash *res_hash_array);
+internal String8 lnk_make_res_obj(Arena *arena, PE_ResourceDir *root_dir, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 path, String8 cwd_path, String8 exe_path, String8List res_file_list, MD5Hash *res_hash_array);
 internal String8 lnk_obj_from_res_file_list(TP_Context *tp, Arena *arena, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name); 
 
 ////////////////////////////////

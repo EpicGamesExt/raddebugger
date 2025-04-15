@@ -81,6 +81,8 @@ internal U32 *          keys_from_hash_table_u32       (Arena *arena, HashTable 
 internal U64 *          keys_from_hash_table_u64       (Arena *arena, HashTable *ht);
 internal KeyValuePair * key_value_pairs_from_hash_table(Arena *arena, HashTable *ht);
 
+internal void * values_from_hash_table_raw(Arena *arena, HashTable *ht);
+
 internal void sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count);
 internal void sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);
 

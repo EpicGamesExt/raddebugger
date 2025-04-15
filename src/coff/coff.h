@@ -144,6 +144,7 @@ enum
   COFF_SectionFlag_MemRead              = (1 << 30),
   COFF_SectionFlag_MemWrite             = (1 << 31)
 };
+#define COFF_SectionFlags_PackAlign(f)    ((f) << COFF_SectionFlag_AlignShift)
 #define COFF_SectionFlags_ExtractAlign(f) (COFF_SectionAlign)(((f) >> COFF_SectionFlag_AlignShift) & COFF_SectionFlag_AlignMask)
 #define COFF_SectionFlags_LnkFlags        ((COFF_SectionFlag_AlignMask << COFF_SectionFlag_AlignShift) | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkOther | COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkNRelocOvfl)
 

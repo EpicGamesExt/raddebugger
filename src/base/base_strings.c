@@ -971,6 +971,15 @@ str8_list_push(Arena *arena, String8List *list, String8 string){
   return(node);
 }
 
+internal String8Node *
+str8_list_push_cstr(Arena *arena, String8List *list, String8 string)
+{
+  String8Node *node = str8_list_push(arena, list, string);
+  local_persist String8 null = str8_lit_comp("\0");
+  str8_list_push(arena, list, null);
+  return node;
+}
+
 internal String8Node*
 str8_list_push_front(Arena *arena, String8List *list, String8 string){
   String8Node *node = push_array_no_zero(arena, String8Node, 1);

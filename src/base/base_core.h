@@ -148,6 +148,7 @@
 #define MemoryCopyStruct(d,s)  MemoryCopy((d),(s),sizeof(*(d)))
 #define MemoryCopyArray(d,s)   MemoryCopy((d),(s),sizeof(d))
 #define MemoryCopyTyped(d,s,c) MemoryCopy((d),(s),sizeof(*(d))*(c))
+#define MemoryCopyStr8(dst, s) MemoryCopy(dst, (s).str, (s).size)
 
 #define MemoryZero(s,z)       memset((s),0,(z))
 #define MemoryZeroStruct(s)   MemoryZero((s),sizeof(*(s)))

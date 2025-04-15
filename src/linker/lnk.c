@@ -33,11 +33,16 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "path/path.h"
+#include "hash_table.h"
 #include "coff/coff.h"
+#include "coff/coff_enum.h"
 #include "coff/coff_parse.h"
+#include "coff/coff_obj_writer.h"
 #include "pe/pe.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
+#include "codeview/codeview_enum.h"
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
@@ -45,10 +50,15 @@
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "path/path.c"
+#include "hash_table.c"
 #include "coff/coff.c"
+#include "coff/coff_enum.c"
 #include "coff/coff_parse.c"
+#include "coff/coff_obj_writer.c"
 #include "pe/pe.c"
 #include "codeview/codeview.c"
+#include "codeview/codeview_enum.c"
 #include "codeview/codeview_parse.c"
 #include "msf/msf.c"
 #include "msf/msf_parse.c"
@@ -63,14 +73,15 @@
 // RDI
 
 #include "rdi/rdi_overrides.h"
-#include "lib_rdi/rdi.h"
-#include "lib_rdi/rdi.c"
+#include "lib_rdi_format/rdi_format.h"
+#include "rdi/rdi.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "rdi/rdi.c"
 
 ////////////////////////////////
 // Code Base Extensions
 
 #include "base_ext/base_inc.h"
-#include "hash_table.h"
 #include "thread_pool/thread_pool.h"
 #include "codeview_ext/codeview.h"
 #include "pdb_ext/msf_builder.h"
@@ -79,7 +90,6 @@
 #include "pdb_ext/pdb_builder.h"
 
 #include "base_ext/base_inc.c"
-#include "hash_table.c"
 #include "thread_pool/thread_pool.c"
 #include "codeview_ext/codeview.c"
 #include "pdb_ext/msf_builder.c"
@@ -406,87 +416,61 @@ lnk_res_number_id_is_before(void *raw_a, void *raw_b)
 }
 
 internal void
-lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, PE_ResourceDir *root_dir)
+lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_dir)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
-  LNK_Section *dir_sect  = lnk_section_table_push(sectab, str8_lit(".rsrc$01"), LNK_RSRC_SECTION_FLAGS);
-  LNK_Section *data_sect = lnk_section_table_push(sectab, str8_lit(".rsrc$02"), LNK_RSRC_SECTION_FLAGS);
-  
-  LNK_Chunk *dir_tree_chunk   = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
-  LNK_Chunk *dir_data_chunk   = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
-  LNK_Chunk *dir_string_chunk = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
-
-  dir_tree_chunk->sort_idx   = str8_lit("a");
-  dir_string_chunk->sort_idx = str8_lit("b");
-  dir_data_chunk->sort_idx   = str8_lit("c");
-  
-  PE_Resource root_wrapper = {0};
-  root_wrapper.id.type     = COFF_ResourceIDType_Number;
-  root_wrapper.id.u.number = 0;
-  root_wrapper.kind        = PE_ResDataKind_DIR;
-  root_wrapper.u.dir       = root_dir;
-  
   struct Stack {
-    struct Stack     *next;
-    U64               arr_idx;
-    U64               res_idx[2];
-    PE_ResourceArray  res_arr[2];
-    LNK_Chunk        *coff_entry_array_chunk;
-    LNK_Chunk        *coff_entry_chunk;
+    struct Stack          *next;
+    U64                    arr_idx;
+    U64                    res_idx[2];
+    PE_ResourceArray       res_arr[2];
+    COFF_ResourceDirEntry *coff_entry_arr[2];
   };
-  struct Stack *stack     = push_array(scratch.arena, struct Stack, 1);
-  stack->res_arr[0].count = 1;
-  stack->res_arr[0].v     = &root_wrapper;
+  struct Stack *stack = push_array(scratch.arena, struct Stack, 1);
+  // init stack
+  {
+    PE_Resource root_wrapper = {0};
+    root_wrapper.id.type     = COFF_ResourceIDType_Number;
+    root_wrapper.id.u.number = 0;
+    root_wrapper.kind        = PE_ResDataKind_DIR;
+    root_wrapper.u.dir       = root_dir;
+
+    COFF_ResourceDirEntry root_dir = {0};
+
+    stack->res_arr[0].count = 1;
+    stack->res_arr[0].v     = &root_wrapper;
+
+    stack->coff_entry_arr[0] = &root_dir;
+    stack->coff_entry_arr[1] = 0;
+  }
+
+  COFF_ObjSection *rsrc1 = coff_obj_writer_push_section(obj_writer, str8_lit(".rsrc$01"), LNK_RSRC1_SECTION_FLAGS, str8_zero());
+  COFF_ObjSection *rsrc2 = coff_obj_writer_push_section(obj_writer, str8_lit(".rsrc$02"), LNK_RSRC2_SECTION_FLAGS, str8_zero());
   
-  U64 total_res_count = 0;
-  
-  while (stack) {
-    while (stack->arr_idx < ArrayCount(stack->res_arr)) {
-      while (stack->res_idx[stack->arr_idx] < stack->res_arr[stack->arr_idx].count) {
-        PE_Resource *res = &stack->res_arr[stack->arr_idx].v[stack->res_idx[stack->arr_idx]];
-        ++stack->res_idx[stack->arr_idx];
-        
-        String8 flag_name   = push_str8f(symtab->arena->v[0], "flag_%u",   total_res_count);
-        String8 offset_name = push_str8f(symtab->arena->v[0], "offset_%u", total_res_count);
-        ++total_res_count;
-        
-        if (stack->coff_entry_array_chunk) {
-          COFF_ResourceDirEntry *entry = push_array(dir_sect->arena, COFF_ResourceDirEntry, 1);
-          stack->coff_entry_chunk      = lnk_section_push_chunk_data(dir_sect, stack->coff_entry_array_chunk, str8_struct(entry), str8_zero());
-          
-          switch (res->id.type) {
-          case COFF_ResourceIDType_Number: {
-            entry->name.id = res->id.u.number;
-          } break;
+  for (; stack; ) {
+    for (; stack->arr_idx < ArrayCount(stack->res_arr); stack->arr_idx += 1) {
+      for (; stack->res_idx[stack->arr_idx] < stack->res_arr[stack->arr_idx].count; ) {
+        U64          res_idx = stack->res_idx[stack->arr_idx]++;
+        PE_Resource *res     = &stack->res_arr[stack->arr_idx].v[res_idx];
 
-          case COFF_ResourceIDType_String: {
-            // TODO: we can make string table smaller by reusing offsets for same strings
-            
-            // not sure why high bit has to be turned on here since number id and string id entries are
-            // in separate arrays but windows doesn't treat name offset like string without this bit.
-            entry->name.offset |= (1 << 31);
-            
-            // make chunk and symbol
-            String8     res_name    = coff_resource_string_from_str8(dir_sect->arena, res->id.u.string);
-            LNK_Chunk  *name_chunk  = lnk_section_push_chunk_data(dir_sect, dir_string_chunk, res_name, str8_zero());
-            LNK_Symbol *name_symbol = lnk_make_defined_symbol_chunk(symtab->arena->v[0], str8_lit("COFF_RESOURCE_ID_STRING"), LNK_DefinedSymbolVisibility_Static, 0, name_chunk, 0, 0, 0);
+        {
+          COFF_ResourceDirEntry *coff_entry = &stack->coff_entry_arr[stack->arr_idx][res_idx];
 
-            // patch COFF_ResourceDirEntry.name.offset
-            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, name.offset), name_symbol);
-          } break;
+          // assign entry data offset
+          coff_entry->id.data_entry_offset = safe_cast_u32(rsrc1->data.total_size);
 
-          case COFF_ResourceIDType_Null: break;
-
-          default: InvalidPath;
+          // set directory flag
+          if (res->kind == PE_ResDataKind_DIR) {
+            coff_entry->id.data_entry_offset |= COFF_Resource_SubDirFlag;
           }
         }
-        
+
         switch (res->kind) {
         case PE_ResDataKind_DIR: {
-          // initialize directory header
-          COFF_ResourceDirTable *dir_header = push_array(dir_sect->arena, COFF_ResourceDirTable, 1);
+          // fill out directory header
+          COFF_ResourceDirTable *dir_header = push_array(obj_writer->arena, COFF_ResourceDirTable, 1);
           dir_header->characteristics       = res->u.dir->characteristics;
           dir_header->time_stamp            = res->u.dir->time_stamp;
           dir_header->major_version         = res->u.dir->major_version;
@@ -494,65 +478,71 @@ lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab
           dir_header->name_entry_count      = res->u.dir->named_list.count;
           dir_header->id_entry_count        = res->u.dir->id_list.count;
 
-          // push sub directory chunk layout
-          LNK_Chunk *dir_node_chunk = lnk_section_push_chunk_list(dir_sect, dir_tree_chunk, str8_zero());
-          dir_node_chunk->align     = COFF_ResourceAlign;
-          LNK_Chunk *dir_header_chunk  = lnk_section_push_chunk_data(dir_sect, dir_node_chunk, str8_struct(dir_header), str8_zero());
-          LNK_Chunk *entry_array_chunk = lnk_section_push_chunk_list(dir_sect, dir_node_chunk, str8_zero());
-          lnk_chunk_set_debugf(dir_sect->arena, dir_header_chunk,  "DIR_HEADER_CHUNK");
-          lnk_chunk_set_debugf(dir_sect->arena, entry_array_chunk, "DIR_ENTRY_ARRAY_CHUNK");
-
-          // push symbols to patch coff entry
-          LNK_Symbol *flag_symbol   = lnk_make_defined_symbol_va(symtab->arena->v[0], flag_name, LNK_DefinedSymbolVisibility_Internal, 0, COFF_Resource_SubDirFlag);
-          LNK_Symbol *offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena->v[0], offset_name, LNK_DefinedSymbolVisibility_Internal, 0, dir_header_chunk, 0, 0, 0);
-          lnk_symbol_table_push(symtab, flag_symbol); // set high bit to indicate directory
-          lnk_symbol_table_push(symtab, offset_symbol); // write offset for this directory
-
-          // patch resource dir header
-          if (stack->coff_entry_chunk) {
-            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), flag_symbol);
-            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), offset_symbol);
-          }
-
-          // sort entries by id
+          // sort input resources
           PE_ResourceArray named_array = pe_resource_list_to_array(scratch.arena, &res->u.dir->named_list);
           PE_ResourceArray id_array    = pe_resource_list_to_array(scratch.arena, &res->u.dir->id_list);
           radsort(named_array.v, named_array.count, lnk_res_string_id_is_before);
-          radsort(id_array.v, id_array.count, lnk_res_number_id_is_before);
+          radsort(id_array.v,    id_array.count,    lnk_res_number_id_is_before);
 
-          // frame for sub directory
-          struct Stack *frame           = push_array(scratch.arena, struct Stack, 1);
-          frame->coff_entry_array_chunk = entry_array_chunk;
-          frame->res_arr[0]             = named_array;
-          frame->res_arr[1]             = id_array;
+          // allocate COFF entries
+          COFF_ResourceDirEntry *named_entries = push_array(obj_writer->arena, COFF_ResourceDirEntry, named_array.count);
+          COFF_ResourceDirEntry *id_entries    = push_array(obj_writer->arena, COFF_ResourceDirEntry, id_array.count);
+
+          // push header and entries
+          str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(dir_header));
+          str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(named_entries, named_array.count));
+          str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(id_entries, id_array.count));
+
+          // fill out named ids
+          for (U64 i = 0; i < named_array.count; i += 1) {
+            PE_Resource            src = named_array.v[i];
+            COFF_ResourceDirEntry *dst = &named_entries[i];
+
+            // append resource name
+            U32     res_name_off = safe_cast_u32(rsrc1->data.total_size);
+            String8 res_name     = coff_resource_string_from_str8(obj_writer->arena, res->id.u.string);
+            str8_list_push(obj_writer->arena, &rsrc1->data, res_name);
+
+            // not sure why high bit has to be turned on here since number id and string id entries are
+            // in separate arrays but windows doesn't treat name offset like string without this bit.
+            dst->name.offset = (1 << 31) | res_name_off;
+          }
+
+          // fill out number ids
+          for (U64 i = 0; i < id_array.count; i += 1) {
+            PE_Resource            src = id_array.v[i];
+            COFF_ResourceDirEntry *dst = &id_entries[i];
+            dst->name.id = src.id.u.number;
+          }
+
+          // fill out sub directory stack frame
+          struct Stack *frame      = push_array(scratch.arena, struct Stack, 1);
+          frame->res_arr[0]        = named_array;
+          frame->res_arr[1]        = id_array;
+          frame->coff_entry_arr[0] = named_entries;
+          frame->coff_entry_arr[1] = id_entries;
           SLLStackPush(stack, frame);
-        } goto yeild; // recurse to sub directory
+        } goto yield; // recurse to sub directory
 
         case PE_ResDataKind_COFF_RESOURCE: {
-          COFF_ResourceDataEntry *coff_resource_data_entry = push_array(dir_sect->arena, COFF_ResourceDataEntry, 1);
-          coff_resource_data_entry->data_size              = res->u.coff_res.data.size;
-          coff_resource_data_entry->data_voff              = 0; // relocated
-          coff_resource_data_entry->code_page              = 0; // TODO: whats this for? (lld-link writes zero)
+          // fill out resource header
+          COFF_ResourceDataEntry *coff_res = push_array(obj_writer->arena, COFF_ResourceDataEntry, 1);
+          coff_res->data_size              = res->u.coff_res.data.size;
+          coff_res->data_voff              = 0; // relocated
+          coff_res->code_page              = 0; // TODO: whats this for? (lld-link writes zero)
 
-          // push layout chunks
-          LNK_Chunk *coff_resource_data_entry_chunk = lnk_section_push_chunk_data(dir_sect, dir_data_chunk, str8_struct(coff_resource_data_entry), str8_zero());
-          LNK_Chunk *resource_data_chunk            = lnk_section_push_chunk_data(data_sect, data_sect->root, res->u.coff_res.data, str8_zero());
+          // emit symbol for resource data
+          U32 resdat_off = safe_cast_u32(rsrc2->data.total_size);
+          COFF_ObjSymbol *resdat = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("resdat"), resdat_off, rsrc2);
 
-          // windows errors out on unaligned data
-          coff_resource_data_entry_chunk->align = COFF_ResourceAlign;
-          resource_data_chunk->align            = COFF_ResourceAlign;
+          // emit reloc for 'data_voff'
+          U64 apply_off   = rsrc1->data.total_size + OffsetOf(COFF_ResourceDataEntry, data_voff);
+          U32 apply_off32 = safe_cast_u32(apply_off);
+          coff_obj_writer_section_push_reloc(obj_writer, rsrc1, apply_off32, resdat, COFF_Reloc_X64_Addr32Nb);
 
-          // relocate data
-          String8     resource_data_symbol_name = push_str8f(symtab->arena->v[0], "$R%06X", total_res_count);
-          LNK_Symbol *resource_data_symbol      = lnk_make_defined_symbol_chunk(symtab->arena->v[0], resource_data_symbol_name, LNK_DefinedSymbolVisibility_Static, 0, resource_data_chunk, 0, 0, 0);
-          lnk_section_push_reloc(dir_sect, coff_resource_data_entry_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(COFF_ResourceDataEntry, data_voff), resource_data_symbol);
-
-          // push symbol for data offset relocation
-          LNK_Symbol *coff_data_offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena->v[0], offset_name, LNK_DefinedSymbolVisibility_Internal, 0, coff_resource_data_entry_chunk, 0, 0, 0);
-          lnk_symbol_table_push(symtab, coff_data_offset_symbol);
-
-          Assert(stack->coff_entry_chunk);
-          lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), coff_data_offset_symbol);
+          // push resource entry & data
+          str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(coff_res));
+          str8_list_push(obj_writer->arena, &rsrc2->data, res->u.coff_res.data);
         } break;
 
         case PE_ResDataKind_NULL: break;
@@ -561,10 +551,9 @@ lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab
         case PE_ResDataKind_COFF_LEAF: InvalidPath;
         }
       }
-      ++stack->arr_idx;
     }
     SLLStackPop(stack);
-    yeild:;
+    yield:;
   }
   
   scratch_end(scratch);
@@ -572,20 +561,20 @@ lnk_serialize_pe_resource_tree(LNK_SectionTable *sectab, LNK_SymbolTable *symtab
 }
 
 internal void
-lnk_add_resource_debug_s(LNK_SectionTable *sectab,
-                         LNK_SymbolTable  *symtab,
-                         String8           obj_path,
-                         String8           cwd_path,
-                         String8           exe_path,
-                         CV_Arch           arch,
-                         String8List       res_file_list,
-                         MD5Hash          *res_hash_array)
+lnk_add_resource_debug_s(COFF_ObjWriter *obj_writer,
+                         String8         obj_path,
+                         String8         cwd_path,
+                         String8         exe_path,
+                         CV_Arch         arch,
+                         String8List     res_file_list,
+                         MD5Hash        *res_hash_array)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
   
   // init serial for tables
-  String8List string_srl, file_srl; MemoryZeroStruct(&string_srl); MemoryZeroStruct(&file_srl);
+  String8List string_srl = {0};
+  String8List file_srl   = {0};
   str8_serial_begin(scratch.arena, &string_srl);
   str8_serial_begin(scratch.arena, &file_srl);
   
@@ -620,7 +609,7 @@ lnk_add_resource_debug_s(LNK_SectionTable *sectab,
                                     1, 0, 1, 0,
                                     version_string);
   
-  String8List env_list; MemoryZeroStruct(&env_list);
+  String8List env_list = {0};
   str8_list_push(scratch.arena, &env_list, str8_lit("cwd"));
   str8_list_push(scratch.arena, &env_list, cwd_path);
   str8_list_push(scratch.arena, &env_list, str8_lit("exe"));
@@ -629,18 +618,18 @@ lnk_add_resource_debug_s(LNK_SectionTable *sectab,
   str8_list_push(scratch.arena, &env_list, str8_lit(""));
   String8 envblock_data = cv_make_envblock(scratch.arena, env_list);
   
-  String8 obj_symbol = cv_make_symbol(scratch.arena, CV_SymKind_OBJNAME, obj_data);
-  String8 comp_symbol = cv_make_symbol(scratch.arena, CV_SymKind_COMPILE3, comp_data);
+  String8 obj_symbol      = cv_make_symbol(scratch.arena, CV_SymKind_OBJNAME,  obj_data);
+  String8 comp_symbol     = cv_make_symbol(scratch.arena, CV_SymKind_COMPILE3, comp_data);
   String8 envblock_symbol = cv_make_symbol(scratch.arena, CV_SymKind_ENVBLOCK, envblock_data);
   
-  String8List symbol_srl; MemoryZeroStruct(&symbol_srl);
+  String8List symbol_srl = {0};
   str8_serial_begin(scratch.arena, &symbol_srl);
   str8_serial_push_string(scratch.arena, &symbol_srl, obj_symbol);
   str8_serial_push_string(scratch.arena, &symbol_srl, comp_symbol);
   str8_serial_push_string(scratch.arena, &symbol_srl, envblock_symbol);
   
   // build code view sub-sections
-  String8List sub_sect_srl; MemoryZeroStruct(&sub_sect_srl);
+  String8List sub_sect_srl = {0};
   str8_serial_begin(scratch.arena, &sub_sect_srl);
   CV_Signature sig = CV_Signature_C13;
   str8_serial_push_struct(scratch.arena, &sub_sect_srl, &sig);
@@ -666,20 +655,18 @@ lnk_add_resource_debug_s(LNK_SectionTable *sectab,
   str8_serial_push_data_list(scratch.arena, &sub_sect_srl, symbol_srl.first);
   str8_serial_push_align(scratch.arena, &sub_sect_srl, CV_C13SubSectionAlign);
   
-  LNK_Section *debug_s = lnk_section_table_push(sectab, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS);
-  String8 sub_sect_data = str8_serial_end(debug_s->arena, &sub_sect_srl);
-  lnk_section_push_chunk_data(debug_s, debug_s->root, sub_sect_data, str8_zero());
+  String8 sub_sect_data = str8_serial_end(obj_writer->arena, &sub_sect_srl);
+  coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS, sub_sect_data);
   
   scratch_end(scratch);
   ProfEnd();
 }
 
 internal String8
-lnk_make_res_obj(TP_Context       *tp,
-                 Arena            *arena,
+lnk_make_res_obj(Arena            *arena,
                  PE_ResourceDir   *root_dir,
-                 COFF_MachineType  machine,
                  COFF_TimeStamp    time_stamp,
+                 COFF_MachineType  machine,
                  String8           path,
                  String8           cwd_path,
                  String8           exe_path,
@@ -687,262 +674,23 @@ lnk_make_res_obj(TP_Context       *tp,
                  MD5Hash          *res_hash_array)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  static const U64 sect_virt_align = 1;
-  static const U64 sect_file_align = 1;
 
-  TP_Arena *temp_tp_arena = push_array(scratch.arena, TP_Arena, 1);
-  temp_tp_arena->v        = push_array(scratch.arena, Arena *, 1);
-  temp_tp_arena->count    = 1;
-  temp_tp_arena->v[0]     = arena_alloc();
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
+
+  // obj features
+  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("@feat.00"), COFF_SymStorageClass_Static, MSCRT_FeatFlag_HAS_SAFE_SEH|MSCRT_FeatFlag_UNKNOWN_4);
   
-  LNK_SymbolTable  *symtab      = lnk_symbol_table_init(temp_tp_arena);
-  LNK_SectionTable *sectab      = lnk_section_table_alloc(0, sect_virt_align, sect_file_align);
-  LNK_Section      *header_sect = lnk_section_table_push(sectab, str8_lit(".null"), 0);
+  // serialize resource tree
+  lnk_serialize_pe_resource_tree(obj_writer, root_dir);
+
+  // push resource debug info
+  lnk_add_resource_debug_s(obj_writer, path, cwd_path, exe_path, cv_arch_from_coff_machine(machine), res_file_list, res_hash_array);
+
+  // finalize obj
+  String8 res_obj = coff_obj_writer_serialize(arena, obj_writer);
   
-  lnk_serialize_pe_resource_tree(sectab, symtab, root_dir);
-  
-  CV_Arch cv_arch = cv_arch_from_coff_machine(machine);
-  lnk_add_resource_debug_s(sectab, symtab, path, cwd_path, exe_path, cv_arch, res_file_list, res_hash_array);
-  
-  // register section symbols (after this point don't push new sections)
-  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-    LNK_Section *sect = &sect_node->data;
-    lnk_symbol_table_push_defined_chunk(symtab, sect->name, LNK_DefinedSymbolVisibility_Internal, 0, sect->root, 0, 0, 0);
-  }
-  sectab->null_sect = lnk_section_list_remove(&sectab->list, str8_lit(".null"));
-  lnk_section_table_build_data(tp, sectab, machine);
-  lnk_section_table_push_null(sectab);
-  lnk_section_table_assign_indices(sectab);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, sectab);
-  
-  COFF_Symbol16List coff_symbol_list = {0};
-  
-  COFF_Symbol16 coff_feat00  = {0};
-  MemoryCopyStr8(&coff_feat00.name, str8_lit("@feat.00"));
-  coff_feat00.value          = MSCRT_FeatFlag_HAS_SAFE_SEH|MSCRT_FeatFlag_UNKNOWN_4;
-  coff_feat00.section_number = COFF_Symbol_AbsSection16;
-  coff_feat00.storage_class  = COFF_SymStorageClass_Static;
-  coff_symbol16_list_push(scratch.arena, &coff_symbol_list, coff_feat00);
-  
-  // emit coff symbols for section definitions
-  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-    LNK_Section *sect = &sect_node->data;
-    if (sect == header_sect) continue;
-    if (!sect->emit_header) continue;
-    
-    U64 reloc_count = 0;
-    LNK_Symbol *coff_reloc_count_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, "%S.coff_relocs[].count", sect->name);
-    if (coff_reloc_count_symbol) {
-      reloc_count = coff_reloc_count_symbol->u.defined.u.va;
-    }
-    
-    U64 sect_size = lnk_virt_size_from_chunk_ref(sect_id_map, sect->root->ref);
-    
-    COFF_Symbol16 coff_sect_symbol = {0};
-    Assert(sect->name.size <= 8);
-    MemoryCopyStr8(&coff_sect_symbol.name, sect->name);
-    coff_sect_symbol.value            = 0;
-    coff_sect_symbol.section_number   = sect->isect;
-    coff_sect_symbol.aux_symbol_count = 1;
-    coff_sect_symbol.storage_class    = COFF_SymStorageClass_Static;
-    
-    Assert(sect->isect <= max_U16);
-    COFF_SymbolSecDef secdef     = {0};
-    secdef.length                = safe_cast_u32(sect_size);
-    secdef.number_lo             = sect->isect;
-    secdef.number_of_relocations = safe_cast_u32(reloc_count);
-    
-    coff_symbol16_list_push(scratch.arena, &coff_symbol_list, coff_sect_symbol);
-    coff_symbol16_list_push(scratch.arena, &coff_symbol_list, *((COFF_Symbol16*)&secdef));
-  }
-  
-  // convert relocations and symbols to coff format
-  {
-    for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-      LNK_Section *sect = &sect_node->data;
-      
-      // filter out resource relocations
-      LNK_RelocList reloc_list          = {0};
-      LNK_RelocList res_data_reloc_list = {0};
-      for (LNK_Reloc *reloc = sect->reloc_list.first; reloc != 0; reloc = reloc->next) {
-        B32 is_reloc_symbol = str8_match_lit("$R", reloc->symbol->name, StringMatchFlag_RightSideSloppy);
-        LNK_Reloc *dst;
-        if (is_reloc_symbol) {
-          dst = lnk_reloc_list_push(sect->arena, &res_data_reloc_list);
-        } else {
-          dst = lnk_reloc_list_push(sect->arena, &reloc_list);
-        }
-        dst->chunk     = reloc->chunk;
-        dst->type      = reloc->type;
-        dst->apply_off = reloc->apply_off;
-        dst->symbol    = reloc->symbol;
-      }
-      sect->reloc_list = reloc_list;
-      
-      COFF_RelocList coff_reloc_list = {0};
-      for (LNK_Reloc *reloc = res_data_reloc_list.first; reloc != 0; reloc = reloc->next) {
-        LNK_Symbol *symbol = reloc->symbol;
-        
-        Assert(LNK_Symbol_IsDefined(symbol->type));
-        Assert(symbol->u.defined.value_type == LNK_DefinedSymbolValue_Chunk);
-        LNK_DefinedSymbol *def = &symbol->u.defined;
-        
-        // resolve symbol offset
-        LNK_Section *symbol_sect   = lnk_sect_from_chunk_ref(sect_id_map, def->u.chunk->ref);
-        U64          chunk_off     = lnk_off_from_chunk_ref(sect_id_map, def->u.chunk->ref);
-        U64          symbol_offset = chunk_off + def->u.chunk_offset;
-        U64          symbol_idx    = coff_symbol_list.count;
-        
-        // push coff symbol
-        COFF_Symbol16 coff_symbol = {0};
-        Assert(symbol->name.size <= 8);
-        String8 symbol_name = push_str8f(scratch.arena, "$R%06X", symbol_offset);
-        MemoryCopyStr8(&coff_symbol.name, symbol_name);
-        coff_symbol.value          = symbol_offset;
-        coff_symbol.section_number = symbol_sect->isect;
-        coff_symbol.storage_class  = COFF_SymStorageClass_Static;
-        coff_symbol16_list_push(scratch.arena, &coff_symbol_list, coff_symbol);
-        
-        // push coff reloc
-        U64 reloc_off = lnk_off_from_chunk_ref(sect_id_map, reloc->chunk->ref);
-        reloc_off += reloc->apply_off;
-        
-        COFF_Reloc coff_reloc = {0};
-        coff_reloc.apply_off  = reloc_off;
-        coff_reloc.isymbol    = safe_cast_u32(symbol_idx);
-        coff_reloc.type       = lnk_ext_reloc_type_to_coff(machine, reloc->type);
-        coff_reloc_list_push(scratch.arena, &coff_reloc_list, coff_reloc);
-      }
-      
-      if (coff_reloc_list.count == 0) continue;
-      
-      // push section for relocation data
-      String8      sect_name  = push_str8f(sectab->arena, "%S.relocs", sect->name);
-      LNK_Section *reloc_sect = lnk_section_table_push(sectab, sect_name, 0);
-      reloc_sect->emit_header = 0;
-      
-      // push chunk layout for relocations
-      LNK_Chunk *reloc_array_chunk = lnk_section_push_chunk_list(reloc_sect, reloc_sect->root, str8_zero());
-      for (COFF_RelocNode *i = coff_reloc_list.first; i != 0; i = i->next) {
-        String8 reloc_data = push_str8_copy(reloc_sect->arena, str8_struct(&i->data));
-        lnk_section_push_chunk_data(reloc_sect, reloc_array_chunk, reloc_data, str8_zero());
-      }
-      
-      // emit symbols for coff section header patch
-      String8     coff_reloc_symbol_name       = push_str8f(symtab->arena->v[0], "%S.coff_reloc[]", sect->name);
-      String8     coff_reloc_count_symbol_name = push_str8f(symtab->arena->v[0], "%S.coff_reloc[].count", sect->name);
-      LNK_Symbol *coff_reloc_symbol            = lnk_make_defined_symbol_chunk(symtab->arena->v[0], coff_reloc_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, reloc_array_chunk, 0, 0, 0);
-      LNK_Symbol *coff_reloc_count_symbol      = lnk_make_defined_symbol_va(symtab->arena->v[0], coff_reloc_count_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, coff_reloc_list.count);
-      lnk_symbol_table_push(symtab, coff_reloc_symbol);
-      lnk_symbol_table_push(symtab, coff_reloc_count_symbol);
-    }
-  }
-  
-  LNK_Section *misc_sect = lnk_section_table_push(sectab, str8_lit(".misc"), COFF_SectionFlag_LnkInfo|COFF_SectionFlag_LnkRemove);
-  misc_sect->emit_header = 0;
-  
-  // serialize coff symbol list
-  String8List srl = {0};
-  str8_serial_begin(scratch.arena, &srl);
-  for (COFF_Symbol16Node *i = coff_symbol_list.first; i != 0; i = i->next) {
-    str8_serial_push_struct(scratch.arena, &srl, &i->data);
-  }
-  String8     coff_symbol_table_data   = str8_serial_end(scratch.arena, &srl);
-  LNK_Chunk  *coff_symbol_table_chunk  = lnk_section_push_chunk_data(misc_sect, misc_sect->root, coff_symbol_table_data, str8_zero());
-  LNK_Symbol *coff_symbol_table_symbol = lnk_make_defined_symbol_chunk(symtab->arena->v[0], str8_lit("COFF_SYMBOL_TABLE"), LNK_DefinedSymbolVisibility_Internal, 0, coff_symbol_table_chunk, 0, 0, 0);
-  lnk_symbol_table_push(symtab, coff_symbol_table_symbol);
-  
-  LNK_Symbol *coff_symbol_count_symbol = lnk_make_defined_symbol_va(symtab->arena->v[0], str8_lit("COFF_SYMBOL_COUNT"), LNK_DefinedSymbolVisibility_Internal, 0, coff_symbol_list.count);
-  lnk_symbol_table_push(symtab, coff_symbol_count_symbol);
-  
-  // build obj header
-  {
-    // init header
-    COFF_FileHeader *file_header      = push_array(header_sect->arena, COFF_FileHeader, 1);
-    file_header->machine              = machine;
-    file_header->section_count        = 0; // relocated
-    file_header->time_stamp           = time_stamp;
-    file_header->symbol_table_foff    = 0; // relocated
-    file_header->symbol_count         = 0; // relocated
-    file_header->optional_header_size = 0; // no PE header in obj
-    file_header->flags                = COFF_FileHeaderFlag_32BitMachine;
-    
-    // push coff header chunk
-    String8    file_header_data  = str8_struct(file_header);
-    LNK_Chunk *file_header_chunk = lnk_section_push_chunk_data(header_sect, header_sect->root, file_header_data, str8_zero());
-    
-    // relocate coff header fields
-    lnk_section_push_reloc_undefined(header_sect, file_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_FileHeader, section_count), str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_SymbolScopeFlag_Internal);
-    lnk_section_push_reloc(header_sect, file_header_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_FileHeader, symbol_table_foff), coff_symbol_table_symbol);
-    lnk_section_push_reloc(header_sect, file_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_FileHeader, symbol_count), coff_symbol_count_symbol);
-    
-    // push coff header symbol
-    LNK_Symbol *file_header_symbol = lnk_make_defined_symbol_chunk(symtab->arena->v[0], str8_lit(LNK_COFF_FILE_HEADER_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, file_header_chunk, 0, 0, 0);
-    lnk_symbol_table_push(symtab, file_header_symbol);
-  }
-  
-  // build section headers
-  {
-    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8_zero());
-    for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-      if (sect_node == sectab->null_sect) continue;
-      if (!sect_node->data.emit_header)   continue;
-      LNK_Section *sect = &sect_node->data;
-      
-      // init section header
-      COFF_SectionHeader *coff_sect_header = push_array(header_sect->arena, COFF_SectionHeader, 1);
-      Assert(sect->name.size <= sizeof(coff_sect_header->name));
-      MemoryCopyStr8(&coff_sect_header->name[0], sect->name);
-      coff_sect_header->flags       = sect->flags;
-      coff_sect_header->vsize       = 0; // ignored
-      coff_sect_header->voff        = 0; // ignored
-      coff_sect_header->fsize       = 0; // relocated
-      coff_sect_header->foff        = 0; // relocated
-      coff_sect_header->relocs_foff = 0; // relocated
-      coff_sect_header->lines_foff  = 0; // obsolete
-      coff_sect_header->line_count  = 0; // obsolete
-      coff_sect_header->reloc_count = 0; // relocated
-      
-      // push section header chunk
-      String8    coff_sect_header_data  = str8_struct(coff_sect_header);
-      String8    sort_index             = lnk_make_section_sort_index(header_sect->arena, str8_zero(), 0, sect->isect);
-      LNK_Chunk *coff_sect_header_chunk = lnk_section_push_chunk_data(header_sect, coff_section_header_array_chunk, coff_sect_header_data, sort_index);
-      lnk_chunk_set_debugf(header_sect->arena, coff_sect_header_chunk, "%S", sect->name);
-      
-      // patch reloc fields
-      if (sect->reloc_list.count) {
-        String8 coff_reloc_symbol_name       = push_str8f(scratch.arena, "%S.coff_reloc[]", sect->name);
-        String8 coff_reloc_count_symbol_name = push_str8f(scratch.arena, "%S.coff_reloc[].count", sect->name);
-        lnk_section_push_reloc_undefined(header_sect, coff_sect_header_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, relocs_foff), coff_reloc_symbol_name, LNK_SymbolScopeFlag_Internal);
-        lnk_section_push_reloc_undefined(header_sect, coff_sect_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_SectionHeader, reloc_count), coff_reloc_count_symbol_name, LNK_SymbolScopeFlag_Internal);
-      }
-      
-      // patch file fields
-      if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-        LNK_Symbol *sect_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScopeFlag_Internal, sect->name);
-        lnk_section_push_reloc(header_sect, coff_sect_header_chunk, LNK_Reloc_CHUNK_SIZE_FILE_32, OffsetOf(COFF_SectionHeader, fsize), sect_symbol);
-        lnk_section_push_reloc(header_sect, coff_sect_header_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, foff), sect_symbol);
-      }
-    }
-    
-    // push section header count symbol
-    U64         symbol_count                     = coff_section_header_array_chunk->u.list->count;
-    LNK_Symbol *coff_section_header_count_symbol = lnk_make_defined_symbol_va(symtab->arena->v[0], str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, symbol_count);
-    lnk_symbol_table_push(symtab, coff_section_header_count_symbol);
-  }
-  
-  lnk_section_table_assign_indices(sectab);
-  lnk_section_table_build_data(tp, sectab, machine);
-  lnk_section_table_assign_file_offsets(sectab);
-  String8 res_obj = lnk_section_table_serialize(tp, arena, sectab, machine);
-  sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, sectab);
-  lnk_patch_relocs_linker(tp, symtab, sectab, sect_id_map, res_obj, 0);
-  lnk_section_table_release(&sectab);
-  
-  arena_release(temp_tp_arena->v[0]);
-  scratch_end(scratch);
+  coff_obj_writer_release(&obj_writer);
+
   ProfEnd();
   return res_obj;
 }
@@ -986,11 +734,10 @@ lnk_obj_from_res_file_list(TP_Context       *tp,
   String8List exe_path_strs = {0};
   str8_list_push(scratch.arena, &exe_path_strs, process_info->binary_path);
   String8 exe_path = str8_list_first(&exe_path_strs);
-  String8 res_obj = lnk_make_res_obj(tp,
-                                     arena,
+  String8 res_obj = lnk_make_res_obj(arena,
                                      root_dir,
-                                     machine,
                                      time_stamp,
+                                     machine,
                                      obj_name,
                                      work_dir,
                                      exe_path,
