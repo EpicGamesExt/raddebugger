@@ -3,8 +3,6 @@
 
 #pragma once
 
-#define MemoryCopyStr8(dst, s) MemoryCopy(dst, (s).str, (s).size)
-
 internal int str8_compar(String8 a, String8 b, B32 ignore_case);
 internal int str8_compar_ignore_case(const void *a, const void *b);
 internal int str8_compar_case_sensitive(const void *a, const void *b);

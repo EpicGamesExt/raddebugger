@@ -1,0 +1,273 @@
+internal COFF_ObjWriter*
+coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine_type)
+{
+  Arena *arena = arena_alloc();
+  COFF_ObjWriter *obj_writer = push_array(arena, COFF_ObjWriter, 1);
+  obj_writer->arena          = arena;
+  obj_writer->time_stamp     = time_stamp;
+  obj_writer->machine_type   = machine_type;
+  return obj_writer;
+}
+
+internal void
+coff_obj_writer_release(COFF_ObjWriter **obj_writer)
+{
+  arena_release((*obj_writer)->arena);
+  *obj_writer = 0;
+}
+
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_ObjSection *section, COFF_SymbolType type, COFF_SymStorageClass storage_class)
+{
+  COFF_ObjSymbolNode *n = push_array(obj_writer->arena, COFF_ObjSymbolNode, 1);
+  SLLQueuePush(obj_writer->symbol_first, obj_writer->symbol_last, n);
+  obj_writer->symbol_count += 1;
+
+  COFF_ObjSymbol *s = &n->v;
+  s->name           = name;
+  s->value          = value;
+  s->section        = section;
+  s->type           = type;
+  s->storage_class  = storage_class;
+  s->idx            = obj_writer->symbol_count-1;
+
+  return s;
+}
+
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_static(COFF_ObjWriter *obj_writer, String8 name, U32 off, COFF_ObjSection *section)
+{
+  COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, off, section, (COFF_SymbolType){0}, COFF_SymStorageClass_Static);
+  return s;
+}
+
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_abs(COFF_ObjWriter *obj_writer, String8 name, COFF_SymStorageClass storage_class, U32 value)
+{
+  COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, value, 0, (COFF_SymbolType){0}, storage_class);
+  return s;
+}
+
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_undef_func(COFF_ObjWriter *obj_writer, String8 name)
+{
+  COFF_SymbolType type = {0};
+  type.u.msb = COFF_SymDType_Func;
+  COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, 0, 0, type, COFF_SymStorageClass_External);
+  return s;
+}
+
+internal COFF_ObjSection *
+coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data)
+{
+  COFF_ObjSectionNode *sect_n = push_array(obj_writer->arena, COFF_ObjSectionNode, 1);
+  SLLQueuePush(obj_writer->sect_first, obj_writer->sect_last, sect_n);
+  obj_writer->sect_count += 1;
+
+  COFF_ObjSection *sect = &sect_n->v;
+  sect->name            = name;
+  sect->flags           = flags;
+  sect->symbol          = coff_obj_writer_push_symbol_static(obj_writer, name, 0, sect);
+
+  str8_list_push(obj_writer->arena, &sect->data, data);
+
+  return sect;
+}
+
+internal COFF_ObjReloc*
+coff_obj_writer_section_push_reloc(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol, COFF_RelocType type)
+{
+  COFF_ObjRelocNode *reloc_n = push_array(obj_writer->arena, COFF_ObjRelocNode, 1);
+  SLLQueuePush(sect->reloc_first, sect->reloc_last, reloc_n);
+  sect->reloc_count += 1;
+
+  COFF_ObjReloc *reloc = &reloc_n->v;
+  reloc->apply_off     = apply_off;
+  reloc->symbol        = symbol;
+  reloc->type          = type;
+
+  return reloc;
+}
+
+internal int
+coff_obj_section_is_before(void *raw_a, void *raw_b)
+{
+  COFF_ObjSection **a = raw_a;
+  COFF_ObjSection **b = raw_b;
+  return (*a)->section_number < (*b)->section_number;
+}
+
+internal String8
+coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List srl = {0};
+
+  String8List string_table = {0};
+  U32 *string_table_size = push_array(scratch.arena, U32, 1);
+  *string_table_size = sizeof(*string_table_size);
+  str8_list_push(scratch.arena, &string_table, str8_struct(string_table_size));
+
+  //
+  // 
+  //
+  U64               obj_sections_count;
+  COFF_ObjSection **obj_sections;
+  {
+    obj_sections_count = obj_writer->sect_count;
+    obj_sections       = push_array(scratch.arena, COFF_ObjSection *, obj_writer->sect_count);
+    U64 sect_idx = 0;
+    for (COFF_ObjSectionNode *sect_n = obj_writer->sect_first; sect_n != 0; sect_n = sect_n->next, sect_idx += 1) {
+      COFF_ObjSection *sect = &sect_n->v;
+      sect->section_number = sect_idx+1;
+      obj_sections[sect_idx] = sect;
+
+    }
+  }
+  AssertAlways(obj_sections_count <= max_U16);
+
+  //
+  // file header
+  //
+  COFF_FileHeader *file_header      = push_array(scratch.arena, COFF_FileHeader, 1);
+  file_header->machine              = obj_writer->machine_type;
+  file_header->section_count        = obj_sections_count;
+  file_header->time_stamp           = obj_writer->time_stamp;
+  file_header->symbol_table_foff    = 0;
+  file_header->symbol_count         = safe_cast_u32(obj_writer->symbol_count);
+  file_header->optional_header_size = 0;
+  file_header->flags                = 0;
+  str8_list_push(scratch.arena, &srl, str8_struct(file_header));
+
+  //
+  // section table
+  //
+
+  COFF_SectionHeader *sectab = push_array(scratch.arena, COFF_SectionHeader, obj_sections_count);
+  str8_list_push(scratch.arena, &srl, str8_array(sectab, obj_sections_count));
+  {
+    for (U64 sect_idx = 0; sect_idx < obj_sections_count; sect_idx += 1) {
+      COFF_ObjSection    *s = obj_sections[sect_idx];
+      COFF_SectionHeader *d = &sectab[sect_idx];
+
+      // section name
+      String8 sect_name = s->name;
+      if (sect_name.size > sizeof(d->name)) {
+        U64 sect_name_off = string_table.total_size;
+        str8_list_push_cstr(scratch.arena, &string_table, sect_name);
+
+        sect_name = push_str8f(scratch.arena, "/%u", sect_name_off);
+        AssertAlways(sect_name.size <= sizeof(d->name));
+      }
+
+      // section data
+      U64 data_foff = 0;
+      U64 data_size = 0;
+      if (s->data.total_size > 0) {
+        data_foff = srl.total_size;
+        data_size = s->data.total_size;
+        str8_list_concat_in_place(&srl, &s->data);
+      }
+
+      // section relocs
+      U64 relocs_foff = 0;
+      if (s->reloc_count) {
+        AssertAlways(s->reloc_count <= max_U16);
+        COFF_Reloc *relocs    = push_array(scratch.arena, COFF_Reloc, s->reloc_count);
+        U64         reloc_idx = 0;
+        for (COFF_ObjRelocNode *reloc_n = s->reloc_first; reloc_n != 0; reloc_n = reloc_n->next, reloc_idx += 1) {
+          COFF_ObjReloc *rs = &reloc_n->v;
+          COFF_Reloc    *rd = &relocs[reloc_idx];
+          rd->apply_off = rs->apply_off;
+          rd->isymbol   = rs->symbol->idx;
+          rd->type      = rs->type;
+        }
+        relocs_foff = srl.total_size;
+        str8_list_push(scratch.arena, &srl, str8_array(relocs, s->reloc_count));
+      }
+
+      // section header
+      MemoryCopyStr8(d->name, sect_name);
+      MemoryZeroTyped(d->name + sect_name.size, sizeof(d->name) - sect_name.size);
+      d->vsize       = 0;
+      d->voff        = 0;
+      d->fsize       = data_size;
+      d->foff        = data_foff;
+      d->relocs_foff = relocs_foff;
+      d->lines_foff  = 0;
+      d->reloc_count = safe_cast_u32(s->reloc_count);
+      d->line_count  = 0;
+      d->flags       = s->flags;
+    }
+  }
+
+  //
+  // symbol table
+  //
+  if (obj_writer->symbol_count) {
+    file_header->symbol_table_foff = srl.total_size;
+    COFF_Symbol16 *symtab = push_array(scratch.arena, COFF_Symbol16, obj_writer->symbol_count);
+    str8_list_push(scratch.arena, &srl, str8_array(symtab, obj_writer->symbol_count));
+    {
+      U64 symbol_idx = 0;
+      for (COFF_ObjSymbolNode *symbol_n = obj_writer->symbol_first; symbol_n != 0; symbol_n = symbol_n->next) {
+        COFF_ObjSymbol *s = &symbol_n->v;
+        COFF_Symbol16  *d = &symtab[symbol_idx];
+
+        COFF_SymbolName name = {0};
+        // long name
+        if (s->name.size > sizeof(name.short_name)) {
+          U64 string_table_offset = string_table.total_size;
+          str8_list_push_cstr(scratch.arena, &string_table, s->name);
+          
+          name.long_name.zeroes = 0;
+          name.long_name.string_table_offset = safe_cast_u32(string_table_offset);
+        }
+        // short name
+        else {
+          MemoryCopyStr8(name.short_name, s->name);
+          MemoryZeroTyped(name.short_name + s->name.size, sizeof(name.short_name) - s->name.size);
+        }
+
+        // symbol header
+        AssertAlways(s->aux_symbols.node_count <= max_U8);
+        d->name             = name;
+        d->value            = s->value;
+        if (s->section == 0) {
+          d->section_number = COFF_Symbol_AbsSection16;
+        } else {
+          d->section_number = safe_cast_u16(s->section->section_number);
+        }
+        d->type             = s->type;
+        d->storage_class    = s->storage_class;
+        d->aux_symbol_count = (U8)s->aux_symbols.node_count;
+
+        // aux symbols
+        symbol_idx += 1;
+        for (String8Node *aux_n = s->aux_symbols.first; aux_n != 0; aux_n = aux_n->next, symbol_idx += 1) {
+          AssertAlways(aux_n->string.size <= sizeof(COFF_Symbol16));
+          COFF_Symbol16 *a = &symtab[symbol_idx];
+          MemoryZeroStruct(a);
+          MemoryCopyStr8(a, aux_n->string);
+        }
+      }
+    }
+  }
+
+  //
+  // string table
+  //
+  *string_table_size = safe_cast_u32(string_table.total_size);
+  str8_list_concat_in_place(&srl, &string_table);
+
+  //
+  // join
+  //
+  String8 obj = str8_list_join(arena, &srl, 0);
+
+  scratch_end(scratch);
+  return obj;
+}
+
+

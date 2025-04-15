@@ -446,6 +446,7 @@ internal void    str8_serial_push_u16(Arena *arena, String8List *srl, U16 x);
 internal void    str8_serial_push_u8(Arena *arena, String8List *srl, U8 x);
 internal void    str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str);
 internal void    str8_serial_push_string(Arena *arena, String8List *srl, String8 str);
+internal void    str8_serial_push_cstr(Arena *arena, String8List *srl, String8 str);
 #define str8_serial_push_array(arena, srl, ptr, count) str8_serial_push_data(arena, srl, ptr, sizeof(*(ptr)) * (count))
 #define str8_serial_push_struct(arena, srl, ptr) str8_serial_push_array(arena, srl, ptr, 1)
 

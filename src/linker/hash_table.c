@@ -270,6 +270,19 @@ hash_table_search_string_u64(HashTable *ht, String8 key, U64 *value_out)
   return 0;
 }
 
+internal B32
+hash_table_search_string_raw(HashTable *ht, String8 key, void **value_out)
+{
+  KeyValuePair *result = hash_table_search_string(ht, key);
+  if (result) {
+    if (value_out) {
+      *value_out = result->value_raw;
+    }
+    return 1;
+  }
+  return 0;
+}
+
 ////////////////////////////////
 
 internal int
@@ -327,6 +340,18 @@ key_value_pairs_from_hash_table(Arena *arena, HashTable *ht)
   return pairs;
 }
 
+internal void *
+values_from_hash_table_raw(Arena *arena, HashTable *ht)
+{
+  void **result = push_array(arena, void *, ht->count);
+  for (U64 bucket_idx = 0, cursor = 0; bucket_idx < ht->cap; ++bucket_idx) {
+    for (BucketNode *n = ht->buckets[bucket_idx].first; n != 0; n = n->next) {
+      Assert(cursor < ht->count);
+      result[cursor++] = n->v.value_raw;
+    }
+  }
+  return result;
+}
 #include "third_party/radsort/radsort.h"
 
 internal void
