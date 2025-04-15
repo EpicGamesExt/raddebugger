@@ -1053,9 +1053,51 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // rjf: determine view ui rule
     info.view_ui_rule = rd_view_ui_rule_from_string(row->block->viz_expand_rule->string);
     
+    // rjf: find possible table type
+    E_Type *maybe_table_type = block_type;
+    for(;;)
+    {
+      if(maybe_table_type->kind == E_TypeKind_Lens &&
+         str8_match(maybe_table_type->name, str8_lit("table"), 0))
+      {
+        break;
+      }
+      else if(maybe_table_type->kind == E_TypeKind_Lens)
+      {
+        maybe_table_type = e_type_from_key__cached(maybe_table_type->direct_type_key);
+        continue;
+      }
+      else
+      {
+        break;
+      }
+    }
+    
     // rjf: fill row's cells
     {
       if(0){}
+      
+      // rjf: table rows
+      else if(maybe_table_type->kind == E_TypeKind_Lens && str8_match(maybe_table_type->name, str8_lit("table"), 0) && maybe_table_type->count >= 1)
+      {
+        U64 column_count = maybe_table_type->count;
+        info.cell_style_key = push_str8f(arena, "table_%I64u_cols", column_count);
+        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+        RD_Cfg *w_cfg = style->first;
+        F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+        E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+        e_ir_state->overridden_irtree = &row->eval.irtree;
+        for(U64 idx = 0; idx < maybe_table_type->count; idx += 1)
+        {
+          E_Eval cell_eval = e_eval_from_expr(arena, maybe_table_type->args[idx]);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .eval = cell_eval, .default_pct = 1.f/maybe_table_type->count, .pct = take_pct());
+        }
+        e_ir_state->overridden_irtree = prev_overridden_irtree;
+        info.can_expand = 0;
+#undef take_pct
+      }
       
       // rjf: folder / file rows
       else if(row->eval.space.kind == E_SpaceKind_FileSystem)

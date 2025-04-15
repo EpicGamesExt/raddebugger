@@ -12330,6 +12330,7 @@ rd_frame(void)
         {str8_lit("range1"),      0, 0, 0,        0, 0, {0}},
         {str8_lit("array"),       0, 0, 1,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(array), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(array)}},
         {str8_lit("slice"),       0, 0, 1,        E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},
+        {str8_lit("table"),       0, 0, 0,        0, 0, {0}},
         {str8_lit("text"),        0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
         {str8_lit("disasm"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
         {str8_lit("memory"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},

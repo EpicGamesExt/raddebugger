@@ -1064,28 +1064,36 @@ ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRang
 }
 
 internal B32
+ev_eval_is_expandable(E_Eval eval)
+{
+  B32 result = 0;
+  E_IRTreeAndType irtree = eval.irtree;
+  
+  // rjf: determine if lenses force expandability
+  if(!result)
+  {
+    EV_ExpandRule *expand_rule = ev_expand_rule_from_type_key(irtree.type_key);
+    if(expand_rule != &ev_nil_expand_rule)
+    {
+      result = 1;
+    }
+  }
+  
+  // rjf: determine if type info force expandability
+  if(!result)
+  {
+    result = ev_type_key_and_mode_is_expandable(irtree.type_key, irtree.mode);
+  }
+  return result;
+}
+
+internal B32
 ev_row_is_expandable(EV_Row *row)
 {
   B32 result = 0;
   if(!ev_key_match(ev_key_root(), row->block->key))
   {
-    E_IRTreeAndType irtree = row->eval.irtree;
-    
-    // rjf: determine if lenses force expandability
-    if(!result)
-    {
-      EV_ExpandRule *expand_rule = ev_expand_rule_from_type_key(irtree.type_key);
-      if(expand_rule != &ev_nil_expand_rule)
-      {
-        result = 1;
-      }
-    }
-    
-    // rjf: determine if type info force expandability
-    if(!result)
-    {
-      result = ev_type_key_and_mode_is_expandable(irtree.type_key, irtree.mode);
-    }
+    result = ev_eval_is_expandable(row->eval);
   }
   return result;
 }
