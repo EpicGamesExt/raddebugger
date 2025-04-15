@@ -1942,7 +1942,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
           type_kind == E_TypeKind_Enum))
       {
         got_commit_data = 1;
-        E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
+        E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).expr;
         E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
         E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
@@ -2096,7 +2096,7 @@ rd_query_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).exprs.last;
+    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).expr;
     if(expr->kind == E_ExprKind_LeafIdentifier &&
        str8_match(expr->qualifier, str8_lit("query"), 0))
     {
@@ -12045,7 +12045,7 @@ rd_frame(void)
       
       //- rjf: add macro for 'call_stack' -> 'query:current_thread.callstack'
       {
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("query:current_thread.call_stack")).exprs.first;
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("query:current_thread.call_stack")).expr;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
       }
       
@@ -12247,7 +12247,7 @@ rd_frame(void)
         E_Parse parse = e_parse_expr_from_text(scratch.arena, expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
-          for(E_Expr *expr = parse.exprs.first; expr != &e_expr_nil; expr = expr->next)
+          for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
           {
             e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, expr);
           }
@@ -15707,7 +15707,7 @@ Z(getting_started)
             ExprWalkTask *next;
             E_Expr *expr;
           };
-          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd).exprs.last;
+          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd).expr;
           ExprWalkTask start_task = {0, expr};
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)

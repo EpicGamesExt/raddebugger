@@ -798,14 +798,14 @@ e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
         }
         
         // rjf: construct leaf type
-        parse.exprs.first = parse.exprs.last = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-        parse.exprs.first->type_key = type_key;
+        parse.expr = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
+        parse.expr->type_key = type_key;
       }
     }
   }
   
   //- rjf: parse extensions
-  if(parse.exprs.first != &e_expr_nil)
+  if(parse.expr != &e_expr_nil)
   {
     for(;;)
     {
@@ -818,9 +818,9 @@ e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
       if(str8_match(token_string, str8_lit("*"), 0))
       {
         token_it += 1;
-        E_Expr *ptee = parse.exprs.first;
-        parse.exprs.first = parse.exprs.last = e_push_expr(arena, E_ExprKind_Ptr, token_string.str);
-        e_expr_push_child(parse.exprs.first, ptee);
+        E_Expr *ptee = parse.expr;
+        parse.expr = e_push_expr(arena, E_ExprKind_Ptr, token_string.str);
+        e_expr_push_child(parse.expr, ptee);
       }
       else
       {
@@ -941,7 +941,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
               
               // rjf: parse type expr
               E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, e_token_array_make_first_opl(it, it_opl));
-              E_Expr *type = type_parse.exprs.last;
+              E_Expr *type = type_parse.expr;
               e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
               it = type_parse.last_token;
               location = token_string.str;
@@ -1029,7 +1029,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         // rjf: parse () contents
         E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
         e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
-        atom = nested_parse.exprs.last;
+        atom = nested_parse.expr;
         it = nested_parse.last_token;
         
         // rjf: expect )
@@ -1058,11 +1058,11 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         // rjf: parse [] contents
         E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
         e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
-        atom = nested_parse.exprs.last;
+        atom = nested_parse.expr;
         it = nested_parse.last_token;
         
         // rjf: build cast-to-U64*, and dereference operators
-        if(nested_parse.exprs.last == &e_expr_nil)
+        if(nested_parse.expr == &e_expr_nil)
         {
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression following `[`.");
         }
@@ -1253,10 +1253,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         it = idx_expr_parse.last_token;
         
         // rjf: valid indexing expression => produce index expr
-        if(idx_expr_parse.exprs.last != &e_expr_nil)
+        if(idx_expr_parse.expr != &e_expr_nil)
         {
           E_Expr *array_expr = atom;
-          E_Expr *index_expr = idx_expr_parse.exprs.last;
+          E_Expr *index_expr = idx_expr_parse.expr;
           atom = e_push_expr(arena, E_ExprKind_ArrayIndex, token_string.str);
           e_expr_push_child(atom, array_expr);
           e_expr_push_child(atom, index_expr);
@@ -1294,11 +1294,14 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         E_Parse args_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, max_U64);
         e_msg_list_concat_in_place(&result.msgs, &args_parse.msgs);
         it = args_parse.last_token;
-        if(args_parse.exprs.first != &e_expr_nil)
+        if(args_parse.expr != &e_expr_nil)
         {
-          call_expr->last->next = args_parse.exprs.first;
-          args_parse.exprs.first->prev = call_expr->last;
-          call_expr->last = args_parse.exprs.last;
+          call_expr->last->next = args_parse.expr;
+          args_parse.expr->prev = call_expr->last;
+          for(E_Expr *arg = args_parse.expr; arg != &e_expr_nil; arg = arg->next)
+          {
+            call_expr->last = arg;
+          }
         }
         atom = call_expr;
         
@@ -1388,7 +1391,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         {
           E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it+1, it_opl), binary_precedence-1, 1);
           e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
-          E_Expr *rhs = rhs_expr_parse.exprs.last;
+          E_Expr *rhs = rhs_expr_parse.expr;
           it = rhs_expr_parse.last_token;
           if(rhs == &e_expr_nil)
           {
@@ -1413,9 +1416,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           // rjf: parse middle expression
           E_Parse middle_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
           it = middle_expr_parse.last_token;
-          E_Expr *middle_expr = middle_expr_parse.exprs.last;
+          E_Expr *middle_expr = middle_expr_parse.expr;
           e_msg_list_concat_in_place(&result.msgs, &middle_expr_parse.msgs);
-          if(middle_expr_parse.exprs.last == &e_expr_nil)
+          if(middle_expr_parse.expr == &e_expr_nil)
           {
             e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression after `?`.");
           }
@@ -1446,7 +1449,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           {
             it = rhs_expr_parse.last_token;
             e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
-            if(rhs_expr_parse.exprs.last == &e_expr_nil)
+            if(rhs_expr_parse.expr == &e_expr_nil)
             {
               e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, colon_token_string.str, "Expected expression after `:`.");
             }
@@ -1454,12 +1457,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           
           // rjf: build ternary
           if(atom != &e_expr_nil &&
-             middle_expr_parse.exprs.last != &e_expr_nil &&
-             rhs_expr_parse.exprs.last != &e_expr_nil)
+             middle_expr_parse.expr != &e_expr_nil &&
+             rhs_expr_parse.expr != &e_expr_nil)
           {
             E_Expr *lhs = atom;
-            E_Expr *mhs = middle_expr_parse.exprs.last;
-            E_Expr *rhs = rhs_expr_parse.exprs.last;
+            E_Expr *mhs = middle_expr_parse.expr;
+            E_Expr *rhs = rhs_expr_parse.expr;
             atom = e_push_expr(arena, E_ExprKind_Ternary, token_string.str);
             e_expr_push_child(atom, lhs);
             e_expr_push_child(atom, mhs);
@@ -1478,7 +1481,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
     //- rjf: store parsed atom to expression chain - if we didn't get an expression, break
     if(atom != &e_expr_nil)
     {
-      DLLPushBack_NPZ(&e_expr_nil, result.exprs.first, result.exprs.last, atom, next, prev);
+      DLLPushBack_NPZ(&e_expr_nil, result.expr, result.last_expr, atom, next, prev);
       chain_count += 1;
     }
     else

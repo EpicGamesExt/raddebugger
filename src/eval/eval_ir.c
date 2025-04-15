@@ -123,14 +123,14 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   {
     E_TokenArray tokens = e_token_array_from_text(scratch.arena, params->type_pattern);
     E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, params->type_pattern, tokens);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.last);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
     type_key = irtree.type_key;
   }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
   node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
   U8 pattern_split = '?';
   node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
-  node->tag_exprs = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).exprs;
+  node->expr = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).expr;
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
     U64 hash = e_hash_from_string(5381, node->type_string);
@@ -164,10 +164,7 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
       {
         if(str8_match(n->type_string, type_string, 0))
         {
-          for(E_Expr *e = n->tag_exprs.first; e != &e_expr_nil; e = e->next)
-          {
-            e_expr_list_push(arena, &exprs, e);
-          }
+          e_expr_list_push(arena, &exprs, n->expr);
         }
       }
     }
@@ -197,10 +194,7 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
         }
         if(fits_this_type_string)
         {
-          for(E_Expr *e = auto_hook_node->tag_exprs.first; e != &e_expr_nil; e = e->next)
-          {
-            e_expr_list_push(arena, &exprs, e);
-          }
+          e_expr_list_push(arena, &exprs, auto_hook_node->expr);
         }
       }
     }
@@ -2251,6 +2245,58 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
         }
       }break;
+    }
+    
+    //- rjf: check chained expressions for simple wrappers
+    {
+      struct
+      {
+        String8 shorthand;
+        String8 full_name;
+      }
+      shorthand_lens_pair_table[] =
+      {
+        {str8_lit("x"), str8_lit("hex")},
+        {str8_lit("b"), str8_lit("bin")},
+        {str8_lit("o"), str8_lit("oct")},
+        {str8_lit("d"), str8_lit("dec")},
+      };
+      for(E_Expr *chained_expr = expr->next;
+          chained_expr != &e_expr_nil;
+          chained_expr = chained_expr->next)
+      {
+        B32 matches_shorthand = 0;
+        if(chained_expr->kind == E_ExprKind_LeafIdentifier)
+        {
+          for EachElement(shorthand_idx, shorthand_lens_pair_table)
+          {
+            if(str8_match(chained_expr->string, shorthand_lens_pair_table[shorthand_idx].shorthand, 0))
+            {
+              String8 full_name = shorthand_lens_pair_table[shorthand_idx].full_name;
+              result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
+                                                .direct_key = result.type_key,
+                                                .name       = full_name);
+              matches_shorthand = 1;
+              break;
+            }
+          }
+        }
+        if(!matches_shorthand && e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative))))
+        {
+          E_Expr *lens_spec_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, str8_lit("array"));
+          E_TypeKey lens_spec_type_key = lens_spec_expr->type_key;
+          E_Type *lens_spec_type = e_type_from_key__cached(lens_spec_type_key);
+          result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
+                                            .flags      = lens_spec_type->flags,
+                                            .count      = 1,
+                                            .args       = &chained_expr,
+                                            .direct_key = result.type_key,
+                                            .name       = lens_spec_type->name,
+                                            .irext      = lens_spec_type->irext,
+                                            .access     = lens_spec_type->access,
+                                            .expand     = lens_spec_type->expand);
+        }
+      }
     }
     
     //- rjf: if the evaluated type has a hook for an extra layer of ir extension,

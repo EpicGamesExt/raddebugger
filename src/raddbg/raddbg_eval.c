@@ -136,7 +136,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches)
     if(cfg_idx < cfgs->count)
     {
       String8 expr_string = rd_cfg_child_from_string(cfgs->v[cfg_idx], str8_lit("expression"))->first->string;
-      exprs_out[idx] = e_parse_expr_from_text(arena, expr_string).exprs.first;
+      exprs_out[idx] = e_parse_expr_from_text(arena, expr_string).expr;
       exprs_strings_out[idx] = push_str8_copy(arena, expr_string);
     }
   }
@@ -218,7 +218,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(locals)
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
     String8 expr_string = accel->v[read_range.min + idx];
-    exprs_out[idx] = e_parse_expr_from_text(arena, expr_string).exprs.last;
+    exprs_out[idx] = e_parse_expr_from_text(arena, expr_string).expr;
     exprs_strings_out[idx] = push_str8_copy(arena, expr_string);
   }
 }
@@ -270,7 +270,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers)
     String8 register_name = accel->v[read_range.min + idx];
     String8 register_expr = push_str8f(arena, "reg:%S", register_name);
     exprs_strings_out[idx] = register_name;
-    exprs_out[idx] = e_parse_expr_from_text(arena, register_expr).exprs.last;
+    exprs_out[idx] = e_parse_expr_from_text(arena, register_expr).expr;
   }
 }
 
@@ -400,7 +400,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       if(wrap_child_w_meta_expr)
       {
         Temp scratch = scratch_begin(&arena, 1);
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).expr;
         B32 expr_is_simple = 0;
         if(expr->kind == E_ExprKind_LeafU64 ||
            expr->kind == E_ExprKind_LeafF64 ||
@@ -428,8 +428,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       if(!md_node_is_nil(range))
       {
         Temp scratch = scratch_begin(&arena, 1);
-        E_Expr *min_bound = e_parse_expr_from_text(scratch.arena, range->first->string).exprs.first;
-        E_Expr *max_bound = e_parse_expr_from_text(scratch.arena, range->first->next->string).exprs.first;
+        E_Expr *min_bound = e_parse_expr_from_text(scratch.arena, range->first->string).expr;
+        E_Expr *max_bound = e_parse_expr_from_text(scratch.arena, range->first->next->string).expr;
         E_Expr *args[] =
         {
           min_bound,
@@ -689,7 +689,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
   {
     Rng1U64 read_range = intersect_1u64(cmds_idx_range, idx_range);
     U64 read_count = dim_1u64(read_range);
-    E_Expr *commands = e_parse_expr_from_text(arena, str8_lit("query:commands")).exprs.last;
+    E_Expr *commands = e_parse_expr_from_text(arena, str8_lit("query:commands")).expr;
     E_IRTreeAndType commands_irtree = e_irtree_and_type_from_expr(arena, commands);
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {

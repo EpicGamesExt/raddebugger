@@ -11,7 +11,8 @@ typedef struct E_Parse E_Parse;
 struct E_Parse
 {
   E_Token *last_token;
-  E_ExprChain exprs;
+  E_Expr *expr;
+  E_Expr *last_expr;
   E_MsgList msgs;
 };
 

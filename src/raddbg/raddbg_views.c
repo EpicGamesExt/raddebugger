@@ -1445,7 +1445,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       E_Expr *root_expr = row->eval.expr;
       if(wrap_string.size != 0)
       {
-        E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string).exprs.last;
+        E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string).expr;
         root_expr = wrap_expr;
         typedef struct Task Task;
         struct Task

@@ -35,7 +35,7 @@ e_eval_from_string(Arena *arena, String8 string)
 {
   E_TokenArray     tokens   = e_token_array_from_text(arena, string);
   E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, tokens);
-  E_Eval           eval     = e_eval_from_expr(arena, parse.exprs.first);
+  E_Eval           eval     = e_eval_from_expr(arena, parse.expr);
   e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
   return eval;
 }
@@ -337,7 +337,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
       S32 indent;
     };
     str8_list_pushf(scratch.arena, &strings, "    expr:\n");
-    Task start_task = {0, parse.exprs.first, 2};
+    Task start_task = {0, parse.expr, 2};
     Task *first_task = &start_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
@@ -370,7 +370,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.exprs.first);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;
