@@ -370,7 +370,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_U64);
         E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafU64)
+        if(expr->kind != E_ExprKind_LeafU64 && expr != &e_expr_nil)
         {
           child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
         }
@@ -381,7 +381,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_F32);
         E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafF32 && expr->kind != E_ExprKind_LeafF64)
+        if(expr->kind != E_ExprKind_LeafF32 && expr->kind != E_ExprKind_LeafF64 && expr != &e_expr_nil)
         {
           child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
         }
@@ -392,7 +392,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_Bool);
         E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafU64)
+        if(expr->kind != E_ExprKind_LeafU64 && expr != &e_expr_nil)
         {
           child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
         }

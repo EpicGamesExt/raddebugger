@@ -562,7 +562,7 @@ e_type_key_match(E_TypeKey l, E_TypeKey r)
   return result;
 }
 
-//- rjf: key -> info extraction
+//- rjf: type key -> info extraction
 
 internal U64
 e_hash_from_type(E_Type *type)
@@ -625,6 +625,48 @@ e_type_kind_from_key(E_TypeKey key)
     case E_TypeKeyKind_RegAlias:{kind = E_TypeKind_Union;}break;
   }
   return kind;
+}
+
+internal U64
+e_type_byte_size_from_key(E_TypeKey key)
+{
+  ProfBeginFunction();
+  U64 result = 0;
+  switch(key.kind)
+  {
+    default:{}break;
+    case E_TypeKeyKind_Basic:
+    {
+      E_TypeKind kind = (E_TypeKind)key.u32[0];
+      result = e_type_kind_basic_byte_size_table[kind];
+    }break;
+    case E_TypeKeyKind_Ext:
+    {
+      U64 type_node_idx = key.u32[1];
+      U32 rdi_idx = key.u32[2];
+      RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
+      RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
+      result = rdi_type->byte_size;
+    }break;
+    case E_TypeKeyKind_Cons:
+    {
+      U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
+      U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
+      E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
+      for(E_ConsTypeNode *node = key_slot->first;
+          node != 0;
+          node = node->key_next)
+      {
+        if(e_type_key_match(node->key, key))
+        {
+          result = node->byte_size;
+          break;
+        }
+      }
+    }break;
+  }
+  ProfEnd();
+  return result;
 }
 
 internal E_Type *
@@ -1201,287 +1243,6 @@ e_type_from_key(Arena *arena, E_TypeKey key)
   return type;
 }
 
-internal U64
-e_type_byte_size_from_key(E_TypeKey key)
-{
-  ProfBeginFunction();
-  U64 result = 0;
-  switch(key.kind)
-  {
-    default:{}break;
-    case E_TypeKeyKind_Basic:
-    {
-      E_TypeKind kind = (E_TypeKind)key.u32[0];
-      result = e_type_kind_basic_byte_size_table[kind];
-    }break;
-    case E_TypeKeyKind_Ext:
-    {
-      U64 type_node_idx = key.u32[1];
-      U32 rdi_idx = key.u32[2];
-      RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
-      RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
-      result = rdi_type->byte_size;
-    }break;
-    case E_TypeKeyKind_Cons:
-    {
-      U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-      U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
-      E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
-      for(E_ConsTypeNode *node = key_slot->first;
-          node != 0;
-          node = node->key_next)
-      {
-        if(e_type_key_match(node->key, key))
-        {
-          result = node->byte_size;
-          break;
-        }
-      }
-    }break;
-  }
-  ProfEnd();
-  return result;
-}
-
-internal E_TypeKey
-e_type_direct_from_key(E_TypeKey key)
-{
-  E_TypeKey result = zero_struct;
-  switch(key.kind)
-  {
-    default:{}break;
-    case E_TypeKeyKind_Ext:
-    case E_TypeKeyKind_Cons:
-    {
-      E_Type *type = e_type_from_key__cached(key);
-      result = type->direct_type_key;
-    }break;
-  }
-  return result;
-}
-
-internal E_TypeKey
-e_type_owner_from_key(E_TypeKey key)
-{
-  E_TypeKey result = zero_struct;
-  switch(key.kind)
-  {
-    default:{}break;
-    case E_TypeKeyKind_Ext:
-    case E_TypeKeyKind_Cons:
-    {
-      E_Type *type = e_type_from_key__cached(key);
-      result = type->owner_type_key;
-    }break;
-  }
-  return result;
-}
-
-internal E_TypeKey
-e_type_ptee_from_key(E_TypeKey key)
-{
-  E_TypeKey result = key;
-  B32 passed_ptr = 0;
-  for(;;)
-  {
-    E_TypeKind kind = e_type_kind_from_key(result);
-    result = e_type_direct_from_key(result);
-    if(kind == E_TypeKind_Ptr || kind == E_TypeKind_LRef || kind == E_TypeKind_RRef)
-    {
-      passed_ptr = 1;
-    }
-    E_TypeKind next_kind = e_type_kind_from_key(result);
-    if(passed_ptr &&
-       next_kind != E_TypeKind_IncompleteStruct &&
-       next_kind != E_TypeKind_IncompleteUnion &&
-       next_kind != E_TypeKind_IncompleteEnum &&
-       next_kind != E_TypeKind_IncompleteClass &&
-       next_kind != E_TypeKind_Alias &&
-       next_kind != E_TypeKind_Modifier)
-    {
-      break;
-    }
-    if(kind == E_TypeKind_Null)
-    {
-      break;
-    }
-  }
-  return result;
-}
-
-internal E_TypeKey
-e_type_unwrap_enum(E_TypeKey key)
-{
-  E_TypeKey result = key;
-  for(B32 good = 1; good;)
-  {
-    E_TypeKind kind = e_type_kind_from_key(result);
-    if(kind == E_TypeKind_Enum)
-    {
-      result = e_type_direct_from_key(result);
-    }
-    else
-    {
-      good = 0;
-    }
-  }
-  return result;
-}
-
-internal E_TypeKey
-e_type_unwrap(E_TypeKey key)
-{
-  E_TypeKey result = key;
-  for(B32 good = 1; good;)
-  {
-    E_TypeKind kind = e_type_kind_from_key(result);
-    if((E_TypeKind_FirstIncomplete <= kind && kind <= E_TypeKind_LastIncomplete) ||
-       kind == E_TypeKind_Modifier ||
-       kind == E_TypeKind_Alias ||
-       kind == E_TypeKind_Lens ||
-       kind == E_TypeKind_MetaExpr)
-    {
-      result = e_type_direct_from_key(result);
-    }
-    else
-    {
-      good = 0;
-    }
-  }
-  return result;
-}
-
-internal E_TypeKey
-e_type_promote(E_TypeKey key)
-{
-  E_TypeKey result = key;
-  E_TypeKind kind = e_type_kind_from_key(key);
-  if(kind == E_TypeKind_Bool ||
-     kind == E_TypeKind_S8 ||
-     kind == E_TypeKind_S16 ||
-     kind == E_TypeKind_U8 ||
-     kind == E_TypeKind_U16)
-  {
-    result = e_type_key_basic(E_TypeKind_S32);
-  }
-  return result;
-}
-
-internal B32
-e_type_match(E_TypeKey l, E_TypeKey r)
-{
-  // rjf: unpack parameters
-  E_TypeKey lu = e_type_unwrap(l);
-  E_TypeKey ru = e_type_unwrap(r);
-  
-  // rjf: exact key matches -> match
-  B32 result = e_type_key_match(lu, ru);
-  
-  // rjf: if keys don't match, type *contents* could still match,
-  // so we need to unpack the type info & compare
-  if(!result)
-  {
-    E_TypeKind luk = e_type_kind_from_key(lu);
-    E_TypeKind ruk = e_type_kind_from_key(ru);
-    if(luk == ruk)
-    {
-      switch(luk)
-      {
-        default:
-        {
-          result = 1;
-        }break;
-        
-        case E_TypeKind_Ptr:
-        case E_TypeKind_LRef:
-        case E_TypeKind_RRef:
-        {
-          E_TypeKey lud = e_type_direct_from_key(lu);
-          E_TypeKey rud = e_type_direct_from_key(ru);
-          result = e_type_match(lud, rud);
-        }break;
-        
-        case E_TypeKind_MemberPtr:
-        {
-          E_TypeKey lud = e_type_direct_from_key(lu);
-          E_TypeKey rud = e_type_direct_from_key(ru);
-          E_TypeKey luo = e_type_owner_from_key(lu);
-          E_TypeKey ruo = e_type_owner_from_key(ru);
-          result = (e_type_match(lud, rud) && e_type_match(luo, ruo));
-        }break;
-        
-        case E_TypeKind_Array:
-        {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
-          if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
-          {
-            result = 1;
-          }
-        }break;
-        
-        case E_TypeKind_Function:
-        {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
-          if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
-          {
-            B32 params_match = 1;
-            E_TypeKey *lp = lt->param_type_keys;
-            E_TypeKey *rp = rt->param_type_keys;
-            U64 count = lt->count;
-            for(U64 i = 0; i < count; i += 1, lp += 1, rp += 1)
-            {
-              if(!e_type_match(*lp, *rp))
-              {
-                params_match = 0;
-                break;
-              }
-            }
-            result = params_match;
-          }
-        }break;
-        
-        case E_TypeKind_Method:
-        {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
-          if(lt->count == rt->count &&
-             e_type_match(lt->direct_type_key, rt->direct_type_key) &&
-             e_type_match(lt->owner_type_key, rt->owner_type_key))
-          {
-            B32 params_match = 1;
-            E_TypeKey *lp = lt->param_type_keys;
-            E_TypeKey *rp = rt->param_type_keys;
-            U64 count = lt->count;
-            for(U64 i = 0; i < count; i += 1, lp += 1, rp += 1)
-            {
-              if(!e_type_match(*lp, *rp))
-              {
-                params_match = 0;
-                break;
-              }
-            }
-            result = params_match;
-          }
-        }break;
-      }
-    }
-  }
-  
-  return result;
-}
-
-internal E_Member *
-e_type_member_copy(Arena *arena, E_Member *src)
-{
-  E_Member *dst = push_array(arena, E_Member, 1);
-  MemoryCopyStruct(dst, src);
-  dst->name = push_str8_copy(arena, src->name);
-  dst->inheritance_key_chain = e_type_key_list_copy(arena, &src->inheritance_key_chain);
-  return dst;
-}
-
 internal int
 e_type_qsort_compare_members_offset(E_Member *a, E_Member *b)
 {
@@ -1641,22 +1402,203 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   return members;
 }
 
-internal E_Member *
-e_type_member_from_array_name(E_MemberArray *members, String8 name)
+//- rjf: type key traversal
+
+internal E_TypeKey
+e_type_key_direct(E_TypeKey key)
 {
-  E_Member *member = 0;
-  for(U64 idx = 0; idx < members->count; idx += 1)
+  E_TypeKey result = zero_struct;
+  switch(key.kind)
   {
-    if((members->v[idx].kind == E_MemberKind_DataField ||
-        members->v[idx].kind == E_MemberKind_Padding) &&
-       str8_match(members->v[idx].name, name, 0))
+    default:{}break;
+    case E_TypeKeyKind_Ext:
+    case E_TypeKeyKind_Cons:
     {
-      member = &members->v[idx];
+      E_Type *type = e_type_from_key__cached(key);
+      result = type->direct_type_key;
+    }break;
+  }
+  return result;
+}
+
+internal E_TypeKey
+e_type_key_owner(E_TypeKey key)
+{
+  E_TypeKey result = zero_struct;
+  switch(key.kind)
+  {
+    default:{}break;
+    case E_TypeKeyKind_Ext:
+    case E_TypeKeyKind_Cons:
+    {
+      E_Type *type = e_type_from_key__cached(key);
+      result = type->owner_type_key;
+    }break;
+  }
+  return result;
+}
+
+internal E_TypeKey
+e_type_key_promote(E_TypeKey key)
+{
+  E_TypeKey result = key;
+  E_TypeKind kind = e_type_kind_from_key(key);
+  if(kind == E_TypeKind_Bool ||
+     kind == E_TypeKind_S8 ||
+     kind == E_TypeKind_S16 ||
+     kind == E_TypeKind_U8 ||
+     kind == E_TypeKind_U16)
+  {
+    result = e_type_key_basic(E_TypeKind_S32);
+  }
+  return result;
+}
+
+internal E_TypeKey
+e_type_key_unwrap(E_TypeKey key, E_TypeUnwrapFlags flags)
+{
+  E_TypeKey result = key;
+  E_TypeKind kind = e_type_kind_from_key(result);
+  B32 did_ptr = 0;
+  for(;;)
+  {
+    B32 done = 0;
+    switch(kind)
+    {
+      default:{done = 1;}break;
+      case E_TypeKind_Modifier:  {done = !(flags & E_TypeUnwrapFlag_Modifiers);}break;
+      case E_TypeKind_Lens:      {done = !(flags & E_TypeUnwrapFlag_Lenses);}break;
+      case E_TypeKind_MetaExpr:  {done = !(flags & E_TypeUnwrapFlag_Meta);}break;
+      case E_TypeKind_Enum:      {done = !(flags & E_TypeUnwrapFlag_Enums);}break;
+      case E_TypeKind_Alias:     {done = !(flags & E_TypeUnwrapFlag_Aliases);}break;
+      case E_TypeKind_Array:
+      case E_TypeKind_Ptr:
+      case E_TypeKind_RRef:
+      case E_TypeKind_LRef:
+      case E_TypeKind_MemberPtr:
+      {
+        done = (did_ptr || !(flags & E_TypeUnwrapFlag_Pointers));
+        did_ptr = 1;
+      }break;
+    }
+    if(done)
+    {
       break;
     }
+    result = e_type_key_direct(result);
+    kind = e_type_kind_from_key(result);
   }
-  return member;
+  return result;
 }
+
+//- rjf: type comparisons
+
+internal B32
+e_type_match(E_TypeKey l, E_TypeKey r)
+{
+  // rjf: unpack parameters
+  E_TypeKey lu = e_type_key_unwrap(l, E_TypeUnwrapFlag_AllDecorative);
+  E_TypeKey ru = e_type_key_unwrap(r, E_TypeUnwrapFlag_AllDecorative);
+  
+  // rjf: exact key matches -> match
+  B32 result = e_type_key_match(lu, ru);
+  
+  // rjf: if keys don't match, type *contents* could still match,
+  // so we need to unpack the type info & compare
+  if(!result)
+  {
+    E_TypeKind luk = e_type_kind_from_key(lu);
+    E_TypeKind ruk = e_type_kind_from_key(ru);
+    if(luk == ruk)
+    {
+      switch(luk)
+      {
+        default:
+        {
+          result = 1;
+        }break;
+        
+        case E_TypeKind_Ptr:
+        case E_TypeKind_LRef:
+        case E_TypeKind_RRef:
+        {
+          E_TypeKey lud = e_type_key_direct(lu);
+          E_TypeKey rud = e_type_key_direct(ru);
+          result = e_type_match(lud, rud);
+        }break;
+        
+        case E_TypeKind_MemberPtr:
+        {
+          E_TypeKey lud = e_type_key_direct(lu);
+          E_TypeKey rud = e_type_key_direct(ru);
+          E_TypeKey luo = e_type_key_owner(lu);
+          E_TypeKey ruo = e_type_key_owner(ru);
+          result = (e_type_match(lud, rud) && e_type_match(luo, ruo));
+        }break;
+        
+        case E_TypeKind_Array:
+        {
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
+          if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
+          {
+            result = 1;
+          }
+        }break;
+        
+        case E_TypeKind_Function:
+        {
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
+          if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
+          {
+            B32 params_match = 1;
+            E_TypeKey *lp = lt->param_type_keys;
+            E_TypeKey *rp = rt->param_type_keys;
+            U64 count = lt->count;
+            for(U64 i = 0; i < count; i += 1, lp += 1, rp += 1)
+            {
+              if(!e_type_match(*lp, *rp))
+              {
+                params_match = 0;
+                break;
+              }
+            }
+            result = params_match;
+          }
+        }break;
+        
+        case E_TypeKind_Method:
+        {
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
+          if(lt->count == rt->count &&
+             e_type_match(lt->direct_type_key, rt->direct_type_key) &&
+             e_type_match(lt->owner_type_key, rt->owner_type_key))
+          {
+            B32 params_match = 1;
+            E_TypeKey *lp = lt->param_type_keys;
+            E_TypeKey *rp = rt->param_type_keys;
+            U64 count = lt->count;
+            for(U64 i = 0; i < count; i += 1, lp += 1, rp += 1)
+            {
+              if(!e_type_match(*lp, *rp))
+              {
+                params_match = 0;
+                break;
+              }
+            }
+            result = params_match;
+          }
+        }break;
+      }
+    }
+  }
+  
+  return result;
+}
+
+//- rjf: key -> string
 
 internal void
 e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec, B32 skip_return)
@@ -1722,7 +1664,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Array:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, 2, skip_return);
       if(prec == 1)
       {
@@ -1734,7 +1676,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       if(!skip_return)
       {
-        E_TypeKey direct = e_type_direct_from_key(key);
+        E_TypeKey direct = e_type_key_direct(key);
         e_type_lhs_string_from_key(arena, direct, out, 2, 0);
       }
       if(prec == 1)
@@ -1747,7 +1689,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     {
       E_Type *type = e_type_from_key__cached(key);
       str8_list_pushf(arena, out, "%S(", type->name);
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       String8 direct_string = e_type_string_from_key(arena, direct);
       str8_list_push(arena, out, direct_string);
       for EachIndex(idx, type->count)
@@ -1761,7 +1703,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Ptr:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("*"));
       E_Type *type = e_type_from_key__cached(key);
@@ -1773,14 +1715,14 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_LRef:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("&"));
     }break;
     
     case E_TypeKind_RRef:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("&&"));
     }break;
@@ -1804,7 +1746,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_MetaExpr:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, prec, skip_return);
     }break;
   }
@@ -1820,7 +1762,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Bitfield:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_rhs_string_from_key(arena, direct, out, prec);
     }break;
     
@@ -1830,7 +1772,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_RRef:
     case E_TypeKind_MemberPtr:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_rhs_string_from_key(arena, direct, out, 1);
     }break;
     
@@ -1845,7 +1787,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       str8_list_push(arena, out, str8_lit("["));
       str8_list_push(arena, out, count_str);
       str8_list_push(arena, out, str8_lit("]"));
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
     }break;
     
@@ -1878,13 +1820,13 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
         }
         str8_list_push(arena, out, str8_lit(")"));
       }
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
     }break;
     
     case E_TypeKind_MetaExpr:
     {
-      E_TypeKey direct = e_type_direct_from_key(key);
+      E_TypeKey direct = e_type_key_direct(key);
       e_type_rhs_string_from_key(arena, direct, out, prec);
     }break;
   }
@@ -1910,7 +1852,7 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
   B32 hit_1ptr = 0;
   for(E_TypeKey key = root_key;
       !e_type_key_match(e_type_key_zero(), key);
-      key = e_type_direct_from_key(key))
+      key = e_type_key_direct(key))
   {
     B32 done = 1;
     E_TypeKind kind = e_type_kind_from_key(key);
@@ -2388,21 +2330,8 @@ E_TYPE_IREXT_FUNCTION_DEF(slice)
   {
     Temp scratch = scratch_begin(&arena, 1);
     
-    // rjf: unpack struct type
-    E_TypeKey struct_type_key = e_type_unwrap(irtree->type_key);
-    for(;;)
-    {
-      if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(struct_type_key)))
-      {
-        struct_type_key = e_type_unwrap(e_type_direct_from_key(struct_type_key));
-      }
-      else
-      {
-        break;
-      }
-    }
-    
     // rjf: build info from struct type
+    E_TypeKey struct_type_key = e_type_key_unwrap(irtree->type_key, E_TypeUnwrapFlag_All);
     E_TypeKind type_kind = e_type_kind_from_key(struct_type_key);
     if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
     {
@@ -2416,7 +2345,7 @@ E_TYPE_IREXT_FUNCTION_DEF(slice)
       for(U64 idx = 0; idx < members.count; idx += 1)
       {
         E_Member *member = &members.v[idx];
-        E_TypeKey member_type = e_type_unwrap(member->type_key);
+        E_TypeKey member_type = e_type_key_unwrap(member->type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind member_type_kind = e_type_kind_from_key(member_type);
         if(count_member == 0 && e_type_kind_is_integer(member_type_kind))
         {
@@ -2479,7 +2408,7 @@ E_TYPE_IREXT_FUNCTION_DEF(slice)
       E_TypeKey element_type_key = zero_struct;
       if(base_ptr_member != 0)
       {
-        element_type_key = e_type_direct_from_key(base_ptr_member->type_key);
+        element_type_key = e_type_key_direct(base_ptr_member->type_key);
       }
       
       // rjf: if no count, but base/opl, swap base/opl if needed, and measure count

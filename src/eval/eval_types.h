@@ -30,6 +30,22 @@ struct E_String2TypeKeyMap
 };
 
 ////////////////////////////////
+//~ rjf: Type Unwrapping
+
+typedef U32 E_TypeUnwrapFlags;
+enum
+{
+  E_TypeUnwrapFlag_Modifiers     = (1<<0),
+  E_TypeUnwrapFlag_Pointers      = (1<<1),
+  E_TypeUnwrapFlag_Lenses        = (1<<2),
+  E_TypeUnwrapFlag_Meta          = (1<<3),
+  E_TypeUnwrapFlag_Enums         = (1<<4),
+  E_TypeUnwrapFlag_Aliases       = (1<<5),
+  E_TypeUnwrapFlag_All           = 0xffffffff,
+  E_TypeUnwrapFlag_AllDecorative = (E_TypeUnwrapFlag_All & ~E_TypeUnwrapFlag_Pointers)
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Context
 
 //- rjf: constructed type cache types
@@ -245,22 +261,24 @@ internal E_TypeKey e_type_key_folder(void);
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
 
-//- rjf: key -> info extraction
+//- rjf: type key -> info extraction
 internal U64 e_hash_from_type(E_Type *type);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
-internal E_TypeKey e_type_direct_from_key(E_TypeKey key);
-internal E_TypeKey e_type_owner_from_key(E_TypeKey key);
-internal E_TypeKey e_type_ptee_from_key(E_TypeKey key);
-internal E_TypeKey e_type_unwrap_enum(E_TypeKey key);
-internal E_TypeKey e_type_unwrap(E_TypeKey key);
-internal E_TypeKey e_type_promote(E_TypeKey key);
-internal B32 e_type_match(E_TypeKey l, E_TypeKey r);
-internal E_Member *e_type_member_copy(Arena *arena, E_Member *src);
 internal int e_type_qsort_compare_members_offset(E_Member *a, E_Member *b);
 internal E_MemberArray e_type_data_members_from_key(Arena *arena, E_TypeKey key);
-internal E_Member *e_type_member_from_array_name(E_MemberArray *members, String8 name);
+
+//- rjf: type key traversal
+internal E_TypeKey e_type_key_direct(E_TypeKey key);
+internal E_TypeKey e_type_key_owner(E_TypeKey key);
+internal E_TypeKey e_type_key_promote(E_TypeKey key);
+internal E_TypeKey e_type_key_unwrap(E_TypeKey key, E_TypeUnwrapFlags flags);
+
+//- rjf: type comparisons
+internal B32 e_type_match(E_TypeKey l, E_TypeKey r);
+
+//- rjf: type key -> string
 internal void e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec, B32 skip_return);
 internal void e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec);
 internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);

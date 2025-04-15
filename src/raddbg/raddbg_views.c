@@ -1257,7 +1257,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
               row->eval.space.kind == E_SpaceKind_File)
       {
         if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Array &&
-           e_type_kind_from_key(e_type_direct_from_key(row->eval.irtree.type_key)) == E_TypeKind_U8)
+           e_type_kind_from_key(e_type_key_direct(row->eval.irtree.type_key)) == E_TypeKind_U8)
         {
           info.can_expand = 0;
         }

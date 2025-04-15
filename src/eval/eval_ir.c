@@ -658,7 +658,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprl = expr->first;
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
-      E_TypeKey l_restype = e_type_unwrap(l.type_key);
+      E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
       E_TypeKey check_type_key = l_restype;
       E_TypeKind check_type_kind = l_restype_kind;
@@ -666,7 +666,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
          l_restype_kind == E_TypeKind_LRef ||
          l_restype_kind == E_TypeKind_RRef)
       {
-        check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
+        check_type_key = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_All);
         check_type_kind = e_type_kind_from_key(check_type_key);
       }
       e_msg_list_concat_in_place(&result.msgs, &l.msgs);
@@ -783,18 +783,11 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
       E_IRTreeAndType r = e_irtree_and_type_from_expr(arena, exprr);
-      E_TypeKey l_restype = e_type_unwrap(l.type_key);
-      E_TypeKey r_restype = e_type_unwrap(r.type_key);
+      E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
+      E_TypeKey r_restype = e_type_key_unwrap(r.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
       E_TypeKind r_restype_kind = e_type_kind_from_key(r_restype);
-      if(e_type_kind_is_basic_or_enum(r_restype_kind))
-      {
-        r_restype = e_type_unwrap_enum(r_restype);
-        r_restype_kind = e_type_kind_from_key(r_restype);
-      }
-      E_TypeKey direct_type = e_type_unwrap(l_restype);
-      direct_type = e_type_direct_from_key(direct_type);
-      direct_type = e_type_unwrap(direct_type);
+      E_TypeKey direct_type = e_type_key_unwrap(l_restype, E_TypeUnwrapFlag_All);
       U64 direct_type_size = e_type_byte_size_from_key(direct_type);
       e_msg_list_concat_in_place(&result.msgs, &l.msgs);
       e_msg_list_concat_in_place(&result.msgs, &r.msgs);
@@ -951,7 +944,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
               {
                 e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
               }
-              k = e_type_direct_from_key(k);
+              k = e_type_key_direct(k);
               kind = e_type_kind_from_key(k);
             }
           }
@@ -981,9 +974,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-        E_TypeKey r_type_direct = e_type_unwrap(e_type_direct_from_key(r_type));
+        E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All);
         U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
@@ -1037,7 +1030,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = r_tree.type_key;
-        E_TypeKey r_type_unwrapped = e_type_unwrap(r_type);
+        E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
@@ -1068,7 +1061,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
         E_IRTreeAndType casted_tree = e_irtree_and_type_from_expr(arena, casted_expr);
         e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
-        E_TypeKey casted_type = e_type_unwrap(casted_tree.type_key);
+        E_TypeKey casted_type = e_type_key_unwrap(casted_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
         U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
         U8 in_group  = e_type_group_from_kind(casted_type_kind);
@@ -1178,7 +1171,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         U64 r_type_size = e_type_byte_size_from_key(r_type);
         
@@ -1212,10 +1205,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
-        E_TypeKey r_type_promoted = e_type_promote(r_type);
+        E_TypeKey r_type_promoted = e_type_key_promote(r_type);
         RDI_EvalOp op = e_opcode_from_expr_kind(kind);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
@@ -1245,7 +1238,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
         E_TypeKey r_type_promoted = e_type_key_basic(E_TypeKind_Bool);
@@ -1303,8 +1296,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-        E_TypeKey l_type = e_type_unwrap_enum(e_type_unwrap(l_tree.type_key));
-        E_TypeKey r_type = e_type_unwrap_enum(e_type_unwrap(r_tree.type_key));
+        E_TypeKey l_type = e_type_key_unwrap(l_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         if(l_type.kind == E_TypeKeyKind_Reg)
@@ -1359,8 +1352,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
           if(l_is_pointer_like && r_is_pointer_like)
           {
-            E_TypeKey l_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
-            E_TypeKey r_type_direct = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(r_type)));
+            E_TypeKey l_type_direct = e_type_key_unwrap(l_type, E_TypeUnwrapFlag_All);
+            E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All);
             U64 l_type_direct_byte_size = e_type_byte_size_from_key(l_type_direct);
             U64 r_type_direct_byte_size = e_type_byte_size_from_key(r_type_direct);
             if(l_type_direct_byte_size == r_type_direct_byte_size)
@@ -1424,7 +1417,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
             
             // rjf: unpack type
-            E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(ptr_tree->type_key)));
+            E_TypeKey direct_type = e_type_key_unwrap(ptr_tree->type_key, E_TypeUnwrapFlag_All);
             U64 direct_type_size = e_type_byte_size_from_key(direct_type);
             
             // rjf: generate
@@ -1457,7 +1450,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           case E_ArithPath_PtrSub:
           {
             // rjf: unpack type
-            E_TypeKey direct_type = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_type)));
+            E_TypeKey direct_type = e_type_key_unwrap(l_type, E_TypeUnwrapFlag_All);
             U64 direct_type_size = e_type_byte_size_from_key(direct_type);
             
             // rjf: generate
@@ -1529,9 +1522,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         e_msg_list_concat_in_place(&result.msgs, &c_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-        E_TypeKey c_type = e_type_unwrap(c_tree.type_key);
-        E_TypeKey l_type = e_type_unwrap(l_tree.type_key);
-        E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+        E_TypeKey c_type = e_type_key_unwrap(c_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKey l_type = e_type_key_unwrap(l_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind c_type_kind = e_type_kind_from_key(c_type);
         E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -1603,7 +1596,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
             else
             {
-              result.type_key = e_type_unwrap(result.type_key);
+              result.type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Lenses);
             }
           }
         }
@@ -1646,7 +1639,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             else
             {
               result = e_irtree_and_type_from_expr(arena, lhs->next);
-              result.type_key = e_type_unwrap(result.type_key);
+              result.type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Lenses);
             }
           }
           
@@ -2268,7 +2261,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       E_IRTreeAndType irtree_stripped = result;
       if(type->kind == E_TypeKind_Lens)
       {
-        irtree_stripped.type_key = e_type_direct_from_key(irtree_stripped.type_key);
+        irtree_stripped.type_key = e_type_key_direct(irtree_stripped.type_key);
       }
       E_IRExt ext = type->irext(arena, expr, &irtree_stripped);
       result.user_data = ext.user_data;

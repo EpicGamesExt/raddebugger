@@ -94,7 +94,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
      type_kind == E_TypeKind_Ptr)
   {
     Temp scratch = scratch_begin(0, 0);
-    E_TypeKey ptee_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(type_key)));
+    E_TypeKey ptee_type_key = e_type_key_unwrap(type_key, E_TypeUnwrapFlag_AllDecorative);
     E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
     if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
     {
@@ -111,7 +111,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
       if(has_vtable)
       {
         U64 ptr_vaddr = eval.value.u64;
-        U64 addr_size = e_type_byte_size_from_key(e_type_unwrap(type_key));
+        U64 addr_size = e_type_byte_size_from_key(e_type_key_unwrap(type_key, E_TypeUnwrapFlag_AllDecorative));
         U64 class_base_vaddr = 0;
         U64 vtable_vaddr = 0;
         if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
@@ -160,7 +160,7 @@ e_value_eval_from_eval(E_Eval eval)
   ProfBeginFunction();
   if(eval.irtree.mode == E_Mode_Offset)
   {
-    E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
+    E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
     if(type_kind == E_TypeKind_Array)
     {
@@ -249,7 +249,7 @@ e_value_from_expr(E_Expr *expr)
 internal U64
 e_base_offset_from_eval(E_Eval eval)
 {
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key))))
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))
   {
     eval = e_value_eval_from_eval(eval);
   }
@@ -273,23 +273,23 @@ e_range_from_eval(E_Eval eval)
       }
     }
   }
-  E_TypeKey type_key = e_type_unwrap(eval.irtree.type_key);
+  E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.irtree.type_key));
+  E_TypeKey direct_type_key = e_type_key_unwrap(type_key, E_TypeUnwrapFlag_All);
   E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
   if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
                                                                direct_type_kind == E_TypeKind_Union ||
                                                                direct_type_kind == E_TypeKind_Class ||
                                                                direct_type_kind == E_TypeKind_Array))
   {
-    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.irtree.type_key)));
+    size = e_type_byte_size_from_key(direct_type_key);
   }
   if(size == 0 && eval.irtree.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
                                                         type_kind == E_TypeKind_Union ||
                                                         type_kind == E_TypeKind_Class ||
                                                         type_kind == E_TypeKind_Array))
   {
-    size = e_type_byte_size_from_key(e_type_unwrap(eval.irtree.type_key));
+    size = e_type_byte_size_from_key(type_key);
   }
   if(size == 0)
   {
@@ -376,7 +376,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
     S32 indent = 2;
     for(E_TypeKey type_key = irtree.type_key;
         !e_type_key_match(e_type_key_zero(), type_key);
-        type_key = e_type_direct_from_key(type_key),
+        type_key = e_type_key_direct(type_key),
         indent += 1)
     {
       E_Type *type = e_type_from_key(scratch.arena, type_key);

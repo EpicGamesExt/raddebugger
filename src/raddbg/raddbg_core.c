@@ -1915,9 +1915,9 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
     Temp scratch = scratch_begin(0, 0);
     
     //- rjf: unpack type of destination
-    E_TypeKey type_key = e_type_unwrap(dst_eval.irtree.type_key);
+    E_TypeKey type_key = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
     E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.irtree.type_key)));
+    E_TypeKey direct_type_key = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_All);
     E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
     
     //- rjf: determine data we'll write
@@ -4001,7 +4001,8 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
                     B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
                     RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-                    E_Type *cell_type = e_type_from_key__cached(cell_info.eval.irtree.type_key);
+                    E_TypeKey cell_type_key = cell_info.eval.irtree.type_key;
+                    E_Type *cell_type = e_type_from_key__cached(cell_type_key);
                     E_Eval cell_value_eval = e_value_eval_from_eval(cell_info.eval);
                     F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
                     F32 next_cell_x_px = cell_x_px + cell_width_px;
@@ -4022,7 +4023,7 @@ rd_view_ui(Rng2F32 rect)
                       E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
                       e_ir_state->overridden_irtree = &cell_info.eval.irtree;
                       {
-                        E_TypeKey slider_value_type = e_type_unwrap(cell_type->direct_type_key);
+                        E_TypeKey slider_value_type = e_type_key_unwrap(cell_type->direct_type_key, E_TypeUnwrapFlag_AllDecorative);
                         slider_value_type_kind = e_type_kind_from_key(slider_value_type);
                         E_Expr *min_casted = e_expr_ref_cast(scratch.arena, slider_value_type, min_expr);
                         E_Expr *max_casted = e_expr_ref_cast(scratch.arena, slider_value_type, max_expr);
@@ -10774,7 +10775,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
       E_Eval eval = e_eval_from_string(scratch.arena, string);
       if(eval.msgs.max_kind == E_MsgKind_Null)
       {
-        E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.irtree.type_key));
+        E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
         if(eval_type_kind == E_TypeKind_Ptr ||
            eval_type_kind == E_TypeKind_LRef ||
            eval_type_kind == E_TypeKind_RRef)
