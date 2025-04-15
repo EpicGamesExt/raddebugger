@@ -752,8 +752,7 @@ lnk_obj_from_res_file_list(TP_Context       *tp,
 ////////////////////////////////
 
 internal String8
-lnk_make_linker_coff_obj(TP_Context       *tp,
-                         Arena            *arena,
+lnk_make_linker_coff_obj(Arena            *arena,
                          COFF_TimeStamp    time_stamp,
                          COFF_MachineType  machine,
                          String8           cwd_path,
@@ -763,30 +762,8 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
                          String8           obj_name)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
-  TP_Arena *temp_tp_arena = push_array(scratch.arena, TP_Arena, 1);
-  temp_tp_arena->v        = &scratch.arena;
-  temp_tp_arena->count    = 1;
   
-  LNK_SymbolTable  *symtab = lnk_symbol_table_init(temp_tp_arena);
-  LNK_SectionTable *sectab = lnk_section_table_alloc(0, 1, 1);
-  
-  LNK_Section *header_sect = lnk_section_table_push(sectab, str8_lit(".coffhdr"), 0);
-  LNK_Section *debug_s_sect = lnk_section_table_push(sectab, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS);
-  
-  // TODO: remove! hack!
-  header_sect->emit_header = 0;
-  
-  {
-    COFF_FileHeader *file_header = push_array(header_sect->arena, COFF_FileHeader, 1);
-    file_header->machine         = machine;
-    file_header->section_count   = 0;
-    file_header->time_stamp      = time_stamp;
-    
-    LNK_Chunk *file_header_chunk = lnk_section_push_chunk_raw(header_sect, header_sect->root, file_header, sizeof(*file_header), str8_zero());
-    lnk_section_push_reloc_undefined(header_sect, file_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_FileHeader, section_count), str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_SymbolScopeFlag_Internal);
-  }
-  
+  String8 debug_s_data = {0};
   {
     CV_SymbolList symbol_list = {0};
     symbol_list.signature = CV_Signature_C13;
@@ -836,77 +813,19 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
     
     B32 include_sig = 1;
     String8List debug_s_data_list = cv_data_c13_from_debug_s(scratch.arena, &debug_s, include_sig);
-    
-    // push debug info to section
-    String8 debug_s_data = str8_list_join(debug_s_sect->arena, &debug_s_data_list, 0);
-    lnk_section_push_chunk_data(debug_s_sect, debug_s_sect->root, debug_s_data, str8_zero());
+    debug_s_data = str8_list_join(scratch.arena, &debug_s_data_list, 0);
   }
-  
+
+  String8 obj;
   {
-    // register section symbols (after this point don't push new sections)
-    for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
-      LNK_Section *sect = &sect_node->data;
-      lnk_symbol_table_push_defined_chunk(symtab, sect->name, LNK_DefinedSymbolVisibility_Internal, 0, sect->root, 0, 0, 0);
-    }
-    
-    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8_zero());
-    for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != NULL; sect_node = sect_node->next) {
-      if (sect_node == sectab->null_sect) continue;
-      if (!sect_node->data.emit_header)   continue;
-      LNK_Section *sect = &sect_node->data;
-      
-      // init section header
-      COFF_SectionHeader *coff_sect_header = push_array(header_sect->arena, COFF_SectionHeader, 1);
-      Assert(sect->name.size <= sizeof(coff_sect_header->name));
-      MemoryCopy(&coff_sect_header->name[0], sect->name.str, sect->name.size);
-      coff_sect_header->flags       = sect->flags;
-      coff_sect_header->vsize       = 0; // ignored
-      coff_sect_header->voff        = 0; // ignored
-      coff_sect_header->fsize       = 0; // relocated
-      coff_sect_header->foff        = 0; // relocated
-      coff_sect_header->relocs_foff = 0; // relocated
-      coff_sect_header->lines_foff  = 0; // obsolete
-      coff_sect_header->line_count  = 0; // obsolete
-      coff_sect_header->reloc_count = 0; // relocated
-      
-      // push section header chunk
-      String8 sort_index = lnk_make_section_sort_index(header_sect->arena, str8_zero(), 0, sect->isect);
-      LNK_Chunk *coff_sect_header_chunk = lnk_section_push_chunk_raw(header_sect, coff_section_header_array_chunk, coff_sect_header, sizeof(*coff_sect_header), sort_index);
-      lnk_chunk_set_debugf(header_sect->arena, coff_sect_header_chunk, "%S", sect->name);
-      
-      // emit relocs for reloc fields
-      if (sect->reloc_list.count) {
-        String8 coff_reloc_symbol_name = push_str8f(scratch.arena, "%S.coff_reloc[]", sect->name);
-        String8 coff_reloc_count_symbol_name = push_str8f(scratch.arena, "%S.coff_reloc[].count", sect->name);
-        lnk_section_push_reloc_undefined(header_sect, coff_sect_header_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, relocs_foff), coff_reloc_symbol_name, LNK_SymbolScopeFlag_Internal);
-        lnk_section_push_reloc_undefined(header_sect, coff_sect_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_SectionHeader, reloc_count), coff_reloc_count_symbol_name, LNK_SymbolScopeFlag_Internal);
-      }
-      
-      // emit relocs for file fields
-      if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-        LNK_Symbol *sect_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScopeFlag_Internal, sect->name);
-        lnk_section_push_reloc(header_sect, coff_sect_header_chunk, LNK_Reloc_CHUNK_SIZE_FILE_32, OffsetOf(COFF_SectionHeader, fsize), sect_symbol);
-        lnk_section_push_reloc(header_sect, coff_sect_header_chunk, LNK_Reloc_FILE_OFF_32, OffsetOf(COFF_SectionHeader, foff), sect_symbol);
-      }
-    }
-    
-    // push section header count symbol
-    U64 symbol_count = coff_section_header_array_chunk->u.list->count;
-    LNK_Symbol *coff_section_header_count_symbol = lnk_make_defined_symbol_va(symtab->arena->v[0], str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, symbol_count);
-    lnk_symbol_table_push(symtab, coff_section_header_count_symbol);
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
+    coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS, debug_s_data);
+    obj = coff_obj_writer_serialize(arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
   }
-  
-  lnk_section_table_assign_indices(sectab);
-  lnk_section_table_build_data(tp, sectab, machine);
-  lnk_section_table_assign_file_offsets(sectab);
-  String8       coff_data   = lnk_section_table_serialize(tp, arena, sectab, machine);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, sectab);
-  lnk_patch_relocs_linker(tp, symtab, sectab, sect_id_map, coff_data, 0);
-  
-  lnk_section_table_release(&sectab);
   
   scratch_end(scratch);
-  return coff_data;
+  return obj;
 }
 
 ////////////////////////////////
@@ -3816,7 +3735,7 @@ lnk_run(int argc, char **argv)
         StringJoin join         = { str8_lit_comp(""),  str8_lit_comp(" "), str8_lit_comp("") };
         String8    raw_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &join);
         
-        String8 obj_data = lnk_make_linker_coff_obj(tp, scratch.arena, config->time_stamp, config->machine, config->work_dir, config->image_name, config->pdb_name, raw_cmd_line, obj_name);
+        String8 obj_data = lnk_make_linker_coff_obj(scratch.arena, config->time_stamp, config->machine, config->work_dir, config->image_name, config->pdb_name, raw_cmd_line, obj_name);
         
         LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
         input->dedup_id = obj_name;
