@@ -326,6 +326,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       CTRL_Entity *entity = ext->entity;
       RD_Cfg *child = rd_cfg_child_from_string(cfg, child_schema->string);
       E_TypeKey child_type_key = zero_struct;
+      B32 wrap_child_w_meta_expr = 0;
       if(0){}
       
       //- rjf: ctrl entity members
@@ -367,36 +368,18 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       //- rjf: catchall cases
       else if(str8_match(child_schema->first->string, str8_lit("u64"), 0))
       {
-        Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_U64);
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafU64 && expr != &e_expr_nil)
-        {
-          child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
-        }
-        scratch_end(scratch);
+        wrap_child_w_meta_expr = 1;
       }
       else if(str8_match(child_schema->first->string, str8_lit("f32"), 0))
       {
-        Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_F32);
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafF32 && expr->kind != E_ExprKind_LeafF64 && expr != &e_expr_nil)
-        {
-          child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
-        }
-        scratch_end(scratch);
+        wrap_child_w_meta_expr = 1;
       }
       else if(str8_match(child_schema->first->string, str8_lit("bool"), 0))
       {
-        Temp scratch = scratch_begin(&arena, 1);
         child_type_key = e_type_key_basic(E_TypeKind_Bool);
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
-        if(expr->kind != E_ExprKind_LeafU64 && expr != &e_expr_nil)
-        {
-          child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
-        }
-        scratch_end(scratch);
+        wrap_child_w_meta_expr = 1;
       }
       else if(str8_match(child_schema->first->string, str8_lit("vaddr_range"), 0))
       {
@@ -411,6 +394,33 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       else if(str8_match(child_schema->first->string, str8_lit("query"), 0))
       {
         child_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, child_schema->string);
+      }
+      
+      //- rjf: extend child type with meta-expression information
+      if(wrap_child_w_meta_expr)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_Expr *expr = e_parse_expr_from_text(scratch.arena, child->first->string).exprs.first;
+        B32 expr_is_simple = 0;
+        if(expr->kind == E_ExprKind_LeafU64 ||
+           expr->kind == E_ExprKind_LeafF64 ||
+           expr->kind == E_ExprKind_LeafF32)
+        {
+          expr_is_simple = 1;
+        }
+        if((expr->kind == E_ExprKind_Pos || expr->kind == E_ExprKind_Neg) &&
+           expr->first == expr->last &&
+           (expr->first->kind == E_ExprKind_LeafU64 ||
+            expr->first->kind == E_ExprKind_LeafF64 ||
+            expr->first->kind == E_ExprKind_LeafF32))
+        {
+          expr_is_simple = 1;
+        }
+        if(!expr_is_simple && expr != &e_expr_nil)
+        {
+          child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
+        }
+        scratch_end(scratch);
       }
       
       //- rjf: extend child type with ranges
