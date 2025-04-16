@@ -121,6 +121,7 @@
 #include "lnk_reloc.h"
 #include "lnk_symbol_table.h"
 #include "lnk_section_table.h"
+#include "lnk_debug_helper.h"
 #include "lnk_obj.h"
 #include "lnk_import_table.h"
 #include "lnk_export_table.h"
@@ -139,6 +140,7 @@
 #include "lnk_symbol_table.c"
 #include "lnk_section_table.c"
 #include "lnk_obj.c"
+#include "lnk_debug_helper.c"
 #include "lnk_import_table.c"
 #include "lnk_export_table.c"
 #include "lnk_lib.c"
@@ -763,27 +765,16 @@ lnk_make_linker_coff_obj(Arena            *arena,
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  String8 debug_s_data = {0};
+  String8 debug_symbols = {0};
   {
-    CV_SymbolList symbol_list = {0};
-    symbol_list.signature = CV_Signature_C13;
+    CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
     
     // S_OBJ
     String8 obj_data = cv_make_obj_name(scratch.arena, obj_name, 0);
     cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_OBJNAME, obj_data);
     
     // S_COMPILE3
-    CV_Arch cv_arch = cv_arch_from_coff_machine(machine);
-    U64 ver_fe_major = 0;
-    U64 ver_fe_minor = 0;
-    U64 ver_fe_build = 0;
-    U64 ver_feqfe    = 0;
-    U64 ver_major    = 14;
-    U64 ver_minor    = 36;
-    U64 ver_build    = 32537;
-    U64 ver_qfe      = 0;
-    String8 version_string = push_str8f(scratch.arena, "Epic Games Tools (R) RAD Linker");
-    String8 comp3_data     = cv_make_comp3(scratch.arena, 0, CV_Language_LINK, cv_arch, ver_fe_major, ver_fe_minor, ver_fe_build, ver_feqfe, ver_major, ver_minor, ver_build, ver_qfe, version_string);
+    String8 comp3_data = lnk_make_linker_compile3(scratch.arena, machine);
     cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
     
     // S_ENVBLOCK
@@ -798,28 +789,18 @@ lnk_make_linker_coff_obj(Arena            *arena,
     str8_list_push(scratch.arena, &env_list, cmd_line);
     str8_list_push(scratch.arena, &env_list, str8_lit(""));
     str8_list_push(scratch.arena, &env_list, str8_lit(""));
-    String8 env_data = cv_make_envblock(scratch.arena, env_list);
-    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_ENVBLOCK, env_data);
+    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_ENVBLOCK, cv_make_envblock(scratch.arena, env_list));
     
     // TODO: emit S_SECTION and S_COFFGROUP
     // TODO: emit S_TRAMPOLINE
     
-    String8List symbol_data_list = cv_data_from_symbol_list(scratch.arena, symbol_list, CV_SymbolAlign);
-    
-    CV_DebugS debug_s = {0};
-    
-    String8List *symbols_list_ptr = cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Symbols);
-    *symbols_list_ptr = symbol_data_list;
-    
-    B32 include_sig = 1;
-    String8List debug_s_data_list = cv_data_c13_from_debug_s(scratch.arena, &debug_s, include_sig);
-    debug_s_data = str8_list_join(scratch.arena, &debug_s_data_list, 0);
+    debug_symbols = lnk_make_debug_s(scratch.arena, symbol_list);
   }
 
   String8 obj;
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
-    coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS, debug_s_data);
+    coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
     obj = coff_obj_writer_serialize(arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
   }

@@ -536,352 +536,143 @@ lnk_build_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp,
   return lib;
 }
 
-internal String8List
-lnk_build_import_entry_obj(Arena *arena, String8 dll_name, COFF_MachineType machine)
+internal String8
+lnk_build_import_entry_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   
   Assert(machine == COFF_MachineType_X64);
   Assert(str8_match_lit("dll", str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
-  
-  String8List list = {0};
-  
-  COFF_FileHeader *file_header = push_array(arena, COFF_FileHeader, 1);
-  file_header->machine = machine;
-  str8_list_push(arena, &list, str8_struct(file_header));
-  
-  file_header->section_count = 2;
-  COFF_SectionHeader *coff_sect_header_array = push_array(arena, COFF_SectionHeader, file_header->section_count);
-  str8_list_push(arena, &list, str8_array(coff_sect_header_array, file_header->section_count));
-  
-  PE_ImportEntry *import_entry = push_array(arena, PE_ImportEntry, 1);
-  U64 import_entry_off = list.total_size;
-  str8_list_push(arena, &list, str8_struct(import_entry));
-  
-  String8 dll_name_cstr = push_cstr(arena, dll_name);
-  U64 dll_name_off = list.total_size;
-  str8_list_push(arena, &list, dll_name_cstr);
-  
-  U32 import_entry_reloc_count = 3;
-  COFF_Reloc *import_entry_reloc_array = push_array(arena, COFF_Reloc, import_entry_reloc_count);
-  U64 import_entry_reloc_off = list.total_size;
-  str8_list_push(arena, &list, str8_array(import_entry_reloc_array, import_entry_reloc_count));
-  
-  file_header->symbol_count = 7;
-  COFF_Symbol16 *symbol_array = push_array(arena, COFF_Symbol16, file_header->symbol_count);
-  file_header->symbol_table_foff = safe_cast_u32(list.total_size);
-  str8_list_push(arena, &list, str8_array(symbol_array, file_header->symbol_count));
-  
-  U64 string_table_base = list.total_size;
-  U32 *string_table_size_ptr = push_array(arena, U32, 1);
-  str8_list_push(arena, &list, str8_struct(string_table_size_ptr));
-  
-  // PE_ImportEntry
+
+  String8 dll_name_no_ext = str8_chop_last_dot(dll_name);
+
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
+
+  String8 debug_symbols;
   {
-    COFF_SectionHeader *sect = &coff_sect_header_array[0];
-    sect->name[0] = '.';
-    sect->name[1] = 'i';
-    sect->name[2] = 'd';
-    sect->name[3] = 'a';
-    sect->name[4] = 't';
-    sect->name[5] = 'a';
-    sect->name[6] = '$';
-    sect->name[7] = '2';
-    sect->fsize       = sizeof(PE_ImportEntry);
-    sect->foff        = import_entry_off;
-    sect->reloc_count = import_entry_reloc_count;
-    sect->relocs_foff = import_entry_reloc_off;
-    sect->flags       = COFF_SectionFlag_CntInitializedData|(COFF_SectionAlign_4Bytes << COFF_SectionFlag_AlignShift)|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
+    CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
+    String8       comp3_data  = lnk_make_linker_compile3(scratch.arena, machine);
+    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
+    debug_symbols = lnk_make_debug_s(obj_writer->arena, symbol_list);
   }
+
+  String8 dll_name_cstr = push_cstr(obj_writer->arena, dll_name);
+  COFF_ObjSection *debugs = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
+  COFF_ObjSection *idata2 = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$2"), LNK_DATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_zero());
+  COFF_ObjSection *idata6 = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), LNK_DATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
+
+  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("@comp.id"), 0x1018175, COFF_SymStorageClass_Static);
   {
-    COFF_Reloc *lookup_table_voff_reloc = &import_entry_reloc_array[0];
-    lookup_table_voff_reloc->apply_off  = OffsetOf(PE_ImportEntry, lookup_table_voff);
-    lookup_table_voff_reloc->isymbol    = 3;
-    lookup_table_voff_reloc->type       = COFF_Reloc_X64_Addr32Nb;
-    
-    COFF_Reloc *name_voff_reloc = &import_entry_reloc_array[1];
-    name_voff_reloc->apply_off  = OffsetOf(PE_ImportEntry, name_voff);
-    name_voff_reloc->isymbol    = 2;
-    name_voff_reloc->type       = COFF_Reloc_X64_Addr32Nb;
-    
-    COFF_Reloc *import_addr_table_voff = &import_entry_reloc_array[2];
-    import_addr_table_voff->apply_off  = OffsetOf(PE_ImportEntry, import_addr_table_voff);
-    import_addr_table_voff->isymbol    = 4;
-    import_addr_table_voff->type       = COFF_Reloc_X64_Addr32Nb;
-  }
-  
-  // dll name
-  {
-    COFF_SectionHeader *sect = &coff_sect_header_array[1];
-    sect->name[0] = '.';
-    sect->name[1] = 'i';
-    sect->name[2] = 'd';
-    sect->name[3] = 'a';
-    sect->name[4] = 't';
-    sect->name[5] = 'a';
-    sect->name[6] = '$';
-    sect->name[7] = '6';
-    sect->fsize = dll_name_cstr.size;
-    sect->foff  = dll_name_off;
-    sect->flags = COFF_SectionFlag_CntInitializedData|(COFF_SectionAlign_2Bytes << COFF_SectionFlag_AlignShift)|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
-  }
-  
-  // import descriptor
-  {
-    String8 dll_name_no_ext = str8_substr(dll_name, r1u64(0, dll_name.size - 4));
     String8 symbol_name = push_str8f(arena, "__IMPORT_DESCRIPTOR_%S", dll_name_no_ext);
-    
-    U64 symbol_name_off = (list.total_size - string_table_base);
-    str8_list_push(arena, &list, push_cstr(arena, symbol_name));
-    
-    COFF_Symbol16 *symbol                      = &symbol_array[0];
-    symbol->name.long_name.zeroes              = 0;
-    symbol->name.long_name.string_table_offset = symbol_name_off;
-    symbol->section_number                     = 1;
-    symbol->storage_class                      = COFF_SymStorageClass_External;
+    coff_obj_writer_push_symbol_external(obj_writer, symbol_name, 0, idata2);
   }
-  
-  // .idata$2
+  COFF_ObjSymbol *idata2_symbol = coff_obj_writer_push_symbol_sect(obj_writer, idata2->name, idata2);
+  COFF_ObjSymbol *idata6_symbol = coff_obj_writer_push_symbol_static(obj_writer, idata6->name, 0, idata6);
+  COFF_ObjSymbol *idata4_symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".idata$4"), COFF_SectionFlag_MemWrite|COFF_SectionFlag_MemRead|COFF_SectionFlag_CntInitializedData);
+  COFF_ObjSymbol *idata5_symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".idata$5"), COFF_SectionFlag_MemWrite|COFF_SectionFlag_MemRead|COFF_SectionFlag_CntInitializedData);
+  coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__NULL_IMPORT_DESCRIPTOR"));
   {
-    COFF_Symbol16 *symbol = &symbol_array[1];
-    symbol->name.short_name[0] = '.';
-    symbol->name.short_name[1] = 'i';
-    symbol->name.short_name[2] = 'd';
-    symbol->name.short_name[3] = 'a';
-    symbol->name.short_name[4] = 't';
-    symbol->name.short_name[5] = 'a';
-    symbol->name.short_name[6] = '$';
-    symbol->name.short_name[7] = '2';
-    symbol->section_number = 1;
-    symbol->storage_class  = COFF_SymStorageClass_Section;
-  }
-  
-  // .idata$6
-  {
-    COFF_Symbol16 *symbol = &symbol_array[2];
-    symbol->name.short_name[0] = '.';
-    symbol->name.short_name[1] = 'i';
-    symbol->name.short_name[2] = 'd';
-    symbol->name.short_name[3] = 'a';
-    symbol->name.short_name[4] = 't';
-    symbol->name.short_name[5] = 'a';
-    symbol->name.short_name[6] = '$';
-    symbol->name.short_name[7] = '6';
-    symbol->section_number = 2;
-    symbol->storage_class  = COFF_SymStorageClass_Static;
-  }
-  
-  // .idata$4
-  {
-    COFF_Symbol16 *symbol = &symbol_array[3];
-    symbol->name.short_name[0] = '.';
-    symbol->name.short_name[1] = 'i';
-    symbol->name.short_name[2] = 'd';
-    symbol->name.short_name[3] = 'a';
-    symbol->name.short_name[4] = 't';
-    symbol->name.short_name[5] = 'a';
-    symbol->name.short_name[6] = '$';
-    symbol->name.short_name[7] = '4';
-    symbol->section_number = COFF_Symbol_UndefinedSection;
-    symbol->storage_class  = COFF_SymStorageClass_Section;
-  }
-  
-  // .idata$5
-  {
-    COFF_Symbol16 *symbol = &symbol_array[4];
-    symbol->name.short_name[0] = '.';
-    symbol->name.short_name[1] = 'i';
-    symbol->name.short_name[2] = 'd';
-    symbol->name.short_name[3] = 'a';
-    symbol->name.short_name[4] = 't';
-    symbol->name.short_name[5] = 'a';
-    symbol->name.short_name[6] = '$';
-    symbol->name.short_name[7] = '5';
-    symbol->section_number = COFF_Symbol_UndefinedSection;
-    symbol->storage_class  = COFF_SymStorageClass_Section;
-  }
-  
-  // __NULL_IMPORT_DESCRIPTOR
-  {
-    U64 symbol_name_off = (list.total_size - string_table_base);
-    str8_list_push(arena, &list, push_cstr(arena, str8_lit("__NULL_IMPORT_DESCRIPTOR")));
-    
-    COFF_Symbol16 *symbol                      = &symbol_array[5];
-    symbol->name.long_name.zeroes              = 0;
-    symbol->name.long_name.string_table_offset = symbol_name_off;
-    symbol->section_number                     = COFF_Symbol_UndefinedSection;
-    symbol->storage_class                      = COFF_SymStorageClass_External;
-  }
-  
-  // NULL_THUNK_DATA
-  {
-    String8 dll_name_no_ext = str8_substr(dll_name, r1u64(0, dll_name.size - 4));
     String8 symbol_name = push_str8f(arena, "\x7f%S_NULL_THUNK_DATA", dll_name_no_ext);
-    
-    U64 symbol_name_off = (list.total_size - string_table_base);
-    str8_list_push(arena, &list, push_cstr(arena, symbol_name));
-    
-    COFF_Symbol16 *symbol                      = &symbol_array[6];
-    symbol->name.long_name.zeroes              = 0;
-    symbol->name.long_name.string_table_offset = symbol_name_off;
-    symbol->section_number                     = COFF_Symbol_UndefinedSection;
-    symbol->storage_class                      = COFF_SymStorageClass_External;
+    coff_obj_writer_push_symbol_undef(obj_writer, symbol_name);
   }
-  
-  // update string table size
-  *string_table_size_ptr = (list.total_size - string_table_base);
-  
+
+  {
+    PE_ImportEntry *import_entry = push_array(obj_writer->arena, PE_ImportEntry, 1);
+    str8_list_push(obj_writer->arena, &idata2->data, str8_struct(import_entry));
+    coff_obj_writer_section_push_reloc(obj_writer, idata2, OffsetOf(PE_ImportEntry, name_voff),              idata6_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, idata2, OffsetOf(PE_ImportEntry, lookup_table_voff),      idata4_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, idata2, OffsetOf(PE_ImportEntry, import_addr_table_voff), idata5_symbol, COFF_Reloc_X64_Addr32Nb);
+  }
+
+  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
+
+  coff_obj_writer_release(&obj_writer);
+
+  scratch_end(scratch);
   ProfEnd();
-  return list;
+  return obj;
 }
 
-internal String8List
-lnk_build_null_import_descriptor_obj(Arena *arena, COFF_MachineType machine)
+internal String8
+lnk_build_null_import_descriptor_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
   ProfBeginFunction();
-  
-  String8List list = {0};
-  
-  COFF_FileHeader *coff_header = push_array(arena, COFF_FileHeader, 1);
-  coff_header->machine = machine;
-  str8_list_push(arena, &list, str8_struct(coff_header));
-  
-  coff_header->section_count = 1;
-  COFF_SectionHeader *coff_sect_header_array = push_array(arena, COFF_SectionHeader, coff_header->section_count);
-  str8_list_push(arena, &list, str8_array(coff_sect_header_array, coff_header->section_count));
-  
-  U64 null_import_data_size = 20;
-  U8 *null_import_data      = push_array(arena, U8, null_import_data_size);
-  U64 null_import_data_off  = list.total_size;
-  str8_list_push(arena, &list, str8(null_import_data, null_import_data_size));
-  
-  coff_header->symbol_count = 1;
-  COFF_Symbol16 *symbol_array = push_array(arena, COFF_Symbol16, coff_header->symbol_count);
-  coff_header->symbol_table_foff = safe_cast_u32(list.total_size);
-  str8_list_push(arena, &list, str8_array(symbol_array, coff_header->symbol_count));
-  
-  U64  string_table_base     = list.total_size;
-  U32 *string_table_size_ptr = push_array(arena, U32, 1);
-  str8_list_push(arena, &list, str8_struct(string_table_size_ptr));
-  
+  Temp scratch = scratch_begin(&arena, 1);
+
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
+
+  String8 debug_symbols;
   {
-    COFF_SectionHeader *sect = &coff_sect_header_array[0];
-    sect->name[0] = '.';
-    sect->name[1] = 'i';
-    sect->name[2] = 'd';
-    sect->name[3] = 'a';
-    sect->name[4] = 't';
-    sect->name[5] = 'a';
-    sect->name[6] = '$';
-    sect->name[7] = '3';
-    sect->fsize = null_import_data_size;
-    sect->foff  = null_import_data_off;
-    sect->flags = COFF_SectionFlag_CntInitializedData|(COFF_SectionAlign_4Bytes << COFF_SectionFlag_AlignShift)|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
+    CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
+    String8       comp3_data  = lnk_make_linker_compile3(scratch.arena, machine);
+    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
+    debug_symbols = lnk_make_debug_s(obj_writer->arena, symbol_list);
   }
-  
-  {
-    U64 symbol_name_off = list.total_size - string_table_base;
-    str8_list_push(arena, &list, push_cstr(arena, str8_lit("__NULL_IMPORT_DESCRIPTOR")));
-    
-    COFF_Symbol16 *symbol                      = &symbol_array[0];
-    symbol->name.long_name.zeroes              = 0;
-    symbol->name.long_name.string_table_offset = symbol_name_off;
-    symbol->section_number                     = 1;
-    symbol->storage_class                      = COFF_SymStorageClass_External;
-  }
-  
-  // update string table size
-  *string_table_size_ptr = (list.total_size - string_table_base);
-  
+
+  PE_ImportEntry *import_desc = push_array(obj_writer->arena, PE_ImportEntry, 1);
+  COFF_ObjSection *debugs = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
+  COFF_ObjSection *idata3 = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$3"), LNK_DATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_struct(import_desc));
+
+  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("@comp.id"), 0x01018175, COFF_SymStorageClass_Static);
+  coff_obj_writer_push_symbol_external(obj_writer, str8_lit("__NULL_IMPORT_DESCRIPTOR"), 0, idata3);
+
+  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
+
+  coff_obj_writer_release(&obj_writer);
+
+  scratch_end(scratch);
   ProfEnd();
-  return list;
+  return obj;
 }
 
-internal String8List
-lnk_build_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_MachineType machine)
+internal String8
+lnk_build_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   
   Assert(str8_match_lit("dll", str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
-  
-  String8List list = {0};
-  
-  COFF_FileHeader *coff_header = push_array(arena, COFF_FileHeader, 1);
-  coff_header->machine = machine;
-  str8_list_push(arena, &list, str8_struct(coff_header));
-  
-  coff_header->section_count = 2;
-  COFF_SectionHeader *coff_sect_header_array = push_array(arena, COFF_SectionHeader, coff_header->section_count);
-  str8_list_push(arena, &list, str8_array(coff_sect_header_array, coff_header->section_count));
-  
-  U64 lookup_entry_data_size = 8;
-  U8 *lookup_entry_data      = push_array(arena, U8, lookup_entry_data_size);
-  U64 lookup_entry_data_off  = list.total_size;
-  str8_list_push(arena, &list, str8(lookup_entry_data, lookup_entry_data_size));
-  
-  U64 null_thunk_data_size = 8;
-  U8 *null_thunk_data      = push_array(arena, U8, null_thunk_data_size);
-  U64 null_thunk_data_off  = list.total_size;
-  str8_list_push(arena, &list, str8(null_thunk_data, null_thunk_data_size));
-  
-  coff_header->symbol_count = 1;
-  COFF_Symbol16 *symbol_array = push_array(arena, COFF_Symbol16, coff_header->symbol_count);
-  coff_header->symbol_table_foff = safe_cast_u32(list.total_size);
-  str8_list_push(arena, &list, str8_array(symbol_array, coff_header->symbol_count));
-  
-  U64 string_table_base = list.total_size;
-  U32 *string_table_size_ptr = push_array(arena, U32, 1);
-  str8_list_push(arena, &list, str8_struct(string_table_size_ptr));
-  
+
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(time_stamp, machine);
+
+  String8 debug_symbols;
   {
-    COFF_SectionHeader *sect = &coff_sect_header_array[0];
-    sect->name[0] = '.';
-    sect->name[1] = 'i';
-    sect->name[2] = 'd';
-    sect->name[3] = 'a';
-    sect->name[4] = 't';
-    sect->name[5] = 'a';
-    sect->name[6] = '$';
-    sect->name[7] = '5';
-    sect->fsize = lookup_entry_data_size;
-    sect->foff  = lookup_entry_data_off;
-    sect->flags = COFF_SectionFlag_CntInitializedData | (COFF_SectionAlign_8Bytes << COFF_SectionFlag_AlignShift)|(COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite);
+    CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
+    String8       comp3_data  = lnk_make_linker_compile3(scratch.arena, machine);
+    cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
+    debug_symbols = lnk_make_debug_s(obj_writer->arena, symbol_list);
   }
-  
+
+  COFF_ObjSection *debugs = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
+  COFF_ObjSection *idata4 = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$4"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite, str8_zero());
+  COFF_ObjSection *idata5 = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$5"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite, str8_zero());
+
+  U64 import_size = coff_word_size_from_machine(machine);
+
+  U8 *null_thunk  = push_array(obj_writer->arena, U8, import_size);
+  U8 *null_lookup = push_array(obj_writer->arena, U8, import_size);
+
+  str8_list_push(obj_writer->arena, &idata5->data, str8_array(null_thunk, import_size));
+  str8_list_push(obj_writer->arena, &idata4->data, str8_array(null_lookup, import_size));
+
+  idata4->flags |= coff_section_flag_from_align_size(import_size);
+  idata5->flags |= coff_section_flag_from_align_size(import_size);
+
+  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("@comp.id"), 0x1018175, COFF_SymStorageClass_Static);
   {
-    COFF_SectionHeader *sect = &coff_sect_header_array[1];
-    sect->name[0] = '.';
-    sect->name[1] = 'i';
-    sect->name[2] = 'd';
-    sect->name[3] = 'a';
-    sect->name[4] = 't';
-    sect->name[5] = 'a';
-    sect->name[6] = '$';
-    sect->name[7] = '4';
-    sect->fsize = null_thunk_data_size;
-    sect->foff  = null_thunk_data_off;
-    sect->flags = COFF_SectionFlag_CntInitializedData|(COFF_SectionAlign_8Bytes << COFF_SectionFlag_AlignShift)|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
-  }
-  
-  {
-    String8 dll_name_no_ext = str8_substr(dll_name, r1u64(0, dll_name.size - 4));
+    String8 dll_name_no_ext = str8_chop_last_dot(dll_name);
     String8 symbol_name = push_str8f(arena, "\x7f%S_NULL_THUNK_DATA", dll_name_no_ext);
-    
-    U64 symbol_name_off = list.total_size - string_table_base;
-    str8_list_push(arena, &list, push_cstr(arena, symbol_name));
-    
-    COFF_Symbol16 *symbol                      = &symbol_array[0];
-    symbol->name.long_name.zeroes              = 0;
-    symbol->name.long_name.string_table_offset = symbol_name_off;
-    symbol->section_number                     = 1;
-    symbol->storage_class                      = COFF_SymStorageClass_External;
+    coff_obj_writer_push_symbol_external(obj_writer, symbol_name, 0, idata5);
   }
+
+  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
   
-  // update string table size
-  *string_table_size_ptr = (list.total_size - string_table_base);
-  
+  coff_obj_writer_release(&obj_writer);
+
+  scratch_end(scratch);
   ProfEnd();
-  return list;
+  return obj;
 }
 
 internal String8
@@ -924,28 +715,28 @@ lnk_build_import_lib(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, 
   
   // These objects appear in first three members of any lib that linker produces with /dll.
   // Objects are used by MSVC linker to build import table.
-  String8List import_obj_array[3];
-  import_obj_array[0] = lnk_build_import_entry_obj(scratch.arena, dll_name, machine);
-  import_obj_array[1] = lnk_build_null_import_descriptor_obj(scratch.arena, machine);
-  import_obj_array[2] = lnk_build_null_thunk_data_obj(scratch.arena, dll_name, machine);
+  String8 import_obj_array[3];
+  import_obj_array[0] = lnk_build_import_entry_obj(scratch.arena, dll_name, time_stamp, machine);
+  import_obj_array[1] = lnk_build_null_import_descriptor_obj(scratch.arena, time_stamp, machine);
+  import_obj_array[2] = lnk_build_null_thunk_data_obj(scratch.arena, dll_name, time_stamp, machine);
 
   // build input list
   LNK_InputObjList input_obj_list = {0};
   for (U64 i = 0; i < ArrayCount(import_obj_array); ++i) {
     LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-    input->data         = str8_list_join(scratch.arena, &import_obj_array[i], 0);
+    input->data         = import_obj_array[i];
     input->path         = dll_name;
     input->lib_path     = lib_name;
   }
 
   LNK_InputObj     **inputs   = lnk_array_from_input_obj_list(scratch.arena, input_obj_list);
-  LNK_SectionTable  *sectab       = lnk_section_table_alloc(0,0,0);
+  LNK_SectionTable  *sectab   = lnk_section_table_alloc(0,0,0);
   LNK_ObjList        obj_list = {0};
   lnk_obj_list_push_parallel(tp, arena, &obj_list, sectab, 0, machine, input_obj_list.count, inputs);
   
   LNK_LibBuild import_lib = lnk_build_lib(scratch.arena, machine, time_stamp, dll_name, obj_list, exptab);
-  B32 emit_second_member = 0; // MSVC linker refuses to link with lib that has the second member.
-  String8List coff_archive_data = lnk_coff_archive_from_lib_build(arena->v[0], &import_lib, emit_second_member, time_stamp, /* -rw-r--r-- */ 644);
+  B32 emit_second_member = 1;
+  String8List coff_archive_data = lnk_coff_archive_from_lib_build(arena->v[0], &import_lib, emit_second_member, COFF_TimeStamp_Max, 0);
   
   // cleanup memory
   lnk_section_table_release(&sectab);

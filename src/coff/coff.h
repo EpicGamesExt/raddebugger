@@ -21,6 +21,7 @@ read_only global U8 g_coff_thin_archive_sig[8] = "!<thin>\n";
 
 #pragma pack(push, 1)
 
+#define COFF_TimeStamp_Max max_U32
 typedef U32 COFF_TimeStamp;
 
 typedef U16 COFF_FileHeaderFlags;
@@ -135,6 +136,20 @@ enum
   COFF_SectionFlag_MemPreload           = (1 << 19),
   COFF_SectionFlag_AlignShift           = 20,
   COFF_SectionFlag_AlignMask            = 0xf,
+  COFF_SectionFlag_Align1Bytes          = (COFF_SectionAlign_1Bytes    << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align2Bytes          = (COFF_SectionAlign_2Bytes    << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align4Bytes          = (COFF_SectionAlign_4Bytes    << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align8Bytes          = (COFF_SectionAlign_8Bytes    << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align16Bytes         = (COFF_SectionAlign_16Bytes   << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align32Bytes         = (COFF_SectionAlign_32Bytes   << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align64Bytes         = (COFF_SectionAlign_64Bytes   << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align128Bytes        = (COFF_SectionAlign_128Bytes  << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align256Bytes        = (COFF_SectionAlign_256Bytes  << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align512Bytes        = (COFF_SectionAlign_512Bytes  << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align1024Bytes       = (COFF_SectionAlign_1024Bytes << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align2048Bytes       = (COFF_SectionAlign_2048Bytes << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align4096Bytes       = (COFF_SectionAlign_4096Bytes << COFF_SectionFlag_AlignShift),
+  COFF_SectionFlag_Align8192Bytes       = (COFF_SectionAlign_8192Bytes << COFF_SectionFlag_AlignShift),
   COFF_SectionFlag_LnkNRelocOvfl        = (1 << 24),
   COFF_SectionFlag_MemDiscardable       = (1 << 25),
   COFF_SectionFlag_MemNotCached         = (1 << 26),
@@ -144,7 +159,6 @@ enum
   COFF_SectionFlag_MemRead              = (1 << 30),
   COFF_SectionFlag_MemWrite             = (1 << 31)
 };
-#define COFF_SectionFlags_PackAlign(f)    ((f) << COFF_SectionFlag_AlignShift)
 #define COFF_SectionFlags_ExtractAlign(f) (COFF_SectionAlign)(((f) >> COFF_SectionFlag_AlignShift) & COFF_SectionFlag_AlignMask)
 #define COFF_SectionFlags_LnkFlags        ((COFF_SectionFlag_AlignMask << COFF_SectionFlag_AlignShift) | COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkOther | COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkNRelocOvfl)
 
