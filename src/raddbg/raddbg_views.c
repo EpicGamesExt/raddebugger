@@ -34,7 +34,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //- rjf: extract invariants
   //
   FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
-  F32 code_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
+  F32 code_font_size = ui_top_font_size();
   F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_u64_from_name(str8_lit("tab_width"));
   FNT_Metrics code_font_metrics = fnt_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(fnt_line_height_from_metrics(&code_font_metrics) * 1.5f);
@@ -779,11 +779,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            rd_cmd(RD_CmdKind_IncCodeFontScale);
+            rd_cmd(RD_CmdKind_IncFontSize);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            rd_cmd(RD_CmdKind_DecCodeFontScale);
+            rd_cmd(RD_CmdKind_DecFontSize);
           }
         }
       }
@@ -2270,7 +2270,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
   FNT_RasterFlags font_raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
-  F32 font_size = rd_font_size_from_slot(RD_FontSlot_Code);
+  F32 font_size = ui_top_font_size();
   F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
   F32 row_height_px = floor_f32(font_size*2.f);
   F32 cell_width_px = floor_f32(font_size*2.f * bytes_per_cell);
@@ -2735,11 +2735,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            rd_cmd(RD_CmdKind_IncCodeFontScale);
+            rd_cmd(RD_CmdKind_IncFontSize);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            rd_cmd(RD_CmdKind_DecCodeFontScale);
+            rd_cmd(RD_CmdKind_DecFontSize);
           }
         }
       }

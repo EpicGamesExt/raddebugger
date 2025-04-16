@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[315] =
+RD_VocabInfo rd_vocab_info_table[314] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -107,6 +107,7 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("yaw"), str8_lit_comp(""), str8_lit_comp("Yaw"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("pitch"), str8_lit_comp(""), str8_lit_comp("Pitch"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("zoom"), str8_lit_comp(""), str8_lit_comp("Zoom"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("font_size"), str8_lit_comp(""), str8_lit_comp("Font Size"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -149,10 +150,8 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("down_one_frame"), str8_lit_comp(""), str8_lit_comp("Down One Frame"), str8_lit_comp(""), RD_IconKind_DownArrow},
 {str8_lit_comp("select_entity"), str8_lit_comp(""), str8_lit_comp("Select Entity"), str8_lit_comp(""), RD_IconKind_RadioHollow},
 {str8_lit_comp("deselect_entity"), str8_lit_comp(""), str8_lit_comp("Deselect Entity"), str8_lit_comp(""), RD_IconKind_RadioFilled},
-{str8_lit_comp("inc_ui_font_scale"), str8_lit_comp(""), str8_lit_comp("Increase UI Font Scale"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("dec_ui_font_scale"), str8_lit_comp(""), str8_lit_comp("Decrease UI Font Scale"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("inc_code_font_scale"), str8_lit_comp(""), str8_lit_comp("Increase Code Font Scale"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("dec_code_font_scale"), str8_lit_comp(""), str8_lit_comp("Decrease Code Font Scale"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("inc_font_size"), str8_lit_comp(""), str8_lit_comp("Increase Font Size"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("dec_font_size"), str8_lit_comp(""), str8_lit_comp("Decrease Font Size"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("open_window"), str8_lit_comp(""), str8_lit_comp("Open New Window"), str8_lit_comp(""), RD_IconKind_Window},
 {str8_lit_comp("close_window"), str8_lit_comp(""), str8_lit_comp("Close Window"), str8_lit_comp(""), RD_IconKind_Window},
 {str8_lit_comp("toggle_fullscreen"), str8_lit_comp(""), str8_lit_comp("Toggle Fullscreen"), str8_lit_comp(""), RD_IconKind_Window},
@@ -323,14 +322,16 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("log_marker"), str8_lit_comp(""), str8_lit_comp("Log Marker"), str8_lit_comp(""), RD_IconKind_Null},
 };
 
-RD_NameSchemaInfo rd_name_schema_info_table[17] =
+RD_NameSchemaInfo rd_name_schema_info_table[19] =
 {
-{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n")},
-{str8_lit_comp("text"), str8_lit_comp("x:\n{\n  'lang':lang,\n  'size':code_string,\n  @default(1) 'show_line_numbers':bool,\n}\n")},
-{str8_lit_comp("disasm"), str8_lit_comp("x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},
-{str8_lit_comp("memory"), str8_lit_comp("x:\n{\n  'size': code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n  @default(1)  'bytes_per_cell': @range[1, 8] u64,\n}\n")},
-{str8_lit_comp("bitmap"), str8_lit_comp("x:\n{\n  @order(0) 'w': u64,\n  @order(1) 'h': u64,\n  'fmt': tex2dformat,\n}\n")},
-{str8_lit_comp("geo3d"), str8_lit_comp("x:\n{\n  'count': code_string,\n  'vtx': code_string,\n  'vtx_size': code_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
+{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n  @default(1)  'background_blur':      bool,\n  @default(1)  'thread_lines':         bool,\n  @default(1)  'breakpoint_lines':     bool,\n  @default(1)  'thread_glow':          bool,\n  @default(1)  'breakpoint_glow':      bool,\n  @default(0)  'opaque_backgrounds':   bool,\n  @default(1)  'smooth_main_text':     bool,\n  @default(0)  'smooth_code_text':     bool,\n  @default(1)  'hint_main_text':       bool,\n  @default(1)  'hint_code_text':       bool,\n  @default(2)  'tab_width': @range[1, 32] u64,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("window"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("text"), str8_lit_comp("@inherit(tab) x:\n{\n  'lang':lang,\n  'size':code_string,\n  @default(1) 'show_line_numbers':bool,\n}\n")},
+{str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},
+{str8_lit_comp("memory"), str8_lit_comp("@inherit(tab) x:\n{\n  'size': code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n  @default(1)  'bytes_per_cell': @range[1, 8] u64,\n}\n")},
+{str8_lit_comp("bitmap"), str8_lit_comp("@inherit(tab) x:\n{\n  @order(0) 'w': u64,\n  @order(1) 'h': u64,\n  'fmt': tex2dformat,\n}\n")},
+{str8_lit_comp("geo3d"), str8_lit_comp("@inherit(tab) x:\n{\n  'count': code_string,\n  'vtx': code_string,\n  'vtx_size': code_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'view_rule':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
@@ -344,7 +345,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[17] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-Rng1U64 rd_reg_slot_range_table[41] =
+Rng1U64 rd_reg_slot_range_table[40] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -375,7 +376,6 @@ Rng1U64 rd_reg_slot_range_table[41] =
 {OffsetOf(RD_Regs, expr), OffsetOf(RD_Regs, expr) + sizeof(String8)},
 {OffsetOf(RD_Regs, ui_key), OffsetOf(RD_Regs, ui_key) + sizeof(UI_Key)},
 {OffsetOf(RD_Regs, off_px), OffsetOf(RD_Regs, off_px) + sizeof(Vec2F32)},
-{OffsetOf(RD_Regs, lister_flags), OffsetOf(RD_Regs, lister_flags) + sizeof(RD_ListerFlags)},
 {OffsetOf(RD_Regs, reg_slot), OffsetOf(RD_Regs, reg_slot) + sizeof(RD_RegSlot)},
 {OffsetOf(RD_Regs, pid), OffsetOf(RD_Regs, pid) + sizeof(U32)},
 {OffsetOf(RD_Regs, force_confirm), OffsetOf(RD_Regs, force_confirm) + sizeof(B32)},
@@ -389,7 +389,7 @@ Rng1U64 rd_reg_slot_range_table[41] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[215] =
+RD_CmdKindInfo rd_cmd_kind_info_table[213] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -434,10 +434,8 @@ RD_CmdKindInfo rd_cmd_kind_info_table[215] =
 { str8_lit_comp("down_one_frame"), str8_lit_comp("Selects the call stack frame below the currently selected."), str8_lit_comp("callstack,unwind"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("select_entity"), str8_lit_comp("Selects a control entity."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("deselect_entity"), str8_lit_comp("Deselects a control entity."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("inc_ui_font_scale"), str8_lit_comp("Increases the font size used for UI."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("dec_ui_font_scale"), str8_lit_comp("Decreases the font size used for UI."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("inc_code_font_scale"), str8_lit_comp("Increases the font size used for code."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("dec_code_font_scale"), str8_lit_comp("Decreases the font size used for code."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("inc_font_size"), str8_lit_comp("Increases the font size by one point."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("dec_font_size"), str8_lit_comp("Decreases the font size by one point."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("open_window"), str8_lit_comp("Opens a new window."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("close_window"), str8_lit_comp("Closes an opened window."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("toggle_fullscreen"), str8_lit_comp("Toggles fullscreen view on the active window."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},

@@ -2320,7 +2320,7 @@ rd_view_ui(Rng2F32 rect)
   //////////////////////////////
   //- rjf: fill view container
   //
-  UI_Parent(view_container)
+  UI_Parent(view_container) UI_FontSize(rd_setting_f32_from_name(str8_lit("font_size")))
   {
     ////////////////////////////
     //- rjf: special-case view: "getting started"
@@ -5280,6 +5280,7 @@ rd_window_frame(void)
   //
   if(rd_state->first_window_state == ws && rd_state->last_window_state == ws && ws->frames_alive == 0)
   {
+    F32 font_size = rd_setting_f32_from_name(str8_lit("font_size"));
     RD_FontSlot english_font_slots[] = {RD_FontSlot_Main, RD_FontSlot_Code};
     RD_FontSlot icon_font_slot = RD_FontSlot_Icons;
     for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
@@ -5289,12 +5290,12 @@ rd_window_frame(void)
       String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
       fnt_push_run_from_string(scratch.arena,
                                rd_font_from_slot(slot),
-                               rd_font_size_from_slot(RD_FontSlot_Code),
+                               font_size,
                                0, 0, 0,
                                sample_text);
       fnt_push_run_from_string(scratch.arena,
                                rd_font_from_slot(slot),
-                               rd_font_size_from_slot(RD_FontSlot_Main),
+                               font_size,
                                0, 0, 0,
                                sample_text);
       scratch_end(scratch);
@@ -5304,17 +5305,17 @@ rd_window_frame(void)
       Temp scratch = scratch_begin(0, 0);
       fnt_push_run_from_string(scratch.arena,
                                rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(icon_font_slot),
+                               font_size,
                                0, 0, FNT_RasterFlag_Smooth,
                                rd_icon_kind_text_table[icon_kind]);
       fnt_push_run_from_string(scratch.arena,
                                rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(RD_FontSlot_Main),
+                               font_size,
                                0, 0, FNT_RasterFlag_Smooth,
                                rd_icon_kind_text_table[icon_kind]);
       fnt_push_run_from_string(scratch.arena,
                                rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(RD_FontSlot_Code),
+                               font_size,
                                0, 0, FNT_RasterFlag_Smooth,
                                rd_icon_kind_text_table[icon_kind]);
       scratch_end(scratch);
@@ -5425,15 +5426,14 @@ rd_window_frame(void)
     //- rjf: @window_ui_part set up
     //
     {
-      // rjf: gather font info
-      FNT_Tag main_font = rd_font_from_slot(RD_FontSlot_Main);
-      F32 main_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
-      FNT_Tag icon_font = rd_font_from_slot(RD_FontSlot_Icons);
+      // rjf: get top-level font size info
+      F32 top_level_font_size = 0;
+      RD_RegsScope(.view = 0) top_level_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
       
       // rjf: build icon info
       UI_IconInfo icon_info = {0};
       {
-        icon_info.icon_font = icon_font;
+        icon_info.icon_font = rd_font_from_slot(RD_FontSlot_Icons);
         icon_info.icon_kind_text_map[UI_IconKind_RightArrow]     = rd_icon_kind_text_table[RD_IconKind_RightScroll];
         icon_info.icon_kind_text_map[UI_IconKind_DownArrow]      = rd_icon_kind_text_table[RD_IconKind_DownScroll];
         icon_info.icon_kind_text_map[UI_IconKind_LeftArrow]      = rd_icon_kind_text_table[RD_IconKind_LeftScroll];
@@ -5459,9 +5459,9 @@ rd_window_frame(void)
       
       // rjf: begin & push initial stack values
       ui_begin_build(ws->os, &ws->ui_events, &icon_info, ws->theme, &animation_info, rd_state->frame_dt, rd_state->frame_dt);
-      ui_push_font(main_font);
-      ui_push_font_size(main_font_size);
-      ui_push_text_padding(main_font_size*0.3f);
+      ui_push_font(rd_font_from_slot(RD_FontSlot_Main));
+      ui_push_font_size(top_level_font_size);
+      ui_push_text_padding(floor_f32(ui_top_font_size()*0.3f));
       ui_push_pref_width(ui_px(floor_f32(ui_top_font_size()*20.f), 1.f));
       ui_push_pref_height(ui_px(floor_f32(ui_top_font_size()*3.f), 1.f));
       ui_push_blur_size(10.f);
@@ -6275,7 +6275,6 @@ rd_window_frame(void)
     FloatingViewTask *first_floating_view_task = 0;
     FloatingViewTask *last_floating_view_task = 0;
     RD_Font(RD_FontSlot_Code)
-      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
     {
       //- rjf: try to add hover eval first
       {
@@ -6561,7 +6560,6 @@ rd_window_frame(void)
     //
     ProfScope("build all floating views")
       RD_Font(RD_FontSlot_Code)
-      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
       UI_TagF("floating")
       UI_Focus(ui_any_ctx_menu_is_open() || ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
     {
@@ -7181,16 +7179,12 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig) && !can_play)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
             }
             if(ui_hovering(sig) && can_play)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
               {
                 if(can_stop)
                 {
@@ -7227,9 +7221,7 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig))
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
               {
                 ui_labelf("Restart");
               }
@@ -7248,16 +7240,12 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig) && !can_pause)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Disabled: Already halted");
             }
             if(ui_hovering(sig) && can_pause)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Halt all attached processes");
             }
             if(ui_clicked(sig))
@@ -7277,16 +7265,11 @@ rd_window_frame(void)
             }
             if(ui_hovering(sig) && !can_stop)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Disabled: No processes are running");
+              UI_Tooltip RD_Font(RD_FontSlot_Main) ui_labelf("Disabled: No processes are running");
             }
             if(ui_hovering(sig) && can_stop)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Kill all attached processes");
             }
             if(ui_clicked(sig))
@@ -7305,16 +7288,11 @@ rd_window_frame(void)
             {
               if(can_play)
               {
-                UI_Tooltip
-                  RD_Font(RD_FontSlot_Main)
-                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                  ui_labelf("Step Over");
+                UI_Tooltip RD_Font(RD_FontSlot_Main) ui_labelf("Step Over");
               }
               else
               {
-                UI_Tooltip
-                  RD_Font(RD_FontSlot_Main)
-                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                UI_Tooltip RD_Font(RD_FontSlot_Main)
                   ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
               }
             }
@@ -7334,16 +7312,12 @@ rd_window_frame(void)
             {
               if(can_play)
               {
-                UI_Tooltip
-                  RD_Font(RD_FontSlot_Main)
-                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                UI_Tooltip RD_Font(RD_FontSlot_Main)
                   ui_labelf("Step Into");
               }
               else
               {
-                UI_Tooltip
-                  RD_Font(RD_FontSlot_Main)
-                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                UI_Tooltip RD_Font(RD_FontSlot_Main)
                   ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
               }
             }
@@ -7361,23 +7335,17 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig) && !can_step && can_pause)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Disabled: Running");
             }
             if(ui_hovering(sig) && !can_step && !can_stop)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Disabled: No processes are running");
             }
             if(ui_hovering(sig) && can_step)
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+              UI_Tooltip RD_Font(RD_FontSlot_Main)
                 ui_labelf("Step Out");
             }
             if(ui_clicked(sig))
@@ -7608,9 +7576,7 @@ rd_window_frame(void)
               UI_PrefWidth(ui_text_dim(10, 1))
               UI_TextAlignment(UI_TextAlign_Center)
             {
-              RD_Font(RD_FontSlot_Icons)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-                ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+              RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
               rd_label(error_string);
             }
           }
@@ -8494,7 +8460,7 @@ rd_window_frame(void)
                     }
                     UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                       RD_Font(RD_FontSlot_Icons)
-                      UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons)*0.75f)
+                      UI_FontSize(ui_top_font_size()*0.75f)
                       UI_TagF(".") UI_TagF("weak") UI_TagF("implicit")
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
@@ -8529,7 +8495,6 @@ rd_window_frame(void)
                     else if(ui_right_clicked(sig))
                     {
                       rd_cmd(RD_CmdKind_PushQuery,
-                             .do_implicit_root = 1,
                              .ui_key       = sig.box->key,
                              .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
                              .expr         = push_str8f(scratch.arena, "$%I64x", tab->id));
@@ -8714,11 +8679,11 @@ rd_window_frame(void)
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
         {
-          rd_cmd(RD_CmdKind_IncUIFontScale);
+          rd_cmd(RD_CmdKind_IncFontSize);
         }
         else if(evt->delta_2f32.y > 0)
         {
-          rd_cmd(RD_CmdKind_DecUIFontScale);
+          rd_cmd(RD_CmdKind_DecFontSize);
         }
       }
     }
@@ -9383,7 +9348,6 @@ rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, St
 {
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *di_scope = di_scope_open();
-  RD_ListerFlags flags = regs->lister_flags;
   String8 needle_path = rd_lister_query_path_from_input_string_off(needle, cursor_off);
   RD_ListerItemChunkList item_list = {0};
   DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
@@ -10402,6 +10366,9 @@ rd_font_from_slot(RD_FontSlot slot)
 internal F32
 rd_font_size_from_slot(RD_FontSlot slot)
 {
+  F32 result = (F32)rd_setting_u64_from_name(str8_lit("font_size"));
+  return result;
+#if 0
   F32 result = 11.f;
   
   // rjf: determine config key based on slot
@@ -10430,8 +10397,8 @@ rd_font_size_from_slot(RD_FontSlot slot)
     F32 dpi = os_dpi_from_window(ws->os);
     result = 11.f * (dpi / 96.f);
   }
-  
   return result;
+#endif
 }
 
 internal FNT_RasterFlags
@@ -12501,7 +12468,7 @@ rd_frame(void)
             // rjf: command has required query -> prep query
             else
             {
-              rd_cmd(RD_CmdKind_PushQuery, .lister_flags = rd_regs()->lister_flags|RD_ListerFlag_LineEdit|RD_ListerFlag_Commands|RD_ListerFlag_Descriptions);
+              rd_cmd(RD_CmdKind_PushQuery);
             }
           }break;
           
@@ -12822,41 +12789,23 @@ rd_frame(void)
           }break;
           
           //- rjf: font sizes
-          case RD_CmdKind_IncUIFontScale:
+          case RD_CmdKind_IncFontSize:
           {
             fnt_reset();
             F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
+            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("font_size"));
             rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
           }break;
-          case RD_CmdKind_DecUIFontScale:
+          case RD_CmdKind_DecFontSize:
           {
             fnt_reset();
             F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
+            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("font_size"));
             rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
-          }break;
-          case RD_CmdKind_IncCodeFontScale:
-          {
-            fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
-            F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
-            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            rd_cfg_new_replacef(code_font_size, "%f", new_font_size);
-          }break;
-          case RD_CmdKind_DecCodeFontScale:
-          {
-            fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
-            F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
-            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            rd_cfg_new_replacef(code_font_size, "%f", new_font_size);
           }break;
           
           //- rjf: panel creation

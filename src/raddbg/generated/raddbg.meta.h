@@ -37,7 +37,6 @@ RD_RegSlot_VoffRange,
 RD_RegSlot_Expr,
 RD_RegSlot_UIKey,
 RD_RegSlot_OffPx,
-RD_RegSlot_ListerFlags,
 RD_RegSlot_RegSlot,
 RD_RegSlot_PID,
 RD_RegSlot_ForceConfirm,
@@ -97,10 +96,8 @@ RD_CmdKind_UpOneFrame,
 RD_CmdKind_DownOneFrame,
 RD_CmdKind_SelectEntity,
 RD_CmdKind_DeselectEntity,
-RD_CmdKind_IncUIFontScale,
-RD_CmdKind_DecUIFontScale,
-RD_CmdKind_IncCodeFontScale,
-RD_CmdKind_DecCodeFontScale,
+RD_CmdKind_IncFontSize,
+RD_CmdKind_DecFontSize,
 RD_CmdKind_OpenWindow,
 RD_CmdKind_CloseWindow,
 RD_CmdKind_ToggleFullscreen,
@@ -563,7 +560,6 @@ Rng1U64 voff_range;
 String8 expr;
 UI_Key ui_key;
 Vec2F32 off_px;
-RD_ListerFlags lister_flags;
 RD_RegSlot reg_slot;
 U32 pid;
 B32 force_confirm;
@@ -627,7 +623,6 @@ RD_Query query;
 .expr = rd_regs()->expr,\
 .ui_key = rd_regs()->ui_key,\
 .off_px = rd_regs()->off_px,\
-.lister_flags = rd_regs()->lister_flags,\
 .reg_slot = rd_regs()->reg_slot,\
 .pid = rd_regs()->pid,\
 .force_confirm = rd_regs()->force_confirm,\
@@ -641,9 +636,9 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[315];
-extern RD_NameSchemaInfo rd_name_schema_info_table[17];
-extern Rng1U64 rd_reg_slot_range_table[41];
+extern RD_VocabInfo rd_vocab_info_table[314];
+extern RD_NameSchemaInfo rd_name_schema_info_table[19];
+extern Rng1U64 rd_reg_slot_range_table[40];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[74];

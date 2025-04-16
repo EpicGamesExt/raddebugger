@@ -120,6 +120,7 @@ RD_VocabTable:
   {yaw                  ""                          "Yaw"                       ""                    Null                                           }
   {pitch                ""                          "Pitch"                     ""                    Null                                           }
   {zoom                 ""                          "Zoom"                      ""                    Null                                           }
+  {font_size            ""                          "Font Size"                 ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -148,25 +149,46 @@ RD_VocabTable:
     settings,
     ```x:
     {
-      @default(1) 'hover_animations':     bool,
-      @default(1) 'press_animations':     bool,
-      @default(0) 'focus_animations':     bool,
-      @default(1) 'tooltip_animations':   bool,
-      @default(1) 'menu_animations':      bool,
-      @default(1) 'scrolling_animations': bool,
-      @default(1) 'background_blur':      bool,
-      @default(1) 'thread_lines':         bool,
-      @default(1) 'breakpoint_lines':     bool,
-      @default(1) 'thread_glow':          bool,
-      @default(1) 'breakpoint_glow':      bool,
-      @default(0) 'opaque_backgrounds':   bool,
-      @default(1) 'smooth_main_text':     bool,
-      @default(0) 'smooth_code_text':     bool,
-      @default(1) 'hint_main_text':       bool,
-      @default(1) 'hint_code_text':       bool,
-      @default(2) 'tab_width':      @range[1, 32] u64,
-      @can_be_per_window 'main_font_size': @range[6, 72] u64,
-      @can_be_per_window 'code_font_size': @range[1, 32] u64,
+      @default(1)  'hover_animations':     bool,
+      @default(1)  'press_animations':     bool,
+      @default(0)  'focus_animations':     bool,
+      @default(1)  'tooltip_animations':   bool,
+      @default(1)  'menu_animations':      bool,
+      @default(1)  'scrolling_animations': bool,
+      @default(1)  'background_blur':      bool,
+      @default(1)  'thread_lines':         bool,
+      @default(1)  'breakpoint_lines':     bool,
+      @default(1)  'thread_glow':          bool,
+      @default(1)  'breakpoint_glow':      bool,
+      @default(0)  'opaque_backgrounds':   bool,
+      @default(1)  'smooth_main_text':     bool,
+      @default(0)  'smooth_code_text':     bool,
+      @default(1)  'hint_main_text':       bool,
+      @default(1)  'hint_code_text':       bool,
+      @default(2)  'tab_width': @range[1, 32] u64,
+      @default(11) 'font_size': @range[6, 72] u64,
+    }
+    ```
+  }
+  
+  //- rjf: windows
+  {
+    window,
+    ```
+      x:
+    {
+      @default(11) 'font_size': @range[6, 72] u64,
+    }
+    ```
+  }
+  
+  //- rjf: tabs
+  {
+    tab,
+    ```
+      x:
+    {
+      @default(11) 'font_size': @range[6, 72] u64,
     }
     ```
   }
@@ -175,7 +197,7 @@ RD_VocabTable:
   {
     text,
     ```
-      x:
+      @inherit(tab) x:
     {
       'lang':lang,
       'size':code_string,
@@ -186,7 +208,7 @@ RD_VocabTable:
   {
     disasm,
     ```
-      x:
+      @inherit(tab) x:
     {
       'arch':              arch,
       'syntax':            dasm_syntax,
@@ -202,7 +224,7 @@ RD_VocabTable:
   {
     memory,
     ```
-      x:
+      @inherit(tab) x:
     {
       'size': code_string,
       @default(16) 'num_columns': @range[1, 64] u64,
@@ -213,7 +235,7 @@ RD_VocabTable:
   {
     bitmap,
     ```
-      x:
+      @inherit(tab) x:
     {
       @order(0) 'w': u64,
       @order(1) 'h': u64,
@@ -224,7 +246,7 @@ RD_VocabTable:
   {
     geo3d,
     ```
-      x:
+      @inherit(tab) x:
     {
       'count': code_string,
       'vtx': code_string,
@@ -396,7 +418,6 @@ RD_RegTable:
   // rjf: ui context
   {UI_Key            ui_key           UIKey         }
   {Vec2F32           off_px           OffPx         }
-  {RD_ListerFlags    lister_flags     ListerFlags   }
   {RD_RegSlot        reg_slot         RegSlot       }
   
   // rjf: general parameters
@@ -466,10 +487,8 @@ RD_CmdTable:    //               |        |              |               |      
   {DeselectEntity                 0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           RadioFilled           "deselect_entity"             "Deselect Entity"                             "Deselects a control entity."                                                                                      ""                               ""                                                               }
   
   //- rjf: font sizes
-  {IncUIFontScale                 1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "inc_ui_font_scale"           "Increase UI Font Scale"                      "Increases the font size used for UI."                                                                             ""                               ""                                                               }
-  {DecUIFontScale                 1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "dec_ui_font_scale"           "Decrease UI Font Scale"                      "Decreases the font size used for UI."                                                                             ""                               ""                                                               }
-  {IncCodeFontScale               1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "inc_code_font_scale"         "Increase Code Font Scale"                    "Increases the font size used for code."                                                                           ""                               ""                                                               }
-  {DecCodeFontScale               1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "dec_code_font_scale"         "Decrease Code Font Scale"                    "Decreases the font size used for code."                                                                           ""                               ""                                                               }
+  {IncFontSize                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "inc_font_size"               "Increase Font Size"                          "Increases the font size by one point."                                                                            ""                               ""                                                               }
+  {DecFontSize                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "dec_font_size"               "Decrease Font Size"                          "Decreases the font size by one point."                                                                            ""                               ""                                                               }
   
   //- rjf: windows
   {OpenWindow                     1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Window                "open_window"                 "Open New Window"                             "Opens a new window."                                                                                              ""                               ""                                                               }

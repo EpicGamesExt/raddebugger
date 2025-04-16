@@ -116,7 +116,6 @@ struct RD_CodeSliceSignal
 ////////////////////////////////
 //~ rjf: UI Building Helpers
 
-#define RD_Palette(code) UI_Palette(rd_palette_from_code(code))
 #define RD_Font(slot) UI_Font(rd_font_from_slot(slot)) UI_TextRasterFlags(rd_raster_flags_from_slot((slot)))
 
 ////////////////////////////////

@@ -160,37 +160,6 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Lister Flags
-
-typedef U32 RD_ListerFlags;
-enum
-{
-  //- rjf: lister visual settings
-  RD_ListerFlag_LineEdit       = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
-  RD_ListerFlag_Descriptions   = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
-  RD_ListerFlag_KindLabel      = (1<<2),  // determines whether or not the lister items have labels for each item's kind
-  RD_ListerFlag_SizeByAnchor   = (1<<3),  // determines whether or not the lister is sized by the anchor box
-  
-  //- rjf: lister item sources
-  RD_ListerFlag_Locals         = (1<<4),
-  RD_ListerFlag_Registers      = (1<<5),
-  RD_ListerFlag_ViewRules      = (1<<6),
-  RD_ListerFlag_ViewRuleParams = (1<<7),
-  RD_ListerFlag_Members        = (1<<8),
-  RD_ListerFlag_Globals        = (1<<9),
-  RD_ListerFlag_ThreadLocals   = (1<<10),
-  RD_ListerFlag_Procedures     = (1<<11),
-  RD_ListerFlag_Types          = (1<<12),
-  RD_ListerFlag_Languages      = (1<<13),
-  RD_ListerFlag_Architectures  = (1<<14),
-  RD_ListerFlag_Tex2DFormats   = (1<<15),
-  RD_ListerFlag_Files          = (1<<16),
-  RD_ListerFlag_Commands       = (1<<17),
-  RD_ListerFlag_Settings       = (1<<18),
-  RD_ListerFlag_SystemProcesses= (1<<19),
-};
-
-////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/raddbg.meta.h"
@@ -899,6 +868,7 @@ internal MD_Node *rd_schema_from_name(String8 name);
 internal String8 rd_setting_from_name(String8 name);
 #define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))
 #define rd_setting_u64_from_name(name) (u64_from_str8(rd_setting_from_name(name), 10))
+#define rd_setting_f32_from_name(name) ((F32)f64_from_str8(rd_setting_from_name(name)))
 
 internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
 internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);

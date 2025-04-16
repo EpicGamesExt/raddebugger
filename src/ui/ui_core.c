@@ -1945,6 +1945,7 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
+  ui_push_font_size(ui_bottom_font_size());
   ui_push_tag(str8_lit("."));
   ui_push_tag(str8_lit("floating"));
 }
@@ -1954,6 +1955,7 @@ ui_tooltip_end_base(void)
 {
   ui_pop_tag();
   ui_pop_tag();
+  ui_pop_font_size();
   ui_pop_text_raster_flags();
   ui_pop_flags();
   ui_pop_parent();
