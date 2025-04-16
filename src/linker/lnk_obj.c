@@ -751,12 +751,17 @@ lnk_symbol_array_from_coff(Arena              *arena,
         if (symbol.section_number == 0 || symbol.section_number > sect_count) {
           lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "out ouf bounds section index in symbol \"%S (%u)\"", symbol.name, symbol.section_number);
         }
-        if (symbol.value > section_table[symbol.section_number-1].fsize) {
-          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "out of bounds section offset in symbol \"%S (%u)\"", symbol.name, symbol.value);
+
+        U32 section_offset = 0;
+        if (symbol.storage_class == COFF_SymStorageClass_External || symbol.storage_class == COFF_SymStorageClass_Static) {
+          section_offset = symbol.value;
+        }
+        if (section_offset > section_table[symbol.section_number-1].fsize) {
+          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "out of bounds section offset in symbol \"%S (%u)\"", symbol.name, section_offset);
         }
 
         LNK_Chunk *chunk = chunk_table[symbol.section_number-1];
-        if (symbol.value > 0) {
+        if (section_offset > 0) {
           // convert leaf to list
           //
           // there is no way to know up front how many splits we have,
@@ -796,7 +801,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
           LNK_ChunkNode *current       = chunk->u.list->last;
           for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
             Assert(c->data->type == LNK_Chunk_Leaf);
-            if (offset_cursor + c->data->u.leaf.size >= symbol.value) {
+            if (offset_cursor + c->data->u.leaf.size >= section_offset) {
               current = c;
               break;
             }
@@ -804,9 +809,9 @@ lnk_symbol_array_from_coff(Arena              *arena,
           }
           Assert(current->data->type == LNK_Chunk_Leaf);
 
-          if (offset_cursor < symbol.value) {
+          if (offset_cursor < section_offset) {
             // bifurcate chunk at symbol offset
-            U64     split_pos        = symbol.value - offset_cursor;
+            U64     split_pos        = section_offset - offset_cursor;
             Rng1U64 left_data_range  = rng_1u64(0, split_pos);
             Rng1U64 right_data_range = rng_1u64(left_data_range.max, current->data->u.leaf.size);
             String8 left_data        = str8_substr(current->data->u.leaf, left_data_range);
@@ -865,142 +870,147 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
     switch (interp) {
-      case COFF_SymbolValueInterp_Regular: {
-        if (parsed_symbol.section_number == 0 || parsed_symbol.section_number > sect_count) {
-          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out ouf bounds section index %x", parsed_symbol.name, symbol_idx, parsed_symbol.section_number);
-        }
-        if (parsed_symbol.value > section_table[parsed_symbol.section_number-1].fsize) {
-          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out of bounds section offset %x into section %x", parsed_symbol.name, symbol_idx, parsed_symbol.value, parsed_symbol.section_number);
-        }
+    case COFF_SymbolValueInterp_Regular: {
+      if (parsed_symbol.section_number == 0 || parsed_symbol.section_number > sect_count) {
+        lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out ouf bounds section index %x", parsed_symbol.name, symbol_idx, parsed_symbol.section_number);
+      }
+
+      U32 section_offset = 0;
+      if (parsed_symbol.storage_class == COFF_SymStorageClass_External ||
+          parsed_symbol.storage_class == COFF_SymStorageClass_Static) {
+        section_offset = parsed_symbol.value;
+      }
+
+      if (section_offset > section_table[parsed_symbol.section_number-1].fsize) {
+        lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out of bounds section offset %x into section %x", parsed_symbol.name, symbol_idx, section_offset, parsed_symbol.section_number);
+      }
+
+      LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
+      if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
+        visibility = LNK_DefinedSymbolVisibility_Extern;
+      }
+      LNK_DefinedSymbolFlags flags = 0;
+      if (COFF_SymbolType_IsFunc(parsed_symbol.type)) {
+        flags |= LNK_DefinedSymbolFlag_IsFunc;
+      }
 
 
-        LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-        if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
-          visibility = LNK_DefinedSymbolVisibility_Extern;
-        }
-        LNK_DefinedSymbolFlags flags = 0;
-        if (COFF_SymbolType_IsFunc(parsed_symbol.type)) {
-          flags |= LNK_DefinedSymbolFlag_IsFunc;
-        }
+      LNK_Chunk             *chunk     = chunk_table[parsed_symbol.section_number-1];
+      COFF_ComdatSelectType  selection = COFF_ComdatSelect_Any;
+      U64                    check_sum = 0;
 
 
-        LNK_Chunk             *chunk     = chunk_table[parsed_symbol.section_number-1];
-        U64                    offset    = parsed_symbol.value;
-        COFF_ComdatSelectType  selection = COFF_ComdatSelect_Any;
-        U64                    check_sum = 0;
+      B32 is_comdat = (section_table[parsed_symbol.section_number-1].flags & COFF_SectionFlag_LnkCOMDAT) &&
+        parsed_symbol.value == 0 &&
+        parsed_symbol.aux_symbol_count > 0 &&
+        parsed_symbol.type.u.lsb == COFF_SymType_Null &&
+        parsed_symbol.storage_class == COFF_SymStorageClass_Static;
+      if (is_comdat) {
+        COFF_SymbolSecDef *secdef = aux_symbols;
 
+        selection = secdef->selection;
+        check_sum = secdef->check_sum;
 
-        B32 is_comdat = (section_table[parsed_symbol.section_number-1].flags & COFF_SectionFlag_LnkCOMDAT) &&
-                        parsed_symbol.value == 0 &&
-                        parsed_symbol.aux_symbol_count > 0 &&
-                        parsed_symbol.type.u.lsb == COFF_SymType_Null &&
-                        parsed_symbol.storage_class == COFF_SymStorageClass_Static;
-        if (is_comdat) {
-          COFF_SymbolSecDef *secdef = aux_symbols;
+        // create association link between chunks
+        if (secdef->selection == COFF_ComdatSelect_Associative) {
+          U32 secdef_number = secdef->number_lo;
 
-          selection = secdef->selection;
-          check_sum = secdef->check_sum;
+          // promote secdef number to 32 bits
+          if (is_big_obj) {
+            secdef_number |= (U32)secdef->number_hi << 16;
+          }
 
-          // create association link between chunks
-          if (secdef->selection == COFF_ComdatSelect_Associative) {
-            U32 secdef_number = secdef->number_lo;
-
-            // promote secdef number to 32 bits
-            if (is_big_obj) {
-              secdef_number |= (U32)secdef->number_hi << 16;
-            }
-
-            // associate chunks
-            if (secdef_number > 0 && secdef_number <= sect_count) {
-              LNK_Chunk *head_chunk      = chunk_table[secdef_number-1];
-              LNK_Chunk *associate_chunk = chunk_table[parsed_symbol.section_number-1];
-              lnk_chunk_associate(head_chunk, associate_chunk);
-            } else {
-              lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out of bounds section definition number %u", parsed_symbol.name, symbol_idx, secdef_number);
-            }
+          // associate chunks
+          if (secdef_number > 0 && secdef_number <= sect_count) {
+            LNK_Chunk *head_chunk      = chunk_table[secdef_number-1];
+            LNK_Chunk *associate_chunk = chunk_table[parsed_symbol.section_number-1];
+            lnk_chunk_associate(head_chunk, associate_chunk);
+          } else {
+            lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out of bounds section definition number %u", parsed_symbol.name, symbol_idx, secdef_number);
           }
         }
+      }
 
 
-        if (chunk->type == LNK_Chunk_List) {
-          LNK_Chunk *closest_chunk = chunk->u.list->last->data;
-          U64        offset_cursor = 0;
-          for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
-            if (offset_cursor + c->data->u.leaf.size > offset) {
-              closest_chunk = c->data;
-              break;
-            }
-            offset_cursor += c->data->u.leaf.size;
+      if (chunk->type == LNK_Chunk_List) {
+        LNK_Chunk *closest_chunk = chunk->u.list->last->data;
+        U64        offset_cursor = 0;
+        for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
+          if (offset_cursor + c->data->u.leaf.size > section_offset) {
+            closest_chunk = c->data;
+            break;
           }
-          Assert(offset >= offset_cursor);
-          offset -= offset_cursor;
-          chunk   = closest_chunk;
+          offset_cursor += c->data->u.leaf.size;
         }
-        Assert(chunk->type == LNK_Chunk_Leaf);
+        Assert(section_offset >= offset_cursor);
+        section_offset -= offset_cursor;
+        chunk           = closest_chunk;
+      }
+      Assert(chunk->type == LNK_Chunk_Leaf);
 
-        lnk_init_defined_symbol_chunk(&symbol_array.v[symbol_idx], parsed_symbol.name, visibility, flags, chunk, offset, selection, check_sum);
-        symbol_array.v[symbol_idx].obj = obj;
-      } break;
-      case COFF_SymbolValueInterp_Weak: {
-        if (parsed_symbol.aux_symbol_count == 0) {
-          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "weak symbol \"%S (%u)\" must at least one aux symbol", parsed_symbol.name, symbol_idx);
-        }
-        
-        COFF_SymbolWeakExt *weak_ext = aux_symbols;
-        if (weak_ext->tag_index >= symbol_count) {
-          lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "weak symbol \"%S (%u)\" points to out of bounds symbol", parsed_symbol.name, symbol_idx);
-        }
+      lnk_init_defined_symbol_chunk(&symbol_array.v[symbol_idx], parsed_symbol.name, visibility, flags, chunk, section_offset, selection, check_sum);
+      symbol_array.v[symbol_idx].obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_Weak: {
+      if (parsed_symbol.aux_symbol_count == 0) {
+        lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "weak symbol \"%S (%u)\" must at least one aux symbol", parsed_symbol.name, symbol_idx);
+      }
 
-        LNK_Symbol *symbol          = &symbol_array.v[symbol_idx];
-        LNK_Symbol *fallback_symbol = &symbol_array.v[weak_ext->tag_index];
-        lnk_init_weak_symbol(symbol, parsed_symbol.name, weak_ext->characteristics, fallback_symbol);
+      COFF_SymbolWeakExt *weak_ext = aux_symbols;
+      if (weak_ext->tag_index >= symbol_count) {
+        lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "weak symbol \"%S (%u)\" points to out of bounds symbol", parsed_symbol.name, symbol_idx);
+      }
 
-        symbol->obj          = obj;
-        fallback_symbol->obj = obj;
-      } break;
-      case COFF_SymbolValueInterp_Undefined: {
-        LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
-        lnk_init_undefined_symbol(symbol, parsed_symbol.name, LNK_SymbolScopeFlag_Main);
-        symbol->obj = obj;
-      } break;
-      case COFF_SymbolValueInterp_Common: {
-        // :common_block
-        //
-        // TODO: sort chunks on size to reduce bss usage
-        LNK_Chunk *chunk = push_array(arena, LNK_Chunk, 1);
-        chunk->align     = Min(32, u64_up_to_pow2(parsed_symbol.value)); // link.exe caps align at 32 bytes
-        chunk->type      = LNK_Chunk_Leaf;
-        chunk->flags     = master_common_block->flags;
-        chunk->u.leaf    = str8(0, parsed_symbol.value);
-        chunk->obj       = obj;
-        lnk_chunk_set_debugf(arena, chunk, "common block %S", parsed_symbol.name);
-        lnk_chunk_list_push(arena, master_common_block->u.list, chunk);
+      LNK_Symbol *symbol          = &symbol_array.v[symbol_idx];
+      LNK_Symbol *fallback_symbol = &symbol_array.v[weak_ext->tag_index];
+      lnk_init_weak_symbol(symbol, parsed_symbol.name, weak_ext->characteristics, fallback_symbol);
 
-        LNK_DefinedSymbolFlags flags = 0;
-        if (COFF_SymbolType_IsFunc(parsed_symbol.type)) {
-          flags |= LNK_DefinedSymbolFlag_IsFunc;
-        }
+      symbol->obj          = obj;
+      fallback_symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_Undefined: {
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_undefined_symbol(symbol, parsed_symbol.name, LNK_SymbolScopeFlag_Main);
+      symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_Common: {
+      // :common_block
+      //
+      // TODO: sort chunks on size to reduce bss usage
+      LNK_Chunk *chunk = push_array(arena, LNK_Chunk, 1);
+      chunk->align     = Min(32, u64_up_to_pow2(parsed_symbol.value)); // link.exe caps align at 32 bytes
+      chunk->type      = LNK_Chunk_Leaf;
+      chunk->flags     = master_common_block->flags;
+      chunk->u.leaf    = str8(0, parsed_symbol.value);
+      chunk->obj       = obj;
+      lnk_chunk_set_debugf(arena, chunk, "common block %S", parsed_symbol.name);
+      lnk_chunk_list_push(arena, master_common_block->u.list, chunk);
 
-        LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
-        lnk_init_defined_symbol_chunk(symbol, parsed_symbol.name, LNK_DefinedSymbolVisibility_Extern, flags, chunk, 0, COFF_ComdatSelect_Largest, 0);
-        symbol->obj = obj;
-      } break;
-      case COFF_SymbolValueInterp_Abs: {
-        // Never code or data, synthetic symbol. COFF spec says bits in value are used
-        // as flags in symbol @feat.00, other symbols like @comp.id and @vol.md are undocumented.
-        // LLVM uses undocumented mask 0x4800 on @feat.00 to tell if object was compiled with /guard:cf.
+      LNK_DefinedSymbolFlags flags = 0;
+      if (COFF_SymbolType_IsFunc(parsed_symbol.type)) {
+        flags |= LNK_DefinedSymbolFlag_IsFunc;
+      }
 
-        LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-        if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
-          visibility = LNK_DefinedSymbolVisibility_Extern;
-        }
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_defined_symbol_chunk(symbol, parsed_symbol.name, LNK_DefinedSymbolVisibility_Extern, flags, chunk, 0, COFF_ComdatSelect_Largest, 0);
+      symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_Abs: {
+      // Never code or data, synthetic symbol. COFF spec says bits in value are used
+      // as flags in symbol @feat.00, other symbols like @comp.id and @vol.md are undocumented.
+      // LLVM uses undocumented mask 0x4800 on @feat.00 to tell if object was compiled with /guard:cf.
 
-        LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
-        lnk_init_defined_symbol_va(symbol, parsed_symbol.name, visibility, 0, parsed_symbol.value);
-        symbol->obj = obj;
-      } break;
-      case COFF_SymbolValueInterp_Debug: {
-      } break;
+      LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
+      if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
+        visibility = LNK_DefinedSymbolVisibility_Extern;
+      }
+
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_defined_symbol_va(symbol, parsed_symbol.name, visibility, 0, parsed_symbol.value);
+      symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_Debug: {
+    } break;
     }
   }
 
