@@ -181,6 +181,13 @@ union Vector_R2{
   float v[2];
 };
 
+typedef union Matrix4x4F32 Matrix4x4F32;
+union Matrix4x4F32
+{
+  float elements[4][4];
+};
+raddbg_auto_view_rule(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
+
 enum Kind{
   Kind_None,
   Kind_First,
@@ -365,6 +372,16 @@ type_coverage_eval_tests(void)
   Function_Few_Params_Type *ptr_few_params = few_params1;
   Function_Few_Params_Type **ptr_ptr_few_params = &ptr_few_params;
   Callback callback = {few_params1, no_params1, {1, 2.f}};
+  
+  Matrix4x4F32 matrix =
+  {
+    {
+      {1.f, 0.f, 0.f, 0.f},
+      {0.f, 1.f, 0.f, 0.f},
+      {0.f, 0.f, 1.f, 0.f},
+      {0.f, 0.f, 0.f, 1.f},
+    }
+  };
   
   Vector_R2 vector = {1.f, 2.f};
   
