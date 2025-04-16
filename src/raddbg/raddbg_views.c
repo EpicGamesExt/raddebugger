@@ -33,6 +33,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: extract invariants
   //
+  F32 main_font_size = ui_bottom_font_size();
   FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
   F32 code_font_size = ui_top_font_size();
   F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_u64_from_name(str8_lit("tab_width"));
@@ -40,7 +41,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   F32 code_line_height = ceil_f32(fnt_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
-  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
+  F32 scroll_bar_dim = floor_f32(main_font_size*1.5f);
   Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim);
   S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
   CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
@@ -1739,7 +1740,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: set up invariants
   //
-  F32 bottom_bar_height = ui_top_font_size()*2.f;
+  F32 main_font_size = ui_bottom_font_size();
+  F32 bottom_bar_height = main_font_size*2.f;
   Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
   
@@ -1885,7 +1887,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: build bottom bar
   //
-  if(!file_is_missing && key_has_data)
+  if(!file_is_missing && key_has_data) UI_FontSize(main_font_size)
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
@@ -2010,7 +2012,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: set up invariants
   //
-  F32 bottom_bar_height = ui_top_font_size()*2.f;
+  F32 main_font_size = ui_bottom_font_size();
+  F32 bottom_bar_height = main_font_size*2.f;
   Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
   rd_regs()->file_path = str8_zero();
@@ -2149,7 +2152,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: build bottom bar
   //
-  if(!is_loading && has_disasm)
+  if(!is_loading && has_disasm) UI_FontSize(main_font_size)
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);

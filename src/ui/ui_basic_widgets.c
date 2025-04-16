@@ -1212,6 +1212,7 @@ internal UI_ScrollPt
 ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices)
 {
   ui_push_tag(str8_lit("scroll_bar"));
+  ui_push_font_size(ui_bottom_font_size()*0.65f);
   
   //- rjf: unpack
   S64 idx_range_dim = Max(dim_1s64(idx_range), 1);
@@ -1329,6 +1330,7 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
     }
   }
   
+  ui_pop_font_size();
   ui_pop_tag();
   return new_pt;
 }
