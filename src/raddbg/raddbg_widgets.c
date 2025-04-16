@@ -1965,9 +1965,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             RD_Cfg *pin = n->v;
             String8 pin_expr = rd_expr_from_cfg(pin);
-            String8 pin_view_rule = rd_view_rule_from_cfg(pin);
-            String8 full_pin_expr = push_str8f(scratch.arena, "%S => %S", pin_expr, pin_view_rule);
-            E_Eval eval = e_eval_from_string(scratch.arena, full_pin_expr);
+            E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
             String8 eval_string = {0};
             if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
             {
@@ -1994,7 +1992,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             UI_Signal pin_sig = ui_signal_from_box(pin_box);
             if(ui_key_match(pin_box_key, ui_hot_key()))
             {
-              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr, pin_view_rule);
+              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr);
             }
           }
         }
@@ -2198,7 +2196,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_vaddr = params->line_vaddrs[line_idx];
         rd_cmd(RD_CmdKind_AddWatchPin,
                .expr       = rd_state->drag_drop_regs->expr,
-               .view_rule  = rd_state->drag_drop_regs->view_rule,
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
@@ -2320,7 +2317,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_idx = mouse_pt.line-params->line_num_range.min;
         line_vaddr = params->line_vaddrs[line_idx];
       }
-      rd_set_hover_eval(mouse_expr_baseline_pos, mouse_expr, str8_zero());
+      rd_set_hover_eval(mouse_expr_baseline_pos, mouse_expr);
     }
   }
   

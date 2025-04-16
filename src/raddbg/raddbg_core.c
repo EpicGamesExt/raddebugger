@@ -44,7 +44,6 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
   dst->expr        = push_str8_copy(arena, src->expr);
-  dst->view_rule   = push_str8_copy(arena, src->view_rule);
   dst->string      = push_str8_copy(arena, src->string);
   dst->cmd_name    = push_str8_copy(arena, src->cmd_name);
   dst->params_tree = md_tree_copy(arena, src->params_tree);
@@ -1120,14 +1119,6 @@ rd_expr_from_cfg(RD_Cfg *cfg)
 {
   RD_Cfg *expr_root = rd_cfg_child_from_string(cfg, str8_lit("expression"));
   String8 result = expr_root->first->string;
-  return result;
-}
-
-internal String8
-rd_view_rule_from_cfg(RD_Cfg *cfg)
-{
-  RD_Cfg *view_rule = rd_cfg_child_from_string(cfg, str8_lit("view_rule"));
-  String8 result = view_rule->first->string;
   return result;
 }
 
@@ -4399,8 +4390,7 @@ rd_view_ui(Rng2F32 rect)
                                 row->eval.space.kind == E_SpaceKind_File ||
                                 row->eval.space.kind == E_SpaceKind_Null)
                         {
-                          RD_RegsScope(.expr = e_string_from_expr(scratch.arena, row->eval.expr),
-                                       .view_rule = ev_view_rule_from_key(rd_view_eval_view(), row->key))
+                          RD_RegsScope(.expr = e_string_from_expr(scratch.arena, row->eval.expr))
                             rd_drag_begin(RD_RegSlot_Expr);
                         }
                       }
@@ -6316,7 +6306,7 @@ rd_window_frame(void)
         }
         
         // rjf: choose hover evaluation expression
-        String8 hover_eval_expr = push_str8f(scratch.arena, "%S%s%S", ws->hover_eval_string, ws->hover_eval_view_rules.size != 0 ? " => " : "", ws->hover_eval_view_rules);
+        String8 hover_eval_expr = ws->hover_eval_string;
         
         // rjf: evaluate hover evaluation expression, & determine if it evaluates
         // such that we want to build a hover eval.
@@ -9274,7 +9264,7 @@ rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringParams *params,
 //~ rjf: Hover Eval
 
 internal void
-rd_set_hover_eval(Vec2F32 pos, String8 string, String8 view_rules)
+rd_set_hover_eval(Vec2F32 pos, String8 string)
 {
   RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
@@ -9283,14 +9273,12 @@ rd_set_hover_eval(Vec2F32 pos, String8 string, String8 view_rules)
      ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
   {
-    B32 is_new_string = (!str8_match(ws->hover_eval_string, string, 0) ||
-                         !str8_match(ws->hover_eval_view_rules, view_rules, 0));
+    B32 is_new_string = (!str8_match(ws->hover_eval_string, string, 0));
     if(is_new_string)
     {
       ws->hover_eval_firstt_us = ws->hover_eval_lastt_us = rd_state->time_in_us;
       arena_clear(ws->hover_eval_arena);
       ws->hover_eval_string = push_str8_copy(ws->hover_eval_arena, string);
-      ws->hover_eval_view_rules = push_str8_copy(ws->hover_eval_arena, view_rules);
       ws->hover_eval_focused = 0;
     }
     ws->hover_eval_spawn_pos = pos;
@@ -14891,7 +14879,6 @@ Z(getting_started)
             String8 file_path = rd_regs()->file_path;
             TxtPt pt = rd_regs()->cursor;
             String8 expr_string = rd_regs()->expr;
-            String8 view_rule_string = rd_regs()->view_rule;
             U64 vaddr = rd_regs()->vaddr;
             B32 removed_already_existing = 0;
             if(kind == RD_CmdKind_ToggleWatchPin)
@@ -14916,9 +14903,7 @@ Z(getting_started)
               RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
               RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
               RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
-              RD_Cfg *view_rule = rd_cfg_new(wp, str8_lit("view_rule"));
               rd_cfg_new(expr, expr_string);
-              rd_cfg_new(view_rule, view_rule_string);
               rd_cmd(RD_CmdKind_RelocateCfg, .cfg = wp->id, .expr = str8_zero());
             }
           }break;

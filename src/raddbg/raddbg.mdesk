@@ -374,43 +374,42 @@ RD_RegTable:
   {RD_CfgIDList      cfg_list         CfgList       }
   
   // rjf: frame selection
-  {U64              unwind_count     UnwindCount   }
-  {U64              inline_depth     InlineDepth   }
+  {U64               unwind_count     UnwindCount   }
+  {U64               inline_depth     InlineDepth   }
   
   // rjf: code / address location info
-  {String8          file_path        FilePath      }
-  {TxtPt            cursor           Cursor        }
-  {TxtPt            mark             Mark          }
-  {U128             text_key         TextKey       }
-  {TXT_LangKind     lang_kind        LangKind      }
-  {D_LineList       lines            Lines         }
-  {DI_Key           dbgi_key         DbgiKey       }
-  {U64              vaddr            Vaddr         }
-  {U64              voff             Voff          }
-  {Rng1U64          vaddr_range      VaddrRange    }
-  {Rng1U64          voff_range       VoffRange     }
+  {String8           file_path        FilePath      }
+  {TxtPt             cursor           Cursor        }
+  {TxtPt             mark             Mark          }
+  {U128              text_key         TextKey       }
+  {TXT_LangKind      lang_kind        LangKind      }
+  {D_LineList        lines            Lines         }
+  {DI_Key            dbgi_key         DbgiKey       }
+  {U64               vaddr            Vaddr         }
+  {U64               voff             Voff          }
+  {Rng1U64           vaddr_range      VaddrRange    }
+  {Rng1U64           voff_range       VoffRange     }
   
   // rjf: evaluation
-  {String8          expr             Expr          }
-  {String8          view_rule        ViewRule      }
+  {String8           expr             Expr          }
   
   // rjf: ui context
-  {UI_Key           ui_key           UIKey         }
-  {Vec2F32          off_px           OffPx         }
-  {RD_ListerFlags   lister_flags     ListerFlags   }
-  {RD_RegSlot       reg_slot         RegSlot       }
+  {UI_Key            ui_key           UIKey         }
+  {Vec2F32           off_px           OffPx         }
+  {RD_ListerFlags    lister_flags     ListerFlags   }
+  {RD_RegSlot        reg_slot         RegSlot       }
   
   // rjf: general parameters
-  {U32              pid              PID           }
-  {B32              force_confirm    ForceConfirm  }
-  {B32              prefer_disasm    PreferDisasm  }
-  {B32              no_rich_tooltip  NoRichTooltip }
-  {B32              do_implicit_root DoImplicitRoot}
-  {Dir2             dir2             Dir2          }
-  {String8          string           String        }
-  {String8          cmd_name         CmdName       }
-  {`MD_Node *`      params_tree      ParamsTree    }
-  {`OS_Event *`     os_event         OSEvent       }
+  {U32               pid              PID           }
+  {B32               force_confirm    ForceConfirm  }
+  {B32               prefer_disasm    PreferDisasm  }
+  {B32               no_rich_tooltip  NoRichTooltip }
+  {B32               do_implicit_root DoImplicitRoot}
+  {Dir2              dir2             Dir2          }
+  {String8           string           String        }
+  {String8           cmd_name         CmdName       }
+  {`MD_Node *`       params_tree      ParamsTree    }
+  {`OS_Event *`      os_event         OSEvent       }
 }
 
 @enum RD_RegSlot:
