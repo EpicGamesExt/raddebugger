@@ -3172,7 +3172,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
     {
       node->params.epsilon = 0.005f;
     }
-    if(node->params.rate == 1)
+    if(node->params.rate == 1 || abs_f32(node->current - node->params.target) < abs_f32(node->params.epsilon))
     {
       node->current = node->params.target;
     }

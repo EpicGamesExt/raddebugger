@@ -99,6 +99,7 @@ RD_CmdKind_DeselectEntity,
 RD_CmdKind_IncFontSize,
 RD_CmdKind_DecFontSize,
 RD_CmdKind_OpenWindow,
+RD_CmdKind_WindowSettings,
 RD_CmdKind_CloseWindow,
 RD_CmdKind_ToggleFullscreen,
 RD_CmdKind_BringToFront,
@@ -636,7 +637,7 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[314];
+extern RD_VocabInfo rd_vocab_info_table[315];
 extern RD_NameSchemaInfo rd_name_schema_info_table[19];
 extern Rng1U64 rd_reg_slot_range_table[40];
 extern String8 rd_binding_version_remap_old_name_table[8];

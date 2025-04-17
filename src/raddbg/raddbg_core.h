@@ -849,7 +849,6 @@ internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_Pa
 internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
 
 internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
-
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
 

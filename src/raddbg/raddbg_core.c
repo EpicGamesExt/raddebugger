@@ -1861,7 +1861,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
     {
       U64 file_path_string_id = space.u64_0;
       String8 file_path = e_string_from_id(file_path_string_id);
-      result  = fs_key_from_path_range(file_path, range);
+      result = fs_key_from_path_range(file_path, range);
     }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {
@@ -2270,7 +2270,7 @@ rd_view_ui(Rng2F32 rect)
   RD_Cfg *cmd_root = rd_cfg_child_from_string(query_root, str8_lit("cmd"));
   String8 current_input = input_root->first->string;
   B32 search_row_is_open = (vs->query_is_selected);
-  F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open);
+  F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open, .epsilon = 0.01f);
   if(search_row_open_t > 0.001f)
   {
     String8 cmd_name = cmd_root->first->string;
@@ -6859,12 +6859,14 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenWindow].string,
                     rd_cmd_kind_info_table[RD_CmdKind_CloseWindow].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ToggleFullscreen].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_WindowSettings].string,
                   };
                   U32 codepoints[] =
                   {
                     'w',
                     'c',
                     'f',
+                    's',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
                   rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
@@ -12004,6 +12006,15 @@ rd_frame(void)
         for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
         {
           RD_Cfg *window = n->v;
+          {
+            E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, window->string);
+            E_Space space = rd_eval_space_from_cfg(window);
+            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+            expr->space    = space;
+            expr->mode     = E_Mode_Offset;
+            expr->type_key = type_key;
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", window->id), expr);
+          }
           RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
           for(RD_PanelNode *p = panel_tree.root;
               p != &rd_nil_panel_node;
@@ -12522,7 +12533,7 @@ rd_frame(void)
           //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
-            String8 expr = push_str8f(scratch.arena, "query:commands, query:recent_files, query:recent_projects, query:procedures, query:$%I64x", rd_regs()->view);
+            String8 expr = push_str8f(scratch.arena, "query:commands, query:recent_files, query:recent_projects, query:procedures, query:$%I64x, query:$%I64x", rd_regs()->view, rd_regs()->window);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1);
           }break;
           
@@ -12603,6 +12614,11 @@ rd_frame(void)
             }
             RD_Cfg *panels = rd_cfg_new(new_window, str8_lit("panels"));
             rd_cfg_new(panels, str8_lit("selected"));
+          }break;
+          case RD_CmdKind_WindowSettings:
+          {
+            String8 expr = push_str8f(scratch.arena, "query:$%I64x", rd_regs()->window);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1);
           }break;
           case RD_CmdKind_CloseWindow:
           {
