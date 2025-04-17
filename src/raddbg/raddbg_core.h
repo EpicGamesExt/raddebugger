@@ -1012,9 +1012,8 @@ internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
 
-//- rjf: fonts/sizes
+//- rjf: fonts
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);
-internal F32 rd_font_size_from_slot(RD_FontSlot slot);
 internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
 
 ////////////////////////////////

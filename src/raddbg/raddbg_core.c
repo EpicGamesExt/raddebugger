@@ -10406,44 +10406,6 @@ rd_font_from_slot(RD_FontSlot slot)
   return result;
 }
 
-internal F32
-rd_font_size_from_slot(RD_FontSlot slot)
-{
-  F32 result = (F32)rd_setting_u64_from_name(str8_lit("font_size"));
-  return result;
-#if 0
-  F32 result = 11.f;
-  
-  // rjf: determine config key based on slot
-  String8 key = {0};
-  switch(slot)
-  {
-    default:{}break;
-    case RD_FontSlot_Icons:
-    case RD_FontSlot_Main:{key = str8_lit("main_font_size");}break;
-    case RD_FontSlot_Code:{key = str8_lit("code_font_size");}break;
-  }
-  
-  // rjf: given key, find setting string
-  String8 setting_string = rd_setting_from_name(key);
-  
-  // rjf: if found, map setting string -> f64; otherwise use the window's monitor's DPI
-  // based on some default size.
-  if(setting_string.size)
-  {
-    result = (F32)f64_from_str8(setting_string);
-  }
-  else
-  {
-    RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
-    RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
-    F32 dpi = os_dpi_from_window(ws->os);
-    result = 11.f * (dpi / 96.f);
-  }
-  return result;
-#endif
-}
-
 internal FNT_RasterFlags
 rd_raster_flags_from_slot(RD_FontSlot slot)
 {
