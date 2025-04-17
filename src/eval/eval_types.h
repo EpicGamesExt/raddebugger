@@ -268,6 +268,7 @@ internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
 internal int e_type_qsort_compare_members_offset(E_Member *a, E_Member *b);
 internal E_MemberArray e_type_data_members_from_key(Arena *arena, E_TypeKey key);
+internal E_TypeExpandRule *e_expand_rule_from_type_key(E_TypeKey key);
 
 //- rjf: type key traversal
 internal E_TypeKey e_type_key_direct(E_TypeKey key);
@@ -308,6 +309,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default);
 E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `only` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(only);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only);
 
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `sequence` lens

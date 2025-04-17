@@ -84,7 +84,7 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
   {
-    if(e_type_kind_from_key(type_key) == E_TypeKind_Lens)
+    if(!result && e_type_kind_from_key(type_key) == E_TypeKind_Lens)
     {
       for(E_Type *lens_type = e_type_from_key__cached(type_key);
           lens_type->kind == E_TypeKind_Lens;
@@ -97,7 +97,7 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
         }
       }
     }
-    else
+    if(!result)
     {
       E_TypeKey expand_type_key = e_default_expansion_type_from_key(type_key);
       E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
@@ -574,24 +574,9 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       // rjf: unpack eval
       E_Mode mode = t->eval.irtree.mode;
       E_TypeKey type_key = t->eval.irtree.type_key;
-      E_Type *type = e_type_from_key__cached(type_key);
-      E_TypeExpandRule *type_expand_rule = &e_type_expand_rule__default;
-      if(type->expand.info != 0)
-      {
-        type_expand_rule = &type->expand;
-      }
-      for(E_Type *lens_type = type;
-          lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
-          lens_type = e_type_from_key__cached(lens_type->direct_type_key))
-      {
-        if(lens_type->expand.info != 0)
-        {
-          type_expand_rule = &lens_type->expand;
-          break;
-        }
-      }
       
-      // rjf: get eval's visualization expansion rule
+      // rjf: get expansion rules from type
+      E_TypeExpandRule *type_expand_rule = e_expand_rule_from_type_key(type_key);
       EV_ExpandRule *viz_expand_rule = ev_expand_rule_from_type_key(type_key);
       
       // rjf: skip if no expansion rule, & type info disallows expansion
@@ -2094,11 +2079,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         {
           expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
           expand_data->type = e_type_from_key__cached(type_key);
-          expand_data->expand_rule = &e_type_expand_rule__default;
-          if(expand_data->type->expand.info != 0)
-          {
-            expand_data->expand_rule = &expand_data->type->expand;
-          }
+          expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
           expand_data->expand_info = expand_data->expand_rule->info(arena, eval.expr, &eval.irtree, params->filter);
         }
         switch(task_idx)

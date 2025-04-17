@@ -1402,6 +1402,30 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   return members;
 }
 
+internal E_TypeExpandRule *
+e_expand_rule_from_type_key(E_TypeKey key)
+{
+  E_TypeExpandRule *rule = &e_type_expand_rule__default;
+  {
+    E_Type *type = e_type_from_key__cached(key);
+    if(type->expand.info != 0)
+    {
+      rule = &type->expand;
+    }
+    for(E_Type *lens_type = type;
+        lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
+        lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+    {
+      if(lens_type->expand.info != 0)
+      {
+        rule = &lens_type->expand;
+        break;
+      }
+    }
+  }
+  return rule;
+}
+
 //- rjf: type key traversal
 
 internal E_TypeKey
@@ -2279,6 +2303,104 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity)
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 {
   return id;
+}
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `only` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(only)
+{
+  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  E_TypeExpandInfo info = {0, type->count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
+{
+  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    E_Expr *arg = type->args[idx];
+    if(arg->string.size != 0)
+    {
+      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, arg->string);
+    }
+  }
+}
+
+////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `omit` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
+{
+  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  String8Array allowed_children_array = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List allowed_children = {0};
+    {
+      E_Type *stripped_type = e_type_from_key__cached(type->direct_type_key);
+      // TODO(rjf): this is kind of ugly due to the need to call irext,
+      // i wish it was possible to have an easier way to "strip" the current
+      // lens & evaluate the wrapped expression?
+      E_IRTreeAndType irtree_stripped = *irtree;
+      irtree_stripped.type_key = type->direct_type_key;
+      irtree_stripped.user_data = stripped_type->irext ? stripped_type->irext(scratch.arena, expr, &irtree_stripped).user_data : 0;
+      E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(irtree_stripped.type_key);
+      E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, expr, &irtree_stripped, filter);
+      if(expand_info.expr_count < 4096)
+      {
+        E_Expr **exprs = push_array(scratch.arena, E_Expr *, expand_info.expr_count);
+        String8 *exprs_strings = push_array(scratch.arena, String8, expand_info.expr_count);
+        for EachIndex(idx, expand_info.expr_count)
+        {
+          exprs[idx] = &e_expr_nil;
+        }
+        expand_rule->range(scratch.arena, expand_info.user_data, expr, &irtree_stripped, filter, r1u64(0, expand_info.expr_count), exprs, exprs_strings);
+        for EachIndex(idx, expand_info.expr_count)
+        {
+          if(exprs[idx]->kind == E_ExprKind_MemberAccess)
+          {
+            String8 name = exprs[idx]->first->next->string;
+            B32 name_is_allowed = 1;
+            for EachIndex(arg_idx, type->count)
+            {
+              if(str8_match(type->args[arg_idx]->string, name, 0))
+              {
+                name_is_allowed = 0;
+                break;
+              }
+            }
+            if(name_is_allowed)
+            {
+              str8_list_push(scratch.arena, &allowed_children, push_str8_copy(arena, name));
+            }
+          }
+        }
+      }
+    }
+    allowed_children_array = str8_array_from_list(arena, &allowed_children);
+    scratch_end(scratch);
+  }
+  String8Array *ext = push_array(arena, String8Array, 1);
+  *ext = allowed_children_array;
+  E_TypeExpandInfo info = {ext, ext->count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(omit)
+{
+  String8Array *ext = (String8Array *)user_data;
+  U64 out_idx = 0;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    String8 name = ext->v[idx];
+    if(name.size != 0)
+    {
+      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, name);
+    }
+  }
 }
 
 ////////////////////////////////

@@ -1565,6 +1565,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       //- rjf: call
       case E_ExprKind_Call:
       {
+        B32 start_disallow_chained_fastpaths = e_ir_state->disallow_chained_fastpaths;
+        e_ir_state->disallow_chained_fastpaths = 1;
         E_Expr *lhs = expr->first;
         E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
@@ -1669,6 +1671,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         {
           e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");
         }
+        
+        e_ir_state->disallow_chained_fastpaths = start_disallow_chained_fastpaths;
       }break;
       
       //- rjf: leaf bytecode
@@ -2258,6 +2262,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     }
     
     //- rjf: check chained expressions for simple wrappers
+    if(!e_ir_state->disallow_chained_fastpaths)
     {
       struct
       {
