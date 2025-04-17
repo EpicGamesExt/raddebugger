@@ -2236,6 +2236,23 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
   return view_state;
 }
 
+typedef struct RD_WatchRowExtrasDrawData RD_WatchRowExtrasDrawData;
+struct RD_WatchRowExtrasDrawData
+{
+  B32 breaks_from_prev;
+};
+
+internal UI_BOX_CUSTOM_DRAW(rd_watch_row_extras_custom_draw)
+{
+  RD_WatchRowExtrasDrawData *draw_data = (RD_WatchRowExtrasDrawData *)user_data;
+  if(draw_data->breaks_from_prev) DR_ClipScope(intersect_2f32(dr_top_clip(), box->rect))
+  {
+    Vec4F32 shadow_color = ui_color_from_name(str8_lit("drop_shadow"));
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0, box->rect.y0, box->rect.x1, (box->rect.y0+box->rect.y1)/2), shadow_color, 0, 0, 0);
+    inst->colors[Corner_01] = inst->colors[Corner_11] = v4f32(0, 0, 0, 0);
+  }
+}
+
 internal void
 rd_view_ui(Rng2F32 rect)
 {
@@ -3946,6 +3963,9 @@ rd_view_ui(Rng2F32 rect)
                 ui_set_next_pref_height(ui_px(row_height_px*row->visual_size, 1.f));
                 ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
                 UI_Box *row_box = ui_build_box_from_stringf(row_flags|((!row_node->next)*UI_BoxFlag_DrawSideBottom)|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
+                RD_WatchRowExtrasDrawData *row_draw_data = push_array(ui_build_arena(), RD_WatchRowExtrasDrawData, 1);
+                row_draw_data->breaks_from_prev = !row_matches_last_row_topology;
+                ui_box_equip_custom_draw(row_box, rd_watch_row_extras_custom_draw, row_draw_data);
                 
                 //////////////////////
                 //- rjf: build row contents

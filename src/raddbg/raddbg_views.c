@@ -1173,7 +1173,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
         {
           MD_Node *schema = n->v;
-          MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
+          MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("row_commands"), 0);
           for MD_EachNode(cmd, cmds_root->first)
           {
             String8 cmd_name = cmd->string;

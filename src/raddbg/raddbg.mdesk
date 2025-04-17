@@ -262,7 +262,7 @@ RD_VocabTable:
   {
     target,
     ```
-      @commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)
+      @row_commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)
       @collection_commands(add_target)
       x:
     {
@@ -285,7 +285,7 @@ RD_VocabTable:
   {
     breakpoint,
     ```
-      @commands(enable_cfg, remove_cfg)
+      @row_commands(enable_cfg, remove_cfg)
       @collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)
       x:
     {
@@ -307,7 +307,7 @@ RD_VocabTable:
   {
     watch_pin,
     ```
-      @commands(remove_cfg)
+      @row_commands(remove_cfg)
       @collection_commands(add_watch_pin)
       x:
     {
@@ -322,13 +322,13 @@ RD_VocabTable:
   //- rjf: file path maps
   {
     file_path_map,
-    ```@collection_commands(add_file_path_map) @commands(remove_cfg) x:{'source':path, 'dest':path}```,
+    ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source':path, 'dest':path}```,
   }
   
   //- rjf: auto view rules
   {
     auto_view_rule,
-    ```@collection_commands(add_auto_view_rule) @commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}```,
+    ```@collection_commands(add_auto_view_rule) @row_commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}```,
   }
   
   //- rjf: recent projects

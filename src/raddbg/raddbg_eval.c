@@ -469,6 +469,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
 typedef struct RD_SchemaExpandAccel RD_SchemaExpandAccel;
 struct RD_SchemaExpandAccel
 {
+  String8Array commands;
   MD_Node **children;
   U64 children_count;
 };
@@ -481,6 +482,22 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     
     // rjf: unpack
     RD_SchemaIRExt *ext = (RD_SchemaIRExt *)irtree->user_data;
+    
+    // rjf: gather expansion commands
+    String8Array commands = {0};
+    {
+      String8List commands_list = {0};
+      for(MD_NodePtrNode *n = ext->schemas.first; n != 0; n = n->next)
+      {
+        MD_Node *schema = n->v;
+        MD_Node *tag = md_tag_from_string(schema, str8_lit("expand_commands"), 0);
+        for MD_EachNode(arg, tag->first)
+        {
+          str8_list_push(scratch.arena, &commands_list, arg->string);
+        }
+      }
+      commands = str8_array_from_list(arena, &commands_list);
+    }
     
     // rjf: gather expansion children
     typedef struct ExpandChildNode ExpandChildNode;
@@ -523,12 +540,13 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     
     // rjf: build accelerator for lookups
     RD_SchemaExpandAccel *accel = push_array(arena, RD_SchemaExpandAccel, 1);
+    accel->commands = commands;
     accel->children = children;
     accel->children_count = child_count;
     
     // rjf: fill result
     result.user_data = accel;
-    result.expr_count = child_count;
+    result.expr_count = child_count + commands.count;
     
     scratch_end(scratch);
   }
@@ -538,12 +556,25 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema)
 {
   RD_SchemaExpandAccel *accel = (RD_SchemaExpandAccel *)user_data;
+  Rng1U64 cmds_idx_range = r1u64(0, accel->commands.count);
+  Rng1U64 chld_idx_range = r1u64(cmds_idx_range.max, cmds_idx_range.max + accel->children_count);
   U64 out_idx = 0;
-  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  
+  // rjf: read commands
   {
-    if(0 <= idx && idx < accel->children_count)
+    Rng1U64 read_range = intersect_1u64(idx_range, cmds_idx_range);
+    for(U64 idx = read_range.min; idx < read_range.max; idx += 1, out_idx += 1)
     {
-      MD_Node *child_schema = accel->children[idx];
+      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, accel->commands.v[idx - cmds_idx_range.min]);
+    }
+  }
+  
+  // rjf: read children
+  {
+    Rng1U64 read_range = intersect_1u64(idx_range, chld_idx_range);
+    for(U64 idx = read_range.min; idx < read_range.max; idx += 1, out_idx += 1)
+    {
+      MD_Node *child_schema = accel->children[idx - chld_idx_range.min];
       exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, child_schema->string);
     }
   }
