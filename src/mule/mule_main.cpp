@@ -330,7 +330,8 @@ type_coverage_eval_tests(void)
   Basics *pointer_to_basics = &basics;
   Basics **pointer_to_pointer_to_basics = &pointer_to_basics;
   
-  Fixed_Array fixed = {
+  Fixed_Array fixed =
+  {
     {
       { 3,  4.f},
       { 5,  6.f},
@@ -344,7 +345,8 @@ type_coverage_eval_tests(void)
     },
     9
   };
-  Pair memory_[] = {
+  Pair memory_[] =
+  {
     {100,  1.f},
     {101,  2.f},
     {102,  4.f},
@@ -352,11 +354,13 @@ type_coverage_eval_tests(void)
     {104, 16.f},
     {105, 32.f},
   };
-  Dynamic_Array dynamic = {
+  Dynamic_Array dynamic =
+  {
     memory_,
     6
   };
   
+  raddbg_pin(table(sequence(6), fixed.pairs[$], memory_[$]));
   raddbg_pin(basics);
   raddbg_pin(fixed);
   raddbg_pin(pointer);
