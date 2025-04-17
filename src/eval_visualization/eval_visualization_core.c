@@ -84,17 +84,33 @@ ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
   {
-    E_TypeKey expand_type_key = e_default_expansion_type_from_key(type_key);
-    E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
-    if(expand_type_kind == E_TypeKind_Struct ||
-       expand_type_kind == E_TypeKind_Union ||
-       expand_type_kind == E_TypeKind_Class ||
-       expand_type_kind == E_TypeKind_Array ||
-       expand_type_kind == E_TypeKind_Set ||
-       e_type_kind_is_pointer_or_ref(expand_type_kind) ||
-       (expand_type_kind == E_TypeKind_Enum && mode == E_Mode_Null))
+    if(e_type_kind_from_key(type_key) == E_TypeKind_Lens)
     {
-      result = 1;
+      for(E_Type *lens_type = e_type_from_key__cached(type_key);
+          lens_type->kind == E_TypeKind_Lens;
+          lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+      {
+        if(lens_type->expand.info != 0)
+        {
+          result = 1;
+          break;
+        }
+      }
+    }
+    else
+    {
+      E_TypeKey expand_type_key = e_default_expansion_type_from_key(type_key);
+      E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
+      if(expand_type_kind == E_TypeKind_Struct ||
+         expand_type_kind == E_TypeKind_Union ||
+         expand_type_kind == E_TypeKind_Class ||
+         expand_type_kind == E_TypeKind_Array ||
+         expand_type_kind == E_TypeKind_Set ||
+         e_type_kind_is_pointer_or_ref(expand_type_kind) ||
+         (expand_type_kind == E_TypeKind_Enum && mode == E_Mode_Null))
+      {
+        result = 1;
+      }
     }
   }
   return result;

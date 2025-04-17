@@ -12365,6 +12365,7 @@ rd_frame(void)
         {str8_lit("digits"),      1, 1, 0,        0, 0, {0}},
         {str8_lit("no_string"),   1, 1, 0,        0, 0, {0}},
         {str8_lit("no_addr"),     1, 1, 0,        0, 0, {0}},
+        {str8_lit("sequence"),    0, 0, 1,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(sequence), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(sequence)}},
         {str8_lit("range1"),      0, 0, 0,        0, 0, {0}},
         {str8_lit("array"),       0, 0, 1,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(array), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(array)}},
         {str8_lit("slice"),       0, 0, 1,        E_TYPE_IREXT_FUNCTION_NAME(slice), E_TYPE_ACCESS_FUNCTION_NAME(slice), {E_TYPE_EXPAND_INFO_FUNCTION_NAME(slice), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(slice)}},

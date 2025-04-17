@@ -2282,6 +2282,37 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 }
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `sequence` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(sequence)
+{
+  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  U64 count = 0;
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_OpList count_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
+    String8 count_bytecode = e_bytecode_from_oplist(scratch.arena, &count_oplist);
+    E_Interpretation count_interpret = e_interpret(count_bytecode);
+    E_Value count_value = count_interpret.value;
+    count = count_value.u64;
+    scratch_end(scratch);
+  }
+  E_TypeExpandInfo info = {0, count};
+  return info;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(sequence)
+{
+  U64 read_range_count = dim_1u64(idx_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
+  {
+    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+    expr->value.u64 = idx_range.min + idx;
+    exprs_out[idx] = expr;
+  }
+}
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `array` lens
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)

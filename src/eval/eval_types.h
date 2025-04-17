@@ -310,6 +310,12 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
+//~ rjf: (Built-In Type Hooks) `sequence` lens
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(sequence);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(sequence);
+
+////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `array` lens
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(array);
