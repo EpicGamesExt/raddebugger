@@ -108,7 +108,8 @@ void optimized_struct_parameters_eval_tests(void);
 
 raddbg_auto_view_rule(std::vector<?>, slice(_Mypair._Myval2));
 
-struct Basics{
+struct Basics
+{
   char a;
   unsigned char b;
   short c;
@@ -119,11 +120,11 @@ struct Basics{
   unsigned long long h;
   float i;
   double j;
-  
   int z;
 };
 
-struct Basics_Stdint{
+struct Basics_Stdint
+{
   int8_t   a;
   uint8_t  b;
   int16_t  c;
@@ -136,23 +137,27 @@ struct Basics_Stdint{
   double   j;
 };
 
-struct Pair{
+struct Pair
+{
   int x;
   float y;
 };
 
-struct Fixed_Array{
+struct Fixed_Array
+{
   Pair pairs[10];
   int count;
 };
 
-struct Dynamic_Array{
+struct Dynamic_Array
+{
   Pair *pairs;
   int count;
 };
 raddbg_auto_view_rule(Dynamic_Array, slice($));
 
-struct Struct_With_Embedded_Arrays{
+struct Struct_With_Embedded_Arrays
+{
   int x;
   float y;
   Pair pairs[10];
@@ -173,13 +178,16 @@ struct Callback{
   Pair pair;
 };
 
-union Vector_R2{
-  struct{
+union Vector_R2
+{
+  struct
+  {
     float x;
     float y;
   };
   float v[2];
 };
+raddbg_auto_view_rule(Vector_R2, only($, x, y));
 
 typedef union Matrix4x4F32 Matrix4x4F32;
 union Matrix4x4F32
@@ -188,7 +196,8 @@ union Matrix4x4F32
 };
 raddbg_auto_view_rule(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
 
-enum Kind{
+enum Kind
+{
   Kind_None,
   Kind_First,
   Kind_Second,
@@ -197,7 +206,8 @@ enum Kind{
   Kind_COUNT,
 };
 
-enum Flag{
+enum Flag
+{
   Flag_None = 0,
   Flag_First = 1,
   Flag_Second = 2,
@@ -208,25 +218,31 @@ enum Flag{
   Flag_All = 0xFFFFFFFF,
 };
 
-struct Has_Enums{
+struct Has_Enums
+{
   Kind kind;
   Flag flags;
 };
 
-struct Discriminated_Union{
+struct Discriminated_Union
+{
   Kind kind;
-  union{
-    struct{
+  union
+  {
+    struct
+    {
       int x;
       int y;
       Vector_R2 vector;
     } first;
     Pair second;
-    struct{
+    struct
+    {
       Function_Few_Params_Type *few_params;
       Pair pairs[4];
     } third;
-    struct{
+    struct
+    {
       Kind sub_kind;
       Flag flags;
     } fourth;

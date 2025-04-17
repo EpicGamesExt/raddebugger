@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[315] =
+RD_VocabInfo rd_vocab_info_table[319] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -108,6 +108,10 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("pitch"), str8_lit_comp(""), str8_lit_comp("Pitch"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("zoom"), str8_lit_comp(""), str8_lit_comp("Zoom"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("font_size"), str8_lit_comp(""), str8_lit_comp("Font Size"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("smooth_ui_text"), str8_lit_comp(""), str8_lit_comp("Smooth UI Text"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("smooth_code_text"), str8_lit_comp(""), str8_lit_comp("Smooth Code Text"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("hint_ui_text"), str8_lit_comp(""), str8_lit_comp("Hint UI Text"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("hint_code_text"), str8_lit_comp(""), str8_lit_comp("Hint Code Text"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -325,8 +329,8 @@ RD_VocabInfo rd_vocab_info_table[315] =
 
 RD_NameSchemaInfo rd_name_schema_info_table[19] =
 {
-{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n  @default(1)  'background_blur':      bool,\n  @default(1)  'thread_lines':         bool,\n  @default(1)  'breakpoint_lines':     bool,\n  @default(1)  'thread_glow':          bool,\n  @default(1)  'breakpoint_glow':      bool,\n  @default(0)  'opaque_backgrounds':   bool,\n  @default(1)  'smooth_main_text':     bool,\n  @default(0)  'smooth_code_text':     bool,\n  @default(1)  'hint_main_text':       bool,\n  @default(1)  'hint_code_text':       bool,\n  @default(2)  'tab_width': @range[1, 32] u64,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
-{str8_lit_comp("window"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n  @default(1)  'background_blur':      bool,\n  @default(1)  'thread_lines':         bool,\n  @default(1)  'breakpoint_lines':     bool,\n  @default(1)  'thread_glow':          bool,\n  @default(1)  'breakpoint_glow':      bool,\n  @default(0)  'opaque_backgrounds':   bool,\n  @default(1)  'smooth_ui_text':     bool,\n  @default(0)  'smooth_code_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(1)  'hint_code_text':       bool,\n  @default(2)  'tab_width': @range[1, 32] u64,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("window"), str8_lit_comp("x:\n{\n  //- rjf: animations\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n\n  //- rjf: thread & breakpoint decorations\n  @default(1)  'thread_lines':       bool,\n  @default(1)  'thread_glow':        bool,\n  @default(1)  'breakpoint_lines':   bool,\n  @default(1)  'breakpoint_glow':    bool,\n\n  //- rjf: occluding background settings\n  @default(0)  'opaque_backgrounds': bool,\n  @default(1)  'background_blur':    bool,\n\n  //- rjf: text rasterization settings\n  @default(1)  'smooth_ui_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(0)  'smooth_code_text':   bool,\n  @default(1)  'hint_code_text':     bool,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("text"), str8_lit_comp("@inherit(tab) x:\n{\n  'lang':lang,\n  'size':code_string,\n  @default(1) 'show_line_numbers':bool,\n}\n")},
 {str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},

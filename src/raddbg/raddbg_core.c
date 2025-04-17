@@ -5507,8 +5507,8 @@ rd_window_frame(void)
       ui_push_pref_height(ui_px(floor_f32(ui_top_font_size()*3.f), 1.f));
       ui_push_blur_size(10.f);
       FNT_RasterFlags text_raster_flags = 0;
-      if(rd_setting_b32_from_name(str8_lit("smooth_main_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
-      if(rd_setting_b32_from_name(str8_lit("hint_main_text"))) {text_raster_flags |= FNT_RasterFlag_Hinted;}
+      if(rd_setting_b32_from_name(str8_lit("smooth_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
+      if(rd_setting_b32_from_name(str8_lit("hint_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Hinted;}
       ui_push_text_raster_flags(text_raster_flags);
     }
     
@@ -10452,7 +10452,7 @@ rd_raster_flags_from_slot(RD_FontSlot slot)
   {
     default:{}break;
     case RD_FontSlot_Icons:{flags = FNT_RasterFlag_Smooth;}break;
-    case RD_FontSlot_Main: {flags = (rd_setting_b32_from_name(str8_lit("smooth_main_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_main_text"))*FNT_RasterFlag_Hinted);}break;
+    case RD_FontSlot_Main: {flags = (rd_setting_b32_from_name(str8_lit("smooth_ui_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_ui_text"))*FNT_RasterFlag_Hinted);}break;
     case RD_FontSlot_Code: {flags = (rd_setting_b32_from_name(str8_lit("smooth_code_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_code_text"))*FNT_RasterFlag_Hinted);}break;
   }
   return flags;

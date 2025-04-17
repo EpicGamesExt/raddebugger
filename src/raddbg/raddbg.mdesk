@@ -121,6 +121,10 @@ RD_VocabTable:
   {pitch                ""                          "Pitch"                     ""                    Null                                           }
   {zoom                 ""                          "Zoom"                      ""                    Null                                           }
   {font_size            ""                          "Font Size"                 ""                    Null                                           }
+  {smooth_ui_text       ""                          "Smooth UI Text"            ""                    Null                                           }
+  {smooth_code_text     ""                          "Smooth Code Text"          ""                    Null                                           }
+  {hint_ui_text         ""                          "Hint UI Text"              ""                    Null                                           }
+  {hint_code_text       ""                          "Hint Code Text"            ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -161,9 +165,9 @@ RD_VocabTable:
       @default(1)  'thread_glow':          bool,
       @default(1)  'breakpoint_glow':      bool,
       @default(0)  'opaque_backgrounds':   bool,
-      @default(1)  'smooth_main_text':     bool,
+      @default(1)  'smooth_ui_text':     bool,
       @default(0)  'smooth_code_text':     bool,
-      @default(1)  'hint_main_text':       bool,
+      @default(1)  'hint_ui_text':       bool,
       @default(1)  'hint_code_text':       bool,
       @default(2)  'tab_width': @range[1, 32] u64,
       @default(11) 'font_size': @range[6, 72] u64,
@@ -177,6 +181,29 @@ RD_VocabTable:
     ```
       x:
     {
+      //- rjf: animations
+      @default(1)  'hover_animations':     bool,
+      @default(1)  'press_animations':     bool,
+      @default(0)  'focus_animations':     bool,
+      @default(1)  'tooltip_animations':   bool,
+      @default(1)  'menu_animations':      bool,
+      @default(1)  'scrolling_animations': bool,
+      
+      //- rjf: thread & breakpoint decorations
+      @default(1)  'thread_lines':       bool,
+      @default(1)  'thread_glow':        bool,
+      @default(1)  'breakpoint_lines':   bool,
+      @default(1)  'breakpoint_glow':    bool,
+      
+      //- rjf: occluding background settings
+      @default(0)  'opaque_backgrounds': bool,
+      @default(1)  'background_blur':    bool,
+      
+      //- rjf: text rasterization settings
+      @default(1)  'smooth_ui_text':     bool,
+      @default(1)  'hint_ui_text':       bool,
+      @default(0)  'smooth_code_text':   bool,
+      @default(1)  'hint_code_text':     bool,
       @default(11) 'font_size': @range[6, 72] u64,
     }
     ```
