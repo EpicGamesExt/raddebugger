@@ -1254,7 +1254,7 @@ rd_immediate_cfg_from_key(String8 string)
     immediate = rd_cfg_new(transient, str8_lit("immediate"));
     cfg = rd_cfg_new(immediate, string);
   }
-  rd_cfg_new(immediate, str8_lit("hot"));
+  rd_cfg_child_from_string_or_alloc(immediate, str8_lit("hot"));
   return cfg;
 }
 
@@ -5742,7 +5742,7 @@ rd_window_frame(void)
           }
           if(immediate_parent != &rd_nil_cfg)
           {
-            rd_cfg_new(immediate_parent, str8_lit("hot"));
+            rd_cfg_child_from_string_or_alloc(immediate_parent, str8_lit("hot"));
           }
           UI_Size main_width = ui_top_pref_width();
           UI_Size main_height = ui_top_pref_height();
@@ -6620,7 +6620,7 @@ rd_window_frame(void)
         
         // rjf: build cfg tree
         RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_new(view, str8_lit("selected"));
+        rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
         rd_cfg_new_replace(expr_root, expr);
         
         // rjf: push view regs
@@ -10913,6 +10913,10 @@ rd_init(CmdLine *cmdln)
                                   cmd_line_has_flag(cmdln, str8_lit("q")));
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
+  rd_state->user_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_user_data_string_key"));
+  rd_state->project_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_project_data_string_key"));
+  rd_state->cmdln_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_cmdln_data_string_key"));
+  rd_state->transient_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_transient_data_string_key"));
   for(U64 idx = 0; idx < ArrayCount(rd_state->frame_arenas); idx += 1)
   {
     rd_state->frame_arenas[idx] = arena_alloc();
@@ -11175,6 +11179,32 @@ rd_frame(void)
   log_scope_begin();
   
   //////////////////////////////
+  //- rjf: (DEBUG) take top-level cfg roots, stringize them, and store them to hash store
+  //
+#if 0
+  {
+    struct
+    {
+      U128 key;
+      String8 name;
+    }
+    table[] =
+    {
+      {rd_state->user_cfg_string_key, str8_lit("user")},
+      {rd_state->project_cfg_string_key, str8_lit("project")},
+      {rd_state->cmdln_cfg_string_key, str8_lit("command_line")},
+      {rd_state->transient_cfg_string_key, str8_lit("transient")},
+    };
+    for EachElement(idx, table)
+    {
+      Arena *arena = arena_alloc();
+      String8 data = rd_string_from_cfg_tree(arena, rd_cfg_child_from_string(rd_state->root_cfg, table[idx].name));
+      hs_submit_data(table[idx].key, &arena, data);
+    }
+  }
+#endif
+  
+  //////////////////////////////
   //- rjf: do per-frame resets
   //
   arena_clear(rd_frame_arena());
@@ -11242,7 +11272,14 @@ rd_frame(void)
     {
       if(str8_match(tln->string, str8_lit("immediate"), 0))
       {
-        rd_cfg_release(rd_cfg_child_from_string(tln, str8_lit("hot")));
+        for(RD_Cfg *child = tln->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
+        {
+          next = child->next;
+          if(str8_match(child->string, str8_lit("hot"), 0))
+          {
+            rd_cfg_release(child);
+          }
+        }
       }
     }
   }
@@ -12276,6 +12313,39 @@ rd_frame(void)
         hs_scope_close(hs_scope);
       }
       
+      //- rjf: (DEBUG) add macro for cfg strings
+#if 0
+      {
+        struct
+        {
+          U128 key;
+          String8 name;
+        }
+        table[] =
+        {
+          {rd_state->user_cfg_string_key, str8_lit("raddbg_user_data")},
+          {rd_state->project_cfg_string_key, str8_lit("raddbg_project_data")},
+          {rd_state->cmdln_cfg_string_key, str8_lit("raddbg_command_line_data")},
+          {rd_state->transient_cfg_string_key, str8_lit("raddbg_transient_data")},
+        };
+        for EachElement(idx, table)
+        {
+          HS_Scope *hs_scope = hs_scope_open();
+          U128 key = table[idx].key;
+          U128 hash = hs_hash_from_key(key, 0);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          space.u128 = key;
+          expr->space    = space;
+          expr->mode     = E_Mode_Offset;
+          expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, table[idx].name, expr);
+          hs_scope_close(hs_scope);
+        }
+      }
+#endif
+      
       //- rjf: add macros for all watches which define identifiers
       RD_CfgList watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
       for(RD_CfgNode *n = watches.first; n != 0; n = n->next)
@@ -12301,13 +12371,16 @@ rd_frame(void)
         String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
         U8 split_char = 0;
         String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
+        U64 cfg_idx = 0;
         for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
         {
           String8 text = text_n->string;
           RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
-          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfgs", ctrl_string_from_handle(scratch.arena, module->handle));
-          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+          String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
+          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
           {
+            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
+            rd_cfg_release_all_children(immediate_root);
             rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
             rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
           }
@@ -12616,7 +12689,7 @@ rd_frame(void)
               }
             }
             RD_Cfg *panels = rd_cfg_new(new_window, str8_lit("panels"));
-            rd_cfg_new(panels, str8_lit("selected"));
+            rd_cfg_child_from_string_or_alloc(panels, str8_lit("selected"));
           }break;
           case RD_CmdKind_WindowSettings:
           {

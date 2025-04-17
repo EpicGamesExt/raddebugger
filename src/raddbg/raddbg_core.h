@@ -597,6 +597,12 @@ struct RD_State
   Arena *project_path_arena;
   String8 project_path;
   
+  // rjf: serialized config debug string keys
+  U128 user_cfg_string_key;
+  U128 project_cfg_string_key;
+  U128 cmdln_cfg_string_key;
+  U128 transient_cfg_string_key;
+  
   // rjf: schema table
   MD_NodePtrList *schemas;
   
