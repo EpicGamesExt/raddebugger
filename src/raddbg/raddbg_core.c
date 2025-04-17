@@ -12843,21 +12843,33 @@ rd_frame(void)
           //- rjf: font sizes
           case RD_CmdKind_IncFontSize:
           {
-            fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
-            F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
-            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("font_size"));
-            rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
+            RD_Cfg *cfg = &rd_nil_cfg;
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->view); }
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->window); }
+            if(cfg != &rd_nil_cfg)
+            {
+              fnt_reset();
+              F32 current_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+              F32 new_font_size = current_font_size+1;
+              new_font_size = ClampBot(1, new_font_size);
+              RD_Cfg *font_size_cfg = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("font_size"));
+              rd_cfg_new_replacef(font_size_cfg, "%I64u", (U64)new_font_size);
+            }
           }break;
           case RD_CmdKind_DecFontSize:
           {
-            fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
-            F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
-            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-            RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("font_size"));
-            rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
+            RD_Cfg *cfg = &rd_nil_cfg;
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->view); }
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->window); }
+            if(cfg != &rd_nil_cfg)
+            {
+              fnt_reset();
+              F32 current_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+              F32 new_font_size = current_font_size-1;
+              new_font_size = ClampBot(1, new_font_size);
+              RD_Cfg *font_size_cfg = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("font_size"));
+              rd_cfg_new_replacef(font_size_cfg, "%I64u", (U64)new_font_size);
+            }
           }break;
           
           //- rjf: panel creation
