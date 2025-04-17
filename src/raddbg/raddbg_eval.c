@@ -277,20 +277,12 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: Schema Type Hooks
 
-typedef struct RD_SchemaNode RD_SchemaNode;
-struct RD_SchemaNode
-{
-  RD_SchemaNode *next;
-  MD_Node *schema;
-};
-
 typedef struct RD_SchemaIRExt RD_SchemaIRExt;
 struct RD_SchemaIRExt
 {
   RD_Cfg *cfg;
   CTRL_Entity *entity;
-  RD_SchemaNode *first_schema;
-  RD_SchemaNode *last_schema;
+  MD_NodePtrList schemas;
 };
 
 E_TYPE_IREXT_FUNCTION_DEF(schema)
@@ -303,21 +295,9 @@ E_TYPE_IREXT_FUNCTION_DEF(schema)
     E_Interpretation interpret = e_interpret(bytecode);
     E_TypeKey type_key = irtree->type_key;
     E_Type *type = e_type_from_key__cached(type_key);
-    MD_Node *schema = rd_schema_from_name(type->name);
     ext->cfg = rd_cfg_from_eval_space(interpret.space);
     ext->entity = rd_ctrl_entity_from_eval_space(interpret.space);
-    for MD_EachNode(tag, schema->first_tag)
-    {
-      if(str8_match(tag->string, str8_lit("inherit"), 0))
-      {
-        RD_SchemaNode *n = push_array(arena, RD_SchemaNode, 1);
-        n->schema = rd_schema_from_name(tag->first->string);
-        SLLQueuePush(ext->first_schema, ext->last_schema, n);
-      }
-    }
-    RD_SchemaNode *n = push_array(arena, RD_SchemaNode, 1);
-    n->schema = schema;
-    SLLQueuePush(ext->first_schema, ext->last_schema, n);
+    ext->schemas = rd_schemas_from_name(type->name);
     scratch_end(scratch);
   }
   E_IRExt result = {ext};
@@ -331,9 +311,9 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
   if(expr->kind == E_ExprKind_MemberAccess)
   {
     MD_Node *child_schema = &md_nil_node;
-    for(RD_SchemaNode *n = ext->first_schema; n != 0; n = n->next)
+    for(MD_NodePtrNode *n = ext->schemas.first; n != 0; n = n->next)
     {
-      for MD_EachNode(child, n->schema->first)
+      for MD_EachNode(child, n->v->first)
       {
         if(str8_match(child->string, expr->first->next->string, 0))
         {
@@ -512,9 +492,9 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     ExpandChildNode *first_child_node = 0;
     ExpandChildNode *last_child_node = 0;
     U64 child_count = 0;
-    for(RD_SchemaNode *n = ext->first_schema; n != 0; n = n->next)
+    for(MD_NodePtrNode *n = ext->schemas.first; n != 0; n = n->next)
     {
-      MD_Node *schema = n->schema;
+      MD_Node *schema = n->v;
       for MD_EachNode(child, schema->first)
       {
         if(!md_node_has_tag(child, str8_lit("no_expand"), 0))
@@ -599,11 +579,15 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs)
     //- rjf: gather commands
     String8List cmds_list = {0};
     {
-      MD_Node *schema = rd_schema_from_name(cfg_name);
-      MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
-      for MD_EachNode(cmd, collection_cmds_root->first)
+      MD_NodePtrList schemas = rd_schemas_from_name(cfg_name);
+      for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
-        str8_list_push(arena, &cmds_list, cmd->string);
+        MD_Node *schema = n->v;
+        MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
+        for MD_EachNode(cmd, collection_cmds_root->first)
+        {
+          str8_list_push(arena, &cmds_list, cmd->string);
+        }
       }
     }
     

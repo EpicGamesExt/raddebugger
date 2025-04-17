@@ -598,7 +598,7 @@ struct RD_State
   String8 project_path;
   
   // rjf: schema table
-  MD_Node **schemas;
+  MD_NodePtrList *schemas;
   
   // rjf: default theme table
   MD_Node *theme_preset_trees[RD_ThemePreset_COUNT];
@@ -863,7 +863,7 @@ internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal String8 rd_path_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 
-internal MD_Node *rd_schema_from_name(String8 name);
+internal MD_NodePtrList rd_schemas_from_name(String8 name);
 
 internal String8 rd_setting_from_name(String8 name);
 #define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))

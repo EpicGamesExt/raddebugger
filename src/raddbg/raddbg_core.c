@@ -1065,15 +1065,19 @@ rd_color_from_cfg(RD_Cfg *cfg)
 internal B32
 rd_disabled_from_cfg(RD_Cfg *cfg)
 {
-  MD_Node *schema = rd_schema_from_name(cfg->string);
-  MD_Node *enabled_schema = md_child_from_string(schema, str8_lit("enabled"), 0);
-  MD_Node *default_tag = md_tag_from_string(enabled_schema, str8_lit("default"), 0);
+  MD_Node *child_schema = &md_nil_node;
+  MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+  for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
+  {
+    child_schema = md_child_from_string(n->v, str8_lit("enabled"), 0);
+  }
+  MD_Node *default_tag = md_tag_from_string(child_schema, str8_lit("default"), 0);
   String8 value_string = rd_cfg_child_from_string(cfg, str8_lit("enabled"))->first->string;
   if(value_string.size == 0)
   {
     value_string = default_tag->first->string;
   }
-  B32 is_enabled = (str8_match(value_string, str8_lit("1"), 0));
+  B32 is_enabled = !!e_value_from_string(value_string).u64;
   B32 is_disabled = !is_enabled;
   if(value_string.size == 0)
   {
@@ -1152,19 +1156,19 @@ rd_target_from_cfg(Arena *arena, RD_Cfg *cfg)
   return target;
 }
 
-internal MD_Node *
-rd_schema_from_name(String8 name)
+internal MD_NodePtrList
+rd_schemas_from_name(String8 name)
 {
-  MD_Node *schema = &md_nil_node;
+  MD_NodePtrList schemas = {0};
   for EachElement(idx, rd_name_schema_info_table)
   {
     if(str8_match(name, rd_name_schema_info_table[idx].name, 0))
     {
-      schema = rd_state->schemas[idx];
+      schemas = rd_state->schemas[idx];
       break;
     }
   }
-  return schema;
+  return schemas;
 }
 
 internal String8
@@ -1207,15 +1211,20 @@ rd_setting_from_name(String8 name)
       };
       for EachElement(idx, schema_names)
       {
-        MD_Node *schema = rd_schema_from_name(schema_names[idx]);
-        MD_Node *setting = md_child_from_string(schema, name, 0);
-        MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
-        if(default_tag != &md_nil_node)
+        MD_NodePtrList schemas = rd_schemas_from_name(schema_names[idx]);
+        for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
         {
-          result = default_tag->first->string;
-          break;
+          MD_Node *schema = n->v;
+          MD_Node *setting = md_child_from_string(schema, name, 0);
+          MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
+          if(default_tag != &md_nil_node)
+          {
+            result = default_tag->first->string;
+            goto end_default_search;
+          }
         }
       }
+      end_default_search:;
       scratch_end(scratch);
     }
   }
@@ -1605,8 +1614,12 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       String8 read_data = {0};
       if(child_key.size != 0)
       {
-        MD_Node *root_schema = rd_schema_from_name(root_cfg->string);
-        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
+        MD_NodePtrList schemas = rd_schemas_from_name(root_cfg->string);
+        MD_Node *child_schema = &md_nil_node;
+        for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
+        {
+          child_schema = md_child_from_string(n->v, child_key, 0);
+        }
         String8 child_type_name = child_schema->first->string;
         if(str8_match(child_type_name, str8_lit("path_pt"), 0))
         {
@@ -1674,8 +1687,12 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       String8 read_data = {0};
       if(child_key.size != 0)
       {
-        MD_Node *root_schema = rd_schema_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
-        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
+        MD_NodePtrList schemas = rd_schemas_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_Node *child_schema = &md_nil_node;
+        for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
+        {
+          child_schema = md_child_from_string(n->v, child_key, 0);
+        }
         if(str8_match(child_schema->string, str8_lit("exe"), 0) ||
            str8_match(child_schema->string, str8_lit("label"), 0))
         {
@@ -1790,8 +1807,12 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       // rjf: perform write, based on child name in schema
       if(child_key.size != 0)
       {
-        MD_Node *root_schema = rd_schema_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
-        MD_Node *child_schema = md_child_from_string(root_schema, child_key, 0);
+        MD_NodePtrList schemas = rd_schemas_from_name(ctrl_entity_kind_code_name_table[entity->kind]);
+        MD_Node *child_schema = &md_nil_node;
+        for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
+        {
+          child_schema = md_child_from_string(n->v, child_key, 0);
+        }
         if(str8_match(child_schema->string, str8_lit("label"), 0))
         {
           result = 1;
@@ -2119,7 +2140,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {
-    MD_Node *schema = rd_schema_from_name(schema_name);
+    MD_NodePtrList schemas = rd_schemas_from_name(schema_name);
     E_Expr *primary_expr = eval.expr;
     E_Expr **args = 0;
     U64 args_count = 0;
@@ -2146,9 +2167,9 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
           param_name = arg->first->string;
           arg_expr = arg->first->next;
         }
-        else
+        else if(schemas.last != 0)
         {
-          for MD_EachNode(schema_child, schema->first)
+          for MD_EachNode(schema_child, schemas.last->v->first)
           {
             MD_Node *order_tag = md_tag_from_string(schema_child, str8_lit("order"), 0);
             if(order_tag != &md_nil_node)
@@ -8679,11 +8700,11 @@ rd_window_frame(void)
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
         {
-          rd_cmd(RD_CmdKind_IncFontSize);
+          rd_cmd(RD_CmdKind_IncFontSize, .view = 0);
         }
         else if(evt->delta_2f32.y > 0)
         {
-          rd_cmd(RD_CmdKind_DecFontSize);
+          rd_cmd(RD_CmdKind_DecFontSize, .view = 0);
         }
       }
     }
@@ -10903,10 +10924,41 @@ rd_init(CmdLine *cmdln)
   // rjf: set up schemas
   {
     U64 schemas_count = ArrayCount(rd_name_schema_info_table);
-    rd_state->schemas = push_array(rd_state->arena, MD_Node *, schemas_count);
+    rd_state->schemas = push_array(rd_state->arena, MD_NodePtrList, schemas_count);
     for EachIndex(idx, schemas_count)
     {
-      rd_state->schemas[idx] = md_tree_from_string(rd_state->arena, rd_name_schema_info_table[idx].schema)->first;
+      Temp scratch = scratch_begin(0, 0);
+      typedef struct SchemaParseTask SchemaParseTask;
+      struct SchemaParseTask
+      {
+        SchemaParseTask *next;
+        String8 schema_text;
+      };
+      SchemaParseTask start_task = {0, rd_name_schema_info_table[idx].schema};
+      SchemaParseTask *first_task = &start_task;
+      SchemaParseTask *last_task = first_task;
+      for(SchemaParseTask *t = first_task; t != 0; t = t->next)
+      {
+        MD_Node *schema = md_tree_from_string(rd_state->arena, t->schema_text)->first;
+        md_node_ptr_list_push_front(rd_state->arena, &rd_state->schemas[idx], schema);
+        for MD_EachNode(tag, schema->first_tag)
+        {
+          if(str8_match(tag->string, str8_lit("inherit"), 0))
+          {
+            for EachIndex(idx2, schemas_count)
+            {
+              if(str8_match(rd_name_schema_info_table[idx2].name, tag->first->string, 0))
+              {
+                SchemaParseTask *new_task = push_array(scratch.arena, SchemaParseTask, 1);
+                SLLQueuePush(first_task, last_task, new_task);
+                new_task->schema_text = rd_name_schema_info_table[idx2].schema;
+                break;
+              }
+            }
+          }
+        }
+      }
+      scratch_end(scratch);
     }
   }
   

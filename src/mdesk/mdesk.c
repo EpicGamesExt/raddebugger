@@ -1204,3 +1204,25 @@ md_debug_string_list_from_tree(Arena *arena, MD_Node *root)
   }
   return strings;
 }
+
+////////////////////////////////
+//~ rjf: Node Pointer List Functions
+
+internal void
+md_node_ptr_list_push(Arena *arena, MD_NodePtrList *list, MD_Node *node)
+{
+  MD_NodePtrNode *n = push_array(arena, MD_NodePtrNode, 1);
+  n->v = node;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal void
+md_node_ptr_list_push_front(Arena *arena, MD_NodePtrList *list, MD_Node *node)
+{
+  MD_NodePtrNode *n = push_array(arena, MD_NodePtrNode, 1);
+  n->v = node;
+  SLLQueuePushFront(list->first, list->last, n);
+  list->count += 1;
+}
+

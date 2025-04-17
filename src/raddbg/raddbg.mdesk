@@ -788,10 +788,8 @@ RD_DefaultBindingTable:
   { "set_next_statement"          F10       ctrl     shift     0          }
   
   //- rjf: font sizes
-  { "inc_ui_font_scale"           Equal     0        0         alt        }
-  { "dec_ui_font_scale"           Minus     0        0         alt        }
-  { "inc_code_font_scale"         Equal     0        shift     alt        }
-  { "dec_code_font_scale"         Minus     0        shift     alt        }
+  { "inc_font_size"               Equal     0        0         alt        }
+  { "dec_font_size"               Minus     0        0         alt        }
   
   //- rjf: windows
   { "window"                      N         ctrl     shift     0          }

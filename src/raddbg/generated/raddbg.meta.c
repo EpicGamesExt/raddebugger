@@ -606,7 +606,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[213] =
 { str8_lit_comp("log_marker"), str8_lit_comp("Logs a marker in the application log, to denote specific points in time within the log."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[109] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[107] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -620,10 +620,8 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[109] =
 {str8_lit_comp("step_over"), {OS_Key_F10, 0   }},
 {str8_lit_comp("run_to_line"), {OS_Key_F10, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("set_next_statement"), {OS_Key_F10, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
-{str8_lit_comp("inc_ui_font_scale"), {OS_Key_Equal, 0   |OS_Modifier_Alt}},
-{str8_lit_comp("dec_ui_font_scale"), {OS_Key_Minus, 0   |OS_Modifier_Alt}},
-{str8_lit_comp("inc_code_font_scale"), {OS_Key_Equal, 0  |OS_Modifier_Shift |OS_Modifier_Alt}},
-{str8_lit_comp("dec_code_font_scale"), {OS_Key_Minus, 0  |OS_Modifier_Shift |OS_Modifier_Alt}},
+{str8_lit_comp("inc_font_size"), {OS_Key_Equal, 0   |OS_Modifier_Alt}},
+{str8_lit_comp("dec_font_size"), {OS_Key_Minus, 0   |OS_Modifier_Alt}},
 {str8_lit_comp("window"), {OS_Key_N, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("toggle_fullscreen"), {OS_Key_Return, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("new_panel_right"), {OS_Key_P, 0 |OS_Modifier_Ctrl  }},

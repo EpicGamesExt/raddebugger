@@ -1777,7 +1777,7 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
     
     // rjf: if we have a violation, we need to subtract some amount from all children
     F32 violation = total_size - total_allowed_size;
-    if(violation > 0)
+    if(violation > 0 && total_weighted_size > 0)
     {
       // rjf: figure out how much we can take in totality
       F32 child_fixup_sum = 0;

@@ -1169,58 +1169,62 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         RD_Cfg *cfg = evalled_cfg;
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg));
-        MD_Node *schema = rd_schema_from_name(cfg->string);
-        MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
-        for MD_EachNode(cmd, cmds_root->first)
+        MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+        for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
         {
-          String8 cmd_name = cmd->string;
-          RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
-          switch(cmd_kind)
+          MD_Node *schema = n->v;
+          MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("commands"), 0);
+          for MD_EachNode(cmd, cmds_root->first)
           {
-            default:{}break;
-            case RD_CmdKind_EnableCfg:
+            String8 cmd_name = cmd->string;
+            RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
+            switch(cmd_kind)
             {
-              B32 is_disabled = rd_disabled_from_cfg(cfg);
-              if(!is_disabled)
+              default:{}break;
+              case RD_CmdKind_EnableCfg:
               {
-                cmd_kind = RD_CmdKind_DisableCfg;
-              }
-            }break;
-            case RD_CmdKind_DisableCfg:
+                B32 is_disabled = rd_disabled_from_cfg(cfg);
+                if(!is_disabled)
+                {
+                  cmd_kind = RD_CmdKind_DisableCfg;
+                }
+              }break;
+              case RD_CmdKind_DisableCfg:
+              {
+                B32 is_disabled = rd_disabled_from_cfg(cfg);
+                if(is_disabled)
+                {
+                  cmd_kind = RD_CmdKind_EnableCfg;
+                }
+              }break;
+              case RD_CmdKind_SelectCfg:
+              {
+                B32 is_disabled = rd_disabled_from_cfg(cfg);
+                if(!is_disabled)
+                {
+                  cmd_kind = RD_CmdKind_DeselectCfg;
+                }
+              }break;
+              case RD_CmdKind_DeselectCfg:
+              {
+                B32 is_disabled = rd_disabled_from_cfg(cfg);
+                if(is_disabled)
+                {
+                  cmd_kind = RD_CmdKind_SelectCfg;
+                }
+              }break;
+            }
+            if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
             {
-              B32 is_disabled = rd_disabled_from_cfg(cfg);
-              if(is_disabled)
-              {
-                cmd_kind = RD_CmdKind_EnableCfg;
-              }
-            }break;
-            case RD_CmdKind_SelectCfg:
+              rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Background,
+                                          .px = floor_f32(ui_top_font_size()*6.f),
+                                          .string = str8_lit("($expr).enabled"));
+            }
+            else if(cmd_kind != RD_CmdKind_Null)
             {
-              B32 is_disabled = rd_disabled_from_cfg(cfg);
-              if(!is_disabled)
-              {
-                cmd_kind = RD_CmdKind_DeselectCfg;
-              }
-            }break;
-            case RD_CmdKind_DeselectCfg:
-            {
-              B32 is_disabled = rd_disabled_from_cfg(cfg);
-              if(is_disabled)
-              {
-                cmd_kind = RD_CmdKind_SelectCfg;
-              }
-            }break;
-          }
-          if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
-          {
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Background,
-                                        .px = floor_f32(ui_top_font_size()*6.f),
-                                        .string = str8_lit("($expr).enabled"));
-          }
-          else if(cmd_kind != RD_CmdKind_Null)
-          {
-            String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+              String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+              rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+            }
           }
         }
       }
