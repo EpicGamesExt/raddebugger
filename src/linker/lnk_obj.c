@@ -317,7 +317,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     }
 
     if (coff_info.machine != COFF_MachineType_Unknown && task->machine != coff_info.machine) {
-      lnk_error_with_loc(LNK_Error_IncompatibleObj, input->path, input->lib_path,
+      lnk_error_with_loc(LNK_Error_IncompatibleMachine, input->path, input->lib_path,
           "conflicting machine types expected %S but got %S",
           coff_string_from_machine_type(task->machine),
           coff_string_from_machine_type(coff_info.machine));

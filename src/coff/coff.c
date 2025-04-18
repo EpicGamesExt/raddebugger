@@ -206,6 +206,27 @@ coff_make_ordinal64(U16 hint)
 }
 
 internal String8
+coff_ordinal_data_from_hint(Arena *arena, COFF_MachineType machine, U16 hint)
+{
+  String8 ordinal_data = {0}; 
+  switch (machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X64: {
+    U64 *ordinal = push_array(arena, U64, 1);
+    *ordinal     = coff_make_ordinal64(hint);
+    ordinal_data = str8_struct(ordinal);
+  } break;
+  case COFF_MachineType_X86: {
+    U32 *ordinal = push_array(arena, U32, 1);
+    *ordinal     = coff_make_ordinal32(hint);
+    ordinal_data = str8_struct(ordinal);
+  } break;
+  default: { NotImplemented; } break;
+  }
+  return ordinal_data;
+}
+
+internal String8
 coff_make_import_header_by_name(Arena            *arena,
                                 String8           dll_name,
                                 COFF_MachineType  machine,

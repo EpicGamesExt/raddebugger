@@ -1,11 +1,11 @@
 internal COFF_ObjWriter*
-coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine_type)
+coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine)
 {
   Arena *arena = arena_alloc();
   COFF_ObjWriter *obj_writer = push_array(arena, COFF_ObjWriter, 1);
   obj_writer->arena          = arena;
   obj_writer->time_stamp     = time_stamp;
-  obj_writer->machine_type   = machine_type;
+  obj_writer->machine   = machine;
   return obj_writer;
 }
 
@@ -35,7 +35,7 @@ coff_obj_writer_push_symbol(COFF_ObjWriter *obj_writer, String8 name, U32 value,
 }
 
 internal COFF_ObjSymbol *
-coff_obj_writer_push_symbol_external(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_ObjSection *section)
+coff_obj_writer_push_symbol_extern(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_ObjSection *section)
 {
   COFF_SymbolLocation loc = {0};
   loc.type                = COFF_SymbolLocation_Section;
@@ -182,7 +182,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   // file header
   //
   COFF_FileHeader *file_header      = push_array(scratch.arena, COFF_FileHeader, 1);
-  file_header->machine              = obj_writer->machine_type;
+  file_header->machine              = obj_writer->machine;
   file_header->section_count        = obj_sections_count;
   file_header->time_stamp           = obj_writer->time_stamp;
   file_header->symbol_table_foff    = 0;

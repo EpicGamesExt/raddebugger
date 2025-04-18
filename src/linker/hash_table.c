@@ -286,19 +286,21 @@ hash_table_search_string_raw(HashTable *ht, String8 key, void **value_out)
 ////////////////////////////////
 
 internal int
-key_value_pair_is_before_u32(void *raw_a, void *raw_b)
+key_value_pair_is_before_u32(void *a, void *b)
 {
-  KeyValuePair *a = raw_a;
-  KeyValuePair *b = raw_b;
-  return a->key_u32 < b->key_u32;
+  return ((KeyValuePair *)a)->key_u32 < ((KeyValuePair *)b)->key_u32;
 }
 
 internal int
-key_value_pair_is_before_u64(void *raw_a, void *raw_b)
+key_value_pair_is_before_u64(void *a, void *b)
 {
-  KeyValuePair *a = raw_a;
-  KeyValuePair *b = raw_b;
-  return a->key_u64 < b->key_u64;
+  return ((KeyValuePair *)a)->key_u64 < ((KeyValuePair *)b)->key_u64;
+}
+
+internal int
+key_value_pair_is_before_string_sensitive(void *a, void *b)
+{
+  return str8_compar_case_sensitive(((KeyValuePair*)a)->key_string, ((KeyValuePair*)b)->key_string) < 0;
 }
 
 internal U32 *
@@ -364,6 +366,12 @@ internal void
 sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count)
 {
   radsort(pairs, count, key_value_pair_is_before_u64);
+}
+
+internal void
+sort_key_value_pairs_as_string_sensitive(KeyValuePair *pairs, U64 count)
+{
+  radsort(pairs, count, key_value_pair_is_before_string_sensitive);
 }
 
 internal U64Array

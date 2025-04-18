@@ -70,7 +70,7 @@ typedef struct COFF_ObjWriter
 {
   Arena           *arena;
   COFF_TimeStamp   time_stamp;
-  COFF_MachineType machine_type;
+  COFF_MachineType machine;
 
   U64                 symbol_count;
   COFF_ObjSymbolNode *symbol_first;
@@ -83,7 +83,7 @@ typedef struct COFF_ObjWriter
 
 ////////////////////////////////
 
-internal COFF_ObjWriter*  coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine_type);
+internal COFF_ObjWriter*  coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine);
 internal void             coff_obj_writer_release(COFF_ObjWriter **obj_writer);
 internal COFF_ObjSection* coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data);
 internal COFF_ObjSymbol*  coff_obj_writer_push_symbol(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_SymbolLocation loc, COFF_SymbolType type, COFF_SymStorageClass storage_class);
