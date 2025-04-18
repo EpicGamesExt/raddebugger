@@ -127,6 +127,8 @@ RD_VocabTable:
   {hint_code_text       ""                          "Hint Code Text"            ""                    Null                                           }
   {opaque_backgrounds   ""                          "Opaque Backgrounds"        ""                    Null                                           }
   {background_blur      ""                          "Background Blur"           ""                    Null                                           }
+  {row_height           ""                          "Row Height"                ""                    Null                                           }
+  {tab_height           ""                          "Tab Height"                ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -173,6 +175,8 @@ RD_VocabTable:
       @default(1)  'hint_code_text':       bool,
       @default(2)  'tab_width': @range[1, 32] u64,
       @default(11) 'font_size': @range[6, 72] u64,
+      @default(3.f) 'row_height': @range[1.75f, 5.f] f32,
+      @default(3.f) 'tab_height': @range[1.75f, 5.f] f32,
     }
     ```
   }
@@ -207,6 +211,10 @@ RD_VocabTable:
       @default(0)  'smooth_code_text':   bool,
       @default(1)  'hint_code_text':     bool,
       @default(11) @display_name('Window Font Size') 'font_size': @range[6, 72] u64,
+      
+      //- rjf: size settings
+      @default(3.f) @display_name('Window Row Height') 'row_height': @range[1.75f, 5.f] f32,
+      @default(3.f) 'tab_height': @range[1.75f, 5.f] f32,
     }
     ```
   }
@@ -218,6 +226,7 @@ RD_VocabTable:
       x:
     {
       @default(11) @display_name('Tab Font Size') 'font_size': @range[6, 72] u64,
+      @default(3.f) @display_name('Tab Row Height') 'row_height': @range[1.75f, 5.f] f32,
     }
     ```
   }

@@ -2322,16 +2322,19 @@ rd_view_ui(Rng2F32 rect)
     UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_selected ? UI_FocusKind_On : UI_FocusKind_Off)
       RD_Font(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput ? RD_FontSlot_Code : RD_FontSlot_Main)
     {
-      UI_TextAlignment(UI_TextAlign_Center)
+      if(cmd_name.size != 0)
+      {
+        UI_TextAlignment(UI_TextAlign_Center)
+          UI_Transparency(1-search_row_open_t)
+          UI_PrefWidth(ui_em(2.5f, 1.f))
+          UI_TagF("weak")
+          RD_Font(RD_FontSlot_Icons)
+          ui_label(rd_icon_kind_text_table[icon == RD_IconKind_Null ? RD_IconKind_Find : icon]);
         UI_Transparency(1-search_row_open_t)
-        UI_PrefWidth(ui_em(2.5f, 1.f))
-        UI_TagF("weak")
-        RD_Font(RD_FontSlot_Icons)
-        ui_label(rd_icon_kind_text_table[icon == RD_IconKind_Null ? RD_IconKind_Find : icon]);
-      UI_Transparency(1-search_row_open_t)
-        RD_Font(RD_FontSlot_Main) UI_PrefWidth(ui_text_dim(1, 1))
-        ui_label(rd_display_from_code_name(cmd_name));
-      ui_spacer(ui_em(0.5f, 1.f));
+          RD_Font(RD_FontSlot_Main) UI_PrefWidth(ui_text_dim(1, 1))
+          ui_label(rd_display_from_code_name(cmd_name));
+        ui_spacer(ui_em(0.5f, 1.f));
+      }
       RD_CellParams params = {0};
       {
         params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_CellFlag_CodeContents;
@@ -2374,7 +2377,9 @@ rd_view_ui(Rng2F32 rect)
   //////////////////////////////
   //- rjf: fill view container
   //
-  UI_Parent(view_container) UI_FontSize(rd_setting_f32_from_name(str8_lit("font_size")))
+  UI_Parent(view_container)
+    UI_FontSize(rd_setting_f32_from_name(str8_lit("font_size")))
+    UI_PrefHeight(ui_px(floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("row_height"))), 1.f))
   {
     ////////////////////////////
     //- rjf: special-case view: "getting started"
@@ -4688,16 +4693,16 @@ rd_view_ui(Rng2F32 rect)
   }
   
   ////////////////////////////
-  //- rjf: catchall query completion controls
+  //- rjf: catchall completion controls
   //
-  if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
+  UI_Focus(UI_FocusKind_On)
   {
-    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+    if(rd_cfg_child_from_string(view, str8_lit("close_on_cancel")) == &rd_nil_cfg && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       vs->query_is_selected = 0;
       vs->query_string_size = 0;
     }
-    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
+    if(vs->query_is_selected && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
     {
       String8 cmd_name = rd_view_query_cmd();
       String8 input = rd_view_query_input();
@@ -5533,8 +5538,9 @@ rd_window_frame(void)
     //
     Rng2F32 window_rect = os_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
-    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+ui_top_px_height());
-    Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - ui_top_px_height(), window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
+    F32 top_bar_dim_px = floor_f32(ui_top_font_size()*3.f);
+    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+top_bar_dim_px);
+    Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - top_bar_dim_px, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     F32 window_edge_px = os_dpi_from_window(ws->os)*0.035f;
     content_rect = pad_2f32(content_rect, -window_edge_px);
@@ -6412,8 +6418,8 @@ rd_window_frame(void)
           // rjf: build view
           RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
           RD_Cfg *view = rd_view_from_eval(root, hover_eval);
-          RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-          rd_cfg_new_replace(explicit_root, str8_lit("1"));
+          rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+          rd_cfg_child_from_string_or_alloc(view, str8_lit("close_on_cancel"));
           
           // rjf: determine size of hover evaluation container
           EV_BlockTree predicted_block_tree = {0};
@@ -6508,7 +6514,6 @@ rd_window_frame(void)
         RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
         RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
         RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-        RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
         B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
         B32 root_is_explicit = (rd_cfg_child_from_string(view, str8_lit("explicit_root")) != &rd_nil_cfg);
         RD_ViewState *vs = rd_view_state_from_cfg(view);
@@ -6522,10 +6527,10 @@ rd_window_frame(void)
         }
         
         // rjf: unpack query info
-        String8 cmd_name = cmd->first->string;
+        String8 cmd_name = ws->query_regs->cmd_name;
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         String8 query_expr = ws->query_regs->expr;
-        if(cmd_name.size != 0)
+        if(query_expr.size == 0 && cmd_name.size != 0)
         {
           query_expr = cmd_kind_info->query.expr;
         }
@@ -6584,14 +6589,7 @@ rd_window_frame(void)
           }
         }
         
-        // rjf: close queries via 'cancel'
-        if(ui_slot_press(UI_EventActionSlot_Cancel))
-        {
-          rd_cmd(RD_CmdKind_CancelQuery);
-        }
-        
         // rjf: push query task
-        else
         {
           FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
@@ -6759,7 +6757,7 @@ rd_window_frame(void)
         {
           rd_request_frame();
         }
-        if(hover_eval_floating_view_task->pressed_outside)
+        if(hover_eval_floating_view_task->pressed_outside || ui_slot_press(UI_EventActionSlot_Cancel))
         {
           ws->hover_eval_focused = 0;
           MemoryZeroStruct(&ws->hover_eval_string);
@@ -6775,7 +6773,7 @@ rd_window_frame(void)
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         
         // rjf: close queries
-        if(query_floating_view_task->pressed_outside)
+        if(query_floating_view_task->pressed_outside || ui_slot_press(UI_EventActionSlot_Cancel))
         {
           rd_cmd(RD_CmdKind_CancelQuery);
         }
@@ -8008,7 +8006,7 @@ rd_window_frame(void)
                                       panel_rect_pct.y1*content_rect_dim.y);
           panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
           F32 tab_bar_rheight = floor_f32(ui_top_font_size()*3.5f);
-          F32 tab_bar_vheight = floor_f32(ui_top_font_size()*3.f);
+          F32 tab_bar_vheight = floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("tab_height")));
           F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
           F32 tab_spacing = floor_f32(ui_top_font_size()*0.4f);
           Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
@@ -14703,6 +14701,7 @@ Z(getting_started)
               RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
               rd_cfg_release_all_children(window_query);
               view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
+              rd_cfg_new(view, str8_lit("close_on_cancel"));
             }
             
             // rjf: non-floating -> embed in tab parameter
@@ -14787,16 +14786,34 @@ Z(getting_started)
                 vs->query_is_selected ^= 1;
               }
             }
+            if(rd_regs()->do_lister)
+            {
+              vs->query_is_selected = 1;
+            }
           }break;
           case RD_CmdKind_CompleteQuery:
           {
+            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
             String8 cmd_name = rd_view_query_cmd();
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-            RD_RegsScope()
+            if(cmd_name.size != 0) RD_RegsScope()
             {
               rd_push_cmd(cmd_name, rd_regs());
             }
-            if(cmd_kind_info->query.flags & RD_QueryFlag_Floating)
+            
+            // rjf: find out if this view is floating
+            B32 is_floating = 0;
+            for(RD_Cfg *p = view; p != &rd_nil_cfg; p = p->parent)
+            {
+              if(str8_match(p->string, str8_lit("transient"), 0))
+              {
+                is_floating = 1;
+                break;
+              }
+            }
+            
+            // rjf: complete query
+            if(is_floating)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
               RD_WindowState *ws = rd_window_state_from_cfg(window);
