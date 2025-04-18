@@ -3617,7 +3617,7 @@ rd_view_ui(Rng2F32 rect)
       ProfScope("build ui")
       {
         Vec2F32 rect_dim = dim_2f32(rect);
-        F32 contents_width_px = (rect_dim.x - floor_f32(ui_top_font_size()*1.5f));
+        F32 contents_width_px = (rect_dim.x - floor_f32(ui_bottom_font_size()*1.5f));
         Rng1S64 visible_row_rng = {0};
         UI_ScrollListParams scroll_list_params = {0};
         {
@@ -4426,12 +4426,12 @@ rd_view_ui(Rng2F32 rect)
                             case CTRL_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
                           }
                         }
-                        else if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity ||
-                                row->eval.space.kind == E_SpaceKind_FileSystem ||
-                                row->eval.space.kind == E_SpaceKind_File ||
-                                row->eval.space.kind == E_SpaceKind_Null)
+                        else if(cell_info.eval.space.kind == RD_EvalSpaceKind_CtrlEntity ||
+                                cell_info.eval.space.kind == E_SpaceKind_FileSystem ||
+                                cell_info.eval.space.kind == E_SpaceKind_File ||
+                                cell_info.eval.space.kind == E_SpaceKind_Null)
                         {
-                          RD_RegsScope(.expr = e_string_from_expr(scratch.arena, row->eval.expr))
+                          RD_RegsScope(.expr = e_string_from_expr(scratch.arena, cell_info.eval.expr))
                             rd_drag_begin(RD_RegSlot_Expr);
                         }
                       }
@@ -6548,7 +6548,7 @@ rd_window_frame(void)
         E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
         
         // rjf: compute query view's top-level rectangle
-        F32 row_height_px = ui_top_px_height();
+        F32 row_height_px = floor_f32(ui_top_px_height());
         Rng2F32 rect = {0};
         RD_RegsScope(.view = view->id)
         {

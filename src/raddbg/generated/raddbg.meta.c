@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[319] =
+RD_VocabInfo rd_vocab_info_table[321] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -112,6 +112,8 @@ RD_VocabInfo rd_vocab_info_table[319] =
 {str8_lit_comp("smooth_code_text"), str8_lit_comp(""), str8_lit_comp("Smooth Code Text"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("hint_ui_text"), str8_lit_comp(""), str8_lit_comp("Hint UI Text"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("hint_code_text"), str8_lit_comp(""), str8_lit_comp("Hint Code Text"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("opaque_backgrounds"), str8_lit_comp(""), str8_lit_comp("Opaque Backgrounds"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("background_blur"), str8_lit_comp(""), str8_lit_comp("Background Blur"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("launch_and_run"), str8_lit_comp(""), str8_lit_comp("Launch and Run"), str8_lit_comp(""), RD_IconKind_Play},
 {str8_lit_comp("launch_and_step_into"), str8_lit_comp(""), str8_lit_comp("Launch and Step Into"), str8_lit_comp(""), RD_IconKind_PlayStepForward},
 {str8_lit_comp("kill"), str8_lit_comp(""), str8_lit_comp("Kill"), str8_lit_comp(""), RD_IconKind_X},
@@ -327,11 +329,12 @@ RD_VocabInfo rd_vocab_info_table[319] =
 {str8_lit_comp("log_marker"), str8_lit_comp(""), str8_lit_comp("Log Marker"), str8_lit_comp(""), RD_IconKind_Null},
 };
 
-RD_NameSchemaInfo rd_name_schema_info_table[19] =
+RD_NameSchemaInfo rd_name_schema_info_table[20] =
 {
 {str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n  @default(1)  'background_blur':      bool,\n  @default(1)  'thread_lines':         bool,\n  @default(1)  'breakpoint_lines':     bool,\n  @default(1)  'thread_glow':          bool,\n  @default(1)  'breakpoint_glow':      bool,\n  @default(0)  'opaque_backgrounds':   bool,\n  @default(1)  'smooth_ui_text':     bool,\n  @default(0)  'smooth_code_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(1)  'hint_code_text':       bool,\n  @default(2)  'tab_width': @range[1, 32] u64,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("window"), str8_lit_comp("x:\n{\n  //- rjf: animations\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n\n  //- rjf: thread & breakpoint decorations\n  @default(1)  'thread_lines':       bool,\n  @default(1)  'thread_glow':        bool,\n  @default(1)  'breakpoint_lines':   bool,\n  @default(1)  'breakpoint_glow':    bool,\n\n  //- rjf: occluding background settings\n  @default(0)  'opaque_backgrounds': bool,\n  @default(1)  'background_blur':    bool,\n\n  //- rjf: text rasterization settings\n  @default(1)  'smooth_ui_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(0)  'smooth_code_text':   bool,\n  @default(1)  'hint_code_text':     bool,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("watch"), str8_lit_comp("@inherit(tab) x:\n{}\n")},
 {str8_lit_comp("text"), str8_lit_comp("@inherit(tab) x:\n{\n  'lang':lang,\n  'size':code_string,\n  @default(1) 'show_line_numbers':bool,\n}\n")},
 {str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},
 {str8_lit_comp("memory"), str8_lit_comp("@inherit(tab) x:\n{\n  'size': code_string,\n  @default(16) 'num_columns': @range[1, 64] u64,\n  @default(1)  'bytes_per_cell': @range[1, 8] u64,\n}\n")},
@@ -339,7 +342,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[19] =
 {str8_lit_comp("geo3d"), str8_lit_comp("@inherit(tab) x:\n{\n  'count': code_string,\n  'vtx': code_string,\n  'vtx_size': code_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(enable_cfg, launch_and_run, launch_and_step_into, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
-{str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'view_rule':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
+{str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @row_commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},

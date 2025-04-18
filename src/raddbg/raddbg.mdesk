@@ -125,6 +125,8 @@ RD_VocabTable:
   {smooth_code_text     ""                          "Smooth Code Text"          ""                    Null                                           }
   {hint_ui_text         ""                          "Hint UI Text"              ""                    Null                                           }
   {hint_code_text       ""                          "Hint Code Text"            ""                    Null                                           }
+  {opaque_backgrounds   ""                          "Opaque Backgrounds"        ""                    Null                                           }
+  {background_blur      ""                          "Background Blur"           ""                    Null                                           }
 }
 
 @struct RD_VocabInfo:
@@ -221,6 +223,13 @@ RD_VocabTable:
   }
   
   //- rjf: views
+  {
+    watch,
+    ```
+      @inherit(tab) x:
+    {}
+    ```
+  }
   {
     text,
     ```
@@ -339,7 +348,6 @@ RD_VocabTable:
       x:
     {
       'expression':       code_string,
-      'view_rule':        code_string,
       'source_location':  path_pt,
       'address_location': code_string,
     }

@@ -1457,7 +1457,7 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   *visible_row_range_out = visible_row_range;
   
   //- rjf: store thread-locals
-  ui_scroll_list_scroll_bar_dim_px = ui_top_font_size()*1.5f;
+  ui_scroll_list_scroll_bar_dim_px = ui_bottom_font_size()*1.5f;
   ui_scroll_list_scroll_pt_ptr = scroll_pt;
   ui_scroll_list_dim_px = params->dim_px;
   ui_scroll_list_scroll_idx_rng = scroll_row_idx_range;

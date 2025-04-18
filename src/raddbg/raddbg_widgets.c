@@ -3136,7 +3136,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //////////////////////////////
   //- rjf: unpack visual metrics
   //
-  F32 expander_size_px = ui_top_font_size()*2.f;
+  F32 expander_size_px = floor_f32(ui_top_font_size()*2.f);
   
   //////////////////////////////
   //- rjf: make key
@@ -3281,8 +3281,8 @@ rd_cell(RD_CellParams *params, String8 string)
   if(params->flags & RD_CellFlag_Slider && !is_focus_active)
     UI_Parent(box)
   {
-    F32 padding_px = floor_f32(ui_top_font_size()*0.65f);
-    F32 height_px = ui_top_px_height() - padding_px*2.f;
+    F32 height_px = ui_top_font_size() * 1.75f;
+    F32 padding_px = (ui_top_px_height() - height_px) / 2.f;
     UI_PrefWidth(ui_children_sum(1.f))
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))

@@ -2142,6 +2142,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         if(!generated && !e_type_key_match(e_type_key_zero(), mapped_type_key))
         {
           generated = 1;
+          result.root = e_irtree_const_u(arena, 0);
           result.type_key = mapped_type_key;
           result.mode = E_Mode_Null;
         }
