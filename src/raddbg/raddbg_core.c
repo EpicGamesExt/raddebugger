@@ -12217,6 +12217,7 @@ rd_frame(void)
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
       
       //- rjf: add macros for all ctrl entity collections
@@ -12236,6 +12237,7 @@ rd_frame(void)
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
       
       //- rjf: add macro / lookup rules for unattached processes

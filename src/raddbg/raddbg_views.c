@@ -1258,7 +1258,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       // rjf: singular row for queries
       else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellFlag_Indented|RD_WatchCellKind_Expr, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
       }
       
       // rjf: singular button for commands
