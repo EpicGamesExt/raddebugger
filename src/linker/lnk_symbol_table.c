@@ -259,6 +259,9 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
       lnk_supplement_error("%S", src->obj->path);
     }
   }
+  else if (dst->type == LNK_Symbol_Import) { 
+    can_replace = 1;
+  }
   // defined VA vs defined chunk
   else if (LNK_Symbol_IsDefined(dst->type) && dst->u.defined.value_type == LNK_DefinedSymbolValue_VA &&
            LNK_Symbol_IsDefined(src->type)) {
@@ -556,6 +559,7 @@ lnk_symbol_table_push_hash(LNK_SymbolTable *symtab, U64 hash, LNK_Symbol *symbol
   switch (symbol->type) {
   case LNK_Symbol_Null: break;
 
+  case LNK_Symbol_Import:
   case LNK_Symbol_DefinedExtern: {
     lnk_symbol_table_push_(symtab, symtab->arena->v[0], &symtab->chunk_lists[LNK_SymbolScopeIndex_Defined][0], LNK_SymbolScopeIndex_Defined, hash, symbol);
   } break;

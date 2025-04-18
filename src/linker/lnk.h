@@ -103,6 +103,11 @@
 
 ////////////////////////////////
 
+#define LNK_COFF_RELOC_FILE_OFFSET32 0x1000
+#define LNK_COFF_RELOC_SECT_SIZE32   0x1001
+
+////////////////////////////////
+
 typedef enum
 {
   LNK_InputSource_CmdLine, // specified on command line
@@ -267,7 +272,7 @@ internal void    lnk_merge_manifest_files(String8 mt_path, String8 out_name, Str
 internal void    lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_dir);
 internal void    lnk_add_resource_debug_s(COFF_ObjWriter *obj_writer, String8 obj_path, String8 cwd_path, String8 exe_path, CV_Arch arch, String8List res_file_list, MD5Hash *res_hash_array);
 internal String8 lnk_make_res_obj(Arena *arena, PE_ResourceDir *root_dir, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 path, String8 cwd_path, String8 exe_path, String8List res_file_list, MD5Hash *res_hash_array);
-internal String8 lnk_obj_from_res_file_list(TP_Context *tp, Arena *arena, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name); 
+internal String8 lnk_obj_from_res_file_list(Arena *arena, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name); 
 
 ////////////////////////////////
 // Debug

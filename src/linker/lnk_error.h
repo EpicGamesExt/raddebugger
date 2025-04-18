@@ -16,7 +16,7 @@ typedef enum
   LNK_Error_IllData,
   LNK_Error_IllExport,
   LNK_Error_IncomatibleCmdOptions,
-  LNK_Error_IncompatibleObj,
+  LNK_Error_IncompatibleMachine,
   LNK_Error_InvalidPrecompLeafCount,
   LNK_Error_InvalidStartIndex,
   LNK_Error_NoAccess,

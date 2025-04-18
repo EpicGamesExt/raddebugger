@@ -88,6 +88,7 @@ typedef enum
   LNK_Symbol_Weak,
   LNK_Symbol_Lazy,
   LNK_Symbol_Undefined,
+  LNK_Symbol_Import,
 } LNK_SymbolType;
 
 typedef struct LNK_Symbol

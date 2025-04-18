@@ -128,9 +128,6 @@ internal String8List     lnk_coff_archive_from_lib_build(Arena *arena, LNK_LibBu
 ////////////////////////////////
 
 internal LNK_LibBuild lnk_build_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ObjList obj_list, LNK_ExportTable *exptab);
-internal String8      lnk_build_import_entry_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine);
-internal String8      lnk_build_null_import_descriptor_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine);
-internal String8      lnk_build_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine);
 internal String8      lnk_build_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stamp, U16 user_id, U16 group_id, U16 mode, U32 size);
 internal String8List  lnk_build_import_lib(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 lib_name, String8 dll_name, LNK_ExportTable *exptab);
 

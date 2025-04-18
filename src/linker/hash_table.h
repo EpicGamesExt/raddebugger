@@ -85,6 +85,7 @@ internal void * values_from_hash_table_raw(Arena *arena, HashTable *ht);
 
 internal void sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count);
 internal void sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);
+internal void sort_key_value_pairs_as_string_sensitive(KeyValuePair *pairs, U64 count);
 
 ////////////////////////////////
 
