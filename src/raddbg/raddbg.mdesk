@@ -206,7 +206,7 @@ RD_VocabTable:
       @default(1)  'hint_ui_text':       bool,
       @default(0)  'smooth_code_text':   bool,
       @default(1)  'hint_code_text':     bool,
-      @default(11) 'font_size': @range[6, 72] u64,
+      @default(11) @display_name('Window Font Size') 'font_size': @range[6, 72] u64,
     }
     ```
   }
@@ -217,7 +217,7 @@ RD_VocabTable:
     ```
       x:
     {
-      @default(11) 'font_size': @range[6, 72] u64,
+      @default(11) @display_name('Tab Font Size') 'font_size': @range[6, 72] u64,
     }
     ```
   }
@@ -461,6 +461,7 @@ RD_RegTable:
   {B32               prefer_disasm    PreferDisasm  }
   {B32               no_rich_tooltip  NoRichTooltip }
   {B32               do_implicit_root DoImplicitRoot}
+  {B32               do_lister        DoLister      }
   {Dir2              dir2             Dir2          }
   {String8           string           String        }
   {String8           cmd_name         CmdName       }

@@ -1666,6 +1666,12 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }
       }
       
+      // rjf: if no child key? -> just read from this cfg's child string - first 8 bytes -> offset of string (just 8), then string's content
+      if(child_key.size == 0)
+      {
+        read_data = cfg->first->string;
+      }
+      
       // rjf: perform read
       Rng1U64 legal_range = r1u64(0, read_data.size);
       Rng1U64 read_range = intersect_1u64(range, legal_range);
@@ -1779,17 +1785,27 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       RD_Cfg *root_cfg = rd_cfg_from_eval_space(space);
       String8 child_key = e_string_from_id(space.u64s[1]);
       
-      // rjf: zero-range? delete child
-      if(range.min == range.max)
+      // rjf: no child key? -> overwrite child string
+      if(child_key.size == 0)
       {
-        rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
+        rd_cfg_new_replace(root_cfg, write_string);
       }
       
-      // rjf: non-zero-range? create child if needed & write value
+      // rjf: child key -> look up & edit child
       else
       {
-        RD_Cfg *child_cfg = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
-        rd_cfg_new_replace(child_cfg, write_string);
+        // rjf: zero-range? delete child
+        if(range.min == range.max)
+        {
+          rd_cfg_release(rd_cfg_child_from_string(root_cfg, child_key));
+        }
+        
+        // rjf: non-zero-range? create child if needed & write value
+        else
+        {
+          RD_Cfg *child_cfg = rd_cfg_child_from_string_or_alloc(root_cfg, child_key);
+          rd_cfg_new_replace(child_cfg, write_string);
+        }
       }
     }break;
     
@@ -2661,7 +2677,7 @@ rd_view_ui(Rng2F32 rect)
       // the "collection of all watches", to build a watch window. but this behavior is not
       // as desirable if we are just using some other expression as the root.
       //
-      B32 implicit_root = !rd_view_cfg_value_from_string(str8_lit("explicit_root")).u64;
+      B32 implicit_root = (rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("explicit_root")) == &rd_nil_cfg);
       
       //////////////////////////////
       //- rjf: determine autocompletion string
@@ -4287,7 +4303,7 @@ rd_view_ui(Rng2F32 rect)
                         {
                           // rjf: set up base parameters
                           cell_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
-                          cell_params.depth                = (cell_x == 0 ? row_depth : 0);
+                          cell_params.depth                = (cell->flags & RD_WatchCellFlag_Indented ? row_depth : 0);
                           cell_params.cursor               = &cell_edit_state->cursor;
                           cell_params.mark                 = &cell_edit_state->mark;
                           cell_params.edit_buffer          = cell_edit_state->input_buffer;
@@ -4454,7 +4470,7 @@ rd_view_ui(Rng2F32 rect)
                           ui_kill_action();
                         }
                         
-                        // rjf: this watch window is being queried? -> move curosr & accept
+                        // rjf: this watch window is a lister? -> move cursor & accept
                         RD_Cfg *lister = rd_cfg_child_from_string(view, str8_lit("lister"));
                         if(lister != &rd_nil_cfg)
                         {
@@ -4676,7 +4692,7 @@ rd_view_ui(Rng2F32 rect)
   //
   if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
   {
-    if(ui_is_focus_active() && rd_cfg_child_from_string(view, str8_lit("lister")) == &rd_nil_cfg && ui_slot_press(UI_EventActionSlot_Cancel))
+    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       vs->query_is_selected = 0;
       vs->query_string_size = 0;
@@ -6307,6 +6323,7 @@ rd_window_frame(void)
       String8 expr;
       B32 is_focused;
       B32 is_anchored;
+      B32 reset_open;
       UI_Signal signal; // NOTE(rjf): output, from build
       B32 pressed;
       B32 pressed_outside;
@@ -6487,8 +6504,25 @@ rd_window_frame(void)
       //- rjf: try to add opened query
       if(query_is_open)
       {
+        // rjf: unpack view for query
+        RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
+        RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+        RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
+        B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
+        B32 root_is_explicit = (rd_cfg_child_from_string(view, str8_lit("explicit_root")) != &rd_nil_cfg);
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
+        
+        // rjf: did this view ID change? -> reset open animation
+        B32 reset_open = 0;
+        if(view->id != ws->query_last_view_id)
+        {
+          ws->query_last_view_id = view->id;
+          reset_open = 1;
+        }
+        
         // rjf: unpack query info
-        String8 cmd_name = ws->query_regs->cmd_name;
+        String8 cmd_name = cmd->first->string;
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         String8 query_expr = ws->query_regs->expr;
         if(cmd_name.size != 0)
@@ -6496,25 +6530,7 @@ rd_window_frame(void)
           query_expr = cmd_kind_info->query.expr;
         }
         B32 query_is_anchored = (!ui_box_is_nil(ui_box_from_key(ws->query_regs->ui_key)));
-        B32 query_is_lister = (cmd_name.size != 0);
         B32 size_query_by_expr_eval = (query_is_anchored || query_expr.size == 0);
-        
-        // rjf: build view for query
-        RD_Cfg *root = rd_immediate_cfg_from_keyf("window_query_%p", window);
-        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
-        RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-        RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
-        rd_cfg_new_replace(cmd, cmd_name);
-        RD_ViewState *vs = rd_view_state_from_cfg(view);
-        if(query_is_lister)
-        {
-          rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
-          vs->query_is_selected = 1;
-        }
-        else
-        {
-          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
-        }
         
         // rjf: compute query expression
         if(query_expr.size == 0)
@@ -6530,18 +6546,6 @@ rd_window_frame(void)
             String8 post_insertion = str8_skip(query_expr, input_insertion_pos + 6);
             query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
           }
-        }
-        
-        // rjf: determine if we want an explicit root
-        B32 do_explicit_root = (!ws->query_regs->do_implicit_root && (query_expr.size == 0 || !query_is_lister));
-        if(do_explicit_root)
-        {
-          RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-          rd_cfg_new(explicit_root, str8_lit("1"));
-        }
-        else
-        {
-          rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
         }
         
         // rjf: evaluate query expression
@@ -6560,7 +6564,7 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            query_height_px = row_height_px * (predicted_block_tree.total_row_count - !do_explicit_root);
+            query_height_px = row_height_px * (predicted_block_tree.total_row_count - !root_is_explicit);
             query_height_px = Min(query_height_px, max_query_height_px);
           }
           rect = r2f32p(content_rect_center.x - query_width_px/2,
@@ -6580,7 +6584,14 @@ rd_window_frame(void)
           }
         }
         
+        // rjf: close queries via 'cancel'
+        if(ui_slot_press(UI_EventActionSlot_Cancel))
+        {
+          rd_cmd(RD_CmdKind_CancelQuery);
+        }
+        
         // rjf: push query task
+        else
         {
           FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
@@ -6592,6 +6603,7 @@ rd_window_frame(void)
           t->expr          = query_expr;
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
+          t->reset_open    = reset_open;
         }
       }
     }
@@ -6616,7 +6628,7 @@ rd_window_frame(void)
         String8 expr      = t->expr;
         B32 is_focused    = t->is_focused;
         B32 is_anchored   = t->is_anchored;
-        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate);
+        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate, .reset = t->reset_open, .initial = 0.f);
         
         // rjf: build cfg tree
         RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
@@ -6763,7 +6775,7 @@ rd_window_frame(void)
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         
         // rjf: close queries
-        if(ui_slot_press(UI_EventActionSlot_Cancel) || query_floating_view_task->pressed_outside)
+        if(query_floating_view_task->pressed_outside)
         {
           rd_cmd(RD_CmdKind_CancelQuery);
         }
@@ -12571,8 +12583,8 @@ rd_frame(void)
           //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
-            String8 expr = push_str8f(scratch.arena, "query:commands, query:recent_files, query:recent_projects, query:procedures, query:$%I64x, query:$%I64x", rd_regs()->view, rd_regs()->window);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1);
+            String8 expr = push_str8f(scratch.arena, "query:commands, query:$%I64x, query:$%I64x, query:recent_files, query:recent_projects, query:procedures", rd_regs()->view, rd_regs()->window);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1);
           }break;
           
           //- rjf: command fast path
@@ -12589,7 +12601,7 @@ rd_frame(void)
             // rjf: command has required query -> prep query
             else
             {
-              rd_cmd(RD_CmdKind_PushQuery);
+              rd_cmd(RD_CmdKind_PushQuery, .do_implicit_root = 1, .do_lister = 1);
             }
           }break;
           
@@ -14675,7 +14687,8 @@ Z(getting_started)
             
             // rjf: floating queries -> set up window to build immediate-mode top-level query
             RD_Cfg *view = &rd_nil_cfg;
-            if(cmd_name.size == 0 || cmd_kind_info->query.flags & RD_QueryFlag_Floating)
+            B32 is_floating = (cmd_name.size == 0 || cmd_kind_info->query.flags & RD_QueryFlag_Floating);
+            if(is_floating)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
               RD_WindowState *ws = rd_window_state_from_cfg(window);
@@ -14686,6 +14699,7 @@ Z(getting_started)
                 ws->query_regs = rd_regs_copy(ws->query_arena, rd_regs());
               }
               RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
+              rd_cfg_release_all_children(window_query);
               view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
             }
             
@@ -14699,6 +14713,25 @@ Z(getting_started)
             RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
             RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
             RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+            if(is_floating)
+            {
+              if(rd_regs()->do_implicit_root)
+              {
+                rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
+              }
+              else
+              {
+                rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+              }
+              if(!rd_regs()->do_lister)
+              {
+                rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
+              }
+              else
+              {
+                rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+              }
+            }
             
             // rjf: choose initial input string
             String8 initial_input = {0};

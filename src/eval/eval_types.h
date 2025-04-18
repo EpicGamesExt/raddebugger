@@ -254,6 +254,9 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
+internal E_TypeKey e_type_key_cons_meta_expr(E_TypeKey type_key, String8 expr);
+internal E_TypeKey e_type_key_cons_meta_display_name(E_TypeKey type_key, String8 name);
+internal E_TypeKey e_type_key_cons_meta_description(E_TypeKey type_key, String8 desc);
 internal E_TypeKey e_type_key_cons_base(Type *type);
 internal E_TypeKey e_type_key_file(void);
 internal E_TypeKey e_type_key_folder(void);

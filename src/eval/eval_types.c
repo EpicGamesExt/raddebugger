@@ -493,6 +493,27 @@ e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlag
 }
 
 internal E_TypeKey
+e_type_key_cons_meta_expr(E_TypeKey type_key, String8 expr)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .direct_key = type_key, .name = expr);
+  return key;
+}
+
+internal E_TypeKey
+e_type_key_cons_meta_display_name(E_TypeKey type_key, String8 name)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_MetaDisplayName, .direct_key = type_key, .name = name);
+  return key;
+}
+
+internal E_TypeKey
+e_type_key_cons_meta_description(E_TypeKey type_key, String8 desc)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_MetaDescription, .direct_key = type_key, .name = desc);
+  return key;
+}
+
+internal E_TypeKey
 e_type_key_cons_base(Type *type)
 {
   E_TypeKey result = e_type_key_zero();
@@ -1492,6 +1513,8 @@ e_type_key_unwrap(E_TypeKey key, E_TypeUnwrapFlags flags)
       default:{done = 1;}break;
       case E_TypeKind_Modifier:  {done = !(flags & E_TypeUnwrapFlag_Modifiers);}break;
       case E_TypeKind_Lens:      {done = !(flags & E_TypeUnwrapFlag_Lenses);}break;
+      case E_TypeKind_MetaDisplayName:
+      case E_TypeKind_MetaDescription:
       case E_TypeKind_MetaExpr:  {done = !(flags & E_TypeUnwrapFlag_Meta);}break;
       case E_TypeKind_Enum:      {done = !(flags & E_TypeUnwrapFlag_Enums);}break;
       case E_TypeKind_Alias:     {done = !(flags & E_TypeUnwrapFlag_Aliases);}break;

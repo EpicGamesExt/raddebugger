@@ -60,6 +60,7 @@ enum
   RD_WatchCellFlag_IsNonCode               = (1<<3),
   RD_WatchCellFlag_CanEdit                 = (1<<4),
   RD_WatchCellFlag_IsErrored               = (1<<5),
+  RD_WatchCellFlag_Indented                = (1<<6),
 };
 
 typedef struct RD_WatchCell RD_WatchCell;
@@ -67,11 +68,11 @@ struct RD_WatchCell
 {
   RD_WatchCell *next;
   RD_WatchCellKind kind;
+  RD_WatchCellFlags flags;
   U64 index;
   String8 string;
   E_Eval eval;
   DR_FStrList fstrs;
-  RD_WatchCellFlags flags;
   F32 default_pct;
   F32 pct;
   F32 px;

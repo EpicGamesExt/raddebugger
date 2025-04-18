@@ -332,8 +332,8 @@ RD_VocabInfo rd_vocab_info_table[321] =
 RD_NameSchemaInfo rd_name_schema_info_table[20] =
 {
 {str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n  @default(1)  'background_blur':      bool,\n  @default(1)  'thread_lines':         bool,\n  @default(1)  'breakpoint_lines':     bool,\n  @default(1)  'thread_glow':          bool,\n  @default(1)  'breakpoint_glow':      bool,\n  @default(0)  'opaque_backgrounds':   bool,\n  @default(1)  'smooth_ui_text':     bool,\n  @default(0)  'smooth_code_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(1)  'hint_code_text':       bool,\n  @default(2)  'tab_width': @range[1, 32] u64,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
-{str8_lit_comp("window"), str8_lit_comp("x:\n{\n  //- rjf: animations\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n\n  //- rjf: thread & breakpoint decorations\n  @default(1)  'thread_lines':       bool,\n  @default(1)  'thread_glow':        bool,\n  @default(1)  'breakpoint_lines':   bool,\n  @default(1)  'breakpoint_glow':    bool,\n\n  //- rjf: occluding background settings\n  @default(0)  'opaque_backgrounds': bool,\n  @default(1)  'background_blur':    bool,\n\n  //- rjf: text rasterization settings\n  @default(1)  'smooth_ui_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(0)  'smooth_code_text':   bool,\n  @default(1)  'hint_code_text':     bool,\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
-{str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("window"), str8_lit_comp("x:\n{\n  //- rjf: animations\n  @default(1)  'hover_animations':     bool,\n  @default(1)  'press_animations':     bool,\n  @default(0)  'focus_animations':     bool,\n  @default(1)  'tooltip_animations':   bool,\n  @default(1)  'menu_animations':      bool,\n  @default(1)  'scrolling_animations': bool,\n\n  //- rjf: thread & breakpoint decorations\n  @default(1)  'thread_lines':       bool,\n  @default(1)  'thread_glow':        bool,\n  @default(1)  'breakpoint_lines':   bool,\n  @default(1)  'breakpoint_glow':    bool,\n\n  //- rjf: occluding background settings\n  @default(0)  'opaque_backgrounds': bool,\n  @default(1)  'background_blur':    bool,\n\n  //- rjf: text rasterization settings\n  @default(1)  'smooth_ui_text':     bool,\n  @default(1)  'hint_ui_text':       bool,\n  @default(0)  'smooth_code_text':   bool,\n  @default(1)  'hint_code_text':     bool,\n  @default(11) @display_name('Window Font Size') 'font_size': @range[6, 72] u64,\n}\n")},
+{str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) @display_name('Tab Font Size') 'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("watch"), str8_lit_comp("@inherit(tab) x:\n{}\n")},
 {str8_lit_comp("text"), str8_lit_comp("@inherit(tab) x:\n{\n  'lang':lang,\n  'size':code_string,\n  @default(1) 'show_line_numbers':bool,\n}\n")},
 {str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) 'show_addresses':    bool,\n  @default(0) 'show_code_bytes':   bool,\n  @default(1) 'show_source_lines': bool,\n  @default(1) 'show_symbol_names': bool,\n  @default(1) 'show_line_numbers': bool,\n}\n")},
@@ -353,7 +353,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[20] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-Rng1U64 rd_reg_slot_range_table[40] =
+Rng1U64 rd_reg_slot_range_table[41] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -390,6 +390,7 @@ Rng1U64 rd_reg_slot_range_table[40] =
 {OffsetOf(RD_Regs, prefer_disasm), OffsetOf(RD_Regs, prefer_disasm) + sizeof(B32)},
 {OffsetOf(RD_Regs, no_rich_tooltip), OffsetOf(RD_Regs, no_rich_tooltip) + sizeof(B32)},
 {OffsetOf(RD_Regs, do_implicit_root), OffsetOf(RD_Regs, do_implicit_root) + sizeof(B32)},
+{OffsetOf(RD_Regs, do_lister), OffsetOf(RD_Regs, do_lister) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},

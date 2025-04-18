@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_type_kind_basic_string_table[59] =
+String8 e_type_kind_basic_string_table[61] =
 {
 str8_lit_comp(""),
 str8_lit_comp("void"),
@@ -75,9 +75,11 @@ str8_lit_comp("set"),
 str8_lit_comp("lens"),
 str8_lit_comp("lens_spec"),
 str8_lit_comp("meta_expr"),
+str8_lit_comp("meta_display_name"),
+str8_lit_comp("meta_description"),
 };
 
-U8 e_type_kind_basic_byte_size_table[59] =
+U8 e_type_kind_basic_byte_size_table[61] =
 {
 0,
 0,
@@ -115,6 +117,8 @@ U8 e_type_kind_basic_byte_size_table[59] =
 16,
 20,
 32,
+0,
+0,
 0,
 0,
 0,

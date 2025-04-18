@@ -420,29 +420,45 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         }
         if(!expr_is_simple && expr != &e_expr_nil)
         {
-          child_type_key = e_type_key_cons(.kind = E_TypeKind_MetaExpr, .name = child->first->string, .direct_key = child_type_key);
+          child_type_key = e_type_key_cons_meta_expr(child_type_key, child->first->string);
         }
         scratch_end(scratch);
       }
       
-      //- rjf: extend child type with ranges
-      MD_Node *range = md_tag_from_string(child_schema->first, str8_lit("range"), 0);
-      if(!md_node_is_nil(range))
+      //- rjf: extend child type with decorative meta info
       {
-        Temp scratch = scratch_begin(&arena, 1);
-        E_Expr *min_bound = e_parse_expr_from_text(scratch.arena, range->first->string).expr;
-        E_Expr *max_bound = e_parse_expr_from_text(scratch.arena, range->first->next->string).expr;
-        E_Expr *args[] =
+        MD_Node *display_name = md_tag_from_string(child_schema, str8_lit("display_name"), 0);
+        MD_Node *description = md_tag_from_string(child_schema, str8_lit("description"), 0);
+        if(!md_node_is_nil(display_name))
         {
-          min_bound,
-          max_bound,
-        };
-        child_type_key = e_type_key_cons(.kind = E_TypeKind_Lens,
-                                         .name = str8_lit("range1"),
-                                         .direct_key = child_type_key,
-                                         .count = 2,
-                                         .args = args);
-        scratch_end(scratch);
+          child_type_key = e_type_key_cons_meta_display_name(child_type_key, display_name->first->string);
+        }
+        if(!md_node_is_nil(description))
+        {
+          child_type_key = e_type_key_cons_meta_description(child_type_key, description->first->string);
+        }
+      }
+      
+      //- rjf: extend child type with ranges
+      {
+        MD_Node *range = md_tag_from_string(child_schema->first, str8_lit("range"), 0);
+        if(!md_node_is_nil(range))
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          E_Expr *min_bound = e_parse_expr_from_text(scratch.arena, range->first->string).expr;
+          E_Expr *max_bound = e_parse_expr_from_text(scratch.arena, range->first->next->string).expr;
+          E_Expr *args[] =
+          {
+            min_bound,
+            max_bound,
+          };
+          child_type_key = e_type_key_cons(.kind = E_TypeKind_Lens,
+                                           .name = str8_lit("range1"),
+                                           .direct_key = child_type_key,
+                                           .count = 2,
+                                           .args = args);
+          scratch_end(scratch);
+        }
       }
       
       //- rjf: evaluate
@@ -903,7 +919,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(environment)
     {
       RD_Cfg *cfg = cfgs->v[rhs_value.u64];
       result.root      = e_irtree_set_space(arena, rd_eval_space_from_cfg(cfg), e_irtree_const_u(arena, 0));
-      result.type_key  = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
+      result.type_key  = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), cfg->first->string.size, E_TypeFlag_IsCodeText);
       result.mode      = E_Mode_Offset;
     }
   }

@@ -523,6 +523,7 @@ struct RD_WindowState
   B32 query_is_active;
   Arena *query_arena;
   RD_Regs *query_regs;
+  RD_CfgID query_last_view_id;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
