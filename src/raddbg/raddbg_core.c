@@ -4695,14 +4695,14 @@ rd_view_ui(Rng2F32 rect)
   ////////////////////////////
   //- rjf: catchall completion controls
   //
-  UI_Focus(UI_FocusKind_On)
+  if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
   {
-    if(rd_cfg_child_from_string(view, str8_lit("close_on_cancel")) == &rd_nil_cfg && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       vs->query_is_selected = 0;
       vs->query_string_size = 0;
     }
-    if(vs->query_is_selected && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
+    if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
     {
       String8 cmd_name = rd_view_query_cmd();
       String8 input = rd_view_query_input();
@@ -6419,7 +6419,6 @@ rd_window_frame(void)
           RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
           RD_Cfg *view = rd_view_from_eval(root, hover_eval);
           rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-          rd_cfg_child_from_string_or_alloc(view, str8_lit("close_on_cancel"));
           
           // rjf: determine size of hover evaluation container
           EV_BlockTree predicted_block_tree = {0};
@@ -6769,11 +6768,13 @@ rd_window_frame(void)
       //- rjf: query interactions
       if(query_floating_view_task)
       {
+        RD_Cfg *view = query_floating_view_task->view;
+        RD_ViewState *vs = rd_view_state_from_cfg(query_floating_view_task->view);
         String8 cmd_name = ws->query_regs->cmd_name;
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         
         // rjf: close queries
-        if(query_floating_view_task->pressed_outside || ui_slot_press(UI_EventActionSlot_Cancel))
+        if(query_floating_view_task->pressed_outside || (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_selected) || ui_slot_press(UI_EventActionSlot_Cancel))
         {
           rd_cmd(RD_CmdKind_CancelQuery);
         }
@@ -6781,7 +6782,6 @@ rd_window_frame(void)
         // rjf: any queries which take a file path mutate the debugger's "current path"
         if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
         {
-          RD_Cfg *view = query_floating_view_task->view;
           RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
           RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
           if(input != &rd_nil_cfg)
@@ -14701,7 +14701,6 @@ Z(getting_started)
               RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
               rd_cfg_release_all_children(window_query);
               view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
-              rd_cfg_new(view, str8_lit("close_on_cancel"));
             }
             
             // rjf: non-floating -> embed in tab parameter
@@ -14710,85 +14709,92 @@ Z(getting_started)
               view = rd_cfg_from_id(rd_regs()->view);
             }
             
-            // rjf: unpack view's query info
-            RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
-            RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
-            RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
-            if(is_floating)
-            {
-              if(rd_regs()->do_implicit_root)
-              {
-                rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
-              }
-              else
-              {
-                rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
-              }
-              if(!rd_regs()->do_lister)
-              {
-                rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
-              }
-              else
-              {
-                rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
-              }
-            }
+            // rjf: determine if the target view is a lister (and thus already has a command)
+            B32 view_is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
             
-            // rjf: choose initial input string
-            String8 initial_input = {0};
-            if(cmd_name.size != 0)
+            // rjf: target view is a lister -> do not do anything - cannot replace the command
+            if(!view_is_lister)
             {
-              if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+              // rjf: unpack view's query info
+              RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+              RD_Cfg *cmd = rd_cfg_child_from_string_or_alloc(query, str8_lit("cmd"));
+              RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+              if(is_floating)
               {
-                RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-                RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
-                String8 current_path_string = current_path->first->string;
-                if(current_path_string.size == 0)
+                if(rd_regs()->do_implicit_root)
                 {
-                  current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                  rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("explicit_root")));
                 }
                 else
                 {
-                  current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
+                  rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
                 }
-                initial_input = path_normalized_from_string(scratch.arena, current_path_string);
-                initial_input = push_str8f(scratch.arena, "%S/", initial_input);
+                if(!rd_regs()->do_lister)
+                {
+                  rd_cfg_release(rd_cfg_child_from_string(view, str8_lit("lister")));
+                }
+                else
+                {
+                  rd_cfg_child_from_string_or_alloc(view, str8_lit("lister"));
+                }
               }
-              else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
+              
+              // rjf: choose initial input string
+              String8 initial_input = {0};
+              if(cmd_name.size != 0)
               {
-                initial_input = input->first->string;
+                if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+                {
+                  RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+                  RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
+                  String8 current_path_string = current_path->first->string;
+                  if(current_path_string.size == 0)
+                  {
+                    current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+                  }
+                  else
+                  {
+                    current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
+                  }
+                  initial_input = path_normalized_from_string(scratch.arena, current_path_string);
+                  initial_input = push_str8f(scratch.arena, "%S/", initial_input);
+                }
+                else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
+                {
+                  initial_input = input->first->string;
+                }
               }
-            }
-            
-            // rjf: build query state
-            String8 current_query_cmd_name = cmd->first->string;
-            rd_cfg_new_replace(input, initial_input);
-            rd_cfg_new_replace(cmd, cmd_name);
-            RD_ViewState *vs = rd_view_state_from_cfg(view);
-            if(cmd_name.size != 0)
-            {
-              if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+              
+              // rjf: build query state
+              String8 current_query_cmd_name = cmd->first->string;
+              rd_cfg_new_replace(input, initial_input);
+              rd_cfg_new_replace(cmd, cmd_name);
+              RD_ViewState *vs = rd_view_state_from_cfg(view);
+              if(cmd_name.size != 0)
               {
-                vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-                vs->query_mark = txt_pt(1, 1);
+                if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+                {
+                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                  vs->query_mark = txt_pt(1, 1);
+                }
+                else
+                {
+                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                  vs->query_mark = vs->query_cursor;
+                }
+                if(!str8_match(current_query_cmd_name, cmd_name, 0))
+                {
+                  vs->query_is_selected = 1;
+                }
+                else
+                {
+                  vs->query_is_selected ^= 1;
+                }
               }
-              else
-              {
-                vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-                vs->query_mark = vs->query_cursor;
-              }
-              if(!str8_match(current_query_cmd_name, cmd_name, 0))
+              if(rd_regs()->do_lister)
               {
                 vs->query_is_selected = 1;
               }
-              else
-              {
-                vs->query_is_selected ^= 1;
-              }
-            }
-            if(rd_regs()->do_lister)
-            {
-              vs->query_is_selected = 1;
             }
           }break;
           case RD_CmdKind_CompleteQuery:
@@ -14801,19 +14807,11 @@ Z(getting_started)
               rd_push_cmd(cmd_name, rd_regs());
             }
             
-            // rjf: find out if this view is floating
-            B32 is_floating = 0;
-            for(RD_Cfg *p = view; p != &rd_nil_cfg; p = p->parent)
-            {
-              if(str8_match(p->string, str8_lit("transient"), 0))
-              {
-                is_floating = 1;
-                break;
-              }
-            }
+            // rjf: find out if this view is a lister
+            B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
             
             // rjf: complete query
-            if(is_floating)
+            if(is_lister)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
               RD_WindowState *ws = rd_window_state_from_cfg(window);
