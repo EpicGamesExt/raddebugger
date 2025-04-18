@@ -103,7 +103,6 @@ struct RD_WatchRowInfo
   String8 cell_style_key;
   RD_WatchCellList cells;
   RD_ViewUIRule *view_ui_rule;
-  E_Expr *view_ui_tag;
 };
 
 typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;

@@ -934,31 +934,54 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     .group_entity     = &ctrl_entity_nil,
     .callstack_thread = &ctrl_entity_nil,
     .view_ui_rule     = &rd_nil_view_ui_rule,
-    .view_ui_tag      = &e_expr_nil,
   };
   {
     Temp scratch = scratch_begin(&arena, 1);
-    DI_Scope *di_scope = di_scope_open();
     
-    // rjf: unpack key & block
-    EV_Block *block = row->block;
+    ////////////////////////////
+    //- rjf: unpack row's evaluation, key, & block info
+    //
+    E_Type *row_type = e_type_from_key__cached(row->eval.irtree.type_key);
     EV_Key key = row->key;
+    EV_Block *block = row->block;
     E_Eval block_eval = row->block->eval;
     E_TypeKey block_type_key = block_eval.irtree.type_key;
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key__cached(block_type_key);
+    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
+    CTRL_Entity *evalled_entity = (row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(row->eval.space) : &ctrl_entity_nil);
     
-    // rjf: determine if row's expression is editable
+    ////////////////////////////
+    //- rjf: determine if this cfg/entity evaluation is top-level - e.g. if we
+    // are evaluating a cfg tree, or some descendant of it
+    //
+    B32 is_top_level = 0;
+    if(evalled_cfg != &rd_nil_cfg)
+    {
+      E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, evalled_cfg->string);
+      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
+    }
+    if(evalled_entity != &ctrl_entity_nil)
+    {
+      String8 top_level_name = ctrl_entity_kind_code_name_table[evalled_entity->kind];
+      E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, top_level_name);
+      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
+    }
+    
+    ////////////////////////////
+    //- rjf: fill if row's expression is editable
+    //
     if(block_type->flags & E_TypeFlag_EditableChildren || row->eval.expr == &e_expr_nil)
     {
       info.expr_is_editable = 1;
     }
     
-    // rjf: determine row's module
-    CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
-    CTRL_Entity *row_module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
+    ////////////////////////////
+    //- rjf: fill row's module
+    //
     if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
     {
+      CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
       switch(row_ctrl_entity->kind)
       {
         default:
@@ -976,12 +999,15 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: determine call stack info
+    ////////////////////////////
+    //- rjf: fill row's call stack info
+    //
     if(block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && str8_match(str8_lit("call_stack"), block_type->name, 0))
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(block_eval.space);
       if(entity->kind == CTRL_EntityKind_Thread)
       {
+        DI_Scope *di_scope = di_scope_open();
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
         CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
@@ -993,24 +1019,31 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           info.callstack_inline_depth = f->inline_depth;
           info.callstack_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         }
+        di_scope_close(di_scope);
       }
     }
     
-    // rjf: determine ctrl entity
+    ////////////////////////////
+    //- rjf: fill row's ctrl entity
+    //
     if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
                                              block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
     {
       info.group_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
     }
     
-    // rjf: determine cfg group name / parent
+    ////////////////////////////
+    //- rjf: fill row's cfg group name / parent
+    //
     if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
                                              block_eval.space.kind == RD_EvalSpaceKind_MetaCfg))
     {
       info.group_cfg_parent = rd_cfg_from_eval_space(block_eval.space);
     }
     
-    // rjf: determine group cfg name
+    ////////////////////////////
+    //- rjf: fill row's group cfg name
+    //
     if(block_type_kind == E_TypeKind_Set)
     {
       String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
@@ -1024,7 +1057,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: determine row's group cfg
+    ////////////////////////////
+    //- rjf: fill row's group cfg
+    //
     if(info.group_cfg_name.size != 0 && (block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs) ||
                                          block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) ||
                                          block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
@@ -1033,29 +1068,14 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       info.group_cfg_child = rd_cfg_from_id(id);
     }
     
-    // rjf: determine cfgs/entities that this row is evaluating
-    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
-    CTRL_Entity *evalled_entity = (row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(row->eval.space) : &ctrl_entity_nil);
-    
-    // rjf: determine if this cfg/entity evaluation is top-level - e.g. if we
-    // are evaluating a cfg tree, or some descendant of it
-    B32 is_top_level = 0;
-    if(evalled_cfg != &rd_nil_cfg)
-    {
-      E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, evalled_cfg->string);
-      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
-    }
-    if(evalled_entity != &ctrl_entity_nil)
-    {
-      String8 top_level_name = ctrl_entity_kind_code_name_table[evalled_entity->kind];
-      E_TypeKey top_level_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, top_level_name);
-      is_top_level = (row->eval.value.u64 == 0 && e_type_key_match(top_level_type_key, row->eval.irtree.type_key));
-    }
-    
-    // rjf: determine view ui rule
+    ////////////////////////////
+    //- rjf: fill row's view ui rule
+    //
     info.view_ui_rule = rd_view_ui_rule_from_string(row->block->viz_expand_rule->string);
     
-    // rjf: find possible table type
+    ////////////////////////////
+    //- rjf: find possible table type
+    //
     E_Type *maybe_table_type = block_type;
     for(;;)
     {
@@ -1075,240 +1095,52 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: fill row's cells
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells table rows
+    //
+    if(0){}
+    else if(block->parent != &ev_nil_block && maybe_table_type->kind == E_TypeKind_Lens && str8_match(maybe_table_type->name, str8_lit("table"), 0) && maybe_table_type->count >= 1)
     {
-      if(0){}
-      
-      // rjf: table rows
-      else if(block->parent != &ev_nil_block && maybe_table_type->kind == E_TypeKind_Lens && str8_match(maybe_table_type->name, str8_lit("table"), 0) && maybe_table_type->count >= 1)
-      {
-        U64 column_count = maybe_table_type->count;
-        info.cell_style_key = push_str8f(arena, "table_%I64u_cols", column_count);
-        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-        RD_Cfg *w_cfg = style->first;
-        F32 next_pct = 0;
+      U64 column_count = maybe_table_type->count;
+      info.cell_style_key = push_str8f(arena, "table_%I64u_cols", column_count);
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-        e_ir_state->overridden_irtree = &row->eval.irtree;
-        for(U64 idx = 0; idx < maybe_table_type->count; idx += 1)
-        {
-          E_Eval cell_eval = e_eval_from_expr(arena, maybe_table_type->args[idx]);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .eval = cell_eval, .default_pct = 1.f/maybe_table_type->count, .pct = take_pct());
-        }
-        e_ir_state->overridden_irtree = prev_overridden_irtree;
-        info.can_expand = 0;
+      E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+      e_ir_state->overridden_irtree = &row->eval.irtree;
+      for(U64 idx = 0; idx < maybe_table_type->count; idx += 1)
+      {
+        E_Eval cell_eval = e_eval_from_expr(arena, maybe_table_type->args[idx]);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .eval = cell_eval, .default_pct = 1.f/maybe_table_type->count, .pct = take_pct());
+      }
+      e_ir_state->overridden_irtree = prev_overridden_irtree;
+      info.can_expand = 0;
 #undef take_pct
-      }
-      
-      // rjf: folder / file rows
-      else if(row->eval.space.kind == E_SpaceKind_FileSystem)
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells files / folders
+    //
+    else if(row->eval.space.kind == E_SpaceKind_FileSystem)
+    {
+      E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
+      if(type->kind == E_TypeKind_Set)
       {
-        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Set)
-        {
-          String8 file_path = e_string_from_id(row->eval.value.u64);
-          DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
-                                      .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
-                                      .pct = 1.f,
-                                      .fstrs = fstrs);
-          if(str8_match(type->name, str8_lit("file"), 0))
-          {
-            info.can_expand = 0;
-          }
-        }
-        else
-        {
-          info.cell_style_key = str8_lit("expr_and_eval");
-          RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-          RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-          RD_Cfg *w_cfg = style->first;
-          F32 next_pct = 0;
-#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
-#undef take_pct
-        }
-      }
-      
-      // rjf: singular button for unattached processes
-      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
-      {
-        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
-        if(str8_match(type->name, str8_lit("unattached_process"), 0))
-        {
-          U64 pid = row->eval.value.u128.u64[0];
-          String8 name = e_string_from_id(row->eval.value.u128.u64[1]);
-          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
-          DR_FStrList fstrs = {0};
-          UI_TagF("weak")
-          {
-            dr_fstrs_push_new(arena, &fstrs, &params,
-                              rd_icon_kind_text_table[RD_IconKind_Scheduler],
-                              .font = rd_font_from_slot(RD_FontSlot_Icons),
-                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
-                              .color = ui_color_from_name(str8_lit("text")));
-          }
-          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-          dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
-          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
-          dr_fstrs_push_new(arena, &fstrs, &params, name);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f, .fstrs = fstrs);
-        }
-      }
-      
-      // rjf: lister rows
-      else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
-      {
-        info.can_expand = 0;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
-      }
-      
-      // rjf: top-level cfg rows
-      else if(is_top_level && evalled_cfg != &rd_nil_cfg)
-      {
-        RD_Cfg *cfg = evalled_cfg;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg));
-        MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
-        for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
-        {
-          MD_Node *schema = n->v;
-          MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("row_commands"), 0);
-          for MD_EachNode(cmd, cmds_root->first)
-          {
-            String8 cmd_name = cmd->string;
-            RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
-            switch(cmd_kind)
-            {
-              default:{}break;
-              case RD_CmdKind_EnableCfg:
-              {
-                B32 is_disabled = rd_disabled_from_cfg(cfg);
-                if(!is_disabled)
-                {
-                  cmd_kind = RD_CmdKind_DisableCfg;
-                }
-              }break;
-              case RD_CmdKind_DisableCfg:
-              {
-                B32 is_disabled = rd_disabled_from_cfg(cfg);
-                if(is_disabled)
-                {
-                  cmd_kind = RD_CmdKind_EnableCfg;
-                }
-              }break;
-              case RD_CmdKind_SelectCfg:
-              {
-                B32 is_disabled = rd_disabled_from_cfg(cfg);
-                if(!is_disabled)
-                {
-                  cmd_kind = RD_CmdKind_DeselectCfg;
-                }
-              }break;
-              case RD_CmdKind_DeselectCfg:
-              {
-                B32 is_disabled = rd_disabled_from_cfg(cfg);
-                if(is_disabled)
-                {
-                  cmd_kind = RD_CmdKind_SelectCfg;
-                }
-              }break;
-            }
-            if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
-            {
-              rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Background,
-                                          .px = floor_f32(ui_top_font_size()*6.f),
-                                          .string = str8_lit("($expr).enabled"));
-            }
-            else if(cmd_kind != RD_CmdKind_Null)
-            {
-              String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-              rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
-            }
-          }
-        }
-      }
-      
-      // rjf: top-level entity rows
-      else if(is_top_level && evalled_entity != &ctrl_entity_nil)
-      {
-        CTRL_Entity *entity = evalled_entity;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, 1));
-        if(entity->kind == CTRL_EntityKind_Machine ||
-           entity->kind == CTRL_EntityKind_Process ||
-           entity->kind == CTRL_EntityKind_Thread)
-        {
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
-                                      .px = floor_f32(ui_top_font_size()*6.f),
-                                      .string = str8_lit("($expr).active"));
-        }
-        if(entity->kind == CTRL_EntityKind_Thread)
-        {
-          RD_CmdKind cmd_kind = RD_CmdKind_SelectEntity;
-          if(ctrl_handle_match(entity->handle, rd_base_regs()->thread))
-          {
-            cmd_kind = RD_CmdKind_DeselectEntity;
-          }
-          String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
-        }
-      }
-      
-      // rjf: singular row for queries
-      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
-      }
-      
-      // rjf: singular button for commands
-      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCmd)
-      {
-        E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
-        if(type->kind == E_TypeKind_Set)
-        {
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
-        }
-        else
-        {
-          String8 cmd_name = e_string_from_id(e_value_eval_from_eval(row->eval).value.u64);
-          RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
-          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
-        }
-      }
-      
-      // rjf: singular cell for view ui
-      else if(info.view_ui_rule != &rd_nil_view_ui_rule)
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewUI, .pct = 1.f);
-      }
-      
-      // rjf: for 'add-new' rows in meta-cfg evaluation spaces, only do expr
-      else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
-      }
-      
-      // rjf: for meta-evaluation space booleans, only do expr
-      else if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Bool &&
-              (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-               row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-               row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
-      {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
-      }
-      
-      // rjf: for meta-cfg evaluation spaces, only do expr/value
-      else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
-              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-              row->eval.space.kind == E_SpaceKind_File)
-      {
-        if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Array &&
-           e_type_kind_from_key(e_type_key_direct(row->eval.irtree.type_key)) == E_TypeKind_U8)
+        String8 file_path = e_string_from_id(row->eval.value.u64);
+        DR_FStrList fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,
+                                    .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode,
+                                    .pct = 1.f,
+                                    .fstrs = fstrs);
+        if(str8_match(type->name, str8_lit("file"), 0))
         {
           info.can_expand = 0;
         }
+      }
+      else
+      {
         info.cell_style_key = str8_lit("expr_and_eval");
         RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
         RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
@@ -1319,65 +1151,278 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
       }
-      
-      // rjf: procedures collections get only expr/value
-      else if(block_type->kind == E_TypeKind_Set && str8_match(block_type->name, str8_lit("procedures"), 0))
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells unattached processes
+    //
+    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
+    {
+      E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
+      if(str8_match(type->name, str8_lit("unattached_process"), 0))
       {
-        info.cell_style_key = str8_lit("procedure_expr_eval");
-        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-        RD_Cfg *w_cfg = style->first;
-        F32 next_pct = 0;
-#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented,           .default_pct = 0.75f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((U64)($expr))"), .default_pct = 0.25f, .pct = take_pct());
-#undef take_pct
-      }
-      
-      // rjf: callstack frames
-      else if(info.callstack_thread != &ctrl_entity_nil)
-      {
-        info.cell_style_key = str8_lit("call_stack_frame");
-        CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
-        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
-        E_Space space = rd_eval_space_from_ctrl_entity(module, RD_EvalSpaceKind_MetaCtrlEntity);
-        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
-        expr->space    = space;
-        expr->mode     = E_Mode_Offset;
-        expr->type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
-        E_Eval module_eval = e_eval_from_expr(arena, expr);
-        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-        RD_Cfg *w_cfg = style->first;
-        F32 next_pct = 0;
-#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                         .default_pct = 0.05f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                   .default_pct = 0.55f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((uint64)($expr))"),  .default_pct = 0.20f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
-                                    .eval = (module == &ctrl_entity_nil ? (E_Eval)zero_struct : module_eval),
-                                    .string = str8_lit(" "),
-                                    .default_pct = 0.20f, .pct = take_pct());
-#undef take_pct
-      }
-      
-      // rjf: default cells
-      else
-      {
-        info.cell_style_key = str8_lit("normal");
-        RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-        RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
-        RD_Cfg *w_cfg = style->first;
-        F32 next_pct = 0;
-#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented,             .default_pct = 0.35f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                 .default_pct = 0.40f, .pct = take_pct());
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof(raw($expr))"),       .default_pct = 0.25f, .pct = take_pct());
-#undef take_pct
+        U64 pid = row->eval.value.u128.u64[0];
+        String8 name = e_string_from_id(row->eval.value.u128.u64[1]);
+        DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+        DR_FStrList fstrs = {0};
+        UI_TagF("weak")
+        {
+          dr_fstrs_push_new(arena, &fstrs, &params,
+                            rd_icon_kind_text_table[RD_IconKind_Scheduler],
+                            .font = rd_font_from_slot(RD_FontSlot_Icons),
+                            .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                            .color = ui_color_from_name(str8_lit("text")));
+        }
+        dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+        dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
+        dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+        dr_fstrs_push_new(arena, &fstrs, &params, name);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f, .fstrs = fstrs);
       }
     }
     
-    di_scope_close(di_scope);
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells lister rows
+    //
+    else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
+    {
+      info.can_expand = 0;
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells top-level cfg evaluations
+    //
+    else if(is_top_level && evalled_cfg != &rd_nil_cfg)
+    {
+      RD_Cfg *cfg = evalled_cfg;
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f, .fstrs = rd_title_fstrs_from_cfg(arena, cfg));
+      MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+      for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
+      {
+        MD_Node *schema = n->v;
+        MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("row_commands"), 0);
+        for MD_EachNode(cmd, cmds_root->first)
+        {
+          String8 cmd_name = cmd->string;
+          RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
+          switch(cmd_kind)
+          {
+            default:{}break;
+            case RD_CmdKind_EnableCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(!is_disabled)
+              {
+                cmd_kind = RD_CmdKind_DisableCfg;
+              }
+            }break;
+            case RD_CmdKind_DisableCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(is_disabled)
+              {
+                cmd_kind = RD_CmdKind_EnableCfg;
+              }
+            }break;
+            case RD_CmdKind_SelectCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(!is_disabled)
+              {
+                cmd_kind = RD_CmdKind_DeselectCfg;
+              }
+            }break;
+            case RD_CmdKind_DeselectCfg:
+            {
+              B32 is_disabled = rd_disabled_from_cfg(cfg);
+              if(is_disabled)
+              {
+                cmd_kind = RD_CmdKind_SelectCfg;
+              }
+            }break;
+          }
+          if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
+          {
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_Background,
+                                        .px = floor_f32(ui_top_font_size()*6.f),
+                                        .string = str8_lit("($expr).enabled"));
+          }
+          else if(cmd_kind != RD_CmdKind_Null)
+          {
+            String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+          }
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells ctrl entity evaluations
+    //
+    else if(is_top_level && evalled_entity != &ctrl_entity_nil)
+    {
+      CTRL_Entity *entity = evalled_entity;
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button, .pct = 1.f, .fstrs = rd_title_fstrs_from_ctrl_entity(arena, entity, 1));
+      if(entity->kind == CTRL_EntityKind_Machine ||
+         entity->kind == CTRL_EntityKind_Process ||
+         entity->kind == CTRL_EntityKind_Thread)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
+                                    .px = floor_f32(ui_top_font_size()*6.f),
+                                    .string = str8_lit("($expr).active"));
+      }
+      if(entity->kind == CTRL_EntityKind_Thread)
+      {
+        RD_CmdKind cmd_kind = RD_CmdKind_SelectEntity;
+        if(ctrl_handle_match(entity->handle, rd_base_regs()->thread))
+        {
+          cmd_kind = RD_CmdKind_DeselectEntity;
+        }
+        String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button, .px = floor_f32(ui_top_font_size()*4.f), .string = push_str8f(arena, "query:commands.%S", cmd_name));
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells queries
+    //
+    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
+    {
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells commands
+    //
+    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+    {
+      E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
+      if(type->kind == E_TypeKind_Set)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      }
+      else
+      {
+        String8 cmd_name = e_string_from_id(e_value_eval_from_eval(row->eval).value.u64);
+        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick, .pct = 1.f, .fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string));
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells view UI escape hatch
+    //
+    else if(info.view_ui_rule != &rd_nil_view_ui_rule)
+    {
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewUI, .pct = 1.f);
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells "add new" expression rows
+    //
+    else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
+    {
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells meta-evaluation booleans
+    //
+    else if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Bool &&
+            (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+             row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+             row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+    {
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells meta-evaluation catch-all: expression / value
+    //
+    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+            row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
+            row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+            row->eval.space.kind == E_SpaceKind_File)
+    {
+      if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Array &&
+         e_type_kind_from_key(e_type_key_direct(row->eval.irtree.type_key)) == E_TypeKind_U8)
+      {
+        info.can_expand = 0;
+      }
+      info.cell_style_key = str8_lit("expr_and_eval");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .default_pct = 0.65f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells procedures (expr & eval, mostly expr)
+    //
+    else if(block_type->kind == E_TypeKind_Set && str8_match(block_type->name, str8_lit("procedures"), 0))
+    {
+      info.cell_style_key = str8_lit("procedure_expr_eval");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented,           .default_pct = 0.75f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((U64)($expr))"), .default_pct = 0.25f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells call stack frames
+    //
+    else if(info.callstack_thread != &ctrl_entity_nil)
+    {
+      info.cell_style_key = str8_lit("call_stack_frame");
+      CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
+      E_Space space = rd_eval_space_from_ctrl_entity(module, RD_EvalSpaceKind_MetaCtrlEntity);
+      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+      expr->space    = space;
+      expr->mode     = E_Mode_Offset;
+      expr->type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
+      E_Eval module_eval = e_eval_from_expr(arena, expr);
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame,                                         .default_pct = 0.05f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                   .default_pct = 0.55f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("lens:hex((uint64)($expr))"),  .default_pct = 0.20f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
+                                  .eval = (module == &ctrl_entity_nil ? (E_Eval)zero_struct : module_eval),
+                                  .string = str8_lit(" "),
+                                  .default_pct = 0.20f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells catchall (normal rows)
+    //
+    else
+    {
+      info.cell_style_key = str8_lit("normal");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .flags = RD_WatchCellFlag_Indented,             .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                                 .default_pct = 0.40f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof(raw($expr))"),       .default_pct = 0.25f, .pct = take_pct());
+#undef take_pct
+    }
+    
     scratch_end(scratch);
   }
   return info;
