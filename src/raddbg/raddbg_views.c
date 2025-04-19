@@ -1221,18 +1221,17 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           }
           if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
           {
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "enabled"),
                                         .flags = RD_WatchCellFlag_Background,
-                                        .px = floor_f32(ui_top_font_size()*6.f),
-                                        .string = str8_lit("($expr).enabled"));
+                                        .px = floor_f32(ui_top_font_size()*6.f));
           }
           else if(cmd_kind != RD_CmdKind_Null)
           {
             String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
+                                        e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
                                         .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
-                                        .px = floor_f32(ui_top_font_size()*4.f),
-                                        .string = push_str8f(arena, "query:commands.%S", cmd_name));
+                                        .px = floor_f32(ui_top_font_size()*4.f));
           }
         }
       }
@@ -1459,8 +1458,10 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     //- rjf: default case: depending on cell info, generate string
     default:
     {
+      if(0){}
+      
       //- rjf: cfg evaluation -> button for cfg
-      if(result.cfg != &rd_nil_cfg)
+      else if(result.cfg != &rd_nil_cfg)
       {
         result.fstrs = rd_title_fstrs_from_cfg(arena, result.cfg);
         result.flags |= RD_WatchCellFlag_Button;
