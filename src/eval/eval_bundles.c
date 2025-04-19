@@ -246,6 +246,29 @@ e_value_from_expr(E_Expr *expr)
   return result;
 }
 
+internal E_Eval
+e_eval_wrap(Arena *arena, E_Eval eval, String8 string)
+{
+  E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
+  e_ir_state->overridden_irtree = &eval.irtree;
+  E_Eval wrapped_eval = e_eval_from_string(arena, string);
+  e_ir_state->overridden_irtree = prev_overridden_irtree;
+  return wrapped_eval;
+}
+
+internal E_Eval
+e_eval_wrapf(Arena *arena, E_Eval eval, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  E_Eval result = e_eval_wrap(arena, eval, string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
 internal U64
 e_base_offset_from_eval(E_Eval eval)
 {

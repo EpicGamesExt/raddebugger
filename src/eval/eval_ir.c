@@ -2343,7 +2343,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
     //- rjf: equip previous task's irtree
     if(t->prev != 0)
     {
-      result.prev = t->prev;
+      result.prev = push_array(arena, E_IRTreeAndType, 1);
+      result.prev[0] = *t->prev;
     }
     
     //- rjf: find any auto hooks according to this generation's type
@@ -2360,7 +2361,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
-            task->prev = push_array(arena, E_IRTreeAndType, 1);
+            task->prev = push_array(scratch.arena, E_IRTreeAndType, 1);
             task->prev[0] = result;
             break;
           }

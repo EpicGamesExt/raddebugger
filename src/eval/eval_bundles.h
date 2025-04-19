@@ -36,6 +36,8 @@ internal E_Eval e_value_eval_from_eval(E_Eval eval);
 internal E_Value e_value_from_string(String8 string);
 internal E_Value e_value_from_stringf(char *fmt, ...);
 internal E_Value e_value_from_expr(E_Expr *expr);
+internal E_Eval e_eval_wrap(Arena *arena, E_Eval eval, String8 string);
+internal E_Eval e_eval_wrapf(Arena *arena, E_Eval eval, char *fmt, ...);;
 
 internal U64 e_base_offset_from_eval(E_Eval eval);
 internal Rng1U64 e_range_from_eval(E_Eval eval);

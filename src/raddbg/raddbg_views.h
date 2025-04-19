@@ -44,7 +44,6 @@ struct RD_CodeViewBuildResult
 typedef enum RD_WatchCellKind
 {
   RD_WatchCellKind_Expr,   // strings to represent expression itself
-  RD_WatchCellKind_Tag,    // strings to represent attached tags at row-granularity
   RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
   RD_WatchCellKind_ViewUI, // an arbitrary user interface, supplied by a hook
   RD_WatchCellKind_CallStackFrame, // a slot for a yellow arrow, to show call stack frame selection
@@ -72,7 +71,6 @@ struct RD_WatchCell
   U64 index;
   String8 string;
   E_Eval eval;
-  DR_FStrList fstrs;
   F32 default_pct;
   F32 pct;
   F32 px;
@@ -109,11 +107,10 @@ typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
 struct RD_WatchRowCellInfo
 {
   RD_WatchCellFlags flags;
-  E_Eval eval;
   RD_Cfg *cfg;
   CTRL_Entity *entity;
   String8 cmd_name;
-  String8 string;
+  String8 file_path;
   DR_FStrList fstrs;
   String8 error_tooltip;
   String8 inheritance_tooltip;
@@ -220,7 +217,7 @@ internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewStat
 internal U64 rd_id_from_watch_cell(RD_WatchCell *cell);
 internal RD_WatchCell *rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list);
 internal RD_WatchCell *rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params);
-#define rd_watch_cell_list_push_new(arena, list, kind_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), __VA_ARGS__})
+#define rd_watch_cell_list_push_new(arena, list, kind_, eval_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), .eval = (eval_), __VA_ARGS__})
 
 //- rjf: watch view points <-> table coordinates
 internal B32 rd_watch_pt_match(RD_WatchPt a, RD_WatchPt b);
