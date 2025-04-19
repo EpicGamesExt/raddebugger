@@ -1416,6 +1416,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 internal RD_WatchRowCellInfo
 rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_flags, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
+  Temp scratch = scratch_begin(&arena ,1);
   RD_WatchRowCellInfo result =
   {
     .flags        = cell->flags,
@@ -1436,11 +1437,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   {
     result.entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
   }
-  result.cmd_name = rd_cmd_name_from_eval_space(cell->eval.space);
-  if(cell->eval.space.kind == E_SpaceKind_FileSystem)
-  {
-    result.file_path = e_string_from_id(cell->eval.space.u64_0);
-  }
+  result.cmd_name = rd_cmd_name_from_eval(cell->eval);
+  result.file_path = rd_file_path_from_eval(arena, cell->eval);
   for(E_Type *type = cell_type;
       type->kind == E_TypeKind_Lens;
       type = e_type_from_key__cached(type->direct_type_key))
@@ -1478,16 +1476,14 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: buttons -> button for command
       else if(result.cmd_name.size != 0)
       {
-        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(result.cmd_name);
-        result.fstrs = rd_title_fstrs_from_code_name(arena, cmd_kind_info->string);
+        result.fstrs = rd_title_fstrs_from_code_name(arena, result.cmd_name);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
       //- rjf: files -> button for file
       else if(result.file_path.size != 0)
       {
-        String8 file_path = e_string_from_id(cell->eval.value.u64);
-        result.fstrs = rd_title_fstrs_from_file_path(arena, file_path);
+        result.fstrs = rd_title_fstrs_from_file_path(arena, result.file_path);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
@@ -1970,6 +1966,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   }
 #endif
   
+  scratch_end(scratch);
   return result;
 }
 

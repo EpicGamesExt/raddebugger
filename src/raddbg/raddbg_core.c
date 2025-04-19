@@ -1505,22 +1505,14 @@ rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
 //- rjf: command name <-> eval space
 
 internal String8
-rd_cmd_name_from_eval_space(E_Space space)
+rd_cmd_name_from_eval(E_Eval eval)
 {
   String8 result = {0};
-  if(space.kind == RD_EvalSpaceKind_MetaCmd)
+  if(eval.space.kind == RD_EvalSpaceKind_MetaCmd)
   {
-    result = e_string_from_id(space.u64s[0]);
+    result = e_string_from_id(eval.value.u64);
   }
   return result;
-}
-
-internal E_Space
-rd_eval_space_from_cmd_name(String8 cmd_name)
-{
-  E_Space space = e_space_make(RD_EvalSpaceKind_MetaCmd);
-  space.u64s[0] = e_id_from_string(cmd_name);
-  return space;
 }
 
 //- rjf: eval space reads/writes
