@@ -1499,7 +1499,24 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: buttons -> button for command
       else if(result.cmd_name.size != 0)
       {
-        result.fstrs = rd_title_fstrs_from_code_name(arena, result.cmd_name);
+        if(cell->px != 0)
+        {
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          DR_FStrList fstrs = {0};
+          UI_TagF("weak")
+          {
+            dr_fstrs_push_new(arena, &fstrs, &params,
+                              rd_icon_kind_text_table[rd_icon_kind_from_code_name(result.cmd_name)],
+                              .font = rd_font_from_slot(RD_FontSlot_Icons),
+                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                              .color = ui_color_from_name(str8_lit("text")));
+          }
+          result.fstrs = fstrs;
+        }
+        else
+        {
+          result.fstrs = rd_title_fstrs_from_code_name(arena, result.cmd_name);
+        }
         result.flags |= RD_WatchCellFlag_Button;
       }
       
@@ -1516,6 +1533,22 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         // rjf: funnel-through this cell's string, if it has one
         B32 is_non_code = 0;
         String8 expr_string = cell->string;
+        
+        // rjf: if this cell has a meta-display-name, then use that
+        if(expr_string.size == 0)
+        {
+          for(E_Type *t = e_type_from_key__cached(cell->eval.irtree.type_key);
+              t != &e_type_nil;
+              t = e_type_from_key__cached(t->direct_type_key))
+          {
+            if(t->kind == E_TypeKind_MetaDisplayName)
+            {
+              is_non_code = 1;
+              expr_string = t->name;
+              break;
+            }
+          }
+        }
         
         // rjf: if this cell has no string specified, then we need to synthesize one from the evaluation
         if(expr_string.size == 0)
@@ -2562,10 +2595,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         cursor = mark = cmd->regs->vaddr;
         mv->center_cursor = 1;
-      }break;
-      case RD_CmdKind_SetColumns:
-      {
-        // TODO(rjf)
       }break;
     }
   }

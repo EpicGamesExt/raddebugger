@@ -226,7 +226,6 @@ RD_VocabTable:
       x:
     {
       @default(11) @display_name('Tab Font Size') 'font_size': @range[6, 72] u64,
-      @default(3.f) @display_name('Tab Row Height') 'row_height': @range[1.75f, 5.f] f32,
     }
     ```
   }
@@ -236,7 +235,9 @@ RD_VocabTable:
     watch,
     ```
       @inherit(tab) x:
-    {}
+    {
+      @default(3.f) @display_name('Tab Row Height') 'row_height': @range[1.75f, 5.f] f32,
+    }
     ```
   }
   {
@@ -683,13 +684,6 @@ RD_CmdTable:    //               |        |              |               |      
   {ToggleWatchExpression          1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr"           "Toggle Watch Expression"                     "Adds or removes an expression to an opened watch view."                                                           ""                               "$text_pt,"                                                      }
   {ToggleWatchExpressionAtCursor  1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr_at_cursor" "Toggle Watch Expression At Cursor"           "Adds or removes the expression that the cursor or selection is currently over to an opened watch view."           ""                               ""                                                               }
   {ToggleWatchExpressionAtMouse   1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr_at_mouse"  "Toggle Watch Expression At Mouse"            "Adds or removes the expression that the mouse is currently over to an opened watch view."                         ""                               ""                                                               }
-  
-  //- rjf: memory view parameterization
-  {SetColumns                     1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  1  1  1                                                           Thumbnails            "set_columns"                 "Set Columns"                                 "Sets the number of columns for a memory view."                                                                    ""                               ""                                                               }
-  
-  //- rjf: disassembly view parameterization
-  {ToggleAddressVisibility        1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Thumbnails            "toggle_address_visibility"   "Toggle Address Visibility"                   "Toggles the visibility of addresses in a disassembly view."                                                       ""                               "$disasm,"                                                       }
-  {ToggleCodeBytesVisibility      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Thumbnails            "toggle_code_bytes_visibility""Toggle Code Bytes Visibility"                "Toggles the visibility of machine code bytes in a disassembly view."                                              ""                               "$disasm,"                                                       }
   
   //- rjf: general config operations
   {EnableCfg                      0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CheckHollow           "enable_cfg"                  "Enable Config Tree"                          "Enables a config tree."                                                                                           ""                               ""                                                               }
