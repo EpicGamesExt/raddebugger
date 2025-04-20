@@ -1451,6 +1451,28 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   }
   
   //////////////////////////////
+  //- rjf: determine cell editability
+  //
+  switch(cell->kind)
+  {
+    default:{}break;
+    case RD_WatchCellKind_Expr:
+    {
+      if(row_info->expr_is_editable)
+      {
+        result.flags |= RD_WatchCellFlag_CanEdit;
+      }
+    }break;
+    case RD_WatchCellKind_Eval:
+    {
+      if(ev_type_key_is_editable(cell->eval.irtree.type_key) && cell->eval.irtree.mode == E_Mode_Offset)
+      {
+        result.flags |= RD_WatchCellFlag_CanEdit;
+      }
+    }break;
+  }
+  
+  //////////////////////////////
   //- rjf: build cell's visual appearance info
   //
   switch(cell->eval.space.kind)
