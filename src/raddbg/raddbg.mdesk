@@ -121,12 +121,6 @@ RD_VocabTable:
   {pitch                ""                          "Pitch"                     ""                    Null                                           }
   {zoom                 ""                          "Zoom"                      ""                    Null                                           }
   {font_size            ""                          "Font Size"                 ""                    Null                                           }
-  {smooth_ui_text       ""                          "Smooth UI Text"            ""                    Null                                           }
-  {smooth_code_text     ""                          "Smooth Code Text"          ""                    Null                                           }
-  {hint_ui_text         ""                          "Hint UI Text"              ""                    Null                                           }
-  {hint_code_text       ""                          "Hint Code Text"            ""                    Null                                           }
-  {opaque_backgrounds   ""                          "Opaque Backgrounds"        ""                    Null                                           }
-  {background_blur      ""                          "Background Blur"           ""                    Null                                           }
   {row_height           ""                          "Row Height"                ""                    Null                                           }
   {tab_height           ""                          "Tab Height"                ""                    Null                                           }
 }
@@ -196,25 +190,38 @@ RD_VocabTable:
       @default(1)  'scrolling_animations': bool,
       
       //- rjf: thread & breakpoint decorations
-      @default(1)  'thread_lines':       bool,
-      @default(1)  'thread_glow':        bool,
-      @default(1)  'breakpoint_lines':   bool,
-      @default(1)  'breakpoint_glow':    bool,
+      @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
+        'thread_lines': bool,
+      @default(1) @display_name('Thread Glow') @description("Controls whether or not a glowing effect is drawn on the selected thread in source and disassembly views.")
+        'thread_glow': bool,
+      @default(1) @display_name('Breakpoint Lines') @description("Controls whether or not a long horizontal line is drawn before the line or instruction at which a breakpoint is placed, in source and disassembly views.")
+        'breakpoint_lines': bool,
+      @default(1) @display_name('Breakpoint Glow') @description("Controls whether or not a glowing effect is drawn on breakpoints in source and disassembly views.")
+        'breakpoint_glow': bool,
       
       //- rjf: occluding background settings
-      @default(0)  'opaque_backgrounds': bool,
-      @default(1)  'background_blur':    bool,
+      @default(0) @display_name('Opaque Backgrounds') @description("Controls whether or not all floating background colors are forced to be fully opaque.")
+        'opaque_backgrounds': bool,
+      @default(1) @display_name('Background Blur') @description("Controls whether or not occluded regions behind floating elements are blurred.")
+        'background_blur': bool,
       
       //- rjf: text rasterization settings
-      @default(1)  'smooth_ui_text':     bool,
-      @default(1)  'hint_ui_text':       bool,
-      @default(0)  'smooth_code_text':   bool,
-      @default(1)  'hint_code_text':     bool,
-      @default(11) @display_name('Window Font Size') 'font_size': @range[6, 72] u64,
+      @default(1) @display_name('Smooth UI Text') @description("Controls whether or not UI text is fully anti-aliased, for a smoother appearance.")
+        'smooth_ui_text': bool,
+      @default(1) @display_name('Hint UI Text') @description("Controls whether or not UI text is hinted, for better text readability at small sizes.")
+        'hint_ui_text': bool,
+      @default(0) @display_name('Smooth Code Text') @description("Controls whether or not code text is fully anti-aliased, for a smoother appearance.")
+        'smooth_code_text': bool,
+      @default(1) @display_name('Hint Code Text') @description("Controls whether or not code text is hinted, for better text readability at small sizes.")
+        'hint_code_text': bool,
+      @default(11) @display_name('Window Font Size') @description("Controls the window's default font size. Does not apply to tabs with their own font size set.")
+        'font_size': @range[6, 72] u64,
       
       //- rjf: size settings
-      @default(3.f) @display_name('Window Row Height') 'row_height': @range[1.75f, 5.f] f32,
-      @default(3.f) 'tab_height': @range[1.75f, 5.f] f32,
+      @default(3.f) @display_name('Window Row Height') @description("Controls the window's default row height, in multiples of the font size. Does not apply to tabs with their own row height set.")
+        'row_height': @range[1.75f, 5.f] f32,
+      @default(3.f) @description("Controls the height of tabs, in multiples of the font size.")
+        'tab_height': @range[1.75f, 5.f] f32,
     }
     ```
   }
@@ -248,6 +255,7 @@ RD_VocabTable:
       'lang':lang,
       'size':code_string,
       @default(1) 'show_line_numbers':bool,
+      @default(0) @display_name('Transient') 'auto': bool,
     }
     ```
   }
@@ -472,6 +480,7 @@ RD_RegTable:
   {B32               no_rich_tooltip  NoRichTooltip }
   {B32               do_implicit_root DoImplicitRoot}
   {B32               do_lister        DoLister      }
+  {B32               do_big_rows      DoBigRows     }
   {Dir2              dir2             Dir2          }
   {String8           string           String        }
   {String8           cmd_name         CmdName       }
@@ -598,7 +607,7 @@ RD_CmdTable:    //               |        |              |               |      
   {Switch                         1        1              "query:recent_files"                             Cfg                null              RecentFile              Null       0  0  0  0  0  1  1                                                           FileOutline           "switch"                      "Switch"                                      "Switches to a recent file."                                                                                       "code,source,file"               ""                                                               }
   {SwitchToPartnerFile            1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "switch_to_partner_file"      "Switch To Partner File"                      "Switches to the focused file's partner; or from header to implementation or vice versa."                          "code,source,file"               ""                                                               }
   {RecordFileInProject            0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "record_file_in_project"      "Record File In Project"                      "Records the passed file path as a recent file in the currently loaded project."                                   ""                               ""                                                               }
-  {ShowFileInExplorer             0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "show_file_in_explorer"       "Show File In Explorer"                       "Opens the operating system's file explorer and shows the selected file."                                          ""                               "$file,"                                                         }
+  {ShowFileInExplorer             1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "show_file_in_explorer"       "Show File In Explorer"                       "Opens the operating system's file explorer and shows the selected file."                                          ""                               "$file,"                                                         }
   
   //- rjf: source <-> disasm
   {GoToDisassembly                1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Glasses               "go_to_disassembly"           "Go To Disassembly"                           "Goes to the disassembly, if any, for a given source code line."                                                   "code,source,disassembly,disasm" "$text_pt,"                                                      }

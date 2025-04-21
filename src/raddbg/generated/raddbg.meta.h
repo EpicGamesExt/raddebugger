@@ -44,6 +44,7 @@ RD_RegSlot_PreferDisasm,
 RD_RegSlot_NoRichTooltip,
 RD_RegSlot_DoImplicitRoot,
 RD_RegSlot_DoLister,
+RD_RegSlot_DoBigRows,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
@@ -566,6 +567,7 @@ B32 prefer_disasm;
 B32 no_rich_tooltip;
 B32 do_implicit_root;
 B32 do_lister;
+B32 do_big_rows;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
@@ -630,6 +632,7 @@ RD_Query query;
 .no_rich_tooltip = rd_regs()->no_rich_tooltip,\
 .do_implicit_root = rd_regs()->do_implicit_root,\
 .do_lister = rd_regs()->do_lister,\
+.do_big_rows = rd_regs()->do_big_rows,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\
@@ -637,9 +640,9 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[320];
+extern RD_VocabInfo rd_vocab_info_table[314];
 extern RD_NameSchemaInfo rd_name_schema_info_table[20];
-extern Rng1U64 rd_reg_slot_range_table[41];
+extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[74];

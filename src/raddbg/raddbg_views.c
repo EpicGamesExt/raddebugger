@@ -1129,7 +1129,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(type->kind == E_TypeKind_Set)
       {
         String8 file_path = e_string_from_id(row->eval.value.u64);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
         if(str8_match(type->name, str8_lit("file"), 0))
         {
           info.can_expand = 0;
@@ -1320,7 +1320,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells meta-evaluation booleans
     //
-    else if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Bool &&
+    else if(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool &&
             (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))

@@ -944,6 +944,7 @@ internal String8 rd_view_query_cmd(void);
 internal String8 rd_view_query_input(void);
 internal RD_Cfg *rd_view_cfg_from_string(String8 string);
 internal E_Value rd_view_cfg_value_from_string(String8 string);
+internal B32 rd_view_cfg_b32_from_string(String8 string);
 internal U64 rd_view_cfg_u64_from_string(String8 string);
 internal F32 rd_view_cfg_f32_from_string(String8 string);
 

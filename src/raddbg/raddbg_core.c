@@ -3047,6 +3047,11 @@ rd_view_ui(Rng2F32 rect)
                         String8 cmd_name = rd_cmd_name_from_eval(eval);
                         rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
                       }break;
+                      case RD_EvalSpaceKind_MetaCtrlEntity:
+                      {
+                        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+                        rd_cmd(RD_CmdKind_PushQuery, .expr = ctrl_string_from_handle(scratch.arena, entity->handle));
+                      }break;
                     }
                     if(did_cmd)
                     {
@@ -4308,7 +4313,7 @@ rd_view_ui(Rng2F32 rect)
                           B32 cell_has_fancy_editors = (cell->kind != RD_WatchCellKind_Expr || fancy_editors_in_expr);
                           B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
                           B32 has_background = !!(cell_info.flags & RD_WatchCellFlag_Background);
-                          B32 is_toggle_switch = (cell_has_fancy_editors && cell->eval.irtree.mode != E_Mode_Null && cell_type->kind == E_TypeKind_Bool);
+                          B32 is_toggle_switch = (cell_has_fancy_editors && cell->eval.irtree.mode != E_Mode_Null && e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool);
                           B32 is_slider = (cell_has_fancy_editors && cell->eval.irtree.mode != E_Mode_Null && cell_type->kind == E_TypeKind_Lens && str8_match(cell_type->name, str8_lit("range1"), 0));
                           B32 is_activated_on_single_click = !!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick);
                           B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
@@ -4815,6 +4820,18 @@ rd_view_cfg_value_from_string(String8 string)
   String8 expr = root->first->string;
   E_Eval eval = e_eval_from_string(scratch.arena, expr);
   E_Value result = e_value_eval_from_eval(eval).value;
+  scratch_end(scratch);
+  return result;
+}
+
+internal B32
+rd_view_cfg_b32_from_string(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  RD_Cfg *root = rd_view_cfg_from_string(string);
+  String8 expr = push_str8f(scratch.arena, "(bool)(%S)", root->first->string);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  B32 result = !!e_value_eval_from_eval(eval).value.u64;
   scratch_end(scratch);
   return result;
 }
@@ -6585,7 +6602,7 @@ rd_window_frame(void)
         E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
         
         // rjf: determine & store row-height setting
-        if(!query_is_anchored && cmd_name.size == 0)
+        if(ws->query_regs->do_big_rows)
         {
           F32 row_height = 5.f;
           F32 row_height_px = row_height * ui_top_font_size();
@@ -8498,7 +8515,7 @@ rd_window_frame(void)
               {
                 // rjf: gather info for this tab
                 B32 tab_is_selected = (tab == panel->selected_tab);
-                B32 tab_is_auto = (rd_cfg_child_from_string(tab, str8_lit("auto")) != &rd_nil_cfg);
+                B32 tab_is_auto = rd_view_cfg_b32_from_string(str8_lit("auto"));
                 
                 // rjf: begin vertical region for this tab
                 ui_set_next_child_layout_axis(Axis2_Y);
@@ -12618,8 +12635,8 @@ rd_frame(void)
           //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
-            String8 expr = push_str8f(scratch.arena, "query:commands, query:$%I64x, query:$%I64x, query:recent_files, query:recent_projects, query:procedures", rd_regs()->view, rd_regs()->window);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1);
+            String8 expr = push_str8f(scratch.arena, "query:commands, query:$%I64x, query:$%I64x, query:recent_files, query:recent_projects, query:procedures, query:processes, query:threads, query:modules", rd_regs()->view, rd_regs()->window);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1);
           }break;
           
           //- rjf: command fast path
@@ -12703,7 +12720,7 @@ rd_frame(void)
           case RD_CmdKind_WindowSettings:
           {
             String8 expr = push_str8f(scratch.arena, "query:$%I64x", rd_regs()->window);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
           }break;
           case RD_CmdKind_CloseWindow:
           {
@@ -14443,11 +14460,14 @@ Z(getting_started)
               {
                 RD_Cfg *tab = tab_n->v;
                 if(rd_cfg_is_project_filtered(tab)) { continue; }
-                if(str8_match(tab->string, str8_lit("text"), 0) &&
-                   rd_cfg_child_from_string(tab, str8_lit("auto")) != &rd_nil_cfg)
+                RD_RegsScope(.view = tab->id)
                 {
-                  panel_w_auto = panel;
-                  view_w_auto = tab;
+                  if(str8_match(tab->string, str8_lit("text"), 0) &&
+                     rd_view_cfg_b32_from_string(str8_lit("auto")))
+                  {
+                    panel_w_auto = panel;
+                    view_w_auto = tab;
+                  }
                 }
               }
             }
@@ -14658,7 +14678,8 @@ Z(getting_started)
                 dst_tab = rd_cfg_new(dst_panel->cfg, str8_lit("text"));
                 RD_Cfg *expr = rd_cfg_new(dst_tab, str8_lit("expression"));
                 rd_cfg_new(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
-                rd_cfg_new(dst_tab, str8_lit("auto"));
+                RD_Cfg *auto_root = rd_cfg_new(dst_tab, str8_lit("auto"));
+                rd_cfg_new(auto_root, str8_lit("1"));
               }
               
               // rjf: determine if we need a contain or center
