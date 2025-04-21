@@ -1599,6 +1599,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             if(e_ir_state->overridden_irtree != 0)
             {
               result = *e_ir_state->overridden_irtree;
+              for(E_IRTreeAndType *prev = e_ir_state->overridden_irtree->prev; prev != 0; prev = prev->prev)
+              {
+                result = *prev;
+              }
             }
             else
             {
@@ -1641,6 +1645,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             if(e_ir_state->overridden_irtree != 0)
             {
               result = *e_ir_state->overridden_irtree;
+              for(E_IRTreeAndType *prev = e_ir_state->overridden_irtree->prev; prev != 0; prev = prev->prev)
+              {
+                result = *prev;
+              }
             }
             else
             {
