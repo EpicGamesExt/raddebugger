@@ -1741,7 +1741,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       str8_list_push(arena, out, direct_string);
       for EachIndex(idx, type->count)
       {
-        String8 string = e_string_from_expr(arena, type->args[idx]);
+        String8 string = e_string_from_expr(arena, type->args[idx], str8_zero());
         str8_list_pushf(arena, out, ", ");
         str8_list_push(arena, out, string);
       }

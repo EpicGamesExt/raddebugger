@@ -483,7 +483,7 @@ e_expr_list_push(Arena *arena, E_ExprList *list, E_Expr *expr)
 //~ rjf: Expression Tree -> String Conversions
 
 internal void
-e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
+e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string, String8List *out)
 {
   switch(expr->kind)
   {
@@ -518,7 +518,7 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
         {
           str8_list_pushf(arena, out, "(");
         }
-        e_append_strings_from_expr(arena, child, out);
+        e_append_strings_from_expr(arena, child, parent_expr_string, out);
         if(need_parens)
         {
           str8_list_pushf(arena, out, ")");
@@ -528,7 +528,14 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     case E_ExprKind_LeafBytecode:
     case E_ExprKind_LeafIdentifier:
     {
-      str8_list_push(arena, out, expr->string);
+      if(str8_match(expr->string, str8_lit("$"), 0) && parent_expr_string.size != 0)
+      {
+        str8_list_push(arena, out, parent_expr_string);
+      }
+      else
+      {
+        str8_list_push(arena, out, expr->string);
+      }
     }break;
     case E_ExprKind_LeafStringLiteral:
     {
@@ -561,16 +568,16 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     }break;
     case E_ExprKind_Ref:
     {
-      e_append_strings_from_expr(arena, expr->ref, out);
+      e_append_strings_from_expr(arena, expr->ref, parent_expr_string, out);
     }break;
   }
 }
 
 internal String8
-e_string_from_expr(Arena *arena, E_Expr *expr)
+e_string_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string)
 {
   String8List strings = {0};
-  e_append_strings_from_expr(arena, expr, &strings);
+  e_append_strings_from_expr(arena, expr, parent_expr_string, &strings);
   String8 result = str8_list_join(arena, &strings, 0);
   return result;
 }

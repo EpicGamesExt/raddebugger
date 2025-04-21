@@ -1615,13 +1615,13 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             // rjf: default case -> just walk the expression tree & generate a string
             default:
             {
-              expr_string = e_string_from_expr(arena, notable_expr);
+              expr_string = e_string_from_expr(arena, notable_expr, str8_zero());
             }break;
             
             // rjf: array indices -> fast path to [index]
             case E_ExprKind_ArrayIndex:
             {
-              expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last));
+              expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last, str8_zero()));
             }break;
             
             // rjf: member accesses -> fast-path to .name

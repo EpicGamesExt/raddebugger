@@ -2183,7 +2183,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
       args_count = type->count;
     }
     RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-    rd_cfg_new_replace(expr_root, e_string_from_expr(scratch.arena, primary_expr));
+    rd_cfg_new_replace(expr_root, e_string_from_expr(scratch.arena, primary_expr, str8_zero()));
     {
       U64 unnamed_order_idx = 0;
       for EachIndex(arg_idx, args_count)
@@ -2216,7 +2216,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
           unnamed_order_idx += 1;
         }
         RD_Cfg *arg_root = rd_cfg_child_from_string_or_alloc(view, param_name);
-        rd_cfg_new_replace(arg_root, e_string_from_expr(scratch.arena, arg_expr));
+        rd_cfg_new_replace(arg_root, e_string_from_expr(scratch.arena, arg_expr, str8_zero()));
       }
     }
   }
@@ -4495,7 +4495,7 @@ rd_view_ui(Rng2F32 rect)
                                   cell->eval.space.kind == E_SpaceKind_File ||
                                   cell->eval.space.kind == E_SpaceKind_Null)
                           {
-                            RD_RegsScope(.expr = e_string_from_expr(scratch.arena, cell->eval.expr))
+                            RD_RegsScope(.expr = e_string_from_expr(scratch.arena, cell->eval.expr, e_string_from_expr(scratch.arena, row->eval.expr, str8_zero())))
                               rd_drag_begin(RD_RegSlot_Expr);
                           }
                         }

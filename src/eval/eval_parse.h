@@ -79,8 +79,8 @@ internal void e_expr_list_push(Arena *arena, E_ExprList *list, E_Expr *expr);
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions
 
-internal void e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out);
-internal String8 e_string_from_expr(Arena *arena, E_Expr *expr);
+internal void e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string, String8List *out);
+internal String8 e_string_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string);
 
 ////////////////////////////////
 //~ rjf: Parsing Functions

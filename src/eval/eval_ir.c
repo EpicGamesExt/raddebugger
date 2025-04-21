@@ -2620,7 +2620,7 @@ e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtre
   E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
   E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
-  lhs_bytecode->string = e_string_from_expr(arena, lhs);
+  lhs_bytecode->string = e_string_from_expr(arena, lhs, str8_zero());
   lhs_bytecode->qualifier = lhs->qualifier;
   lhs_bytecode->space = lhs->space;
   lhs_bytecode->mode = lhs_irtree->mode;
@@ -2639,7 +2639,7 @@ e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree,
   E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
   E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
-  lhs_bytecode->string = e_string_from_expr(arena, lhs);
+  lhs_bytecode->string = e_string_from_expr(arena, lhs, str8_zero());
   lhs_bytecode->qualifier = lhs->qualifier;
   lhs_bytecode->space = lhs->space;
   lhs_bytecode->mode = lhs_irtree->mode;
@@ -2658,7 +2658,7 @@ e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree)
   E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
   E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
   E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
-  rhs_bytecode->string = e_string_from_expr(arena, rhs);
+  rhs_bytecode->string = e_string_from_expr(arena, rhs, str8_zero());
   rhs_bytecode->space = rhs->space;
   rhs_bytecode->mode = rhs_irtree->mode;
   rhs_bytecode->type_key = rhs_irtree->type_key;
@@ -2673,7 +2673,7 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
   E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
   E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
   E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
-  rhs_bytecode->string = e_string_from_expr(arena, rhs);
+  rhs_bytecode->string = e_string_from_expr(arena, rhs, str8_zero());
   rhs_bytecode->space = rhs->space;
   rhs_bytecode->mode = rhs_irtree->mode;
   rhs_bytecode->type_key = rhs_irtree->type_key;
