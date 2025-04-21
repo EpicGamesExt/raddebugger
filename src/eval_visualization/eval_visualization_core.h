@@ -197,7 +197,7 @@ struct EV_Row
   EV_Block *block;
   EV_Key key;
   U64 visual_size;
-  String8 string;
+  String8 edit_string;
   E_Eval eval;
 };
 

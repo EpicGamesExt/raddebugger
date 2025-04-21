@@ -1129,7 +1129,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(type->kind == E_TypeKind_Set)
       {
         String8 file_path = e_string_from_id(row->eval.value.u64);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
         if(str8_match(type->name, str8_lit("file"), 0))
         {
           info.can_expand = 0;
@@ -1143,7 +1143,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
       }
@@ -1155,7 +1155,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess &&
             str8_match(row_type->name, str8_lit("unattached_process"), 0))
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1164,7 +1164,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
     {
       info.can_expand = 0;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1173,7 +1173,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(is_top_level && evalled_cfg != &rd_nil_cfg)
     {
       RD_Cfg *cfg = evalled_cfg;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
       MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
@@ -1244,6 +1244,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       CTRL_Entity *entity = evalled_entity;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
                                   .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
                                   .pct = 1.f);
       if(entity->kind == CTRL_EntityKind_Machine ||
@@ -1251,6 +1252,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
          entity->kind == CTRL_EntityKind_Thread)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "active"),
+                                    .edit_string = row->edit_string,
                                     .px = floor_f32(ui_top_font_size()*6.f));
       }
       if(entity->kind == CTRL_EntityKind_Thread)
@@ -1262,6 +1264,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         }
         String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
+                                    .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
                                     .px = floor_f32(ui_top_font_size()*4.f));
       }
@@ -1272,7 +1275,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string,.flags = RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1283,11 +1286,14 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
       if(type->kind == E_TypeKind_Set)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                    .edit_string = row->edit_string,
+                                    .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
       }
       else
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                    .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
                                     .pct = 1.f);
       }
@@ -1306,7 +1312,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1317,7 +1325,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1339,8 +1349,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .default_pct = 0.65f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
     }
     
@@ -1355,7 +1369,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented,      .default_pct = 0.75f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Indented,
+                                  .default_pct = 0.75f,
+                                  .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "lens:hex((uint64)$)"), .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
     }
@@ -1383,7 +1401,6 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           row->eval,                                             .default_pct = 0.55f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           e_eval_wrapf(arena, row->eval, "lens:hex((uint64)$)"), .default_pct = 0.20f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           (module == &ctrl_entity_nil ? (E_Eval)zero_struct : module_eval),
-                                  .string = str8_lit(" "),
                                   .default_pct = 0.20f, .pct = take_pct());
 #undef take_pct
     }
@@ -1399,7 +1416,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .flags = RD_WatchCellFlag_Indented,             .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Indented,
+                                  .default_pct = 0.35f,
+                                  .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,                                                 .default_pct = 0.40f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "typeof(raw($))"),          .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
@@ -1532,7 +1553,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       {
         // rjf: funnel-through this cell's string, if it has one
         B32 is_non_code = 0;
-        String8 expr_string = cell->string;
+        String8 expr_string = cell->edit_string;
         
         // rjf: if this cell has a meta-display-name, then use that
         if(expr_string.size == 0)

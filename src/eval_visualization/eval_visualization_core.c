@@ -1034,7 +1034,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           row->block         = n->v.block;
           row->key           = ev_key_make(ev_hash_from_key(row->block->key), 1);
           row->visual_size   = n->v.block->viz_expand_info.single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
-          row->string        = n->v.block->string;
+          row->edit_string   = n->v.block->string;
           row->eval          = n->v.block->eval;
         }
         
@@ -1053,7 +1053,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           row->block                = n->v.block;
           row->key                  = row_key;
           row->visual_size          = 1;
-          row->string               = range_exprs_strings[idx];
+          row->edit_string          = range_exprs_strings[idx];
           row->eval                 = row_eval;
         }
       }

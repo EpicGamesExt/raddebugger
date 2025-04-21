@@ -69,7 +69,7 @@ struct RD_WatchCell
   RD_WatchCellKind kind;
   RD_WatchCellFlags flags;
   U64 index;
-  String8 string;
+  String8 edit_string;
   E_Eval eval;
   F32 default_pct;
   F32 pct;
