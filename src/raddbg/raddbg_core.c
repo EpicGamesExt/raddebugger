@@ -3041,11 +3041,15 @@ rd_view_ui(Rng2F32 rect)
                         {
                           rd_cmd(RD_CmdKind_OpenRecentProject, .cfg = cfg->id);
                         }
-                        else
+                        else if(e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Set)
                         {
                           rd_cmd(RD_CmdKind_PushQuery, .expr = e_string_from_expr(scratch.arena, eval.expr, str8_zero()));
                         }
-                      }break;
+                        else
+                        {
+                          did_cmd = 0;
+                        }
+                      }break; 
                       case RD_EvalSpaceKind_MetaUnattachedProcess:
                       {
                         U64 pid = eval.value.u128.u64[0];

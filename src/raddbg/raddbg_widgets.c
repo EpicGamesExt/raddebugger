@@ -1739,8 +1739,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     UI_TagF("floating")
   {
     TxtRng select_rng = txt_rng(*cursor, *mark);
-    Vec4F32 active_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeLineNumbersSelected);
-    Vec4F32 inactive_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeLineNumbers);
     ui_set_next_fixed_x(floor_f32(params->margin_float_off_px + params->priority_margin_width_px + params->catchall_margin_width_px));
     ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -1756,7 +1754,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        Vec4F32 text_color = (select_rng.min.line <= line_num && line_num <= select_rng.max.line) ? active_color : inactive_color;
+        B32 line_is_selected = (select_rng.min.line <= line_num && line_num <= select_rng.max.line);
         Vec4F32 bg_color = v4f32(0, 0, 0, 0);
         
         // rjf: line info on this line -> adjust bg color to visualize
@@ -1785,7 +1783,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         }
         
         // rjf: build line num box
-        UI_TextColor(text_color) UI_BackgroundColor(bg_color)
+        UI_TagF(line_is_selected ? "" : "weak") UI_BackgroundColor(bg_color)
           ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
       }
     }
@@ -2001,10 +1999,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               Vec4F32 pin_color = rd_color_from_cfg(pin);
               if(pin_color.w == 0)
               {
-                pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+                pin_color = ui_color_from_name(str8_lit("text"));
               }
-              rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);
-              rd_code_label(0.6f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), eval_string);
+              Vec4F32 default_code_color = ui_color_from_name(str8_lit("code_default"));
+              rd_code_label(0.8f, 1, default_code_color, pin_expr);
+              rd_code_label(0.6f, 1, default_code_color, eval_string);
             }
             UI_Signal pin_sig = ui_signal_from_box(pin_box);
             if(ui_key_match(pin_box_key, ui_hot_key()))

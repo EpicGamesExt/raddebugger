@@ -749,7 +749,10 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
            l_restype_kind == E_TypeKind_RRef)
         {
           new_tree = e_irtree_resolve_to_value(arena, l.mode, new_tree, l_restype);
-          mode = E_Mode_Offset;
+          if(l.mode != E_Mode_Null)
+          {
+            mode = E_Mode_Offset;
+          }
         }
         if(r_value != 0 && !r_is_constant_value)
         {
@@ -1023,7 +1026,11 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           }
           result.root     = new_tree;
           result.type_key = r_type_direct;
-          result.mode     = E_Mode_Offset;
+          result.mode     = E_Mode_Null;
+          if(r_tree.mode == E_Mode_Value)
+          {
+            result.mode = E_Mode_Offset;
+          }
         }
       }break;
       

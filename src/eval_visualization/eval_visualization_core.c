@@ -1604,6 +1604,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           goto arrays_and_sets_and_structs;
         }
         E_Type *type = e_type_from_key__cached(type_key);
+        E_TypeKind element_type_kind = e_type_kind_from_key(e_type_key_unwrap(type->direct_type_key, E_TypeUnwrapFlag_All));
         B32 lens_applied = 1;
         EV_StringParams lens_params = *params;
         if(0){}
@@ -1623,6 +1624,15 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         else if(str8_match(type->name, str8_lit("no_addr"), 0))
         {
           lens_params.flags |= EV_StringFlag_DisableAddresses;
+        }
+        else if(str8_match(type->name, str8_lit("array"), 0) &&
+                type->count >= 1 &&
+                (((E_TypeKind_Char8 <= element_type_kind && element_type_kind <= E_TypeKind_UChar32) ||
+                  element_type_kind == E_TypeKind_S8 ||
+                  element_type_kind == E_TypeKind_U8)))
+        {
+          lens_params.limit_strings = 1;
+          lens_params.limit_strings_size = e_value_from_expr(type->args[0]).u64;
         }
         else
         {
@@ -1819,6 +1829,12 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 default:{string = str8_cstring((char *)string_buffer);}break;
                 case 2: {string = str8_from_16(scratch.arena, str16_cstring((U16 *)string_buffer));}break;
                 case 4: {string = str8_from_32(scratch.arena, str32_cstring((U32 *)string_buffer));}break;
+              }
+              
+              // rjf: apply string size limitation
+              if(params->limit_strings)
+              {
+                string = str8_prefix(string, params->limit_strings_size);
               }
               
               // rjf: escape and quote

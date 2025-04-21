@@ -246,6 +246,8 @@ struct EV_StringParams
   U32 min_digits;
   U8 digit_group_separator;
   String8 filter;
+  B32 limit_strings;
+  U64 limit_strings_size;
 };
 
 typedef struct EV_StringIterTask EV_StringIterTask;
