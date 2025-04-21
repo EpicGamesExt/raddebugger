@@ -1027,7 +1027,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           result.root     = new_tree;
           result.type_key = r_type_direct;
           result.mode     = E_Mode_Null;
-          if(r_tree.mode == E_Mode_Value)
+          if(r_tree.mode != E_Mode_Null)
           {
             result.mode = E_Mode_Offset;
           }
