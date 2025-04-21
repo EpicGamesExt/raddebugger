@@ -1449,7 +1449,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //- rjf: unpack evaluation
   //
   E_Type *cell_type = e_type_from_key__cached(cell->eval.irtree.type_key);
-  if(cell->eval.space.u64s[1] == 0)
+  MD_NodePtrList cell_schemas = rd_schemas_from_name(cell_type->name);
+  if(cell->eval.space.u64s[1] == 0 && cell_schemas.count != 0)
   {
     result.cfg = rd_cfg_from_eval_space(cell->eval.space);
   }

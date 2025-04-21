@@ -3021,7 +3021,7 @@ rd_view_ui(Rng2F32 rect)
                         }
                         else
                         {
-                          did_cmd = 0;
+                          rd_cmd(RD_CmdKind_PushQuery, .expr = e_string_from_expr(scratch.arena, eval.expr, str8_zero()));
                         }
                       }break;
                       case E_SpaceKind_File:
@@ -3043,7 +3043,7 @@ rd_view_ui(Rng2F32 rect)
                         }
                         else
                         {
-                          did_cmd = 0;
+                          rd_cmd(RD_CmdKind_PushQuery, .expr = e_string_from_expr(scratch.arena, eval.expr, str8_zero()));
                         }
                       }break;
                       case RD_EvalSpaceKind_MetaUnattachedProcess:
@@ -12205,7 +12205,6 @@ rd_frame(void)
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("environment"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .name = str8_lit("environment"),
-                                                    .flags = E_TypeFlag_EditableChildren,
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(environment),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(environment),
                                                     .expand =
@@ -12674,14 +12673,19 @@ rd_frame(void)
                                       "query:commands, "
                                       "query:$%I64x, "
                                       "query:$%I64x, "
+                                      "query:targets, "
                                       "query:recent_files, "
                                       "query:recent_projects, "
-                                      "query:procedures, "
                                       "query:processes, "
                                       "query:threads, "
                                       "query:modules, "
                                       "query:user_settings, "
-                                      "query:project_settings, ",
+                                      "query:project_settings, "
+                                      "query:procedures, "
+                                      "query:types, "
+                                      "query:globals, "
+                                      "query:thread_locals, "
+                                      ,
                                       rd_regs()->view, rd_regs()->window);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1);
           }break;
