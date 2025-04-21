@@ -1742,3 +1742,19 @@ pe_compute_checksum(U8 *buffer, U64 buffer_size)
   return hash;
 }
 
+////////////////////////////////
+
+internal B32
+pe_has_plus_header(COFF_MachineType machine)
+{
+  B32 has_plus_header = 0;
+  switch (machine) {
+  case COFF_MachineType_X86: {
+    has_plus_header = 0;
+  } break;
+  case COFF_MachineType_X64: {
+    has_plus_header = 1;
+  } break;
+  }
+  return has_plus_header;
+}

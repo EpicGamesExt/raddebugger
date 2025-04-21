@@ -1070,6 +1070,22 @@ os_process_join(OS_Handle handle, U64 endt_us)
   return (result == WAIT_OBJECT_0);
 }
 
+internal B32
+os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out)
+{
+  B32 result = 0;
+  if(os_process_join(handle, endt_us))
+  {
+    DWORD exit_code;
+    if(GetExitCodeProcess((HANDLE)handle.u64[0], &exit_code))
+    {
+      *exit_code_out = exit_code;
+      result = 1;
+    }
+  }
+  return result; 
+}
+
 internal void
 os_process_detach(OS_Handle handle)
 {

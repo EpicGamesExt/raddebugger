@@ -1197,6 +1197,16 @@ str8_array_from_list(Arena *arena, String8List *list)
   return array;
 }
 
+internal String8Array *
+str8_array_from_list_arr(Arena *arena, String8List **lists, U64 count)
+{
+  String8Array *result = push_array(arena, String8Array, count);
+  for (U64 idx = 0; idx < count; idx += 1) {
+    result[idx] = str8_array_from_list(arena, lists[idx]);
+  }
+  return result;
+}
+
 internal String8Array
 str8_array_reserve(Arena *arena, U64 count)
 {
