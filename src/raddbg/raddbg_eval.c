@@ -4,36 +4,6 @@
 ////////////////////////////////
 //~ rjf: `commands` Type Hooks
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
-{
-  E_TypeExpandInfo result = {0};
-  if(filter.size != 0)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8List cmd_names = {0};
-    for EachNonZeroEnumVal(RD_CmdKind, k)
-    {
-      RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
-      String8 name = info->string;
-      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
-      if(matches.count == matches.needle_part_count)
-      {
-        str8_list_push(scratch.arena, &cmd_names, name);
-      }
-    }
-    String8Array *accel = push_array(arena, String8Array, 1);
-    *accel = str8_array_from_list(arena, &cmd_names);
-    result.user_data = accel;
-    result.expr_count = accel->count;
-    scratch_end(scratch);
-  }
-  else
-  {
-    result.expr_count = RD_CmdKind_COUNT - 1;
-  }
-  return result;
-}
-
 E_TYPE_ACCESS_FUNCTION_DEF(commands)
 {
   E_IRTreeAndType result = {&e_irnode_nil};
@@ -47,34 +17,46 @@ E_TYPE_ACCESS_FUNCTION_DEF(commands)
   return result;
 }
 
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
+{
+  E_TypeExpandInfo result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List cmd_names = {0};
+    for EachNonZeroEnumVal(RD_CmdKind, k)
+    {
+      RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
+      if(info->flags & RD_CmdKindFlag_ListInUI)
+      {
+        String8 name = info->string;
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
+        if(matches.count == matches.needle_part_count)
+        {
+          str8_list_push(scratch.arena, &cmd_names, name);
+        }
+      }
+    }
+    String8Array *accel = push_array(arena, String8Array, 1);
+    *accel = str8_array_from_list(arena, &cmd_names);
+    result.user_data = accel;
+    result.expr_count = accel->count;
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
 {
   U64 out_idx = 0;
-  if(user_data != 0)
+  String8Array *accel = (String8Array *)user_data;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
-    String8Array *accel = (String8Array *)user_data;
-    for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
-    {
-      String8 cmd_name = accel->v[idx];
-      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
-      expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
-      expr->value.u64 = e_id_from_string(cmd_name);
-      exprs_out[out_idx] = expr;
-    }
-  }
-  else
-  {
-    for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
-    {
-      RD_CmdKind cmd_kind = (RD_CmdKind)(idx+1);
-      String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
-      expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
-      expr->value.u64 = e_id_from_string(cmd_name);
-      exprs_out[out_idx] = expr;
-    }
+    String8 cmd_name = accel->v[idx];
+    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
+    expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+    expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
+    expr->value.u64 = e_id_from_string(cmd_name);
+    exprs_out[out_idx] = expr;
   }
 }
 

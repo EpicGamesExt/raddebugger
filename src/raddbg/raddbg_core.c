@@ -2960,7 +2960,10 @@ rd_view_ui(Rng2F32 rect)
                 {
                   taken = 1;
                   E_Eval eval = row->eval;
-                  switch(eval.space.kind)
+                  
+                  // rjf: if we have a specific command we are trying to complete, then
+                  // fill registers based on this row's evaluation.
+                  if(cmd_name.size != 0) switch(eval.space.kind)
                   {
                     default:
                     {
@@ -2992,6 +2995,67 @@ rd_view_ui(Rng2F32 rect)
                       U64 pid = eval.value.u128.u64[0];
                       rd_cmd(RD_CmdKind_CompleteQuery, .pid = pid);
                     }break;
+                  }
+                  
+                  // rjf: if we do not have a specific command, then we can just
+                  // pick a sensible default based on what was selected.
+                  if(cmd_name.size == 0)
+                  {
+                    B32 did_cmd = 1;
+                    switch(eval.space.kind)
+                    {
+                      default:
+                      {
+                        String8 symbol_name = d_symbol_name_from_process_vaddr(scratch.arena, ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), eval.value.u64, 0, 0);
+                        if(symbol_name.size != 0)
+                        {
+                          rd_cmd(RD_CmdKind_GoToName, .string = symbol_name);
+                        }
+                        else
+                        {
+                          did_cmd = 0;
+                        }
+                      }break;
+                      case E_SpaceKind_File:
+                      case E_SpaceKind_FileSystem:
+                      {
+                        String8 file = rd_file_path_from_eval(scratch.arena, eval);
+                        rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file, .vaddr = 0);
+                      }break;
+                      case RD_EvalSpaceKind_MetaCfg:
+                      {
+                        RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
+                        if(str8_match(cfg->string, str8_lit("recent_file"), 0))
+                        {
+                          rd_cmd(RD_CmdKind_Switch, .cfg = cfg->id);
+                        }
+                        else if(str8_match(cfg->string, str8_lit("recent_project"), 0))
+                        {
+                          rd_cmd(RD_CmdKind_OpenRecentProject, .cfg = cfg->id);
+                        }
+                        else
+                        {
+                          did_cmd = 0;
+                        }
+                      }break;
+                      case RD_EvalSpaceKind_MetaUnattachedProcess:
+                      {
+                        U64 pid = eval.value.u128.u64[0];
+                      }break;
+                      case RD_EvalSpaceKind_MetaCmd:
+                      {
+                        String8 cmd_name = rd_cmd_name_from_eval(eval);
+                        rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
+                      }break;
+                    }
+                    if(did_cmd)
+                    {
+                      rd_cmd(RD_CmdKind_CompleteQuery);
+                    }
+                    else
+                    {
+                      taken = 0;
+                    }
                   }
                 }
               }
@@ -14760,9 +14824,11 @@ Z(getting_started)
           }break;
           case RD_CmdKind_CompleteQuery:
           {
+            // rjf: unpack params
             RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
             String8 cmd_name = rd_view_query_cmd();
-            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+            
+            // rjf: push command
             if(cmd_name.size != 0) RD_RegsScope()
             {
               rd_push_cmd(cmd_name, rd_regs());
@@ -14771,7 +14837,9 @@ Z(getting_started)
             // rjf: find out if this view is a lister
             B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
             
-            // rjf: complete query
+            // rjf: complete query, either by closing the query popup, or closing the
+            // tab-embedded query edit
+            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
             if(is_lister)
             {
               RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
