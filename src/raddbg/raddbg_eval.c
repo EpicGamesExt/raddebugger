@@ -28,11 +28,18 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
       RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
       if(info->flags & RD_CmdKindFlag_ListInUI)
       {
-        String8 name = info->string;
-        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
-        if(matches.count == matches.needle_part_count)
+        String8 code_name = info->string;
+        String8 description = info->description;
+        String8 search_tags = info->search_tags;
+        String8 display_name = rd_display_from_code_name(code_name);
+        FuzzyMatchRangeList desc_matches = fuzzy_match_find(scratch.arena, filter, description);
+        FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, display_name);
+        FuzzyMatchRangeList tags_matches = fuzzy_match_find(scratch.arena, filter, search_tags);
+        if(name_matches.count == name_matches.needle_part_count ||
+           desc_matches.count == desc_matches.needle_part_count ||
+           tags_matches.count == tags_matches.needle_part_count)
         {
-          str8_list_push(scratch.arena, &cmd_names, name);
+          str8_list_push(scratch.arena, &cmd_names, code_name);
         }
       }
     }
