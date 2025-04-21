@@ -1176,17 +1176,9 @@ rd_setting_from_name(String8 name)
 {
   String8 result = {0};
   {
-    // rjf: find most-granular config scope to begin looking for the setting
+    // rjf: find most-granular config scopes to begin looking for the setting
     RD_Cfg *view_cfg = rd_cfg_from_id(rd_regs()->view);
-    RD_Cfg *start_cfg = view_cfg;
-    for(RD_Cfg *p = start_cfg->parent; p != &rd_nil_cfg; p = p->parent)
-    {
-      if(str8_match(p->string, str8_lit("transient"), 0))
-      {
-        start_cfg = &rd_nil_cfg;
-        break;
-      }
-    }
+    RD_Cfg *start_cfg = &rd_nil_cfg;
     if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->panel); }
     if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->window); }
     
@@ -1200,23 +1192,27 @@ rd_setting_from_name(String8 name)
     // rjf: return resultant child string stored under this key
     result = setting->first->string;
     
-    // rjf: no result -> look for default in settings
+    // rjf: no result -> look for default in schemas
     if(result.size == 0) ProfScope("default setting schema lookup")
     {
-      Temp scratch = scratch_begin(0, 0);
-      String8 schema_names[] =
+      MD_Node *schema = &md_nil_node;
       {
-        view_cfg->string,
-        str8_lit("settings"),
-      };
-      for EachElement(idx, schema_names)
-      {
-        MD_NodePtrList schemas = rd_schemas_from_name(schema_names[idx]);
-        for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
+        MD_NodePtrList schemas = rd_schemas_from_name(view_cfg->string);
+        for(MD_NodePtrNode *n = schemas.first; n != 0 && schema == &md_nil_node; n = n->next)
         {
-          MD_Node *schema = n->v;
-          MD_Node *setting = md_child_from_string(schema, name, 0);
-          MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
+          schema = md_child_from_string(n->v, name, 0);
+        }
+        for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && schema == &md_nil_node; cfg = cfg->parent)
+        {
+          MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+          for(MD_NodePtrNode *n = schemas.first; n != 0 && schema == &md_nil_node; n = n->next)
+          {
+            schema = md_child_from_string(n->v, name, 0);
+          }
+        }
+        if(schema != &md_nil_node)
+        {
+          MD_Node *default_tag = md_tag_from_string(schema, str8_lit("default"), 0);
           if(default_tag != &md_nil_node)
           {
             result = default_tag->first->string;
@@ -1225,7 +1221,6 @@ rd_setting_from_name(String8 name)
         }
       }
       end_default_search:;
-      scratch_end(scratch);
     }
   }
   return result;
@@ -2990,6 +2985,19 @@ rd_view_ui(Rng2F32 rect)
                       RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
                       rd_cmd(RD_CmdKind_CompleteQuery, .cfg = cfg->id);
                     }break;
+                    case RD_EvalSpaceKind_MetaCtrlEntity:
+                    {
+                      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+                      RD_RegsScope(.ctrl_entity = entity->handle)
+                      {
+                        if(0){}
+                        else if(entity->kind == CTRL_EntityKind_Thread)  { rd_regs()->thread = entity->handle; }
+                        else if(entity->kind == CTRL_EntityKind_Module)  { rd_regs()->module = entity->handle; }
+                        else if(entity->kind == CTRL_EntityKind_Process) { rd_regs()->process = entity->handle; }
+                        else if(entity->kind == CTRL_EntityKind_Machine) { rd_regs()->machine = entity->handle; }
+                        rd_cmd(RD_CmdKind_CompleteQuery);
+                      }
+                    }break;
                     case RD_EvalSpaceKind_MetaUnattachedProcess:
                     {
                       U64 pid = eval.value.u128.u64[0];
@@ -4725,7 +4733,11 @@ rd_view_ui(Rng2F32 rect)
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
       E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-      e_ir_state->overridden_irtree = expr_eval.irtree.prev;
+      e_ir_state->overridden_irtree = &expr_eval.irtree;
+      for(E_IRTreeAndType *prev = expr_eval.irtree.prev; prev != 0; prev = prev->prev)
+      {
+        e_ir_state->overridden_irtree = prev;
+      }
       view_ui_rule->ui(expr_eval, rect);
       e_ir_state->overridden_irtree = prev_overridden_irtree;
       scratch_end(scratch);
@@ -12100,6 +12112,26 @@ rd_frame(void)
         }
       }
       
+      //- rjf: add macros for user/project
+      {
+        E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("user"));
+        E_Space space = rd_eval_space_from_cfg(rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user")));
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->space    = space;
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = type_key;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("user_settings"), expr);
+      }
+      {
+        E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("project"));
+        E_Space space = rd_eval_space_from_cfg(rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")));
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->space    = space;
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = type_key;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("project_settings"), expr);
+      }
+      
       //- rjf: add macros for evallable control entities
       String8 evallable_ctrl_names[] =
       {
@@ -12479,8 +12511,7 @@ rd_frame(void)
         {str8_lit("disasm"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
         {str8_lit("memory"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
         {str8_lit("bitmap"),      0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
-        {str8_lit("checkbox"),    0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
-        {str8_lit("color_rgba"),  0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
+        {str8_lit("color"),       0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(color),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(color)},
         {str8_lit("geo3d"),       0, 0, 0,        0, 0, {0}, RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
       };
       
@@ -12639,7 +12670,19 @@ rd_frame(void)
           //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
-            String8 expr = push_str8f(scratch.arena, "query:commands, query:$%I64x, query:$%I64x, query:recent_files, query:recent_projects, query:procedures, query:processes, query:threads, query:modules", rd_regs()->view, rd_regs()->window);
+            String8 expr = push_str8f(scratch.arena,
+                                      "query:commands, "
+                                      "query:$%I64x, "
+                                      "query:$%I64x, "
+                                      "query:recent_files, "
+                                      "query:recent_projects, "
+                                      "query:procedures, "
+                                      "query:processes, "
+                                      "query:threads, "
+                                      "query:modules, "
+                                      "query:user_settings, "
+                                      "query:project_settings, ",
+                                      rd_regs()->view, rd_regs()->window);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1);
           }break;
           

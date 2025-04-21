@@ -123,6 +123,7 @@ RD_VocabTable:
   {font_size            ""                          "Font Size"                 ""                    Null                                           }
   {row_height           ""                          "Row Height"                ""                    Null                                           }
   {tab_height           ""                          "Tab Height"                ""                    Null                                           }
+  {rgba                 ""                          "RGBA"                      ""                    Palette                                        }
 }
 
 @struct RD_VocabInfo:
@@ -146,31 +147,22 @@ RD_VocabTable:
 
 @table(name schema) RD_SchemaTable:
 {
-  //- rjf: settings
+  //- rjf: users / projects
   {
-    settings,
-    ```x:
+    user
+      ```
+      x:
     {
-      @default(1)  'hover_animations':     bool,
-      @default(1)  'press_animations':     bool,
-      @default(0)  'focus_animations':     bool,
-      @default(1)  'tooltip_animations':   bool,
-      @default(1)  'menu_animations':      bool,
-      @default(1)  'scrolling_animations': bool,
-      @default(1)  'background_blur':      bool,
-      @default(1)  'thread_lines':         bool,
-      @default(1)  'breakpoint_lines':     bool,
-      @default(1)  'thread_glow':          bool,
-      @default(1)  'breakpoint_glow':      bool,
-      @default(0)  'opaque_backgrounds':   bool,
-      @default(1)  'smooth_ui_text':     bool,
-      @default(0)  'smooth_code_text':     bool,
-      @default(1)  'hint_ui_text':       bool,
-      @default(1)  'hint_code_text':       bool,
-      @default(2)  'tab_width': @range[1, 32] u64,
-      @default(11) 'font_size': @range[6, 72] u64,
-      @default(3.f) 'row_height': @range[1.75f, 5.f] f32,
-      @default(3.f) 'tab_height': @range[1.75f, 5.f] f32,
+      @default(2) @display_name('User Tab Width') 'tab_width': @range[1, 32] u64,
+    }
+    ```
+  }
+  {
+    project
+      ```
+      x:
+    {
+      @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
     }
     ```
   }
@@ -1101,67 +1093,6 @@ RD_IconTable:
 {
   @expand(RD_IconTable a) `str8_lit_comp("$(a.text)")`;
 }
-
-////////////////////////////////
-//~ rjf: View Rules
-
-@table(name               name_lower             display_name                 params_schema                                                                                              icon            can_filter  filter_is_code  typing_automatically_filters  can_use_in_watch_table  can_fill_value_cell  can_expand           show_in_docs description)
-RD_ViewRuleTable:
-{
-  //- rjf: basics
-  { Empty                  empty                  ""                           ""                                                                                                         Null            0 0 0 0 0 0     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { GettingStarted         getting_started        "Getting Started"            ""                                                                                                         QuestionMark    0 0 0 0 0 0     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  
-  //- rjf: meta (settings)
-  { Settings               settings               "Settings"                   ""                                                                                                         Gear            0 0 0 0 0 0     1 "An interface to modify general settings for the debugger's appearance and behavior."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
-  
-  //- rjf: temporary view for loading files - must analyze file before picking viewer
-  { PendingFile            pending_file           "Pending File"               ""                                                                                                         FileOutline     0 0 0 0 0 0     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  
-  //- rjf: visualizers
-  { Watch                  watch                  "Watch"                      ""                                                                                                         Binoculars      1 1 1 0 0 0     1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
-  { Text                   text                   "Text"                       "x:{'lang':lang, 'size':expr}"                                                                             FileOutline     0 0 0 1 0 1     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Disasm                 disasm                 "Disassembly"                "x:{'arch':arch, 'size':expr, 'addresses':bool, 'code_bytes':bool}"                                        Glasses         0 0 0 1 0 1     1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
-  { Memory                 memory                 "Memory"                     "x:{'size':expr}"                                                                                          Grid            0 0 0 1 0 1     1 "A hex-editor-like grid interface for viewing memory."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
-  { Bitmap                 bitmap                 "Bitmap"                     "x:{'w':expr, 'h':expr, 'fmt':tex2dformat}"                                                                Binoculars      0 0 0 1 0 1     1 "Visualizes memory as a bitmap."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
-  { Checkbox               checkbox               "Checkbox"                   ""                                                                                                         CheckFilled     0 0 0 1 1 0     1 "Visualizes memory as an RGBA color."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
-  { ColorRGBA              color_rgba             "Color (RGBA)"               ""                                                                                                         Palette         0 0 0 1 1 1     1 "Visualizes memory as an RGBA color."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
-  { Geo3D                  geo3d                  "Geometry (3D)"              "x:{'count':expr, 'vtx':expr, 'vtx_size':expr}"                                                            Binoculars      0 0 0 1 0 1     1 "Visualizes memory as 3D geometry."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
-}
-
-/*
-@enum RD_ViewRuleKind:
-{
-  Null,
-  @expand(RD_ViewRuleTable a) `$(a.name)`,
-  COUNT
-}
-
-@struct RD_ViewRuleInfo:
-{
-  `String8 string`;
-  `String8 description`;
-  `String8 display_name`;
-  `String8 params_schema`;
-  `RD_IconKind icon_kind`;
-  `RD_ViewRuleInfoFlags flags`;
-  `EV_ExpandRuleInfoHookFunctionType *expr_expand_info`;
-  `RD_ViewRuleUIFunctionType *ui`;
-}
-
-@gen
-{
-  `RD_VIEW_RULE_UI_FUNCTION_DEF(null);`,
-  @expand(RD_ViewRuleTable a) `$(a.can_use_in_watch_table != 0 && a.can_expand != 0 -> "EV_EXPAND_RULE_INFO_FUNCTION_DEF(" .. a.name_lower .. ");")`,
-  @expand(RD_ViewRuleTable a) `RD_VIEW_RULE_UI_FUNCTION_DEF($(a.name_lower));`,
-}
-
-@data(RD_ViewRuleInfo) rd_view_rule_kind_info_table:
-{
-  `{{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil), RD_VIEW_RULE_UI_FUNCTION_NAME(null)}`,
-  @expand(RD_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), RD_IconKind_$(a.icon), (RD_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|RD_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|RD_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)|RD_ViewRuleInfoFlag_CanUseInWatchTable*$(a.can_use_in_watch_table)|RD_ViewRuleInfoFlag_CanFillValueCell*$(a.can_fill_value_cell)|RD_ViewRuleInfoFlag_CanExpand*$(a.can_expand)), $(a.can_expand != 0 -> "EV_EXPAND_RULE_INFO_FUNCTION_NAME(" .. a.name_lower .. ")") $(a.can_expand == 0 -> "EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil)"), RD_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
-}
-*/
 
 ////////////////////////////////
 //~ rjf: Theme Tables

@@ -1701,6 +1701,9 @@ fancy_viz_eval_tests(void)
   unsigned int example_color_u32 = 0xff6f30ff;
   struct {float r, g, b, a;} example_color_struct = {0.50f, 0.95f, 0.75f, 1.00f};
   int x0 = 0;
+  raddbg_pin(color(example_color_4f32));
+  raddbg_pin(color(example_color_u32));
+  raddbg_pin(color(example_color_struct));
   
   //- rjf: multiline text
   char *long_string = ("This is an example of some very long text with line breaks\n"

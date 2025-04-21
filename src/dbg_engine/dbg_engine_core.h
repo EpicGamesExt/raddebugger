@@ -170,42 +170,6 @@ D_RunKind;
 #include "dbg_engine/generated/dbg_engine.meta.h"
 
 ////////////////////////////////
-//~ rjf: View Rules
-
-typedef U32 D_ViewRuleSpecInfoFlags; // NOTE(rjf): see @view_rule_info
-enum
-{
-  D_ViewRuleSpecInfoFlag_Inherited      = (1<<0),
-  D_ViewRuleSpecInfoFlag_Expandable     = (1<<1),
-  D_ViewRuleSpecInfoFlag_ExprResolution = (1<<2),
-  D_ViewRuleSpecInfoFlag_VizBlockProd   = (1<<3),
-};
-
-typedef struct D_ViewRuleSpecInfo D_ViewRuleSpecInfo;
-struct D_ViewRuleSpecInfo
-{
-  String8 string;
-  String8 display_string;
-  String8 schema;
-  String8 description;
-  D_ViewRuleSpecInfoFlags flags;
-};
-
-typedef struct D_ViewRuleSpecInfoArray D_ViewRuleSpecInfoArray;
-struct D_ViewRuleSpecInfoArray
-{
-  D_ViewRuleSpecInfo *v;
-  U64 count;
-};
-
-typedef struct D_ViewRuleSpec D_ViewRuleSpec;
-struct D_ViewRuleSpec
-{
-  D_ViewRuleSpec *hash_next;
-  D_ViewRuleSpecInfo info;
-};
-
-////////////////////////////////
 //~ rjf: Command Types
 
 typedef struct D_CmdParams D_CmdParams;
@@ -363,10 +327,6 @@ struct D_State
   D_RunLocalsCache member_caches[2];
   U64 member_cache_gen;
   
-  // rjf: view rule specification table
-  U64 view_rule_spec_table_size;
-  D_ViewRuleSpec **view_rule_spec_table;
-  
   // rjf: user -> ctrl driving state
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
@@ -391,7 +351,6 @@ struct D_State
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global D_ViewRuleSpec d_nil_core_view_rule_spec = {0};
 global D_State *d_state = 0;
 
 ////////////////////////////////
@@ -425,12 +384,6 @@ internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
 //- rjf: command lists
 internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
-
-////////////////////////////////
-//~ rjf: View Rule Spec Stateful Functions
-
-internal void d_register_view_rule_specs(D_ViewRuleSpecInfoArray specs);
-internal D_ViewRuleSpec *d_view_rule_spec_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders

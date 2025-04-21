@@ -3307,7 +3307,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //- rjf: image-region canvas interaction
   //
   Vec2S32 mouse_bmp = {-1, -1};
-  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig))
+  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig)) RD_Font(RD_FontSlot_Code)
   {
     Vec2F32 mouse_scr = sub_2f32(ui_mouse(), rect.p0);
     Vec2F32 mouse_cvs = rd_bitmap_canvas_from_screen_pos(view_center_pos, zoom, canvas_rect, mouse_scr);
@@ -3380,43 +3380,118 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
 }
 
 ////////////////////////////////
-//~ rjf: "checkbox"
+//~ rjf: rgba @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(checkbox)
+typedef struct RD_EvalColor RD_EvalColor;
+struct RD_EvalColor
 {
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  if(ui_clicked(rd_icon_buttonf(value_eval.value.u64 == 0 ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled, 0, "###check")))
+  Vec4F32 rgba;
+  E_Eval rgba_evals[4];
+};
+
+internal RD_EvalColor
+rd_eval_color_from_eval(E_Eval eval)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: walk eval's type tree, find all four component evaluations
+  E_Eval component_evals[4] = {0};
   {
-    rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
+    typedef struct LeafTask LeafTask;
+    struct LeafTask
+    {
+      LeafTask *next;
+      E_Eval eval;
+    };
+    U64 num_components_left = 4;
+    LeafTask start_task = {0, eval};
+    LeafTask *first_task = &start_task;
+    LeafTask *last_task = first_task;
+    for(LeafTask *t = first_task; t != 0 && num_components_left > 0; t = t->next)
+    {
+      E_Type *type = e_type_from_key__cached(e_type_key_unwrap(t->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+      switch(type->kind)
+      {
+        default:{}break;
+        
+        // rjf: leaf u32 -> take all 4 components
+        case E_TypeKind_U32:
+        {
+          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0xff000000) >> 24) / 255.f"));
+          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x00ff0000) >> 16) / 255.f"));
+          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x0000ff00) >> 8) / 255.f"));
+          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x000000ff) >> 0) / 255.f"));
+          num_components_left -= 4;
+        }break;
+        
+        //- rjf: array -> generate tasks for first four elements
+        case E_TypeKind_Array:
+        {
+          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[0])"));
+          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[1])"));
+          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[2])"));
+          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[3])"));
+          num_components_left -= 4;
+        }break;
+      }
+    }
   }
+  
+  //- rjf: swizzle / extract the component values from the evals, depending on this lens
+  // (the lens implicitly tells us the format)
+  RD_EvalColor result = {0};
+  {
+    E_Type *lens_type = e_type_from_key__cached(eval.irtree.type_key);
+    for(E_Type *t = lens_type; t->kind == E_TypeKind_Lens; t = e_type_from_key__cached(t->direct_type_key))
+    {
+      if(str8_match(t->name, str8_lit("color"), 0))
+      {
+        lens_type = t;
+        break;
+      }
+    }
+    if(lens_type->kind == E_TypeKind_Lens)
+    {
+      if(lens_type->count < 1 || str8_match(lens_type->args[0]->string, str8_lit("rgba"), 0))
+      {
+        result.rgba_evals[0] = component_evals[0];
+        result.rgba_evals[1] = component_evals[1];
+        result.rgba_evals[2] = component_evals[2];
+        result.rgba_evals[3] = component_evals[3];
+      }
+      else if(str8_match(lens_type->args[0]->string, str8_lit("argb"), 0))
+      {
+        result.rgba_evals[0] = component_evals[1];
+        result.rgba_evals[1] = component_evals[2];
+        result.rgba_evals[2] = component_evals[3];
+        result.rgba_evals[3] = component_evals[0];
+      }
+      else if(str8_match(lens_type->args[0]->string, str8_lit("bgra"), 0))
+      {
+        result.rgba_evals[0] = component_evals[2];
+        result.rgba_evals[1] = component_evals[1];
+        result.rgba_evals[2] = component_evals[0];
+        result.rgba_evals[3] = component_evals[3];
+      }
+      else if(str8_match(lens_type->args[0]->string, str8_lit("abgr"), 0))
+      {
+        result.rgba_evals[0] = component_evals[3];
+        result.rgba_evals[1] = component_evals[2];
+        result.rgba_evals[2] = component_evals[1];
+        result.rgba_evals[3] = component_evals[0];
+      }
+      for EachIndex(idx, 4)
+      {
+        result.rgba.v[idx] = e_value_eval_from_eval(result.rgba_evals[idx]).value.f32;
+      }
+    }
+  }
+  
+  scratch_end(scratch);
+  return result;
 }
 
-////////////////////////////////
-//~ rjf: color_rgba @view_hook_impl
-
-internal Vec4F32
-rd_rgba_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Vec4F32 rgba = {0};
-  {
-    E_Eval value_eval = e_value_eval_from_eval(eval);
-    E_TypeKey type_key = eval.irtree.type_key;
-    E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    U64 type_size = e_type_byte_size_from_key(type_key);
-    if(16 <= type_size)
-    {
-      e_space_read(eval.space, &rgba, r1u64(eval.value.u64, eval.value.u64 + 16));
-    }
-    else if(4 <= type_size)
-    {
-      U32 hex_val = value_eval.value.u32;
-      rgba = rgba_from_u32(hex_val);
-    }
-  }
-  return rgba;
-}
-
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(color)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -3424,16 +3499,26 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba)
   return info;
 }
 
-RD_VIEW_UI_FUNCTION_DEF(color_rgba)
+RD_VIEW_UI_FUNCTION_DEF(color)
 {
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 dim = dim_2f32(rect);
   F32 padding = ui_top_font_size()*3.f;
-  Vec4F32 rgba = {0}; // TODO(rjf): @cfg rd_rgba_from_eval_params(eval, params);
+  F32 sv_dim_px = Min(dim.x, dim.y);
+  if(sv_dim_px == dim.x)
+  {
+    padding = ui_top_font_size()*30.f;
+  }
+  sv_dim_px -= padding*2.f;
+  sv_dim_px = Min(sv_dim_px, ui_top_font_size()*70.f);
+  RD_EvalColor eval_color = rd_eval_color_from_eval(eval);
+  Vec4F32 rgba = eval_color.rgba;
   Vec4F32 hsva = hsva_from_rgba(rgba);
   
+  //////////////////////////////
   //- rjf: too small -> just show components
-  if(dim.y <= ui_top_font_size()*8.f)
+  //
+  if(dim.y <= ui_top_font_size()*12.f)
   {
     //- rjf: build text box
     UI_Box *text_box = &ui_nil_box;
@@ -3444,11 +3529,11 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
       {
         DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.x), .color = v4f32(1.f, 0.25f, 0.25f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.x), .color = linear_from_srgba(v4f32(1.f, 0.25f, 0.25f, 1.f)), .underline_thickness = 4.f);
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.y), .color = v4f32(0.25f, 1.f, 0.25f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.y), .color = linear_from_srgba(v4f32(0.25f, 1.f, 0.25f, 1.f)), .underline_thickness = 4.f);
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.z), .color = v4f32(0.25f, 0.25f, 1.f, 1.f), .underline_thickness = 4.f);
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.z), .color = linear_from_srgba(v4f32(0.25f, 0.25f, 1.f, 1.f)), .underline_thickness = 4.f);
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.w), .color = v4f32(1.f,   1.f,   1.f, 1.f), .underline_thickness = 4.f);
         dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(")"));
@@ -3479,45 +3564,64 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
     }
   }
   
+  //////////////////////////////
   //- rjf: large enough -> full color picker
+  //
   else
   {
-    UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_px(padding, 1.f)) UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_HeightFill
+    UI_WidthFill UI_HeightFill
+      UI_PrefHeight(ui_children_sum(1)) UI_Column UI_Padding(ui_pct(1.f, 0.f))
+      UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1.f, 0.f))
+      UI_PrefWidth(ui_px(sv_dim_px, 1.f))
+      UI_PrefHeight(ui_px(sv_dim_px, 1.f))
+      RD_Font(RD_FontSlot_Code)
     {
-      UI_PrefWidth(ui_px(dim.y - padding*2, 1.f))
-      {
-        UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
-      }
+      UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
+      ui_spacer(ui_em(1.f, 1.f));
       UI_PrefWidth(ui_em(3.f, 1.f))
       {
         UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
       }
-      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
-        UI_TagF("weak")
+      ui_spacer(ui_em(1.f, 1.f));
+      UI_PrefWidth(ui_children_sum(1)) UI_Column
       {
-        ui_labelf("Hex");
-        ui_labelf("R");
-        ui_labelf("G");
-        ui_labelf("B");
-        ui_labelf("H");
-        ui_labelf("S");
-        ui_labelf("V");
-        ui_labelf("A");
-      }
-      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
-      {
-        String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
-        ui_label(hex_string);
-        ui_labelf("%.2f", rgba.x);
-        ui_labelf("%.2f", rgba.y);
-        ui_labelf("%.2f", rgba.z);
-        ui_labelf("%.2f", hsva.x);
-        ui_labelf("%.2f", hsva.y);
-        ui_labelf("%.2f", hsva.z);
-        ui_labelf("%.2f", rgba.w);
+        UI_PrefWidth(ui_em(6.f, 0.f)) UI_PrefHeight(ui_em(6.f, 0.f))
+          UI_BackgroundColor(linear_from_srgba(v4f32(rgba.x, rgba.y, rgba.z, 1.f)))
+          UI_CornerRadius(4.f)
+          UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
+          ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
+        ui_spacer(ui_em(2.f, 1.f));
+        UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_children_sum(1)) UI_Row
+        {
+          UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
+            UI_TagF("weak")
+          {
+            ui_labelf("Hex");
+            ui_labelf("R");
+            ui_labelf("G");
+            ui_labelf("B");
+            ui_labelf("H");
+            ui_labelf("S");
+            ui_labelf("V");
+            ui_labelf("A");
+          }
+          UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
+          {
+            String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
+            ui_label(hex_string);
+            ui_labelf("%.2f", rgba.x);
+            ui_labelf("%.2f", rgba.y);
+            ui_labelf("%.2f", rgba.z);
+            ui_labelf("%.2f", hsva.x);
+            ui_labelf("%.2f", hsva.y);
+            ui_labelf("%.2f", hsva.z);
+            ui_labelf("%.2f", rgba.w);
+          }
+        }
       }
     }
   }
+  
   scratch_end(scratch);
 }
 

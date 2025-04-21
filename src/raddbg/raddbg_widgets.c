@@ -129,6 +129,23 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
     }
     
+    //- rjf: push bucket name
+    if(cfg->parent == rd_state->root_cfg)
+    {
+      if(str8_match(cfg->string, str8_lit("user"), 0))
+      {
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("User"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main));
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+        start_secondary();
+      }
+      else if(str8_match(cfg->string, str8_lit("project"), 0))
+      {
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("Project"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main));
+        dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+        start_secondary();
+      }
+    }
+    
     //- rjf: push label
     if(label_string.size != 0)
     {

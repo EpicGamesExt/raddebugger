@@ -197,59 +197,6 @@ d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *
 }
 
 ////////////////////////////////
-//~ rjf: View Rule Spec Stateful Functions
-
-internal void
-d_register_view_rule_specs(D_ViewRuleSpecInfoArray specs)
-{
-  for(U64 idx = 0; idx < specs.count; idx += 1)
-  {
-    // rjf: extract info from array slot
-    D_ViewRuleSpecInfo *info = &specs.v[idx];
-    
-    // rjf: skip empties
-    if(info->string.size == 0)
-    {
-      continue;
-    }
-    
-    // rjf: determine hash/slot
-    U64 hash = d_hash_from_string(info->string);
-    U64 slot_idx = hash%d_state->view_rule_spec_table_size;
-    
-    // rjf: allocate node & push
-    D_ViewRuleSpec *spec = push_array(d_state->arena, D_ViewRuleSpec, 1);
-    SLLStackPush_N(d_state->view_rule_spec_table[slot_idx], spec, hash_next);
-    
-    // rjf: fill node
-    D_ViewRuleSpecInfo *info_copy = &spec->info;
-    MemoryCopyStruct(info_copy, info);
-    info_copy->string         = push_str8_copy(d_state->arena, info->string);
-    info_copy->display_string = push_str8_copy(d_state->arena, info->display_string);
-    info_copy->description    = push_str8_copy(d_state->arena, info->description);
-  }
-}
-
-internal D_ViewRuleSpec *
-d_view_rule_spec_from_string(String8 string)
-{
-  D_ViewRuleSpec *spec = &d_nil_core_view_rule_spec;
-  {
-    U64 hash = d_hash_from_string(string);
-    U64 slot_idx = hash%d_state->view_rule_spec_table_size;
-    for(D_ViewRuleSpec *s = d_state->view_rule_spec_table[slot_idx]; s != 0; s = s->hash_next)
-    {
-      if(str8_match(string, s->info.string, 0))
-      {
-        spec = s;
-        break;
-      }
-    }
-  }
-  return spec;
-}
-
-////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
 // NOTE(rjf): Stepping Algorithm Overview (2024/01/17)
@@ -1668,15 +1615,7 @@ d_init(void)
   hs_submit_data(d_state->output_log_key, 0, str8_zero());
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
-  d_state->view_rule_spec_table_size = 1024;
-  d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->ctrl_msg_arena = arena_alloc();
-  
-  // rjf: register core view rules
-  {
-    D_ViewRuleSpecInfoArray array = {d_core_view_rule_spec_info_table, ArrayCount(d_core_view_rule_spec_info_table)};
-    d_register_view_rule_specs(array);
-  }
   
   // rjf: set up caches
   d_state->unwind_cache.slots_count = 1024;
