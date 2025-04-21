@@ -3100,6 +3100,10 @@ rd_view_ui(Rng2F32 rect)
                   {
                     any_edits_started = 1;
                     String8 string = cell->edit_string;
+                    if(string.size == 0)
+                    {
+                      string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
+                    }
                     string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
                     U64 hash = ev_hash_from_key(pt.key);

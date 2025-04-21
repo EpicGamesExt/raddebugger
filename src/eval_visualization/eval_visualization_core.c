@@ -546,6 +546,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       U64 child_id;
       U64 split_relative_idx;
       B32 default_expanded;
+      B32 force_expanded;
     };
     Task start_task = {0, tree.root, tree.root->eval, 1, 0};
     Task *first_task = &start_task;
@@ -560,7 +561,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
       // rjf: obtain expansion node & expansion state
       EV_ExpandNode *expand_node = ev_expand_node_from_key(view, key);
       B32 is_expanded = (expand_node != 0 && expand_node->expanded);
-      if(t->default_expanded)
+      if(t->default_expanded || t->force_expanded)
       {
         is_expanded ^= 1;
       }
@@ -726,9 +727,10 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *exp
         t->next = task;
         task->parent_block       = t->parent_block;
         task->eval               = e_eval_from_expr(arena, t->eval.expr->next);
-        task->child_id           = t->child_id;
+        task->child_id           = t->child_id + 1;
         task->split_relative_idx = 0;
         task->default_expanded   = t->default_expanded;
+        task->force_expanded     = 1;
       }
     }
     scratch_end(scratch);
