@@ -2312,20 +2312,25 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
           }
         }
-        if(!matches_shorthand && e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative))))
+        if(!matches_shorthand)
         {
-          E_Expr *lens_spec_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, str8_lit("array"));
-          E_TypeKey lens_spec_type_key = lens_spec_expr->type_key;
-          E_Type *lens_spec_type = e_type_from_key__cached(lens_spec_type_key);
-          result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
-                                            .flags      = lens_spec_type->flags,
-                                            .count      = 1,
-                                            .args       = &chained_expr,
-                                            .direct_key = result.type_key,
-                                            .name       = lens_spec_type->name,
-                                            .irext      = lens_spec_type->irext,
-                                            .access     = lens_spec_type->access,
-                                            .expand     = lens_spec_type->expand);
+          E_TypeKind type_kind = e_type_kind_from_key(e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative));
+          if(e_type_kind_is_pointer_or_ref(type_kind) ||
+             type_kind == E_TypeKind_Array)
+          {
+            E_Expr *lens_spec_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, str8_lit("array"));
+            E_TypeKey lens_spec_type_key = lens_spec_expr->type_key;
+            E_Type *lens_spec_type = e_type_from_key__cached(lens_spec_type_key);
+            result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
+                                              .flags      = lens_spec_type->flags,
+                                              .count      = 1,
+                                              .args       = &chained_expr,
+                                              .direct_key = result.type_key,
+                                              .name       = lens_spec_type->name,
+                                              .irext      = lens_spec_type->irext,
+                                              .access     = lens_spec_type->access,
+                                              .expand     = lens_spec_type->expand);
+          }
         }
       }
     }
