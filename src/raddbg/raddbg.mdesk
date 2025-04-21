@@ -153,6 +153,23 @@ RD_VocabTable:
       ```
       x:
     {
+      //- rjf: thread & breakpoint decorations
+      @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
+        'thread_lines': bool,
+      @default(1) @display_name('Thread Glow') @description("Controls whether or not a glowing effect is drawn on the selected thread in source and disassembly views.")
+        'thread_glow': bool,
+      @default(1) @display_name('Breakpoint Lines') @description("Controls whether or not a long horizontal line is drawn before the line or instruction at which a breakpoint is placed, in source and disassembly views.")
+        'breakpoint_lines': bool,
+      @default(1) @display_name('Breakpoint Glow') @description("Controls whether or not a glowing effect is drawn on breakpoints in source and disassembly views.")
+        'breakpoint_glow': bool,
+      
+      //- rjf: occluding background settings
+      @default(0) @display_name('Opaque Backgrounds') @description("Controls whether or not all floating background colors are forced to be fully opaque.")
+        'opaque_backgrounds': bool,
+      @default(1) @display_name('Background Blur') @description("Controls whether or not occluded regions behind floating elements are blurred.")
+        'background_blur': bool,
+      
+      //- rjf: code formatting settings
       @default(2) @display_name('User Tab Width') 'tab_width': @range[1, 32] u64,
     }
     ```
@@ -180,22 +197,6 @@ RD_VocabTable:
       @default(1)  'tooltip_animations':   bool,
       @default(1)  'menu_animations':      bool,
       @default(1)  'scrolling_animations': bool,
-      
-      //- rjf: thread & breakpoint decorations
-      @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
-        'thread_lines': bool,
-      @default(1) @display_name('Thread Glow') @description("Controls whether or not a glowing effect is drawn on the selected thread in source and disassembly views.")
-        'thread_glow': bool,
-      @default(1) @display_name('Breakpoint Lines') @description("Controls whether or not a long horizontal line is drawn before the line or instruction at which a breakpoint is placed, in source and disassembly views.")
-        'breakpoint_lines': bool,
-      @default(1) @display_name('Breakpoint Glow') @description("Controls whether or not a glowing effect is drawn on breakpoints in source and disassembly views.")
-        'breakpoint_glow': bool,
-      
-      //- rjf: occluding background settings
-      @default(0) @display_name('Opaque Backgrounds') @description("Controls whether or not all floating background colors are forced to be fully opaque.")
-        'opaque_backgrounds': bool,
-      @default(1) @display_name('Background Blur') @description("Controls whether or not occluded regions behind floating elements are blurred.")
-        'background_blur': bool,
       
       //- rjf: text rasterization settings
       @default(1) @display_name('Smooth UI Text') @description("Controls whether or not UI text is fully anti-aliased, for a smoother appearance.")
@@ -247,7 +248,8 @@ RD_VocabTable:
       'lang':lang,
       'size':code_string,
       @default(1) 'show_line_numbers':bool,
-      @default(0) @display_name('Transient') 'auto': bool,
+      @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
+        'auto': bool,
     }
     ```
   }
@@ -259,10 +261,14 @@ RD_VocabTable:
       'arch':              arch,
       'syntax':            dasm_syntax,
       'size':              code_string,
-      @default(1) 'show_addresses':    bool,
-      @default(0) 'show_code_bytes':   bool,
-      @default(1) 'show_source_lines': bool,
-      @default(1) 'show_symbol_names': bool,
+      @default(1) @description("Controls whether or not addresses are shown in the disassembly text.")
+        'show_addresses':    bool,
+      @default(0) @description("Controls whether or not code bytes are shown in the disassembly text.")
+        'show_code_bytes':   bool,
+      @default(1) @description("Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.")
+        'show_source_lines': bool,
+      @default(1) @description("Controls whether or not disassembly text is decorated with symbol names.")
+        'show_symbol_names': bool,
       @default(1) 'show_line_numbers': bool,
     }
     ```

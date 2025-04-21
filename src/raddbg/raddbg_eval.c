@@ -620,6 +620,7 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs)
     
     //- rjf: gather commands
     String8List cmds_list = {0};
+    if(rd_view_query_cmd().size == 0)
     {
       MD_NodePtrList schemas = rd_schemas_from_name(cfg_name);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)

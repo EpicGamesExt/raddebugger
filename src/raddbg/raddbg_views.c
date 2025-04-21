@@ -1726,6 +1726,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         {
           DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
           dr_fstrs_push_new(arena, &result.fstrs, &params, string);
+          result.flags |= RD_WatchCellFlag_IsNonCode;
         }
       }
     }break;
