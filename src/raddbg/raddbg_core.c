@@ -4223,7 +4223,7 @@ rd_view_ui(Rng2F32 rect)
                         UI_Tag(cell_tag)
                       {
                         //- rjf: cell has hook? -> build ui by calling hook
-                        if(cell_info.view_ui_rule != &rd_nil_view_ui_rule)
+                        if(cell->kind == RD_WatchCellKind_ViewUI && cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                         {
                           RD_Cfg *root = rd_immediate_cfg_from_keyf("view_%I64x_%I64x", rd_regs()->view, row_hash);
                           RD_Cfg *view = rd_view_from_eval(root, cell->eval);
