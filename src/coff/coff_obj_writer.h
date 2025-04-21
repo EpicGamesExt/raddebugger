@@ -17,6 +17,17 @@ typedef struct COFF_SymbolLocation
   } u;
 } COFF_SymbolLocation;
 
+typedef struct COFF_ObjSymbolWeak
+{
+  struct COFF_ObjSymbol *tag;
+  COFF_WeakExtType       characteristics;
+} COFF_ObjSymbolWeak;
+
+typedef struct COFF_ObjSymbolSecDef
+{
+  COFF_ComdatSelectType selection;
+} COFF_ObjSymbolSecDef;
+
 typedef struct COFF_ObjSymbol
 {
   String8                 name;

@@ -774,6 +774,12 @@ os_process_join(OS_Handle handle, U64 endt_us)
   NotImplemented;
 }
 
+internal B32
+os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out)
+{
+  NotImplemented;
+}
+
 internal void
 os_process_detach(OS_Handle handle)
 {
