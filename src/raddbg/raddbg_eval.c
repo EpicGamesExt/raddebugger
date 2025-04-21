@@ -10,7 +10,10 @@ E_TYPE_ACCESS_FUNCTION_DEF(commands)
   if(expr->kind == E_ExprKind_MemberAccess)
   {
     String8 cmd_name = expr->first->next->string;
-    result.type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+    RD_CmdKindInfo *cmd_info = rd_cmd_kind_info_from_string(cmd_name);
+    E_TypeKey cmd_type = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+    cmd_type = e_type_key_cons_meta_description(cmd_type, cmd_info->description);
+    result.type_key = cmd_type;
     result.mode = E_Mode_Value;
     result.root = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCmd), e_irtree_const_u(arena, e_id_from_string(cmd_name)));
   }
@@ -59,8 +62,11 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     String8 cmd_name = accel->v[idx];
+    RD_CmdKindInfo *cmd_info = rd_cmd_kind_info_from_string(cmd_name);
+    E_TypeKey cmd_type = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+    cmd_type = e_type_key_cons_meta_description(cmd_type, cmd_info->description);
     E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-    expr->type_key = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
+    expr->type_key = cmd_type;
     expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
     expr->value.u64 = e_id_from_string(cmd_name);
     exprs_out[out_idx] = expr;

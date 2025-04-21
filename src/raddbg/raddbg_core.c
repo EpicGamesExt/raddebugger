@@ -4347,6 +4347,12 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.fstrs                = cell_info.fstrs;
                             cell_params.fuzzy_matches        = &fuzzy_matches;
                             
+                            // rjf: apply description
+                            if(row_height_px > ui_top_font_size()*3.5f)
+                            {
+                              cell_params.description = cell_info.description;
+                            }
+                            
                             // rjf: apply expander (or substitute space)
                             if(row_is_expandable && cell == row_info->cells.first)
                             {
@@ -6348,7 +6354,6 @@ rd_window_frame(void)
     {
       FloatingViewTask *next;
       RD_Cfg *view;
-      F32 row_height_px;
       Rng2F32 rect;
       String8 view_name;
       String8 expr;
@@ -6479,7 +6484,6 @@ rd_window_frame(void)
             SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
             hover_eval_floating_view_task = t;
             t->view          = view;
-            t->row_height_px = row_height_px;
             t->rect          = rect;
             t->view_name     = view_name;
             t->expr          = hover_eval_expr;
@@ -6580,11 +6584,20 @@ rd_window_frame(void)
         // rjf: evaluate query expression
         E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
         
+        // rjf: determine & store row-height setting
+        if(!query_is_anchored && cmd_name.size == 0)
+        {
+          F32 row_height = 5.f;
+          F32 row_height_px = row_height * ui_top_font_size();
+          RD_Cfg *row_height_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("row_height"));
+          rd_cfg_new_replacef(row_height_root, "%f", row_height);
+        }
+        
         // rjf: compute query view's top-level rectangle
-        F32 row_height_px = floor_f32(ui_top_px_height());
         Rng2F32 rect = {0};
         RD_RegsScope(.view = view->id)
         {
+          F32 row_height_px = ui_top_px_height();
           Vec2F32 content_rect_center = center_2f32(content_rect);
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_expr(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval.expr);
@@ -6619,7 +6632,6 @@ rd_window_frame(void)
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
           query_floating_view_task = t;
           t->view          = view;
-          t->row_height_px = row_height_px;
           t->rect          = rect;
           t->view_name     = str8_lit("watch");
           t->expr          = query_expr;
@@ -6644,7 +6656,6 @@ rd_window_frame(void)
       {
         // rjf: unpack
         RD_Cfg *view      = t->view;    
-        F32 row_height_px = t->row_height_px;
         Rng2F32 rect      = t->rect;
         String8 view_name = t->view_name;
         String8 expr      = t->expr;
@@ -6674,7 +6685,6 @@ rd_window_frame(void)
         
         // rjf: build
         UI_Focus(is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
-          UI_PrefHeight(ui_px(row_height_px, 1.f))
         {
           // rjf: build top-level container box
           UI_Box *container = &ui_nil_box;

@@ -40,12 +40,13 @@ enum
 typedef struct RD_CellParams RD_CellParams;
 struct RD_CellParams
 {
-  //- rjf: catachall parameters
+  //- rjf: catchall parameters
   RD_CellFlags flags;
   S32 depth;
   FuzzyMatchRangeList *fuzzy_matches;
   String8 pre_edit_value;
   DR_FStrList fstrs;
+  String8 description;
   
   //- rjf: expander r/w info
   B32 *expanded_out;

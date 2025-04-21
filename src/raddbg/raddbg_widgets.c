@@ -3216,10 +3216,23 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build left-hand-side container box
+  //
+  UI_Box *lhs_box = &ui_nil_box;
+  UI_Parent(box) UI_WidthFill UI_ChildLayoutAxis(Axis2_Y)
+  {
+    lhs_box = ui_build_box_from_stringf(0, "lhs_box");
+    UI_Parent(lhs_box)
+    {
+      ui_spacer(ui_em(3.f, 0.f));
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build scrollable container box
   //
   UI_Box *scrollable_box = &ui_nil_box;
-  UI_Parent(box) UI_WidthFill
+  UI_Parent(lhs_box) UI_WidthFill UI_HeightFill
   {
     scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
   }
@@ -3652,6 +3665,22 @@ rd_cell(RD_CellParams *params, String8 string)
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
       cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: build description
+  //
+  if(params->description.size != 0) UI_Parent(lhs_box) UI_HeightFill RD_Font(RD_FontSlot_Main) UI_FontSize(ui_top_font_size()*0.85f)
+  {
+    UI_Row
+    {
+      ui_spacer(ui_em(0.5f, 1.f));
+      ui_label(params->description);
+    }
+  }
+  UI_Parent(lhs_box)
+  {
+    ui_spacer(ui_em(3.f, 0.f));
   }
   
   //////////////////////////////

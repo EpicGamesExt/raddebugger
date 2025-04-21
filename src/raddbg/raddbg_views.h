@@ -112,6 +112,7 @@ struct RD_WatchRowCellInfo
   String8 cmd_name;
   String8 file_path;
   DR_FStrList fstrs;
+  String8 description;
   String8 error_tooltip;
   String8 inheritance_tooltip;
   RD_ViewUIRule *view_ui_rule;

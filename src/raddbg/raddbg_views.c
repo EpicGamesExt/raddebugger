@@ -1472,6 +1472,20 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   }
   
   //////////////////////////////
+  //- rjf: determine cell description
+  //
+  for(E_Type *type = cell_type;
+      type->kind != E_TypeKind_Null;
+      type = e_type_from_key__cached(type->direct_type_key))
+  {
+    if(type->kind == E_TypeKind_MetaDescription)
+    {
+      result.description = type->name;
+      break;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: determine cell editability
   //
   switch(cell->kind)
