@@ -3523,164 +3523,159 @@ rd_cell(RD_CellParams *params, String8 string)
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
+    Temp scratch = scratch_begin(0, 0);
+    
+    //- rjf: compute fancy strings
+    DR_FStrList fstrs = {0};
+    {
+      //- rjf: (not editing)
+      if(!is_focus_active && !is_focus_active_disabled && params->expr_fstrs.total_size != 0)
+      {
+        fstrs = params->expr_fstrs;
+      }
+      else if(!is_focus_active && !is_focus_active_disabled && params->eval_fstrs.total_size != 0)
+      {
+        fstrs = params->eval_fstrs;
+      }
+      else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_CellFlag_CodeContents && params->pre_edit_value.size != 0)
+      {
+        String8 display_string = params->pre_edit_value;
+        fstrs = rd_fstrs_from_code_string(scratch.arena, 1, 0, ui_color_from_name(str8_lit("text")), display_string);
+      }
+      else if(!is_focus_active && !is_focus_active_disabled)
+      {
+        String8 display_string = params->pre_edit_value;
+        if(params->pre_edit_value.size == 0)
+        {
+          display_string = ui_display_part_from_key_string(string);
+        }
+        UI_TagF("weak")
+        {
+          DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          dr_fstrs_push_new(scratch.arena, &fstrs, &params, display_string);
+        }
+      }
+      
+      //- rjf: (editing)
+      else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_CellFlag_CodeContents)
+      {
+        String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
+        DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
+        if(autocomplete_hint_string.size != 0)
+        {
+          String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
+          String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
+          U64 off = 0;
+          U64 cursor_off = params->cursor->column-1;
+          DR_FStrNode *prev_n = 0;
+          for(DR_FStrNode *n = code_fstrs.first; n != 0; n = n->next)
+          {
+            if(off <= cursor_off && cursor_off <= off+n->v.string.size)
+            {
+              prev_n = n;
+              break;
+            }
+            off += n->v.string.size;
+          }
+          {
+            DR_FStrNode *autocomp_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+            DR_FStr *fstr = &autocomp_fstr_n->v;
+            fstr->string = autocomplete_append_string;
+            fstr->params.font = ui_top_font();
+            fstr->params.color = ui_color_from_name(str8_lit("text"));
+            fstr->params.color.w *= 0.5f;
+            fstr->params.size = ui_top_font_size();
+            autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
+            if(prev_n != 0)
+            {
+              prev_n->next = autocomp_fstr_n;
+            }
+            if(prev_n == 0)
+            {
+              code_fstrs.first = code_fstrs.last = autocomp_fstr_n;
+            }
+            if(prev_n != 0 && prev_n->next == 0)
+            {
+              code_fstrs.last = autocomp_fstr_n;
+            }
+            code_fstrs.node_count += 1;
+            code_fstrs.total_size += autocomplete_hint_string.size;
+            if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
+            {
+              String8 full_string = prev_n->v.string;
+              U64 chop_amt = full_string.size - (cursor_off - off);
+              prev_n->v.string = str8_chop(full_string, chop_amt);
+              code_fstrs.total_size -= chop_amt;
+              if(chop_amt != 0)
+              {
+                String8 post_cursor = str8_skip(full_string, cursor_off - off);
+                DR_FStrNode *post_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+                DR_FStr *post_fstr = &post_fstr_n->v;
+                MemoryCopyStruct(post_fstr, &prev_n->v);
+                post_fstr->string   = post_cursor;
+                if(autocomp_fstr_n->next == 0)
+                {
+                  code_fstrs.last = post_fstr_n;
+                }
+                post_fstr_n->next = autocomp_fstr_n->next;
+                autocomp_fstr_n->next = post_fstr_n;
+                code_fstrs.node_count += 1;
+                code_fstrs.total_size += post_cursor.size;
+              }
+            }
+          }
+        }
+        fstrs = code_fstrs;
+      }
+      else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_CellFlag_CodeContents))
+      {
+        String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
+        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, edit_string);
+      }
+    }
+    
+    //- rjf: compute fuzzy match ranges
+    FuzzyMatchRangeList fuzzy_matches = {0};
+    if(params->search_needle.size != 0)
+    {
+      fuzzy_matches = dr_fuzzy_match_find_from_fstrs(scratch.arena, &fstrs, params->search_needle);
+    }
+    
+    //- rjf: build textual content
     if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) == 0)
     {
       ui_spacer(ui_em(0.5f, 1.f));
     }
-    if(!is_focus_active && !is_focus_active_disabled && params->fstrs.total_size != 0)
+    if(is_focus_active)
     {
-      UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-      ui_box_equip_display_fstrs(label, &params->fstrs);
-      if(params->fuzzy_matches != 0)
-      {
-        ui_box_equip_fuzzy_match_ranges(label, params->fuzzy_matches);
-      }
+      ui_set_next_pref_width(ui_text_dim(1, 1));
+      ui_set_next_flags(UI_BoxFlag_DisableTextTrunc);
     }
-    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_CellFlag_CodeContents)
-    {
-      String8 display_string = ui_display_part_from_key_string(string);
-      if(!(params->flags & RD_CellFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
-      {
-        display_string = params->pre_edit_value;
-        UI_Box *box = rd_code_label(1.f, 1, ui_color_from_name(str8_lit("text")), display_string);
-        if(params->fuzzy_matches != 0)
-        {
-          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
-        }
-      }
-      else if(params->flags & RD_CellFlag_DisplayStringIsCode)
-      {
-        UI_Box *box = rd_code_label(1.f, 1, ui_color_from_name(str8_lit("text")), display_string);
-        if(params->fuzzy_matches != 0)
-        {
-          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
-        }
-      }
-      else UI_TagF("weak")
-      {
-        UI_Box *box = ui_label(display_string).box;
-        if(params->fuzzy_matches != 0)
-        {
-          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
-        }
-      }
-    }
-    else if(!is_focus_active && !is_focus_active_disabled && !(params->flags & RD_CellFlag_CodeContents))
-    {
-      String8 display_string = ui_display_part_from_key_string(string);
-      if(!(params->flags & RD_CellFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
-      {
-        display_string = params->pre_edit_value;
-      }
-      else
-      {
-        ui_set_next_tag(str8_lit("weak"));
-      }
-      UI_Box *box = ui_label(display_string).box;
-      if(params->fuzzy_matches != 0)
-      {
-        ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
-      }
-    }
-    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_CellFlag_CodeContents)
+    UI_Box *text_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###text_box");
+    ui_box_equip_display_fstrs(text_box, &fstrs);
+    ui_box_equip_fuzzy_match_ranges(text_box, &fuzzy_matches);
+    if(is_focus_active || is_focus_active_disabled)
     {
       String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-      Temp scratch = scratch_begin(0, 0);
-      F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) * expander_size_px;
-      ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
-      UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
-      if(autocomplete_hint_string.size != 0)
-      {
-        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
-        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
-        U64 off = 0;
-        U64 cursor_off = params->cursor->column-1;
-        DR_FStrNode *prev_n = 0;
-        for(DR_FStrNode *n = code_fstrs.first; n != 0; n = n->next)
-        {
-          if(off <= cursor_off && cursor_off <= off+n->v.string.size)
-          {
-            prev_n = n;
-            break;
-          }
-          off += n->v.string.size;
-        }
-        {
-          DR_FStrNode *autocomp_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
-          DR_FStr *fstr = &autocomp_fstr_n->v;
-          fstr->string = autocomplete_append_string;
-          fstr->params.font = ui_top_font();
-          fstr->params.color = ui_color_from_name(str8_lit("text"));
-          fstr->params.color.w *= 0.5f;
-          fstr->params.size = ui_top_font_size();
-          autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
-          if(prev_n != 0)
-          {
-            prev_n->next = autocomp_fstr_n;
-          }
-          if(prev_n == 0)
-          {
-            code_fstrs.first = code_fstrs.last = autocomp_fstr_n;
-          }
-          if(prev_n != 0 && prev_n->next == 0)
-          {
-            code_fstrs.last = autocomp_fstr_n;
-          }
-          code_fstrs.node_count += 1;
-          code_fstrs.total_size += autocomplete_hint_string.size;
-          if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
-          {
-            String8 full_string = prev_n->v.string;
-            U64 chop_amt = full_string.size - (cursor_off - off);
-            prev_n->v.string = str8_chop(full_string, chop_amt);
-            code_fstrs.total_size -= chop_amt;
-            if(chop_amt != 0)
-            {
-              String8 post_cursor = str8_skip(full_string, cursor_off - off);
-              DR_FStrNode *post_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
-              DR_FStr *post_fstr = &post_fstr_n->v;
-              MemoryCopyStruct(post_fstr, &prev_n->v);
-              post_fstr->string   = post_cursor;
-              if(autocomp_fstr_n->next == 0)
-              {
-                code_fstrs.last = post_fstr_n;
-              }
-              post_fstr_n->next = autocomp_fstr_n->next;
-              autocomp_fstr_n->next = post_fstr_n;
-              code_fstrs.node_count += 1;
-              code_fstrs.total_size += post_cursor.size;
-            }
-          }
-        }
-      }
-      ui_box_equip_display_fstrs(editstr_box, &code_fstrs);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = params->cursor[0];
       draw_data->mark = params->mark[0];
-      ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
-      mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
-      scratch_end(scratch);
-    }
-    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_CellFlag_CodeContents))
-    {
-      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-      F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) * expander_size_px;
-      ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
-      UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
-      draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
-      draw_data->cursor = params->cursor[0];
-      draw_data->mark = params->mark[0];
-      ui_box_equip_display_string(editstr_box, edit_string);
-      ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
-      mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
+      ui_box_equip_custom_draw(text_box, ui_line_edit_draw, draw_data);
+      Vec2F32 text2mouse = sub_2f32(ui_mouse(), ui_box_text_position(text_box));
+      FNT_Tag font = ui_top_font();
+      F32 font_size = ui_top_font_size();
+      if(params->flags & RD_CellFlag_CodeContents)
+      {
+        font = rd_font_from_slot(RD_FontSlot_Code);
+      }
+      U64 mouse_pt_off = fnt_char_pos_from_tag_size_string_p(font, font_size, 0, ui_top_tab_size(), edit_string, text2mouse.x);
+      mouse_pt = txt_pt(1, 1+mouse_pt_off);
       cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
     }
+    
+    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -3722,7 +3717,7 @@ rd_cell(RD_CellParams *params, String8 string)
     F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*params->depth;
     if(visible_dim_px > 0)
     {
-      Rng1F32 cursor_range_px  = r1f32(cursor_off-ui_top_font_size()*2.f, cursor_off+ui_top_font_size()*2.f);
+      Rng1F32 cursor_range_px  = r1f32(cursor_off-ui_top_font_size()*2.f, cursor_off+ui_top_font_size()*1.f);
       Rng1F32 visible_range_px = r1f32(scrollable_box->view_off_target.x, scrollable_box->view_off_target.x + visible_dim_px);
       cursor_range_px.min = ClampBot(0, cursor_range_px.min);
       cursor_range_px.max = ClampBot(0, cursor_range_px.max);

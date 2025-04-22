@@ -1176,7 +1176,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(is_top_level && evalled_cfg != &rd_nil_cfg)
     {
       RD_Cfg *cfg = evalled_cfg;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
       MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
@@ -1248,7 +1248,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       CTRL_Entity *entity = evalled_entity;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
                                   .pct = 1.f);
       if(entity->kind == CTRL_EntityKind_Machine ||
          entity->kind == CTRL_EntityKind_Process ||
@@ -1291,13 +1291,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
-                                    .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented, .pct = 1.f);
       }
       else
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
-                                    .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
+                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
                                     .pct = 1.f);
       }
     }
@@ -1523,14 +1523,14 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: cfg evaluation -> button for cfg
       else if(result.cfg != &rd_nil_cfg)
       {
-        result.fstrs = rd_title_fstrs_from_cfg(arena, result.cfg);
+        result.expr_fstrs = rd_title_fstrs_from_cfg(arena, result.cfg);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
       //- rjf: entity evaluation -> button for entity
       else if(result.entity != &ctrl_entity_nil)
       {
-        result.fstrs = rd_title_fstrs_from_ctrl_entity(arena, result.entity, 1);
+        result.expr_fstrs = rd_title_fstrs_from_ctrl_entity(arena, result.entity, 1);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
@@ -1549,11 +1549,11 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
                               .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
                               .color = ui_color_from_name(str8_lit("text")));
           }
-          result.fstrs = fstrs;
+          result.expr_fstrs = fstrs;
         }
         else
         {
-          result.fstrs = rd_title_fstrs_from_code_name(arena, result.cmd_name);
+          result.expr_fstrs = rd_title_fstrs_from_code_name(arena, result.cmd_name);
         }
         result.flags |= RD_WatchCellFlag_Button;
       }
@@ -1561,7 +1561,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: files -> button for file
       else if(result.file_path.size != 0)
       {
-        result.fstrs = rd_title_fstrs_from_file_path(arena, result.file_path);
+        result.expr_fstrs = rd_title_fstrs_from_file_path(arena, result.file_path);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
@@ -1680,12 +1680,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             UI_TagF("weak")
             {
               DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-              dr_fstrs_push_new(arena, &result.fstrs, &params, expr_string);
+              dr_fstrs_push_new(arena, &result.expr_fstrs, &params, expr_string);
             }
           }
           else
           {
-            result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
+            result.expr_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
           }
         }
         
@@ -1726,12 +1726,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           String8 string = rd_value_string_from_eval(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, cell->eval);
           if(is_code)
           {
-            result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
+            result.eval_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
           }
           else UI_TagF("weak")
           {
             DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-            dr_fstrs_push_new(arena, &result.fstrs, &params, string);
+            dr_fstrs_push_new(arena, &result.eval_fstrs, &params, string);
             result.flags |= RD_WatchCellFlag_IsNonCode;
           }
         }
@@ -1757,7 +1757,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "(PID: %I64u)", pid));
       dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &fstrs, &params, name);
-      result.fstrs = fstrs;
+      result.expr_fstrs = fstrs;
     }break;
   }
   scratch_end(scratch);

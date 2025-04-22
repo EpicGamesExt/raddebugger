@@ -112,7 +112,8 @@ struct RD_WatchRowCellInfo
   CTRL_Entity *entity;
   String8 cmd_name;
   String8 file_path;
-  DR_FStrList fstrs;
+  DR_FStrList expr_fstrs;
+  DR_FStrList eval_fstrs;
   String8 description;
   String8 error_tooltip;
   String8 inheritance_tooltip;

@@ -33,8 +33,6 @@ enum
   RD_CellFlag_Border              = (1<<9),
   RD_CellFlag_NoBackground        = (1<<10),
   RD_CellFlag_Button              = (1<<11),
-  RD_CellFlag_PreferDisplayString = (1<<12),
-  RD_CellFlag_DisplayStringIsCode = (1<<13),
 };
 
 typedef struct RD_CellParams RD_CellParams;
@@ -43,9 +41,10 @@ struct RD_CellParams
   //- rjf: catchall parameters
   RD_CellFlags flags;
   S32 depth;
-  FuzzyMatchRangeList *fuzzy_matches;
   String8 pre_edit_value;
-  DR_FStrList fstrs;
+  DR_FStrList expr_fstrs;
+  DR_FStrList eval_fstrs;
+  String8 search_needle;
   String8 description;
   
   //- rjf: expander r/w info

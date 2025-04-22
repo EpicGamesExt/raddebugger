@@ -133,6 +133,16 @@ dr_string_from_fstrs(Arena *arena, DR_FStrList *list)
   return result;
 }
 
+internal FuzzyMatchRangeList
+dr_fuzzy_match_find_from_fstrs(Arena *arena, DR_FStrList *fstrs, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 fstrs_string = dr_string_from_fstrs(scratch.arena, fstrs);
+  FuzzyMatchRangeList ranges = fuzzy_match_find(arena, needle, fstrs_string);
+  scratch_end(scratch);
+  return ranges;
+}
+
 internal DR_FRunList
 dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
 {

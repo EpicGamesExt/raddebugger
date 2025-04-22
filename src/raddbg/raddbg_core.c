@@ -3114,7 +3114,11 @@ rd_view_ui(Rng2F32 rect)
                     String8 string = cell->edit_string;
                     if(string.size == 0)
                     {
-                      string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
+                      string = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
+                    }
+                    if(string.size == 0)
+                    {
+                      string = dr_string_from_fstrs(scratch.arena, &cell_info.eval_fstrs);
                     }
                     string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
@@ -3363,7 +3367,10 @@ rd_view_ui(Rng2F32 rect)
                     continue;
                   }
                   RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-                  String8 cell_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
+                  String8List cell_strings = {0};
+                  str8_list_push(scratch.arena, &cell_strings, dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs));
+                  str8_list_push(scratch.arena, &cell_strings, dr_string_from_fstrs(scratch.arena, &cell_info.eval_fstrs));
+                  String8 cell_string = str8_list_join(scratch.arena, &cell_strings, &(StringJoin){.sep = str8_lit(" ")});
                   cell_string = str8_skip_chop_whitespace(cell_string);
                   U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
                   if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -4330,17 +4337,6 @@ rd_view_ui(Rng2F32 rect)
                             is_button = 0;
                             is_activated_on_single_click = 0;
                           }
-                          String8 searched_string = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
-                          String8 search_query = rd_view_query_input();
-                          FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, search_query, searched_string);
-                          if(fuzzy_matches.count == 0)
-                          {
-                            String8 path_needle = str8_skip_last_slash(search_query);
-                            if(0 < path_needle.size && path_needle.size < search_query.size)
-                            {
-                              fuzzy_matches = fuzzy_match_find(scratch.arena, path_needle, searched_string);
-                            }
-                          }
                           
                           // rjf: form cell build parameters
                           RD_CellParams cell_params = {0};
@@ -4354,9 +4350,10 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.expanded_out         = &next_row_expanded;
-                            cell_params.pre_edit_value       = dr_string_from_fstrs(scratch.arena, &cell_info.fstrs);
-                            cell_params.fstrs                = cell_info.fstrs;
-                            cell_params.fuzzy_matches        = &fuzzy_matches;
+                            cell_params.pre_edit_value       = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
+                            cell_params.expr_fstrs           = cell_info.expr_fstrs;
+                            cell_params.eval_fstrs           = cell_info.eval_fstrs;
+                            cell_params.search_needle        = rd_view_query_input();
                             
                             // rjf: apply description
                             if(row_height_px > ui_top_font_size()*3.5f)
@@ -5981,270 +5978,6 @@ rd_window_frame(void)
         ui_divider(ui_em(1.f, 1.f));
       }
     }
-    
-    ////////////////////////////
-    //- rjf: @window_ui_part top-level registers context menu
-    //
-#if 0
-    UI_CtxMenu(rd_state->ctx_menu_key) UI_PrefWidth(ui_em(50.f, 1.f))
-    {
-      Temp scratch = scratch_begin(0, 0);
-      RD_Regs *regs = ws->ctx_menu_regs;
-      RD_RegSlot slot = ws->ctx_menu_regs_slot;
-      CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
-      {
-        switch(slot)
-        {
-          default:{}break;
-          
-          //////////////////////
-          //- rjf: source code locations
-          //
-          case RD_RegSlot_Cursor:
-          {
-            // TODO(rjf): with new registers-based commands, all of this can be deduplicated with the
-            // command-based path, but I am holding off on that until post 0.9.12 - these should be
-            // able to just all push commands for their corresponding actions
-            //
-            TXT_Scope *txt_scope = txt_scope_open();
-            HS_Scope *hs_scope = hs_scope_open();
-            TxtRng range = txt_rng(regs->cursor, regs->mark);
-            D_LineList lines = regs->lines;
-            if(!txt_pt_match(range.min, range.max) && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Copy].string)))
-            {
-              U128 hash = {0};
-              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
-              String8 data = hs_data_from_hash(hs_scope, hash);
-              String8 copy_data = txt_string_from_info_data_txt_rng(&info, data, range);
-              os_set_clipboard_text(copy_data);
-              ui_ctx_menu_close();
-            }
-            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_RightArrow, 0, "Set Next Statement")))
-            {
-              CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-              U64 new_rip_vaddr = regs->vaddr;
-              if(regs->file_path.size != 0)
-              {
-                for(D_LineNode *n = lines.first; n != 0; n = n->next)
-                {
-                  CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
-                  CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
-                  if(module != &ctrl_entity_nil)
-                  {
-                    new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
-                    break;
-                  }
-                }
-              }
-              rd_cmd(RD_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
-              ui_ctx_menu_close();
-            }
-            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Run To Line")))
-            {
-              if(regs->file_path.size != 0)
-              {
-                rd_cmd(RD_CmdKind_RunToLine, .file_path = regs->file_path, .cursor = range.min);
-              }
-              else
-              {
-                rd_cmd(RD_CmdKind_RunToLine, .vaddr = regs->vaddr);
-              }
-              ui_ctx_menu_close();
-            }
-            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Null, 0, "Go To Name")))
-            {
-              U128 hash = {0};
-              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
-              String8 data = hs_data_from_hash(hs_scope, hash);
-              Rng1U64 expr_off_range = {0};
-              if(range.min.column != range.max.column)
-              {
-                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
-              }
-              else
-              {
-                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-              }
-              String8 expr = str8_substr(data, expr_off_range);
-              rd_cmd(RD_CmdKind_GoToName, .string = expr);
-              ui_ctx_menu_close();
-            }
-            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
-            {
-              rd_cmd(RD_CmdKind_ToggleBreakpoint,
-                     .file_path = regs->file_path,
-                     .cursor    = range.min,
-                     .vaddr     = regs->vaddr);
-              ui_ctx_menu_close();
-            }
-            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Binoculars, 0, "Toggle Watch Expression")))
-            {
-              U128 hash = {0};
-              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
-              String8 data = hs_data_from_hash(hs_scope, hash);
-              Rng1U64 expr_off_range = {0};
-              if(range.min.column != range.max.column)
-              {
-                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
-              }
-              else
-              {
-                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-              }
-              String8 expr = str8_substr(data, expr_off_range);
-              rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = expr);
-              ui_ctx_menu_close();
-            }
-            if(regs->file_path.size == 0 && range.min.line == range.max.line && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_GoToSource].string)))
-            {
-              rd_cmd(RD_CmdKind_GoToSource, .lines = lines);
-              ui_ctx_menu_close();
-            }
-            if(regs->file_path.size != 0 && range.min.line == range.max.line && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_GoToDisassembly].string)))
-            {
-              rd_cmd(RD_CmdKind_GoToDisassembly, .lines = lines);
-              ui_ctx_menu_close();
-            }
-            hs_scope_close(hs_scope);
-            txt_scope_close(txt_scope);
-          }break;
-          
-          //////////////////////
-          //- rjf: tabs
-          //
-          case RD_RegSlot_View:
-          {
-#if 0 // TODO(rjf): @cfg (context menus)
-            RD_Cfg *tab = rd_cfg_from_id(regs->view);
-            RD_RegsScope(.view = regs->view)
-            {
-              String8 expr = rd_view_expr_string();
-              RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(tab->string);
-              RD_IconKind view_icon = view_rule_info->icon_kind;
-              DR_FStrList fstrs = rd_title_fstrs_from_view(scratch.arena, view_rule_info->display_name, expr, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
-              String8 file_path = rd_file_path_from_eval_string(scratch.arena, expr);
-              
-              // rjf: title
-              UI_Row
-              {
-                ui_spacer(ui_em(1.f, 1.f));
-                RD_Font(RD_FontSlot_Icons)
-                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-                  UI_PrefWidth(ui_em(2.f, 1.f))
-                  UI_PrefHeight(ui_pct(1, 0))
-                  UI_TextAlignment(UI_TextAlign_Center)
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-                  ui_label(rd_icon_kind_text_table[view_icon]);
-                UI_PrefWidth(ui_text_dim(10, 1))
-                {
-                  UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                  ui_box_equip_display_fstrs(name_box, &fstrs);
-                }
-              }
-              
-              RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-              
-              // rjf: copy name
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
-              {
-                os_set_clipboard_text(dr_string_from_fstrs(scratch.arena, &fstrs));
-                ui_ctx_menu_close();
-              }
-              
-              // rjf: copy full path
-              if(file_path.size != 0)
-              {
-                UI_Signal copy_full_path_sig = rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Full Path");
-                String8 full_path = path_normalized_from_string(scratch.arena, file_path);
-                if(ui_clicked(copy_full_path_sig))
-                {
-                  os_set_clipboard_text(full_path);
-                  ui_ctx_menu_close();
-                }
-                if(ui_hovering(copy_full_path_sig)) UI_Tooltip
-                {
-                  ui_label(full_path);
-                }
-              }
-              
-              // rjf: show in explorer
-              if(file_path.size != 0)
-              {
-                UI_Signal sig = rd_icon_buttonf(RD_IconKind_FolderClosedFilled, 0, "Show In Explorer");
-                if(ui_clicked(sig))
-                {
-                  String8 full_path = path_normalized_from_string(scratch.arena, file_path);
-                  os_show_in_filesystem_ui(full_path);
-                  ui_ctx_menu_close();
-                }
-              }
-              
-              // rjf: filter controls
-              if(view_rule_info->flags & RD_ViewRuleInfoFlag_CanFilter)
-              {
-                if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Filter].string)))
-                {
-                  rd_cmd(RD_CmdKind_Filter);
-                  ui_ctx_menu_close();
-                }
-                if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_ClearFilter].string)))
-                {
-                  rd_cmd(RD_CmdKind_ClearFilter);
-                  ui_ctx_menu_close();
-                }
-              }
-              
-              // rjf: close tab
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Tab")))
-              {
-                rd_cmd(RD_CmdKind_CloseTab);
-                ui_ctx_menu_close();
-              }
-              
-              // rjf: param tree editing
-#if 0
-              UI_TextPadding(ui_top_font_size()*1.5f) RD_Font(RD_FontSlot_Code)
-              {
-                Temp scratch = scratch_begin(0, 0);
-                String8 schema_string = view->spec->params_schema;
-                MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, schema_string);
-                MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), schema_string, schema_tokenize.tokens);
-                MD_Node *schema_root = schema_parse.root->first;
-                if(!md_node_is_nil(schema_root))
-                {
-                  if(!md_node_is_nil(schema_root->first))
-                  {
-                    RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-                  }
-                  for MD_EachNode(key, schema_root->first)
-                  {
-                    UI_Row
-                    {
-                      MD_Node *params = view->params_roots[view->params_write_gen%ArrayCount(view->params_roots)];
-                      MD_Node *param_tree = md_child_from_string(params, key->string, 0);
-                      String8 pre_edit_value = md_string_from_children(scratch.arena, param_tree);
-                      UI_PrefWidth(ui_em(10.f, 1.f)) ui_label(key->string);
-                      UI_Signal sig = rd_cellf(RD_CellFlag_Border|RD_CellFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, pre_edit_value, "%S##view_param", key->string);
-                      if(ui_committed(sig))
-                      {
-                        String8 new_string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size);
-                        rd_view_store_param(view, key->string, new_string);
-                      }
-                    }
-                  }
-                }
-                scratch_end(scratch);
-              }
-#endif
-            }
-#endif
-          }break;
-        }
-      }
-      
-      scratch_end(scratch);
-    }
-#endif
     
     ////////////////////////////
     //- rjf: @window_ui_part drop-completion context menu
