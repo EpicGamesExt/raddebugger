@@ -235,7 +235,8 @@ RD_VocabTable:
     ```
       x:
     {
-      @default(11) @display_name('Tab Font Size') 'font_size': @range[6, 72] u64,
+      @default(11) @display_name('Tab Font Size') @description("Controls the tab's font size.")
+        'font_size': @range[6, 72] u64,
     }
     ```
   }
@@ -246,7 +247,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @default(3.f) @display_name('Tab Row Height') 'row_height': @range[1.75f, 5.f] f32,
+      @default(3.f) @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
+        'row_height': @range[1.75f, 5.f] f32,
     }
     ```
   }
@@ -255,9 +257,10 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      'lang':lang,
-      'size':code_string,
-      @default(1) 'show_line_numbers':bool,
+      @description("The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.")
+        'lang': lang,
+      @default(1) @description("Controls whether or not line numbers are shown.")
+        'show_line_numbers':bool,
       @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
         'auto': bool,
     }
@@ -279,7 +282,8 @@ RD_VocabTable:
         'show_source_lines': bool,
       @default(1) @description("Controls whether or not disassembly text is decorated with symbol names.")
         'show_symbol_names': bool,
-      @default(1) 'show_line_numbers': bool,
+      @default(1) @description("Controls whether or not line numbers are shown.")
+        'show_line_numbers': bool,
     }
     ```
   }
@@ -288,9 +292,12 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      'size': code_string,
-      @default(16) 'num_columns': @range[1, 64] u64,
-      @default(1)  'bytes_per_cell': @range[1, 8] u64,
+      @description("The number of bytes of the viewed memory range.")
+        'size': code_string,
+      @default(16) @description("The number of columns to build before building new rows.")
+        'num_columns': @range[1, 64] u64,
+      @default(1) @description("The number of bytes that each cell should represent.")
+        'bytes_per_cell': @range[1, 8] u64,
     }
     ```
   }
@@ -301,7 +308,8 @@ RD_VocabTable:
     {
       @order(0) 'w': u64,
       @order(1) 'h': u64,
-      'fmt': tex2dformat,
+      @display_name("Bitmap Format") @description("The pixel format that the bitmap data should be interpreted as being within.")
+        'fmt': tex2dformat,
     }
     ```
   }
@@ -980,6 +988,7 @@ RD_DefaultBindingTable:
   
   //- rjf: command lister
   { "open_palette"                F1        0        0         0          }
+  { "open_palette"                P         ctrl     shift     0          }
   
   //- rjf: developer commands
   { "log_marker"                  M         ctrl     shift     alt        }

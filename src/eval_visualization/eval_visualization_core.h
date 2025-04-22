@@ -235,7 +235,8 @@ enum
   EV_StringFlag_PrettyNames          = (1<<1),
   EV_StringFlag_DisableAddresses     = (1<<2),
   EV_StringFlag_DisableStrings       = (1<<3),
-  EV_StringFlag_DisableStringQuotes  = (1<<4),
+  EV_StringFlag_DisableChars         = (1<<4),
+  EV_StringFlag_DisableStringQuotes  = (1<<5),
 };
 
 typedef struct EV_StringParams EV_StringParams;

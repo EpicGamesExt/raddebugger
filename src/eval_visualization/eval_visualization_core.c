@@ -1378,7 +1378,11 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
     case E_TypeKind_UChar32:
     {
       B32 type_is_unsigned = (E_TypeKind_UChar8 <= type_kind && type_kind <= E_TypeKind_UChar32);
-      String8 char_str = ev_string_from_ascii_value(arena, eval.value.s64);
+      String8 char_str = {0};
+      if(!(params->flags & EV_StringFlag_DisableChars))
+      {
+        char_str = ev_string_from_ascii_value(arena, eval.value.s64);
+      }
       if(char_str.size != 0)
       {
         if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
@@ -1620,6 +1624,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         else if(str8_match(type->name, str8_lit("no_string"), 0))
         {
           lens_params.flags |= EV_StringFlag_DisableStrings;
+        }
+        else if(str8_match(type->name, str8_lit("no_char"), 0))
+        {
+          lens_params.flags |= EV_StringFlag_DisableChars;
         }
         else if(str8_match(type->name, str8_lit("no_addr"), 0))
         {

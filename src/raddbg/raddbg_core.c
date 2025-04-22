@@ -12303,6 +12303,7 @@ rd_frame(void)
         {str8_lit("hex"),         1, 1, 0,        0, 0, {0}},
         {str8_lit("digits"),      1, 1, 0,        0, 0, {0}},
         {str8_lit("no_string"),   1, 1, 0,        0, 0, {0}},
+        {str8_lit("no_char"),     1, 1, 0,        0, 0, {0}},
         {str8_lit("no_addr"),     1, 1, 0,        0, 0, {0}},
         {str8_lit("sequence"),    0, 0, 1,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(sequence), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(sequence)}},
         {str8_lit("only"),        0, 0, 0,        0, 0, {E_TYPE_EXPAND_INFO_FUNCTION_NAME(only), E_TYPE_EXPAND_RANGE_FUNCTION_NAME(only)}},

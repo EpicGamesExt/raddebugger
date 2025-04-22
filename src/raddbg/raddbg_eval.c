@@ -533,8 +533,18 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
       {
         if(!md_node_has_tag(child, str8_lit("no_expand"), 0))
         {
-          FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, child->string);
-          if(matches.count == matches.needle_part_count)
+          String8 display_name = md_tag_from_string(child, str8_lit("display_name"), 0)->first->string;
+          if(display_name.size == 0)
+          {
+            display_name = rd_display_from_code_name(child->string);
+          }
+          String8 desc = md_tag_from_string(child, str8_lit("description"), 0)->first->string;
+          FuzzyMatchRangeList name_matches         = fuzzy_match_find(scratch.arena, filter, child->string);
+          FuzzyMatchRangeList display_name_matches = fuzzy_match_find(scratch.arena, filter, display_name);
+          FuzzyMatchRangeList desc_matches         = fuzzy_match_find(scratch.arena, filter, desc);
+          if(name_matches.count == name_matches.needle_part_count ||
+             display_name_matches.count == display_name_matches.needle_part_count ||
+             desc_matches.count == desc_matches.needle_part_count)
           {
             ExpandChildNode *n = push_array(scratch.arena, ExpandChildNode, 1);
             n->n = child;
