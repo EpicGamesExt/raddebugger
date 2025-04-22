@@ -3178,8 +3178,8 @@ rd_cell(RD_CellParams *params, String8 string)
   // (the base line edit textual label / editor is always built, but this can be enriched
   // with extra widgets & metadata)
   //
-  B32 build_toggle_switch = !!(params->flags & RD_CellFlag_ToggleSwitch && !is_focus_active);
-  B32 build_slider        = !!(params->flags & RD_CellFlag_Slider && !is_focus_active);
+  B32 build_toggle_switch = !!(params->flags & RD_CellFlag_ToggleSwitch) && !is_focus_active;
+  B32 build_slider        = !!(params->flags & RD_CellFlag_Slider) && !is_focus_active;
   B32 build_lhs_name_desc = (params->meta_fstrs.node_count != 0 || params->description.size != 0);
   DR_FStrList lhs_name_fstrs = params->meta_fstrs;
   DR_FStrList value_name_fstrs = params->value_fstrs;
@@ -3195,114 +3195,6 @@ rd_cell(RD_CellParams *params, String8 string)
       {
         autocomplete_hint_string = evt->string;
       }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: compute editable fancy strings
-  //
-  DR_FStrList fstrs = {0};
-  {
-    //- rjf: (not editing)
-    if(!is_focus_active && !is_focus_active_disabled && value_name_fstrs.total_size != 0)
-    {
-      fstrs = value_name_fstrs;
-    }
-    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_CellFlag_CodeContents && params->pre_edit_value.size != 0)
-    {
-      String8 display_string = params->pre_edit_value;
-      fstrs = rd_fstrs_from_code_string(scratch.arena, 1, 0, ui_color_from_name(str8_lit("text")), display_string);
-    }
-    else if(!is_focus_active && !is_focus_active_disabled)
-    {
-      String8 display_string = params->pre_edit_value;
-      if(params->pre_edit_value.size == 0)
-      {
-        display_string = ui_display_part_from_key_string(string);
-      }
-      UI_TagF("weak")
-      {
-        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, display_string);
-      }
-    }
-    
-    //- rjf: (editing)
-    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_CellFlag_CodeContents)
-    {
-      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
-      if(autocomplete_hint_string.size != 0)
-      {
-        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
-        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
-        U64 off = 0;
-        U64 cursor_off = params->cursor->column-1;
-        DR_FStrNode *prev_n = 0;
-        for(DR_FStrNode *n = code_fstrs.first; n != 0; n = n->next)
-        {
-          if(off <= cursor_off && cursor_off <= off+n->v.string.size)
-          {
-            prev_n = n;
-            break;
-          }
-          off += n->v.string.size;
-        }
-        {
-          DR_FStrNode *autocomp_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
-          DR_FStr *fstr = &autocomp_fstr_n->v;
-          fstr->string = autocomplete_append_string;
-          fstr->params.font = ui_top_font();
-          fstr->params.color = ui_color_from_name(str8_lit("text"));
-          fstr->params.color.w *= 0.5f;
-          fstr->params.size = ui_top_font_size();
-          autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
-          if(prev_n != 0)
-          {
-            prev_n->next = autocomp_fstr_n;
-          }
-          if(prev_n == 0)
-          {
-            code_fstrs.first = code_fstrs.last = autocomp_fstr_n;
-          }
-          if(prev_n != 0 && prev_n->next == 0)
-          {
-            code_fstrs.last = autocomp_fstr_n;
-          }
-          code_fstrs.node_count += 1;
-          code_fstrs.total_size += autocomplete_hint_string.size;
-          if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
-          {
-            String8 full_string = prev_n->v.string;
-            U64 chop_amt = full_string.size - (cursor_off - off);
-            prev_n->v.string = str8_chop(full_string, chop_amt);
-            code_fstrs.total_size -= chop_amt;
-            if(chop_amt != 0)
-            {
-              String8 post_cursor = str8_skip(full_string, cursor_off - off);
-              DR_FStrNode *post_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
-              DR_FStr *post_fstr = &post_fstr_n->v;
-              MemoryCopyStruct(post_fstr, &prev_n->v);
-              post_fstr->string   = post_cursor;
-              if(autocomp_fstr_n->next == 0)
-              {
-                code_fstrs.last = post_fstr_n;
-              }
-              post_fstr_n->next = autocomp_fstr_n->next;
-              autocomp_fstr_n->next = post_fstr_n;
-              code_fstrs.node_count += 1;
-              code_fstrs.total_size += post_cursor.size;
-            }
-          }
-        }
-      }
-      fstrs = code_fstrs;
-    }
-    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_CellFlag_CodeContents))
-    {
-      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-      DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
-      dr_fstrs_push_new(scratch.arena, &fstrs, &params, edit_string);
     }
   }
   
@@ -3379,34 +3271,6 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
-  //- rjf: build line edit container box
-  //
-  UI_Box *edit_box = &ui_nil_box;
-  UI_Parent(box) if(fstrs.node_count != 0 || (!is_focus_active && !is_focus_active_disabled))
-  {
-    UI_Size edit_box_size = ui_pct(1, 0);
-    if(build_lhs_name_desc)
-    {
-      edit_box_size = ui_px(dr_dim_from_fstrs(&fstrs).x + 10, 1.f);
-      ui_set_next_text_alignment(UI_TextAlign_Center);
-    }
-    UI_PrefWidth(edit_box_size)
-      edit_box = ui_build_box_from_stringf(0, "edit_box");
-  }
-  
-  //////////////////////////////
-  //- rjf: build scrollable container box
-  //
-  UI_Box *scrollable_box = &ui_nil_box;
-  if(edit_box != &ui_nil_box)
-  {
-    UI_Parent(edit_box) UI_WidthFill UI_HeightFill
-    {
-      scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: build left-hand-side name/desc box
   //
   if(build_lhs_name_desc) UI_Parent(lhs_box) UI_Padding(ui_em(3.f, 0.f)) UI_WidthFill UI_HeightFill
@@ -3435,6 +3299,33 @@ rd_cell(RD_CellParams *params, String8 string)
         FuzzyMatchRangeList desc_fuzzy_matches = fuzzy_match_find(scratch.arena, params->search_needle, params->description);
         ui_box_equip_fuzzy_match_ranges(desc_box, &desc_fuzzy_matches);
       }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build line edit container box
+  //
+  UI_Box *edit_box = &ui_nil_box;
+  UI_Parent(box) if((is_focus_active || is_focus_active_disabled) || params->pre_edit_value.size != 0 || params->value_fstrs.node_count != 0 || (params->edit_string_size_out && params->edit_string_size_out[0] != 0))
+  {
+    UI_Size edit_box_size = ui_pct(1, 0);
+    if(build_lhs_name_desc)
+    {
+      edit_box_size = ui_children_sum(1);
+    }
+    UI_PrefWidth(edit_box_size)
+      edit_box = ui_build_box_from_stringf(0, "edit_box");
+  }
+  
+  //////////////////////////////
+  //- rjf: build scrollable container box
+  //
+  UI_Box *scrollable_box = &ui_nil_box;
+  if(edit_box != &ui_nil_box)
+  {
+    UI_Parent(edit_box) UI_PrefWidth(ui_children_sum(0))
+    {
+      scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
     }
   }
   
@@ -3499,7 +3390,7 @@ rd_cell(RD_CellParams *params, String8 string)
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))
       UI_Row UI_Padding(ui_px(padding_px, 1.f))
-      UI_PrefWidth(ui_pct(0.5f, 0.f))
+      UI_PrefWidth(ui_pct(0.5f - 0.2f*(!!build_lhs_name_desc), 0.f))
       UI_PrefHeight(ui_px(height_px, 1.f))
       UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
     {
@@ -3686,6 +3577,114 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: compute editable fancy strings
+  //
+  DR_FStrList fstrs = {0};
+  {
+    //- rjf: (not editing)
+    if(!is_focus_active && !is_focus_active_disabled && value_name_fstrs.total_size != 0)
+    {
+      fstrs = value_name_fstrs;
+    }
+    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_CellFlag_CodeContents && params->pre_edit_value.size != 0)
+    {
+      String8 display_string = params->pre_edit_value;
+      fstrs = rd_fstrs_from_code_string(scratch.arena, 1, 0, ui_color_from_name(str8_lit("text")), display_string);
+    }
+    else if(!is_focus_active && !is_focus_active_disabled)
+    {
+      String8 display_string = params->pre_edit_value;
+      if(params->pre_edit_value.size == 0)
+      {
+        display_string = ui_display_part_from_key_string(string);
+      }
+      UI_TagF("weak")
+      {
+        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+        dr_fstrs_push_new(scratch.arena, &fstrs, &params, display_string);
+      }
+    }
+    
+    //- rjf: (editing)
+    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_CellFlag_CodeContents)
+    {
+      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
+      DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
+      if(autocomplete_hint_string.size != 0)
+      {
+        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
+        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
+        U64 off = 0;
+        U64 cursor_off = params->cursor->column-1;
+        DR_FStrNode *prev_n = 0;
+        for(DR_FStrNode *n = code_fstrs.first; n != 0; n = n->next)
+        {
+          if(off <= cursor_off && cursor_off <= off+n->v.string.size)
+          {
+            prev_n = n;
+            break;
+          }
+          off += n->v.string.size;
+        }
+        {
+          DR_FStrNode *autocomp_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+          DR_FStr *fstr = &autocomp_fstr_n->v;
+          fstr->string = autocomplete_append_string;
+          fstr->params.font = ui_top_font();
+          fstr->params.color = ui_color_from_name(str8_lit("text"));
+          fstr->params.color.w *= 0.5f;
+          fstr->params.size = ui_top_font_size();
+          autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
+          if(prev_n != 0)
+          {
+            prev_n->next = autocomp_fstr_n;
+          }
+          if(prev_n == 0)
+          {
+            code_fstrs.first = code_fstrs.last = autocomp_fstr_n;
+          }
+          if(prev_n != 0 && prev_n->next == 0)
+          {
+            code_fstrs.last = autocomp_fstr_n;
+          }
+          code_fstrs.node_count += 1;
+          code_fstrs.total_size += autocomplete_hint_string.size;
+          if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
+          {
+            String8 full_string = prev_n->v.string;
+            U64 chop_amt = full_string.size - (cursor_off - off);
+            prev_n->v.string = str8_chop(full_string, chop_amt);
+            code_fstrs.total_size -= chop_amt;
+            if(chop_amt != 0)
+            {
+              String8 post_cursor = str8_skip(full_string, cursor_off - off);
+              DR_FStrNode *post_fstr_n = push_array(scratch.arena, DR_FStrNode, 1);
+              DR_FStr *post_fstr = &post_fstr_n->v;
+              MemoryCopyStruct(post_fstr, &prev_n->v);
+              post_fstr->string   = post_cursor;
+              if(autocomp_fstr_n->next == 0)
+              {
+                code_fstrs.last = post_fstr_n;
+              }
+              post_fstr_n->next = autocomp_fstr_n->next;
+              autocomp_fstr_n->next = post_fstr_n;
+              code_fstrs.node_count += 1;
+              code_fstrs.total_size += post_cursor.size;
+            }
+          }
+        }
+      }
+      fstrs = code_fstrs;
+    }
+    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_CellFlag_CodeContents))
+    {
+      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
+      DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+      dr_fstrs_push_new(scratch.arena, &fstrs, &params, edit_string);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build scrolled contents
   //
   TxtPt mouse_pt = {0};
@@ -3703,9 +3702,9 @@ rd_cell(RD_CellParams *params, String8 string)
     }
     if(is_focus_active)
     {
-      ui_set_next_pref_width(ui_text_dim(1, 1));
       ui_set_next_flags(UI_BoxFlag_DisableTextTrunc);
     }
+    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*0.5f, 0));
     UI_Box *text_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "###text_box");
     ui_box_equip_display_fstrs(text_box, &fstrs);
     ui_box_equip_fuzzy_match_ranges(text_box, &fuzzy_matches);
@@ -3749,6 +3748,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //////////////////////////////
   //- rjf: focus cursor
   //
+  if(scrollable_box != &ui_nil_box)
   {
     F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*params->depth;
     if(visible_dim_px > 0)

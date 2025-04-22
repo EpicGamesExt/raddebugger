@@ -1179,4 +1179,7 @@ internal F32      ui_top_px_height(void);
 //- rjf: context menu
 #define UI_CtxMenu(key) DeferLoopChecked(ui_begin_ctx_menu(key), ui_end_ctx_menu())
 
+//- rjf: debug
+#define UI_Debug UI_FlagsAdd(UI_BoxFlag_Debug)
+
 #endif // UI_H

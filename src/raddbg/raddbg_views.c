@@ -1231,7 +1231,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           {
             rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "enabled"),
                                         .flags = RD_WatchCellFlag_Background,
-                                        .px = floor_f32(ui_top_font_size()*6.f));
+                                        .px = floor_f32(ui_top_font_size()*5.f));
           }
           else if(cmd_kind != RD_CmdKind_Null)
           {
@@ -1239,7 +1239,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
             rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
                                         e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
                                         .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
-                                        .px = floor_f32(ui_top_font_size()*4.f));
+                                        .px = floor_f32(ui_top_font_size()*3.f));
           }
         }
       }
@@ -1261,7 +1261,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "active"),
                                     .edit_string = row->edit_string,
-                                    .px = floor_f32(ui_top_font_size()*6.f));
+                                    .px = floor_f32(ui_top_font_size()*5.f));
       }
       if(entity->kind == CTRL_EntityKind_Thread)
       {
@@ -1274,7 +1274,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
                                     .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
-                                    .px = floor_f32(ui_top_font_size()*4.f));
+                                    .px = floor_f32(ui_top_font_size()*3.f));
       }
     }
     

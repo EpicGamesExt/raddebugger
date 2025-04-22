@@ -4169,6 +4169,11 @@ rd_view_ui(Rng2F32 rect)
                       E_Eval cell_value_eval = e_value_eval_from_eval(cell->eval);
                       F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
                       F32 next_cell_x_px = cell_x_px + cell_width_px;
+                      F32 cell_width_strictness = 0.f;
+                      if(cell->px != 0)
+                      {
+                        cell_width_strictness = 1.f;
+                      }
                       B32 cell_toggled = (cell_value_eval.value.u64 != 0);
                       B32 next_cell_toggled = cell_toggled;
                       
@@ -4256,7 +4261,7 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: build cell container
                       //
                       UI_Box *cell_box = &ui_nil_box;
-                      UI_PrefWidth(ui_px(cell_width_px, 0.f))
+                      UI_PrefWidth(ui_px(cell_width_px, cell_width_strictness))
                       {
                         ui_set_next_fixed_height(floor_f32(row->visual_size * row_height_px));
                         cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft|cell_flags, "cell_%I64x_%I64x", row_hash, cell_id);
@@ -4376,6 +4381,13 @@ rd_view_ui(Rng2F32 rect)
                             is_activated_on_single_click = 0;
                           }
                           
+                          // rjf: determine query needle
+                          String8 needle = rd_view_query_input();
+                          if(cell->eval.space.kind == E_SpaceKind_FileSystem)
+                          {
+                            needle = str8_skip_last_slash(needle);
+                          }
+                          
                           // rjf: form cell build parameters
                           RD_CellParams cell_params = {0};
                           {
@@ -4388,7 +4400,7 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.expanded_out         = &next_row_expanded;
-                            cell_params.search_needle        = rd_view_query_input();
+                            cell_params.search_needle        = needle;
                             cell_params.meta_fstrs = cell_info.expr_fstrs;
                             cell_params.value_fstrs = cell_info.eval_fstrs;
                             if(row_height_px > ui_top_font_size()*3.5f)
@@ -6678,6 +6690,8 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
                   };
                   U32 codepoints[] =
@@ -6686,6 +6700,8 @@ rd_window_frame(void)
                     'u',
                     'p',
                     'r',
+                    'e',
+                    't',
                     'x',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -8608,7 +8624,10 @@ rd_window_frame(void)
     
     //- rjf: unpack settings
     F32 rounded_corner_amount = rd_setting_f32_from_name(str8_lit("rounded_corner_amount"));
+    F32 border_softness = 1.f;
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
+    B32 do_drop_shadows = 
+      rd_setting_b32_from_name(str8_lit("drop_shadows"));
     Vec4F32 base_background_color = ui_color_from_name(str8_lit("background"));
     Vec4F32 base_border_color = ui_color_from_name(str8_lit("border"));
     Vec4F32 drop_shadow_color = ui_color_from_name(str8_lit("drop_shadow"));
@@ -8635,7 +8654,7 @@ rd_window_frame(void)
     
     //- rjf: draw window border
     {
-      dr_rect(os_client_rect_from_window(ws->os), base_border_color, 0, 1.f, 0.5f);
+      dr_rect(os_client_rect_from_window(ws->os), base_border_color, 0, 1.f, border_softness*0.5f);
     }
     
     //- rjf: recurse & draw
@@ -8695,7 +8714,7 @@ rd_window_frame(void)
       }
       
       // rjf: draw drop shadow
-      if(box->flags & UI_BoxFlag_DrawDropShadow)
+      if(do_drop_shadows && box->flags & UI_BoxFlag_DrawDropShadow)
       {
         Rng2F32 drop_shadow_rect = shift_2f32(pad_2f32(box->rect, 8), v2f32(4, 4));
         R_Rect2DInst *inst = dr_rect(drop_shadow_rect, drop_shadow_color, 0.8f, 0, 8.f);
@@ -8703,7 +8722,7 @@ rd_window_frame(void)
       }
       
       // rjf: blur background
-      if(box->flags & UI_BoxFlag_DrawBackgroundBlur && do_background_blur)
+      if(do_background_blur && box->flags & UI_BoxFlag_DrawBackgroundBlur)
       {
         R_PassParams_Blur *params = dr_blur(pad_2f32(box->rect, 1.f), box->blur_size*(1-box->transparency), 0);
         MemoryCopyArray(params->corner_radii, box_corner_radii);
@@ -8733,7 +8752,7 @@ rd_window_frame(void)
         }
         
         // rjf: draw background
-        R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box_background_color, 0, 0, 1.f);
+        R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box_background_color, 0, 0, border_softness*1.f);
         MemoryCopyArray(inst->corner_radii, box_corner_radii);
         
         // rjf: hot effect extension
@@ -8750,7 +8769,7 @@ rd_window_frame(void)
             {
               color.w *= t;
             }
-            R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, 1.f);
+            R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), v4f32(0, 0, 0, 0), 0, 0, border_softness*1.f);
             inst->colors[Corner_00] = color;
             inst->colors[Corner_10] = color;
             MemoryCopyArray(inst->corner_radii, box_corner_radii);
@@ -8952,7 +8971,7 @@ rd_window_frame(void)
           {
             Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
             Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
-            R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, border_softness*1.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
             
             // rjf: hover effect
@@ -8973,7 +8992,7 @@ rd_window_frame(void)
           // rjf: debug border rendering
           if(b->flags & UI_BoxFlag_Debug)
           {
-            R_Rect2DInst *inst = dr_rect(b->rect, v4f32(1*box->pref_size[Axis2_X].strictness, 0, 1, 0.25f), 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, v4f32(1*box->pref_size[Axis2_X].strictness, 0, 1, 0.25f), 0, 1.f, 0);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
           }
           
@@ -9022,7 +9041,7 @@ rd_window_frame(void)
             }
             Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("focus"));
             color.w *= b->focus_active_t;
-            R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, border_softness*1.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
           }
           
@@ -12453,11 +12472,15 @@ rd_frame(void)
           //- rjf: open lister
           case RD_CmdKind_OpenLister:
           {
+            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+            RD_Cfg *tab = panel_tree.focused->selected_tab;
             String8 expr = push_str8f(scratch.arena,
                                       "query:commands, "
                                       "query:$%I64x, "
                                       "query:$%I64x, "
                                       "query:targets, "
+                                      "query:breakpoints, "
                                       "query:recent_files, "
                                       "query:recent_projects, "
                                       "query:processes, "
@@ -12470,8 +12493,8 @@ rd_frame(void)
                                       "query:globals, "
                                       "query:thread_locals, "
                                       ,
-                                      rd_regs()->view, rd_regs()->window);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1);
+                                      tab->id, window->id);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id);
           }break;
           
           //- rjf: command fast path
@@ -12811,6 +12834,16 @@ rd_frame(void)
             {
               os_move_file_path(dst_path, overwritten_path);
             }
+          }break;
+          
+          //- rjf: opening user/project settings
+          case RD_CmdKind_UserSettings:
+          {
+            rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:user_settings"), .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
+          }break;
+          case RD_CmdKind_ProjectSettings:
+          {
+            rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:project_settings"), .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
           }break;
           
           //- rjf: font sizes
