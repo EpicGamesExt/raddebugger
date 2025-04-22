@@ -413,6 +413,12 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         {
           expr_is_simple = 1;
         }
+        if(expr->kind == E_ExprKind_LeafIdentifier &&
+           (str8_match(expr->string, str8_lit("true"), 0) ||
+            str8_match(expr->string, str8_lit("false"), 0)))
+        {
+          expr_is_simple = 1;
+        }
         if(!expr_is_simple && expr != &e_expr_nil)
         {
           child_type_key = e_type_key_cons_meta_expr(child_type_key, child->first->string);

@@ -119,16 +119,19 @@ internal String8
 dr_string_from_fstrs(Arena *arena, DR_FStrList *list)
 {
   String8 result = {0};
-  result.size = list->total_size;
-  result.str = push_array_no_zero(arena, U8, result.size);
-  U64 idx = 0;
-  for(DR_FStrNode *n = list->first; n != 0; n = n->next)
   {
-    if(!fnt_tag_match(n->v.params.font, dr_thread_ctx->icon_font))
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List parts = {0};
+    for(DR_FStrNode *n = list->first; n != 0; n = n->next)
     {
-      MemoryCopy(result.str+idx, n->v.string.str, n->v.string.size);
-      idx += n->v.string.size;
+      if(!fnt_tag_match(n->v.params.font, dr_thread_ctx->icon_font))
+      {
+        str8_list_push(scratch.arena, &parts, n->v.string);
+      }
     }
+    result = str8_list_join(arena, &parts, 0);
+    result = str8_skip_chop_whitespace(result);
+    scratch_end(scratch);
   }
   return result;
 }
@@ -137,7 +140,23 @@ internal FuzzyMatchRangeList
 dr_fuzzy_match_find_from_fstrs(Arena *arena, DR_FStrList *fstrs, String8 needle)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 fstrs_string = dr_string_from_fstrs(scratch.arena, fstrs);
+  String8 fstrs_string = {0};
+  fstrs_string.size = fstrs->total_size;
+  fstrs_string.str = push_array(arena, U8, fstrs_string.size);
+  {
+    // TODO(rjf): the fact that we only increment on non-icon portions is super weird?
+    // we are only doing that because of the rendering of the fuzzy matches, so maybe
+    // once that is straightened out, we can fix the code here too...
+    U64 off = 0;
+    for(DR_FStrNode *n = fstrs->first; n != 0; n = n->next)
+    {
+      if(!fnt_tag_match(n->v.params.font, dr_thread_ctx->icon_font))
+      {
+        MemoryCopy(fstrs_string.str + off, n->v.string.str, n->v.string.size);
+        off += n->v.string.size;
+      }
+    }
+  }
   FuzzyMatchRangeList ranges = fuzzy_match_find(arena, needle, fstrs_string);
   scratch_end(scratch);
   return ranges;

@@ -1226,6 +1226,42 @@ rd_setting_from_name(String8 name)
   return result;
 }
 
+internal B32
+rd_setting_b32_from_name(String8 name)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 value = rd_setting_from_name(name);
+  String8 expr = push_str8f(scratch.arena, "(bool)(%S)", value);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  B32 result = !!e_value_eval_from_eval(eval).value.u64;
+  scratch_end(scratch);
+  return result;
+}
+
+internal U64
+rd_setting_u64_from_name(String8 name)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 value = rd_setting_from_name(name);
+  String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", value);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  U64 result = e_value_eval_from_eval(eval).value.u64;
+  scratch_end(scratch);
+  return result;
+}
+
+internal F32
+rd_setting_f32_from_name(String8 name)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 value = rd_setting_from_name(name);
+  String8 expr = push_str8f(scratch.arena, "(float32)(%S)", value);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  F32 result = e_value_eval_from_eval(eval).value.f32;
+  scratch_end(scratch);
+  return result;
+}
+
 internal RD_Cfg *
 rd_immediate_cfg_from_key(String8 string)
 {
@@ -3114,11 +3150,11 @@ rd_view_ui(Rng2F32 rect)
                     String8 string = cell->edit_string;
                     if(string.size == 0)
                     {
-                      string = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
+                      string = dr_string_from_fstrs(scratch.arena, &cell_info.eval_fstrs);
                     }
                     if(string.size == 0)
                     {
-                      string = dr_string_from_fstrs(scratch.arena, &cell_info.eval_fstrs);
+                      string = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
                     }
                     string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
@@ -4118,6 +4154,8 @@ rd_view_ui(Rng2F32 rect)
                     F32 cell_x_px = 0;
                     for(RD_WatchCell *cell = row_info->cells.first; cell != 0; cell = cell->next, cell_x += 1)
                     {
+                      if(row_depth > 0) { ui_push_tagf("weak"); }
+                      
                       ////////////
                       //- rjf: unpack cell info
                       //
@@ -4350,12 +4388,9 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.expanded_out         = &next_row_expanded;
-                            cell_params.pre_edit_value       = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
-                            cell_params.expr_fstrs           = cell_info.expr_fstrs;
-                            cell_params.eval_fstrs           = cell_info.eval_fstrs;
                             cell_params.search_needle        = rd_view_query_input();
-                            
-                            // rjf: apply description
+                            cell_params.meta_fstrs = cell_info.expr_fstrs;
+                            cell_params.value_fstrs = cell_info.eval_fstrs;
                             if(row_height_px > ui_top_font_size()*3.5f)
                             {
                               cell_params.description = cell_info.description;
@@ -4683,6 +4718,8 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: bump x pixel coordinate
                       //
                       cell_x_px = next_cell_x_px;
+                      
+                      if(row_depth > 0) { ui_pop_tag(); }
                     }
                   }
                   

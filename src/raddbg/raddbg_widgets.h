@@ -42,8 +42,8 @@ struct RD_CellParams
   RD_CellFlags flags;
   S32 depth;
   String8 pre_edit_value;
-  DR_FStrList expr_fstrs;
-  DR_FStrList eval_fstrs;
+  DR_FStrList meta_fstrs;
+  DR_FStrList value_fstrs;
   String8 search_needle;
   String8 description;
   

@@ -198,8 +198,6 @@ RD_CmdKind_GoToLine,
 RD_CmdKind_GoToAddress,
 RD_CmdKind_CenterCursor,
 RD_CmdKind_ContainCursor,
-RD_CmdKind_FindTextForward,
-RD_CmdKind_FindTextBackward,
 RD_CmdKind_FindNext,
 RD_CmdKind_FindPrev,
 RD_CmdKind_FindThread,
@@ -640,7 +638,7 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[315];
+extern RD_VocabInfo rd_vocab_info_table[313];
 extern RD_NameSchemaInfo rd_name_schema_info_table[21];
 extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];

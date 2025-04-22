@@ -944,6 +944,9 @@ internal F32 ui_anim_(UI_Key key, UI_AnimParams *params);
 ////////////////////////////////
 //~ rjf: Stacks
 
+internal void ui__push_tags_key_from_appended_string(String8 string);
+internal void ui__pop_tags_key(void);
+
 //- rjf: base
 internal UI_Box *                   ui_top_parent(void);
 internal Axis2                      ui_top_child_layout_axis(void);

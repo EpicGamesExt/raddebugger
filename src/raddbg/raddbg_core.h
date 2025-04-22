@@ -872,9 +872,9 @@ internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal MD_NodePtrList rd_schemas_from_name(String8 name);
 
 internal String8 rd_setting_from_name(String8 name);
-#define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))
-#define rd_setting_u64_from_name(name) (u64_from_str8(rd_setting_from_name(name), 10))
-#define rd_setting_f32_from_name(name) ((F32)f64_from_str8(rd_setting_from_name(name)))
+internal B32 rd_setting_b32_from_name(String8 name);
+internal U64 rd_setting_u64_from_name(String8 name);
+internal F32 rd_setting_f32_from_name(String8 name);
 
 internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
 internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);

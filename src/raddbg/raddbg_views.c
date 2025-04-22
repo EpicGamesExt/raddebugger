@@ -1129,7 +1129,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(type->kind == E_TypeKind_Set)
       {
         String8 file_path = e_string_from_id(row->eval.value.u64);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
         if(str8_match(type->name, str8_lit("file"), 0))
         {
           info.can_expand = 0;
@@ -1167,7 +1167,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
     {
       info.can_expand = 0;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      RD_WatchCellFlags extra_flags = 0;
+      if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+      {
+        extra_flags |= RD_WatchCellFlag_NoEval;
+      }
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = extra_flags|RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1176,7 +1181,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(is_top_level && evalled_cfg != &rd_nil_cfg)
     {
       RD_Cfg *cfg = evalled_cfg;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
       MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
@@ -1248,7 +1253,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       CTRL_Entity *entity = evalled_entity;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
                                   .pct = 1.f);
       if(entity->kind == CTRL_EntityKind_Machine ||
          entity->kind == CTRL_EntityKind_Process ||
@@ -1278,7 +1283,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string,.flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1291,13 +1296,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
-                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented, .pct = 1.f);
+                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .pct = 1.f);
       }
       else
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
-                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
+                                    .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
                                     .pct = 1.f);
       }
     }
@@ -1569,6 +1574,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       else
       {
         //- rjf: build left-hand-side strings
+        DR_FStrList expr_fstrs = {0};
         if(cell->flags & RD_WatchCellFlag_Expr)
         {
           // rjf: funnel-through this cell's string, if it has one
@@ -1677,19 +1683,17 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           // rjf: use expression string / params to generate fancy strings
           if(is_non_code)
           {
-            UI_TagF("weak")
-            {
-              DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-              dr_fstrs_push_new(arena, &result.expr_fstrs, &params, expr_string);
-            }
+            DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
+            dr_fstrs_push_new(arena, &expr_fstrs, &params, expr_string);
           }
           else
           {
-            result.expr_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
+            expr_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
           }
         }
         
         //- rjf: evaluation -> need to form value string
+        DR_FStrList eval_fstrs = {0};
         if(!(cell->flags & RD_WatchCellFlag_NoEval))
         {
           // rjf: determine string generation parameters based on evaluation
@@ -1726,14 +1730,25 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           String8 string = rd_value_string_from_eval(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, cell->eval);
           if(is_code)
           {
-            result.eval_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
+            eval_fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
           }
           else UI_TagF("weak")
           {
             DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-            dr_fstrs_push_new(arena, &result.eval_fstrs, &params, string);
+            dr_fstrs_push_new(arena, &eval_fstrs, &params, string);
             result.flags |= RD_WatchCellFlag_IsNonCode;
           }
+        }
+        
+        //- rjf: if we have only the expression, then use the expression as the value
+        if(cell->flags & RD_WatchCellFlag_NoEval)
+        {
+          result.eval_fstrs = expr_fstrs;
+        }
+        else
+        {
+          result.expr_fstrs = expr_fstrs;
+          result.eval_fstrs = eval_fstrs;
         }
       }
     }break;

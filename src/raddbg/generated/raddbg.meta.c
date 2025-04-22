@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[315] =
+RD_VocabInfo rd_vocab_info_table[313] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -253,8 +253,6 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("goto_address"), str8_lit_comp(""), str8_lit_comp("Go To Address"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("center_cursor"), str8_lit_comp(""), str8_lit_comp("Center Cursor"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("contain_cursor"), str8_lit_comp(""), str8_lit_comp("Contain Cursor"), str8_lit_comp(""), RD_IconKind_Null},
-{str8_lit_comp("find_text_forward"), str8_lit_comp(""), str8_lit_comp("Find Text (Forward)"), str8_lit_comp(""), RD_IconKind_Find},
-{str8_lit_comp("find_text_backward"), str8_lit_comp(""), str8_lit_comp("Find Text (Backwards)"), str8_lit_comp(""), RD_IconKind_Find},
 {str8_lit_comp("find_next"), str8_lit_comp(""), str8_lit_comp("Find Next"), str8_lit_comp(""), RD_IconKind_Find},
 {str8_lit_comp("find_prev"), str8_lit_comp(""), str8_lit_comp("Find Previous"), str8_lit_comp(""), RD_IconKind_Find},
 {str8_lit_comp("find_thread"), str8_lit_comp(""), str8_lit_comp("Find Thread"), str8_lit_comp(""), RD_IconKind_Find},
@@ -394,7 +392,7 @@ Rng1U64 rd_reg_slot_range_table[42] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[211] =
+RD_CmdKindInfo rd_cmd_kind_info_table[209] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -539,8 +537,6 @@ RD_CmdKindInfo rd_cmd_kind_info_table[211] =
 { str8_lit_comp("goto_address"), str8_lit_comp("Jumps to an address in the current memory or disassembly view."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Vaddr, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("center_cursor"), str8_lit_comp("Snaps the current code view to center the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("contain_cursor"), str8_lit_comp("Snaps the current code view to contain the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("find_text_forward"), str8_lit_comp("Searches the current code file forward (from the cursor) for a string."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*1)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("find_text_backward"), str8_lit_comp("Searches the current code file backwards (from the cursor) for a string."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*1)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("find_next"), str8_lit_comp("Searches the current code file forward (from the cursor) for the last searched string."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("find_prev"), str8_lit_comp("Searches the current code file backwards (from the cursor) for the last searched string."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("find_thread"), str8_lit_comp("Jumps to the passed thread in either source code, disassembly, or both if they're already open."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Thread, str8_lit_comp("query:threads"), str8_lit_comp(""), CTRL_EntityKind_Thread}},
