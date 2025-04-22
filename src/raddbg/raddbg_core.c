@@ -3277,13 +3277,11 @@ rd_view_ui(Rng2F32 rect)
                     edit_state->cursor = op.cursor;
                     edit_state->mark = op.mark;
                     
-                    // rjf: commit edited cell string
-                    switch(cell->kind)
+                    // rjf: commit edited cell string - first try to commit eval value, if that path is
+                    // enabled on this cell, next try to commit expression string, if that path is enabled
+                    if(cell->kind == RD_WatchCellKind_Eval)
                     {
-                      case RD_WatchCellKind_ViewUI:
-                      case RD_WatchCellKind_CallStackFrame:
-                      {}break;
-                      case RD_WatchCellKind_Expr:
+                      if(cell->flags & RD_WatchCellFlag_Expr && cell->flags & RD_WatchCellFlag_NoEval)
                       {
                         RD_Cfg *cfg = row_info.group_cfg_child;
                         String8 child_key = str8_lit("expression");
@@ -3312,31 +3310,28 @@ rd_view_ui(Rng2F32 rect)
                           RD_Cfg *expr = child_key.size != 0 ? rd_cfg_child_from_string_or_alloc(cfg, child_key) : cfg;
                           rd_cfg_new_replace(expr, new_string);
                         }
-                      }break;
-                      case RD_WatchCellKind_Eval:
+                      }
+                      else
                       {
-                        if(cell->eval.irtree.mode == E_Mode_Offset)
+                        B32 should_commit_asap = editing_complete;
+                        if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg)
                         {
-                          B32 should_commit_asap = editing_complete;
-                          if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+                          should_commit_asap = 1;
+                        }
+                        else if(evt->slot != UI_EventActionSlot_Cancel)
+                        {
+                          should_commit_asap = editing_complete;
+                        }
+                        if(should_commit_asap)
+                        {
+                          B32 success = 0;
+                          success = rd_commit_eval_value_string(cell->eval, new_string);
+                          if(!success)
                           {
-                            should_commit_asap = 1;
-                          }
-                          else if(evt->slot != UI_EventActionSlot_Cancel)
-                          {
-                            should_commit_asap = editing_complete;
-                          }
-                          if(should_commit_asap)
-                          {
-                            B32 success = 0;
-                            success = rd_commit_eval_value_string(cell->eval, new_string);
-                            if(!success)
-                            {
-                              log_user_error(str8_lit("Could not commit value successfully."));
-                            }
+                            log_user_error(str8_lit("Could not commit value successfully."));
                           }
                         }
-                      }break;
+                      }
                     }
                   }
                 }
@@ -3418,43 +3413,39 @@ rd_view_ui(Rng2F32 rect)
                     continue;
                   }
                   RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
-                  switch(cell->kind)
+                  if(cell->flags & RD_WatchCellFlag_Expr && cell->flags & RD_WatchCellFlag_NoEval)
                   {
-                    default:{}break;
-                    case RD_WatchCellKind_Expr:
+                    RD_Cfg *cfg = row_info.group_cfg_child;
+                    if(cfg != &rd_nil_cfg)
                     {
-                      RD_Cfg *cfg = row_info.group_cfg_child;
-                      if(cfg != &rd_nil_cfg)
+                      rd_cfg_list_push(scratch.arena, &cfgs_to_remove, cfg);
+                      U64 deleted_num = ev_block_num_from_id(row->block, row->key.child_id);
+                      if(deleted_num != 0)
                       {
-                        rd_cfg_list_push(scratch.arena, &cfgs_to_remove, cfg);
-                        U64 deleted_num = ev_block_num_from_id(row->block, row->key.child_id);
-                        if(deleted_num != 0)
+                        EV_Key parent_key = row->block->parent->key;
+                        EV_Key key = row->block->key;
+                        U64 fallback_id_prev = ev_block_id_from_num(row->block, deleted_num-1);
+                        U64 fallback_id_next = ev_block_id_from_num(row->block, deleted_num+1);
+                        if(fallback_id_next != 0)
                         {
-                          EV_Key parent_key = row->block->parent->key;
-                          EV_Key key = row->block->key;
-                          U64 fallback_id_prev = ev_block_id_from_num(row->block, deleted_num-1);
-                          U64 fallback_id_next = ev_block_id_from_num(row->block, deleted_num+1);
-                          if(fallback_id_next != 0)
-                          {
-                            parent_key = row->block->key;
-                            key = ev_key_make(row->key.parent_hash, fallback_id_next);
-                          }
-                          else if(fallback_id_prev != 0)
-                          {
-                            parent_key = row->block->key;
-                            key = ev_key_make(row->key.parent_hash, fallback_id_prev);
-                          }
-                          RD_WatchPt new_pt = {parent_key, key, pt.cell_id};
-                          next_cursor_pt = new_pt;
-                          next_cursor_set = 1;
-                          state_dirty = 1;
+                          parent_key = row->block->key;
+                          key = ev_key_make(row->key.parent_hash, fallback_id_next);
                         }
+                        else if(fallback_id_prev != 0)
+                        {
+                          parent_key = row->block->key;
+                          key = ev_key_make(row->key.parent_hash, fallback_id_prev);
+                        }
+                        RD_WatchPt new_pt = {parent_key, key, pt.cell_id};
+                        next_cursor_pt = new_pt;
+                        next_cursor_set = 1;
+                        state_dirty = 1;
                       }
-                    }break;
-                    case RD_WatchCellKind_Eval:
-                    {
-                      rd_commit_eval_value_string(cell->eval, str8_zero());
-                    }break;
+                    }
+                  }
+                  else
+                  {
+                    rd_commit_eval_value_string(cell->eval, str8_zero());
                   }
                 }
               }
@@ -4325,8 +4316,7 @@ rd_view_ui(Rng2F32 rect)
                         else
                         {
                           // rjf: compute visual params
-                          B32 fancy_editors_in_expr = (row_info->cells.count == 1);
-                          B32 cell_has_fancy_editors = (cell->kind != RD_WatchCellKind_Expr || fancy_editors_in_expr);
+                          B32 cell_has_fancy_editors = (!(cell->flags & RD_WatchCellFlag_NoEval));
                           B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
                           B32 has_background = !!(cell_info.flags & RD_WatchCellFlag_Background);
                           B32 is_toggle_switch = (cell_has_fancy_editors && cell->eval.irtree.mode != E_Mode_Null && e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool);
@@ -4334,7 +4324,7 @@ rd_view_ui(Rng2F32 rect)
                           B32 is_activated_on_single_click = !!(cell_info.flags & RD_WatchCellFlag_ActivateWithSingleClick);
                           B32 is_non_code = !!(cell_info.flags & RD_WatchCellFlag_IsNonCode);
                           String8 ghost_text = {0};
-                          if(cell_selected && ewv->text_editing && cell->kind == RD_WatchCellKind_Expr)
+                          if(cell_selected && ewv->text_editing && cell->flags & RD_WatchCellFlag_Expr && cell->flags & RD_WatchCellFlag_NoEval)
                           {
                             is_non_code = 0;
                             is_button = 0;

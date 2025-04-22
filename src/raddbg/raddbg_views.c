@@ -823,7 +823,7 @@ rd_id_from_watch_cell(RD_WatchCell *cell)
 {
   U64 result = 5381;
   result = e_hash_from_string(result, str8_struct(&cell->kind));
-  if(cell->kind != RD_WatchCellKind_Expr)
+  if(!(cell->flags & RD_WatchCellFlag_Expr))
   {
     result = e_hash_from_string(result, str8_struct(&cell->index));
     result = e_hash_from_string(result, str8_struct(&cell->default_pct));
@@ -1129,7 +1129,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       if(type->kind == E_TypeKind_Set)
       {
         String8 file_path = e_string_from_id(row->eval.value.u64);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_IsNonCode, .pct = 1.f);
         if(str8_match(type->name, str8_lit("file"), 0))
         {
           info.can_expand = 0;
@@ -1143,7 +1143,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         RD_Cfg *w_cfg = style->first;
         F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .default_pct = 0.65f, .pct = take_pct());
 #undef take_pct
       }
@@ -1155,7 +1155,10 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaUnattachedProcess &&
             str8_match(row_type->name, str8_lit("unattached_process"), 0))
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+                                  .edit_string = row->edit_string,
+                                  .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented,
+                                  .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1164,7 +1167,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
     {
       info.can_expand = 0;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1173,7 +1176,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(is_top_level && evalled_cfg != &rd_nil_cfg)
     {
       RD_Cfg *cfg = evalled_cfg;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string, .flags = RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
       MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
       {
@@ -1243,7 +1246,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(is_top_level && evalled_entity != &ctrl_entity_nil)
     {
       CTRL_Entity *entity = evalled_entity;
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
                                   .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
                                   .pct = 1.f);
@@ -1275,7 +1278,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval, .edit_string = row->edit_string,.flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .edit_string = row->edit_string,.flags = RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1286,13 +1289,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
       if(type->kind == E_TypeKind_Set)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
       }
       else
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                     .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button|RD_WatchCellFlag_ActivateWithSingleClick,
                                     .pct = 1.f);
@@ -1312,9 +1315,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.expr == &e_expr_nil && info.group_cfg_name.size != 0 && info.group_cfg_child == &rd_nil_cfg)
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1325,9 +1328,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
     {
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented, .pct = 1.f);
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
@@ -1349,9 +1352,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .default_pct = 0.35f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
                                   .default_pct = 0.65f, .pct = take_pct());
@@ -1369,9 +1372,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
                                   .default_pct = 0.75f,
                                   .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "lens:hex((uint64)$)"), .default_pct = 0.25f, .pct = take_pct());
@@ -1416,9 +1419,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, row->eval,
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .edit_string = row->edit_string,
-                                  .flags = RD_WatchCellFlag_Indented,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
                                   .default_pct = 0.35f,
                                   .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,                                                 .default_pct = 0.40f, .pct = take_pct());
@@ -1489,23 +1492,22 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //////////////////////////////
   //- rjf: determine cell editability
   //
-  switch(cell->kind)
+  if(cell->kind == RD_WatchCellKind_Eval)
   {
-    default:{}break;
-    case RD_WatchCellKind_Expr:
+    if(cell->flags & RD_WatchCellFlag_Expr && cell->flags & RD_WatchCellFlag_NoEval)
     {
       if(row_info->expr_is_editable)
       {
         result.flags |= RD_WatchCellFlag_CanEdit;
       }
-    }break;
-    case RD_WatchCellKind_Eval:
+    }
+    else
     {
       if(ev_type_key_is_editable(cell->eval.irtree.type_key) && cell->eval.irtree.mode == E_Mode_Offset)
       {
         result.flags |= RD_WatchCellFlag_CanEdit;
       }
-    }break;
+    }
   }
   
   //////////////////////////////
@@ -1563,171 +1565,175 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
         result.flags |= RD_WatchCellFlag_Button;
       }
       
-      //- rjf: expression cell -> need to form "left-hand-side", or "meta" string, for some evaluation
-      else if(cell->kind == RD_WatchCellKind_Expr)
+      //- rjf: catchall cell -> need to form "left-hand-side", or "meta" string, for expression, and/or value string
+      else
       {
-        // rjf: funnel-through this cell's string, if it has one
-        B32 is_non_code = 0;
-        String8 expr_string = cell->edit_string;
-        
-        // rjf: if this cell has a meta-display-name, then use that
-        if(expr_string.size == 0)
+        //- rjf: build left-hand-side strings
+        if(cell->flags & RD_WatchCellFlag_Expr)
         {
-          for(E_Type *t = e_type_from_key__cached(cell->eval.irtree.type_key);
-              t != &e_type_nil;
-              t = e_type_from_key__cached(t->direct_type_key))
+          // rjf: funnel-through this cell's string, if it has one
+          B32 is_non_code = 0;
+          String8 expr_string = cell->edit_string;
+          
+          // rjf: if this cell has a meta-display-name, then use that
+          if(expr_string.size == 0)
           {
-            if(t->kind == E_TypeKind_MetaDisplayName)
+            for(E_Type *t = e_type_from_key__cached(cell->eval.irtree.type_key);
+                t != &e_type_nil;
+                t = e_type_from_key__cached(t->direct_type_key))
             {
-              is_non_code = 1;
-              expr_string = t->name;
-              break;
+              if(t->kind == E_TypeKind_MetaDisplayName)
+              {
+                is_non_code = 1;
+                expr_string = t->name;
+                break;
+              }
             }
           }
-        }
-        
-        // rjf: if this cell has no string specified, then we need to synthesize one from the evaluation
-        if(expr_string.size == 0)
-        {
-          // rjf: first, locate a notable expression - we special-case things like member accesses
-          // or array indices, so we should grab those if possible
-          E_Expr *notable_expr = cell->eval.expr;
-          for(B32 good = 0; !good;)
+          
+          // rjf: if this cell has no string specified, then we need to synthesize one from the evaluation
+          if(expr_string.size == 0)
           {
+            // rjf: first, locate a notable expression - we special-case things like member accesses
+            // or array indices, so we should grab those if possible
+            E_Expr *notable_expr = cell->eval.expr;
+            for(B32 good = 0; !good;)
+            {
+              switch(notable_expr->kind)
+              {
+                default:{good = 1;}break;
+                case E_ExprKind_Address:
+                case E_ExprKind_Deref:
+                case E_ExprKind_Cast:
+                {
+                  notable_expr = notable_expr->last;
+                }break;
+                case E_ExprKind_Ref:
+                {
+                  notable_expr = notable_expr->ref;
+                }break;
+              }
+            }
+            
+            // rjf: generate expression string based on our notable expression
             switch(notable_expr->kind)
             {
-              default:{good = 1;}break;
-              case E_ExprKind_Address:
-              case E_ExprKind_Deref:
-              case E_ExprKind_Cast:
+              // rjf: default case -> just walk the expression tree & generate a string
+              default:
               {
-                notable_expr = notable_expr->last;
+                expr_string = e_string_from_expr(arena, notable_expr, str8_zero());
               }break;
-              case E_ExprKind_Ref:
+              
+              // rjf: array indices -> fast path to [index]
+              case E_ExprKind_ArrayIndex:
               {
-                notable_expr = notable_expr->ref;
+                expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last, str8_zero()));
+              }break;
+              
+              // rjf: member accesses -> fast-path to .name
+              case E_ExprKind_MemberAccess:
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                
+                // TODO(rjf): @cfg need to build inheritance tooltips
+#if 0
+                if(member.inheritance_key_chain.count != 0)
+                {
+                  String8List strings = {0};
+                  for(E_TypeKeyNode *n = member.inheritance_key_chain.first; n != 0; n = n->next)
+                  {
+                    String8 base_class_name = e_type_string_from_key(scratch.arena, n->v);
+                    str8_list_push(scratch.arena, &strings, base_class_name);
+                  }
+                  result.inheritance_tooltip = str8_list_join(arena, &strings, &(StringJoin){.sep = str8_lit_comp("::")});
+                }
+#endif
+                
+                // rjf: in meta-evaluation spaces, we will try to look up into our vocabulary map
+                // to see if we have a fancy display string for this member. otherwise, we will just
+                // do a code-string of ".member_name"
+                String8 member_name = notable_expr->first->next->string;
+                if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+                   cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+                   cell->eval.space.kind == E_SpaceKind_File ||
+                   cell->eval.space.kind == E_SpaceKind_FileSystem)
+                {
+                  String8 fancy_name = rd_display_from_code_name(member_name);
+                  if(fancy_name.size != 0)
+                  {
+                    expr_string = fancy_name;
+                    is_non_code = 1;
+                  }
+                }
+                if(expr_string.size == 0)
+                {
+                  expr_string = push_str8f(arena, ".%S", member_name);
+                }
+                scratch_end(scratch);
               }break;
             }
           }
           
-          // rjf: generate expression string based on our notable expression
-          switch(notable_expr->kind)
+          // rjf: use expression string / params to generate fancy strings
+          if(is_non_code)
           {
-            // rjf: default case -> just walk the expression tree & generate a string
-            default:
+            UI_TagF("weak")
             {
-              expr_string = e_string_from_expr(arena, notable_expr, str8_zero());
-            }break;
-            
-            // rjf: array indices -> fast path to [index]
-            case E_ExprKind_ArrayIndex:
-            {
-              expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last, str8_zero()));
-            }break;
-            
-            // rjf: member accesses -> fast-path to .name
-            case E_ExprKind_MemberAccess:
-            {
-              Temp scratch = scratch_begin(&arena, 1);
-              
-              // TODO(rjf): @cfg need to build inheritance tooltips
-#if 0
-              if(member.inheritance_key_chain.count != 0)
-              {
-                String8List strings = {0};
-                for(E_TypeKeyNode *n = member.inheritance_key_chain.first; n != 0; n = n->next)
-                {
-                  String8 base_class_name = e_type_string_from_key(scratch.arena, n->v);
-                  str8_list_push(scratch.arena, &strings, base_class_name);
-                }
-                result.inheritance_tooltip = str8_list_join(arena, &strings, &(StringJoin){.sep = str8_lit_comp("::")});
-              }
-#endif
-              
-              // rjf: in meta-evaluation spaces, we will try to look up into our vocabulary map
-              // to see if we have a fancy display string for this member. otherwise, we will just
-              // do a code-string of ".member_name"
-              String8 member_name = notable_expr->first->next->string;
-              if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-                 cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                 cell->eval.space.kind == E_SpaceKind_File ||
-                 cell->eval.space.kind == E_SpaceKind_FileSystem)
-              {
-                String8 fancy_name = rd_display_from_code_name(member_name);
-                if(fancy_name.size != 0)
-                {
-                  expr_string = fancy_name;
-                  is_non_code = 1;
-                }
-              }
-              if(expr_string.size == 0)
-              {
-                expr_string = push_str8f(arena, ".%S", member_name);
-              }
-              scratch_end(scratch);
-            }break;
+              DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
+              dr_fstrs_push_new(arena, &result.fstrs, &params, expr_string);
+            }
+          }
+          else
+          {
+            result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
           }
         }
         
-        // rjf: use expression string / params to generate fancy strings
-        if(is_non_code)
+        //- rjf: evaluation -> need to form value string
+        if(!(cell->flags & RD_WatchCellFlag_NoEval))
         {
-          UI_TagF("weak")
+          // rjf: determine string generation parameters based on evaluation
+          EV_StringParams string_params = {string_flags, 10};
+          {
+            if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+            {
+              string_params.flags |= EV_StringFlag_DisableStringQuotes|EV_StringFlag_DisableAddresses;
+            }
+            if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
+               rd_ctrl_entity_from_eval_space(cell->eval.space)->kind == CTRL_EntityKind_Module)
+            {
+              string_params.radix = 16;
+            }
+            if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
+               rd_ctrl_entity_from_eval_space(cell->eval.space)->kind == CTRL_EntityKind_Thread)
+            {
+              string_params.radix = 16;
+            }
+          }
+          
+          // rjf: determine if code
+          B32 is_code = 1;
+          {
+            E_Type *type = e_type_from_key__cached(cell->eval.irtree.type_key);
+            if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
+            {
+              is_code = 0;
+            }
+          }
+          
+          // rjf: generate string based on that expression & fill
+          String8 string = rd_value_string_from_eval(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, cell->eval);
+          if(is_code)
+          {
+            result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
+          }
+          else UI_TagF("weak")
           {
             DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-            dr_fstrs_push_new(arena, &result.fstrs, &params, expr_string);
+            dr_fstrs_push_new(arena, &result.fstrs, &params, string);
+            result.flags |= RD_WatchCellFlag_IsNonCode;
           }
-        }
-        else
-        {
-          result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), expr_string);
-        }
-      }
-      
-      //- rjf: evaluation -> need to form value string
-      else if(cell->kind == RD_WatchCellKind_Eval)
-      {
-        // rjf: determine string generation parameters based on evaluation
-        EV_StringParams string_params = {string_flags, 10};
-        {
-          if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-             cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
-          {
-            string_params.flags |= EV_StringFlag_DisableStringQuotes|EV_StringFlag_DisableAddresses;
-          }
-          if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity &&
-             rd_ctrl_entity_from_eval_space(cell->eval.space)->kind == CTRL_EntityKind_Module)
-          {
-            string_params.radix = 16;
-          }
-          if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity &&
-             rd_ctrl_entity_from_eval_space(cell->eval.space)->kind == CTRL_EntityKind_Thread)
-          {
-            string_params.radix = 16;
-          }
-        }
-        
-        // rjf: determine if code
-        B32 is_code = 1;
-        {
-          E_Type *type = e_type_from_key__cached(cell->eval.irtree.type_key);
-          if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
-          {
-            is_code = 0;
-          }
-        }
-        
-        // rjf: generate string based on that expression & fill
-        String8 string = rd_value_string_from_eval(arena, rd_view_query_input(), &string_params, font, font_size, max_size_px, cell->eval);
-        if(is_code)
-        {
-          result.fstrs = rd_fstrs_from_code_string(arena, 1, 0, ui_color_from_name(str8_lit("text")), string);
-        }
-        else UI_TagF("weak")
-        {
-          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), font_size, 0, 0};
-          dr_fstrs_push_new(arena, &result.fstrs, &params, string);
-          result.flags |= RD_WatchCellFlag_IsNonCode;
         }
       }
     }break;

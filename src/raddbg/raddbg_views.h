@@ -43,9 +43,8 @@ struct RD_CodeViewBuildResult
 
 typedef enum RD_WatchCellKind
 {
-  RD_WatchCellKind_Expr,   // strings to represent expression itself
-  RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
-  RD_WatchCellKind_ViewUI, // an arbitrary user interface, supplied by a hook
+  RD_WatchCellKind_Eval,           // an evaluation cell
+  RD_WatchCellKind_ViewUI,         // an arbitrary user interface, supplied by a hook
   RD_WatchCellKind_CallStackFrame, // a slot for a yellow arrow, to show call stack frame selection
 }
 RD_WatchCellKind;
@@ -53,13 +52,15 @@ RD_WatchCellKind;
 typedef U32 RD_WatchCellFlags;
 enum
 {
-  RD_WatchCellFlag_Button                  = (1<<0),
-  RD_WatchCellFlag_Background              = (1<<1),
-  RD_WatchCellFlag_ActivateWithSingleClick = (1<<2),
-  RD_WatchCellFlag_IsNonCode               = (1<<3),
-  RD_WatchCellFlag_CanEdit                 = (1<<4),
-  RD_WatchCellFlag_IsErrored               = (1<<5),
-  RD_WatchCellFlag_Indented                = (1<<6),
+  RD_WatchCellFlag_Expr                    = (1<<0),
+  RD_WatchCellFlag_NoEval                  = (1<<1),
+  RD_WatchCellFlag_Button                  = (1<<2),
+  RD_WatchCellFlag_Background              = (1<<3),
+  RD_WatchCellFlag_ActivateWithSingleClick = (1<<4),
+  RD_WatchCellFlag_IsNonCode               = (1<<5),
+  RD_WatchCellFlag_CanEdit                 = (1<<6),
+  RD_WatchCellFlag_IsErrored               = (1<<7),
+  RD_WatchCellFlag_Indented                = (1<<8),
 };
 
 typedef struct RD_WatchCell RD_WatchCell;
