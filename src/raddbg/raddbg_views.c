@@ -1328,7 +1328,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells meta-evaluation booleans
     //
-    else if(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool &&
+    else if(info.group_cfg_child == &rd_nil_cfg &&
+            e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Bool &&
             (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCmd ||
              row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
