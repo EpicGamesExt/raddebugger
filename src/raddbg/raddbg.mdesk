@@ -175,6 +175,10 @@ RD_VocabTable:
       
       //- rjf: code formatting settings
       @default(2) @display_name('User Tab Width') 'tab_width': @range[1, 32] u64,
+      
+      //- rjf: windows style menu bar
+      @default(1) @display_name('Focus Menu Bar With Alt') @description("Mimics standard Windows behavior of focusing the menu bar using the Alt key.")
+        'focus_menu_bar_with_alt': bool,
     }
     ```
   }

@@ -7212,7 +7212,7 @@ rd_window_frame(void)
                   {
                     ui_set_next_fastpath_codepoint(items[idx].codepoint);
                     B32 alt_fastpath_key = 0;
-                    if(ui_key_press(OS_Modifier_Alt, items[idx].key))
+                    if(rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt")) && ui_key_press(OS_Modifier_Alt, items[idx].key))
                     {
                       alt_fastpath_key = 1;
                     }
@@ -11855,6 +11855,7 @@ rd_frame(void)
       }
       
       //- rjf: try menu bar operations
+      if(rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt")))
       {
         if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
