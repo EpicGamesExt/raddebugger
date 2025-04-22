@@ -169,6 +169,10 @@ RD_VocabTable:
       @default(1) @display_name('Background Blur') @description("Controls whether or not occluded regions behind floating elements are blurred.")
         'background_blur': bool,
       
+      //- rjf: appearance settings
+      @default(1.f) @display_name('Rounded Corner Amount') @description("Controls the degree to which UI corners are rounded.")
+        'rounded_corner_amount': @range[0, 1] f32,
+      
       //- rjf: code formatting settings
       @default(2) @display_name('User Tab Width') 'tab_width': @range[1, 32] u64,
     }
