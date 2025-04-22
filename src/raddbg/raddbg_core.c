@@ -2546,7 +2546,7 @@ rd_view_ui(Rng2F32 rect)
           UI_Padding(ui_pct(1, 0))
         {
           ui_labelf("use");
-          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
+          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
           ui_labelf("to search for commands and options");
         }
       }
@@ -6690,6 +6690,7 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string,
                     rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
@@ -6700,6 +6701,7 @@ rd_window_frame(void)
                     'u',
                     'p',
                     'r',
+                    'n',
                     'e',
                     't',
                     'x',
@@ -6906,7 +6908,7 @@ rd_window_frame(void)
                     ui_labelf("Search for commands and options by pressing ");
                     UI_Flags(UI_BoxFlag_DrawBorder)
                       UI_TextAlignment(UI_TextAlign_Center)
-                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
                   }
                   ui_spacer(ui_em(1.f, 1.f));
                   UI_TagF("pop")
@@ -12469,8 +12471,8 @@ rd_frame(void)
 #endif
           }break;
           
-          //- rjf: open lister
-          case RD_CmdKind_OpenLister:
+          //- rjf: open palette
+          case RD_CmdKind_OpenPalette:
           {
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
