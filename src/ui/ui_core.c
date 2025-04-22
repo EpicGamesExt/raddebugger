@@ -557,11 +557,11 @@ ui_next_event(UI_Event **ev)
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers & OS_Modifier_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers == OS_Modifier_Shift))
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && !(n->v.modifiers & OS_Modifier_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && n->v.modifiers == 0)
       {
         good = 0;
       }
@@ -2878,7 +2878,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_Modifier_Ctrl &&
+       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
@@ -2899,7 +2899,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_Modifier_Ctrl &&
+       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;

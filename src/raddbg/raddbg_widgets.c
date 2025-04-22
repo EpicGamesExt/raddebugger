@@ -699,7 +699,7 @@ rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
-rd_cmd_binding_buttons(String8 name)
+rd_cmd_binding_buttons(String8 name, String8 filter)
 {
   Temp scratch = scratch_begin(0, 0);
   RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_name(scratch.arena, name);
@@ -731,17 +731,19 @@ rd_cmd_binding_buttons(String8 name)
     {
       if(binding.key != OS_Key_Null)
       {
-        String8List mods = os_string_list_from_modifiers(scratch.arena, binding.modifiers);
-        String8 key = os_g_key_display_string_table[binding.key];
-        str8_list_push(scratch.arena, &mods, key);
-        StringJoin join = {0};
-        join.sep = str8_lit(" + ");
-        keybinding_str = str8_list_join(scratch.arena, &mods, &join);
+        keybinding_str = os_string_from_modifiers_key(scratch.arena, binding.modifiers, binding.key);
       }
       else
       {
         keybinding_str = str8_lit("- no binding -");
       }
+    }
+    
+    //- rjf: compute fuzzy matches
+    FuzzyMatchRangeList matches = {0};
+    if(filter.size != 0)
+    {
+      matches = fuzzy_match_find(scratch.arena, filter, keybinding_str);
     }
     
     //- rjf: build box
@@ -756,6 +758,7 @@ rd_cmd_binding_buttons(String8 name)
                                             UI_BoxFlag_DrawBorder|
                                             UI_BoxFlag_DrawBackground,
                                             "%S###bind_btn_%S_%x_%x", keybinding_str, name, binding.key, binding.modifiers);
+    ui_box_equip_fuzzy_match_ranges(box, &matches);
     
     //- rjf: interaction
     UI_Signal sig = ui_signal_from_box(box);
@@ -895,7 +898,7 @@ rd_cmd_spec_button(String8 name)
         UI_TagF("weak")
         UI_FastpathCodepoint(0)
       {
-        rd_cmd_binding_buttons(name);
+        rd_cmd_binding_buttons(name, str8_zero());
       }
     }
   }
@@ -3180,6 +3183,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //
   B32 build_toggle_switch = !!(params->flags & RD_CellFlag_ToggleSwitch) && !is_focus_active;
   B32 build_slider        = !!(params->flags & RD_CellFlag_Slider) && !is_focus_active;
+  B32 build_bindings      = !!(params->flags & RD_CellFlag_Bindings) && !is_focus_active;
   B32 build_lhs_name_desc = (params->meta_fstrs.node_count != 0 || params->description.size != 0);
   DR_FStrList lhs_name_fstrs = params->meta_fstrs;
   DR_FStrList value_name_fstrs = params->value_fstrs;
@@ -3434,6 +3438,20 @@ rd_cell(RD_CellParams *params, String8 string)
           }
         }
         ui_spacer(ui_pct(1-Clamp(0, params->slider_value_out[0], 1), 0.f));
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build bindings
+  //
+  if(build_bindings) UI_Parent(box) RD_Font(RD_FontSlot_Main)
+  {
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_Padding(ui_em(1.f, 1.f)) UI_HeightFill
+    {
+      UI_PrefWidth(ui_children_sum(1)) UI_Row UI_Padding(ui_em(1.f, 1.f))
+      {
+        rd_cmd_binding_buttons(params->bindings_name, params->search_needle);
       }
     }
   }

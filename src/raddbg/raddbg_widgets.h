@@ -21,18 +21,21 @@ enum
   //- rjf: slider extension
   RD_CellFlag_Slider              = (1<<4),
   
+  //- rjf: bindings extension
+  RD_CellFlag_Bindings            = (1<<5),
+  
   //- rjf: behavior
-  RD_CellFlag_DisableEdit         = (1<<5),
-  RD_CellFlag_KeyboardClickable   = (1<<6),
-  RD_CellFlag_SingleClickActivate = (1<<7),
+  RD_CellFlag_DisableEdit         = (1<<6),
+  RD_CellFlag_KeyboardClickable   = (1<<7),
+  RD_CellFlag_SingleClickActivate = (1<<8),
   
   //- rjf: contents description
-  RD_CellFlag_CodeContents        = (1<<8),
+  RD_CellFlag_CodeContents        = (1<<9),
   
   //- rjf: appearance
-  RD_CellFlag_Border              = (1<<9),
-  RD_CellFlag_NoBackground        = (1<<10),
-  RD_CellFlag_Button              = (1<<11),
+  RD_CellFlag_Border              = (1<<10),
+  RD_CellFlag_NoBackground        = (1<<11),
+  RD_CellFlag_Button              = (1<<12),
 };
 
 typedef struct RD_CellParams RD_CellParams;
@@ -55,6 +58,9 @@ struct RD_CellParams
   
   //- rjf: slider info r/w info
   F32 *slider_value_out;
+  
+  //- rjf: bindings name w info
+  String8 bindings_name;
   
   //- rjf: text editing r/w info
   TxtPt *cursor;
@@ -134,7 +140,7 @@ internal void rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U6
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
-internal void rd_cmd_binding_buttons(String8 name);
+internal void rd_cmd_binding_buttons(String8 name, String8 filter);
 internal UI_Signal rd_menu_bar_button(String8 string);
 internal UI_Signal rd_cmd_spec_button(String8 name);
 internal void rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints);

@@ -775,7 +775,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl)
+        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl && evt->modifiers & OS_Modifier_Shift)
         {
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)

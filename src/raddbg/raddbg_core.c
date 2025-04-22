@@ -2546,7 +2546,7 @@ rd_view_ui(Rng2F32 rect)
           UI_Padding(ui_pct(1, 0))
         {
           ui_labelf("use");
-          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
+          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero());
           ui_labelf("to search for commands and options");
         }
       }
@@ -4463,6 +4463,13 @@ rd_view_ui(Rng2F32 rect)
                             {
                               cell_params.flags |= RD_CellFlag_Slider;
                               cell_params.slider_value_out = &next_cell_slider_value;
+                            }
+                            
+                            // rjf: apply bindings
+                            if(cell->px == 0 && cell->eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+                            {
+                              cell_params.flags |= RD_CellFlag_Bindings;
+                              cell_params.bindings_name = rd_cmd_name_from_eval(cell->eval);
                             }
                           }
                           
@@ -6908,7 +6915,7 @@ rd_window_frame(void)
                     ui_labelf("Search for commands and options by pressing ");
                     UI_Flags(UI_BoxFlag_DrawBorder)
                       UI_TextAlignment(UI_TextAlign_Center)
-                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero());
                   }
                   ui_spacer(ui_em(1.f, 1.f));
                   UI_TagF("pop")
