@@ -705,7 +705,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter)
   RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_name(scratch.arena, name);
   
   //- rjf: build buttons for each binding
-  for(RD_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
+  UI_CornerRadius(ui_top_font_size()*0.5f) for(RD_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
   {
     RD_Binding binding = n->v->binding;
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
@@ -820,7 +820,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter)
   B32 adding_new_binding = (rd_state->bind_change_active &&
                             str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                             rd_state->bind_change_binding_id == 0);
-  RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "")
+  RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "") UI_CornerRadius(ui_top_font_size()*0.5f)
   {
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
