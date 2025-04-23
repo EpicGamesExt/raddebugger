@@ -7065,7 +7065,7 @@ rd_window_frame(void)
         //- rjf: center column
         if(dim_2f32(top_bar_rect).x > ui_top_font_size()*60)
           UI_PrefWidth(ui_children_sum(1.f)) UI_Row
-          UI_PrefWidth(ui_em(2.5f, 1))
+          UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y, 1))
           RD_Font(RD_FontSlot_Icons)
           UI_FontSize(ui_top_font_size()*0.85f)
         {

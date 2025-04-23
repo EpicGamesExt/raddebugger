@@ -824,7 +824,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter)
   {
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
-    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
+    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.5f, 1));
     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                             UI_BoxFlag_Clickable|
                                             UI_BoxFlag_DrawActiveEffects|
@@ -3447,7 +3447,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //
   if(build_bindings) UI_Parent(box) RD_Font(RD_FontSlot_Main)
   {
-    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_Padding(ui_em(1.f, 1.f)) UI_HeightFill
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_Padding(ui_px(ui_top_px_height()*0.2f, 1.f)) UI_HeightFill
     {
       UI_PrefWidth(ui_children_sum(1)) UI_Row UI_Padding(ui_em(1.f, 1.f))
       {
