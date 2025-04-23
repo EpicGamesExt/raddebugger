@@ -366,16 +366,27 @@ internal RD_Cfg *
 rd_cfg_from_id(RD_CfgID id)
 {
   RD_Cfg *result = &rd_nil_cfg;
-  U64 hash = d_hash_from_string(str8_struct(&id));
-  U64 slot_idx = hash%rd_state->cfg_id_slots_count;
-  for(RD_CfgNode *n = rd_state->cfg_id_slots[slot_idx].first; n != 0; n = n->next)
+  if(id != 0 &&
+     id == rd_state->cfg_last_accessed_id &&
+     id == rd_state->cfg_last_accessed->id)
   {
-    if(n->v->id == id)
+    result = rd_state->cfg_last_accessed;
+  }
+  else
+  {
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->cfg_id_slots_count;
+    for(RD_CfgNode *n = rd_state->cfg_id_slots[slot_idx].first; n != 0; n = n->next)
     {
-      result = n->v;
-      break;
+      if(n->v->id == id)
+      {
+        result = n->v;
+        break;
+      }
     }
   }
+  rd_state->cfg_last_accessed_id = id;
+  rd_state->cfg_last_accessed = result;
   return result;
 }
 
@@ -1172,6 +1183,29 @@ rd_schemas_from_name(String8 name)
 }
 
 internal String8
+rd_default_setting_from_names(String8 schema_name, String8 setting_name)
+{
+  String8 result = {0};
+  {
+    MD_Node *setting_schema = &md_nil_node;
+    MD_NodePtrList schemas = rd_schemas_from_name(schema_name);
+    for(MD_NodePtrNode *n = schemas.first; n != 0 && setting_schema == &md_nil_node; n = n->next)
+    {
+      setting_schema = md_child_from_string(n->v, setting_name, 0);
+    }
+    if(setting_schema != &md_nil_node)
+    {
+      MD_Node *default_tag = md_tag_from_string(setting_schema, str8_lit("default"), 0);
+      if(default_tag != &md_nil_node)
+      {
+        result = default_tag->first->string;
+      }
+    }
+  }
+  return result;
+}
+
+internal String8
 rd_setting_from_name(String8 name)
 {
   String8 result = {0};
@@ -1193,34 +1227,13 @@ rd_setting_from_name(String8 name)
     result = setting->first->string;
     
     // rjf: no result -> look for default in schemas
-    if(result.size == 0) ProfScope("default setting schema lookup")
+    if(result.size == 0)
     {
-      MD_Node *schema = &md_nil_node;
+      result = rd_default_setting_from_names(view_cfg->string, name);
+      for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && result.size == 0; cfg = cfg->parent)
       {
-        MD_NodePtrList schemas = rd_schemas_from_name(view_cfg->string);
-        for(MD_NodePtrNode *n = schemas.first; n != 0 && schema == &md_nil_node; n = n->next)
-        {
-          schema = md_child_from_string(n->v, name, 0);
-        }
-        for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && schema == &md_nil_node; cfg = cfg->parent)
-        {
-          MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
-          for(MD_NodePtrNode *n = schemas.first; n != 0 && schema == &md_nil_node; n = n->next)
-          {
-            schema = md_child_from_string(n->v, name, 0);
-          }
-        }
-        if(schema != &md_nil_node)
-        {
-          MD_Node *default_tag = md_tag_from_string(schema, str8_lit("default"), 0);
-          if(default_tag != &md_nil_node)
-          {
-            result = default_tag->first->string;
-            goto end_default_search;
-          }
-        }
+        result = rd_default_setting_from_names(cfg->string, name);
       }
-      end_default_search:;
     }
   }
   return result;
@@ -2258,17 +2271,26 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
 internal RD_ViewState *
 rd_view_state_from_cfg(RD_Cfg *cfg)
 {
-  RD_CfgID id = cfg->id;
-  U64 hash = d_hash_from_string(str8_struct(&id));
-  U64 slot_idx = hash%rd_state->view_state_slots_count;
-  RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
   RD_ViewState *view_state = &rd_nil_view_state;
-  for(RD_ViewState *v = slot->first; v != 0; v = v->hash_next)
+  RD_CfgID id = cfg->id;
+  if(id != 0 &&
+     id == rd_state->view_state_last_accessed_id &&
+     id == rd_state->view_state_last_accessed->cfg_id)
   {
-    if(v->cfg_id == id)
+    view_state = rd_state->view_state_last_accessed;
+  }
+  else
+  {
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->view_state_slots_count;
+    RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
+    for(RD_ViewState *v = slot->first; v != 0; v = v->hash_next)
     {
-      view_state = v;
-      break;
+      if(v->cfg_id == id)
+      {
+        view_state = v;
+        break;
+      }
     }
   }
   if(view_state == &rd_nil_view_state)
@@ -2283,6 +2305,9 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
       view_state = push_array(rd_state->arena, RD_ViewState, 1);
     }
     MemoryCopyStruct(view_state, &rd_nil_view_state);
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->view_state_slots_count;
+    RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
     DLLPushBack_NP(slot->first, slot->last, view_state, hash_next, hash_prev);
     view_state->cfg_id = id;
     view_state->arena = arena_alloc();
@@ -2293,6 +2318,8 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
   {
     view_state->last_frame_index_touched = rd_state->frame_index;
   }
+  rd_state->view_state_last_accessed = view_state;
+  rd_state->view_state_last_accessed_id = id;
   return view_state;
 }
 
@@ -5201,18 +5228,27 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
   //- rjf: unpack
   RD_Cfg *window_cfg = rd_window_from_cfg(cfg);
   RD_CfgID id = window_cfg->id;
-  U64 hash = d_hash_from_string(str8_struct(&id));
-  U64 slot_idx = hash%rd_state->window_state_slots_count;
-  RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
   
   //- rjf: scan for existing window
   RD_WindowState *ws = &rd_nil_window_state;
-  for(RD_WindowState *w = slot->first; w != 0; w = w->hash_next)
+  if(id != 0 &&
+     id == rd_state->window_state_last_accessed_id &&
+     id == rd_state->window_state_last_accessed->cfg_id)
   {
-    if(w->cfg_id == id)
+    ws = rd_state->window_state_last_accessed;
+  }
+  else
+  {
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->window_state_slots_count;
+    RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
+    for(RD_WindowState *w = slot->first; w != 0; w = w->hash_next)
     {
-      ws = w;
-      break;
+      if(w->cfg_id == id)
+      {
+        ws = w;
+        break;
+      }
     }
   }
   
@@ -5288,6 +5324,9 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     }
     
     // rjf: hook up window links
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->window_state_slots_count;
+    RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
     DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
     DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
     
@@ -5301,6 +5340,8 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->last_frame_index_touched = rd_state->frame_index;
   }
   
+  rd_state->window_state_last_accessed_id = ws->cfg_id;
+  rd_state->window_state_last_accessed = ws;
   return ws;
 }
 
@@ -5471,6 +5512,15 @@ rd_window_frame(void)
         ws->theme->patterns[idx] = n->pattern;
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: @window_frame_part compute window's font raster flags
+  //
+  {
+    ws->font_slot_raster_flags[RD_FontSlot_Icons] = FNT_RasterFlag_Smooth;
+    ws->font_slot_raster_flags[RD_FontSlot_Main] = (rd_setting_b32_from_name(str8_lit("smooth_ui_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_ui_text"))*FNT_RasterFlag_Hinted);
+    ws->font_slot_raster_flags[RD_FontSlot_Code] = (rd_setting_b32_from_name(str8_lit("smooth_code_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_code_text"))*FNT_RasterFlag_Hinted);
   }
   
   //////////////////////////////
@@ -10283,14 +10333,9 @@ rd_font_from_slot(RD_FontSlot slot)
 internal FNT_RasterFlags
 rd_raster_flags_from_slot(RD_FontSlot slot)
 {
-  FNT_RasterFlags flags = FNT_RasterFlag_Smooth|FNT_RasterFlag_Hinted;
-  switch(slot)
-  {
-    default:{}break;
-    case RD_FontSlot_Icons:{flags = FNT_RasterFlag_Smooth;}break;
-    case RD_FontSlot_Main: {flags = (rd_setting_b32_from_name(str8_lit("smooth_ui_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_ui_text"))*FNT_RasterFlag_Hinted);}break;
-    case RD_FontSlot_Code: {flags = (rd_setting_b32_from_name(str8_lit("smooth_code_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_name(str8_lit("hint_code_text"))*FNT_RasterFlag_Hinted);}break;
-  }
+  RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(window);
+  FNT_RasterFlags flags = ws->font_slot_raster_flags[slot];
   return flags;
 }
 

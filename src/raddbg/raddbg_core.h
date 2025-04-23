@@ -501,6 +501,9 @@ struct RD_WindowState
   // rjf: theme (recomputed each frame)
   UI_Theme *theme;
   
+  // rjf: font raster flags (recomputed each frame)
+  FNT_RasterFlags font_slot_raster_flags[RD_FontSlot_COUNT];
+  
   // rjf: dev interface state
   B32 dev_menu_is_open;
   
@@ -700,6 +703,8 @@ struct RD_State
   RD_CfgSlot *cfg_id_slots;
   RD_CfgNode *free_cfg_id_node;
   U64 cfg_id_gen;
+  RD_CfgID cfg_last_accessed_id;
+  RD_Cfg *cfg_last_accessed;
   
   // rjf: window state cache
   U64 window_state_slots_count;
@@ -708,11 +713,15 @@ struct RD_State
   RD_CfgID last_focused_window;
   RD_WindowState *first_window_state;
   RD_WindowState *last_window_state;
+  RD_CfgID window_state_last_accessed_id;
+  RD_WindowState *window_state_last_accessed;
   
   // rjf: view state cache
   U64 view_state_slots_count;
   RD_ViewStateSlot *view_state_slots;
   RD_ViewState *free_view_state;
+  RD_CfgID view_state_last_accessed_id;
+  RD_ViewState *view_state_last_accessed;
   
   // rjf: bind change
   Arena *bind_change_arena;
@@ -870,6 +879,7 @@ internal String8 rd_path_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 
 internal MD_NodePtrList rd_schemas_from_name(String8 name);
+internal String8 rd_default_setting_from_names(String8 schema_name, String8 setting_name);
 
 internal String8 rd_setting_from_name(String8 name);
 internal B32 rd_setting_b32_from_name(String8 name);
