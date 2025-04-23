@@ -10257,23 +10257,7 @@ rd_font_from_slot(RD_FontSlot slot)
   }
   
   // rjf: determine font name
-  String8 font_name = {0};
-  if(key.size != 0)
-  {
-    RD_Cfg *seed_cfg = &rd_nil_cfg;
-    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_id(rd_regs()->view); }
-    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_id(rd_regs()->panel); }
-    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_id(rd_regs()->window); }
-    for(RD_Cfg *cfg = seed_cfg; cfg != &rd_nil_cfg; cfg = cfg->parent)
-    {
-      RD_Cfg *font_root = rd_cfg_child_from_string(cfg, key);
-      if(font_root != &rd_nil_cfg)
-      {
-        font_name = font_root->first->string;
-        break;
-      }
-    }
-  }
+  String8 font_name = rd_setting_from_name(key);
   
   // rjf: map name -> tag
   FNT_Tag result = {0};

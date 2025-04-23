@@ -161,6 +161,10 @@ RD_VocabTable:
       @default(1)  'menu_animations':      bool,
       @default(1)  'scrolling_animations': bool,
       
+      //- rjf: fonts
+      'main_font': string,
+      'code_font': string,
+      
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
         'thread_lines': bool,
