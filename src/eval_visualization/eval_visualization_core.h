@@ -351,7 +351,7 @@ internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
 ////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, E_Expr *expr);
+internal EV_BlockTree ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////

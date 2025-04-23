@@ -2790,7 +2790,7 @@ rd_view_ui(Rng2F32 rect)
               {
                 ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
               }
-              block_tree   = ev_block_tree_from_expr(scratch.arena, eval_view, filter, eval.expr);
+              block_tree   = ev_block_tree_from_eval(scratch.arena, eval_view, filter, eval);
               block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
               if(implicit_root && block_ranges.first != 0)
               {
@@ -6315,7 +6315,7 @@ rd_window_frame(void)
           EV_BlockTree predicted_block_tree = {0};
           RD_RegsScope(.view = view->id)
           {
-            predicted_block_tree = ev_block_tree_from_expr(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval.expr);
+            predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
           }
           F32 row_height_px = ui_top_px_height();
           U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
@@ -6461,7 +6461,7 @@ rd_window_frame(void)
           F32 row_height_px = ui_top_px_height();
           Vec2F32 content_rect_center = center_2f32(content_rect);
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_expr(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval.expr);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval);
           F32 query_width_px = floor_f32(content_rect_dim.x * 0.35f);
           F32 max_query_height_px = content_rect_dim.y*0.8f;
           F32 query_height_px = max_query_height_px;

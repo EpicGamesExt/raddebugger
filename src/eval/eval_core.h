@@ -304,6 +304,21 @@ struct E_IRTreeAndType
 };
 
 ////////////////////////////////
+//~ rjf: Evaluation Artifact Bundle
+
+typedef struct E_Eval E_Eval;
+struct E_Eval
+{
+  E_Value value;
+  E_Space space;
+  E_Expr *expr;
+  E_IRTreeAndType irtree;
+  String8 bytecode;
+  E_InterpretationCode code;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
 //~ rjf: Full Extracted Type Information Types
 
 typedef enum E_MemberKind
@@ -628,7 +643,12 @@ struct E_BaseCtx
 ////////////////////////////////
 //~ rjf: Globals
 
-global read_only E_Module e_module_nil = {&rdi_parsed_nil};
+read_only global E_String2NumMap e_string2num_map_nil = {0};
+read_only global E_String2ExprMap e_string2expr_map_nil = {0};
+read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
+read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
+read_only global E_Eval e_eval_nil = {zero_struct, zero_struct, &e_expr_nil, {&e_irnode_nil}};
+read_only global E_Module e_module_nil = {&rdi_parsed_nil};
 thread_static E_BaseCtx *e_base_ctx = 0;
 thread_static U64 e_base_ctx_gen = 0;
 

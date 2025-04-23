@@ -1466,16 +1466,15 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
   U128 result = {0};
   U64 size = dim_1u64(range);
   U64 pre_mem_gen = dmn_mem_gen();
+  CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
+  U64 range_hash = ctrl_hash_from_string(str8_struct(&range));
+  U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
+  U64 process_slot_idx = process_hash%cache->slots_count;
+  U64 process_stripe_idx = process_slot_idx%cache->stripes_count;
+  CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
+  CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
   if(size != 0) for(;;)
   {
-    CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
-    U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
-    U64 process_slot_idx = process_hash%cache->slots_count;
-    U64 process_stripe_idx = process_slot_idx%cache->stripes_count;
-    CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
-    CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
-    U64 range_hash = ctrl_hash_from_string(str8_struct(&range));
-    
     //- rjf: try to read from cache
     B32 is_good = 0;
     B32 process_node_exists = 0;
@@ -6353,6 +6352,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
 {
   ProfBeginFunction();
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
+  
   //- rjf: unpack next request
   CTRL_Handle process = {0};
   Rng1U64 vaddr_range = {0};

@@ -126,7 +126,6 @@ struct E_IRState
 ////////////////////////////////
 //~ rjf: Globals
 
-global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 thread_static E_IRState *e_ir_state = 0;
 
 ////////////////////////////////

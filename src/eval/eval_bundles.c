@@ -33,10 +33,14 @@ e_eval_from_expr(Arena *arena, E_Expr *expr)
 internal E_Eval
 e_eval_from_string(Arena *arena, String8 string)
 {
+  ProfBeginFunction();
+  ProfBegin("e_eval_from_string (%.*s)", str8_varg(string));
   E_TokenArray     tokens   = e_token_array_from_text(arena, string);
   E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, tokens);
   E_Eval           eval     = e_eval_from_expr(arena, parse.expr);
   e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
+  ProfEnd();
+  ProfEnd();
   return eval;
 }
 
@@ -214,6 +218,14 @@ e_value_from_expr(E_Expr *expr)
   E_Eval value_eval = e_value_eval_from_eval(eval);
   E_Value result = value_eval.value;
   scratch_end(scratch);
+  return result;
+}
+
+internal E_Value
+e_value_from_eval(E_Eval eval)
+{
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  E_Value result = value_eval.value;
   return result;
 }
 
