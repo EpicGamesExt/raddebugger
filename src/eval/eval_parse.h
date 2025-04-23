@@ -52,7 +52,6 @@ internal void e_expr_insert_child(E_Expr *parent, E_Expr *prev, E_Expr *child);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
 internal void e_expr_remove_child(E_Expr *parent, E_Expr *child);
 internal E_Expr *e_expr_ref(Arena *arena, E_Expr *ref);
-internal E_Expr *e_expr_ref_deref(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs);
 internal E_Expr *e_expr_copy(Arena *arena, E_Expr *src);
 internal void e_expr_list_push(Arena *arena, E_ExprList *list, E_Expr *expr);

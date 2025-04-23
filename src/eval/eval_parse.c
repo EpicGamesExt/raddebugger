@@ -335,15 +335,6 @@ e_expr_ref(Arena *arena, E_Expr *ref)
 }
 
 internal E_Expr *
-e_expr_ref_deref(Arena *arena, E_Expr *rhs)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
-  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
-  e_expr_push_child(root, rhs_ref);
-  return root;
-}
-
-internal E_Expr *
 e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs)
 {
   E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
