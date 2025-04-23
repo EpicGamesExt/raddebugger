@@ -5,34 +5,6 @@
 #define EVAL_IR_H
 
 ////////////////////////////////
-//~ rjf: Bytecode Operation Types
-
-enum
-{
-  E_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
-  E_IRExtKind_SetSpace,
-  E_IRExtKind_COUNT
-};
-
-typedef struct E_Op E_Op;
-struct E_Op
-{
-  E_Op *next;
-  RDI_EvalOp opcode;
-  E_Value value;
-  String8 string;
-};
-
-typedef struct E_OpList E_OpList;
-struct E_OpList
-{
-  E_Op *first;
-  E_Op *last;
-  U64 op_count;
-  U64 encoded_size;
-};
-
-////////////////////////////////
 //~ rjf: Used Tag Map Data Structure
 
 typedef struct E_UsedExprNode E_UsedExprNode;
@@ -116,24 +88,11 @@ struct E_StringIDMap
 typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
 {
-  // rjf: instruction pointer info
-  U64 thread_ip_vaddr;
-  U64 thread_ip_voff;
-  E_Space thread_reg_space;
-  
-  // rjf: modules
-  E_Module *modules;
-  U64 modules_count;
-  E_Module *primary_module;
-  
-  // rjf: identifier-resolution maps
   E_String2NumMap *regs_map;
   E_String2NumMap *reg_alias_map;
   E_String2NumMap *locals_map; // (within `primary_module`)
   E_String2NumMap *member_map; // (within `primary_module`)
   E_String2ExprMap *macro_map;
-  
-  // rjf: hook maps
   E_AutoHookMap *auto_hook_map;
 };
 

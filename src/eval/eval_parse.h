@@ -17,25 +17,13 @@ struct E_Parse
 };
 
 ////////////////////////////////
-//~ rjf: Parse Context
-
-typedef struct E_ParseCtx E_ParseCtx;
-struct E_ParseCtx
-{
-  E_Module *modules;
-  U64 modules_count;
-  E_Module *primary_module;
-};
-
-////////////////////////////////
-//~ rjf: Parse State (stateful thread-local caching mechanisms, not provided by user)
+//~ rjf: Parse Evaluation State
 
 typedef struct E_ParseState E_ParseState;
 struct E_ParseState
 {
   Arena *arena;
   U64 arena_eval_start_pos;
-  E_ParseCtx *ctx;
 };
 
 ////////////////////////////////
@@ -55,13 +43,6 @@ internal void e_token_chunk_list_push(Arena *arena, E_TokenChunkList *list, U64 
 internal E_TokenArray e_token_array_from_chunk_list(Arena *arena, E_TokenChunkList *list);
 internal E_TokenArray e_token_array_from_text(Arena *arena, String8 text);
 internal E_TokenArray e_token_array_make_first_opl(E_Token *first, E_Token *opl);
-
-////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
-
-internal E_ParseCtx *e_selected_parse_ctx(void);
-internal void e_select_parse_ctx(E_ParseCtx *ctx);
-internal U32 e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi);
 
 ////////////////////////////////
 //~ rjf: Expression Tree Building Functions

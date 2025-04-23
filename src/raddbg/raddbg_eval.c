@@ -1333,7 +1333,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     
     // rjf: unpack row info
     RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
-    E_Module *module = &e_parse_state->ctx->modules[item->dbgi_idx];
+    E_Module *module = &e_base_ctx->modules[item->dbgi_idx];
     
     // rjf: build expr
     E_Expr *item_expr = &e_expr_nil;
@@ -1353,7 +1353,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = procedure->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &symbol_name.size);
           String8List strings = {0};
@@ -1377,7 +1377,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = gvar->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
           item_expr->mode     = E_Mode_Offset;
           item_expr->space    = module->space;
@@ -1393,7 +1393,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = tvar->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
           item_expr->mode     = E_Mode_Offset;
           item_expr->space    = module->space;
@@ -1405,7 +1405,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
         {
           RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_parse_state->ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_base_ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
           item_expr->type_key = type_key;
         }break;

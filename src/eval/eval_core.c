@@ -22,6 +22,37 @@ e_hash_from_string(U64 seed, String8 string)
   return result;
 }
 
+//- rjf: type key data structures
+
+internal void
+e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
+{
+  E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
+  n->v = key;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal void
+e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
+{
+  E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
+  n->v = key;
+  SLLQueuePushFront(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal E_TypeKeyList
+e_type_key_list_copy(Arena *arena, E_TypeKeyList *src)
+{
+  E_TypeKeyList dst = {0};
+  for(E_TypeKeyNode *n = src->first; n != 0; n = n->next)
+  {
+    e_type_key_list_push(arena, &dst, n->v);
+  }
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: Message Functions
 
@@ -270,6 +301,45 @@ e_string2expr_lookup(E_String2ExprMap *map, String8 string)
   return expr;
 }
 
+//- rjf: string -> type-key
+
+internal E_String2TypeKeyMap
+e_string2typekey_map_make(Arena *arena, U64 slots_count)
+{
+  E_String2TypeKeyMap map = {0};
+  map.slots_count = slots_count;
+  map.slots = push_array(arena, E_String2TypeKeySlot, map.slots_count);
+  return map;
+}
+
+internal void
+e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key)
+{
+  E_String2TypeKeyNode *n = push_array(arena, E_String2TypeKeyNode, 1);
+  U64 hash = e_hash_from_string(5381, string);
+  U64 slot_idx = hash%map->slots_count;
+  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
+  n->string = push_str8_copy(arena, string);
+  n->key = key;
+}
+
+internal E_TypeKey
+e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string)
+{
+  E_TypeKey key = zero_struct;
+  U64 hash = e_hash_from_string(5381, string);
+  U64 slot_idx = hash%map->slots_count;
+  for(E_String2TypeKeyNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(str8_match(n->string, string, 0))
+    {
+      key = n->key;
+      break;
+    }
+  }
+  return key;
+}
+
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Functions
 
@@ -391,4 +461,16 @@ e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   }
   
   return map;
+}
+
+////////////////////////////////
+//~ rjf: Base Evaluation Context Selection
+
+internal void
+e_select_base_ctx(E_BaseCtx *ctx)
+{
+  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
+  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
+  e_base_ctx = ctx;
+  e_base_ctx_gen += 1;
 }

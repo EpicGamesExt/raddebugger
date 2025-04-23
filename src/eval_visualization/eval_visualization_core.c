@@ -469,18 +469,18 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
         if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
            e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
-          Arch arch = e_type_state->ctx->primary_module->arch;
+          Arch arch = e_base_ctx->primary_module->arch;
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
           U64 module_base = 0;
-          for(U64 idx = 0; idx < e_type_state->ctx->modules_count; idx += 1)
+          for(U64 idx = 0; idx < e_base_ctx->modules_count; idx += 1)
           {
-            if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vtable_vaddr))
+            if(contains_1u64(e_base_ctx->modules[idx].vaddr_range, vtable_vaddr))
             {
-              arch = e_type_state->ctx->modules[idx].arch;
+              arch = e_base_ctx->modules[idx].arch;
               rdi_idx = (U32)idx;
-              rdi = e_type_state->ctx->modules[idx].rdi;
-              module_base = e_type_state->ctx->modules[idx].vaddr_range.min;
+              rdi = e_base_ctx->modules[idx].rdi;
+              module_base = e_base_ctx->modules[idx].vaddr_range.min;
               break;
             }
           }
@@ -1867,11 +1867,11 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               U64 vaddr = ptr_data->value_eval.value.u64;
               E_Module *module = &e_module_nil;
               U32 module_idx = 0;
-              for EachIndex(idx, e_type_state->ctx->modules_count)
+              for EachIndex(idx, e_base_ctx->modules_count)
               {
-                if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vaddr))
+                if(contains_1u64(e_base_ctx->modules[idx].vaddr_range, vaddr))
                 {
-                  module = &e_type_state->ctx->modules[idx];
+                  module = &e_base_ctx->modules[idx];
                   module_idx = (U32)idx;
                   break;
                 }

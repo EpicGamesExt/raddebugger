@@ -5,31 +5,6 @@
 #define EVAL_TYPES_H
 
 ////////////////////////////////
-//~ rjf: String -> Type Key Map Data Structure
-
-typedef struct E_String2TypeKeyNode E_String2TypeKeyNode;
-struct E_String2TypeKeyNode
-{
-  E_String2TypeKeyNode *next;
-  String8 string;
-  E_TypeKey key;
-};
-
-typedef struct E_String2TypeKeySlot E_String2TypeKeySlot;
-struct E_String2TypeKeySlot
-{
-  E_String2TypeKeyNode *first;
-  E_String2TypeKeyNode *last;
-};
-
-typedef struct E_String2TypeKeyMap E_String2TypeKeyMap;
-struct E_String2TypeKeyMap
-{
-  U64 slots_count;
-  E_String2TypeKeySlot *slots;
-};
-
-////////////////////////////////
 //~ rjf: Type Unwrapping
 
 typedef U32 E_TypeUnwrapFlags;
@@ -46,7 +21,7 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Evaluation Context
+//~ rjf: Type Evaluation State
 
 //- rjf: constructed type cache types
 
@@ -152,26 +127,13 @@ struct E_MemberCacheSlot
   E_MemberCacheNode *last;
 };
 
-//- rjf: context parameterization
-
-typedef struct E_TypeCtx E_TypeCtx;
-struct E_TypeCtx
-{
-  E_Module *modules;
-  U64 modules_count;
-  E_Module *primary_module;
-};
-
-//- rjf: stateful machine part of context (not provided by user)
+//- rjf: bundle
 
 typedef struct E_TypeState E_TypeState;
 struct E_TypeState
 {
   Arena *arena;
   U64 arena_eval_start_pos;
-  
-  // rjf: evaluation context
-  E_TypeCtx *ctx;
   
   // rjf: JIT-constructed types tables
   U64 cons_id_gen;
@@ -231,9 +193,9 @@ internal void e_member_list_push(Arena *arena, E_MemberList *list, E_Member *mem
 internal E_MemberArray e_member_array_from_list(Arena *arena, E_MemberList *list);
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
+//~ rjf: Type Evaluation Phase Beginning Marker (Required For All Subsequent APIs)
 
-internal void e_select_type_ctx(E_TypeCtx *ctx);
+internal void e_type_eval_begin(void);
 
 ////////////////////////////////
 //~ rjf: Type Operation Functions
@@ -287,14 +249,6 @@ internal void e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8Lis
 internal void e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec);
 internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
 internal E_TypeKey e_default_expansion_type_from_key(E_TypeKey key);
-
-//- rjf: type key data structures
-internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
-internal void e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
-internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
-internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
-internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);
-internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups

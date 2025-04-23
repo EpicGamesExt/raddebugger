@@ -2998,8 +2998,31 @@ rd_view_ui(Rng2F32 rect)
                   {
                     default:
                     {
-                      String8 symbol_name = d_symbol_name_from_process_vaddr(scratch.arena, ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), eval.value.u64, 0, 0);
-                      rd_cmd(RD_CmdKind_CompleteQuery, .string = symbol_name);
+                      U64 vaddr = eval.value.u64;
+                      CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+                      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                      U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                      {
+                        DI_Scope *scope = di_scope_open();
+                        RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+                        String8 name = {0};
+                        if(name.size == 0)
+                        {
+                          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+                          name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                        }
+                        if(name.size == 0)
+                        {
+                          RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+                          name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &name.size);
+                        }
+                        if(name.size != 0)
+                        {
+                          rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
+                        }
+                        di_scope_close(scope);
+                      }
                     }break;
                     case E_SpaceKind_File:
                     case E_SpaceKind_FileSystem:
@@ -3050,10 +3073,32 @@ rd_view_ui(Rng2F32 rect)
                     {
                       default:
                       {
-                        String8 symbol_name = d_symbol_name_from_process_vaddr(scratch.arena, ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), eval.value.u64, 0, 0);
-                        if(symbol_name.size != 0)
+                        String8 name = {0};
                         {
-                          rd_cmd(RD_CmdKind_GoToName, .string = symbol_name);
+                          U64 vaddr = eval.value.u64;
+                          CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+                          CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                          {
+                            DI_Scope *scope = di_scope_open();
+                            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+                            if(name.size == 0)
+                            {
+                              RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+                              name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                            }
+                            if(name.size == 0)
+                            {
+                              RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+                              name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &name.size);
+                            }
+                            di_scope_close(scope);
+                          }
+                        }
+                        if(name.size != 0)
+                        {
+                          rd_cmd(RD_CmdKind_GoToName, .string = name);
                         }
                         else
                         {
@@ -10214,30 +10259,6 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
         }break;
       }
     }
-    
-#if 0
-    // rjf: try to map as symbol
-    if(!mapped && kind == TXT_TokenKind_Identifier)
-    {
-      U64 voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, string);
-      if(voff != 0)
-      {
-        mapped = 1;
-        color = RD_ThemeColor_CodeSymbol;
-      }
-    }
-    
-    // rjf: try to map as type
-    if(!mapped && kind == TXT_TokenKind_Identifier)
-    {
-      U64 type_num = d_type_num_from_dbgi_key_name(&dbgi_key, string);
-      if(type_num != 0)
-      {
-        mapped = 1;
-        color = RD_ThemeColor_CodeType;
-      }
-    }
-#endif
   }
   return color;
 }
@@ -11769,57 +11790,70 @@ rd_frame(void)
     }
     ProfEnd();
     
-    ////////////////////////////
-    //- rjf: build eval type context
-    //
-    E_TypeCtx *type_ctx = push_array(scratch.arena, E_TypeCtx, 1);
-    ProfScope("build eval type context")
-    {
-      E_TypeCtx *ctx = type_ctx;
-      ctx->modules           = eval_modules;
-      ctx->modules_count     = eval_modules_count;
-      ctx->primary_module    = eval_modules_primary;
-    }
-    e_select_type_ctx(type_ctx);
+    //~
+    //~ NOTE(rjf): NEW VVVVV
+    //~
     
     ////////////////////////////
-    //- rjf: build eval parse context
+    //- rjf: build base evaluation context
     //
-    E_ParseCtx *parse_ctx = push_array(scratch.arena, E_ParseCtx, 1);
-    ProfScope("build eval parse context")
+    E_BaseCtx *eval_base_ctx = push_array(scratch.arena, E_BaseCtx, 1);
     {
-      E_ParseCtx *ctx = parse_ctx;
-      ctx->modules           = eval_modules;
-      ctx->modules_count     = eval_modules_count;
-      ctx->primary_module    = eval_modules_primary;
-    }
-    e_select_parse_ctx(parse_ctx);
-    
-    ////////////////////////////
-    //- rjf: build eval IR context
-    //
-    E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
-    if(e_ir_state != 0) { e_ir_state->ctx = 0; }
-    {
-      E_IRCtx *ctx = ir_ctx;
-      ctx->thread_ip_voff     = rip_voff;
-      ctx->thread_ip_vaddr    = rip_vaddr;
-      ctx->thread_reg_space   = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
-      ctx->modules           = eval_modules;
-      ctx->modules_count     = eval_modules_count;
-      ctx->primary_module    = eval_modules_primary;
-      ctx->regs_map      = ctrl_string2reg_from_arch(ctx->primary_module->arch);
-      ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->primary_module->arch);
-      ctx->locals_map    = d_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
-      ctx->member_map    = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
-      ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
-      ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
-      ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
-      ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
+      E_BaseCtx *ctx = eval_base_ctx;
       
-      //- rjf: cache meta name -> type key correllation
-      rd_state->meta_name2type_map = push_array(rd_frame_arena(), E_String2TypeKeyMap, 1);
-      rd_state->meta_name2type_map[0] = e_string2typekey_map_make(rd_frame_arena(), 256);
+      //- rjf: fill instruction pointer info
+      ctx->thread_ip_vaddr     = rip_vaddr;
+      ctx->thread_ip_voff      = rip_voff;
+      ctx->thread_reg_space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
+      ctx->thread_arch         = thread->arch;
+      ctx->thread_unwind_count = unwind_count;
+      
+      //- rjf: fill modules
+      ctx->modules        = eval_modules;
+      ctx->modules_count  = eval_modules_count;
+      ctx->primary_module = eval_modules_primary;
+      
+      //- rjf: fill space hooks
+      ctx->space_read  = rd_eval_space_read;
+      ctx->space_write = rd_eval_space_write;
+    }
+    e_select_base_ctx(eval_base_ctx);
+    
+    ////////////////////////////
+    //- rjf: begin type evaluation
+    //
+    e_type_eval_begin();
+    
+    ////////////////////////////
+    //- rjf: build extra types & maps
+    //
+    E_String2ExprMap *macro_map = push_array(scratch.arena, E_String2ExprMap, 1);
+    macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
+    E_AutoHookMap *auto_hook_map = push_array(scratch.arena, E_AutoHookMap, 1);
+    auto_hook_map[0] = e_auto_hook_map_make(scratch.arena, 512);
+    rd_state->meta_name2type_map = push_array(rd_frame_arena(), E_String2TypeKeyMap, 1);
+    rd_state->meta_name2type_map[0] = e_string2typekey_map_make(rd_frame_arena(), 256);
+    EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
+    rd_state->view_ui_rule_map = rd_view_ui_rule_map_make(scratch.arena, 512);
+    {
+      //- rjf: add macro for commands
+      {
+        String8 name = str8_lit("commands");
+        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                             .name = name,
+                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
+                                             .expand =
+                                             {
+                                               .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
+                                               .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
+                                             });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+      }
+      
+      //- rjf: build schema types & cache (name -> type) mapping
       for EachElement(idx, rd_name_schema_info_table)
       {
         String8 name = rd_name_schema_info_table[idx].name;
@@ -11861,16 +11895,70 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", cfg->id), expr);
+          e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", cfg->id), expr);
           if(exe.size != 0)
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_skip_last_slash(exe), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_skip_last_slash(exe), expr);
           }
           if(label.size != 0)
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, label, expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, label, expr);
           }
         }
+      }
+      
+      //- rjf: add macro for watches group
+      {
+        String8 collection_name = str8_lit("watches");
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren,
+                                         .expand =
+                                         {
+                                           .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(watches),
+                                           .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(watches),
+                                           .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
+                                           .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
+                                         });
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+      }
+      
+      //- rjf: add macros for all watches which define identifiers
+      RD_CfgList watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
+      for(RD_CfgNode *n = watches.first; n != 0; n = n->next)
+      {
+        RD_Cfg *watch = n->v;
+        String8 expr = rd_expr_from_cfg(watch);
+        E_Parse parse = e_parse_expr_from_text(scratch.arena, expr);
+        if(parse.msgs.max_kind == E_MsgKind_Null)
+        {
+          for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
+          {
+            e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, macro_map, expr);
+          }
+        }
+      }
+      
+      //- rjf: add macros for all config collections
+      for EachElement(cfg_name_idx, evallable_cfg_names)
+      {
+        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
+        String8 collection_name = rd_plural_from_code_name(cfg_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+                                                        .irext = E_TYPE_IREXT_FUNCTION_NAME(cfgs),
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs),
+                                                        .expand =
+                                                        {
+                                                          .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs),
+                                                          .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs),
+                                                          .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs),
+                                                          .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs),
+                                                        });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
       
       //- rjf: add macros for windows/tabs
@@ -11886,7 +11974,7 @@ rd_frame(void)
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
             expr->type_key = type_key;
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", window->id), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", window->id), expr);
           }
           RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
           for(RD_PanelNode *p = panel_tree.root;
@@ -11902,11 +11990,12 @@ rd_frame(void)
               expr->space    = space;
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
-              e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x", tab->id), expr);
+              e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", tab->id), expr);
             }
           }
         }
       }
+      
       
       //- rjf: add macros for user/project
       {
@@ -11916,7 +12005,7 @@ rd_frame(void)
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = type_key;
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("user_settings"), expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("user_settings"), expr);
       }
       {
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("project"));
@@ -11925,7 +12014,7 @@ rd_frame(void)
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = type_key;
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("project_settings"), expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("project_settings"), expr);
       }
       
       //- rjf: add macros for evallable control entities
@@ -11950,51 +12039,72 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, ctrl_string_from_handle(scratch.arena, entity->handle), expr);
+          e_string2expr_map_insert(scratch.arena, macro_map, ctrl_string_from_handle(scratch.arena, entity->handle), expr);
           if(entity->string.size != 0)
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, entity->string, expr);
           }
           if(kind == CTRL_EntityKind_Machine && entity->handle.machine_id == CTRL_MachineID_Local)
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("local_machine"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("local_machine"), expr);
           }
           if(kind == CTRL_EntityKind_Thread && ctrl_handle_match(rd_base_regs()->thread, entity->handle))
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_thread"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_thread"), expr);
           }
           if(kind == CTRL_EntityKind_Process && ctrl_handle_match(rd_base_regs()->process, entity->handle))
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_process"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_process"), expr);
           }
           if(kind == CTRL_EntityKind_Module && ctrl_handle_match(rd_base_regs()->module, entity->handle))
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_module"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_module"), expr);
           }
         }
+      }
+      
+      //- rjf: add macros for all ctrl entity collections
+      for EachElement(ctrl_name_idx, evallable_ctrl_names)
+      {
+        String8 kind_name = evallable_ctrl_names[ctrl_name_idx];
+        String8 collection_name = rd_plural_from_code_name(kind_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                        .name = collection_name,
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(ctrl_entities),
+                                                        .expand =
+                                                        {
+                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(ctrl_entities),
+                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(ctrl_entities)
+                                                        });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
+      }
+      
+      //- rjf: add macro / lookup rules for unattached processes
+      {
+        String8 collection_name = str8_lit("unattached_processes");
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+                                                        .expand =
+                                                        {
+                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),
+                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(unattached_processes)
+                                                        });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
       
       //- rjf: add macro for 'call_stack' -> 'query:current_thread.callstack'
       {
         E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("query:current_thread.call_stack")).expr;
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("call_stack"), expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("call_stack"), expr);
       }
       
-      //- rjf: add macro for watches group
-      {
-        String8 collection_name = str8_lit("watches");
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren,
-                                         .expand =
-                                         {
-                                           .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(watches),
-                                           .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(watches),
-                                           .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
-                                           .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
-                                         });
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-      }
       
       //- rjf: add types for queries
       {
@@ -12050,7 +12160,7 @@ rd_frame(void)
                                              .range = collection_infos[idx].range,
                                            });
           expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+          e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
         }
       }
       
@@ -12076,82 +12186,7 @@ rd_frame(void)
                                            .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(debug_info_table),
                                            .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(debug_info_table)
                                          });
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
-      }
-      
-      //- rjf: add macros for all config collections
-      for EachElement(cfg_name_idx, evallable_cfg_names)
-      {
-        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
-        String8 collection_name = rd_plural_from_code_name(cfg_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
-                                                        .irext = E_TYPE_IREXT_FUNCTION_NAME(cfgs),
-                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs),
-                                                        .expand =
-                                                        {
-                                                          .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs),
-                                                          .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs),
-                                                          .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs),
-                                                          .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs),
-                                                        });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
-      }
-      
-      //- rjf: add macros for all ctrl entity collections
-      for EachElement(ctrl_name_idx, evallable_ctrl_names)
-      {
-        String8 kind_name = evallable_ctrl_names[ctrl_name_idx];
-        String8 collection_name = rd_plural_from_code_name(kind_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
-                                                        .name = collection_name,
-                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(ctrl_entities),
-                                                        .expand =
-                                                        {
-                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(ctrl_entities),
-                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(ctrl_entities)
-                                                        });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
-      }
-      
-      //- rjf: add macro / lookup rules for unattached processes
-      {
-        String8 collection_name = str8_lit("unattached_processes");
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
-                                                        .expand =
-                                                        {
-                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),
-                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(unattached_processes)
-                                                        });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
-      }
-      
-      //- rjf: add macro for commands
-      {
-        String8 name = str8_lit("commands");
-        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
-                                             .name = name,
-                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
-                                             .expand =
-                                             {
-                                               .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
-                                               .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
-                                             });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, name, expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
       }
       
       //- rjf: add macro for output log
@@ -12166,7 +12201,7 @@ rd_frame(void)
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("output"), expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("output"), expr);
         hs_scope_close(hs_scope);
       }
       
@@ -12197,27 +12232,11 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, table[idx].name, expr);
+          e_string2expr_map_insert(scratch.arena, macro_map, table[idx].name, expr);
           hs_scope_close(hs_scope);
         }
       }
 #endif
-      
-      //- rjf: add macros for all watches which define identifiers
-      RD_CfgList watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
-      for(RD_CfgNode *n = watches.first; n != 0; n = n->next)
-      {
-        RD_Cfg *watch = n->v;
-        String8 expr = rd_expr_from_cfg(watch);
-        E_Parse parse = e_parse_expr_from_text(scratch.arena, expr);
-        if(parse.msgs.max_kind == E_MsgKind_Null)
-        {
-          for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
-          {
-            e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, expr);
-          }
-        }
-      }
       
       //- rjf: gather auto-view-rules from loaded modules
       RD_CfgList immediate_auto_view_rules = {0};
@@ -12260,17 +12279,11 @@ rd_frame(void)
             RD_Cfg *rule = n->v;
             String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
             String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
-            e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
+            e_auto_hook_map_insert_new(scratch.arena, auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
           }
         }
       }
-    }
-    e_select_ir_ctx(ir_ctx);
-    
-    ////////////////////////////
-    //- rjf: generate macros for all lenses
-    //
-    {
+      
       //- rjf: choose set of lenses
       // TODO(rjf): generate via metaprogram
       struct
@@ -12312,9 +12325,6 @@ rd_frame(void)
       };
       
       //- rjf: fill lenses in ev expand rule map, rd view ui rule map
-      EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
-      ev_select_expand_rule_table(expand_rule_table);
-      rd_state->view_ui_rule_map = rd_view_ui_rule_map_make(scratch.arena, 512);
       {
         for EachElement(idx, lens_table)
         {
@@ -12352,9 +12362,25 @@ rd_frame(void)
                                          .irext = lens_table[idx].irext,
                                          .access = lens_table[idx].access,
                                          .expand = lens_table[idx].expand);
-        e_string2expr_map_insert(scratch.arena, e_ir_state->ctx->macro_map, lens_table[idx].name, expr);
+        e_string2expr_map_insert(scratch.arena, macro_map, lens_table[idx].name, expr);
       }
     }
+    ev_select_expand_rule_table(expand_rule_table);
+    
+    ////////////////////////////
+    //- rjf: build IR evaluation context
+    //
+    E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
+    {
+      E_IRCtx *ctx = ir_ctx;
+      ctx->regs_map       = ctrl_string2reg_from_arch(eval_base_ctx->primary_module->arch);
+      ctx->reg_alias_map  = ctrl_string2alias_from_arch(eval_base_ctx->primary_module->arch);
+      ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+      ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+      ctx->macro_map      = macro_map;
+      ctx->auto_hook_map  = auto_hook_map;
+    }
+    e_select_ir_ctx(ir_ctx);
     
     ////////////////////////////
     //- rjf: build eval interpretation context

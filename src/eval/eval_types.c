@@ -223,10 +223,10 @@ e_member_array_from_list(Arena *arena, E_MemberList *list)
 }
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
+//~ rjf: Type Evaluation Phase Beginning Marker (Required For All Subsequent APIs)
 
 internal void
-e_select_type_ctx(E_TypeCtx *ctx)
+e_type_eval_begin(void)
 {
   if(e_type_state == 0)
   {
@@ -235,10 +235,7 @@ e_select_type_ctx(E_TypeCtx *ctx)
     e_type_state->arena = arena;
     e_type_state->arena_eval_start_pos = arena_pos(e_type_state->arena);
   }
-  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
-  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
   arena_pop_to(e_type_state->arena, e_type_state->arena_eval_start_pos);
-  e_type_state->ctx = ctx;
   e_type_state->cons_id_gen = 0;
   e_type_state->cons_content_slots_count = 256;
   e_type_state->cons_key_slots_count = 256;
@@ -665,7 +662,7 @@ e_type_byte_size_from_key(E_TypeKey key)
     {
       U64 type_node_idx = key.u32[1];
       U32 rdi_idx = key.u32[2];
-      RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
+      RDI_Parsed *rdi = e_base_ctx->modules[rdi_idx].rdi;
       RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
       result = rdi_type->byte_size;
     }break;
@@ -777,7 +774,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       {
         U64 type_node_idx = key.u32[1];
         U32 rdi_idx = key.u32[2];
-        RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
+        RDI_Parsed *rdi = e_base_ctx->modules[rdi_idx].rdi;
         RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
         if(rdi_type->kind != RDI_TypeKind_NULL)
         {
@@ -824,7 +821,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name       = push_str8_copy(arena, name);
             type->byte_size  = (U64)rdi_type->byte_size;
             type->count      = members_count;
-            type->arch       = e_type_state->ctx->modules[rdi_idx].arch;
+            type->arch       = e_base_ctx->modules[rdi_idx].arch;
             type->members    = members;
           }
           
@@ -869,7 +866,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name            = push_str8_copy(arena, name);
             type->byte_size       = (U64)rdi_type->byte_size;
             type->count           = enum_vals_count;
-            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+            type->arch            = e_base_ctx->modules[rdi_idx].arch;
             type->enum_vals       = enum_vals;
             type->direct_type_key = direct_type_key;
           }
@@ -909,7 +906,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->direct_type_key = direct_type_key;
                 type->byte_size       = direct_type_byte_size;
                 type->flags           = flags;
-                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                type->arch            = e_base_ctx->modules[rdi_idx].arch;
               }break;
               case RDI_TypeKind_Ptr:
               case RDI_TypeKind_LRef:
@@ -918,9 +915,9 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
                 type->direct_type_key = direct_type_key;
-                type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
+                type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
                 type->count           = 1;
-                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                type->arch            = e_base_ctx->modules[rdi_idx].arch;
               }break;
               
               case RDI_TypeKind_Array:
@@ -930,7 +927,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->direct_type_key = direct_type_key;
                 type->count           = rdi_type->constructed.count;
                 type->byte_size       = direct_type_byte_size * type->count;
-                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                type->arch            = e_base_ctx->modules[rdi_idx].arch;
               }break;
               case RDI_TypeKind_Function:
               {
@@ -942,11 +939,11 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
                   type->direct_type_key = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
-                  type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                  type->arch            = e_base_ctx->modules[rdi_idx].arch;
                   for(U32 idx = 0; idx < type->count; idx += 1)
                   {
                     U32 param_type_idx = idx_run[idx];
@@ -976,11 +973,11 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
                   type->owner_type_key  = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
-                  type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                  type->arch            = e_base_ctx->modules[rdi_idx].arch;
                   for(U32 idx = 0; idx < type->count; idx += 1)
                   {
                     U32 param_type_idx = idx_run[idx];
@@ -1015,10 +1012,10 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 }
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
-                type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
+                type->byte_size       = bit_size_from_arch(e_base_ctx->modules[rdi_idx].arch)/8;
                 type->owner_type_key  = owner_type_key;
                 type->direct_type_key = direct_type_key;
-                type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+                type->arch            = e_base_ctx->modules[rdi_idx].arch;
               }break;
             }
           }
@@ -1047,7 +1044,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name            = push_str8_copy(arena, name);
             type->byte_size       = direct_type_byte_size;
             type->direct_type_key = direct_type_key;
-            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+            type->arch            = e_base_ctx->modules[rdi_idx].arch;
           }
           
           //- rjf: bitfields
@@ -1071,7 +1068,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->direct_type_key = direct_type_key;
             type->off             = (U32)rdi_type->bitfield.off;
             type->count           = (U64)rdi_type->bitfield.size;
-            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+            type->arch            = e_base_ctx->modules[rdi_idx].arch;
           }
           
           //- rjf: incomplete types
@@ -1085,7 +1082,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type = push_array(arena, E_Type, 1);
             type->kind            = kind;
             type->name            = push_str8_copy(arena, name);
-            type->arch            = e_type_state->ctx->modules[rdi_idx].arch;
+            type->arch            = e_base_ctx->modules[rdi_idx].arch;
           }
           
         }
@@ -1990,74 +1987,6 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
   return type_key;
 }
 
-//- rjf: type key data structures
-
-internal void
-e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
-{
-  E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
-  n->v = key;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal void
-e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key)
-{
-  E_TypeKeyNode *n = push_array(arena, E_TypeKeyNode, 1);
-  n->v = key;
-  SLLQueuePushFront(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal E_TypeKeyList
-e_type_key_list_copy(Arena *arena, E_TypeKeyList *src)
-{
-  E_TypeKeyList dst = {0};
-  for(E_TypeKeyNode *n = src->first; n != 0; n = n->next)
-  {
-    e_type_key_list_push(arena, &dst, n->v);
-  }
-  return dst;
-}
-
-internal E_String2TypeKeyMap
-e_string2typekey_map_make(Arena *arena, U64 slots_count)
-{
-  E_String2TypeKeyMap map = {0};
-  map.slots_count = slots_count;
-  map.slots = push_array(arena, E_String2TypeKeySlot, map.slots_count);
-  return map;
-}
-
-internal void
-e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key)
-{
-  E_String2TypeKeyNode *n = push_array(arena, E_String2TypeKeyNode, 1);
-  U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
-  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
-  n->string = push_str8_copy(arena, string);
-  n->key = key;
-}
-
-internal E_TypeKey
-e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string)
-{
-  E_TypeKey key = zero_struct;
-  U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
-  for(E_String2TypeKeyNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
-  {
-    if(str8_match(n->string, string, 0))
-    {
-      key = n->key;
-      break;
-    }
-  }
-  return key;
-}
-
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
@@ -2546,7 +2475,7 @@ E_TYPE_IREXT_FUNCTION_DEF(slice)
       }
       
       // rjf: determine architecture
-      Arch arch = e_type_state->ctx->primary_module->arch;
+      Arch arch = e_base_ctx->primary_module->arch;
       if(base_ptr_member != 0)
       {
         E_Type *type = e_type_from_key__cached(base_ptr_member->type_key);

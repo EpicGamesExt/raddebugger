@@ -2588,7 +2588,29 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           CTRL_Entity *module = ctrl_module_from_process_vaddr(process, f_rip);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           U64 rip_voff = ctrl_voff_from_vaddr(module, f_rip);
-          String8 symbol_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0, 1);
+          String8 symbol_name = {0};
+          {
+            U64 vaddr = eval.value.u64;
+            CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+            {
+              DI_Scope *scope = di_scope_open();
+              RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+              if(symbol_name.size == 0)
+              {
+                RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+                symbol_name.str = rdi_name_from_procedure(rdi, procedure, &symbol_name.size);
+              }
+              if(symbol_name.size == 0)
+              {
+                RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+                symbol_name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &symbol_name.size);
+              }
+              di_scope_close(scope);
+            }
+          }
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");

@@ -4704,14 +4704,18 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
   scope->di_scope = di_scope_open();
   
-  // rjf: unpack thread
+  //////////////////////////////
+  //- rjf: unpack thread
+  //
   Arch arch = thread->arch;
   U64 thread_rip_vaddr = dmn_rip_from_thread(thread->handle.dmn_handle);
   CTRL_Entity *process = ctrl_process_from_entity(thread);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
   U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
   
-  // rjf: gather evaluation modules
+  //////////////////////////////
+  //- rjf: gather evaluation modules
+  //
   U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];
@@ -4751,35 +4755,40 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     }
   }
   
-  // rjf: build eval type context
+  //////////////////////////////
+  //- rjf: build base evaluation context
+  //
   {
-    E_TypeCtx *ctx = &scope->type_ctx;
-    ctx->modules           = eval_modules;
-    ctx->modules_count     = eval_modules_count;
-    ctx->primary_module    = eval_modules_primary;
-  }
-  e_select_type_ctx(&scope->type_ctx);
-  
-  // rjf: build eval parse context
-  ProfScope("build eval parse context")
-  {
-    E_ParseCtx *ctx = &scope->parse_ctx;
-    ctx->modules           = eval_modules;
-    ctx->modules_count     = eval_modules_count;
-    ctx->primary_module    = eval_modules_primary;
-  }
-  e_select_parse_ctx(&scope->parse_ctx);
-  
-  // rjf: build eval IR context
-  {
-    E_IRCtx *ctx = &scope->ir_ctx;
-    ctx->thread_ip_vaddr = thread_rip_vaddr;
-    ctx->thread_ip_voff  = thread_rip_voff;
+    E_BaseCtx *ctx = &scope->base_ctx;
+    
+    //- rjf: fill instruction pointer info
+    ctx->thread_ip_vaddr     = thread_rip_vaddr;
+    ctx->thread_ip_voff      = thread_rip_voff;
+    ctx->thread_arch         = thread->arch;
     ctx->thread_reg_space = e_space_make(CTRL_EvalSpaceKind_Entity);
     ctx->thread_reg_space.u64_0 = (U64)thread;
-    ctx->modules           = eval_modules;
-    ctx->modules_count     = eval_modules_count;
-    ctx->primary_module    = eval_modules_primary;
+    
+    //- rjf: fill modules
+    ctx->modules        = eval_modules;
+    ctx->modules_count  = eval_modules_count;
+    ctx->primary_module = eval_modules_primary;
+    
+    //- rjf: fill space hooks
+    ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
+    ctx->space_read  = ctrl_eval_space_read;
+  }
+  e_select_base_ctx(&scope->base_ctx);
+  
+  //////////////////////////////
+  //- rjf: begin type evaluation
+  //
+  e_type_eval_begin();
+  
+  //////////////////////////////
+  //- rjf: build IR evaluation context
+  //
+  {
+    E_IRCtx *ctx = &scope->ir_ctx;
     ctx->regs_map      = ctrl_string2reg_from_arch(arch);
     ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
     ctx->locals_map    = e_push_locals_map_from_rdi_voff(arena, eval_modules_primary->rdi, thread_rip_voff);
@@ -4791,7 +4800,9 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   }
   e_select_ir_ctx(&scope->ir_ctx);
   
-  // rjf: build eval interpretation context
+  //////////////////////////////
+  //- rjf: build eval interpretation context
+  //
   {
     E_InterpretCtx *ctx = &scope->interpret_ctx;
     ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;

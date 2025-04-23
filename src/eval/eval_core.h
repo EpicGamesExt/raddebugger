@@ -56,6 +56,34 @@ union E_Value
 };
 
 ////////////////////////////////
+//~ rjf: Bytecode Operation Types
+
+enum
+{
+  E_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
+  E_IRExtKind_SetSpace,
+  E_IRExtKind_COUNT
+};
+
+typedef struct E_Op E_Op;
+struct E_Op
+{
+  E_Op *next;
+  RDI_EvalOp opcode;
+  E_Value value;
+  String8 string;
+};
+
+typedef struct E_OpList E_OpList;
+struct E_OpList
+{
+  E_Op *first;
+  E_Op *last;
+  U64 op_count;
+  U64 encoded_size;
+};
+
+////////////////////////////////
 //~ rjf: Operator Info
 
 typedef enum E_OpKind
@@ -505,6 +533,31 @@ struct E_String2ExprMap
 };
 
 ////////////////////////////////
+//~ rjf: String -> Type Key Map Data Structure
+
+typedef struct E_String2TypeKeyNode E_String2TypeKeyNode;
+struct E_String2TypeKeyNode
+{
+  E_String2TypeKeyNode *next;
+  String8 string;
+  E_TypeKey key;
+};
+
+typedef struct E_String2TypeKeySlot E_String2TypeKeySlot;
+struct E_String2TypeKeySlot
+{
+  E_String2TypeKeyNode *first;
+  E_String2TypeKeyNode *last;
+};
+
+typedef struct E_String2TypeKeyMap E_String2TypeKeyMap;
+struct E_String2TypeKeyMap
+{
+  U64 slots_count;
+  E_String2TypeKeySlot *slots;
+};
+
+////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)
 
 typedef struct E_AutoHookNode E_AutoHookNode;
@@ -542,9 +595,30 @@ struct E_AutoHookParams
 };
 
 ////////////////////////////////
-//~ rjf: Contextual & Implicit Evaluation Parameters
+//~ rjf: Evaluation Context
 
 typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
+
+typedef struct E_BaseCtx E_BaseCtx;
+struct E_BaseCtx
+{
+  // rjf: instruction pointer info
+  U64 thread_ip_vaddr;
+  U64 thread_ip_voff;
+  E_Space thread_reg_space;
+  Arch thread_arch;
+  U64 thread_unwind_count;
+  
+  // rjf: modules
+  E_Module *modules;
+  U64 modules_count;
+  E_Module *primary_module;
+  
+  // rjf: space hooks
+  void *space_rw_user_data;
+  E_SpaceRWFunction *space_read;
+  E_SpaceRWFunction *space_write;
+};
 
 ////////////////////////////////
 //~ rjf: Generated Code
@@ -555,12 +629,19 @@ typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64
 //~ rjf: Globals
 
 global read_only E_Module e_module_nil = {&rdi_parsed_nil};
+thread_static E_BaseCtx *e_base_ctx = 0;
+thread_static U64 e_base_ctx_gen = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helper Functions
 
 internal U64 e_hash_from_string(U64 seed, String8 string);
 #define e_value_u64(v) (E_Value){.u64 = (v)}
+
+//- rjf: type key data structures
+internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
+internal void e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
+internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 
 ////////////////////////////////
 //~ rjf: Message Functions
@@ -592,10 +673,20 @@ internal void e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string
 internal void e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string);
 internal E_Expr *e_string2expr_lookup(E_String2ExprMap *map, String8 string);
 
+//- rjf: string -> type-key
+internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
+internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);
+internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string);
+
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Functions
 
 internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
+
+////////////////////////////////
+//~ rjf: Base Evaluation Context Selection
+
+internal void e_select_base_ctx(E_BaseCtx *ctx);
 
 #endif // EVAL_CORE_H

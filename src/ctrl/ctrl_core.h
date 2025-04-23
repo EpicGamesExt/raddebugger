@@ -658,8 +658,7 @@ typedef struct CTRL_EvalScope CTRL_EvalScope;
 struct CTRL_EvalScope
 {
   DI_Scope *di_scope;
-  E_TypeCtx type_ctx;
-  E_ParseCtx parse_ctx;
+  E_BaseCtx base_ctx;
   E_IRCtx ir_ctx;
   E_InterpretCtx interpret_ctx;
 };

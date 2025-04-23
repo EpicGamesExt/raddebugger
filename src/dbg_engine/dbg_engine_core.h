@@ -395,10 +395,6 @@ internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
-//- rjf: voff|vaddr -> symbol lookups
-internal String8 d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, U64 depth, B32 decorated);
-internal String8 d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, U64 depth, B32 decorated);
-
 //- rjf: symbol -> voff lookups
 internal U64 d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
 internal U64 d_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);

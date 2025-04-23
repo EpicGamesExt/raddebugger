@@ -54,35 +54,6 @@ e_eval_from_stringf(Arena *arena, char *fmt, ...)
 }
 
 internal E_Eval
-e_autoresolved_eval_from_eval(E_Eval eval)
-{
-  if(e_parse_state &&
-     e_interpret_ctx &&
-     e_parse_state->ctx->modules_count > 0 &&
-     e_interpret_ctx->module_base != 0 &&
-     (e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_S64)) ||
-      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_U64)) ||
-      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_S32)) ||
-      e_type_key_match(eval.irtree.type_key, e_type_key_basic(E_TypeKind_U32))))
-  {
-    U64 vaddr = eval.value.u64;
-    U64 voff = vaddr - e_interpret_ctx->module_base[0];
-    RDI_Parsed *rdi = e_parse_state->ctx->primary_module->rdi;
-    RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
-    RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
-    RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
-    U32 string_idx = 0;
-    if(string_idx == 0) { string_idx = procedure->name_string_idx; }
-    if(string_idx == 0) { string_idx = gvar->name_string_idx; }
-    if(string_idx != 0)
-    {
-      eval.irtree.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_Void), 1, 0);
-    }
-  }
-  return eval;
-}
-
-internal E_Eval
 e_dynamically_typed_eval_from_eval(E_Eval eval)
 {
   E_TypeKey type_key = eval.irtree.type_key;
@@ -117,18 +88,18 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
         if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
            e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
-          Arch arch = e_type_state->ctx->primary_module->arch;
+          Arch arch = e_base_ctx->primary_module->arch;
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
           U64 module_base = 0;
-          for(U64 idx = 0; idx < e_type_state->ctx->modules_count; idx += 1)
+          for(U64 idx = 0; idx < e_base_ctx->modules_count; idx += 1)
           {
-            if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vtable_vaddr))
+            if(contains_1u64(e_base_ctx->modules[idx].vaddr_range, vtable_vaddr))
             {
-              arch = e_type_state->ctx->modules[idx].arch;
+              arch = e_base_ctx->modules[idx].arch;
               rdi_idx = (U32)idx;
-              rdi = e_type_state->ctx->modules[idx].rdi;
-              module_base = e_type_state->ctx->modules[idx].vaddr_range.min;
+              rdi = e_base_ctx->modules[idx].rdi;
+              module_base = e_base_ctx->modules[idx].vaddr_range.min;
               break;
             }
           }

@@ -296,46 +296,6 @@ e_token_array_make_first_opl(E_Token *first, E_Token *opl)
 }
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
-
-internal E_ParseCtx *
-e_selected_parse_ctx(void)
-{
-  return e_parse_state->ctx;
-}
-
-internal void
-e_select_parse_ctx(E_ParseCtx *ctx)
-{
-  if(e_parse_state == 0)
-  {
-    Arena *arena = arena_alloc();
-    e_parse_state = push_array(arena, E_ParseState, 1);
-    e_parse_state->arena = arena;
-    e_parse_state->arena_eval_start_pos = arena_pos(arena);
-  }
-  arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
-  if(ctx->modules == 0)        { ctx->modules = &e_module_nil; }
-  if(ctx->primary_module == 0) { ctx->primary_module = &e_module_nil; }
-  e_parse_state->ctx = ctx;
-}
-
-internal U32
-e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi)
-{
-  U32 result = 0;
-  for(U64 idx = 0; idx < e_parse_state->ctx->modules_count; idx += 1)
-  {
-    if(e_parse_state->ctx->modules[idx].rdi == rdi)
-    {
-      result = (U32)idx;
-      break;
-    }
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Expression Tree Building Functions
 
 internal E_Expr *
@@ -688,9 +648,9 @@ e_leaf_type_from_name(String8 name)
   }
   if(!found)
   {
-    for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
+    for(U64 module_idx = 0; module_idx < e_base_ctx->modules_count; module_idx += 1)
     {
-      RDI_Parsed *rdi = e_parse_state->ctx->modules[module_idx].rdi;
+      RDI_Parsed *rdi = e_base_ctx->modules[module_idx].rdi;
       RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
       RDI_ParsedNameMap parsed_name_map = {0};
       rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -728,7 +688,7 @@ e_type_from_expr(E_Expr *expr)
     case E_ExprKind_Ptr:
     {
       E_TypeKey direct_type_key = e_type_from_expr(expr->first);
-      result = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, direct_type_key, 1, 0);
+      result = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, direct_type_key, 1, 0);
     }break;
     case E_ExprKind_Array:
     {
@@ -1090,7 +1050,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         else
         {
           E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-          type->type_key = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
+          type->type_key = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
           E_Expr *casted = atom;
           E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
           e_expr_push_child(cast, type);

@@ -30,7 +30,6 @@ read_only global E_Eval e_eval_nil = {zero_struct, zero_struct, &e_expr_nil, {&e
 internal E_Eval e_eval_from_expr(Arena *arena, E_Expr *expr);
 internal E_Eval e_eval_from_string(Arena *arena, String8 string);
 internal E_Eval e_eval_from_stringf(Arena *arena, char *fmt, ...);
-internal E_Eval e_autoresolved_eval_from_eval(E_Eval eval);
 internal E_Eval e_dynamically_typed_eval_from_eval(E_Eval eval);
 internal E_Eval e_value_eval_from_eval(E_Eval eval);
 internal E_Value e_value_from_string(String8 string);
