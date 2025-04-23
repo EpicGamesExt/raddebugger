@@ -222,7 +222,6 @@ x11_graphical_init(GFX_LinuxContext* out)
   // Try to populate monitors interally for searchability
   B32 success_repopulate = x11_repopulate_monitors();
   Assert(success_repopulate);   // Application will behave strangely if can't get monitor properties
-
   return 1;
 }
 
@@ -257,7 +256,7 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
   if (title.size)
   { XStoreName(x11_server, new_window, (char*)title.str); }
   else
-  { XStoreName(x11_server, new_window, (char*)out->default_window_name.str); }
+  { XStoreName(x11_server, new_window, (char*)gfx_default_window_name.str); }
 
   // Subscribe to NET_WM_DELETE events and disable auto XDestroyWindow()
   Atom enabled_protocols[] = { x11_atoms[ X11_Atom_WM_DELETE_WINDOW ] };
@@ -369,7 +368,8 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
       }
       x_window = x_window->next;
     }
-    Assert(window != NULL);     // Something has gone horribly wrong if no match is found
+    B32 window_found = (window != NULL || event.type == MappingNotify); // Window unused on Mappnig
+    Assert(window_found);     // Something has gone horribly wrong if no match is found
 
     // Fulfil event type specific tasks
     // NOTE(mallchad): Don't think wakeup is relevant here

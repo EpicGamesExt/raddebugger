@@ -60,6 +60,7 @@ typedef khronos_int64_t GLint64;
 typedef khronos_uint64_t GLuint64EXT;
 typedef khronos_int64_t GLint64EXT;
 
+
 typedef void (*PFNGL_DrawArrays) (GLenum mode, GLint first, GLsizei count);
 typedef void (*PFNGL_DrawElements) (GLenum mode, GLsizei count, GLenum type, const void *indices);
 typedef void (*PFNGL_GenBuffers) (GLsizei n, GLuint *buffers);
@@ -114,6 +115,8 @@ typedef void (*PFNGL_Uniform2f) (GLint location, GLfloat v0, GLfloat v1);
 typedef void (*PFNGL_UniformMatrix4fv) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 typedef GLint (*PFNGL_GetUniformLocation) (GLuint program, const GLchar *name);
 typedef void (*PFNGL_DepthFunc) (GLenum func);
+typedef GLubyte* (*PFNGL_GetString) (GLenum name);
+typedef GLubyte* (*PFNGL_GetStringi) (GLenum name, GLuint index);
 
 const char* rgl_function_names[] =
 {
@@ -171,6 +174,8 @@ const char* rgl_function_names[] =
 "glUniformMatrix4fv",
 "glGetUniformLocation",
 "glDepthFunc",
+"glGetString",
+"glGetStringi",
 };
 
 typedef struct R_GLProcFunctions R_GLProcFunctions;
@@ -235,6 +240,8 @@ PFNGL_Uniform2f Uniform2f;
 PFNGL_UniformMatrix4fv UniformMatrix4fv;
 PFNGL_GetUniformLocation GetUniformLocation;
 PFNGL_DepthFunc DepthFunc;
+PFNGL_GetString GetString;
+PFNGL_GetStringi GetStringi;
 };
 };
 };
@@ -306,7 +313,7 @@ PFNGL_DepthFunc DepthFunc;
 
 
 C_LINKAGE_BEGIN
-read_only global String8 r_ogl_g_rect_common_src =
+read_only global String8 rgl_rect_common_src =
 str8_lit_comp(
 ""
 "\n"
@@ -338,7 +345,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_rect_vs_src =
+read_only global String8 rgl_rect_vs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -427,7 +434,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_rect_fs_src =
+read_only global String8 rgl_rect_fs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -501,7 +508,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_finalize_common_src =
+read_only global String8 rgl_finalize_common_src =
 str8_lit_comp(
 ""
 "\n"
@@ -514,7 +521,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_finalize_vs_src =
+read_only global String8 rgl_finalize_vs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -534,7 +541,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_finalize_fs_src =
+read_only global String8 rgl_finalize_fs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -554,7 +561,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_blur_common_src =
+read_only global String8 rgl_blur_common_src =
 str8_lit_comp(
 ""
 "\n"
@@ -579,7 +586,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_blur_vs_src =
+read_only global String8 rgl_blur_vs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -629,7 +636,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_blur_fs_src =
+read_only global String8 rgl_blur_fs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -681,7 +688,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_mesh_common_src =
+read_only global String8 rgl_mesh_common_src =
 str8_lit_comp(
 ""
 "\n"
@@ -694,7 +701,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_mesh_vs_src =
+read_only global String8 rgl_mesh_vs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -720,7 +727,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_mesh_fs_src =
+read_only global String8 rgl_mesh_fs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -739,7 +746,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_geo3dcomposite_common_src =
+read_only global String8 rgl_geo3dcomposite_common_src =
 str8_lit_comp(
 ""
 "\n"
@@ -752,7 +759,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_geo3dcomposite_vs_src =
+read_only global String8 rgl_geo3dcomposite_vs_src =
 str8_lit_comp(
 ""
 "\n"
@@ -772,7 +779,7 @@ str8_lit_comp(
 ""
 );
 
-read_only global String8 r_ogl_g_geo3dcomposite_fs_src =
+read_only global String8 rgl_geo3dcomposite_fs_src =
 str8_lit_comp(
 ""
 "\n"

@@ -1064,6 +1064,9 @@ os_init(void)
 internal void*
 os_reserve(U64 size){
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  if(result == MAP_FAILED)
+  { result = 0; }
+
   return(result);
 }
 
@@ -1447,6 +1450,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
 internal void
 os_file_close(OS_Handle file)
 {
+  if(os_handle_match(file, os_handle_zero())) { return; }
   S32 fd = *file.u64;
   close(fd);
 }

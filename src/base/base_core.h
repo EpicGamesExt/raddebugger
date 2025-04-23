@@ -833,7 +833,7 @@ struct GenericArray
   U64 head;
   U64 head_size;
   U32 item_size;
-  B32 fast_bounded;
+  B32 fast_unbounded;
 };
 
 /// Declare a typed dynamic array class
@@ -847,7 +847,7 @@ struct GenericArray
     U64 head;                                   \
     U64 head_size;                              \
     U32 item_size;                              \
-    B32 fast_bounded;                           \
+    B32 fast_unbounded;                         \
   };
 
 B32 ArrayAllocate(GenericArray* target, struct Arena* arena, U64 size, U32 item_size);
@@ -866,8 +866,9 @@ B32 _ArrayGetTail(GenericArray* target, void* out, U32 item_size);
 #define ArrayGetTail(target, out) \
   _ArrayGetTail((GenericArray*)(target), (out), sizeof((target)->data[0]));
 
-/// Push a new item after the tail index and increments head_size
-B32 _ArrayPushTail(GenericArray* target, void* item, U32 item_size);
+/// Push a new 'item' after the tail index and increments head_size
+/// if 'item' is NULL just return an empty object after the tail
+void* _ArrayPushTail(GenericArray* target, void* item, U32 item_size);
 #define ArrayPushTail(target, item) \
   _ArrayPushTail((GenericArray*)(target), (item), sizeof((target)->data[0]))
 
@@ -875,6 +876,7 @@ B32 _ArrayPushTail(GenericArray* target, void* item, U32 item_size);
 B32 _ArrayPopTail(GenericArray* target, void* out, U32 item_size);
 #define ArrayPopTail(target, out) \
   _ArrayPopTail((GenericArray*)(target), (out), sizeof((target)->data[0]))
+
 
 // Create commonly used generic array types
 DeclareArray(U8Array, U8);

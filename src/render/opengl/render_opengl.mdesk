@@ -56,6 +56,8 @@
   {void       UniformMatrix4fv        "GLint location, GLsizei count, GLboolean transpose, const GLfloat *value"}
   {GLint      GetUniformLocation      "GLuint program, const GLchar *name"}
   {void       DepthFunc               "GLenum func"}
+  {"GLubyte*"   GetString               "GLenum name"}
+  {"GLubyte*"   GetStringi               "GLenum name, GLuint index"}
 }
 
 @table(name, value) OGL_DefinesTable:
@@ -182,6 +184,7 @@
   `typedef khronos_int64_t GLint64;`
   `typedef khronos_uint64_t GLuint64EXT;`
   `typedef khronos_int64_t GLint64EXT;`
+`
 }
 
 @gen{ `` }
@@ -250,7 +253,7 @@
 
 ////////////////////////////////
 //~ dmylo: UI Rectangle Shaders
-@embed_string r_ogl_g_rect_common_src:
+@embed_string rgl_rect_common_src:
 """
 #version 330 core
 #define float2   vec2
@@ -279,7 +282,7 @@ layout (std140) uniform Globals
 };
 """
 
-@embed_string r_ogl_g_rect_vs_src:
+@embed_string rgl_rect_vs_src:
 """
 layout (location=0) in float4 a_dst_rect_px;
 layout (location=1) in float4 a_src_rect_px;
@@ -365,7 +368,7 @@ void main()
 }
 """
 
-@embed_string r_ogl_g_rect_fs_src:
+@embed_string rgl_rect_fs_src:
 """
 in Vertex2Pixel
 {
@@ -438,7 +441,7 @@ void main()
 
 ////////////////////////////////
 //~ dmylo: UI Finalize Shaders
-@embed_string r_ogl_g_finalize_common_src:
+@embed_string rgl_finalize_common_src:
 """
 #version 330 core
 #define float2   vec2
@@ -448,7 +451,7 @@ void main()
 #define float4x4 mat4
 """
 
-@embed_string r_ogl_g_finalize_vs_src:
+@embed_string rgl_finalize_vs_src:
 """
 out Vertex2Pixel
 {
@@ -465,7 +468,7 @@ void main()
 }
 """
 
-@embed_string r_ogl_g_finalize_fs_src:
+@embed_string rgl_finalize_fs_src:
 """
 in Vertex2Pixel
 {
@@ -484,7 +487,7 @@ void main()
 
 ////////////////////////////////
 //~ dmylo: Blur Shaders
-@embed_string r_ogl_g_blur_common_src:
+@embed_string rgl_blur_common_src:
 """
 #version 330 core
 #define float2   vec2
@@ -506,7 +509,7 @@ layout (std140) uniform Globals
 };
 """
 
-@embed_string r_ogl_g_blur_vs_src:
+@embed_string rgl_blur_vs_src:
 """
 out Vertex2Pixel
 {
@@ -553,7 +556,7 @@ void main()
 }
 """
 
-@embed_string r_ogl_g_blur_fs_src:
+@embed_string rgl_blur_fs_src:
 """
 in Vertex2Pixel
 {
@@ -605,7 +608,7 @@ void main()
 ////////////////////////////////
 //~ dmylo: Mesh Shaders
 
-@embed_string r_ogl_g_mesh_common_src:
+@embed_string rgl_mesh_common_src:
 """
 #version 330 core
 #define float2   vec2
@@ -615,7 +618,7 @@ void main()
 #define float4x4 mat4
 """
 
-@embed_string r_ogl_g_mesh_vs_src:
+@embed_string rgl_mesh_vs_src:
 """
 uniform mat4 xform;
 
@@ -638,7 +641,7 @@ void main()
 }
 """
 
-@embed_string r_ogl_g_mesh_fs_src:
+@embed_string rgl_mesh_fs_src:
 """
 in Vertex2Pixel
 {
@@ -656,7 +659,7 @@ void main()
 
 ////////////////////////////////
 //~ dmylo: Geo3D Composition Shaders
-@embed_string r_ogl_g_geo3dcomposite_common_src:
+@embed_string rgl_geo3dcomposite_common_src:
 """
 #version 330 core
 #define float2   vec2
@@ -666,7 +669,7 @@ void main()
 #define float4x4 mat4
 """
 
-@embed_string r_ogl_g_geo3dcomposite_vs_src:
+@embed_string rgl_geo3dcomposite_vs_src:
 """
 out Vertex2Pixel
 {
@@ -683,7 +686,7 @@ void main()
 }
 """
 
-@embed_string r_ogl_g_geo3dcomposite_fs_src:
+@embed_string rgl_geo3dcomposite_fs_src:
 """
 in Vertex2Pixel
 {

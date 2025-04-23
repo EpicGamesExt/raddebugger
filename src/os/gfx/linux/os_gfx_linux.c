@@ -41,6 +41,9 @@ global S32 gfx_egl_config_available_size = 0;
 global S32 gfx_egl_context_config[] = {
   EGL_CONTEXT_MAJOR_VERSION, gfx_opengl_version_major,
   EGL_CONTEXT_MINOR_VERSION, gfx_opengl_version_minor,
+  EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+  EGL_CONTEXT_OPENGL_DEBUG, EGL_TRUE,
+  EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE, EGL_FALSE,
   EGL_NONE
 };
 
@@ -261,6 +264,12 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 
   window->first_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
                                                  (EGLNativeWindowType)window->handle, NULL);
+  // This need to figure out how exactly this works double buffered
+  /* window->second_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
+                                                    (EGLNativeWindowType)window->handle, NULL); */
+  if (gfx_egl_read_surface = NULL)
+  { gfx_egl_read_surface = window->first_surface; };
+
   return result;
 }
 internal void

@@ -9,6 +9,7 @@
 
 #include <dirent.h>
 #include <dlfcn.h>
+#include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/limits.h>

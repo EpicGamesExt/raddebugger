@@ -590,29 +590,32 @@ _ArrayGetTailIndex(GenericArray* target)
 
 B32 _ArrayGetTail(GenericArray* target, void* out, U32 item_size)
 {
-  if (target->head_size <= 0) { return 0; }
+  if (target->fast_unbounded && target->head_size <= 0) { return 0; }
   U8* tail = target->data;
   tail += (target->head + ((target->head_size - 1) * item_size));
   MemoryCopy(out, tail, item_size);
   return 1;
 }
 
-B32
+void*
 _ArrayPushTail(GenericArray* target, void* item, U32 item_size)
 {
-  if (target->fast_bounded && (target->head + target->head_size >= target->size))
+  if (target->fast_unbounded && (target->head + target->head_size >= target->size) && item)
   { return 0; }
   U8* new_tail = target->data;
   new_tail += (target->head + (target->head_size * item_size));
-  MemoryCopy(new_tail, item, item_size);
+
+  // Return a new object
+  if (item != NULL)
+  { MemoryCopy(new_tail, item, item_size); }
   ++(target->head_size);
-  return 1;
+  return new_tail;
 }
 
 B32
 _ArrayPopTail(GenericArray* target, void* out, U32 item_size)
 {
-  if (target->fast_bounded && (target->head_size <= 0))
+  if (target->fast_unbounded && (target->head_size <= 0))
   { return 0; }
   U8* tail = target->data;
   tail += (target->head + ((target->head_size -1) * item_size));

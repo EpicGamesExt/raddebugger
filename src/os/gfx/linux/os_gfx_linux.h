@@ -99,6 +99,7 @@ global void* gfx_lnx_icon;
 global Vec2S32 gfx_lnx_icon_size;
 global U32 gfx_lnx_icon_capacity;
 global U32 gfx_lnx_icon_stride;
+global String8 gfx_default_window_name;
 
 GFX_LinuxMonitor* gfx_monitor_from_handle(OS_Handle monitor);
 OS_Handle gfx_handle_from_monitor(GFX_LinuxMonitor* monitor);
