@@ -4781,6 +4781,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   //////////////////////////////
   //- rjf: begin type evaluation
   //
+  e_parse_eval_begin();
   e_type_eval_begin();
   
   //////////////////////////////

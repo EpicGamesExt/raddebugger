@@ -88,6 +88,8 @@ e_select_ir_ctx(E_IRCtx *ctx)
   e_ir_state->string_id_map->id_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->id_slots_count);
   e_ir_state->string_id_map->hash_slots_count = 1024;
   e_ir_state->string_id_map->hash_slots = push_array(e_ir_state->arena, E_StringIDSlot, e_ir_state->string_id_map->hash_slots_count);
+  e_ir_state->ir_cache_slots_count = 4096;
+  e_ir_state->ir_cache_slots = push_array(e_ir_state->arena, E_IRCacheSlot, e_ir_state->ir_cache_slots_count);
   String8 builtin_view_rule_names[] =
   {
     str8_lit_comp("bswap"),
@@ -115,20 +117,17 @@ e_auto_hook_map_make(Arena *arena, U64 slots_count)
 internal void
 e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params)
 {
-  Temp scratch = scratch_begin(&arena, 1);
   E_TypeKey type_key = params->type_key;
   if(params->type_pattern.size != 0)
   {
-    E_TokenArray tokens = e_token_array_from_text(scratch.arena, params->type_pattern);
-    E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, params->type_pattern, tokens);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
-    type_key = irtree.type_key;
+    E_Parse parse = e_parse_from_string(params->type_pattern);
+    type_key = e_type_key_from_expr(parse.expr);
   }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
   node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
   U8 pattern_split = '?';
   node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
-  node->expr = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string)).expr;
+  node->expr = e_parse_from_string(params->tag_expr_string).expr;
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
     U64 hash = e_hash_from_string(5381, node->type_string);
@@ -139,7 +138,6 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   {
     SLLQueuePush_N(map->first_pattern, map->last_pattern, node, pattern_order_next);
   }
-  scratch_end(scratch);
 }
 
 internal E_ExprList
@@ -777,7 +775,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprl = expr->first;
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
-      E_IRTreeAndType r = e_irtree_and_type_from_expr(arena, exprr);
+      E_IRTreeAndType r = e_push_irtree_and_type_from_expr(arena, exprr);
       E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKey r_restype = e_type_key_unwrap(r.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
@@ -871,7 +869,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
 //- rjf: top-level irtree/type extraction
 
 internal E_IRTreeAndType
-e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
+e_push_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -922,7 +920,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, lhs);
         
         // rjf: try all IR trees in chain
         for(E_IRTreeAndType *lhs_irtree_try = &lhs_irtree; lhs_irtree_try != 0; lhs_irtree_try = lhs_irtree_try->prev)
@@ -978,7 +976,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All);
@@ -1037,7 +1035,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = r_tree.type_key;
         E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
@@ -1065,11 +1063,11 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         // rjf: unpack operands
         E_Expr *cast_type_expr = expr->first;
         E_Expr *casted_expr = cast_type_expr->next;
-        E_IRTreeAndType cast_irtree = e_irtree_and_type_from_expr(arena, cast_type_expr);
+        E_IRTreeAndType cast_irtree = e_push_irtree_and_type_from_expr(arena, cast_type_expr);
         E_TypeKey cast_type = cast_irtree.type_key;
         E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
-        E_IRTreeAndType casted_tree = e_irtree_and_type_from_expr(arena, casted_expr);
+        E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, casted_expr);
         e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
         E_TypeKey casted_type = e_type_key_unwrap(casted_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
@@ -1124,7 +1122,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *r_expr = expr->first;
         E_TypeKey r_type = zero_struct;
         E_Space space = r_expr->space;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         r_type = r_tree.type_key;
         
@@ -1152,7 +1150,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: evaluate operand tree
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: fill output
@@ -1166,7 +1164,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -1194,14 +1192,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       //- rjf: unary operations
       case E_ExprKind_Pos:
       {
-        result = e_irtree_and_type_from_expr(arena, expr->first);
+        result = e_push_irtree_and_type_from_expr(arena, expr->first);
       }break;
       case E_ExprKind_Neg:
       case E_ExprKind_BitNot:
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
@@ -1234,7 +1232,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
@@ -1289,8 +1287,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         B32 is_comparison = e_expr_kind_is_comparison(kind);
         E_Expr *l_expr = expr->first;
         E_Expr *r_expr = l_expr->next;
-        E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, l_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey l_type = e_type_key_unwrap(l_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
@@ -1513,9 +1511,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *c_expr = expr->first;
         E_Expr *l_expr = c_expr->next;
         E_Expr *r_expr = l_expr->next;
-        E_IRTreeAndType c_tree = e_irtree_and_type_from_expr(arena, c_expr);
-        E_IRTreeAndType l_tree = e_irtree_and_type_from_expr(arena, l_expr);
-        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        E_IRTreeAndType c_tree = e_push_irtree_and_type_from_expr(arena, c_expr);
+        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, l_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &c_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
@@ -1561,7 +1559,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         B32 start_disallow_chained_fastpaths = e_ir_state->disallow_chained_fastpaths;
         e_ir_state->disallow_chained_fastpaths = 1;
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, lhs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
         
@@ -1582,7 +1580,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           {
             e_expr_push_child(call, e_expr_ref(arena, arg));
           }
-          result = e_irtree_and_type_from_expr(arena, call);
+          result = e_push_irtree_and_type_from_expr(arena, call);
           
           // rjf: is "raw"? -> try to return overridden tree, otherwise strip all
           // lens types from result; disallow auto-hooks
@@ -1611,7 +1609,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           Temp scratch = scratch_begin(&arena, 1);
           
           // rjf: generate result via first argument to lens
-          result = e_irtree_and_type_from_expr(arena, lhs->next);
+          result = e_push_irtree_and_type_from_expr(arena, lhs->next);
           
           // rjf: count extra arguments
           U64 arg_count = 0;
@@ -1645,7 +1643,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
             }
             else
             {
-              result = e_irtree_and_type_from_expr(arena, lhs->next);
+              result = e_push_irtree_and_type_from_expr(arena, lhs->next);
               result.type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Lenses);
             }
           }
@@ -1789,7 +1787,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         if(!string_mapped && e_ir_state->overridden_irtree != 0)
         {
           E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, e_ir_state->overridden_irtree, string);
-          E_IRTreeAndType access_irtree = e_irtree_and_type_from_expr(scratch.arena, access);
+          E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, access);
           if(access_irtree.root != &e_irnode_nil)
           {
             string_mapped = 1;
@@ -2156,7 +2154,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
           {
             generated = 1;
             e_string2expr_map_inc_poison(e_ir_state->ctx->macro_map, string);
-            result = e_irtree_and_type_from_expr(arena, macro_expr);
+            result = e_push_irtree_and_type_from_expr(arena, macro_expr);
             e_string2expr_map_dec_poison(e_ir_state->ctx->macro_map, string);
           }
         }
@@ -2243,13 +2241,13 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       }break;
       case E_ExprKind_Ptr:
       {
-        E_IRTreeAndType ptee_irtree = e_irtree_and_type_from_expr(arena, expr->first);
+        E_IRTreeAndType ptee_irtree = e_push_irtree_and_type_from_expr(arena, expr->first);
         result = ptee_irtree;
         result.type_key = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, result.type_key, 1, 0);
       }break;
       case E_ExprKind_Array:
       {
-        E_IRTreeAndType element_irtree = e_irtree_and_type_from_expr(arena, expr->first);
+        E_IRTreeAndType element_irtree = e_push_irtree_and_type_from_expr(arena, expr->first);
         result = element_irtree;
         result.type_key = e_type_key_cons_array(result.type_key, expr->value.u64, 0);
       }break;
@@ -2263,7 +2261,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
       {
         E_Expr *lhs = expr->first;
         E_Expr *rhs = lhs->next;
-        result = e_irtree_and_type_from_expr(arena, rhs);
+        result = e_push_irtree_and_type_from_expr(arena, rhs);
         if(lhs->kind != E_ExprKind_LeafIdentifier)
         {
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
@@ -2689,4 +2687,41 @@ e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_Type
   e_expr_push_child(root, lhs);
   e_expr_push_child(root, rhs_bytecode);
   return root;
+}
+
+////////////////////////////////
+//~ rjf: IR Cache Functions
+
+internal E_IRTreeAndType
+e_irtree_and_type_from_expr(E_Expr *expr)
+{
+  U64 hash_parts[] =
+  {
+    (U64)expr,
+    (U64)(e_ir_state->overridden_irtree ? e_ir_state->overridden_irtree->root : 0),
+  };
+  U64 hash = e_hash_from_string(5381, str8((U8 *)hash_parts, sizeof(hash_parts)));
+  U64 slot_idx = hash%e_ir_state->ir_cache_slots_count;
+  E_IRCacheSlot *slot = &e_ir_state->ir_cache_slots[slot_idx];
+  E_IRCacheNode *node = 0;
+  for(E_IRCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(expr == n->expr &&
+       ((e_ir_state->overridden_irtree == 0 && n->overridden_node == 0) ||
+        (e_ir_state->overridden_irtree != 0 && n->overridden_node == e_ir_state->overridden_irtree->root)))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(e_ir_state->arena, E_IRCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->expr = expr;
+    node->overridden_node = (e_ir_state->overridden_irtree ? e_ir_state->overridden_irtree->root : 0);
+    node->irtree = e_push_irtree_and_type_from_expr(e_ir_state->arena, expr);
+  }
+  E_IRTreeAndType result = node->irtree;
+  return result;
 }

@@ -663,10 +663,38 @@ e_leaf_type_from_name(String8 name)
   return key;
 }
 
-internal E_Parse
-e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
+internal E_TypeKey
+e_type_key_from_expr(E_Expr *expr)
 {
-  E_Parse parse = {0, &e_expr_nil, &e_expr_nil};
+  E_TypeKey result = zero_struct;
+  E_ExprKind kind = expr->kind;
+  switch(kind)
+  {
+    // TODO(rjf): do we support E_ExprKind_Func here?
+    default:{}break;
+    case E_ExprKind_TypeIdent:
+    {
+      result = expr->type_key;
+    }break;
+    case E_ExprKind_Ptr:
+    {
+      E_TypeKey direct_type_key = e_type_key_from_expr(expr->first);
+      result = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, direct_type_key, 1, 0);
+    }break;
+    case E_ExprKind_Array:
+    {
+      E_Expr *child_expr = expr->first;
+      E_TypeKey direct_type_key = e_type_key_from_expr(child_expr);
+      result = e_type_key_cons_array(direct_type_key, expr->value.u64, 0);
+    }break;
+  }
+  return result;
+}
+
+internal E_Parse
+e_push_type_parse_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
+{
+  E_Parse parse = {tokens, 0, &e_expr_nil, &e_expr_nil};
   E_Token *token_it = tokens.v;
   
   //- rjf: parse unsigned marker
@@ -755,13 +783,13 @@ e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
 }
 
 internal E_Parse
-e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tokens, S64 max_precedence, U64 max_chain_count)
+e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray tokens, S64 max_precedence, U64 max_chain_count)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   E_Token *it = tokens.v;
   E_Token *it_opl = tokens.v + tokens.count;
-  E_Parse result = {0, &e_expr_nil, &e_expr_nil};
+  E_Parse result = {tokens, 0, &e_expr_nil, &e_expr_nil};
   
   //////////////////////////////
   //- rjf: parse chain of expressions
@@ -860,7 +888,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
               it += 1;
               
               // rjf: parse type expr
-              E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, e_token_array_make_first_opl(it, it_opl));
+              E_Parse type_parse = e_push_type_parse_from_text_tokens(arena, text, e_token_array_make_first_opl(it, it_opl));
               E_Expr *type = type_parse.expr;
               e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
               it = type_parse.last_token;
@@ -947,7 +975,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         it += 1;
         
         // rjf: parse () contents
-        E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+        E_Parse nested_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
         e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
         atom = nested_parse.expr;
         it = nested_parse.last_token;
@@ -976,7 +1004,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         it += 1;
         
         // rjf: parse [] contents
-        E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+        E_Parse nested_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
         e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
         atom = nested_parse.expr;
         it = nested_parse.last_token;
@@ -1168,7 +1196,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         it += 1;
         
         // rjf: parse indexing expression
-        E_Parse idx_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+        E_Parse idx_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
         e_msg_list_concat_in_place(&result.msgs, &idx_expr_parse.msgs);
         it = idx_expr_parse.last_token;
         
@@ -1211,7 +1239,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
         call_expr->string = callee_expr->string;
         e_expr_push_child(call_expr, callee_expr);
-        E_Parse args_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, max_U64);
+        E_Parse args_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, max_U64);
         e_msg_list_concat_in_place(&result.msgs, &args_parse.msgs);
         it = args_parse.last_token;
         if(args_parse.expr != &e_expr_nil)
@@ -1309,7 +1337,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
         // precedence
         if(binary_precedence != 0 && binary_precedence <= max_precedence)
         {
-          E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it+1, it_opl), binary_precedence-1, 1);
+          E_Parse rhs_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it+1, it_opl), binary_precedence-1, 1);
           e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
           E_Expr *rhs = rhs_expr_parse.expr;
           it = rhs_expr_parse.last_token;
@@ -1334,7 +1362,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           it += 1;
           
           // rjf: parse middle expression
-          E_Parse middle_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+          E_Parse middle_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
           it = middle_expr_parse.last_token;
           E_Expr *middle_expr = middle_expr_parse.expr;
           e_msg_list_concat_in_place(&result.msgs, &middle_expr_parse.msgs);
@@ -1364,7 +1392,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
           }
           
           // rjf: parse rhs
-          E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+          E_Parse rhs_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
           if(got_colon)
           {
             it = rhs_expr_parse.last_token;
@@ -1418,20 +1446,55 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray tok
 }
 
 internal E_Parse
-e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
-{
-  ProfBegin("parse '%.*s'", str8_varg(text));
-  E_Parse parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence, max_U64);
-  ProfEnd();
-  return parse;
-}
-
-internal E_Parse
-e_parse_expr_from_text(Arena *arena, String8 text)
+e_push_parse_from_string(Arena *arena, String8 text)
 {
   Temp scratch = scratch_begin(&arena, 1);
   E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
-  E_Parse parse = e_parse_expr_from_text_tokens(arena, text, tokens);
+  E_Parse parse = e_push_parse_from_string_tokens__prec(arena, text, tokens, e_max_precedence, max_U64);
   scratch_end(scratch);
   return parse;
+}
+
+////////////////////////////////
+//~ rjf: Parse Cache Functions
+
+internal void
+e_parse_eval_begin(void)
+{
+  if(e_parse_state == 0)
+  {
+    Arena *arena = arena_alloc();
+    e_parse_state = push_array(arena, E_ParseState, 1);
+    e_parse_state->arena = arena;
+    e_parse_state->arena_eval_start_pos = arena_pos(e_parse_state->arena);
+  }
+  arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
+  e_parse_state->cache_slots_count = 4096;
+  e_parse_state->cache_slots = push_array(e_parse_state->arena, E_ParseCacheSlot, e_parse_state->cache_slots_count);
+}
+
+internal E_Parse
+e_parse_from_string(String8 string)
+{
+  U64 hash = e_hash_from_string(5381, string);
+  U64 slot_idx = hash%e_parse_state->cache_slots_count;
+  E_ParseCacheSlot *slot = &e_parse_state->cache_slots[slot_idx];
+  E_ParseCacheNode *node = 0;
+  for(E_ParseCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(str8_match(n->string, string, 0))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(e_parse_state->arena, E_ParseCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->string = push_str8_copy(e_parse_state->arena, string);
+    node->parse = e_push_parse_from_string(e_parse_state->arena, node->string);
+  }
+  E_Parse result = node->parse;
+  return result;
 }

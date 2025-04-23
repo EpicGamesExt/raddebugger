@@ -2014,7 +2014,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
           type_kind == E_TypeKind_Enum))
       {
         got_commit_data = 1;
-        E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string).expr;
+        E_Expr *src_expr = e_parse_from_string(string).expr;
         E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
         E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
@@ -2168,7 +2168,7 @@ rd_query_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string).expr;
+    E_Expr *expr = e_parse_from_string(string).expr;
     if(expr->kind == E_ExprKind_LeafIdentifier &&
        str8_match(expr->qualifier, str8_lit("query"), 0))
     {
@@ -5090,26 +5090,6 @@ rd_tex2dformat_from_eval(E_Eval eval)
   }
   
   return fmt;
-}
-
-internal E_Value
-rd_value_from_eval_key(E_Eval eval, String8 key)
-{
-  E_Value value = zero_struct;
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, key, 0))
-      {
-        value = e_value_from_expr(arg->first->next);
-        break;
-      }
-    }
-  }
-  return value;
 }
 
 //- rjf: pushing/attaching view resources
@@ -11790,10 +11770,6 @@ rd_frame(void)
     }
     ProfEnd();
     
-    //~
-    //~ NOTE(rjf): NEW VVVVV
-    //~
-    
     ////////////////////////////
     //- rjf: build base evaluation context
     //
@@ -11822,6 +11798,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: begin type evaluation
     //
+    e_parse_eval_begin();
     e_type_eval_begin();
     
     ////////////////////////////
@@ -11929,7 +11906,7 @@ rd_frame(void)
       {
         RD_Cfg *watch = n->v;
         String8 expr = rd_expr_from_cfg(watch);
-        E_Parse parse = e_parse_expr_from_text(scratch.arena, expr);
+        E_Parse parse = e_parse_from_string(expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
           for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
@@ -12134,7 +12111,7 @@ rd_frame(void)
       
       //- rjf: add macro for 'call_stack' -> 'query:current_thread.callstack'
       {
-        E_Expr *expr = e_parse_expr_from_text(scratch.arena, str8_lit("query:current_thread.call_stack")).expr;
+        E_Expr *expr = e_parse_from_string(str8_lit("query:current_thread.call_stack")).expr;
         e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("call_stack"), expr);
       }
       
@@ -12271,52 +12248,6 @@ rd_frame(void)
       }
 #endif
       
-      //- rjf: gather auto-view-rules from loaded modules
-      RD_CfgList immediate_auto_view_rules = {0};
-      CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
-      for EachIndex(idx, modules.count)
-      {
-        CTRL_Entity *module = modules.v[idx];
-        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
-        U8 split_char = 0;
-        String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
-        U64 cfg_idx = 0;
-        for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
-        {
-          String8 text = text_n->string;
-          RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
-          String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
-          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
-          {
-            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
-            rd_cfg_release_all_children(immediate_root);
-            rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
-            rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
-          }
-        }
-      }
-      
-      //- rjf: add auto-hook rules for auto-view-rules
-      {
-        RD_CfgList auto_view_rules = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("auto_view_rule"));
-        RD_CfgList rules_lists[] =
-        {
-          auto_view_rules,
-          immediate_auto_view_rules,
-        };
-        for EachElement(list_idx, rules_lists)
-        {
-          RD_CfgList list = rules_lists[list_idx];
-          for(RD_CfgNode *n = list.first; n != 0; n = n->next)
-          {
-            RD_Cfg *rule = n->v;
-            String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
-            String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
-            e_auto_hook_map_insert_new(scratch.arena, auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
-          }
-        }
-      }
-      
       //- rjf: choose set of lenses
       // TODO(rjf): generate via metaprogram
       struct
@@ -12399,6 +12330,56 @@ rd_frame(void)
       }
     }
     ev_select_expand_rule_table(expand_rule_table);
+    
+    ////////////////////////////
+    //- rjf: gather auto-view-rules from loaded modules
+    //
+    RD_CfgList immediate_auto_view_rules = {0};
+    CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+    for EachIndex(idx, modules.count)
+    {
+      CTRL_Entity *module = modules.v[idx];
+      String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
+      U8 split_char = 0;
+      String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
+      U64 cfg_idx = 0;
+      for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
+      {
+        String8 text = text_n->string;
+        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
+        String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
+        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
+        {
+          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
+          rd_cfg_release_all_children(immediate_root);
+          rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
+          rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: add auto-hook rules for auto-view-rules
+    //
+    {
+      RD_CfgList auto_view_rules = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("auto_view_rule"));
+      RD_CfgList rules_lists[] =
+      {
+        auto_view_rules,
+        immediate_auto_view_rules,
+      };
+      for EachElement(list_idx, rules_lists)
+      {
+        RD_CfgList list = rules_lists[list_idx];
+        for(RD_CfgNode *n = list.first; n != 0; n = n->next)
+        {
+          RD_Cfg *rule = n->v;
+          String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
+          String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
+          e_auto_hook_map_insert_new(scratch.arena, auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
+        }
+      }
+    }
     
     ////////////////////////////
     //- rjf: build IR evaluation context
@@ -15804,7 +15785,7 @@ Z(getting_started)
             ExprWalkTask *next;
             E_Expr *expr;
           };
-          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd).expr;
+          E_Expr *expr = e_parse_from_string(src_bp_cnd).expr;
           ExprWalkTask start_task = {0, expr};
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)

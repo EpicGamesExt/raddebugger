@@ -99,6 +99,22 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: IR State
 
+typedef struct E_IRCacheNode E_IRCacheNode;
+struct E_IRCacheNode
+{
+  E_IRCacheNode *next;
+  E_Expr *expr;
+  E_IRNode *overridden_node;
+  E_IRTreeAndType irtree;
+};
+
+typedef struct E_IRCacheSlot E_IRCacheSlot;
+struct E_IRCacheSlot
+{
+  E_IRCacheNode *first;
+  E_IRCacheNode *last;
+};
+
 typedef struct E_IRState E_IRState;
 struct E_IRState
 {
@@ -121,6 +137,8 @@ struct E_IRState
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
   U64 string_id_gen;
   E_StringIDMap *string_id_map;
+  U64 ir_cache_slots_count;
+  E_IRCacheSlot *ir_cache_slots;
 };
 
 ////////////////////////////////
@@ -193,7 +211,7 @@ internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
 E_TYPE_ACCESS_FUNCTION_DEF(default);
-internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
+internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
 
 //- rjf: irtree -> linear ops/bytecode
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
@@ -205,5 +223,10 @@ internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeA
 internal E_Expr *e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index);
 internal E_Expr *e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree);
 internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key);
+
+////////////////////////////////
+//~ rjf: IR Cache Functions
+
+internal E_IRTreeAndType e_irtree_and_type_from_expr(E_Expr *expr);
 
 #endif // EVAL_IR_H

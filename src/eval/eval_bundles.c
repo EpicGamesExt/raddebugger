@@ -8,7 +8,7 @@ internal E_Eval
 e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
   ProfBeginFunction();
-  E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(arena, expr);
+  E_IRTreeAndType     irtree   = e_push_irtree_and_type_from_expr(arena, expr);
   E_OpList            oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8             bytecode = e_bytecode_from_oplist(arena, &oplist);
   E_Interpretation    interp   = e_interpret(bytecode);
@@ -35,10 +35,25 @@ e_eval_from_string(Arena *arena, String8 string)
 {
   ProfBeginFunction();
   ProfBegin("e_eval_from_string (%.*s)", str8_varg(string));
-  E_TokenArray     tokens   = e_token_array_from_text(arena, string);
-  E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, tokens);
-  E_Eval           eval     = e_eval_from_expr(arena, parse.expr);
-  e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
+  E_Parse             parse    = e_parse_from_string(string);
+  E_IRTreeAndType     irtree   = e_irtree_and_type_from_expr(parse.expr);
+  E_OpList            oplist   = e_oplist_from_irtree(arena, irtree.root);
+  String8             bytecode = e_bytecode_from_oplist(arena, &oplist);
+  E_Interpretation    interp   = e_interpret(bytecode);
+  E_Eval eval =
+  {
+    .value           = interp.value,
+    .space           = interp.space,
+    .expr            = parse.expr,
+    .irtree          = irtree,
+    .bytecode        = bytecode,
+    .code            = interp.code,
+  };
+  e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
+  if(E_InterpretationCode_Good < eval.code && eval.code < E_InterpretationCode_COUNT)
+  {
+    e_msg(arena, &eval.msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[eval.code]);
+  }
   ProfEnd();
   ProfEnd();
   return eval;
@@ -322,18 +337,8 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   String8 expr_text = string;
   str8_list_pushf(scratch.arena, &strings, "`%S`\n", expr_text);
   
-  //- rjf: tokenize
-  E_TokenArray tokens = e_token_array_from_text(scratch.arena, expr_text);
-  str8_list_pushf(scratch.arena, &strings, "    tokens:\n");
-  for EachIndex(idx, tokens.count)
-  {
-    E_Token token = tokens.v[idx];
-    String8 token_string = str8_substr(expr_text, token.range);
-    str8_list_pushf(scratch.arena, &strings, "        %S: `%S`\n", e_token_kind_strings[token.kind], token_string);
-  }
-  
   //- rjf: parse
-  E_Parse parse = e_parse_expr_from_text_tokens(scratch.arena, expr_text, tokens);
+  E_Parse parse = e_push_parse_from_string(scratch.arena, expr_text);
   {
     typedef struct Task Task;
     struct Task
@@ -342,6 +347,14 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
       E_Expr *expr;
       S32 indent;
     };
+    E_TokenArray tokens = parse.tokens;
+    str8_list_pushf(scratch.arena, &strings, "    tokens:\n");
+    for EachIndex(idx, tokens.count)
+    {
+      E_Token token = tokens.v[idx];
+      String8 token_string = str8_substr(expr_text, token.range);
+      str8_list_pushf(scratch.arena, &strings, "        %S: `%S`\n", e_token_kind_strings[token.kind], token_string);
+    }
     str8_list_pushf(scratch.arena, &strings, "    expr:\n");
     Task start_task = {0, parse.expr, 2};
     Task *first_task = &start_task;
@@ -376,7 +389,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;

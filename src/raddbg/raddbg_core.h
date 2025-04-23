@@ -952,7 +952,6 @@ internal F32 rd_view_cfg_f32_from_string(String8 string);
 internal TXT_LangKind rd_lang_kind_from_eval(E_Eval eval);
 internal Arch rd_arch_from_eval(E_Eval eval);
 internal R_Tex2DFormat rd_tex2dformat_from_eval(E_Eval eval);
-internal E_Value rd_value_from_eval_key(E_Eval eval, String8 key);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);
