@@ -663,58 +663,6 @@ e_leaf_type_from_name(String8 name)
   return key;
 }
 
-internal E_TypeKey
-e_type_from_expr(E_Expr *expr)
-{
-  E_TypeKey result = zero_struct;
-  E_ExprKind kind = expr->kind;
-  switch(kind)
-  {
-    // TODO(rjf): do we support E_ExprKind_Func here?
-    default:{}break;
-    case E_ExprKind_TypeIdent:
-    {
-      result = expr->type_key;
-    }break;
-    case E_ExprKind_Ptr:
-    {
-      E_TypeKey direct_type_key = e_type_from_expr(expr->first);
-      result = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, direct_type_key, 1, 0);
-    }break;
-    case E_ExprKind_Array:
-    {
-      E_Expr *child_expr = expr->first;
-      E_TypeKey direct_type_key = e_type_from_expr(child_expr);
-      result = e_type_key_cons_array(direct_type_key, expr->value.u64, 0);
-    }break;
-  }
-  return result;
-}
-
-internal void
-e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String2ExprMap *map, E_Expr *expr)
-{
-  switch(expr->kind)
-  {
-    default:
-    {
-      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next)
-      {
-        e_push_leaf_ident_exprs_from_expr__in_place(arena, map, child);
-      }
-    }break;
-    case E_ExprKind_Define:
-    {
-      E_Expr *exprl = expr->first;
-      E_Expr *exprr = exprl->next;
-      if(exprl->kind == E_ExprKind_LeafIdentifier)
-      {
-        e_string2expr_map_insert(arena, map, exprl->string, exprr);
-      }
-    }break;
-  }
-}
-
 internal E_Parse
 e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray tokens)
 {

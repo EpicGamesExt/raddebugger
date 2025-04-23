@@ -11934,7 +11934,40 @@ rd_frame(void)
         {
           for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
           {
-            e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, macro_map, expr);
+            typedef struct ExprWalkTask ExprWalkTask;
+            struct ExprWalkTask
+            {
+              ExprWalkTask *next;
+              E_Expr *expr;
+            };
+            ExprWalkTask start_task = {0, expr};
+            ExprWalkTask *first_task = &start_task;
+            ExprWalkTask *last_task = first_task;
+            for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+            {
+              switch(t->expr->kind)
+              {
+                case E_ExprKind_Call:{}break;
+                case E_ExprKind_Define:
+                {
+                  E_Expr *lhs = t->expr->first;
+                  E_Expr *rhs = lhs->next;
+                  if(lhs->kind == E_ExprKind_LeafIdentifier)
+                  {
+                    e_string2expr_map_insert(scratch.arena, macro_map, lhs->string, rhs);
+                  }
+                }break;
+                default:
+                {
+                  for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+                  {
+                    ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                    SLLQueuePush(first_task, last_task, task);
+                    task->expr = child;
+                  }
+                }break;
+              }
+            }
           }
         }
       }

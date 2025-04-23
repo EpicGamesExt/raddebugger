@@ -1065,7 +1065,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         // rjf: unpack operands
         E_Expr *cast_type_expr = expr->first;
         E_Expr *casted_expr = cast_type_expr->next;
-        E_TypeKey cast_type = e_type_from_expr(cast_type_expr);
+        E_IRTreeAndType cast_irtree = e_irtree_and_type_from_expr(arena, cast_type_expr);
+        E_TypeKey cast_type = cast_irtree.type_key;
         E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
         E_IRTreeAndType casted_tree = e_irtree_and_type_from_expr(arena, casted_expr);
@@ -1123,22 +1124,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         E_Expr *r_expr = expr->first;
         E_TypeKey r_type = zero_struct;
         E_Space space = r_expr->space;
-        switch(r_expr->kind)
-        {
-          case E_ExprKind_TypeIdent:
-          case E_ExprKind_Ptr:
-          case E_ExprKind_Array:
-          case E_ExprKind_Func:
-          {
-            r_type = e_type_from_expr(r_expr);
-          }break;
-          default:
-          {
-            E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
-            e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-            r_type = r_tree.type_key;
-          }break;
-        }
+        E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+        r_type = r_tree.type_key;
         
         // rjf: bad conditions? -> error if applicable, exit
         if(e_type_key_match(r_type, e_type_key_zero()))
@@ -2253,13 +2241,21 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *root_expr)
         result.type_key = expr->type_key;
         result.mode = E_Mode_Null;
       }break;
-      
-      //- rjf: (unexpected) type expressions
       case E_ExprKind_Ptr:
+      {
+        E_IRTreeAndType ptee_irtree = e_irtree_and_type_from_expr(arena, expr->first);
+        result = ptee_irtree;
+        result.type_key = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, result.type_key, 1, 0);
+      }break;
       case E_ExprKind_Array:
+      {
+        E_IRTreeAndType element_irtree = e_irtree_and_type_from_expr(arena, expr->first);
+        result = element_irtree;
+        result.type_key = e_type_key_cons_array(result.type_key, expr->value.u64, 0);
+      }break;
       case E_ExprKind_Func:
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Type expression not expected.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Function type expressions are currently not supported.");
       }break;
       
       //- rjf: definitions
