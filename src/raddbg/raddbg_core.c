@@ -3219,14 +3219,14 @@ rd_view_ui(Rng2F32 rect)
                   if(cell_info.flags & RD_WatchCellFlag_CanEdit)
                   {
                     any_edits_started = 1;
-                    String8 string = cell->edit_string;
-                    if(string.size == 0)
+                    String8 string = {0};
+                    if(cell_info.flags & RD_WatchCellFlag_NoEval)
+                    {
+                      string = cell->eval.string;
+                    }
+                    else
                     {
                       string = dr_string_from_fstrs(scratch.arena, &cell_info.eval_fstrs);
-                    }
-                    if(string.size == 0)
-                    {
-                      string = dr_string_from_fstrs(scratch.arena, &cell_info.expr_fstrs);
                     }
                     string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};

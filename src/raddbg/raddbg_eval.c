@@ -638,7 +638,6 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs)
     
     //- rjf: gather commands
     String8List cmds_list = {0};
-    if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) == &rd_nil_cfg)
     {
       MD_NodePtrList schemas = rd_schemas_from_name(cfg_name);
       for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
@@ -738,9 +737,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs)
     }
     
     //- rjf: fill
-    accel->cmds = ext->cmds;
+    if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) == &rd_nil_cfg)
+    {
+      accel->cmds = ext->cmds;
+      accel->cmds_idx_range = r1u64(0, accel->cmds.count);
+    }
     accel->cfgs = cfgs__filtered;
-    accel->cmds_idx_range = r1u64(0, accel->cmds.count);
     accel->cfgs_idx_range = r1u64(accel->cmds_idx_range.max, accel->cmds_idx_range.max + accel->cfgs.count);
     info.expr_count = (accel->cmds.count + accel->cfgs.count);
   }
