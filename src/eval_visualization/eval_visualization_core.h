@@ -294,7 +294,7 @@ global read_only EV_Block ev_nil_block =
   {0},
   0,
   {0},
-  {&e_expr_nil, &e_irnode_nil},
+  {{0}, &e_expr_nil, &e_irnode_nil},
   {0},
   &e_type_expand_rule__default,
   {0},

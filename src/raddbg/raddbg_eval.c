@@ -75,14 +75,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     String8 cmd_name = accel->v[idx];
-    RD_CmdKindInfo *cmd_info = rd_cmd_kind_info_from_string(cmd_name);
-    E_TypeKey cmd_type = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("command"));
-    cmd_type = e_type_key_cons_meta_description(cmd_type, cmd_info->description);
-    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-    expr->type_key = cmd_type;
-    expr->space = e_space_make(RD_EvalSpaceKind_MetaCmd);
-    expr->value.u64 = e_id_from_string(cmd_name);
-    exprs_out[out_idx] = expr;
+    E_Eval cmd_eval = e_eval_from_stringf("query:commands.%S", cmd_name);
+    exprs_out[out_idx] = cmd_eval.expr;
   }
 }
 
@@ -105,7 +99,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(watches)
         B32 passes_filter = 1;
         if(filter.size != 0)
         {
-          E_Eval eval = e_eval_from_string(scratch.arena, expr);
+          E_Eval eval = e_eval_from_string(expr);
           E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
           if(type->kind != E_TypeKind_Set)
           {
@@ -196,7 +190,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(locals)
   E_TypeExpandInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_ir_state->ctx->locals_map);
+    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_ir_ctx->locals_map);
     e_string2num_map_node_array_sort__in_place(&nodes);
     String8List exprs_filtered = {0};
     for EachIndex(idx, nodes.count)
@@ -768,12 +762,12 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
   {
     Rng1U64 read_range = intersect_1u64(cmds_idx_range, idx_range);
     U64 read_count = dim_1u64(read_range);
-    E_Expr *commands = e_parse_from_string(str8_lit("query:commands")).expr;
-    E_IRTreeAndType commands_irtree = e_irtree_and_type_from_expr(commands);
+    E_Eval cmds_eval = e_eval_from_stringf("query:commands");
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       String8 cmd_name = accel->cmds.v[idx + read_range.min - cmds_idx_range.min];
-      exprs_out[dst_idx] = e_expr_irext_member_access(arena, commands, &commands_irtree, cmd_name);
+      E_Eval cmd_eval = e_eval_wrapf(cmds_eval, "$.%S", cmd_name);
+      exprs_out[dst_idx] = cmd_eval.expr;
     }
   }
   

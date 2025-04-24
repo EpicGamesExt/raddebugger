@@ -5,6 +5,15 @@
 #define EVAL_CORE_H
 
 ////////////////////////////////
+//~ rjf: Evaluation Key Type
+
+typedef struct E_Key E_Key;
+struct E_Key
+{
+  U64 u64;
+};
+
+////////////////////////////////
 //~ rjf: Messages
 
 typedef enum E_MsgKind
@@ -309,6 +318,7 @@ struct E_IRTreeAndType
 typedef struct E_Eval E_Eval;
 struct E_Eval
 {
+  E_Key key;
   E_Expr *expr;
   E_IRTreeAndType irtree;
   String8 bytecode;
@@ -417,7 +427,7 @@ struct E_TypeExpandInfo
 #define E_TYPE_IREXT_FUNCTION_DEF(name) internal E_TYPE_IREXT_FUNCTION_SIG(E_TYPE_IREXT_FUNCTION_NAME(name))
 typedef E_TYPE_IREXT_FUNCTION_SIG(E_TypeIRExtFunctionType);
 
-#define E_TYPE_ACCESS_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_Expr *expr, E_IRTreeAndType *lhs_irtree)
+#define E_TYPE_ACCESS_FUNCTION_SIG(name) E_IRTreeAndType name(Arena *arena, E_IRTreeAndType *overridden, E_Expr *expr, E_IRTreeAndType *lhs_irtree)
 #define E_TYPE_ACCESS_FUNCTION_NAME(name) e_type_access__##name
 #define E_TYPE_ACCESS_FUNCTION_DEF(name) internal E_TYPE_ACCESS_FUNCTION_SIG(E_TYPE_ACCESS_FUNCTION_NAME(name))
 typedef E_TYPE_ACCESS_FUNCTION_SIG(E_TypeAccessFunctionType);
@@ -471,6 +481,44 @@ struct E_Type
   E_TypeIRExtFunctionType *irext;
   E_TypeAccessFunctionType *access;
   E_TypeExpandRule expand;
+};
+
+////////////////////////////////
+//~ rjf: Constructed Type Types
+
+typedef struct E_ConsTypeParams E_ConsTypeParams;
+struct E_ConsTypeParams
+{
+  Arch arch;
+  E_TypeKind kind;
+  E_TypeFlags flags;
+  String8 name;
+  E_TypeKey direct_key;
+  U64 count;
+  U64 depth;
+  E_Member *members;
+  E_EnumVal *enum_vals;
+  E_Expr **args;
+  E_TypeIRExtFunctionType *irext;
+  E_TypeAccessFunctionType *access;
+  E_TypeExpandRule expand;
+};
+
+typedef struct E_ConsTypeNode E_ConsTypeNode;
+struct E_ConsTypeNode
+{
+  E_ConsTypeNode *key_next;
+  E_ConsTypeNode *content_next;
+  E_TypeKey key;
+  E_ConsTypeParams params;
+  U64 byte_size;
+};
+
+typedef struct E_ConsTypeSlot E_ConsTypeSlot;
+struct E_ConsTypeSlot
+{
+  E_ConsTypeNode *first;
+  E_ConsTypeNode *last;
 };
 
 ////////////////////////////////
@@ -614,6 +662,8 @@ struct E_AutoHookParams
 
 typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
 
+//- rjf: base context
+
 typedef struct E_BaseCtx E_BaseCtx;
 struct E_BaseCtx
 {
@@ -635,6 +685,300 @@ struct E_BaseCtx
   E_SpaceRWFunction *space_write;
 };
 
+//- rjf: ir generation context
+
+typedef struct E_IRCtx E_IRCtx;
+struct E_IRCtx
+{
+  E_String2NumMap *regs_map;
+  E_String2NumMap *reg_alias_map;
+  E_String2NumMap *locals_map; // (within `primary_module`)
+  E_String2NumMap *member_map; // (within `primary_module`)
+  E_String2ExprMap *macro_map;
+  E_AutoHookMap *auto_hook_map;
+};
+
+////////////////////////////////
+//~ rjf: Parse Results
+
+typedef struct E_Parse E_Parse;
+struct E_Parse
+{
+  E_TokenArray tokens;
+  E_Token *last_token;
+  E_Expr *expr;
+  E_Expr *last_expr;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
+//~ rjf: Bytecode Interpretation Types
+
+typedef struct E_Interpretation E_Interpretation;
+struct E_Interpretation
+{
+  E_Value value;
+  E_Space space;
+  E_InterpretationCode code;
+};
+
+////////////////////////////////
+//~ rjf: Core Evaluation Cache Types
+
+//- rjf: unpacked type cache
+
+typedef struct E_TypeCacheNode E_TypeCacheNode;
+struct E_TypeCacheNode
+{
+  E_TypeCacheNode *next;
+  E_TypeKey key;
+  E_Type *type;
+};
+
+typedef struct E_TypeCacheSlot E_TypeCacheSlot;
+struct E_TypeCacheSlot
+{
+  E_TypeCacheNode *first;
+  E_TypeCacheNode *last;
+};
+
+//- rjf: member lookup cache types
+
+typedef struct E_MemberHashNode E_MemberHashNode;
+struct E_MemberHashNode
+{
+  E_MemberHashNode *next;
+  U64 member_idx;
+};
+
+typedef struct E_MemberHashSlot E_MemberHashSlot;
+struct E_MemberHashSlot
+{
+  E_MemberHashNode *first;
+  E_MemberHashNode *last;
+};
+
+typedef struct E_MemberFilterNode E_MemberFilterNode;
+struct E_MemberFilterNode
+{
+  E_MemberFilterNode *next;
+  String8 filter;
+  E_MemberArray members_filtered;
+};
+
+typedef struct E_MemberFilterSlot E_MemberFilterSlot;
+struct E_MemberFilterSlot
+{
+  E_MemberFilterNode *first;
+  E_MemberFilterNode *last;
+};
+
+typedef struct E_MemberCacheNode E_MemberCacheNode;
+struct E_MemberCacheNode
+{
+  E_MemberCacheNode *next;
+  E_TypeKey key;
+  E_MemberArray members;
+  U64 member_hash_slots_count;
+  E_MemberHashSlot *member_hash_slots;
+  U64 member_filter_slots_count;
+  E_MemberFilterSlot *member_filter_slots;
+};
+
+typedef struct E_MemberCacheSlot E_MemberCacheSlot;
+struct E_MemberCacheSlot
+{
+  E_MemberCacheNode *first;
+  E_MemberCacheNode *last;
+};
+
+//- rjf: used expression map
+
+typedef struct E_UsedExprNode E_UsedExprNode;
+struct E_UsedExprNode
+{
+  E_UsedExprNode *next;
+  E_UsedExprNode *prev;
+  E_Expr *expr;
+};
+
+typedef struct E_UsedExprSlot E_UsedExprSlot;
+struct E_UsedExprSlot
+{
+  E_UsedExprNode *first;
+  E_UsedExprNode *last;
+};
+
+typedef struct E_UsedExprMap E_UsedExprMap;
+struct E_UsedExprMap
+{
+  U64 slots_count;
+  E_UsedExprSlot *slots;
+};
+
+//- rjf: type key -> auto hook expression list cache
+
+typedef struct E_TypeAutoHookCacheNode E_TypeAutoHookCacheNode;
+struct E_TypeAutoHookCacheNode
+{
+  E_TypeAutoHookCacheNode *next;
+  E_TypeKey key;
+  E_ExprList exprs;
+};
+
+typedef struct E_TypeAutoHookCacheSlot E_TypeAutoHookCacheSlot;
+struct E_TypeAutoHookCacheSlot
+{
+  E_TypeAutoHookCacheNode *first;
+  E_TypeAutoHookCacheNode *last;
+};
+
+typedef struct E_TypeAutoHookCacheMap E_TypeAutoHookCacheMap;
+struct E_TypeAutoHookCacheMap
+{
+  U64 slots_count;
+  E_TypeAutoHookCacheSlot *slots;
+};
+
+//- rjf: string ID cache
+
+typedef struct E_StringIDNode E_StringIDNode;
+struct E_StringIDNode
+{
+  E_StringIDNode *hash_next;
+  E_StringIDNode *id_next;
+  U64 id;
+  String8 string;
+};
+
+typedef struct E_StringIDSlot E_StringIDSlot;
+struct E_StringIDSlot
+{
+  E_StringIDNode *first;
+  E_StringIDNode *last;
+};
+
+typedef struct E_StringIDMap E_StringIDMap;
+struct E_StringIDMap
+{
+  U64 id_slots_count;
+  E_StringIDSlot *id_slots;
+  U64 hash_slots_count;
+  E_StringIDSlot *hash_slots;
+};
+
+//- rjf: cache evaluation bundles
+
+typedef U32 E_CacheBundleFlags;
+enum
+{
+  E_CacheBundleFlag_Parse     = (1<<0),
+  E_CacheBundleFlag_IRTree    = (1<<1),
+  E_CacheBundleFlag_Bytecode  = (1<<2),
+  E_CacheBundleFlag_Interpret = (1<<3),
+};
+
+typedef struct E_CacheBundle E_CacheBundle;
+struct E_CacheBundle
+{
+  E_CacheBundleFlags flags;
+  E_Key key;
+  E_Key parent_key;
+  String8 string;
+  E_Parse parse;
+  E_IRTreeAndType irtree;
+  String8 bytecode;
+  E_Interpretation interpretation;
+};
+
+typedef struct E_CacheNode E_CacheNode;
+struct E_CacheNode
+{
+  E_CacheNode *string_next;
+  E_CacheNode *key_next;
+  E_CacheBundle bundle;
+};
+
+typedef struct E_CacheLookup E_CacheLookup;
+struct E_CacheLookup
+{
+  E_CacheNode *node;
+  U64 hash;
+};
+
+typedef struct E_CacheSlot E_CacheSlot;
+struct E_CacheSlot
+{
+  E_CacheNode *first;
+  E_CacheNode *last;
+};
+
+//- rjf: parent stack
+
+typedef struct E_CacheParentNode E_CacheParentNode;
+struct E_CacheParentNode
+{
+  E_CacheParentNode *next;
+  E_Key key;
+};
+
+//- rjf: main cache state type
+
+typedef struct E_Cache E_Cache;
+struct E_Cache
+{
+  //- rjf: root arena
+  Arena *arena;
+  U64 arena_eval_start_pos;
+  
+  //- rjf: key ID generation counter
+  U64 key_id_gen;
+  
+  //- rjf: key -> bundle, string -> bundle tables
+  U64 key_slots_count;
+  E_CacheSlot *key_slots;
+  U64 string_slots_count;
+  E_CacheSlot *string_slots;
+  
+  //- rjf: parent stack
+  E_CacheParentNode *top_parent_node;
+  E_CacheParentNode *free_parent_node;
+  
+  //- rjf: unpacked context
+  RDI_Procedure *thread_ip_procedure;
+  
+  //- rjf: [types] JIT-constructed types tables
+  U64 cons_id_gen;
+  U64 cons_content_slots_count;
+  U64 cons_key_slots_count;
+  E_ConsTypeSlot *cons_content_slots;
+  E_ConsTypeSlot *cons_key_slots;
+  
+  //- rjf: [types] build-in constructed type keys
+  E_TypeKey file_type_key;
+  E_TypeKey folder_type_key;
+  
+  //- rjf: [types] member cache table
+  U64 member_cache_slots_count;
+  E_MemberCacheSlot *member_cache_slots;
+  
+  //- rjf: [types] unpacked type cache
+  U64 type_cache_slots_count;
+  E_TypeCacheSlot *type_cache_slots;
+  
+  //- rjf: [ir] ir gen options
+  B32 disallow_autohooks;
+  B32 disallow_chained_fastpaths;
+  
+  //- rjf: [ir] ir caches
+  E_UsedExprMap *used_expr_map;
+  E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
+  
+  //- rjf: [ir] string ID cache
+  U64 string_id_gen;
+  E_StringIDMap *string_id_map;
+};
+
 ////////////////////////////////
 //~ rjf: Generated Code
 
@@ -647,18 +991,33 @@ read_only global E_String2NumMap e_string2num_map_nil = {0};
 read_only global E_String2ExprMap e_string2expr_map_nil = {0};
 read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-read_only global E_Eval e_eval_nil = {&e_expr_nil, {&e_irnode_nil}};
+read_only global E_Eval e_eval_nil = {{0}, &e_expr_nil, {&e_irnode_nil}};
 read_only global E_Module e_module_nil = {&rdi_parsed_nil};
+read_only global E_CacheBundle e_cache_bundle_nil = {0, {0}, {0}, {0}, {{0}, 0, &e_expr_nil, &e_expr_nil}, {&e_irnode_nil}};
 thread_static E_BaseCtx *e_base_ctx = 0;
-thread_static U64 e_base_ctx_gen = 0;
+thread_static E_IRCtx *e_ir_ctx = 0;
+thread_static E_Cache *e_cache = 0;
 
 ////////////////////////////////
-//~ rjf: Basic Helper Functions
+//~ rjf: Basic Helpers
 
 internal U64 e_hash_from_string(U64 seed, String8 string);
 #define e_value_u64(v) (E_Value){.u64 = (v)}
 
-//- rjf: type key data structures
+////////////////////////////////
+//~ rjf: Expr Kind Enum Functions
+
+internal RDI_EvalOp e_opcode_from_expr_kind(E_ExprKind kind);
+internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
+
+////////////////////////////////
+//~ rjf: Key Type Functions
+
+internal B32 e_key_match(E_Key a, E_Key b);
+
+////////////////////////////////
+//~ rjf: Type Key Type Functions
+
 internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal void e_type_key_list_push_front(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
@@ -676,7 +1035,7 @@ internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
 internal E_Space e_space_make(E_SpaceKind kind);
 
 ////////////////////////////////
-//~ rjf: Basic Map Functions
+//~ rjf: Map Functions
 
 //- rjf: string -> num
 internal E_String2NumMap e_string2num_map_make(Arena *arena, U64 slot_count);
@@ -691,12 +1050,17 @@ internal E_String2ExprMap e_string2expr_map_make(Arena *arena, U64 slot_count);
 internal void e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_Expr *expr);
 internal void e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string);
 internal void e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string);
-internal E_Expr *e_string2expr_lookup(E_String2ExprMap *map, String8 string);
+internal E_Expr *e_string2expr_map_lookup(E_String2ExprMap *map, String8 string);
 
 //- rjf: string -> type-key
 internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
 internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);
 internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string);
+
+//- rjf: auto hooks
+internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
+internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params);
+#define e_auto_hook_map_insert_new(arena, map, ...) e_auto_hook_map_insert_new_((arena), (map), &(E_AutoHookParams){.type_key = zero_struct, __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Functions
@@ -705,8 +1069,102 @@ internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Pars
 internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 
 ////////////////////////////////
-//~ rjf: Base Evaluation Context Selection
+//~ rjf: Cache Creation & Selection
+
+internal E_Cache *e_cache_alloc(void);
+internal void e_cache_release(E_Cache *cache);
+internal void e_select_cache(E_Cache *cache);
+
+////////////////////////////////
+//~ rjf: Evaluation Phase Markers
 
 internal void e_select_base_ctx(E_BaseCtx *ctx);
+internal void e_select_ir_ctx(E_IRCtx *ctx);
+
+////////////////////////////////
+//~ rjf: Base Cache Accessing Functions
+//
+// The cache uses a unique keying mechanism to refer to some evaluation at
+// many layers of analysis.
+//
+//                                  key
+//         ________________________________________________
+//        /            /             |                     \
+//     text ->   expression   ->  ir tree and type  ->  interpretation result
+//
+// Each one of these calls refers to one stage in this pipeline. The cache will
+// only compute what is needed on-demand. If you ask for the full evaluation,
+// which is a bundle of artifacts at all layers of analysis, then all stages
+// will be computed.
+//
+// One wrinkle here is that the IR tree generation stage is implicitly
+// parameterized by the "overridden" IR tree - this is to enable "parent
+// expressions", e.g. `$.x`, or simply `x` assuming `foo` has such a member,
+// in the context of some struct `foo` evaluates to the same thing as `foo.x`.
+// So even though the primary API shape is based around singular keys, the
+// "parent key stack" also implicitly parameterizes all of these (partly
+// because it is not relevant in 99% of cases).
+
+//- rjf: parent key stack
+internal E_Key e_parent_key_push(E_Key key);
+internal E_Key e_parent_key_pop(void);
+#define E_ParentKey(key) DeferLoop(e_parent_key_push(key), e_parent_key_pop())
+
+//- rjf: key construction
+internal E_Key e_key_from_string(String8 string);
+internal E_Key e_key_from_stringf(char *fmt, ...);
+internal E_Key e_key_from_expr(E_Expr *expr);
+
+//- rjf: base key -> bundle helper
+internal E_CacheBundle *e_cache_bundle_from_key(E_Key key);
+
+//- rjf: bundle -> pipeline stage outputs
+internal E_Parse e_parse_from_bundle(E_CacheBundle *bundle);
+internal E_IRTreeAndType e_irtree_from_bundle(E_CacheBundle *bundle);
+internal String8 e_bytecode_from_bundle(E_CacheBundle *bundle);
+internal E_Interpretation e_interpretation_from_bundle(E_CacheBundle *bundle);
+#define e_parse_from_key(key) e_parse_from_bundle(e_cache_bundle_from_key(key))
+#define e_irtree_from_key(key) e_irtree_from_bundle(e_cache_bundle_from_key(key))
+#define e_bytecode_from_key(key) e_bytecode_from_bundle(e_cache_bundle_from_key(key))
+#define e_interpretation_from_key(key) e_interpretation_from_bundle(e_cache_bundle_from_key(key))
+
+//- rjf: comprehensive bundle
+internal E_Eval e_eval_from_bundle(E_CacheBundle *bundle);
+internal E_Eval e_value_eval_from_eval(E_Eval eval);
+#define e_eval_from_key(key) e_eval_from_bundle(e_cache_bundle_from_key(key))
+#define e_value_from_key(key) (e_value_eval_from_eval(e_eval_from_key(key)).value)
+
+//- rjf: string-based helpers
+#define e_parse_from_string(string) e_parse_from_bundle(e_cache_bundle_from_key(e_key_from_string(string)))
+#define e_irtree_from_string(string) e_irtree_from_bundle(e_cache_bundle_from_key(e_key_from_string(string)))
+#define e_bytecode_from_string(string) e_bytecode_from_bundle(e_cache_bundle_from_key(e_key_from_string(string)))
+#define e_interpretation_from_string(string) e_interpretation_from_bundle(e_cache_bundle_from_key(e_key_from_string(string)))
+#define e_eval_from_string(string) e_eval_from_key(e_key_from_string(string))
+#define e_eval_from_stringf(...) e_eval_from_key(e_key_from_stringf(__VA_ARGS__))
+#define e_value_from_string(string) e_value_eval_from_eval(e_eval_from_string(string)).value
+#define e_value_from_stringf(...) e_value_eval_from_eval(e_eval_from_stringf(__VA_ARGS__)).value
+// TODO(rjf): (replace the old bundle APIs here)
+
+//- rjf: expr-based helpers
+#define e_eval_from_expr(expr) e_eval_from_key(e_key_from_expr(expr))
+#define e_value_from_expr(expr) e_value_eval_from_eval(e_eval_from_expr(expr)).value
+
+//- rjf: type key -> auto hooks
+internal E_ExprList e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
+internal E_ExprList e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key);
+
+//- rjf: string IDs
+internal U64 e_id_from_string(String8 string);
+internal String8 e_string_from_id(U64 id);
+
+////////////////////////////////
+//~ rjf: Key Extension Functions
+
+internal E_Key e_key_wrap(E_Key key, String8 string);
+internal E_Key e_key_wrapf(E_Key key, char *fmt, ...);
+
+//- rjf: eval-based helpers
+#define e_eval_wrap(eval, string) e_eval_from_key(e_key_wrap((eval).key, (string)))
+#define e_eval_wrapf(eval, ...) e_eval_from_key(e_key_wrapf((eval).key, __VA_ARGS__))
 
 #endif // EVAL_CORE_H

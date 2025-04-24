@@ -5,98 +5,6 @@
 #define EVAL_IR_H
 
 ////////////////////////////////
-//~ rjf: Used Tag Map Data Structure
-
-typedef struct E_UsedExprNode E_UsedExprNode;
-struct E_UsedExprNode
-{
-  E_UsedExprNode *next;
-  E_UsedExprNode *prev;
-  E_Expr *expr;
-};
-
-typedef struct E_UsedExprSlot E_UsedExprSlot;
-struct E_UsedExprSlot
-{
-  E_UsedExprNode *first;
-  E_UsedExprNode *last;
-};
-
-typedef struct E_UsedExprMap E_UsedExprMap;
-struct E_UsedExprMap
-{
-  U64 slots_count;
-  E_UsedExprSlot *slots;
-};
-
-////////////////////////////////
-//~ rjf: Type Key -> Auto Hook Expr List Cache
-
-typedef struct E_TypeAutoHookCacheNode E_TypeAutoHookCacheNode;
-struct E_TypeAutoHookCacheNode
-{
-  E_TypeAutoHookCacheNode *next;
-  E_TypeKey key;
-  E_ExprList exprs;
-};
-
-typedef struct E_TypeAutoHookCacheSlot E_TypeAutoHookCacheSlot;
-struct E_TypeAutoHookCacheSlot
-{
-  E_TypeAutoHookCacheNode *first;
-  E_TypeAutoHookCacheNode *last;
-};
-
-typedef struct E_TypeAutoHookCacheMap E_TypeAutoHookCacheMap;
-struct E_TypeAutoHookCacheMap
-{
-  U64 slots_count;
-  E_TypeAutoHookCacheSlot *slots;
-};
-
-////////////////////////////////
-//~ rjf: Evaluated String ID Map
-
-typedef struct E_StringIDNode E_StringIDNode;
-struct E_StringIDNode
-{
-  E_StringIDNode *hash_next;
-  E_StringIDNode *id_next;
-  U64 id;
-  String8 string;
-};
-
-typedef struct E_StringIDSlot E_StringIDSlot;
-struct E_StringIDSlot
-{
-  E_StringIDNode *first;
-  E_StringIDNode *last;
-};
-
-typedef struct E_StringIDMap E_StringIDMap;
-struct E_StringIDMap
-{
-  U64 id_slots_count;
-  E_StringIDSlot *id_slots;
-  U64 hash_slots_count;
-  E_StringIDSlot *hash_slots;
-};
-
-////////////////////////////////
-//~ rjf: IR Context
-
-typedef struct E_IRCtx E_IRCtx;
-struct E_IRCtx
-{
-  E_String2NumMap *regs_map;
-  E_String2NumMap *reg_alias_map;
-  E_String2NumMap *locals_map; // (within `primary_module`)
-  E_String2NumMap *member_map; // (within `primary_module`)
-  E_String2ExprMap *macro_map;
-  E_AutoHookMap *auto_hook_map;
-};
-
-////////////////////////////////
 //~ rjf: IR State
 
 typedef struct E_IRCacheNode E_IRCacheNode;
@@ -142,37 +50,6 @@ struct E_IRState
 };
 
 ////////////////////////////////
-//~ rjf: Globals
-
-thread_static E_IRState *e_ir_state = 0;
-
-////////////////////////////////
-//~ rjf: Expr Kind Enum Functions
-
-internal RDI_EvalOp e_opcode_from_expr_kind(E_ExprKind kind);
-internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
-
-////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
-
-internal void e_select_ir_ctx(E_IRCtx *ctx);
-
-////////////////////////////////
-//~ rjf: Auto Hooks
-
-internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
-internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params);
-#define e_auto_hook_map_insert_new(arena, map, ...) e_auto_hook_map_insert_new_((arena), (map), &(E_AutoHookParams){.type_key = zero_struct, __VA_ARGS__})
-internal E_ExprList e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
-internal E_ExprList e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key);
-
-////////////////////////////////
-//~ rjf: Evaluated String IDs
-
-internal U64 e_id_from_string(String8 string);
-internal String8 e_string_from_id(U64 id);
-
-////////////////////////////////
 //~ rjf: IR-ization Functions
 
 //- rjf: op list functions
@@ -211,7 +88,7 @@ internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
 E_TYPE_ACCESS_FUNCTION_DEF(default);
-internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
+internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr);
 
 //- rjf: irtree -> linear ops/bytecode
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
@@ -223,10 +100,5 @@ internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeA
 internal E_Expr *e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index);
 internal E_Expr *e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree);
 internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key);
-
-////////////////////////////////
-//~ rjf: IR Cache Functions
-
-internal E_IRTreeAndType e_irtree_and_type_from_expr(E_Expr *expr);
 
 #endif // EVAL_IR_H

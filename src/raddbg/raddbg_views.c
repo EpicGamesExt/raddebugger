@@ -1108,14 +1108,14 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       RD_Cfg *w_cfg = style->first;
       F32 next_pct = 0;
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
-      E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-      e_ir_state->overridden_irtree = &row->eval.irtree;
-      for(U64 idx = 0; idx < maybe_table_type->count; idx += 1)
+      E_ParentKey(row->eval.key)
       {
-        E_Eval cell_eval = e_eval_from_expr(arena, maybe_table_type->args[idx]);
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, cell_eval, .default_pct = 1.f/maybe_table_type->count, .pct = take_pct());
+        for(U64 idx = 0; idx < maybe_table_type->count; idx += 1)
+        {
+          E_Eval cell_eval = e_eval_from_expr(maybe_table_type->args[idx]);
+          rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, cell_eval, .default_pct = 1.f/maybe_table_type->count, .pct = take_pct());
+        }
       }
-      e_ir_state->overridden_irtree = prev_overridden_irtree;
       info.can_expand = 0;
 #undef take_pct
     }
@@ -1229,7 +1229,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           }
           if(cmd_kind == RD_CmdKind_EnableCfg || cmd_kind == RD_CmdKind_DisableCfg)
           {
-            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "enabled"),
+            rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "enabled"),
                                         .flags = RD_WatchCellFlag_Background,
                                         .px = floor_f32(ui_top_font_size()*5.f));
           }
@@ -1237,7 +1237,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           {
             String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
             rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,
-                                        e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
+                                        e_eval_from_stringf("query:commands.%S", cmd_name),
                                         .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
                                         .px = floor_f32(ui_top_font_size()*3.f));
           }
@@ -1259,7 +1259,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
          entity->kind == CTRL_EntityKind_Process ||
          entity->kind == CTRL_EntityKind_Thread)
       {
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "active"),
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "active"),
                                     .edit_string = row->edit_string,
                                     .px = floor_f32(ui_top_font_size()*5.f));
       }
@@ -1271,7 +1271,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           cmd_kind = RD_CmdKind_DeselectEntity;
         }
         String8 cmd_name = rd_cmd_kind_info_table[cmd_kind].string;
-        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_from_stringf(arena, "query:commands.%S", cmd_name),
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_from_stringf("query:commands.%S", cmd_name),
                                     .edit_string = row->edit_string,
                                     .flags = RD_WatchCellFlag_ActivateWithSingleClick|RD_WatchCellFlag_Button,
                                     .px = floor_f32(ui_top_font_size()*3.f));
@@ -1383,7 +1383,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
                                   .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
                                   .default_pct = 0.75f,
                                   .pct = take_pct());
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "lens:hex((uint64)$)"), .default_pct = 0.25f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "lens:hex((uint64)$)"), .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
     }
     
@@ -1395,12 +1395,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       info.cell_style_key = str8_lit("call_stack_frame");
       CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
-      E_Space space = rd_eval_space_from_ctrl_entity(module, RD_EvalSpaceKind_MetaCtrlEntity);
-      E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
-      expr->space    = space;
-      expr->mode     = E_Mode_Offset;
-      expr->type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("module"));
-      E_Eval module_eval = e_eval_from_expr(arena, expr);
+      E_Eval module_eval = ctrl_eval_from_handle(module->handle);
       RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
       RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
       RD_Cfg *w_cfg = style->first;
@@ -1408,7 +1403,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 #define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_CallStackFrame, row->eval,                                             .default_pct = 0.05f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           row->eval,                                             .default_pct = 0.55f, .pct = take_pct());
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           e_eval_wrapf(arena, row->eval, "lens:hex((uint64)$)"), .default_pct = 0.20f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           e_eval_wrapf(row->eval, "lens:hex((uint64)$)"),        .default_pct = 0.20f, .pct = take_pct());
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,           (module == &ctrl_entity_nil ? (E_Eval)zero_struct : module_eval),
                                   .default_pct = 0.20f, .pct = take_pct());
 #undef take_pct
@@ -1430,8 +1425,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
                                   .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
                                   .default_pct = 0.35f,
                                   .pct = take_pct());
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,                                                 .default_pct = 0.40f, .pct = take_pct());
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(arena, row->eval, "typeof(raw($))"),          .default_pct = 0.25f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,                                 .default_pct = 0.40f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "typeof(raw($))"), .default_pct = 0.25f, .pct = take_pct());
 #undef take_pct
     }
     
@@ -2088,13 +2083,13 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, dv->temp_look_process), RD_EvalSpaceKind_CtrlEntity);
-      eval = e_eval_from_stringf(scratch.arena, "(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
+      eval = e_eval_from_stringf("(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
     }
     else
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-      eval = e_eval_from_stringf(scratch.arena, "(rip.u64 & (~(0x4000 - 1)))");
+      eval = e_eval_from_stringf("(rip.u64 & (~(0x4000 - 1)))");
     }
   }
   
@@ -2655,10 +2650,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         ui_color_from_name(str8_lit("code_local")),
       };
       U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
-      for(E_String2NumMapNode *n = e_ir_state->ctx->locals_map->first; n != 0; n = n->order_next)
+      for(E_String2NumMapNode *n = e_ir_ctx->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
-        E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);
+        E_Eval local_eval = e_eval_from_string(local_name);
         if(local_eval.irtree.mode == E_Mode_Offset)
         {
           E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.irtree.type_key);
@@ -3463,20 +3458,20 @@ rd_eval_color_from_eval(E_Eval eval)
         // rjf: leaf u32 -> take all 4 components
         case E_TypeKind_U32:
         {
-          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0xff000000) >> 24) / 255.f"));
-          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x00ff0000) >> 16) / 255.f"));
-          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x0000ff00) >> 8) / 255.f"));
-          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)(($ & 0x000000ff) >> 0) / 255.f"));
+          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0xff000000) >> 24) / 255.f"));
+          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0x00ff0000) >> 16) / 255.f"));
+          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0x0000ff00) >> 8) / 255.f"));
+          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0x000000ff) >> 0) / 255.f"));
           num_components_left -= 4;
         }break;
         
         //- rjf: array -> generate tasks for first four elements
         case E_TypeKind_Array:
         {
-          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[0])"));
-          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[1])"));
-          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[2])"));
-          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(scratch.arena, t->eval, "(float32)($[3])"));
+          component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)($[0])"));
+          component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)($[1])"));
+          component_evals[2] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)($[2])"));
+          component_evals[3] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)($[3])"));
           num_components_left -= 4;
         }break;
       }

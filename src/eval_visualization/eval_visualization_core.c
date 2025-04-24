@@ -586,6 +586,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       }
       
       // rjf: get top-level lookup/expansion info
+      // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
       E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval.expr, &t->eval.irtree, filter);
       EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr);
       
@@ -705,7 +706,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
           type_expand_rule->range(arena, type_expand_info.user_data, t->eval.expr, &t->eval.irtree, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string);
           if(child_expr != &e_expr_nil)
           {
-            E_Eval child_eval = e_eval_from_expr(arena, child_expr);
+            E_Eval child_eval = e_eval_from_expr(child_expr);
             EV_Key child_key = child_keys[idx];
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
@@ -725,7 +726,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
         task->next = t->next;
         t->next = task;
         task->parent_block       = t->parent_block;
-        task->eval               = e_eval_from_expr(arena, t->eval.expr->next);
+        task->eval               = e_eval_from_expr(t->eval.expr->next);
         task->child_id           = t->child_id + 1;
         task->split_relative_idx = 0;
         task->default_expanded   = t->default_expanded;
@@ -1046,7 +1047,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           U64 child_id = ev_block_id_from_num(n->v.block, child_num);
           EV_Key row_key = ev_key_make(ev_hash_from_key(n->v.block->key), child_id);
           E_Expr *row_expr = range_exprs[idx];
-          E_Eval row_eval = e_eval_from_expr(arena, row_expr);
+          E_Eval row_eval = e_eval_from_expr(row_expr);
           EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
           SLLQueuePush(rows.first, rows.last, row_node);
           rows.count += 1;
@@ -2055,7 +2056,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               if(ptr_data->type->count == 1)
               {
                 E_Expr *deref_expr = e_expr_irext_deref(arena, eval.expr, &eval.irtree);
-                E_Eval deref_eval = e_eval_from_expr(arena, deref_expr);
+                E_Eval deref_eval = e_eval_from_expr(deref_expr);
                 need_new_task = 1;
                 need_pop = 0;
                 new_task.params = *params;
@@ -2105,6 +2106,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
           expand_data->type = e_type_from_key__cached(type_key);
           expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
+          // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
           expand_data->expand_info = expand_data->expand_rule->info(arena, eval.expr, &eval.irtree, params->filter);
         }
         switch(task_idx)
@@ -2134,7 +2136,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               need_new_task = 1;
               need_pop = 0;
               new_task.params = *params;
-              new_task.eval = e_eval_from_expr(arena, next_expr);
+              new_task.eval = e_eval_from_expr(next_expr);
               if(task_idx > 1)
               {
                 *out_string = str8_lit(", ");

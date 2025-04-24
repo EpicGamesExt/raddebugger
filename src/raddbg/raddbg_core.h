@@ -635,6 +635,9 @@ struct RD_State
   // rjf: dbgi match store
   DI_MatchStore *match_store;
   
+  // rjf: evaluation cache
+  E_Cache *eval_cache;
+  
   // rjf: ambiguous path table (constructed from-scratch each frame)
   U64 ambiguous_path_slots_count;
   RD_AmbiguousPathNode **ambiguous_path_slots;

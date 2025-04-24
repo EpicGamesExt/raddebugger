@@ -10,6 +10,5 @@
 #include "eval/eval_ir.h"
 #include "eval/eval_interpret.h"
 #include "eval/eval_bundles.h"
-#include "eval/eval_cache.h"
 
 #endif // EVAL_INC_H

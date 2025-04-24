@@ -217,6 +217,16 @@ ctrl_handle_from_string(String8 string)
   return handle;
 }
 
+internal E_Eval
+ctrl_eval_from_handle(CTRL_Handle handle)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 string = ctrl_string_from_handle(scratch.arena, handle);
+  E_Eval eval = e_eval_from_string(string);
+  scratch_end(scratch);
+  return eval;
+}
+
 ////////////////////////////////
 //~ rjf: Trap Type Functions
 
@@ -1412,6 +1422,7 @@ ctrl_init(void)
     scratch_end(scratch);
   }
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
+  ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
   ctrl_state->dbg_dir_arena = arena_alloc();
@@ -4755,6 +4766,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   }
   
   //////////////////////////////
+  //- rjf: select evaluation cache
+  //
+  e_select_cache(ctrl_state->ctrl_thread_eval_cache);
+  
+  //////////////////////////////
   //- rjf: build base evaluation context
   //
   {
@@ -4777,12 +4793,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->space_read  = ctrl_eval_space_read;
   }
   e_select_base_ctx(&scope->base_ctx);
-  
-  //////////////////////////////
-  //- rjf: begin type evaluation
-  //
-  e_parse_eval_begin();
-  e_type_eval_begin();
   
   //////////////////////////////
   //- rjf: build IR evaluation context
@@ -4818,11 +4828,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->tls_base      = push_array(arena, U64, 1);
   }
   e_select_interpret_ctx(&scope->interpret_ctx, eval_modules_primary->rdi, thread_rip_voff);
-  
-  ////////////////////////////
-  //- rjf: begin cached evaluations
-  //
-  e_cache_eval_begin();
   
   return scope;
 }
@@ -5886,7 +5891,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             E_Eval eval = zero_struct;
             ProfScope("evaluate expression")
             {
-              eval = e_eval_from_string(temp.arena, condition_n->string);
+              eval = e_eval_from_string(condition_n->string);
             }
             
             // rjf: interpret evaluation

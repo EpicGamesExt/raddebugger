@@ -1245,7 +1245,7 @@ rd_setting_b32_from_name(String8 name)
   Temp scratch = scratch_begin(0, 0);
   String8 value = rd_setting_from_name(name);
   String8 expr = push_str8f(scratch.arena, "(bool)(%S)", value);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval eval = e_eval_from_string(expr);
   B32 result = !!e_value_eval_from_eval(eval).value.u64;
   scratch_end(scratch);
   return result;
@@ -1257,7 +1257,7 @@ rd_setting_u64_from_name(String8 name)
   Temp scratch = scratch_begin(0, 0);
   String8 value = rd_setting_from_name(name);
   String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", value);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval eval = e_eval_from_string(expr);
   U64 result = e_value_eval_from_eval(eval).value.u64;
   scratch_end(scratch);
   return result;
@@ -1269,7 +1269,7 @@ rd_setting_f32_from_name(String8 name)
   Temp scratch = scratch_begin(0, 0);
   String8 value = rd_setting_from_name(name);
   String8 expr = push_str8f(scratch.arena, "(float32)(%S)", value);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval eval = e_eval_from_string(expr);
   F32 result = e_value_eval_from_eval(eval).value.f32;
   scratch_end(scratch);
   return result;
@@ -2029,7 +2029,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
         got_commit_data = 1;
         E_Expr *src_expr = e_parse_from_string(string).expr;
         E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
-        E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
+        E_Eval src_eval = e_eval_from_expr(src_expr__casted);
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
         commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
       }
@@ -2095,7 +2095,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
       //- rjf: pointer? -> try to treat new value as numeric value
       if(!got_commit_data && type_kind == E_TypeKind_Ptr)
       {
-        E_Eval src_eval = e_eval_from_string(scratch.arena, string);
+        E_Eval src_eval = e_eval_from_string(string);
         E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
         E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.irtree.type_key);
         if((e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
@@ -2156,7 +2156,7 @@ rd_file_path_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Eval eval = e_eval_from_string(scratch.arena, string);
+    E_Eval eval = e_eval_from_string(string);
     result = rd_file_path_from_eval(arena, eval);
     scratch_end(scratch);
   }
@@ -2617,7 +2617,7 @@ rd_view_ui(Rng2F32 rect)
       }
       
       // rjf: unpack view's target expression & hash
-      E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
+      E_Eval eval = e_eval_from_string(expr_string);
       Rng1U64 range = r1u64(0, 1024);
       U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
       U128 hash = hs_hash_from_key(key, 0);
@@ -2709,7 +2709,7 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_Font(RD_FontSlot_Code)
       {
-        E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
+        E_Eval eval = e_eval_from_string(expr_string);
         RD_WatchViewState *ewv = rd_view_state(RD_WatchViewState);
         UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
         F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
@@ -4260,8 +4260,7 @@ rd_view_ui(Rng2F32 rect)
                       {
                         E_Expr *min_expr = cell_type->args[0];
                         E_Expr *max_expr = cell_type->args[1];
-                        E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-                        e_ir_state->overridden_irtree = &cell->eval.irtree;
+                        E_ParentKey(cell->eval.key)
                         {
                           E_TypeKey slider_value_type = e_type_key_unwrap(cell_type->direct_type_key, E_TypeUnwrapFlag_AllDecorative);
                           slider_value_type_kind = e_type_kind_from_key(slider_value_type);
@@ -4270,7 +4269,6 @@ rd_view_ui(Rng2F32 rect)
                           cell_slider_min = e_value_from_expr(min_casted);
                           cell_slider_max = e_value_from_expr(max_casted);
                         }
-                        e_ir_state->overridden_irtree = prev_overridden_irtree;
                       }
                       switch(slider_value_type_kind)
                       {
@@ -4399,10 +4397,10 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: view ui contents
-                            E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-                            e_ir_state->overridden_irtree = cell->eval.irtree.prev;
-                            cell_info.view_ui_rule->ui(cell->eval, cell_rect);
-                            e_ir_state->overridden_irtree = prev_overridden_irtree;
+                            E_ParentKey(cell->eval.key)
+                            {
+                              cell_info.view_ui_rule->ui(cell->eval, cell_rect);
+                            }
                             
                             // rjf: loading fill
                             UI_Parent(loading_overlay_container)
@@ -4850,15 +4848,11 @@ rd_view_ui(Rng2F32 rect)
     {
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
-      E_Eval expr_eval = e_eval_from_string(scratch.arena, expr_string);
-      E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-      e_ir_state->overridden_irtree = &expr_eval.irtree;
-      for(E_IRTreeAndType *prev = expr_eval.irtree.prev; prev != 0; prev = prev->prev)
+      E_Eval expr_eval = e_eval_from_string(expr_string);
+      E_ParentKey(expr_eval.key)
       {
-        e_ir_state->overridden_irtree = prev;
+        view_ui_rule->ui(expr_eval, rect);
       }
-      view_ui_rule->ui(expr_eval, rect);
-      e_ir_state->overridden_irtree = prev_overridden_irtree;
       scratch_end(scratch);
     }
   }
@@ -4950,48 +4944,34 @@ rd_view_cfg_from_string(String8 string)
 internal E_Value
 rd_view_cfg_value_from_string(String8 string)
 {
-  Temp scratch = scratch_begin(0, 0);
   RD_Cfg *root = rd_view_cfg_from_string(string);
   String8 expr = root->first->string;
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval eval = e_eval_from_string(expr);
   E_Value result = e_value_eval_from_eval(eval).value;
-  scratch_end(scratch);
   return result;
 }
 
 internal B32
 rd_view_cfg_b32_from_string(String8 string)
 {
-  Temp scratch = scratch_begin(0, 0);
   RD_Cfg *root = rd_view_cfg_from_string(string);
-  String8 expr = push_str8f(scratch.arena, "(bool)(%S)", root->first->string);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  B32 result = !!e_value_eval_from_eval(eval).value.u64;
-  scratch_end(scratch);
+  B32 result = !!e_value_from_stringf("(bool)(%S)", root->first->string).u64;
   return result;
 }
 
 internal U64
 rd_view_cfg_u64_from_string(String8 string)
 {
-  Temp scratch = scratch_begin(0, 0);
   RD_Cfg *root = rd_view_cfg_from_string(string);
-  String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", root->first->string);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  U64 result = e_value_eval_from_eval(eval).value.u64;
-  scratch_end(scratch);
+  U64 result = e_value_from_stringf("(uint64)(%S)", root->first->string).u64;
   return result;
 }
 
 internal F32
 rd_view_cfg_f32_from_string(String8 string)
 {
-  Temp scratch = scratch_begin(0, 0);
   RD_Cfg *root = rd_view_cfg_from_string(string);
-  String8 expr = push_str8f(scratch.arena, "(float32)(%S)", root->first->string);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  F32 result = e_value_eval_from_eval(eval).value.f32;
-  scratch_end(scratch);
+  F32 result = e_value_from_stringf("(float32)(%S)", root->first->string).f32;
   return result;
 }
 
@@ -5912,7 +5892,7 @@ rd_window_frame(void)
           {
             rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), rd_state->drag_drop_regs->expr);
             ui_spacer(ui_em(2.f, 1.f));
-            E_Eval eval = e_eval_from_string(scratch.arena, rd_state->drag_drop_regs->expr);
+            E_Eval eval = e_eval_from_string(rd_state->drag_drop_regs->expr);
             if(eval.irtree.mode != E_Mode_Null)
             {
               EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
@@ -6294,7 +6274,7 @@ rd_window_frame(void)
         
         // rjf: evaluate hover evaluation expression, & determine if it evaluates
         // such that we want to build a hover eval.
-        E_Eval hover_eval = e_eval_from_string(scratch.arena, hover_eval_expr);
+        E_Eval hover_eval = e_eval_from_string(hover_eval_expr);
         {
           if(hover_eval.msgs.max_kind > E_MsgKind_Null)
           {
@@ -6405,7 +6385,7 @@ rd_window_frame(void)
       if(query_is_open)
       {
         String8 expr = ws->query_regs->expr;
-        E_Eval eval = e_eval_from_string(scratch.arena, expr);
+        E_Eval eval = e_eval_from_string(expr);
         if(eval.msgs.max_kind > E_MsgKind_Null)
         {
           query_is_open = 0;
@@ -6473,7 +6453,7 @@ rd_window_frame(void)
         }
         
         // rjf: evaluate query expression
-        E_Eval query_eval = e_eval_from_string(scratch.arena, query_expr);
+        E_Eval query_eval = e_eval_from_string(query_expr);
         
         // rjf: determine & store row-height setting
         if(ws->query_regs->do_big_rows)
@@ -10228,7 +10208,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as local
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 local_num = e_num_from_string(e_ir_state->ctx->locals_map, string);
+      U64 local_num = e_num_from_string(e_ir_ctx->locals_map, string);
       if(local_num != 0)
       {
         mapped = 1;
@@ -10239,7 +10219,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as member
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 member_num = e_num_from_string(e_ir_state->ctx->member_map, string);
+      U64 member_num = e_num_from_string(e_ir_ctx->member_map, string);
       if(member_num != 0)
       {
         mapped = 1;
@@ -10250,7 +10230,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register
     if(!mapped)
     {
-      U64 reg_num = e_num_from_string(e_ir_state->ctx->regs_map, string);
+      U64 reg_num = e_num_from_string(e_ir_ctx->regs_map, string);
       if(reg_num != 0)
       {
         mapped = 1;
@@ -10261,7 +10241,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register alias
     if(!mapped)
     {
-      U64 alias_num = e_num_from_string(e_ir_state->ctx->reg_alias_map, string);
+      U64 alias_num = e_num_from_string(e_ir_ctx->reg_alias_map, string);
       if(alias_num != 0)
       {
         mapped = 1;
@@ -10650,8 +10630,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
     case RD_RegSlot_PID: goto use_numeric_eval;
     use_numeric_eval:
     {
-      Temp scratch = scratch_begin(0, 0);
-      E_Eval eval = e_eval_from_string(scratch.arena, string);
+      E_Eval eval = e_eval_from_string(string);
       if(eval.msgs.max_kind == E_MsgKind_Null)
       {
         E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
@@ -10691,7 +10670,6 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
       {
         log_user_errorf("Couldn't evaluate \"%S\" as an address.", string);
       }
-      scratch_end(scratch);
     }break;
   }
 }
@@ -10816,6 +10794,7 @@ rd_init(CmdLine *cmdln)
   rd_state->num_frames_requested = 2;
   rd_state->seconds_until_autosave = 0.5f;
   rd_state->match_store = di_match_store_alloc();
+  rd_state->eval_cache = e_cache_alloc();
   for(U64 idx = 0; idx < ArrayCount(rd_state->cmds_arenas); idx += 1)
   {
     rd_state->cmds_arenas[idx] = arena_alloc();
@@ -11816,6 +11795,11 @@ rd_frame(void)
     ProfEnd();
     
     ////////////////////////////
+    //- rjf: begin evaluation
+    //
+    e_select_cache(rd_state->eval_cache);
+    
+    ////////////////////////////
     //- rjf: build base evaluation context
     //
     E_BaseCtx *eval_base_ctx = push_array(scratch.arena, E_BaseCtx, 1);
@@ -11839,12 +11823,6 @@ rd_frame(void)
       ctx->space_write = rd_eval_space_write;
     }
     e_select_base_ctx(eval_base_ctx);
-    
-    ////////////////////////////
-    //- rjf: begin type evaluation
-    //
-    e_parse_eval_begin();
-    e_type_eval_begin();
     
     ////////////////////////////
     //- rjf: build extra types & maps
@@ -12459,11 +12437,6 @@ rd_frame(void)
       ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
     }
     e_select_interpret_ctx(interpret_ctx, eval_modules_primary->rdi, rip_voff);
-    
-    ////////////////////////////
-    //- rjf: begin cached evaluations
-    //
-    e_cache_eval_begin();
     
     ////////////////////////////
     //- rjf: autosave if needed
@@ -15842,19 +15815,16 @@ Z(getting_started)
           {
             if(t->expr->kind == E_ExprKind_LeafIdentifier)
             {
-              E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, t->expr->string);
-              if(macro_expr != &e_expr_nil)
+              E_Expr *macro_expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, t->expr->string);
+              E_Eval eval = e_eval_from_string(t->expr->string);
+              switch(eval.space.kind)
               {
-                E_Eval eval = e_eval_from_expr(scratch.arena, macro_expr);
-                switch(eval.space.kind)
+                default:{is_static_for_ctrl_thread = 0;}break;
+                case E_SpaceKind_Null:
+                case RD_EvalSpaceKind_MetaCfg:
                 {
-                  default:{is_static_for_ctrl_thread = 0;}break;
-                  case E_SpaceKind_Null:
-                  case RD_EvalSpaceKind_MetaCfg:
-                  {
-                    is_static_for_ctrl_thread = 1;
-                  }break;
-                }
+                  is_static_for_ctrl_thread = 1;
+                }break;
               }
             }
             for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
@@ -15874,7 +15844,7 @@ Z(getting_started)
         String8 non_ctrl_thread_static_condition = src_bp_cnd;
         if(is_static_for_ctrl_thread)
         {
-          E_Eval eval = e_eval_from_string(scratch.arena, src_bp_cnd);
+          E_Eval eval = e_eval_from_string(src_bp_cnd);
           E_Eval value_eval = e_value_eval_from_eval(eval);
           if(value_eval.value.u64 == 0)
           {

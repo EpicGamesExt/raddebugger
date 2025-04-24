@@ -4,6 +4,7 @@
 ////////////////////////////////
 //~ rjf: Bundled Evaluation Functions
 
+#if 0
 internal E_Eval
 e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
@@ -144,63 +145,6 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
   return eval;
 }
 
-internal E_Eval
-e_value_eval_from_eval(E_Eval eval)
-{
-  ProfBeginFunction();
-  if(eval.irtree.mode == E_Mode_Offset)
-  {
-    E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
-    E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    if(type_kind == E_TypeKind_Array)
-    {
-      eval.irtree.mode = E_Mode_Value;
-    }
-    else
-    {
-      U64 type_byte_size = e_type_byte_size_from_key(type_key);
-      Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
-      MemoryZeroStruct(&eval.value);
-      if(!e_type_key_match(type_key, e_type_key_zero()) &&
-         type_byte_size <= sizeof(E_Value) &&
-         e_space_read(eval.space, &eval.value, value_vaddr_range))
-      {
-        eval.irtree.mode = E_Mode_Value;
-        
-        // rjf: mask&shift, for bitfields
-        if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
-        {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *type = e_type_from_key__cached(type_key);
-          U64 valid_bits_mask = 0;
-          for(U64 idx = 0; idx < type->count; idx += 1)
-          {
-            valid_bits_mask |= (1ull<<idx);
-          }
-          eval.value.u64 = eval.value.u64 >> type->off;
-          eval.value.u64 = eval.value.u64 & valid_bits_mask;
-          eval.irtree.type_key = type->direct_type_key;
-          scratch_end(scratch);
-        }
-        
-        // rjf: manually sign-extend
-        switch(type_kind)
-        {
-          default: break;
-          case E_TypeKind_Char8:
-          case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
-          case E_TypeKind_Char16:
-          case E_TypeKind_S16: {eval.value.s64 = (S64)*((S16 *)&eval.value.u64);}break;
-          case E_TypeKind_Char32:
-          case E_TypeKind_S32: {eval.value.s64 = (S64)*((S32 *)&eval.value.u64);}break;
-        }
-      }
-    }
-  }
-  ProfEnd();
-  return eval;
-}
-
 internal E_Value
 e_value_from_string(String8 string)
 {
@@ -266,6 +210,8 @@ e_eval_wrapf(Arena *arena, E_Eval eval, char *fmt, ...)
   scratch_end(scratch);
   return result;
 }
+
+#endif
 
 internal U64
 e_base_offset_from_eval(E_Eval eval)
@@ -389,7 +335,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, parse.expr);
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;

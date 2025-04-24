@@ -709,6 +709,7 @@ struct CTRL_State
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
   CTRL_EntityStore *ctrl_thread_entity_store;
+  E_Cache *ctrl_thread_eval_cache;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
   DMN_EventNode *last_dmn_event_node;
@@ -769,6 +770,8 @@ internal B32 ctrl_handle_match(CTRL_Handle a, CTRL_Handle b);
 internal void ctrl_handle_list_push(Arena *arena, CTRL_HandleList *list, CTRL_Handle *pair);
 internal CTRL_HandleList ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src);
 internal String8 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle);
+internal CTRL_Handle ctrl_handle_from_string(String8 string);
+internal E_Eval ctrl_eval_from_handle(CTRL_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions

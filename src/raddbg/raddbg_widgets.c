@@ -1983,7 +1983,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             RD_Cfg *pin = n->v;
             String8 pin_expr = rd_expr_from_cfg(pin);
-            E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
+            E_Eval eval = e_eval_from_string(pin_expr);
             String8 eval_string = {0};
             if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
             {
@@ -2327,7 +2327,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0)
   {
-    E_Eval eval = e_eval_from_string(scratch.arena, mouse_expr);
+    E_Eval eval = e_eval_from_string(mouse_expr);
     if(eval.msgs.max_kind == E_MsgKind_Null && (eval.irtree.mode != E_Mode_Null || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;

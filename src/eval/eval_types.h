@@ -21,141 +21,6 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Type Evaluation State
-
-//- rjf: constructed type cache types
-
-typedef struct E_ConsTypeParams E_ConsTypeParams;
-struct E_ConsTypeParams
-{
-  Arch arch;
-  E_TypeKind kind;
-  E_TypeFlags flags;
-  String8 name;
-  E_TypeKey direct_key;
-  U64 count;
-  U64 depth;
-  E_Member *members;
-  E_EnumVal *enum_vals;
-  E_Expr **args;
-  E_TypeIRExtFunctionType *irext;
-  E_TypeAccessFunctionType *access;
-  E_TypeExpandRule expand;
-};
-
-typedef struct E_ConsTypeNode E_ConsTypeNode;
-struct E_ConsTypeNode
-{
-  E_ConsTypeNode *key_next;
-  E_ConsTypeNode *content_next;
-  E_TypeKey key;
-  E_ConsTypeParams params;
-  U64 byte_size;
-};
-
-typedef struct E_ConsTypeSlot E_ConsTypeSlot;
-struct E_ConsTypeSlot
-{
-  E_ConsTypeNode *first;
-  E_ConsTypeNode *last;
-};
-
-//- rjf: unpacked type cache
-
-typedef struct E_TypeCacheNode E_TypeCacheNode;
-struct E_TypeCacheNode
-{
-  E_TypeCacheNode *next;
-  E_TypeKey key;
-  E_Type *type;
-};
-
-typedef struct E_TypeCacheSlot E_TypeCacheSlot;
-struct E_TypeCacheSlot
-{
-  E_TypeCacheNode *first;
-  E_TypeCacheNode *last;
-};
-
-//- rjf: member lookup cache types
-
-typedef struct E_MemberHashNode E_MemberHashNode;
-struct E_MemberHashNode
-{
-  E_MemberHashNode *next;
-  U64 member_idx;
-};
-
-typedef struct E_MemberHashSlot E_MemberHashSlot;
-struct E_MemberHashSlot
-{
-  E_MemberHashNode *first;
-  E_MemberHashNode *last;
-};
-
-typedef struct E_MemberFilterNode E_MemberFilterNode;
-struct E_MemberFilterNode
-{
-  E_MemberFilterNode *next;
-  String8 filter;
-  E_MemberArray members_filtered;
-};
-
-typedef struct E_MemberFilterSlot E_MemberFilterSlot;
-struct E_MemberFilterSlot
-{
-  E_MemberFilterNode *first;
-  E_MemberFilterNode *last;
-};
-
-typedef struct E_MemberCacheNode E_MemberCacheNode;
-struct E_MemberCacheNode
-{
-  E_MemberCacheNode *next;
-  E_TypeKey key;
-  E_MemberArray members;
-  U64 member_hash_slots_count;
-  E_MemberHashSlot *member_hash_slots;
-  U64 member_filter_slots_count;
-  E_MemberFilterSlot *member_filter_slots;
-};
-
-typedef struct E_MemberCacheSlot E_MemberCacheSlot;
-struct E_MemberCacheSlot
-{
-  E_MemberCacheNode *first;
-  E_MemberCacheNode *last;
-};
-
-//- rjf: bundle
-
-typedef struct E_TypeState E_TypeState;
-struct E_TypeState
-{
-  Arena *arena;
-  U64 arena_eval_start_pos;
-  
-  // rjf: JIT-constructed types tables
-  U64 cons_id_gen;
-  U64 cons_content_slots_count;
-  U64 cons_key_slots_count;
-  E_ConsTypeSlot *cons_content_slots;
-  E_ConsTypeSlot *cons_key_slots;
-  
-  // rjf: build-in constructed type keys
-  E_TypeKey file_type_key;
-  E_TypeKey folder_type_key;
-  
-  // rjf: member cache table
-  U64 member_cache_slots_count;
-  E_MemberCacheSlot *member_cache_slots;
-  
-  // rjf: unpacked type cache
-  U64 type_cache_slots_count;
-  E_TypeCacheSlot *type_cache_slots;
-};
-
-////////////////////////////////
 //~ rjf: Globals
 
 global read_only E_Member e_member_nil = {E_MemberKind_Null};
@@ -171,7 +36,6 @@ global read_only E_TypeExpandRule e_type_expand_rule__default =
   E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
   E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
 };
-thread_static E_TypeState *e_type_state = 0;
 
 ////////////////////////////////
 //~ rjf: Type Kind Enum Functions
@@ -191,11 +55,6 @@ internal B32 e_type_kind_is_pointer_or_ref(E_TypeKind kind);
 internal void e_member_list_push(Arena *arena, E_MemberList *list, E_Member *member);
 #define e_member_list_push_new(arena, list, ...) e_member_list_push((arena), (list), &(E_Member){.kind = E_MemberKind_DataField, __VA_ARGS__})
 internal E_MemberArray e_member_array_from_list(Arena *arena, E_MemberList *list);
-
-////////////////////////////////
-//~ rjf: Type Evaluation Phase Beginning Marker (Required For All Subsequent APIs)
-
-internal void e_type_eval_begin(void);
 
 ////////////////////////////////
 //~ rjf: Type Operation Functions

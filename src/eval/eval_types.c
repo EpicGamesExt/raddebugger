@@ -223,49 +223,6 @@ e_member_array_from_list(Arena *arena, E_MemberList *list)
 }
 
 ////////////////////////////////
-//~ rjf: Type Evaluation Phase Beginning Marker (Required For All Subsequent APIs)
-
-internal void
-e_type_eval_begin(void)
-{
-  if(e_type_state == 0)
-  {
-    Arena *arena = arena_alloc();
-    e_type_state = push_array(arena, E_TypeState, 1);
-    e_type_state->arena = arena;
-    e_type_state->arena_eval_start_pos = arena_pos(e_type_state->arena);
-  }
-  arena_pop_to(e_type_state->arena, e_type_state->arena_eval_start_pos);
-  e_type_state->cons_id_gen = 0;
-  e_type_state->cons_content_slots_count = 256;
-  e_type_state->cons_key_slots_count = 256;
-  e_type_state->cons_content_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_content_slots_count);
-  e_type_state->cons_key_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_key_slots_count);
-  e_type_state->member_cache_slots_count = 256;
-  e_type_state->member_cache_slots = push_array(e_type_state->arena, E_MemberCacheSlot, e_type_state->member_cache_slots_count);
-  e_type_state->type_cache_slots_count = 1024;
-  e_type_state->type_cache_slots = push_array(e_type_state->arena, E_TypeCacheSlot, e_type_state->type_cache_slots_count);
-  e_type_state->file_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
-                                                .name = str8_lit("file"),
-                                                .irext  = E_TYPE_IREXT_FUNCTION_NAME(file),
-                                                .access = E_TYPE_ACCESS_FUNCTION_NAME(file),
-                                                .expand =
-                                                {
-                                                  .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(file),
-                                                  .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(file),
-                                                });
-  e_type_state->folder_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
-                                                  .name = str8_lit("folder"),
-                                                  .expand =
-                                                  {
-                                                    .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(folder),
-                                                    .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(folder),
-                                                    .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(folder),
-                                                    .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(folder),
-                                                  });
-}
-
-////////////////////////////////
 //~ rjf: Type Operation Functions
 
 //- rjf: key constructors
@@ -385,8 +342,8 @@ internal E_TypeKey
 e_type_key_cons_(E_ConsTypeParams *params)
 {
   U64 content_hash = e_hash_from_cons_type_params(params);
-  U64 content_slot_idx = content_hash%e_type_state->cons_content_slots_count;
-  E_ConsTypeSlot *content_slot = &e_type_state->cons_content_slots[content_slot_idx];
+  U64 content_slot_idx = content_hash%e_cache->cons_content_slots_count;
+  E_ConsTypeSlot *content_slot = &e_cache->cons_content_slots[content_slot_idx];
   E_ConsTypeNode *node = 0;
   for(E_ConsTypeNode *n = content_slot->first; n != 0; n = n->content_next)
   {
@@ -401,17 +358,17 @@ e_type_key_cons_(E_ConsTypeParams *params)
   {
     E_TypeKey key = {E_TypeKeyKind_Cons};
     key.u32[0] = (U32)params->kind;
-    key.u32[1] = (U32)e_type_state->cons_id_gen;
-    e_type_state->cons_id_gen += 1;
+    key.u32[1] = (U32)e_cache->cons_id_gen;
+    e_cache->cons_id_gen += 1;
     U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
-    E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
-    E_ConsTypeNode *node = push_array(e_type_state->arena, E_ConsTypeNode, 1);
+    U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+    E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
+    E_ConsTypeNode *node = push_array(e_cache->arena, E_ConsTypeNode, 1);
     SLLQueuePush_N(content_slot->first, content_slot->last, node, content_next);
     SLLQueuePush_N(key_slot->first, key_slot->last, node, key_next);
     node->key = key;
     MemoryCopyStruct(&node->params, params);
-    node->params.name = push_str8_copy(e_type_state->arena, params->name);
+    node->params.name = push_str8_copy(e_cache->arena, params->name);
     if(node->params.expand.info != 0)
     {
       if(node->params.expand.range == 0)       {node->params.expand.range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(default);}
@@ -420,32 +377,32 @@ e_type_key_cons_(E_ConsTypeParams *params)
     }
     if(params->members != 0)
     {
-      node->params.members = push_array(e_type_state->arena, E_Member, params->count);
+      node->params.members = push_array(e_cache->arena, E_Member, params->count);
       MemoryCopy(node->params.members, params->members, sizeof(E_Member)*params->count);
       for(U64 idx = 0; idx < node->params.count; idx += 1)
       {
-        node->params.members[idx].name = push_str8_copy(e_type_state->arena, node->params.members[idx].name);
-        node->params.members[idx].inheritance_key_chain = e_type_key_list_copy(e_type_state->arena, &node->params.members[idx].inheritance_key_chain);
+        node->params.members[idx].name = push_str8_copy(e_cache->arena, node->params.members[idx].name);
+        node->params.members[idx].inheritance_key_chain = e_type_key_list_copy(e_cache->arena, &node->params.members[idx].inheritance_key_chain);
         U64 opl_off = (node->params.members[idx].off + e_type_byte_size_from_key(node->params.members[idx].type_key));
         node->byte_size = Max(node->byte_size, opl_off);
       }
     }
     else if(params->enum_vals != 0)
     {
-      node->params.enum_vals = push_array(e_type_state->arena, E_EnumVal, params->count);
+      node->params.enum_vals = push_array(e_cache->arena, E_EnumVal, params->count);
       MemoryCopy(node->params.enum_vals, params->enum_vals, sizeof(E_EnumVal)*params->count);
       for(U64 idx = 0; idx < node->params.count; idx += 1)
       {
-        node->params.enum_vals[idx].name = push_str8_copy(e_type_state->arena, node->params.enum_vals[idx].name);
+        node->params.enum_vals[idx].name = push_str8_copy(e_cache->arena, node->params.enum_vals[idx].name);
       }
       node->byte_size = e_type_byte_size_from_key(node->params.direct_key);
     }
     else if(params->args != 0)
     {
-      node->params.args = push_array(e_type_state->arena, E_Expr *, params->count);
+      node->params.args = push_array(e_cache->arena, E_Expr *, params->count);
       for EachIndex(idx, params->count)
       {
-        node->params.args[idx] = e_expr_copy(e_type_state->arena, params->args[idx]);
+        node->params.args[idx] = e_expr_copy(e_cache->arena, params->args[idx]);
       }
     }
     else switch(params->kind)
@@ -560,14 +517,14 @@ e_type_key_cons_base(Type *type)
 internal E_TypeKey
 e_type_key_file(void)
 {
-  E_TypeKey key = e_type_state->file_type_key;
+  E_TypeKey key = e_cache->file_type_key;
   return key;
 }
 
 internal E_TypeKey
 e_type_key_folder(void)
 {
-  E_TypeKey key = e_type_state->folder_type_key;
+  E_TypeKey key = e_cache->folder_type_key;
   return key;
 }
 
@@ -669,8 +626,8 @@ e_type_byte_size_from_key(E_TypeKey key)
     case E_TypeKeyKind_Cons:
     {
       U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-      U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
-      E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
+      U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+      E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
       for(E_ConsTypeNode *node = key_slot->first;
           node != 0;
           node = node->key_next)
@@ -715,8 +672,8 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       case E_TypeKeyKind_Cons:
       {
         U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-        U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
-        E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
+        U64 key_slot_idx = key_hash%e_cache->cons_key_slots_count;
+        E_ConsTypeSlot *key_slot = &e_cache->cons_key_slots[key_slot_idx];
         for(E_ConsTypeNode *node = key_slot->first;
             node != 0;
             node = node->key_next)
@@ -1996,9 +1953,9 @@ e_type_from_key__cached(E_TypeKey key)
   E_Type *type = &e_type_nil;
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 slot_idx = hash%e_type_state->type_cache_slots_count;
+    U64 slot_idx = hash%e_cache->type_cache_slots_count;
     E_TypeCacheNode *node = 0;
-    for(E_TypeCacheNode *n = e_type_state->type_cache_slots[slot_idx].first; n != 0; n = n->next)
+    for(E_TypeCacheNode *n = e_cache->type_cache_slots[slot_idx].first; n != 0; n = n->next)
     {
       if(e_type_key_match(key, n->key))
       {
@@ -2008,10 +1965,10 @@ e_type_from_key__cached(E_TypeKey key)
     }
     if(node == 0)
     {
-      node = push_array(e_type_state->arena, E_TypeCacheNode, 1);
+      node = push_array(e_cache->arena, E_TypeCacheNode, 1);
       node->key = key;
-      node->type = e_type_from_key(e_type_state->arena, key);
-      SLLQueuePush(e_type_state->type_cache_slots[slot_idx].first, e_type_state->type_cache_slots[slot_idx].last, node);
+      node->type = e_type_from_key(e_cache->arena, key);
+      SLLQueuePush(e_cache->type_cache_slots[slot_idx].first, e_cache->type_cache_slots[slot_idx].last, node);
     }
     type = node->type;
   }
@@ -2022,8 +1979,8 @@ internal E_MemberCacheNode *
 e_member_cache_node_from_type_key(E_TypeKey key)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&key));
-  U64 slot_idx = hash%e_type_state->member_cache_slots_count;
-  E_MemberCacheSlot *slot = &e_type_state->member_cache_slots[slot_idx];
+  U64 slot_idx = hash%e_cache->member_cache_slots_count;
+  E_MemberCacheSlot *slot = &e_cache->member_cache_slots[slot_idx];
   E_MemberCacheNode *node = 0;
   for(E_MemberCacheNode *n = slot->first; n != 0; n = n->next)
   {
@@ -2035,19 +1992,19 @@ e_member_cache_node_from_type_key(E_TypeKey key)
   }
   if(node == 0)
   {
-    node = push_array(e_type_state->arena, E_MemberCacheNode, 1);
+    node = push_array(e_cache->arena, E_MemberCacheNode, 1);
     SLLQueuePush(slot->first, slot->last, node);
     node->key = key;
-    node->members = e_type_data_members_from_key(e_type_state->arena, key);
+    node->members = e_type_data_members_from_key(e_cache->arena, key);
     node->member_hash_slots_count = node->members.count;
-    node->member_hash_slots = push_array(e_type_state->arena, E_MemberHashSlot, node->member_hash_slots_count);
+    node->member_hash_slots = push_array(e_cache->arena, E_MemberHashSlot, node->member_hash_slots_count);
     node->member_filter_slots_count = 16;
-    node->member_filter_slots = push_array(e_type_state->arena, E_MemberFilterSlot, node->member_filter_slots_count);
+    node->member_filter_slots = push_array(e_cache->arena, E_MemberFilterSlot, node->member_filter_slots_count);
     for EachIndex(idx, node->members.count)
     {
       U64 hash = e_hash_from_string(5381, node->members.v[idx].name);
       U64 slot_idx = hash%node->member_hash_slots_count;
-      E_MemberHashNode *n = push_array(e_type_state->arena, E_MemberHashNode, 1);
+      E_MemberHashNode *n = push_array(e_cache->arena, E_MemberHashNode, 1);
       SLLQueuePush(node->member_hash_slots[slot_idx].first, node->member_hash_slots[slot_idx].last, n);
       n->member_idx = idx;
     }
@@ -2083,8 +2040,8 @@ e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter)
       if(filter_node == 0)
       {
         Temp scratch = scratch_begin(0, 0);
-        filter_node = push_array(e_type_state->arena, E_MemberFilterNode, 1);
-        filter_node->filter = push_str8_copy(e_type_state->arena, filter);
+        filter_node = push_array(e_cache->arena, E_MemberFilterNode, 1);
+        filter_node->filter = push_str8_copy(e_cache->arena, filter);
         E_MemberList member_list__filtered = {0};
         for EachIndex(idx, node->members.count)
         {
@@ -2095,7 +2052,7 @@ e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter)
             e_member_list_push(scratch.arena, &member_list__filtered, member);
           }
         }
-        filter_node->members_filtered = e_member_array_from_list(e_type_state->arena, &member_list__filtered);
+        filter_node->members_filtered = e_member_array_from_list(e_cache->arena, &member_list__filtered);
         scratch_end(scratch);
       }
       members = filter_node->members_filtered;
@@ -2300,6 +2257,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
       irtree_stripped.type_key = type->direct_type_key;
       irtree_stripped.user_data = stripped_type->irext ? stripped_type->irext(scratch.arena, expr, &irtree_stripped).user_data : 0;
       E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(irtree_stripped.type_key);
+      // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
       E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, expr, &irtree_stripped, filter);
       if(expand_info.expr_count < 4096)
       {
@@ -2395,14 +2353,9 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
   U64 count = 1;
   if(type->args != 0 && type->count > 0)
   {
-    E_Expr *count_expr = type->args[0];
-    E_IRTreeAndType *prev_overridden_irtree = e_ir_state->overridden_irtree;
-    e_ir_state->overridden_irtree = irtree;
-    {
-      E_Value count_value = e_value_from_expr(count_expr);
-      count = count_value.u64;
-    }
-    e_ir_state->overridden_irtree = prev_overridden_irtree;
+    E_Key count_key = e_key_from_expr(type->args[0]);
+    E_Value count_value = e_value_from_key(count_key);
+    count = count_value.u64;
   }
   E_TypeExpandInfo info = {0, count};
   return info;
@@ -2550,7 +2503,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
     default:
     case E_ExprKind_MemberAccess:
     {
-      result = E_TYPE_ACCESS_FUNCTION_NAME(default)(arena, expr, lhs_irtree);
+      result = E_TYPE_ACCESS_FUNCTION_NAME(default)(arena, overridden, expr, lhs_irtree);
     }break;
     case E_ExprKind_ArrayIndex:
     {

@@ -7,6 +7,7 @@
 ////////////////////////////////
 //~ rjf: Bundled Evaluation Functions
 
+#if 0
 internal E_Eval e_eval_from_expr(Arena *arena, E_Expr *expr);
 internal E_Eval e_eval_from_string(Arena *arena, String8 string);
 internal E_Eval e_eval_from_stringf(Arena *arena, char *fmt, ...);
@@ -18,6 +19,7 @@ internal E_Value e_value_from_expr(E_Expr *expr);
 internal E_Value e_value_from_eval(E_Eval eval);
 internal E_Eval e_eval_wrap(Arena *arena, E_Eval eval, String8 string);
 internal E_Eval e_eval_wrapf(Arena *arena, E_Eval eval, char *fmt, ...);;
+#endif
 
 internal U64 e_base_offset_from_eval(E_Eval eval);
 internal Rng1U64 e_range_from_eval(E_Eval eval);
