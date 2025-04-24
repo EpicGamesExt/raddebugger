@@ -139,6 +139,7 @@ RD_CmdKind_CloseTab,
 RD_CmdKind_MoveTab,
 RD_CmdKind_TabBarTop,
 RD_CmdKind_TabBarBottom,
+RD_CmdKind_TabSettings,
 RD_CmdKind_SetCurrentPath,
 RD_CmdKind_Open,
 RD_CmdKind_Switch,
@@ -261,6 +262,10 @@ RD_CmdKind_OpenProcesses,
 RD_CmdKind_OpenMachines,
 RD_CmdKind_OpenModules,
 RD_CmdKind_OpenFilePathMaps,
+RD_CmdKind_OpenAutoViewRules,
+RD_CmdKind_OpenOutput,
+RD_CmdKind_OpenDisasm,
+RD_CmdKind_OpenMemory,
 RD_CmdKind_COUNT,
 RD_CmdKind_FirstTabFastPathCmd = RD_CmdKind_OpenWatch,
 } RD_CmdKind;
@@ -610,6 +615,7 @@ X(processes)\
 X(machines)\
 X(modules)\
 X(file_path_maps)\
+X(auto_view_rules)\
 Y(output, text, "query:output")\
 Y(disasm, disasm, "")\
 Y(memory, memory, "")\
@@ -659,9 +665,9 @@ Z(getting_started)\
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern String8 rd_tab_fast_path_view_name_table[16];
-extern String8 rd_tab_fast_path_query_name_table[16];
-extern RD_VocabInfo rd_vocab_info_table[310];
+extern String8 rd_tab_fast_path_view_name_table[20];
+extern String8 rd_tab_fast_path_query_name_table[20];
+extern RD_VocabInfo rd_vocab_info_table[315];
 extern RD_NameSchemaInfo rd_name_schema_info_table[21];
 extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];

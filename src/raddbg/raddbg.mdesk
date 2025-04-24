@@ -33,14 +33,15 @@ RD_WatchTabFastPathTable:
   {Machines        "Machines"          machines          Machine               }
   {Modules         "Modules"           modules           Module                }
   {FilePathMaps    "File Path Map"     file_path_maps    FileOutline           }
+  {AutoViewRules   "Auto View Rules"   auto_view_rules   Binoculars            }
 }
 
 @table(name   display_name    name_lower     view     query     icon)
 RD_ViewTabFastPathTable:
 {
-  {Output          "Output"            output      "text"      "query:output"    List                  }
-  {Disasm          "Disassembly"       disasm      ""          ""                Glasses               }
-  {Memory          "Memory"            memory      ""          ""                Grid                  }
+  {Output          "Output"            output      text            "query:output"    List                  }
+  {Disasm          "Disassembly"       disasm      disasm          ""                Glasses               }
+  {Memory          "Memory"            memory      memory          ""                Grid                  }
 }
 
 @table(name   display_name    name_lower    icon)
@@ -53,7 +54,7 @@ RD_FixedTabTable:
 {
   `#define RD_FixedTabXList \\`;
   @expand(RD_WatchTabFastPathTable a) `X($(a.name_lower))\\`;
-  @expand(RD_ViewTabFastPathTable a) `Y($(a.name_lower), $(a.view == "" -> a.name_lower)$(a.view != "" -> a.view), "$(a.query)")\\`;
+  @expand(RD_ViewTabFastPathTable a) `Y($(a.name_lower), $(a.view), "$(a.query)")\\`;
   @expand(RD_FixedTabTable a) `Z($(a.name_lower))\\`;
   ``;
 }
@@ -61,11 +62,13 @@ RD_FixedTabTable:
 @data(String8) rd_tab_fast_path_view_name_table:
 {
   @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("watch")`,
+  @expand(RD_ViewTabFastPathTable a) `str8_lit_comp("$(a.view)")`,
 }
 
 @data(String8) rd_tab_fast_path_query_name_table:
 {
   @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("query:$(a.name_lower)")`,
+  @expand(RD_ViewTabFastPathTable a) `str8_lit_comp("$(a.query)")`,
 }
 
 ////////////////////////////////
@@ -198,6 +201,7 @@ RD_VocabTable:
   @expand(D_CmdTable a)                 `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
   @expand(RD_CmdTable a)                `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
   @expand(RD_WatchTabFastPathTable a)   `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.icon)}`;
+  @expand(RD_ViewTabFastPathTable a)    `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.icon)}`;
 }
 
 ////////////////////////////////
@@ -333,6 +337,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @description("An expression to describe the base address or offset of the disassembly.")
+        'expression': code_string,
       'arch':              arch,
       'syntax':            dasm_syntax,
       'size':              code_string,
@@ -354,6 +360,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @description("An expression to describe the base address or offset of the memory view.")
+        'expression': code_string,
       @description("The number of bytes of the viewed memory range.")
         'size': code_string,
       @default(16) @description("The number of columns to build before building new rows.")
@@ -368,6 +376,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @display_name("Base Pointer") @description("An expression to describe the base address or offset of the bitmap data.")
+        'expression': code_string,
       @order(0) 'w': u64,
       @order(1) 'h': u64,
       @display_name("Bitmap Format") @description("The pixel format that the bitmap data should be interpreted as being within.")
@@ -679,6 +689,7 @@ RD_CmdTable:    //               |        |              |               |      
   {MoveTab                        0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_tab"                    "Move Tab"                                    "Moves a tab to a new panel."                                                                                      ""                               ""                                                               }
   {TabBarTop                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               "$tab,"                                                          }
   {TabBarBottom                   1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           DownArrow             "tab_bar_bottom"              "Anchor Tab Bar To Bottom"                    "Anchors a panel's tab bar to the bottom of the panel."                                                            ""                               "$tab,"                                                          }
+  {TabSettings                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "tab_settings"                "Tab Settings"                                "Opens settings for a tab."                                                                                        ""                               ""                                                               }
   
   //- rjf: files
   {SetCurrentPath                 0        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "set_current_path"            "Set Current Path"                            "Sets the debugger's current path, which is used as a starting point when browsing for files."                     ""                               ""                                                               }
@@ -841,6 +852,7 @@ RD_CmdTable:    //               |        |              |               |      
   @expand(D_CmdTable a) `$(a.name)`,
   @expand(RD_CmdTable, a) `$(a.name)`,
   @expand(RD_WatchTabFastPathTable, a) `Open$(a.name)`,
+  @expand(RD_ViewTabFastPathTable, a) `Open$(a.name)`,
   COUNT,
   
   `FirstTabFastPathCmd = RD_CmdKind_OpenWatch`,
@@ -873,6 +885,8 @@ RD_CmdTable:    //               |        |              |               |      
   @expand(RD_CmdTable, a)
     ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_WatchTabFastPathTable, a)
+    ```{ str8_lit_comp("$(a.name_lower)"), str8_lit_comp("Opens a $(a.display_name) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs}```;
+  @expand(RD_ViewTabFastPathTable, a)
     ```{ str8_lit_comp("$(a.name_lower)"), str8_lit_comp("Opens a $(a.display_name) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs}```;
 }
 

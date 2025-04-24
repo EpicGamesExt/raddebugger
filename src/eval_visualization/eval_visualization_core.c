@@ -1740,9 +1740,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       }break;
       
       //////////////////////////
-      //- rjf: modifiers
+      //- rjf: modifiers / no-ops
       //
       case E_TypeKind_Modifier:
+      case E_TypeKind_MetaDescription:
       {
         need_pop = 1;
         need_new_task = 1;
@@ -2171,7 +2172,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       new_t = push_array(arena, EV_StringIterTask, 1);
     }
     MemoryCopyStruct(new_t, &new_task);
-    new_t->depth = top_task_depth+1;
+    new_t->depth = top_task_depth + 1*(!need_pop);
     SLLStackPush(it->top_task, new_t);
     new_t->idx = 0;
   }

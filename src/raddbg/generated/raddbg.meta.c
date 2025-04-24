@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 rd_tab_fast_path_view_name_table[16] =
+String8 rd_tab_fast_path_view_name_table[20] =
 {
 str8_lit_comp("watch"),
 str8_lit_comp("watch"),
@@ -22,9 +22,13 @@ str8_lit_comp("watch"),
 str8_lit_comp("watch"),
 str8_lit_comp("watch"),
 str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("text"),
+str8_lit_comp("disasm"),
+str8_lit_comp("memory"),
 };
 
-String8 rd_tab_fast_path_query_name_table[16] =
+String8 rd_tab_fast_path_query_name_table[20] =
 {
 str8_lit_comp("query:watches"),
 str8_lit_comp("query:locals"),
@@ -42,9 +46,13 @@ str8_lit_comp("query:processes"),
 str8_lit_comp("query:machines"),
 str8_lit_comp("query:modules"),
 str8_lit_comp("query:file_path_maps"),
+str8_lit_comp("query:auto_view_rules"),
+str8_lit_comp("query:output"),
+str8_lit_comp(""),
+str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[310] =
+RD_VocabInfo rd_vocab_info_table[315] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -234,6 +242,7 @@ RD_VocabInfo rd_vocab_info_table[310] =
 {str8_lit_comp("move_tab"), str8_lit_comp(""), str8_lit_comp("Move Tab"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("tab_bar_top"), str8_lit_comp(""), str8_lit_comp("Anchor Tab Bar To Top"), str8_lit_comp(""), RD_IconKind_UpArrow},
 {str8_lit_comp("tab_bar_bottom"), str8_lit_comp(""), str8_lit_comp("Anchor Tab Bar To Bottom"), str8_lit_comp(""), RD_IconKind_DownArrow},
+{str8_lit_comp("tab_settings"), str8_lit_comp(""), str8_lit_comp("Tab Settings"), str8_lit_comp(""), RD_IconKind_Gear},
 {str8_lit_comp("set_current_path"), str8_lit_comp(""), str8_lit_comp("Set Current Path"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("open"), str8_lit_comp(""), str8_lit_comp("Open"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("switch"), str8_lit_comp(""), str8_lit_comp("Switch"), str8_lit_comp(""), RD_IconKind_FileOutline},
@@ -356,6 +365,10 @@ RD_VocabInfo rd_vocab_info_table[310] =
 {str8_lit_comp("machines"), str8_lit_comp(""), str8_lit_comp("Machines"), str8_lit_comp(""), RD_IconKind_Machine},
 {str8_lit_comp("modules"), str8_lit_comp(""), str8_lit_comp("Modules"), str8_lit_comp(""), RD_IconKind_Module},
 {str8_lit_comp("file_path_maps"), str8_lit_comp(""), str8_lit_comp("File Path Map"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("auto_view_rules"), str8_lit_comp(""), str8_lit_comp("Auto View Rules"), str8_lit_comp(""), RD_IconKind_Binoculars},
+{str8_lit_comp("output"), str8_lit_comp(""), str8_lit_comp("Output"), str8_lit_comp(""), RD_IconKind_List},
+{str8_lit_comp("disasm"), str8_lit_comp(""), str8_lit_comp("Disassembly"), str8_lit_comp(""), RD_IconKind_Glasses},
+{str8_lit_comp("memory"), str8_lit_comp(""), str8_lit_comp("Memory"), str8_lit_comp(""), RD_IconKind_Grid},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[21] =
@@ -366,9 +379,9 @@ RD_NameSchemaInfo rd_name_schema_info_table[21] =
 {str8_lit_comp("tab"), str8_lit_comp("x:\n{\n  @default(11) @display_name('Tab Font Size') @description(\"Controls the tab's font size.\")\n  'font_size': @range[6, 72] u64,\n}\n")},
 {str8_lit_comp("watch"), str8_lit_comp("@inherit(tab) x:\n{\n  @default(3.f) @display_name('Tab Row Height') @description(\"Controls the tab's row height, in multiples of the font size.\")\n  'row_height': @range[1.75f, 5.f] f32,\n}\n")},
 {str8_lit_comp("text"), str8_lit_comp("@inherit(tab) x:\n{\n  @description(\"The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.\")\n  'lang': lang,\n  @default(1) @description(\"Controls whether or not line numbers are shown.\")\n  'show_line_numbers':bool,\n  @default(0) @display_name('Transient') @description(\"Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.\")\n  'auto': bool,\n}\n")},
-{str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) @description(\"Controls whether or not addresses are shown in the disassembly text.\")\n  'show_addresses':    bool,\n  @default(0) @description(\"Controls whether or not code bytes are shown in the disassembly text.\")\n  'show_code_bytes':   bool,\n  @default(1) @description(\"Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.\")\n  'show_source_lines': bool,\n  @default(1) @description(\"Controls whether or not disassembly text is decorated with symbol names.\")\n  'show_symbol_names': bool,\n  @default(1) @description(\"Controls whether or not line numbers are shown.\")\n  'show_line_numbers': bool,\n}\n")},
-{str8_lit_comp("memory"), str8_lit_comp("@inherit(tab) x:\n{\n  @description(\"The number of bytes of the viewed memory range.\")\n  'size': code_string,\n  @default(16) @description(\"The number of columns to build before building new rows.\")\n  'num_columns': @range[1, 64] u64,\n  @default(1) @description(\"The number of bytes that each cell should represent.\")\n  'bytes_per_cell': @range[1, 8] u64,\n}\n")},
-{str8_lit_comp("bitmap"), str8_lit_comp("@inherit(tab) x:\n{\n  @order(0) 'w': u64,\n  @order(1) 'h': u64,\n  @display_name(\"Bitmap Format\") @description(\"The pixel format that the bitmap data should be interpreted as being within.\")\n  'fmt': tex2dformat,\n}\n")},
+{str8_lit_comp("disasm"), str8_lit_comp("@inherit(tab) x:\n{\n  @description(\"An expression to describe the base address or offset of the disassembly.\")\n  'expression': code_string,\n  'arch':              arch,\n  'syntax':            dasm_syntax,\n  'size':              code_string,\n  @default(1) @description(\"Controls whether or not addresses are shown in the disassembly text.\")\n  'show_addresses':    bool,\n  @default(0) @description(\"Controls whether or not code bytes are shown in the disassembly text.\")\n  'show_code_bytes':   bool,\n  @default(1) @description(\"Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.\")\n  'show_source_lines': bool,\n  @default(1) @description(\"Controls whether or not disassembly text is decorated with symbol names.\")\n  'show_symbol_names': bool,\n  @default(1) @description(\"Controls whether or not line numbers are shown.\")\n  'show_line_numbers': bool,\n}\n")},
+{str8_lit_comp("memory"), str8_lit_comp("@inherit(tab) x:\n{\n  @description(\"An expression to describe the base address or offset of the memory view.\")\n  'expression': code_string,\n  @description(\"The number of bytes of the viewed memory range.\")\n  'size': code_string,\n  @default(16) @description(\"The number of columns to build before building new rows.\")\n  'num_columns': @range[1, 64] u64,\n  @default(1) @description(\"The number of bytes that each cell should represent.\")\n  'bytes_per_cell': @range[1, 8] u64,\n}\n")},
+{str8_lit_comp("bitmap"), str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Base Pointer\") @description(\"An expression to describe the base address or offset of the bitmap data.\")\n  'expression': code_string,\n  @order(0) 'w': u64,\n  @order(1) 'h': u64,\n  @display_name(\"Bitmap Format\") @description(\"The pixel format that the bitmap data should be interpreted as being within.\")\n  'fmt': tex2dformat,\n}\n")},
 {str8_lit_comp("geo3d"), str8_lit_comp("@inherit(tab) x:\n{\n  'count': code_string,\n  'vtx': code_string,\n  'vtx_size': code_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
@@ -429,7 +442,7 @@ Rng1U64 rd_reg_slot_range_table[42] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[206] =
+RD_CmdKindInfo rd_cmd_kind_info_table[211] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -515,6 +528,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[206] =
 { str8_lit_comp("move_tab"), str8_lit_comp("Moves a tab to a new panel."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("tab_bar_top"), str8_lit_comp("Anchors a panel's tab bar to the top of the panel."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("tab_bar_bottom"), str8_lit_comp("Anchors a panel's tab bar to the bottom of the panel."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("tab_settings"), str8_lit_comp("Opens settings for a tab."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("set_current_path"), str8_lit_comp("Sets the debugger's current path, which is used as a starting point when browsing for files."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("open"), str8_lit_comp("Opens a file."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("switch"), str8_lit_comp("Switches to a recent file."), str8_lit_comp("code,source,file"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:recent_files"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -637,6 +651,10 @@ RD_CmdKindInfo rd_cmd_kind_info_table[206] =
 { str8_lit_comp("machines"), str8_lit_comp("Opens a Machines tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 { str8_lit_comp("modules"), str8_lit_comp("Opens a Modules tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 { str8_lit_comp("file_path_maps"), str8_lit_comp("Opens a File Path Map tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
+{ str8_lit_comp("auto_view_rules"), str8_lit_comp("Opens a Auto View Rules tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
+{ str8_lit_comp("output"), str8_lit_comp("Opens a Output tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
+{ str8_lit_comp("disasm"), str8_lit_comp("Opens a Disassembly tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
+{ str8_lit_comp("memory"), str8_lit_comp("Opens a Memory tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 };
 
 struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =
