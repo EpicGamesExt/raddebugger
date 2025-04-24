@@ -887,6 +887,7 @@ struct E_CacheBundle
   E_IRTreeAndType irtree;
   String8 bytecode;
   E_Interpretation interpretation;
+  E_MsgList msgs;
 };
 
 typedef struct E_CacheNode E_CacheNode;
@@ -1026,6 +1027,7 @@ internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 internal void e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, String8 text);
 internal void e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, char *fmt, ...);
 internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
+internal E_MsgList e_msg_list_copy(Arena *arena, E_MsgList *src);
 
 ////////////////////////////////
 //~ rjf: Space Functions

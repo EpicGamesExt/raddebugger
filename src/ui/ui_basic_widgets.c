@@ -143,24 +143,24 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   TxtPt mark = draw_data->mark;
   F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x;
   F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x;
-  F32 cursor_thickness = ClampBot(4.f, font_size/6.f);
+  F32 cursor_thickness = ClampBot(1.f, floor_f32(font_size/10.f));
   Rng2F32 cursor_rect =
   {
-    text_position.x + cursor_pixel_off - cursor_thickness*0.50f,
+    text_position.x + cursor_pixel_off,
     box->parent->parent->rect.y0+ui_top_font_size()*0.5f,
-    text_position.x + cursor_pixel_off + cursor_thickness*0.50f,
+    text_position.x + cursor_pixel_off + cursor_thickness,
     box->parent->parent->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 mark_rect =
   {
-    text_position.x + mark_pixel_off - cursor_thickness*0.50f,
+    text_position.x + mark_pixel_off - cursor_thickness,
     box->parent->parent->rect.y0+ui_top_font_size()*0.5f,
-    text_position.x + mark_pixel_off + cursor_thickness*0.50f,
+    text_position.x + mark_pixel_off + cursor_thickness,
     box->parent->parent->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
   dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
-  dr_rect(cursor_rect, cursor_color, 0.f, 0, 1.f);
+  dr_rect(cursor_rect, cursor_color, 0.f, 0, 0.f);
 }
 
 internal UI_Signal

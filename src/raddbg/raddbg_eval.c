@@ -683,9 +683,9 @@ E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
     {
       String8 rhs_name = expr->first->next->string;
       RD_CfgID id = 0;
-      if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0) &&
-         try_u64_from_str8_c_rules(str8_skip(rhs_name, 1), &id))
+      if(str8_match(str8_prefix(rhs_name, 1), str8_lit("$"), 0))
       {
+        id = u64_from_str8(str8_skip(rhs_name, 1), 16);
         cfg = rd_cfg_from_id(id);
       }
     }break;
@@ -777,7 +777,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
-      evals_out[dst_idx] = e_eval_wrapf(eval, "$.$%I64d", cfg->id);
+      evals_out[dst_idx] = e_eval_from_stringf("$%I64x", cfg->id);
     }
   }
 }

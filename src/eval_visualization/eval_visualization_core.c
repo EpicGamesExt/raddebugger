@@ -542,12 +542,13 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       Task *next;
       EV_Block *parent_block;
       E_Eval eval;
+      E_Expr *next_expr;
       U64 child_id;
       U64 split_relative_idx;
       B32 default_expanded;
       B32 force_expanded;
     };
-    Task start_task = {0, tree.root, tree.root->eval, 1, 0};
+    Task start_task = {0, tree.root, tree.root->eval, tree.root->eval.expr->next, 1, 0};
     Task *first_task = &start_task;
     Task *last_task = first_task;
     
@@ -708,6 +709,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
           SLLQueuePush(first_task, last_task, task);
           task->parent_block       = expansion_block;
           task->eval               = child_eval;
+          task->next_expr          = &e_expr_nil;
           task->child_id           = child_key.child_id;
           task->split_relative_idx = split_relative_idx;
           task->default_expanded   = viz_expand_info.rows_default_expanded;
@@ -715,13 +717,14 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       }
       
       // rjf: if this expr has a sibling, push another task to continue the chain
-      if(t->eval.expr->next != &e_expr_nil)
+      if(t->next_expr != &e_expr_nil)
       {
         Task *task = push_array(scratch.arena, Task, 1);
         task->next = t->next;
         t->next = task;
         task->parent_block       = t->parent_block;
-        task->eval               = e_eval_from_expr(t->eval.expr->next);
+        task->eval               = e_eval_from_expr(t->next_expr);
+        task->next_expr          = t->next_expr->next;
         task->child_id           = t->child_id + 1;
         task->split_relative_idx = 0;
         task->default_expanded   = t->default_expanded;
@@ -2048,8 +2051,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               // rjf: single-length pointers -> just gen new task for deref'd expr
               if(ptr_data->type->count == 1)
               {
-                E_Expr *deref_expr = e_expr_irext_deref(arena, eval.expr, &eval.irtree);
-                E_Eval deref_eval = e_eval_from_expr(deref_expr);
+                E_Eval deref_eval = e_eval_wrapf(eval, "*$");
                 need_new_task = 1;
                 need_pop = 0;
                 new_task.params = *params;
@@ -2121,9 +2123,9 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           //- rjf: middle step -> generate new task for next thing in expansion
           else
           {
-            E_Eval next_eval = {0};
+            E_Eval next_eval = e_eval_nil;
             expand_data->expand_rule->range(arena, expand_data->expand_info.user_data, eval, params->filter, r1u64(task_idx-1, task_idx), &next_eval);
-            if(next_eval.expr != 0 && next_eval.expr != &e_expr_nil)
+            if(next_eval.expr != &e_expr_nil)
             {
               need_new_task = 1;
               need_pop = 0;

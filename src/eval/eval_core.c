@@ -160,6 +160,17 @@ e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push)
   MemoryZeroStruct(to_push);
 }
 
+internal E_MsgList
+e_msg_list_copy(Arena *arena, E_MsgList *src)
+{
+  E_MsgList dst = {0};
+  for(E_Msg *msg = src->first; msg != 0; msg = msg->next)
+  {
+    e_msg(arena, &dst, msg->kind, msg->location, msg->text);
+  }
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: Space Functions
 
@@ -796,6 +807,8 @@ e_parse_from_bundle(E_CacheBundle *bundle)
   {
     bundle->flags |= E_CacheBundleFlag_Parse;
     bundle->parse = e_push_parse_from_string(e_cache->arena, bundle->string);
+    E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->parse.msgs);
+    e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }
   E_Parse parse = bundle->parse;
   return parse;
@@ -810,6 +823,8 @@ e_irtree_from_bundle(E_CacheBundle *bundle)
     E_IRTreeAndType overridden = e_irtree_from_key(bundle->parent_key);
     E_Parse parse = e_parse_from_bundle(bundle);
     bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &overridden, 0, 0, parse.expr);
+    E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->irtree.msgs);
+    e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }
   E_IRTreeAndType result = bundle->irtree;
   return result;
@@ -839,6 +854,10 @@ e_interpretation_from_bundle(E_CacheBundle *bundle)
     bundle->flags |= E_CacheBundleFlag_Interpret;
     String8 bytecode = e_bytecode_from_bundle(bundle);
     E_Interpretation interpret = e_interpret(bytecode);
+    if(E_InterpretationCode_Good < interpret.code && interpret.code < E_InterpretationCode_COUNT)
+    {
+      e_msg(e_cache->arena, &bundle->msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[interpret.code]);
+    }
     bundle->interpretation = interpret;
   }
   E_Interpretation interpret = bundle->interpretation;
@@ -857,6 +876,7 @@ e_eval_from_bundle(E_CacheBundle *bundle)
     .expr      = e_parse_from_bundle(bundle).expr,
     .irtree    = e_irtree_from_bundle(bundle),
     .bytecode  = e_bytecode_from_bundle(bundle),
+    .msgs      = bundle->msgs,
   };
   E_Interpretation interpretation = e_interpretation_from_bundle(bundle);
   eval.code = interpretation.code;

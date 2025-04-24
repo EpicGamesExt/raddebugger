@@ -160,6 +160,7 @@ internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels
 
+internal DR_FStrList rd_fstrs_from_rich_string(Arena *arena, String8 string);
 internal UI_Signal rd_label(String8 string);
 internal UI_Signal rd_error_label(String8 string);
 internal B32 rd_help_label(String8 string);

@@ -2595,12 +2595,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           S64 column = cursor->column;
           Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
           F32 cursor_off_pixels = advance.x;
-          F32 cursor_thickness = ClampBot(4.f, line_box->font_size/6.f);
+          F32 cursor_thickness = ClampBot(1.f, floor_f32(line_box->font_size/10.f));
           Rng2F32 cursor_rect =
           {
-            ui_box_text_position(line_box).x+cursor_off_pixels-cursor_thickness/2.f,
+            ui_box_text_position(line_box).x+cursor_off_pixels,
             line_box->rect.y0-params->font_size*0.125f,
-            ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness/2.f,
+            ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness,
             line_box->rect.y1+params->font_size*0.125f,
           };
           Vec4F32 cursor_color = ui_color_from_name(str8_lit("cursor"));
@@ -2608,7 +2608,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             cursor_color.w *= 0.5f;
           }
-          dr_rect(cursor_rect, cursor_color, 1.f, 0, 1.f);
+          dr_rect(cursor_rect, cursor_color, 1.f, 0, 0.f);
         }
         
         // rjf: extra rendering for lines with line-info that match the hovered
@@ -2849,10 +2849,10 @@ rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels
 
-internal UI_Signal
-rd_label(String8 string)
+internal DR_FStrList
+rd_fstrs_from_rich_string(Arena *arena, String8 string)
 {
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(&arena, 1);
   typedef U32 StringPartFlags;
   enum
   {
@@ -2907,8 +2907,17 @@ rd_label(String8 string)
         fstr.params.color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
       }
     }
-    dr_fstrs_push(scratch.arena, &fstrs, &fstr);
+    dr_fstrs_push(arena, &fstrs, &fstr);
   }
+  scratch_end(scratch);
+  return fstrs;
+}
+
+internal UI_Signal
+rd_label(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DR_FStrList fstrs = rd_fstrs_from_rich_string(scratch.arena, string);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
   ui_box_equip_display_fstrs(box, &fstrs);
   UI_Signal sig = ui_signal_from_box(box);

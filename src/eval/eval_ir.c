@@ -493,14 +493,13 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
       E_IRTreeAndType r = e_push_irtree_and_type_from_expr(arena, overridden, 0, 0, exprr);
+      e_msg_list_concat_in_place(&result.msgs, &r.msgs);
       E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKey r_restype = e_type_key_unwrap(r.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
       E_TypeKind r_restype_kind = e_type_kind_from_key(r_restype);
       E_TypeKey direct_type = e_type_key_unwrap(l_restype, E_TypeUnwrapFlag_All);
       U64 direct_type_size = e_type_byte_size_from_key(direct_type);
-      e_msg_list_concat_in_place(&result.msgs, &l.msgs);
-      e_msg_list_concat_in_place(&result.msgs, &r.msgs);
       
       // rjf: bad conditions? -> error if applicable, exit
       if(r.root->op == 0)
@@ -586,7 +585,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
 //- rjf: top-level irtree/type extraction
 
 internal E_IRTreeAndType
-e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr)
+e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -603,7 +602,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
     E_Expr *expr;
     E_IRTreeAndType *prev;
   };
-  Task start_task = {0, root_expr, overridden};
+  Task start_task = {0, root_expr, root_overridden};
   Task *first_task = &start_task;
   Task *last_task = first_task;
   for(Task *t = first_task; t != 0; t = t->next)
@@ -614,9 +613,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
     e_expr_poison(expr);
     
     //- rjf: select the task's previous ir-tree-and-type as the overridden tree
+    E_IRTreeAndType *overridden = 0;
     if(t->prev != 0)
     {
-      overridden = t->prev;
+      overridden = push_array(arena, E_IRTreeAndType, 1);
+      MemoryCopyStruct(overridden, t->prev);
     }
     
     //- rjf: do expr -> irtree generation for this expression
@@ -636,6 +637,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
         E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, lhs);
+        e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         
         // rjf: try all IR trees in chain
         for(E_IRTreeAndType *lhs_irtree_try = &lhs_irtree; lhs_irtree_try != 0; lhs_irtree_try = lhs_irtree_try->prev)
@@ -692,11 +694,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All);
         U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
-        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: bad conditions? -> error if applicable, exit
         if(r_tree.root->op == 0)
@@ -751,10 +753,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = r_tree.type_key;
         E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
-        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: bad conditions? -> error if applicable, exit
         if(r_tree.root->op == 0)
@@ -779,6 +781,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         E_Expr *cast_type_expr = expr->first;
         E_Expr *casted_expr = cast_type_expr->next;
         E_IRTreeAndType cast_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, cast_type_expr);
+        e_msg_list_concat_in_place(&result.msgs, &cast_irtree.msgs);
         E_TypeKey cast_type = cast_irtree.type_key;
         E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
@@ -915,12 +918,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
         E_TypeKey r_type_promoted = e_type_key_promote(r_type);
         RDI_EvalOp op = e_opcode_from_expr_kind(kind);
-        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: bad conditions? -> error if applicable, exit
         if(r_tree.root->op == 0)
@@ -948,12 +951,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
         RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
         E_TypeKey r_type_promoted = e_type_key_basic(E_TypeKind_Bool);
         RDI_EvalOp op = e_opcode_from_expr_kind(kind);
-        e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: bad conditions? -> error if applicable, exit
         if(r_tree.root->op == 0)
@@ -1273,6 +1276,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
       {
         E_Expr *lhs = expr->first;
         E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs);
+        e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
         
@@ -1294,19 +1298,30 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
             e_expr_push_child(call, e_expr_ref(arena, arg));
           }
           result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, call);
+          E_MsgList new_msgs = {0};
+          e_msg_list_concat_in_place(&new_msgs, &lhs_irtree.msgs);
+          e_msg_list_concat_in_place(&new_msgs, &result.msgs);
+          result.msgs = new_msgs;
           
           // rjf: is "raw"? -> try to return overridden tree, otherwise strip all
           // lens types from result; disallow auto-hooks
           if(str8_match(callee->string, str8_lit("raw"), 0))
           {
             disallow_autohooks = 1;
-            if(overridden != 0)
+            if(overridden->root != &e_irnode_nil)
             {
-              result = *overridden;
-              for(E_IRTreeAndType *prev = overridden->prev; prev != 0; prev = prev->prev)
+              E_MsgList existing_msgs = result.msgs;
+              for(E_IRTreeAndType *prev = overridden; prev->root != &e_irnode_nil; prev = prev->prev)
               {
                 result = *prev;
+                if(e_type_kind_from_key(prev->type_key) != E_TypeKind_Lens)
+                {
+                  break;
+                }
               }
+              E_MsgList overridden_msgs = e_msg_list_copy(arena, &result.msgs);
+              result.msgs = existing_msgs;
+              e_msg_list_concat_in_place(&result.msgs, &overridden_msgs);
             }
             else
             {
@@ -1322,7 +1337,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
           Temp scratch = scratch_begin(&arena, 1);
           
           // rjf: generate result via first argument to lens
-          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, lhs->next);
+          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs->next);
           
           // rjf: count extra arguments
           U64 arg_count = 0;
@@ -1346,17 +1361,25 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
           if(str8_match(lhs_type->name, str8_lit("raw"), 0))
           {
             disallow_autohooks = 1;
-            if(overridden != 0)
+            if(overridden->root != &e_irnode_nil)
             {
+              E_MsgList existing_msgs = result.msgs;
               result = *overridden;
-              for(E_IRTreeAndType *prev = overridden->prev; prev != 0; prev = prev->prev)
+              for(E_IRTreeAndType *prev = overridden; prev->root != &e_irnode_nil; prev = prev->prev)
               {
                 result = *prev;
+                if(e_type_kind_from_key(prev->type_key) != E_TypeKind_Lens)
+                {
+                  break;
+                }
               }
+              E_MsgList overridden_msgs = e_msg_list_copy(arena, &result.msgs);
+              result.msgs = existing_msgs;
+              e_msg_list_concat_in_place(&result.msgs, &overridden_msgs);
             }
             else
             {
-              result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, lhs->next);
+              result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs->next);
               result.type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Lenses);
             }
           }
@@ -1484,7 +1507,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         }
         
         //- rjf: try to map name as overridden expression signifier ('$')
-        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && overridden != 0)
+        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && (overridden->root != &e_irnode_nil || overridden->msgs.first != 0))
         {
           E_OpList oplist = e_oplist_from_irtree(arena, overridden->root);
           string_mapped = 1;
@@ -1492,11 +1515,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
           mapped_bytecode_mode = overridden->mode;
           mapped_type_key = overridden->type_key;
           disallow_autohooks = 1;
+          E_MsgList msgs = e_msg_list_copy(arena, &overridden->msgs);
+          e_msg_list_concat_in_place(&result.msgs, &msgs);
         }
         
         //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
-        if(!string_mapped && overridden != 0)
+        if(!string_mapped && overridden->root != &e_irnode_nil)
         {
+          // TODO(rjf): @eval
           E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, overridden, string);
           E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, overridden, disallow_autohooks, disallow_chained_fastpaths, access);
           if(access_irtree.root != &e_irnode_nil)
@@ -1506,6 +1532,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
             mapped_type_key = access_irtree.type_key;
             mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
             mapped_bytecode_mode = access_irtree.mode;
+            e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
           }
         }
         
@@ -1884,7 +1911,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
         }
         
         //- rjf: error on failure-to-generate
-        if(!generated)
+        if(!generated && !str8_match(string, str8_lit("$"), 0))
         {
           e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", string);
         }
@@ -2066,8 +2093,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
     //- rjf: equip previous task's irtree
     if(t->prev != 0)
     {
-      result.prev = push_array(arena, E_IRTreeAndType, 1);
-      result.prev[0] = *t->prev;
+      result.prev = overridden;
     }
     
     //- rjf: find any auto hooks according to this generation's type
@@ -2084,8 +2110,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *overridden, B32 
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->expr = e;
-            task->prev = push_array(scratch.arena, E_IRTreeAndType, 1);
-            task->prev[0] = result;
+            task->prev = &result;
             break;
           }
         }

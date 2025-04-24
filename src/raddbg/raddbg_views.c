@@ -1509,6 +1509,35 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     {
       if(0){}
       
+      //- rjf: errors
+      else if(cell->eval.msgs.max_kind > E_MsgKind_Null && !(cell->flags & RD_WatchCellFlag_NoEval))
+      {
+        RD_Font(RD_FontSlot_Main)
+        {
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          DR_FStrList fstrs = {0};
+          UI_TagF("weak")
+          {
+            dr_fstrs_push_new(arena, &fstrs, &params,
+                              rd_icon_kind_text_table[RD_IconKind_WarningBig],
+                              .font = rd_font_from_slot(RD_FontSlot_Icons),
+                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                              .color = ui_color_from_name(str8_lit("text")));
+            dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+            for(E_Msg *msg = cell->eval.msgs.first; msg != 0; msg = msg->next)
+            {
+              DR_FStrList msg_fstrs = rd_fstrs_from_rich_string(arena, msg->text);
+              dr_fstrs_concat_in_place(&fstrs, &msg_fstrs);
+              if(msg->next)
+              {
+                dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" "));
+              }
+            }
+          }
+          result.expr_fstrs = fstrs;
+        }
+      }
+      
       //- rjf: cfg evaluation -> button for cfg
       else if(result.cfg != &rd_nil_cfg)
       {
