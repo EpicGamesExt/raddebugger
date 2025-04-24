@@ -4,7 +4,47 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-RD_VocabInfo rd_vocab_info_table[309] =
+String8 rd_tab_fast_path_view_name_table[16] =
+{
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+str8_lit_comp("watch"),
+};
+
+String8 rd_tab_fast_path_query_name_table[16] =
+{
+str8_lit_comp("query:watches"),
+str8_lit_comp("query:locals"),
+str8_lit_comp("query:registers"),
+str8_lit_comp("query:globals"),
+str8_lit_comp("query:thread_locals"),
+str8_lit_comp("query:types"),
+str8_lit_comp("query:procedures"),
+str8_lit_comp("query:call_stack"),
+str8_lit_comp("query:targets"),
+str8_lit_comp("query:breakpoints"),
+str8_lit_comp("query:watch_pins"),
+str8_lit_comp("query:threads"),
+str8_lit_comp("query:processes"),
+str8_lit_comp("query:machines"),
+str8_lit_comp("query:modules"),
+str8_lit_comp("query:file_path_maps"),
+};
+
+RD_VocabInfo rd_vocab_info_table[310] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -315,6 +355,7 @@ RD_VocabInfo rd_vocab_info_table[309] =
 {str8_lit_comp("processes"), str8_lit_comp(""), str8_lit_comp("Processes"), str8_lit_comp(""), RD_IconKind_Scheduler},
 {str8_lit_comp("machines"), str8_lit_comp(""), str8_lit_comp("Machines"), str8_lit_comp(""), RD_IconKind_Machine},
 {str8_lit_comp("modules"), str8_lit_comp(""), str8_lit_comp("Modules"), str8_lit_comp(""), RD_IconKind_Module},
+{str8_lit_comp("file_path_maps"), str8_lit_comp(""), str8_lit_comp("File Path Map"), str8_lit_comp(""), RD_IconKind_FileOutline},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[21] =
@@ -388,7 +429,7 @@ Rng1U64 rd_reg_slot_range_table[42] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[205] =
+RD_CmdKindInfo rd_cmd_kind_info_table[206] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -595,6 +636,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[205] =
 { str8_lit_comp("processes"), str8_lit_comp("Opens a Processes tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 { str8_lit_comp("machines"), str8_lit_comp("Opens a Machines tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 { str8_lit_comp("modules"), str8_lit_comp("Opens a Modules tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
+{ str8_lit_comp("file_path_maps"), str8_lit_comp("Opens a File Path Map tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 };
 
 struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =

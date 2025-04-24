@@ -3005,7 +3005,7 @@ rd_view_ui(Rng2F32 rect)
               if(evt->kind == UI_EventKind_Press &&
                  evt->slot == UI_EventActionSlot_Accept &&
                  selection_tbl.min.y == selection_tbl.max.y &&
-                 (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg || view_is_floating))
+                 (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg))
               {
                 RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
                 RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
@@ -4756,11 +4756,10 @@ rd_view_ui(Rng2F32 rect)
                             rd_cmd(RD_CmdKind_SelectThread, .thread = cell_info.entity->handle);
                           }
                           
-                          // rjf: other cases, but this watch window is floating? -> move cursor & accept
-                          else
+                          // rjf: other cases, but this watch window is floating? -> push query
+                          else if(view_is_floating)
                           {
-                            ewv->next_cursor = ewv->next_mark = cell_pt;
-                            rd_cmd(RD_CmdKind_Accept);
+                            rd_cmd(RD_CmdKind_PushQuery, .expr = cell->eval.string);
                           }
                         }
                         
@@ -6485,7 +6484,7 @@ rd_window_frame(void)
         Rng2F32 rect = {0};
         RD_RegsScope(.view = view->id)
         {
-          F32 row_height_px = ui_top_px_height();
+          F32 row_height_px = ui_top_font_size() * rd_setting_f32_from_name(str8_lit("row_height"));
           Vec2F32 content_rect_center = center_2f32(content_rect);
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval);
@@ -6494,7 +6493,8 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            query_height_px = row_height_px * (predicted_block_tree.total_row_count - !root_is_explicit);
+            F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!vs->query_is_selected, .initial = (F32)!!vs->query_is_selected, .epsilon = 0.01f);
+            query_height_px = row_height_px * (predicted_block_tree.total_row_count - !root_is_explicit) + ui_top_px_height()*search_row_open_t;
             query_height_px = Min(query_height_px, max_query_height_px);
           }
           rect = r2f32p(content_rect_center.x - query_width_px/2,
@@ -6867,6 +6867,7 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenMachines].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProcesses].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenThreads].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenCallStack].string,
                     //rd_cmd_kind_info_table[RD_CmdKind_Output].string,
                     //rd_cmd_kind_info_table[RD_CmdKind_Memory].string,
                     //rd_cmd_kind_info_table[RD_CmdKind_Disassembly].string,
@@ -6879,12 +6880,14 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProcedures].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenBreakpoints].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenWatchPins].string,
-                    // rd_cmd_kind_info_table[RD_CmdKind_OpenFilePathMap].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenFilePathMaps].string,
                     // rd_cmd_kind_info_table[RD_CmdKind_OpenAutoViewRules].string,
                     // rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
                   };
                   U32 codepoints[] =
                   {
+                    0,
+                    0,
                     0,
                     0,
                     0,
@@ -8565,16 +8568,14 @@ rd_window_frame(void)
                   UI_Signal sig = ui_signal_from_box(add_new_box);
                   if(ui_pressed(sig))
                   {
-                    rd_cmd(RD_CmdKind_FocusPanel);
-                    UI_Key tab_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_menu_key_"));
-                    if(ui_ctx_menu_is_open(tab_menu_key))
-                    {
-                      ui_ctx_menu_close();
-                    }
-                    else
-                    {
-                      ui_ctx_menu_open(tab_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
-                    }
+                    rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
+                    rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:commands"),
+                           .panel = panel->cfg->id,
+                           .do_implicit_root = 1,
+                           .do_lister = 1,
+                           .do_big_rows = 1,
+                           .ui_key = add_new_box->key,
+                           .off_px = v2f32(0, dim_2f32(add_new_box->rect).y));
                   }
                 }
               }
@@ -12544,14 +12545,14 @@ rd_frame(void)
               d_push_cmd((D_CmdKind)kind, &params);
             }
             
-            // rjf: try to open tabs for "view driver" commands
-#if 0 // TODO(rjf): @cfg (tab opening)
-            RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(cmd->name);
-            if(view_rule_info != &rd_nil_view_rule_info)
+            // rjf: try to open tabs, if this is a tab-fastpath-opener
+            if(kind >= RD_CmdKind_FirstTabFastPathCmd)
             {
-              rd_cmd(RD_CmdKind_OpenTab, .string = str8_zero(), .params_tree = md_tree_from_string(scratch.arena, cmd->name)->first);
+              U64 fast_path_idx = (kind - RD_CmdKind_FirstTabFastPathCmd);
+              String8 view_name = rd_tab_fast_path_view_name_table[fast_path_idx];
+              String8 query_name = rd_tab_fast_path_query_name_table[fast_path_idx];
+              rd_cmd(RD_CmdKind_OpenTab, .string = view_name, .expr = query_name);
             }
-#endif
           }break;
           
           //- rjf: open palette

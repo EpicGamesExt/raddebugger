@@ -260,7 +260,9 @@ RD_CmdKind_OpenThreads,
 RD_CmdKind_OpenProcesses,
 RD_CmdKind_OpenMachines,
 RD_CmdKind_OpenModules,
+RD_CmdKind_OpenFilePathMaps,
 RD_CmdKind_COUNT,
+RD_CmdKind_FirstTabFastPathCmd = RD_CmdKind_OpenWatch,
 } RD_CmdKind;
 
 typedef enum RD_IconKind
@@ -607,6 +609,7 @@ X(threads)\
 X(processes)\
 X(machines)\
 X(modules)\
+X(file_path_maps)\
 Y(output, text, "query:output")\
 Y(disasm, disasm, "")\
 Y(memory, memory, "")\
@@ -656,7 +659,9 @@ Z(getting_started)\
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[309];
+extern String8 rd_tab_fast_path_view_name_table[16];
+extern String8 rd_tab_fast_path_query_name_table[16];
+extern RD_VocabInfo rd_vocab_info_table[310];
 extern RD_NameSchemaInfo rd_name_schema_info_table[21];
 extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];

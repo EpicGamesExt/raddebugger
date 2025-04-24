@@ -32,6 +32,7 @@ RD_WatchTabFastPathTable:
   {Processes       "Processes"         processes         Scheduler             }
   {Machines        "Machines"          machines          Machine               }
   {Modules         "Modules"           modules           Module                }
+  {FilePathMaps    "File Path Map"     file_path_maps    FileOutline           }
 }
 
 @table(name   display_name    name_lower     view     query     icon)
@@ -55,6 +56,16 @@ RD_FixedTabTable:
   @expand(RD_ViewTabFastPathTable a) `Y($(a.name_lower), $(a.view == "" -> a.name_lower)$(a.view != "" -> a.view), "$(a.query)")\\`;
   @expand(RD_FixedTabTable a) `Z($(a.name_lower))\\`;
   ``;
+}
+
+@data(String8) rd_tab_fast_path_view_name_table:
+{
+  @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("watch")`,
+}
+
+@data(String8) rd_tab_fast_path_query_name_table:
+{
+  @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("query:$(a.name_lower)")`,
 }
 
 ////////////////////////////////
@@ -831,6 +842,8 @@ RD_CmdTable:    //               |        |              |               |      
   @expand(RD_CmdTable, a) `$(a.name)`,
   @expand(RD_WatchTabFastPathTable, a) `Open$(a.name)`,
   COUNT,
+  
+  `FirstTabFastPathCmd = RD_CmdKind_OpenWatch`,
 }
 
 @struct RD_Query:

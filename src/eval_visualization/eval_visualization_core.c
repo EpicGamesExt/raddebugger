@@ -587,7 +587,6 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       }
       
       // rjf: get top-level lookup/expansion info
-      // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
       E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval, filter);
       EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr);
       
@@ -2101,7 +2100,6 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
           expand_data->type = e_type_from_key__cached(type_key);
           expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
-          // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
           expand_data->expand_info = expand_data->expand_rule->info(arena, eval, params->filter);
         }
         switch(task_idx)
