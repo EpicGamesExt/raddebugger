@@ -518,12 +518,15 @@ internal RD_Cfg *
 rd_cfg_child_from_string(RD_Cfg *parent, String8 string)
 {
   RD_Cfg *child = &rd_nil_cfg;
-  for(RD_Cfg *c = parent->first; c != &rd_nil_cfg; c = c->next)
+  if(string.size != 0)
   {
-    if(str8_match(c->string, string, 0))
+    for(RD_Cfg *c = parent->first; c != &rd_nil_cfg; c = c->next)
     {
-      child = c;
-      break;
+      if(str8_match(c->string, string, 0))
+      {
+        child = c;
+        break;
+      }
     }
   }
   return child;
@@ -4360,7 +4363,7 @@ rd_view_ui(Rng2F32 rect)
                         //- rjf: cell has hook? -> build ui by calling hook
                         if(cell->kind == RD_WatchCellKind_ViewUI && cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                         {
-                          RD_Cfg *root = rd_immediate_cfg_from_keyf("view_%I64x_%I64x", rd_regs()->view, row_hash);
+                          RD_Cfg *root = rd_immediate_cfg_from_keyf("view%I64x_%I64x", rd_regs()->view, row_hash);
                           RD_Cfg *view = rd_view_from_eval(root, cell->eval);
                           Rng2F32 cell_rect = r2f32p(cell_x_px, 0, next_cell_x_px, row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
                           ui_set_next_fixed_y(-1.f * (row_node->visual_size_skipped) * row_height_px);
@@ -6860,48 +6863,40 @@ rd_window_frame(void)
                 {
                   String8 cmds[] =
                   {
-                    rd_cmd_kind_info_table[RD_CmdKind_Targets].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Scheduler].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_CallStack].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Modules].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Output].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Memory].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Disassembly].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Watch].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Locals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Registers].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Globals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_ThreadLocals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Types].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Procedures].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Breakpoints].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_WatchPins].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_FilePathMap].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_AutoViewRules].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_Settings].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenTargets].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenMachines].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenProcesses].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenThreads].string,
+                    //rd_cmd_kind_info_table[RD_CmdKind_Output].string,
+                    //rd_cmd_kind_info_table[RD_CmdKind_Memory].string,
+                    //rd_cmd_kind_info_table[RD_CmdKind_Disassembly].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenWatch].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenLocals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenRegisters].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenGlobals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenThreadLocals].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenTypes].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenProcedures].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenBreakpoints].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenWatchPins].string,
+                    // rd_cmd_kind_info_table[RD_CmdKind_OpenFilePathMap].string,
+                    // rd_cmd_kind_info_table[RD_CmdKind_OpenAutoViewRules].string,
+                    // rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
                   };
                   U32 codepoints[] =
                   {
-                    't',
-                    's',
-                    'k',
-                    'd',
-                    'o',
-                    'm',
-                    'y',
-                    'w',
-                    'l',
-                    'r',
                     0,
                     0,
                     0,
                     0,
-                    'b',
-                    'h',
-                    'p',
-                    'v',
-                    'g',
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
                     0,
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -8093,7 +8088,7 @@ rd_window_frame(void)
                            .dst_panel = panel->cfg->id,
                            .panel = rd_state->drag_drop_regs->panel,
                            .view = rd_state->drag_drop_regs->view,
-                           .prev_view = rd_cfg_list_last(&panel->tabs)->id);
+                           .prev_tab = rd_cfg_list_last(&panel->tabs)->id);
                   }
                 }
               }
@@ -8571,14 +8566,14 @@ rd_window_frame(void)
                   if(ui_pressed(sig))
                   {
                     rd_cmd(RD_CmdKind_FocusPanel);
-                    UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-                    if(ui_ctx_menu_is_open(view_menu_key))
+                    UI_Key tab_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_menu_key_"));
+                    if(ui_ctx_menu_is_open(tab_menu_key))
                     {
                       ui_ctx_menu_close();
                     }
                     else
                     {
-                      ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                      ui_ctx_menu_open(tab_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
                     }
                   }
                 }
@@ -8598,7 +8593,7 @@ rd_window_frame(void)
                    .dst_panel = panel->cfg->id,
                    .panel     = rd_state->drag_drop_regs->panel,
                    .view      = rd_state->drag_drop_regs->view,
-                   .prev_view = tab_drop_prev->id);
+                   .prev_tab  = tab_drop_prev->id);
           }
           
           //////////////////////////
@@ -8737,6 +8732,7 @@ rd_window_frame(void)
     
     //- rjf: recurse & draw
     U64 total_heatmap_sum_count = 0;
+    UI_Box *hover_debug_box = &ui_nil_box;
     for(UI_Box *box = ui_root_from_state(ws->ui); !ui_box_is_nil(box);)
     {
       // rjf: get corner radii
@@ -8762,6 +8758,12 @@ rd_window_frame(void)
           heatmap_buckets[bucket_idx] += 1;
           total_heatmap_sum_count += 1;
         }
+      }
+      
+      // rjf: grab if debug
+      if(box->flags & UI_BoxFlag_Debug && contains_2f32(box->rect, ui_mouse()))
+      {
+        hover_debug_box = box;
       }
       
       // rjf: push transparency
@@ -9167,6 +9169,18 @@ rd_window_frame(void)
         Rng2F32 rect = r2f32p(x*heatmap_bucket_size, y*heatmap_bucket_size, (x+1)*heatmap_bucket_size, (y+1)*heatmap_bucket_size);
         dr_rect(rect, v4f32(rgb.x, rgb.y, rgb.z, 0.3f), 0, 0, 0);
       }
+    }
+    
+    //- rjf: draw hover debug box
+    if(hover_debug_box != &ui_nil_box)
+    {
+      FNT_Tag font = rd_font_from_slot(RD_FontSlot_Code);
+      Vec2F32 p = ui_mouse();
+      dr_rect(hover_debug_box->rect, v4f32(1, 1, 1, 0.2f), 0, 0, 0);
+      dr_text(font, 12.f, 0, 0, FNT_RasterFlag_Hinted, p, v4f32(1, 1, 1, 1), push_str8f(scratch.arena, "key: 0x%I64x", hover_debug_box->key.u64[0]));
+      p.y += 20.f;
+      dr_text(font, 12.f, 0, 0, FNT_RasterFlag_Hinted, p, v4f32(1, 1, 1, 1), push_str8f(scratch.arena, "string: '%S'", hover_debug_box->string));
+      p.y += 20.f;
     }
     
     //- rjf: draw border/overlay color to signify error
@@ -13586,7 +13600,7 @@ rd_frame(void)
             rd_cmd(RD_CmdKind_MoveTab,
                    .dst_panel = panel->cfg->id,
                    .view      = tab->id,
-                   .prev_view = new_prev->id);
+                   .prev_tab  = new_prev->id);
           }break;
           case RD_CmdKind_OpenTab:
           {
@@ -13609,6 +13623,13 @@ rd_frame(void)
             rd_view_equip_spec(view, spec, query, rd_regs()->params_tree);
             rd_panel_insert_tab_view(panel, panel->last_tab_view, view);
 #endif
+          }break;
+          case RD_CmdKind_DuplicateTab:
+          {
+            RD_Cfg *src = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *dst = rd_cfg_deep_copy(src);
+            rd_cfg_insert_child(src->parent, src, dst);
+            rd_cmd(RD_CmdKind_FocusTab, .view = dst->id);
           }break;
           case RD_CmdKind_CloseTab:
           {
@@ -13638,7 +13659,7 @@ rd_frame(void)
           case RD_CmdKind_MoveTab:
           {
             RD_Cfg *tab = rd_cfg_from_id(rd_regs()->view);
-            RD_Cfg *prev_tab = rd_cfg_from_id(rd_regs()->prev_view);
+            RD_Cfg *prev_tab = rd_cfg_from_id(rd_regs()->prev_tab);
             RD_Cfg *src_panel = tab->parent;
             RD_Cfg *dst_panel = rd_cfg_from_id(rd_regs()->dst_panel);
             if(dst_panel != &rd_nil_cfg && prev_tab != tab)
@@ -13810,30 +13831,10 @@ rd_frame(void)
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
             
             //- rjf: define all of the "fixed" tabs we care about
-#define FixedTab_XList \
-X(watches)\
-X(locals)\
-X(registers)\
-X(globals)\
-X(thread_locals)\
-X(types)\
-X(procedures)\
-X(call_stack)\
-X(breakpoints)\
-X(watch_pins)\
-X(targets)\
-X(threads)\
-X(processes)\
-X(machines)\
-X(modules)\
-Y(output, text, "query:output")\
-Y(disasm, disasm, "")\
-Y(memory, memory, "")\
-Z(getting_started)
 #define X(name) RD_Cfg *name = &rd_nil_cfg;
 #define Y(name, rule, expr) RD_Cfg *name = &rd_nil_cfg;
 #define Z(name) RD_Cfg *name = &rd_nil_cfg;
-            FixedTab_XList
+            RD_FixedTabXList
 #undef X
 #undef Y
 #undef Z
@@ -13853,7 +13854,7 @@ Z(getting_started)
 #define X(name) else if(str8_match(tab->string, str8_lit("watch"), 0) && str8_match(rd_expr_from_cfg(tab), str8_lit("query:" #name), 0)) {name = tab;}
 #define Y(name, rule, expr) else if(str8_match(tab->string, str8_lit(#rule), 0) && str8_match(rd_expr_from_cfg(tab), str8_lit(expr), 0)) {name = tab;}
 #define Z(name) else if(str8_match(tab->string, str8_lit(#name), 0)) {name = tab;}
-                FixedTab_XList
+                RD_FixedTabXList
 #undef X
 #undef Y
 #undef Z
@@ -13877,7 +13878,7 @@ Z(getting_started)
 #define X(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit("watch")); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit("query:" #name));}
 #define Y(name, rule, expr) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#rule)); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit(expr));}
 #define Z(name) if(name == &rd_nil_cfg && !any_fixed_tabs_found) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#name));}
-            FixedTab_XList
+            RD_FixedTabXList
 #undef X
 #undef Y
 #undef Z
@@ -13886,7 +13887,7 @@ Z(getting_started)
 #define X(name) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
 #define Y(name, rule, expr) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
 #define Z(name) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
-            FixedTab_XList
+            RD_FixedTabXList
 #undef X
 #undef Y
 #undef Z
@@ -14062,7 +14063,7 @@ Z(getting_started)
 #define X(name) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
 #define Y(name, rule, expr) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
 #define Z(name) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
-            FixedTab_XList
+            RD_FixedTabXList
 #undef X
 #undef Y
 #undef Z

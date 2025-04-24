@@ -12,6 +12,52 @@
 @embed_file rd_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////
+//~ rjf: Fixed Tab Tables
+
+@table(name   display_name    name_lower     icon)
+RD_WatchTabFastPathTable:
+{
+  {Watch           "Watch"             watches           Binoculars            }
+  {Locals          "Locals"            locals            Binoculars            }
+  {Registers       "Registers"         registers         Binoculars            }
+  {Globals         "Globals"           globals           Binoculars            }
+  {ThreadLocals    "Thread Locals"     thread_locals     Binoculars            }
+  {Types           "Types"             types             Binoculars            }
+  {Procedures      "Procedures"        procedures        Binoculars            }
+  {CallStack       "Call Stack"        call_stack        Thread                }
+  {Targets         "Targets"           targets           Target                }
+  {Breakpoints     "Breakpoints"       breakpoints       CircleFilled          }
+  {WatchPins       "Watch Pins"        watch_pins        Pin                   }
+  {Threads         "Threads"           threads           Threads               }
+  {Processes       "Processes"         processes         Scheduler             }
+  {Machines        "Machines"          machines          Machine               }
+  {Modules         "Modules"           modules           Module                }
+}
+
+@table(name   display_name    name_lower     view     query     icon)
+RD_ViewTabFastPathTable:
+{
+  {Output          "Output"            output      "text"      "query:output"    List                  }
+  {Disasm          "Disassembly"       disasm      ""          ""                Glasses               }
+  {Memory          "Memory"            memory      ""          ""                Grid                  }
+}
+
+@table(name   display_name    name_lower    icon)
+RD_FixedTabTable:
+{
+  {GettingStarted  "Getting Started"   getting_started   "getting_started"   QuestionMark  }
+}
+
+@gen
+{
+  `#define RD_FixedTabXList \\`;
+  @expand(RD_WatchTabFastPathTable a) `X($(a.name_lower))\\`;
+  @expand(RD_ViewTabFastPathTable a) `Y($(a.name_lower), $(a.view == "" -> a.name_lower)$(a.view != "" -> a.view), "$(a.query)")\\`;
+  @expand(RD_FixedTabTable a) `Z($(a.name_lower))\\`;
+  ``;
+}
+
+////////////////////////////////
 //~ rjf: Vocabulary Map
 
 @table(code_name       code_name_plural            display_name                 display_name_plural  icon_kind)
@@ -137,9 +183,10 @@ RD_VocabTable:
 
 @data(RD_VocabInfo) rd_vocab_info_table:
 {
-  @expand(RD_VocabTable a) `{str8_lit_comp("$(a.code_name)"), str8_lit_comp("$(a.code_name_plural == _ -> a.code_name .. 's')$(a.code_name_plural != _ -> a.code_name_plural)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.display_name_plural == _ -> a.display_name .. 's')$(a.display_name_plural != _ -> a.display_name_plural)"), RD_IconKind_$(a.icon_kind)}`;
-  @expand(D_CmdTable a)    `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
-  @expand(RD_CmdTable a)   `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
+  @expand(RD_VocabTable a)              `{str8_lit_comp("$(a.code_name)"), str8_lit_comp("$(a.code_name_plural == _ -> a.code_name .. 's')$(a.code_name_plural != _ -> a.code_name_plural)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.display_name_plural == _ -> a.display_name .. 's')$(a.display_name_plural != _ -> a.display_name_plural)"), RD_IconKind_$(a.icon_kind)}`;
+  @expand(D_CmdTable a)                 `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
+  @expand(RD_CmdTable a)                `{str8_lit_comp("$(a.string)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.canonical_icon)}`;
+  @expand(RD_WatchTabFastPathTable a)   `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp(""), str8_lit_comp("$(a.display_name)"), str8_lit_comp(""), RD_IconKind_$(a.icon)}`;
 }
 
 ////////////////////////////////
@@ -463,7 +510,7 @@ RD_RegTable:
   {RD_CfgID          window           Window        }
   {RD_CfgID          panel            Panel         }
   {RD_CfgID          view             View          }
-  {RD_CfgID          prev_view        PrevView      }
+  {RD_CfgID          prev_tab         PrevTab       }
   {RD_CfgID          dst_panel        DstPanel      }
   {RD_CfgID          cfg              Cfg           }
   {RD_CfgIDList      cfg_list         CfgList       }
@@ -616,6 +663,7 @@ RD_CmdTable:    //               |        |              |               |      
   {MoveTabRight                   1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           RightArrow            "move_tab_right"              "Move Tab Right"                              "Moves the selected tab right one slot."                                                                           ""                               "$tab,"                                                          }
   {MoveTabLeft                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           LeftArrow             "move_tab_left"               "Move Tab Left"                               "Moves the selected tab left one slot."                                                                            ""                               "$tab,"                                                          }
   {OpenTab                        0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "open_tab"                    "Open Tab"                                    "Opens a new tab with the parameterized view specification."                                                       ""                               ""                                                               }
+  {DuplicateTab                   1        1              ""                                               View               null              Nil                     Null       0  0  0  0  0  0  0                                                           Duplicate             "duplicate_tab"               "Duplicate Tab"                               "Duplicates a tab."                                                                                                ""                               "$tab,"                                                          }
   {CloseTab                       1        1              ""                                               View               null              Nil                     Null       0  0  0  0  0  0  0                                                           X                     "close_tab"                   "Close Tab"                                   "Closes the currently opened tab."                                                                                 ""                               "$tab,"                                                          }
   {MoveTab                        0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_tab"                    "Move Tab"                                    "Moves a tab to a new panel."                                                                                      ""                               ""                                                               }
   {TabBarTop                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               "$tab,"                                                          }
@@ -760,30 +808,6 @@ RD_CmdTable:    //               |        |              |               |      
   {Search                         1        1              ""                                               String             null              Nil                     Null       0  0  1  1  1  0  1                                                           Find                  "search"                      "Search"                                      "Begins searching within the active interface."                                                                    "sort,search,filter,find"        ""                                                               }
   {SearchBackwards                1        1              ""                                               String             null              Nil                     Null       0  0  1  1  1  0  1                                                           Find                  "search_backwards"            "Search Backwards"                            "Begins searching backwards within the active interface."                                                          "sort,search,filter,find"        ""                                                               }
   
-  //- rjf: view drivers
-  {GettingStarted                 1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           QuestionMark          "getting_started"             "Getting Started"                             "Opens the menu for information on getting started."                                                               "tutorial,help"                  ""                                                               }
-  {Commands                       0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           List                  "commands"                    "Commands"                                    "Opens the list of all commands."                                                                                  ""                               ""                                                               }
-  {Targets                        1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Target                "targets"                     "Targets"                                     "Opens the list of all targets."                                                                                   ""                               ""                                                               }
-  {FilePathMap                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "file_path_map"               "File Path Map"                               "Opens the file path mapping editor."                                                                              ""                               ""                                                               }
-  {AutoViewRules                  1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "auto_view_rules"             "Auto View Rules"                             "Opens the auto view rule editor."                                                                                 ""                               ""                                                               }
-  {Breakpoints                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           CircleFilled          "breakpoints"                 "Breakpoints"                                 "Opens the breakpoints view."                                                                                      ""                               ""                                                               }
-  {WatchPins                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Pin                   "watch_pins"                  "Watch Pins"                                  "Opens the watch pins view."                                                                                       ""                               ""                                                               }
-  {Scheduler                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Scheduler             "scheduler"                   "Scheduler"                                   "Opens the scheduler view, for process and thread controls."                                                       "threads,processes,targets"      ""                                                               }
-  {CallStack                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Thread                "call_stack"                  "Call Stack"                                  "Opens the call stack view."                                                                                       "callstack,thread,unwind"        ""                                                               }
-  {Modules                        1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Module                "modules"                     "Modules"                                     "Opens the modules view."                                                                                          ""                               ""                                                               }
-  {Watch                          1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "watch"                       "Watch"                                       "Opens a watch view."                                                                                              ""                               ""                                                               }
-  {Locals                         1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "locals"                      "Locals"                                      "Opens a locals view."                                                                                             ""                               ""                                                               }
-  {Registers                      1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "registers"                   "Registers"                                   "Opens a registers view."                                                                                          ""                               ""                                                               }
-  {Globals                        1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "globals"                     "Globals"                                     "Opens a globals view."                                                                                            ""                               ""                                                               }
-  {ThreadLocals                   1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "thread_locals"               "Thread Locals"                               "Opens a thread locals view."                                                                                      ""                               ""                                                               }
-  {Types                          1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "types"                       "Types"                                       "Opens a types view."                                                                                              ""                               ""                                                               }
-  {Procedures                     1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "procedures"                  "Procedures"                                  "Opens a procedures view."                                                                                         ""                               ""                                                               }
-  {PendingFile                    0        0              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "pending_file"                "Pending File"                                "Opens a view which asynchronously analyzes the file path parameter, then picks an appropriate viewer for it."     ""                               ""                                                               }
-  {Disassembly                    1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Glasses               "disasm"                      "Disassembly"                                 "Opens the disassembly view."                                                                                      "disasm"                         ""                                                               }
-  {Output                         1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           List                  "output"                      "Output"                                      "Opens an output view."                                                                                            ""                               ""                                                               }
-  {Memory                         1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Grid                  "memory"                      "Memory"                                      "Opens a memory view."                                                                                             ""                               ""                                                               }
-  {Settings                       1        1              ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Gear                  "settings"                    "Settings"                                    "Opens the settings view."                                                                                         "theme,color,scheme,options"     ""                                                               }
-  
   //- rjf: queries
   {PickFile                       0        0              `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           FileOutline           "pick_file"                   "Pick File"                                   "Opens the file browser to pick a file."                                                                           ""                               ""                                                               }
   {PickFolder                     0        0              `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       0  1  0  0  0  1  1                                                           FolderOpenFilled      "pick_folder"                 "Pick Folder"                                 "Opens the file browser to pick a folder."                                                                         ""                               ""                                                               }
@@ -805,6 +829,7 @@ RD_CmdTable:    //               |        |              |               |      
   `Null`,
   @expand(D_CmdTable a) `$(a.name)`,
   @expand(RD_CmdTable, a) `$(a.name)`,
+  @expand(RD_WatchTabFastPathTable, a) `Open$(a.name)`,
   COUNT,
 }
 
@@ -834,6 +859,8 @@ RD_CmdTable:    //               |        |              |               |      
     ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_CmdTable, a)
     ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Floating*$(a.q_floating))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_expr)"), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+  @expand(RD_WatchTabFastPathTable, a)
+    ```{ str8_lit_comp("$(a.name_lower)"), str8_lit_comp("Opens a $(a.display_name) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs}```;
 }
 
 ////////////////////////////////

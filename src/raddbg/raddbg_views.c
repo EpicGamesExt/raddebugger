@@ -1676,19 +1676,20 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
                   // to see if we have a fancy display string for this member. otherwise, we will just
                   // do a code-string of ".member_name"
                   String8 member_name = notable_expr->first->next->string;
+                  String8 fancy_name = {0};
                   if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
                      cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
                      cell->eval.space.kind == E_SpaceKind_File ||
                      cell->eval.space.kind == E_SpaceKind_FileSystem)
                   {
-                    String8 fancy_name = rd_display_from_code_name(member_name);
-                    if(fancy_name.size != 0)
-                    {
-                      member_name = fancy_name;
-                      is_non_code = 1;
-                    }
+                    fancy_name = rd_display_from_code_name(member_name);
                   }
-                  if(member_name.size != 0)
+                  if(fancy_name.size != 0)
+                  {
+                    is_non_code = 1;
+                    expr_string = fancy_name;
+                  }
+                  else if(member_name.size != 0)
                   {
                     expr_string = push_str8f(arena, ".%S", member_name);
                   }

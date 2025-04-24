@@ -3319,7 +3319,9 @@ rd_cell(RD_CellParams *params, String8 string)
   //- rjf: build line edit container box
   //
   UI_Box *edit_box = &ui_nil_box;
-  UI_Parent(box) if((is_focus_active || is_focus_active_disabled) || params->pre_edit_value.size != 0 || params->value_fstrs.node_count != 0 || (params->edit_string_size_out && params->edit_string_size_out[0] != 0))
+  UI_Parent(box) if((is_focus_active || is_focus_active_disabled) ||
+                    params->pre_edit_value.size != 0 ||
+                    params->value_fstrs.node_count != 0)
   {
     UI_Size edit_box_size = ui_pct(1, 0);
     if(build_lhs_name_desc)

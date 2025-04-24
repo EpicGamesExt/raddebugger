@@ -17,7 +17,7 @@ RD_RegSlot_CtrlEntity,
 RD_RegSlot_Window,
 RD_RegSlot_Panel,
 RD_RegSlot_View,
-RD_RegSlot_PrevView,
+RD_RegSlot_PrevTab,
 RD_RegSlot_DstPanel,
 RD_RegSlot_Cfg,
 RD_RegSlot_CfgList,
@@ -134,6 +134,7 @@ RD_CmdKind_PrevTab,
 RD_CmdKind_MoveTabRight,
 RD_CmdKind_MoveTabLeft,
 RD_CmdKind_OpenTab,
+RD_CmdKind_DuplicateTab,
 RD_CmdKind_CloseTab,
 RD_CmdKind_MoveTab,
 RD_CmdKind_TabBarTop,
@@ -235,28 +236,6 @@ RD_CmdKind_RegisterAsJITDebugger,
 RD_CmdKind_FindCodeLocation,
 RD_CmdKind_Search,
 RD_CmdKind_SearchBackwards,
-RD_CmdKind_GettingStarted,
-RD_CmdKind_Commands,
-RD_CmdKind_Targets,
-RD_CmdKind_FilePathMap,
-RD_CmdKind_AutoViewRules,
-RD_CmdKind_Breakpoints,
-RD_CmdKind_WatchPins,
-RD_CmdKind_Scheduler,
-RD_CmdKind_CallStack,
-RD_CmdKind_Modules,
-RD_CmdKind_Watch,
-RD_CmdKind_Locals,
-RD_CmdKind_Registers,
-RD_CmdKind_Globals,
-RD_CmdKind_ThreadLocals,
-RD_CmdKind_Types,
-RD_CmdKind_Procedures,
-RD_CmdKind_PendingFile,
-RD_CmdKind_Disassembly,
-RD_CmdKind_Output,
-RD_CmdKind_Memory,
-RD_CmdKind_Settings,
 RD_CmdKind_PickFile,
 RD_CmdKind_PickFolder,
 RD_CmdKind_PickFileOrFolder,
@@ -266,6 +245,21 @@ RD_CmdKind_CancelQuery,
 RD_CmdKind_UpdateQuery,
 RD_CmdKind_ToggleDevMenu,
 RD_CmdKind_LogMarker,
+RD_CmdKind_OpenWatch,
+RD_CmdKind_OpenLocals,
+RD_CmdKind_OpenRegisters,
+RD_CmdKind_OpenGlobals,
+RD_CmdKind_OpenThreadLocals,
+RD_CmdKind_OpenTypes,
+RD_CmdKind_OpenProcedures,
+RD_CmdKind_OpenCallStack,
+RD_CmdKind_OpenTargets,
+RD_CmdKind_OpenBreakpoints,
+RD_CmdKind_OpenWatchPins,
+RD_CmdKind_OpenThreads,
+RD_CmdKind_OpenProcesses,
+RD_CmdKind_OpenMachines,
+RD_CmdKind_OpenModules,
 RD_CmdKind_COUNT,
 } RD_CmdKind;
 
@@ -541,7 +535,7 @@ CTRL_Handle ctrl_entity;
 RD_CfgID window;
 RD_CfgID panel;
 RD_CfgID view;
-RD_CfgID prev_view;
+RD_CfgID prev_tab;
 RD_CfgID dst_panel;
 RD_CfgID cfg;
 RD_CfgIDList cfg_list;
@@ -597,6 +591,27 @@ RD_CmdKindFlags flags;
 RD_Query query;
 };
 
+#define RD_FixedTabXList \
+X(watches)\
+X(locals)\
+X(registers)\
+X(globals)\
+X(thread_locals)\
+X(types)\
+X(procedures)\
+X(call_stack)\
+X(targets)\
+X(breakpoints)\
+X(watch_pins)\
+X(threads)\
+X(processes)\
+X(machines)\
+X(modules)\
+Y(output, text, "query:output")\
+Y(disasm, disasm, "")\
+Y(memory, memory, "")\
+Z(getting_started)\
+
 #define rd_regs_lit_init_top \
 .machine = rd_regs()->machine,\
 .module = rd_regs()->module,\
@@ -606,7 +621,7 @@ RD_Query query;
 .window = rd_regs()->window,\
 .panel = rd_regs()->panel,\
 .view = rd_regs()->view,\
-.prev_view = rd_regs()->prev_view,\
+.prev_tab = rd_regs()->prev_tab,\
 .dst_panel = rd_regs()->dst_panel,\
 .cfg = rd_regs()->cfg,\
 .cfg_list = rd_regs()->cfg_list,\
@@ -641,7 +656,7 @@ RD_Query query;
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern RD_VocabInfo rd_vocab_info_table[315];
+extern RD_VocabInfo rd_vocab_info_table[309];
 extern RD_NameSchemaInfo rd_name_schema_info_table[21];
 extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];
