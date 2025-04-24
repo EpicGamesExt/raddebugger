@@ -6506,8 +6506,8 @@ rd_window_frame(void)
             UI_Box *anchor_box = ui_box_from_key(ws->query_regs->ui_key);
             if(anchor_box != &ui_nil_box)
             {
-              rect.x0 = anchor_box->rect.x0;
-              rect.y0 = anchor_box->rect.y1;
+              rect.x0 = anchor_box->rect.x0 + ws->query_regs->off_px.x;
+              rect.y0 = anchor_box->rect.y1 + ws->query_regs->off_px.y;
               rect.x1 = rect.x0 + ui_top_font_size()*60.f;
               rect.y1 = rect.y0 + query_height_px;
             }
@@ -8573,11 +8573,10 @@ rd_window_frame(void)
                   if(ui_pressed(sig))
                   {
                     rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
-                    rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:commands"),
+                    rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:tab_commands"),
                            .panel = panel->cfg->id,
                            .do_implicit_root = 1,
                            .do_lister = 1,
-                           .do_big_rows = 1,
                            .ui_key = add_new_box->key,
                            .off_px = v2f32(0, dim_2f32(add_new_box->rect).y));
                   }
@@ -11869,21 +11868,31 @@ rd_frame(void)
     EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
     rd_state->view_ui_rule_map = rd_view_ui_rule_map_make(scratch.arena, 512);
     {
-      //- rjf: add macro for commands
+      //- rjf: add macros for command groups
       {
-        String8 name = str8_lit("commands");
-        E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
-                                             .name = name,
-                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
-                                             .expand =
-                                             {
-                                               .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
-                                               .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
-                                             });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        String8 names[] =
+        {
+          str8_lit("commands"),
+          str8_lit("tab_commands"),
+          str8_lit("text_pt_commands"),
+          str8_lit("text_range_commands"),
+        };
+        for EachElement(idx, names)
+        {
+          String8 name = names[idx];
+          E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                               .name = name,
+                                               .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
+                                               .expand =
+                                               {
+                                                 .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
+                                                 .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
+                                               });
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          expr->type_key = type_key;
+          expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+          e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        }
       }
       
       //- rjf: build schema types & cache (name -> type) mapping
@@ -13620,14 +13629,6 @@ rd_frame(void)
               rd_cfg_new(project, rd_state->project_path);
             }
             rd_cmd(RD_CmdKind_FocusTab, .view = tab->id);
-#if 0 // TODO(rjf): @cfg (tab opening)
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *view = rd_view_alloc();
-            String8 query = rd_regs()->string;
-            RD_ViewRuleInfo *spec = rd_view_rule_info_from_string(rd_regs()->params_tree->string);
-            rd_view_equip_spec(view, spec, query, rd_regs()->params_tree);
-            rd_panel_insert_tab_view(panel, panel->last_tab_view, view);
-#endif
           }break;
           case RD_CmdKind_DuplicateTab:
           {

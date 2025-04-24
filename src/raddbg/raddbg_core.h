@@ -157,6 +157,9 @@ enum
 {
   RD_CmdKindFlag_ListInUI      = (1<<0),
   RD_CmdKindFlag_ListInIPCDocs = (1<<1),
+  RD_CmdKindFlag_ListInTab     = (1<<2),
+  RD_CmdKindFlag_ListInTextPt  = (1<<3),
+  RD_CmdKindFlag_ListInTextRng = (1<<4),
 };
 
 ////////////////////////////////

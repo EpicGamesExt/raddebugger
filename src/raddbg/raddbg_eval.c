@@ -26,10 +26,14 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8List cmd_names = {0};
+    E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
     for EachNonZeroEnumVal(RD_CmdKind, k)
     {
       RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
-      if(info->flags & RD_CmdKindFlag_ListInUI)
+      if(info->flags & RD_CmdKindFlag_ListInUI &&
+         (!str8_match(type->name, str8_lit("text_pt_commands"), 0) || info->flags & RD_CmdKindFlag_ListInTextPt) &&
+         (!str8_match(type->name, str8_lit("text_range_commands"), 0) || info->flags & RD_CmdKindFlag_ListInTextRng) &&
+         (!str8_match(type->name, str8_lit("tab_commands"), 0) || info->flags & RD_CmdKindFlag_ListInTab))
       {
         String8 code_name = info->string;
         String8 description = info->description;

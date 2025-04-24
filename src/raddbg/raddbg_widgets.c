@@ -2156,17 +2156,16 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
         lines = params->line_infos[cursor->line - params->line_num_range.min];
       }
-#if 0 // TODO(rjf): @cfg
       rd_cmd(RD_CmdKind_PushQuery,
-             .reg_slot    = RD_RegSlot_Cursor,
-             .ui_key      = ui_get_selected_state()->root->key,
-             .off_px      = sub_2f32(ui_mouse(), v2f32(2, 2)),
-             .cursor      = *cursor,
-             .mark        = *mark,
-             .vaddr       = vaddr,
-             .lines       = lines,
-             .lister_flags= RD_ListerFlag_LineEdit|RD_ListerFlag_Settings|RD_ListerFlag_Commands);
-#endif
+             .expr = txt_pt_match(*cursor, *mark) ? str8_lit("query:text_pt_commands") : str8_lit("query:text_range_commands"),
+             .do_implicit_root = 1,
+             .do_lister = 1,
+             .ui_key = ui_get_selected_state()->root->key,
+             .off_px = ui_mouse(),
+             .cursor = *cursor,
+             .mark = *mark,
+             .vaddr = vaddr,
+             .lines = lines);
     }
     
     //- rjf: dragging threads, breakpoints, or watch pins over this slice ->
