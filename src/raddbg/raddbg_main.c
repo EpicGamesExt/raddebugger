@@ -4,50 +4,92 @@
 ////////////////////////////////
 //~ rjf: 0.9.16 release notes
 //
-// - Auto view rules have been upgraded to support type pattern-matching. This
-//   makes them usable for generic types in various languages. This
-//   pattern-matching is done by using `?` characters in a pattern, to specify
-//   placeholders for various parts of a type name. For example, the pattern
-//   `DynamicArray<?>` would match `DynamicArray<int>`, `DynamicArray<float>`,
-//   and so on.
-// - The `slice` view rule has been streamlined and simplified. When an
-//   expression with a `slice` view rule is expanded, it will simply expand to
-//   the slice's contents, which matches the behavior with static arrays.
-// - The `slice` view rule now supports `first, one_past_last` pointer pairs,
-//   as well as `base_pointer, length` pairs.
-// - The syntax for view rules has changed to improve its familiarity,
-//   usability, and to improve its consistency with the rest of the evaluation
-//   language. It now appears like function calls, and many arguments no longer
-//   need to be explicitly named. For example, instead of
-//   `bitmap:{w:1024, h:1024}`, the new view rule syntax would be
-//   `bitmap(1024, 1024)`. Commas can still be omitted. Named arguments are
-//   still possible (and required in some cases):
-//   `disasm(size=1024, arch=x64)`. If there are no arguments required for a
-//   view rule, like `hex`, then no parentheses are needed.
+// - "View rules", now simply called "views", have been formally integrated
+//   into the debugger evaluation language. They now appear similar to function
+//   calls, and are expressed directly within an expression. For example, an
+//   expression `dynamic_array` with a view rule `slice` from prior versions
+//   would now be expressed as `slice(dynamic_array)`. Alternatively, views
+//   can be expressed with similar syntax to method calls:
+//   `dynamic_array.slice()`. Many views can still be attached to a single
+//   expression, like `dynamic_array.slice().hex()` (equivalent to
+//   `hex(slice(dynamic_array))`. The first argument to a view is the
+//   expression to which the view should apply. Some views take additional
+//   parameters, like `bitmap(base_pointer, width, height)`. Named parameters,
+//   required in some cases (e.g. the `fmt`/format parameter for `bitmap`), are
+//   expressed using `name = value` syntax:
+//   `bitmap(base, width, height, fmt=bgra8)`.
+// - "Auto view rules", now simply called "type views", have been upgraded
+//   to support type pattern-matching. This makes them usable for generic types
+//   in various languages. This pattern-matching is done by using `?` characters
+//   in a pattern, to specify placeholders for various parts of a type name.
+//   For example, the pattern `DynamicArray<?>` would match
+//   `DynamicArray<int>`, `DynamicArray<float>`, and so on.
+// - Type views have been upgraded to support a larger number of possibilities.
+//   Instead of mapping to a set of views which are applied to some other
+//   expression, type views can remap the expression itself, and apply
+//   additional views. These expressions can refer to the originating
+//   expression either explicitly using the `$` character, or implicitly in
+//   some cases. For instance, a type like
+//   `struct Bitmap {U8 *base; U32 width; U32 height;};` can be used in a type
+//   view which maps `Bitmap` to `bitmap(base, width, height)`. In this case,
+//   `base`, `width`, and `height` are recognized as being member names of
+//   `Bitmap`. This is equivalent to `bitmap($.base, $.width, $.height)`.
+// - The F1 command palette has been replaced by a substantially more powerful
+//   "everything palette" (referred to in the UI simply as "palette"), opened
+//   with the `Open Palette` command. This palette lists commands and allows
+//   the editing of bindings, just like the old command palette (although it
+//   now also supports searching for command bindings themselves, in addition
+//   to the original searching support for command names and descriptions).
+//   However, this palette now also lists: targets, breakpoints, recent files,
+//   recent projects, settings (including tab settings, window settings, user
+//   settings, project settings), attached processes, threads, modules,
+//   functions, types, and global variables. This can be used to quickly search
+//   for a large set of possible things, and either jump to them or edit them.
+// - The tab right-click menu has been upgraded to show all tab-related
+//   settings, including ones specially-defined for specific visualizers (like
+//   the width and height parameters to the bitmap visualizer).
+// - The debugger UI now more flexibly supports a larger set of possible
+//   combinations of font sizes. Each tab can have a specific font size set,
+//   which can be edited within the palette or a tab's right-click menu. If a
+//   tab has no per-tab font size set, then it inherits the setting from the
+//   window's font size.
+// - Debugger settings have been upgraded to be stored as expressions, rather
+//   than being locked to a specific value. These expressions are evaluated,
+//   like any other expression, and their evaluated value is used when the
+//   setting value is actually needed.
+// - The `slice` view has been streamlined and simplified. When an expression
+//   with a `slice` view is expanded, it will simply expand to the slice's
+//   contents, which matches the behavior with static arrays.
+// - The `slice` view now supports `first, one_past_last` pointer pairs, as
+//   well as `base_pointer, length` pairs.
+// - The debugger now displays toggle switches as an additional visualization
+//   and editor for all boolean evaluations.
+// - A new `range1` view has been added, which expresses bounds for some scalar
+//   value. When this view is used in an evaluation, the debugger will
+//   visualize the evaluation value with a slider, which can be used to edit
+//   the value as well.
 // - The hover evaluation feature has been majorly upgraded to support all
-//   features normally available in the `Watch` view. Hover evaluations now
-//   explicitly show type information, and contain a view rule column, which
-//   can be edited in a way identical to the `Watch` view.
-// - Added "auto tabs", which are colored differently than normal tabs. These
-//   tabs are automatically opened by the debugger when snapping to source code
-//   which is not already opened. They are automatically replaced and recycled
-//   when the debugger needs to snap to new locations. This will greatly reduce
-//   the number of unused source code tabs accumulated throughout a debugging
-//   session. These tabs can still be promoted to permanent tabs, in which case
-//   they'll stay around until manually closed.
-// - The `Scheduler` view has been removed, in favor of three separate views,
+//   features normally available in the `Watch` view.
+// - Added "transient tabs", which are colored differently than normal tabs.
+//   These tabs are automatically opened by the debugger when snapping to
+//   source code which is not already opened. They are automatically replaced
+//   and recycled when the debugger needs to snap to new locations. This will
+//   greatly reduce the number of unused source code tabs accumulated
+//   throughout a debugging session. These tabs can still be promoted to
+//   permanent tabs, in which case they'll stay around until manually closed.
+// - The `Scheduler` tab has been removed, in favor of three separate tabs,
 //   which present various versions of the same information: `Threads`,
 //   `Processes`, and `Machines`. The justification for this is that the
 //   common case is debugging a small number of programs, usually 1, and for
-//   those purposes, the `Threads` view is sufficient if not desirable, and
+//   those purposes, the `Threads` tab is sufficient if not desirable, and
 //   the extra information provided by `Processes` and `Machines`, while useful
-//   in other contexts, is not useful in that common case. The `Machines` view
+//   in other contexts, is not useful in that common case. The `Machines` tab
 //   now shows a superset of the information previously found in the
-//   `Scheduler` view.
+//   `Scheduler` tab.
 // - The two separate interfaces for editing threads, breakpoints, and watch
 //   pins (the right-click context menu and the dedicated tabs) have been
 //   merged. Both interfaces support exactly the same features in exactly the
-//   same way.
+//   same way. The same interface is also accessible through the palette.
 // - Added the ability to add a list of environment strings to targets.
 // - The debugger releases are now packaged with a `raddbg_markup.h`
 //   single-header library which contains a number of source code markup tools
