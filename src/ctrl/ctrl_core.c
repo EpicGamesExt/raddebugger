@@ -4819,6 +4819,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   }
   e_select_interpret_ctx(&scope->interpret_ctx, eval_modules_primary->rdi, thread_rip_voff);
   
+  ////////////////////////////
+  //- rjf: begin cached evaluations
+  //
+  e_cache_eval_begin();
+  
   return scope;
 }
 

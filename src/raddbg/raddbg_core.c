@@ -12461,6 +12461,11 @@ rd_frame(void)
     e_select_interpret_ctx(interpret_ctx, eval_modules_primary->rdi, rip_voff);
     
     ////////////////////////////
+    //- rjf: begin cached evaluations
+    //
+    e_cache_eval_begin();
+    
+    ////////////////////////////
     //- rjf: autosave if needed
     //
     {
