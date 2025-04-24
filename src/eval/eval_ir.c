@@ -1295,7 +1295,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
           e_expr_push_child(call, first_arg);
           for(E_Expr *arg = lhs->next; arg != &e_expr_nil; arg = arg->next)
           {
-            e_expr_push_child(call, e_expr_ref(arena, arg));
+            e_expr_push_child(call, e_expr_copy(arena, arg));
           }
           result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, call);
           E_MsgList new_msgs = {0};

@@ -2348,6 +2348,15 @@ rd_view_ui(Rng2F32 rect)
   RD_ViewState *vs = rd_view_state_from_cfg(view);
   String8 view_name = view->string;
   String8 expr_string = rd_expr_from_cfg(view);
+  B32 view_is_floating = 0;
+  for(RD_Cfg *p = view->parent; p != &rd_nil_cfg; p = p->parent)
+  {
+    if(str8_match(p->string, str8_lit("immediate"), 0))
+    {
+      view_is_floating = 1;
+      break;
+    }
+  }
   
   //////////////////////////////
   //- rjf: query extension
@@ -2987,14 +2996,13 @@ rd_view_ui(Rng2F32 rect)
             B32 taken = 0;
             
             //////////////////////////////
-            //- rjf: consume query-completion events, if this view is being used as a query
+            //- rjf: consume query-completion events, if this view is being used as a lister
             //
             {
-              RD_Cfg *lister = rd_cfg_child_from_string(view, str8_lit("lister"));
-              if(lister != &rd_nil_cfg &&
-                 evt->kind == UI_EventKind_Press &&
+              if(evt->kind == UI_EventKind_Press &&
                  evt->slot == UI_EventActionSlot_Accept &&
-                 selection_tbl.min.y == selection_tbl.max.y)
+                 selection_tbl.min.y == selection_tbl.max.y &&
+                 (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg || view_is_floating))
               {
                 RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
                 RD_Cfg *cmd = rd_cfg_child_from_string(query, str8_lit("cmd"));
@@ -4642,8 +4650,7 @@ rd_view_ui(Rng2F32 rect)
                           }
                           
                           // rjf: this watch window is a lister? -> move cursor & accept
-                          RD_Cfg *lister = rd_cfg_child_from_string(view, str8_lit("lister"));
-                          if(lister != &rd_nil_cfg)
+                          if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             rd_cmd(RD_CmdKind_Accept);
@@ -4744,6 +4751,13 @@ rd_view_ui(Rng2F32 rect)
                           else if(cell_info.entity->kind == CTRL_EntityKind_Thread)
                           {
                             rd_cmd(RD_CmdKind_SelectThread, .thread = cell_info.entity->handle);
+                          }
+                          
+                          // rjf: other cases, but this watch window is floating? -> move cursor & accept
+                          else
+                          {
+                            ewv->next_cursor = ewv->next_mark = cell_pt;
+                            rd_cmd(RD_CmdKind_Accept);
                           }
                         }
                         
@@ -6841,8 +6855,8 @@ rd_window_frame(void)
                 }
                 
                 // rjf: view menu
-                UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
-                UI_CtxMenu(view_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
+                UI_Key tab_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_menu_key_"));
+                UI_CtxMenu(tab_menu_key) UI_PrefWidth(ui_em(50.f, 1.f)) UI_TagF("implicit")
                 {
                   String8 cmds[] =
                   {
@@ -7003,7 +7017,7 @@ rd_window_frame(void)
                     {str8_lit("File"),     'f', OS_Key_F, file_menu_key},
                     {str8_lit("Window"),   'w', OS_Key_W, window_menu_key},
                     {str8_lit("Panel"),    'p', OS_Key_P, panel_menu_key},
-                    {str8_lit("View"),     'v', OS_Key_V, view_menu_key},
+                    {str8_lit("Tab"),      'b', OS_Key_V, tab_menu_key},
                     {str8_lit("Targets"),  't', OS_Key_T, targets_menu_key},
                     {str8_lit("Control"),  'c', OS_Key_C, ctrl_menu_key},
                     {str8_lit("Help"),     'h', OS_Key_H, help_menu_key},

@@ -1440,6 +1440,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //////////////////////////////
   //- rjf: unpack evaluation
   //
+  E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
   E_Type *cell_type = e_type_from_key__cached(cell->eval.irtree.type_key);
   MD_NodePtrList cell_schemas = rd_schemas_from_name(cell_type->name);
   if(cell->eval.space.u64s[1] == 0 && cell_schemas.count != 0)
@@ -1612,83 +1613,88 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           // rjf: if this cell has no string specified, then we need to synthesize one from the evaluation
           if(expr_string.size == 0)
           {
-            // rjf: first, locate a notable expression - we special-case things like member accesses
-            // or array indices, so we should grab those if possible
-            E_Expr *notable_expr = cell->eval.expr;
-            for(B32 good = 0; !good;)
+            // rjf: defaultly fill the cell's expression string, before trying other things
+            expr_string = cell->eval.string;
+            
+            // rjf: try to form a simpler expression string out of the expression tree itself, *if* this
+            // is not an editable expression
+            if(!(block_type->flags & E_TypeFlag_EditableChildren))
             {
+              // rjf: first, locate a notable expression - we special-case things like member accesses
+              // or array indices, so we should grab those if possible
+              E_Expr *notable_expr = cell->eval.expr;
+              for(B32 good = 0; !good;)
+              {
+                switch(notable_expr->kind)
+                {
+                  default:{good = 1;}break;
+                  case E_ExprKind_Address:
+                  case E_ExprKind_Deref:
+                  case E_ExprKind_Cast:
+                  {
+                    notable_expr = notable_expr->last;
+                  }break;
+                  case E_ExprKind_Ref:
+                  {
+                    notable_expr = notable_expr->ref;
+                  }break;
+                }
+              }
+              
+              // rjf: generate expression string based on our notable expression
               switch(notable_expr->kind)
               {
-                default:{good = 1;}break;
-                case E_ExprKind_Address:
-                case E_ExprKind_Deref:
-                case E_ExprKind_Cast:
+                // rjf: default case -> just take whatever string was directly passed via the evaluation
+                default:{}break;
+                
+                // rjf: array indices -> fast path to [index]
+                case E_ExprKind_ArrayIndex:
                 {
-                  notable_expr = notable_expr->last;
+                  expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last, str8_zero()));
                 }break;
-                case E_ExprKind_Ref:
+                
+                // rjf: member accesses -> fast-path to .name
+                case E_ExprKind_MemberAccess:
                 {
-                  notable_expr = notable_expr->ref;
+                  Temp scratch = scratch_begin(&arena, 1);
+                  
+                  // TODO(rjf): @cfg need to build inheritance tooltips
+#if 0
+                  if(member.inheritance_key_chain.count != 0)
+                  {
+                    String8List strings = {0};
+                    for(E_TypeKeyNode *n = member.inheritance_key_chain.first; n != 0; n = n->next)
+                    {
+                      String8 base_class_name = e_type_string_from_key(scratch.arena, n->v);
+                      str8_list_push(scratch.arena, &strings, base_class_name);
+                    }
+                    result.inheritance_tooltip = str8_list_join(arena, &strings, &(StringJoin){.sep = str8_lit_comp("::")});
+                  }
+#endif
+                  
+                  // rjf: in meta-evaluation spaces, we will try to look up into our vocabulary map
+                  // to see if we have a fancy display string for this member. otherwise, we will just
+                  // do a code-string of ".member_name"
+                  String8 member_name = notable_expr->first->next->string;
+                  if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+                     cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+                     cell->eval.space.kind == E_SpaceKind_File ||
+                     cell->eval.space.kind == E_SpaceKind_FileSystem)
+                  {
+                    String8 fancy_name = rd_display_from_code_name(member_name);
+                    if(fancy_name.size != 0)
+                    {
+                      member_name = fancy_name;
+                      is_non_code = 1;
+                    }
+                  }
+                  if(member_name.size != 0)
+                  {
+                    expr_string = push_str8f(arena, ".%S", member_name);
+                  }
+                  scratch_end(scratch);
                 }break;
               }
-            }
-            
-            // rjf: generate expression string based on our notable expression
-            switch(notable_expr->kind)
-            {
-              // rjf: default case -> just take whatever string was directly passed via the evaluation
-              default:
-              {
-                expr_string = cell->eval.string;
-              }break;
-              
-              // rjf: array indices -> fast path to [index]
-              case E_ExprKind_ArrayIndex:
-              {
-                expr_string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last, str8_zero()));
-              }break;
-              
-              // rjf: member accesses -> fast-path to .name
-              case E_ExprKind_MemberAccess:
-              {
-                Temp scratch = scratch_begin(&arena, 1);
-                
-                // TODO(rjf): @cfg need to build inheritance tooltips
-#if 0
-                if(member.inheritance_key_chain.count != 0)
-                {
-                  String8List strings = {0};
-                  for(E_TypeKeyNode *n = member.inheritance_key_chain.first; n != 0; n = n->next)
-                  {
-                    String8 base_class_name = e_type_string_from_key(scratch.arena, n->v);
-                    str8_list_push(scratch.arena, &strings, base_class_name);
-                  }
-                  result.inheritance_tooltip = str8_list_join(arena, &strings, &(StringJoin){.sep = str8_lit_comp("::")});
-                }
-#endif
-                
-                // rjf: in meta-evaluation spaces, we will try to look up into our vocabulary map
-                // to see if we have a fancy display string for this member. otherwise, we will just
-                // do a code-string of ".member_name"
-                String8 member_name = notable_expr->first->next->string;
-                if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-                   cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                   cell->eval.space.kind == E_SpaceKind_File ||
-                   cell->eval.space.kind == E_SpaceKind_FileSystem)
-                {
-                  String8 fancy_name = rd_display_from_code_name(member_name);
-                  if(fancy_name.size != 0)
-                  {
-                    expr_string = fancy_name;
-                    is_non_code = 1;
-                  }
-                }
-                if(expr_string.size == 0)
-                {
-                  expr_string = push_str8f(arena, ".%S", member_name);
-                }
-                scratch_end(scratch);
-              }break;
             }
           }
           

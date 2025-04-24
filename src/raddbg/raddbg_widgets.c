@@ -3454,7 +3454,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //////////////////////////////
   //- rjf: build bindings
   //
-  if(build_bindings) UI_Parent(box) RD_Font(RD_FontSlot_Main)
+  if(build_bindings) UI_Parent(box) RD_Font(RD_FontSlot_Main) UI_PermissionFlags(UI_PermissionFlag_Clicks)
   {
     UI_PrefWidth(ui_children_sum(1)) UI_Column UI_Padding(ui_px(ui_top_px_height()*0.2f, 1.f)) UI_HeightFill
     {
