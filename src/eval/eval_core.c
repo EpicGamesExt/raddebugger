@@ -852,10 +852,11 @@ e_eval_from_bundle(E_CacheBundle *bundle)
 {
   E_Eval eval =
   {
-    .key = bundle->key,
-    .expr = e_parse_from_bundle(bundle).expr,
-    .irtree = e_irtree_from_bundle(bundle),
-    .bytecode = e_bytecode_from_bundle(bundle),
+    .key       = bundle->key,
+    .string    = bundle->string,
+    .expr      = e_parse_from_bundle(bundle).expr,
+    .irtree    = e_irtree_from_bundle(bundle),
+    .bytecode  = e_bytecode_from_bundle(bundle),
   };
   E_Interpretation interpretation = e_interpretation_from_bundle(bundle);
   eval.code = interpretation.code;

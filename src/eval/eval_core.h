@@ -286,6 +286,16 @@ struct E_ExprList
   U64 count;
 };
 
+typedef struct E_Parse E_Parse;
+struct E_Parse
+{
+  E_TokenArray tokens;
+  E_Token *last_token;
+  E_Expr *expr;
+  E_Expr *last_expr;
+  E_MsgList msgs;
+};
+
 ////////////////////////////////
 //~ rjf: IR Tree Types
 
@@ -313,12 +323,24 @@ struct E_IRTreeAndType
 };
 
 ////////////////////////////////
+//~ rjf: Bytecode Interpretation Types
+
+typedef struct E_Interpretation E_Interpretation;
+struct E_Interpretation
+{
+  E_Value value;
+  E_Space space;
+  E_InterpretationCode code;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Artifact Bundle
 
 typedef struct E_Eval E_Eval;
 struct E_Eval
 {
   E_Key key;
+  String8 string;
   E_Expr *expr;
   E_IRTreeAndType irtree;
   String8 bytecode;
@@ -432,12 +454,12 @@ typedef E_TYPE_IREXT_FUNCTION_SIG(E_TypeIRExtFunctionType);
 #define E_TYPE_ACCESS_FUNCTION_DEF(name) internal E_TYPE_ACCESS_FUNCTION_SIG(E_TYPE_ACCESS_FUNCTION_NAME(name))
 typedef E_TYPE_ACCESS_FUNCTION_SIG(E_TypeAccessFunctionType);
 
-#define E_TYPE_EXPAND_INFO_FUNCTION_SIG(name) E_TypeExpandInfo name(Arena *arena, E_Expr *expr, E_IRTreeAndType *irtree, String8 filter)
+#define E_TYPE_EXPAND_INFO_FUNCTION_SIG(name) E_TypeExpandInfo name(Arena *arena, E_Eval eval, String8 filter)
 #define E_TYPE_EXPAND_INFO_FUNCTION_NAME(name) e_type_expand_info__##name
 #define E_TYPE_EXPAND_INFO_FUNCTION_DEF(name) internal E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TYPE_EXPAND_INFO_FUNCTION_NAME(name))
 typedef E_TYPE_EXPAND_INFO_FUNCTION_SIG(E_TypeExpandInfoFunctionType);
 
-#define E_TYPE_EXPAND_RANGE_FUNCTION_SIG(name) void name(Arena *arena, void *user_data, E_Expr *expr, E_IRTreeAndType *irtree, String8 filter, Rng1U64 idx_range, E_Expr **exprs_out, String8 *exprs_strings_out)
+#define E_TYPE_EXPAND_RANGE_FUNCTION_SIG(name) void name(Arena *arena, void *user_data, E_Eval eval, String8 filter, Rng1U64 idx_range, E_Eval *evals_out)
 #define E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name) e_type_expand_range__##name
 #define E_TYPE_EXPAND_RANGE_FUNCTION_DEF(name) internal E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TYPE_EXPAND_RANGE_FUNCTION_NAME(name))
 typedef E_TYPE_EXPAND_RANGE_FUNCTION_SIG(E_TypeExpandRangeFunctionType);
@@ -696,30 +718,6 @@ struct E_IRCtx
   E_String2NumMap *member_map; // (within `primary_module`)
   E_String2ExprMap *macro_map;
   E_AutoHookMap *auto_hook_map;
-};
-
-////////////////////////////////
-//~ rjf: Parse Results
-
-typedef struct E_Parse E_Parse;
-struct E_Parse
-{
-  E_TokenArray tokens;
-  E_Token *last_token;
-  E_Expr *expr;
-  E_Expr *last_expr;
-  E_MsgList msgs;
-};
-
-////////////////////////////////
-//~ rjf: Bytecode Interpretation Types
-
-typedef struct E_Interpretation E_Interpretation;
-struct E_Interpretation
-{
-  E_Value value;
-  E_Space space;
-  E_InterpretationCode code;
 };
 
 ////////////////////////////////
@@ -991,7 +989,7 @@ read_only global E_String2NumMap e_string2num_map_nil = {0};
 read_only global E_String2ExprMap e_string2expr_map_nil = {0};
 read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-read_only global E_Eval e_eval_nil = {{0}, &e_expr_nil, {&e_irnode_nil}};
+read_only global E_Eval e_eval_nil = {{0}, {0}, &e_expr_nil, {&e_irnode_nil}};
 read_only global E_Module e_module_nil = {&rdi_parsed_nil};
 read_only global E_CacheBundle e_cache_bundle_nil = {0, {0}, {0}, {0}, {{0}, 0, &e_expr_nil, &e_expr_nil}, {&e_irnode_nil}};
 thread_static E_BaseCtx *e_base_ctx = 0;

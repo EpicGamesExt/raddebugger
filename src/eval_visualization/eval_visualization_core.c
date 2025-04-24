@@ -587,7 +587,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       
       // rjf: get top-level lookup/expansion info
       // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
-      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval.expr, &t->eval.irtree, filter);
+      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval, filter);
       EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr);
       
       // rjf: determine expansion info
@@ -701,21 +701,16 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
         if(viz_expand_info.rows_default_expanded || ev_expansion_from_key(view, child_keys[idx]))
         {
           Rng1U64 child_range = r1u64(split_relative_idx, split_relative_idx+1);
-          E_Expr *child_expr = &e_expr_nil;
-          String8 child_string = {0};
-          type_expand_rule->range(arena, type_expand_info.user_data, t->eval.expr, &t->eval.irtree, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_expr, &child_string);
-          if(child_expr != &e_expr_nil)
-          {
-            E_Eval child_eval = e_eval_from_expr(child_expr);
-            EV_Key child_key = child_keys[idx];
-            Task *task = push_array(scratch.arena, Task, 1);
-            SLLQueuePush(first_task, last_task, task);
-            task->parent_block       = expansion_block;
-            task->eval               = child_eval;
-            task->child_id           = child_key.child_id;
-            task->split_relative_idx = split_relative_idx;
-            task->default_expanded   = viz_expand_info.rows_default_expanded;
-          }
+          E_Eval child_eval = {0};
+          type_expand_rule->range(arena, type_expand_info.user_data, t->eval, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
+          EV_Key child_key = child_keys[idx];
+          Task *task = push_array(scratch.arena, Task, 1);
+          SLLQueuePush(first_task, last_task, task);
+          task->parent_block       = expansion_block;
+          task->eval               = child_eval;
+          task->child_id           = child_key.child_id;
+          task->split_relative_idx = split_relative_idx;
+          task->default_expanded   = viz_expand_info.rows_default_expanded;
         }
       }
       
@@ -1009,11 +1004,10 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         // rjf: get info about expansion range
         B32 is_standalone_row = 0;
         U64 range_exprs_count = dim_1u64(block_relative_range__windowed);
-        E_Expr **range_exprs = push_array(arena, E_Expr *, range_exprs_count);
-        String8 *range_exprs_strings = push_array(arena, String8 ,range_exprs_count);
+        E_Eval *range_evals = push_array(arena, E_Eval, range_exprs_count);
         for EachIndex(idx, range_exprs_count)
         {
-          range_exprs[idx] = &e_expr_nil;
+          range_evals[idx] = e_eval_nil;
         }
         if(n->v.block->viz_expand_info.single_item || n->v.block->parent == &ev_nil_block)
         {
@@ -1021,7 +1015,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         }
         else
         {
-          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval.expr, &n->v.block->eval.irtree, filter, block_relative_range__windowed, range_exprs, range_exprs_strings);
+          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval, filter, block_relative_range__windowed, range_evals);
         }
         
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
@@ -1046,8 +1040,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           U64 child_num = block_relative_range.min + num_skipped + idx + 1;
           U64 child_id = ev_block_id_from_num(n->v.block, child_num);
           EV_Key row_key = ev_key_make(ev_hash_from_key(n->v.block->key), child_id);
-          E_Expr *row_expr = range_exprs[idx];
-          E_Eval row_eval = e_eval_from_expr(row_expr);
+          E_Eval row_eval = range_evals[idx];
           EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
           SLLQueuePush(rows.first, rows.last, row_node);
           rows.count += 1;
@@ -1055,7 +1048,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           row->block                = n->v.block;
           row->key                  = row_key;
           row->visual_size          = 1;
-          row->edit_string          = range_exprs_strings[idx];
+          row->edit_string          = row_eval.string;
           row->eval                 = row_eval;
         }
       }
@@ -2107,7 +2100,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           expand_data->type = e_type_from_key__cached(type_key);
           expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
           // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
-          expand_data->expand_info = expand_data->expand_rule->info(arena, eval.expr, &eval.irtree, params->filter);
+          expand_data->expand_info = expand_data->expand_rule->info(arena, eval, params->filter);
         }
         switch(task_idx)
         {
@@ -2128,15 +2121,14 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           //- rjf: middle step -> generate new task for next thing in expansion
           else
           {
-            E_Expr *next_expr = &e_expr_nil;
-            String8 next_string = {0};
-            expand_data->expand_rule->range(arena, expand_data->expand_info.user_data, eval.expr, &eval.irtree, params->filter, r1u64(task_idx-1, task_idx), &next_expr, &next_string);
-            if(next_expr != &e_expr_nil)
+            E_Eval next_eval = {0};
+            expand_data->expand_rule->range(arena, expand_data->expand_info.user_data, eval, params->filter, r1u64(task_idx-1, task_idx), &next_eval);
+            if(next_eval.expr != 0 && next_eval.expr != &e_expr_nil)
             {
               need_new_task = 1;
               need_pop = 0;
               new_task.params = *params;
-              new_task.eval = e_eval_from_expr(next_expr);
+              new_task.eval = next_eval;
               if(task_idx > 1)
               {
                 *out_string = str8_lit(", ");

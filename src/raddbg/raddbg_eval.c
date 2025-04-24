@@ -76,7 +76,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
   {
     String8 cmd_name = accel->v[idx];
     E_Eval cmd_eval = e_eval_from_stringf("query:commands.%S", cmd_name);
-    exprs_out[out_idx] = cmd_eval.expr;
+    evals_out[out_idx] = cmd_eval;
   }
 }
 
@@ -138,8 +138,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches)
     if(cfg_idx < cfgs->count)
     {
       String8 expr_string = rd_cfg_child_from_string(cfgs->v[cfg_idx], str8_lit("expression"))->first->string;
-      exprs_out[idx] = e_parse_from_string(expr_string).expr;
-      exprs_strings_out[idx] = push_str8_copy(arena, expr_string);
+      evals_out[idx] = e_eval_from_string(expr_string);
     }
   }
 }
@@ -220,8 +219,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(locals)
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
     String8 expr_string = accel->v[read_range.min + idx];
-    exprs_out[idx] = e_parse_from_string(expr_string).expr;
-    exprs_strings_out[idx] = push_str8_copy(arena, expr_string);
+    evals_out[idx] = e_eval_from_string(expr_string);
   }
 }
 
@@ -271,8 +269,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(registers)
   {
     String8 register_name = accel->v[read_range.min + idx];
     String8 register_expr = push_str8f(arena, "reg:%S", register_name);
-    exprs_strings_out[idx] = register_name;
-    exprs_out[idx] = e_parse_from_string(register_expr).expr;
+    evals_out[idx] = e_eval_from_string(register_expr);
   }
 }
 
@@ -503,7 +500,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
     Temp scratch = scratch_begin(&arena, 1);
     
     // rjf: unpack
-    RD_SchemaIRExt *ext = (RD_SchemaIRExt *)irtree->user_data;
+    RD_SchemaIRExt *ext = (RD_SchemaIRExt *)eval.irtree.user_data;
     
     // rjf: gather expansion commands
     String8Array commands = {0};
@@ -597,7 +594,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema)
     Rng1U64 read_range = intersect_1u64(idx_range, cmds_idx_range);
     for(U64 idx = read_range.min; idx < read_range.max; idx += 1, out_idx += 1)
     {
-      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, accel->commands.v[idx - cmds_idx_range.min]);
+      evals_out[out_idx] = e_eval_from_stringf("query:commands.%S", accel->commands.v[idx - cmds_idx_range.min]);
     }
   }
   
@@ -607,7 +604,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema)
     for(U64 idx = read_range.min; idx < read_range.max; idx += 1, out_idx += 1)
     {
       MD_Node *child_schema = accel->children[idx - chld_idx_range.min];
-      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, child_schema->string);
+      evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", child_schema->string);
     }
   }
 }
@@ -719,7 +716,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs)
   Temp scratch = scratch_begin(&arena, 1);
   {
     //- rjf: unpack
-    RD_CfgsIRExt *ext = (RD_CfgsIRExt *)irtree->user_data;
+    RD_CfgsIRExt *ext = (RD_CfgsIRExt *)eval.irtree.user_data;
     
     //- rjf: filter cfgs
     RD_CfgArray cfgs__filtered = ext->cfgs;
@@ -767,7 +764,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
     {
       String8 cmd_name = accel->cmds.v[idx + read_range.min - cmds_idx_range.min];
       E_Eval cmd_eval = e_eval_wrapf(cmds_eval, "$.%S", cmd_name);
-      exprs_out[dst_idx] = cmd_eval.expr;
+      evals_out[dst_idx] = cmd_eval;
     }
   }
   
@@ -778,7 +775,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
-      exprs_out[dst_idx] = e_expr_irext_member_access(arena, expr, irtree, push_str8f(arena, "$%I64d", cfg->id));
+      evals_out[dst_idx] = e_eval_wrapf(eval, "$.$%I64d", cfg->id);
     }
   }
 }
@@ -883,7 +880,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
 {
-  RD_CallStackAccel *accel = (RD_CallStackAccel *)irtree->user_data;
+  RD_CallStackAccel *accel = (RD_CallStackAccel *)eval.irtree.user_data;
   E_TypeExpandInfo result = {0};
   result.user_data = accel;
   result.expr_count = accel->call_stack.count;
@@ -945,7 +942,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(environment)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment)
 {
-  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)irtree->user_data;
+  RD_EnvironmentAccel *accel = (RD_EnvironmentAccel *)eval.irtree.user_data;
   E_TypeExpandInfo result = {accel, accel->cfgs.count + 1};
   return result;
 }
@@ -961,7 +958,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(environment)
     U64 cfg_idx = read_range.min + idx;
     if(cfg_idx < accel->cfgs.count)
     {
-      exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, cfg_idx);
+      evals_out[idx] = e_eval_wrapf(eval, "$[%I64u]", cfg_idx);
     }
   }
 }
@@ -1022,10 +1019,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     Temp scratch = scratch_begin(&arena, 1);
     
     //- rjf: evaluate lhs machine, if we have one
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
-    CTRL_Entity *lhs_entity = rd_ctrl_entity_from_eval_space(lhs_interp.space);
+    CTRL_Entity *lhs_entity = rd_ctrl_entity_from_eval_space(eval.space);
     
     //- rjf: gather all machines we're searching through
     CTRL_EntityArray machines = {0};
@@ -1113,12 +1107,13 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes)
   E_TypeKey unattached_process_type = e_type_key_cons(.kind = E_TypeKind_U128, .name = str8_lit("unattached_process"));
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
+#if 0 // TODO(rjf): @eval
     E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
     expr->type_key = unattached_process_type;
     expr->value.u128.u64[0] = accel->infos[idx].pid;
     expr->value.u128.u64[1] = e_id_from_string(accel->infos[idx].name);
     expr->space = rd_eval_space_from_ctrl_entity(accel->machines[idx], RD_EvalSpaceKind_MetaUnattachedProcess);
-    exprs_out[out_idx] = expr;
+#endif
   }
 }
 
@@ -1170,17 +1165,14 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
   Temp scratch = scratch_begin(&arena, 1);
   {
     //- rjf: determine which entity we're looking under
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
     CTRL_Entity *scoping_entity = &ctrl_entity_nil;
-    if(lhs_interp.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+    if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
     {
-      scoping_entity = rd_ctrl_entity_from_eval_space(lhs_interp.space);
+      scoping_entity = rd_ctrl_entity_from_eval_space(eval.space);
     }
     
     //- rjf: determine which type of child we're gathering
-    E_TypeKey lhs_type_key = irtree->type_key;
+    E_TypeKey lhs_type_key = eval.irtree.type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 name = rd_singular_from_code_name_plural(lhs_type->name);
     CTRL_EntityKind entity_kind = ctrl_entity_kind_from_string(name);
@@ -1242,7 +1234,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities)
   for(U64 out_idx = 0; out_idx < read_count; out_idx += 1)
   {
     CTRL_Entity *entity = entities->v[out_idx + read_range.min];
-    exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, ctrl_string_from_handle(arena, entity->handle));
+    evals_out[out_idx] = ctrl_eval_from_handle(entity->handle);
   }
 }
 
@@ -1265,7 +1257,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
   // rjf: determine which debug info section we're dealing with
   RDI_SectionKind section = RDI_SectionKind_NULL;
   {
-    E_TypeKey lhs_type_key = irtree->type_key;
+    E_TypeKey lhs_type_key = eval.irtree.type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     if(0){}
     else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
@@ -1327,8 +1319,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
     E_Module *module = &e_base_ctx->modules[item->dbgi_idx];
     
-    // rjf: build expr
-    E_Expr *item_expr = &e_expr_nil;
+    // rjf: build item's evaluation
+    E_Eval item_eval = e_eval_nil;
     {
       U64 element_idx = item->idx;
       switch(accel->section)
@@ -1336,7 +1328,6 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
         default:{}break;
         case RDI_SectionKind_Procedures:
         {
-          Temp scratch = scratch_begin(&arena, 1);
           RDI_Procedure *procedure = rdi_element_from_name_idx(module->rdi, Procedures, element_idx);
           RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
           U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
@@ -1348,64 +1339,35 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &symbol_name.size);
-          String8List strings = {0};
-          e_type_lhs_string_from_key(scratch.arena, type_key, &strings, 0, 0);
-          str8_list_push(scratch.arena, &strings, symbol_name);
-          e_type_rhs_string_from_key(scratch.arena, type_key, &strings, 0);
-          item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-          item_expr->mode     = E_Mode_Value;
-          item_expr->space    = module->space;
-          item_expr->type_key = type_key;
-          item_expr->bytecode = bytecode;
-          item_expr->string   = str8_list_join(arena, &strings, 0);
-          scratch_end(scratch);
+          item_eval = e_eval_from_string(symbol_name);
         }break;
         case RDI_SectionKind_GlobalVariables:
         {
           RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
-          U64 voff = gvar->voff;
-          E_OpList oplist = {0};
-          e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
-          String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-          U32 type_idx = gvar->type_idx;
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
-          item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-          item_expr->mode     = E_Mode_Offset;
-          item_expr->space    = module->space;
-          item_expr->type_key = type_key;
-          item_expr->bytecode = bytecode;
-          item_expr->string.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &item_expr->string.size);
+          String8 symbol_name = {0};
+          symbol_name.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &symbol_name.size);
+          item_eval = e_eval_from_string(symbol_name);
         }break;
         case RDI_SectionKind_ThreadVariables:
         {
           RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
-          E_OpList oplist = {0};
-          e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(tvar->tls_off));
-          String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-          U32 type_idx = tvar->type_idx;
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
-          item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-          item_expr->mode     = E_Mode_Offset;
-          item_expr->space    = module->space;
-          item_expr->type_key = type_key;
-          item_expr->bytecode = bytecode;
-          item_expr->string.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &item_expr->string.size);
+          String8 symbol_name = {0};
+          symbol_name.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &symbol_name.size);
+          item_eval = e_eval_from_string(symbol_name);
         }break;
         case RDI_SectionKind_UDTs:
         {
           RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_base_ctx->modules));
-          item_expr = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
-          item_expr->type_key = type_key;
+          String8 name = {0};
+          name.str = rdi_string_from_idx(module->rdi, type_node->user_defined.name_string_idx, &name.size);
+          item_eval = e_eval_from_string(name);
         }break;
       }
     }
     
     // rjf: fill
-    exprs_out[idx] = item_expr;
+    evals_out[idx] = item_eval;
   }
 }
 

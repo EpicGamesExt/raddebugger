@@ -2103,7 +2103,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
   {
     //- rjf: try to extract a struct-like type key, enum-like, or array-like
     // type key, for expansion
-    E_TypeKey expand_type_key = e_default_expansion_type_from_key(irtree->type_key);
+    E_TypeKey expand_type_key = e_default_expansion_type_from_key(eval.irtree.type_key);
     
     //- rjf: struct type? -> use the struct type for expansion
     B32 did_expansion = 0;
@@ -2154,7 +2154,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
   {
     //- rjf: try to extract a struct-like type key, enum-like, or array-like
     // type key, for expansion
-    E_TypeKey expand_type_key = e_default_expansion_type_from_key(irtree->type_key);
+    E_TypeKey expand_type_key = e_default_expansion_type_from_key(eval.irtree.type_key);
     E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
     
     //- rjf: struct case -> the lookup-range will return a range of members
@@ -2170,7 +2170,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = data_members.v[member_idx].name;
-        exprs_out[idx] = e_expr_irext_member_access(arena, expr, irtree, member_name);
+        evals_out[idx] = e_eval_wrapf(eval, "$.%S", member_name);
       }
     }
     
@@ -2185,7 +2185,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = type->enum_vals[member_idx].name;
-        exprs_out[idx] = e_expr_irext_member_access(arena, expr, irtree, member_name);
+        evals_out[idx] = e_eval_wrapf(eval, "$.%S", member_name);
       }
     }
     
@@ -2197,7 +2197,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       U64 read_range_count = dim_1u64(idx_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
-        exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
+        evals_out[idx] = e_eval_wrapf(eval, "$[%I64u]", idx_range.min + idx);
       }
     }
   }
@@ -2219,21 +2219,21 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(only)
 {
-  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
   E_TypeExpandInfo info = {0, type->count};
   return info;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
 {
-  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
   U64 out_idx = 0;
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     E_Expr *arg = type->args[idx];
     if(arg->string.size != 0)
     {
-      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, arg->string);
+      evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", arg->string);
     }
   }
 }
@@ -2243,12 +2243,13 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
 {
-  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
   String8Array allowed_children_array = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8List allowed_children = {0};
     {
+#if 0 // TODO(rjf): @eval
       E_Type *stripped_type = e_type_from_key__cached(type->direct_type_key);
       // TODO(rjf): this is kind of ugly due to the need to call irext,
       // i wish it was possible to have an easier way to "strip" the current
@@ -2289,6 +2290,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
           }
         }
       }
+#endif
     }
     allowed_children_array = str8_array_from_list(arena, &allowed_children);
     scratch_end(scratch);
@@ -2308,7 +2310,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(omit)
     String8 name = ext->v[idx];
     if(name.size != 0)
     {
-      exprs_out[out_idx] = e_expr_irext_member_access(arena, expr, irtree, name);
+      evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", name);
     }
   }
 }
@@ -2318,18 +2320,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(omit)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(sequence)
 {
-  E_Type *type = e_type_from_key__cached(irtree->type_key);
-  U64 count = 0;
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_OpList count_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
-    String8 count_bytecode = e_bytecode_from_oplist(scratch.arena, &count_oplist);
-    E_Interpretation count_interpret = e_interpret(count_bytecode);
-    E_Value count_value = count_interpret.value;
-    count = count_value.u64;
-    scratch_end(scratch);
-  }
-  E_TypeExpandInfo info = {0, count};
+  E_TypeExpandInfo info = {0, eval.value.u64};
   return info;
 }
 
@@ -2338,9 +2329,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(sequence)
   U64 read_range_count = dim_1u64(idx_range);
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
-    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-    expr->value.u64 = idx_range.min + idx;
-    exprs_out[idx] = expr;
+    evals_out[idx] = e_eval_from_stringf("%I64u", idx_range.min + idx);
   }
 }
 
@@ -2349,7 +2338,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(sequence)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
 {
-  E_Type *type = e_type_from_key__cached(irtree->type_key);
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
   U64 count = 1;
   if(type->args != 0 && type->count > 0)
   {
@@ -2366,7 +2355,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(array)
   U64 read_range_count = dim_1u64(idx_range);
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
-    exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
+    evals_out[idx] = e_eval_wrapf(eval, "$[I64u]", idx_range.min + idx);
   }
 }
 
@@ -2525,7 +2514,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice)
 {
-  E_SliceAccel *accel = (E_SliceAccel *)irtree->user_data;
+  E_SliceAccel *accel = (E_SliceAccel *)eval.irtree.user_data;
   E_TypeExpandInfo info = {accel, accel->count};
   return info;
 }
@@ -2535,7 +2524,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(slice)
   U64 read_range_count = dim_1u64(idx_range);
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
-    exprs_out[idx] = e_expr_irext_array_index(arena, expr, irtree, idx_range.min + idx);
+    evals_out[idx] = e_eval_wrapf(eval, "$[%I64u]", idx_range.min + idx);
   }
 }
 
@@ -2557,11 +2546,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(folder)
     Temp scratch = scratch_begin(&arena, 1);
     
     //- rjf: evaluate lhs file path ID
-    E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, irtree->root);
-    String8 lhs_bytecode = e_bytecode_from_oplist(scratch.arena, &lhs_oplist);
-    E_Interpretation lhs_interp = e_interpret(lhs_bytecode);
-    E_Value lhs_value = lhs_interp.value;
-    U64 lhs_string_id = lhs_value.u64;
+    U64 lhs_string_id = eval.value.u64;
     String8 folder_path = e_string_from_id(lhs_string_id);
     
     //- rjf: compute filter - omit common prefixes (common parent paths)
@@ -2621,30 +2606,20 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(folder)
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Expr *expr = &e_expr_nil;
-    String8 expr_string = {0};
+    String8 path_expr_string = {0};
     if(0 <= idx && idx < accel->folders.count)
     {
       String8 folder_name = accel->folders.v[idx - 0];
       String8 folder_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", folder_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("folder"));
-      expr->space = e_space_make(E_SpaceKind_FileSystem);
-      expr->value.u64 = e_id_from_string(folder_path);
-      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, folder_name));
+      path_expr_string = push_str8f(arena, "file:\"%S\"", escaped_from_raw_str8(scratch.arena, folder_path));
     }
     else if(accel->folders.count <= idx && idx < accel->folders.count + accel->files.count)
     {
       String8 file_name = accel->files.v[idx - accel->folders.count];
       String8 file_path = push_str8f(scratch.arena, "%S%s%S", accel->folder_path, accel->folder_path.size != 0 ? "/" : "", file_name);
-      expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-      expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("file"));
-      expr->space = e_space_make(E_SpaceKind_FileSystem);
-      expr->value.u64 = e_id_from_string(file_path);
-      expr_string = push_str8f(arena, "\"%S\"", escaped_from_raw_str8(scratch.arena, file_name));
+      path_expr_string = push_str8f(arena, "file:\"%S\"", escaped_from_raw_str8(scratch.arena, file_path));
     }
-    exprs_out[out_idx] = expr;
-    exprs_strings_out[out_idx] = expr_string;
+    evals_out[out_idx] = e_eval_from_string(path_expr_string);
     scratch_end(scratch);
   }
 }
@@ -2783,7 +2758,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(file)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(file)
 {
-  E_FileAccel *accel = (E_FileAccel *)irtree->user_data;
+  E_FileAccel *accel = (E_FileAccel *)eval.irtree.user_data;
   E_TypeExpandInfo info = {accel, accel->fields.count};
   return info;
 }
@@ -2805,8 +2780,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(file)
       rhs->string = push_str8_copy(arena, name);
       e_expr_push_child(expr, lhs);
       e_expr_push_child(expr, rhs);
+      evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", name);
     }
-    exprs_out[out_idx] = expr;
-    exprs_strings_out[out_idx] = string;
   }
 }
