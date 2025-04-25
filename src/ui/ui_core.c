@@ -1616,29 +1616,23 @@ internal void
 ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  
-  switch(root->pref_size[axis].kind)
+  for(UI_Box *b = root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, root).next)
   {
-    default:{}break;
-    case UI_SizeKind_Pixels:
+    switch(b->pref_size[axis].kind)
     {
-      root->fixed_size.v[axis] = root->pref_size[axis].value;
-    }break;
-    
-    case UI_SizeKind_TextContent:
-    {
-      F32 padding = root->pref_size[axis].value;
-      F32 text_size = root->display_fruns.dim.x;
-      root->fixed_size.v[axis] = padding + text_size + root->text_padding*2;
-    }break;
+      default:{}break;
+      case UI_SizeKind_Pixels:
+      {
+        b->fixed_size.v[axis] = b->pref_size[axis].value;
+      }break;
+      case UI_SizeKind_TextContent:
+      {
+        F32 padding = b->pref_size[axis].value;
+        F32 text_size = b->display_fruns.dim.x;
+        b->fixed_size.v[axis] = padding + text_size + b->text_padding*2;
+      }break;
+    }
   }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_calc_sizes_standalone__in_place_rec(child, axis);
-  }
-  
   ProfEnd();
 }
 
@@ -1646,43 +1640,35 @@ internal void
 ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  
-  //- rjf: solve for all kinds that are upwards-dependent
-  switch(root->pref_size[axis].kind)
+  for(UI_Box *b = root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, root).next)
   {
-    default: break;
-    
-    // rjf: if root has a parent percentage, figure out its size
-    case UI_SizeKind_ParentPct:
+    switch(b->pref_size[axis].kind)
     {
-      // rjf: find parent that has a fixed size
-      UI_Box *fixed_parent = &ui_nil_box;
-      for(UI_Box *p = root->parent; !ui_box_is_nil(p); p = p->parent)
+      default:{}break;
+      case UI_SizeKind_ParentPct:
       {
-        if(p->flags & (UI_BoxFlag_FixedWidth<<axis) ||
-           p->pref_size[axis].kind == UI_SizeKind_Pixels ||
-           p->pref_size[axis].kind == UI_SizeKind_TextContent ||
-           p->pref_size[axis].kind == UI_SizeKind_ParentPct)
+        // rjf: find parent that has a fixed size
+        UI_Box *fixed_parent = &ui_nil_box;
+        for(UI_Box *p = b->parent; !ui_box_is_nil(p); p = p->parent)
         {
-          fixed_parent = p;
-          break;
+          if(p->flags & (UI_BoxFlag_FixedWidth<<axis) ||
+             p->pref_size[axis].kind == UI_SizeKind_Pixels ||
+             p->pref_size[axis].kind == UI_SizeKind_TextContent ||
+             p->pref_size[axis].kind == UI_SizeKind_ParentPct)
+          {
+            fixed_parent = p;
+            break;
+          }
         }
-      }
-      
-      // rjf: figure out root's size on this axis
-      F32 size = fixed_parent->fixed_size.v[axis] * root->pref_size[axis].value;
-      
-      // rjf: mutate root to have this size
-      root->fixed_size.v[axis] = size;
-    }break;
+        
+        // rjf: figure out box's size on this axis
+        F32 size = fixed_parent->fixed_size.v[axis] * b->pref_size[axis].value;
+        
+        // rjf: mutate box to have this size
+        b->fixed_size.v[axis] = size;
+      }break;
+    }
   }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_calc_sizes_upwards_dependent__in_place_rec(child, axis);
-  }
-  
   ProfEnd();
 }
 
@@ -1690,43 +1676,36 @@ internal void
 ui_calc_sizes_downwards_dependent__in_place_rec(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  
-  //- rjf: recurse first. we may depend on children that have
-  // the same property
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+  UI_BoxRec rec = {0};
+  for(UI_Box *box = root; !ui_box_is_nil(box); box = rec.next)
   {
-    ui_calc_sizes_downwards_dependent__in_place_rec(child, axis);
-  }
-  
-  //- rjf: solve for all kinds that are downwards-dependent
-  switch(root->pref_size[axis].kind)
-  {
-    default: break;
-    
-    // rjf: sum children
-    case UI_SizeKind_ChildrenSum:
+    rec = ui_box_rec_df_pre(box, root);
+    S32 pop_idx = 0;
+    for(UI_Box *b = box;
+        !ui_box_is_nil(b) && pop_idx <= rec.pop_count;
+        b = b->parent, pop_idx += 1)
     {
-      F32 sum = 0;
-      for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+      if(b->pref_size[axis].kind == UI_SizeKind_ChildrenSum)
       {
-        if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+        F32 sum = 0;
+        for(UI_Box *child = b->first; !ui_box_is_nil(child); child = child->next)
         {
-          if(axis == root->child_layout_axis)
+          if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
           {
-            sum += child->fixed_size.v[axis];
-          }
-          else
-          {
-            sum = Max(sum, child->fixed_size.v[axis]);
+            if(axis == b->child_layout_axis)
+            {
+              sum += child->fixed_size.v[axis];
+            }
+            else
+            {
+              sum = Max(sum, child->fixed_size.v[axis]);
+            }
           }
         }
+        b->fixed_size.v[axis] = sum;
       }
-      
-      // rjf: figure out root's size on this axis
-      root->fixed_size.v[axis] = sum;
-    }break;
+    }
   }
-  
   ProfEnd();
 }
 
