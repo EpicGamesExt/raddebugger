@@ -164,8 +164,6 @@
 //
 // [ ] CLI argument over-mangling?
 // [ ] fix light themes
-// [ ] make `array` view rule work with actual array types, to change their
-//     size dynamically
 // [ ] disasm starting address - need to use debug info for more correct
 //     results...
 //  [ ] linked list view rule
@@ -187,12 +185,8 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-//
-// [ ] font lister
-// [ ] per-panel font size overrides
 //
 // [ ] For the Scheduler window, it would be nice if you could dim or
 //     folderize threads that are not your threads - eg., if a thread doesn't
@@ -215,7 +209,6 @@
 //     jettison a collection of keys in retained mode fashion
 //
 // [ ] Jeff Notes
-//  [ ] sort locals by appearance in source code (or maybe just debug info)
 //  [ ] sum view rule
 //  [ ] plot view rule
 //  [ ] histogram view rule
@@ -295,55 +288,36 @@
 //
 // [ ] eval wide/async transforms (e.g. diff(blob1, blob2))
 // [ ] search-in-all-files
-// [ ] Memory View
+// [ ] memory view
 //  [ ] memory view mutation controls
 //  [ ] memory view user-made annotations
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
-// [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
-// [ ] automatically start search query with selected text
 
 ////////////////////////////////
 //~ rjf: Cold, Clean-up Tasks That Probably Only Ryan Notices
 // (E.G. Because They Are Code-Related Or Because Nobody Cares)
 //
-// [ ] @bug view-snapping in scroll-lists, accounting for mapping between
-//     visual positions & logical positions (variably sized rows in watch,
-//     table headers, etc.)
-// [ ] @cleanup straighten out index/number space & types & terminology for
-//     scroll lists
 // [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
 //     code slice params)
 
 ////////////////////////////////
 //~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)
 //
-// [ ] @feature disasm view improvement features
-//  [ ] visualize jump destinations in disasm
+// [ ] @feature visualize jump destinations in disasm
+// [ ] @feature serializing eval view maps (?)
+// [ ] @feature multidimensional `array`
+// [ ] @feature 2-vector, 3-vector, quaternion
+// [ ] @feature audio waveform views
+// [ ] @feature smart scopes - expression operators for "grab me the first type X"
+// [ ] @feature "pinning" watch expressions, to attach it to a particular scope/evaluation
+//              context
 //
-// [ ] @feature eval ui improvement features
-//  [ ] serializing eval view maps
-//  [ ] view rule hook coverage
-//  [ ] `array:(x, y)` - multidimensional array
-//   [ ] `each:(expr addition)` - apply some additional expression to all
-//        elements in an array/linked list would be useful to look at only a
-//        subset of an array of complex structs
-//   [ ] `slider:(min max)` view rule
-//   [ ] `v2f32` view rule
-//   [ ] `v3` view rule
-//   [ ] `quat` view rule
-//   [ ] `matrix` view rule
-//   [ ] `audio` waveform view rule
-//  [ ] smart scopes - expression operators for "grab me the first type X"
-//  [ ] "pinning" watch expressions, to attach it to a particular ctrl_ctx
-//
-// [ ] @feature header file for target -> debugger communication; printf, log,
-//     etc.
 // [ ] @feature just-in-time debugging
 // [ ] @feature step-out-of-loop
 //
-//-[ ] long-term future notes from martins
+// [ ] long-term future notes from martins
 //  [ ] core dump saving/loading
 //  [ ] parallel call stacks view
 //  [ ] parallel watch view
@@ -357,12 +331,6 @@
 //     others. would be good for e.g. the middle of a path
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
-// [ ] frontend speedup opportunities
-//  [ ] font cache layer -> can probably cache (string*font*size) -> (run) too
-//      (not just rasterization)... would save a *lot*, there is a ton of work
-//      just in looking up & stitching stuff repeatedly
-//  [ ] convert UI layout pass to not be naive recursive version
-//  [ ] (big change) parallelize window ui build codepaths per-panel
 
 ////////////////////////////////
 //~ rjf: Recently Completed Task Log
@@ -425,6 +393,29 @@
 // [x] single-line visualization busted with auto-view-rules applied, it seems...
 //     not showing member variables, just commas, check w/ mohit
 // [x] r8 bitmap view rule seems incorrect?
+//  [x] font cache layer -> can probably cache (string*font*size) -> (run) too
+//      (not just rasterization)... would save a *lot*, there is a ton of work
+//      just in looking up & stitching stuff repeatedly
+//  [x] convert UI layout pass to not be naive recursive version
+// [x] @feature header file for target -> debugger communication; printf, log,
+//     etc.
+//   [x] `slider:(min max)` view rule
+//   [x] `matrix` view rule
+//   [x] `each:(expr addition)` - apply some additional expression to all
+//        elements in an array/linked list would be useful to look at only a
+//        subset of an array of complex structs
+// [x] @bug view-snapping in scroll-lists, accounting for mapping between
+//     visual positions & logical positions (variably sized rows in watch,
+//     table headers, etc.)
+// [x] @cleanup straighten out index/number space & types & terminology for
+//     scroll lists
+//  [x] sort locals by appearance in source code (or maybe just debug info)
+// [x] per-panel font size overrides
+// [x] theme lister -> fonts & font sizes
+// [x] make `array` view rule work with actual array types, to change their
+//     size dynamically
+// [x] automatically start search query with selected text
+// [x] @feature processor/data breakpoints
 
 ////////////////////////////////
 //~ rjf: Build Options
