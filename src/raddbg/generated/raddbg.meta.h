@@ -134,6 +134,7 @@ RD_CmdKind_PrevTab,
 RD_CmdKind_MoveTabRight,
 RD_CmdKind_MoveTabLeft,
 RD_CmdKind_OpenTab,
+RD_CmdKind_BuildTab,
 RD_CmdKind_DuplicateTab,
 RD_CmdKind_CloseTab,
 RD_CmdKind_MoveTab,
@@ -667,7 +668,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[20];
 extern String8 rd_tab_fast_path_query_name_table[20];
-extern RD_VocabInfo rd_vocab_info_table[315];
+extern RD_VocabInfo rd_vocab_info_table[316];
 extern RD_NameSchemaInfo rd_name_schema_info_table[21];
 extern Rng1U64 rd_reg_slot_range_table[42];
 extern String8 rd_binding_version_remap_old_name_table[8];

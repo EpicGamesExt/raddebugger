@@ -52,7 +52,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[315] =
+RD_VocabInfo rd_vocab_info_table[316] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -236,7 +236,8 @@ RD_VocabInfo rd_vocab_info_table[315] =
 {str8_lit_comp("prev_tab"), str8_lit_comp(""), str8_lit_comp("Focus Previous Tab"), str8_lit_comp(""), RD_IconKind_LeftArrow},
 {str8_lit_comp("move_tab_right"), str8_lit_comp(""), str8_lit_comp("Move Tab Right"), str8_lit_comp(""), RD_IconKind_RightArrow},
 {str8_lit_comp("move_tab_left"), str8_lit_comp(""), str8_lit_comp("Move Tab Left"), str8_lit_comp(""), RD_IconKind_LeftArrow},
-{str8_lit_comp("open_tab"), str8_lit_comp(""), str8_lit_comp("Open Tab"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("open_tab"), str8_lit_comp(""), str8_lit_comp("Open New Tab"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("build_tab"), str8_lit_comp(""), str8_lit_comp("Build Tab"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("duplicate_tab"), str8_lit_comp(""), str8_lit_comp("Duplicate Tab"), str8_lit_comp(""), RD_IconKind_Duplicate},
 {str8_lit_comp("close_tab"), str8_lit_comp(""), str8_lit_comp("Close Tab"), str8_lit_comp(""), RD_IconKind_X},
 {str8_lit_comp("move_tab"), str8_lit_comp(""), str8_lit_comp("Move Tab"), str8_lit_comp(""), RD_IconKind_Null},
@@ -442,7 +443,7 @@ Rng1U64 rd_reg_slot_range_table[42] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[211] =
+RD_CmdKindInfo rd_cmd_kind_info_table[212] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -522,7 +523,8 @@ RD_CmdKindInfo rd_cmd_kind_info_table[211] =
 { str8_lit_comp("prev_tab"), str8_lit_comp("Focuses the previous tab on the active panel."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("move_tab_right"), str8_lit_comp("Moves the selected tab right one slot."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("move_tab_left"), str8_lit_comp("Moves the selected tab left one slot."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
-{ str8_lit_comp("open_tab"), str8_lit_comp("Opens a new tab with the parameterized view specification."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("open_tab"), str8_lit_comp("Opens a new tab."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_CmdName, str8_lit_comp("query:tab_commands"), str8_lit_comp("commands"), CTRL_EntityKind_Null}},
+{ str8_lit_comp("build_tab"), str8_lit_comp("Opens a new tab with the parameterized view specification."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("duplicate_tab"), str8_lit_comp("Duplicates a tab."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_View, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("close_tab"), str8_lit_comp("Closes the currently opened tab."), str8_lit_comp(""), str8_lit_comp("$tab,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_View, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("move_tab"), str8_lit_comp("Moves a tab to a new panel."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -698,6 +700,7 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =
 {str8_lit_comp("close_tab"), {OS_Key_W, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("tab_bar_top"), {OS_Key_Up, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
 {str8_lit_comp("tab_bar_bottom"), {OS_Key_Down, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
+{str8_lit_comp("open_tab"), {OS_Key_T, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("open"), {OS_Key_O, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("reload_active"), {OS_Key_R, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("switch"), {OS_Key_I, 0 |OS_Modifier_Ctrl  }},
@@ -761,7 +764,6 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =
 {str8_lit_comp("toggle_watch_expr_at_mouse"), {OS_Key_D, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("toggle_watch_pin"), {OS_Key_F9, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("toggle_breakpoint"), {OS_Key_F9, 0   }},
-{str8_lit_comp("add_target"), {OS_Key_T, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("attach"), {OS_Key_F6, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("open_palette"), {OS_Key_F1, 0   }},
 {str8_lit_comp("open_palette"), {OS_Key_P, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},

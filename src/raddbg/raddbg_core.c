@@ -3100,6 +3100,11 @@ rd_view_ui(Rng2F32 rect)
                       U64 pid = eval.value.u128.u64[0];
                       rd_cmd(RD_CmdKind_CompleteQuery, .pid = pid);
                     }break;
+                    case RD_EvalSpaceKind_MetaCmd:
+                    {
+                      String8 cmd_name = rd_cmd_name_from_eval(eval);
+                      rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = cmd_name);
+                    }break;
                   }
                   
                   // rjf: if we do not have a specific command, then we can just
@@ -6820,9 +6825,6 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_RotatePanelColumns].string,
                     rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
                     rd_cmd_kind_info_table[RD_CmdKind_PrevPanel].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_CloseTab].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_NextTab].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_PrevTab].string,
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarTop].string,
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ResetToDefaultPanels].string,
@@ -6839,9 +6841,6 @@ rd_window_frame(void)
                     'c',
                     'n',
                     'p',
-                    't',
-                    'b',
-                    'v',
                     0,
                     0,
                     0,
@@ -6858,48 +6857,25 @@ rd_window_frame(void)
                 {
                   String8 cmds[] =
                   {
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenTargets].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenMachines].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenProcesses].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenThreads].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenCallStack].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenOutput].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenMemory].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenDisasm].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenWatch].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenLocals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenRegisters].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenGlobals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenThreadLocals].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenTypes].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenProcedures].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenBreakpoints].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenWatchPins].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenFilePathMaps].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenAutoViewRules].string,
-                    // rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_CloseTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_DuplicateTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_MoveTabLeft].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_MoveTabRight].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NextTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_PrevTab].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_TabSettings].string,
                   };
                   U32 codepoints[] =
                   {
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
+                    'o',
+                    'c',
+                    'd',
+                    'l',
+                    'r',
+                    'n',
+                    'p',
+                    's',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
                   rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
@@ -12557,7 +12533,7 @@ rd_frame(void)
               U64 fast_path_idx = (kind - RD_CmdKind_FirstTabFastPathCmd);
               String8 view_name = rd_tab_fast_path_view_name_table[fast_path_idx];
               String8 query_name = rd_tab_fast_path_query_name_table[fast_path_idx];
-              rd_cmd(RD_CmdKind_OpenTab, .string = view_name, .expr = query_name);
+              rd_cmd(RD_CmdKind_BuildTab, .string = view_name, .expr = query_name);
             }
           }break;
           
@@ -12589,8 +12565,9 @@ rd_frame(void)
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id);
           }break;
           
-          //- rjf: command fast path
+          //- rjf: command fast paths
           case RD_CmdKind_RunCommand:
+          case RD_CmdKind_OpenTab:
           {
             RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(cmd->regs->cmd_name);
             
@@ -13609,7 +13586,7 @@ rd_frame(void)
                    .view      = tab->id,
                    .prev_tab  = new_prev->id);
           }break;
-          case RD_CmdKind_OpenTab:
+          case RD_CmdKind_BuildTab:
           {
             String8 expr_file_path = rd_file_path_from_eval_string(scratch.arena, rd_regs()->expr);
             RD_Cfg *panel = rd_cfg_from_id(rd_regs()->panel);
@@ -13699,6 +13676,11 @@ rd_frame(void)
             RD_Cfg *panel = rd_cfg_from_id(rd_regs()->panel);
             rd_cfg_child_from_string_or_alloc(panel, str8_lit("tabs_on_bottom"));
           }break;
+          case RD_CmdKind_TabSettings:
+          {
+            String8 expr = push_str8f(scratch.arena, "query:$%I64x", rd_regs()->view);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
+          }break;
           
           //- rjf: files
           case RD_CmdKind_Open:
@@ -13708,7 +13690,7 @@ rd_frame(void)
             if(props.created != 0)
             {
               rd_cmd(RD_CmdKind_RecordFileInProject);
-              rd_cmd(RD_CmdKind_OpenTab, .string = str8_lit("pending"), .expr = rd_eval_string_from_file_path(scratch.arena, path));
+              rd_cmd(RD_CmdKind_BuildTab, .string = str8_lit("pending"), .expr = rd_eval_string_from_file_path(scratch.arena, path));
             }
             else
             {
