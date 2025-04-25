@@ -93,8 +93,10 @@ struct FNT_FontHashSlot
 ////////////////////////////////
 //~ rjf: Rasterization Cache Types
 
-typedef struct F_RasterCacheInfo F_RasterCacheInfo;
-struct F_RasterCacheInfo
+//- rjf: base glyph rasterization / dimensions cache 
+
+typedef struct FNT_RasterCacheInfo FNT_RasterCacheInfo;
+struct FNT_RasterCacheInfo
 {
   Rng2S16 subrect;
   Vec2S16 raster_dim;
@@ -102,21 +104,40 @@ struct F_RasterCacheInfo
   F32 advance;
 };
 
-typedef struct F_Hash2InfoRasterCacheNode F_Hash2InfoRasterCacheNode;
-struct F_Hash2InfoRasterCacheNode
+typedef struct FNT_Hash2InfoRasterCacheNode FNT_Hash2InfoRasterCacheNode;
+struct FNT_Hash2InfoRasterCacheNode
 {
-  F_Hash2InfoRasterCacheNode *hash_next;
-  F_Hash2InfoRasterCacheNode *hash_prev;
+  FNT_Hash2InfoRasterCacheNode *hash_next;
+  FNT_Hash2InfoRasterCacheNode *hash_prev;
   U64 hash;
-  F_RasterCacheInfo info;
+  FNT_RasterCacheInfo info;
 };
 
 typedef struct FNT_Hash2InfoRasterCacheSlot FNT_Hash2InfoRasterCacheSlot;
 struct FNT_Hash2InfoRasterCacheSlot
 {
-  F_Hash2InfoRasterCacheNode *first;
-  F_Hash2InfoRasterCacheNode *last;
+  FNT_Hash2InfoRasterCacheNode *first;
+  FNT_Hash2InfoRasterCacheNode *last;
 };
+
+//- rjf: run cache (arrangements of many glyphs to represent a full string)
+
+typedef struct FNT_RunCacheNode FNT_RunCacheNode;
+struct FNT_RunCacheNode
+{
+  FNT_RunCacheNode *next;
+  String8 string;
+  FNT_Run run;
+};
+
+typedef struct FNT_RunCacheSlot FNT_RunCacheSlot;
+struct FNT_RunCacheSlot
+{
+  FNT_RunCacheNode *first;
+  FNT_RunCacheNode *last;
+};
+
+//- rjf: style hash -> artifacts/metrics cache
 
 typedef struct FNT_Hash2StyleRasterCacheNode FNT_Hash2StyleRasterCacheNode;
 struct FNT_Hash2StyleRasterCacheNode
@@ -127,10 +148,13 @@ struct FNT_Hash2StyleRasterCacheNode
   F32 ascent;
   F32 descent;
   F32 column_width;
-  F_RasterCacheInfo *utf8_class1_direct_map;
+  FNT_RasterCacheInfo *utf8_class1_direct_map;
   U64 utf8_class1_direct_map_mask[4];
   U64 hash2info_slots_count;
   FNT_Hash2InfoRasterCacheSlot *hash2info_slots;
+  U64 run_slots_count;
+  FNT_RunCacheSlot *run_slots;
+  U64 run_slots_frame_index;
 };
 
 typedef struct FNT_Hash2StyleRasterCacheSlot FNT_Hash2StyleRasterCacheSlot;
@@ -189,6 +213,8 @@ struct FNT_State
 {
   Arena *permanent_arena;
   Arena *raster_arena;
+  Arena *frame_arena;
+  U64 frame_index;
   
   // rjf: font table
   U64 font_hash_table_size;
@@ -206,13 +232,13 @@ struct FNT_State
 ////////////////////////////////
 //~ rjf: Globals
 
-global FNT_State *f_state = 0;
+global FNT_State *fnt_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Functions
 
 internal U128 fnt_hash_from_string(String8 string);
-internal U64 fnt_little_hash_from_string(String8 string);
+internal U64 fnt_little_hash_from_string(U64 seed, String8 string);
 internal Vec2S32 fnt_vertex_from_corner(Corner corner);
 
 ////////////////////////////////
@@ -241,10 +267,13 @@ internal FNT_PieceArray fnt_piece_array_from_chunk_list(Arena *arena, FNT_PieceC
 internal FNT_PieceArray fnt_piece_array_copy(Arena *arena, FNT_PieceArray *src);
 
 ////////////////////////////////
-//~ rjf: Rasterization Cache
+//~ rjf: Cache Usage
 
+//- rjf: base cache lookups
 internal FNT_Hash2StyleRasterCacheNode *fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags);
 internal FNT_Run fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string);
+
+//- rjf: helpers
 internal String8List fnt_wrapped_string_lines_from_font_size_string_max(Arena *arena, FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 max);
 internal Vec2F32 fnt_dim_from_tag_size_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string);
 internal Vec2F32 fnt_dim_from_tag_size_string_list(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8List list);
@@ -262,5 +291,6 @@ internal F32 fnt_line_height_from_metrics(FNT_Metrics *metrics);
 
 internal void fnt_init(void);
 internal void fnt_reset(void);
+internal void fnt_frame(void);
 
 #endif // FONT_CACHE_H
