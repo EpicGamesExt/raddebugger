@@ -171,7 +171,7 @@ dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
   for(DR_FStrNode *n = strs->first; n != 0; n = n->next)
   {
     DR_FRunNode *dst_n = push_array(arena, DR_FRunNode, 1);
-    dst_n->v.run = fnt_push_run_from_string(arena, n->v.params.font, n->v.params.size, base_align_px, tab_size_px, n->v.params.raster_flags, n->v.string);
+    dst_n->v.run = fnt_run_from_string(n->v.params.font, n->v.params.size, base_align_px, tab_size_px, n->v.params.raster_flags, n->v.string);
     dst_n->v.color = n->v.params.color;
     dst_n->v.underline_thickness = n->v.params.underline_thickness;
     dst_n->v.strikethrough_thickness = n->v.params.strikethrough_thickness;
@@ -712,7 +712,7 @@ internal void
 dr_text(FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  FNT_Run run = fnt_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
+  FNT_Run run = fnt_run_from_string(font, size, base_align_px, tab_size_px, flags, string);
   dr_text_run(p, color, run);
   scratch_end(scratch);
 }

@@ -5532,36 +5532,31 @@ rd_window_frame(void)
       Temp scratch = scratch_begin(0, 0);
       RD_FontSlot slot = english_font_slots[idx];
       String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(slot),
-                               font_size,
-                               0, 0, 0,
-                               sample_text);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(slot),
-                               font_size,
-                               0, 0, 0,
-                               sample_text);
+      fnt_run_from_string(rd_font_from_slot(slot),
+                          font_size,
+                          0, 0, 0,
+                          sample_text);
+      fnt_run_from_string(rd_font_from_slot(slot),
+                          font_size,
+                          0, 0, 0,
+                          sample_text);
       scratch_end(scratch);
     }
     for(RD_IconKind icon_kind = RD_IconKind_Null; icon_kind < RD_IconKind_COUNT; icon_kind = (RD_IconKind)(icon_kind+1))
     {
       Temp scratch = scratch_begin(0, 0);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               font_size,
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               font_size,
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               font_size,
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
+      fnt_run_from_string(rd_font_from_slot(icon_font_slot),
+                          font_size,
+                          0, 0, FNT_RasterFlag_Smooth,
+                          rd_icon_kind_text_table[icon_kind]);
+      fnt_run_from_string(rd_font_from_slot(icon_font_slot),
+                          font_size,
+                          0, 0, FNT_RasterFlag_Smooth,
+                          rd_icon_kind_text_table[icon_kind]);
+      fnt_run_from_string(rd_font_from_slot(icon_font_slot),
+                          font_size,
+                          0, 0, FNT_RasterFlag_Smooth,
+                          rd_icon_kind_text_table[icon_kind]);
       scratch_end(scratch);
     }
   }
@@ -8947,7 +8942,7 @@ rd_window_frame(void)
             ellipses_raster_flags = box->display_fstrs.last->v.params.raster_flags;
           }
           max_x = (box->rect.x1-text_position.x);
-          ellipses_run = fnt_push_run_from_string(scratch.arena, ellipses_font, ellipses_size, 0, box->tab_size, ellipses_raster_flags, str8_lit("..."));
+          ellipses_run = fnt_run_from_string(ellipses_font, ellipses_size, 0, box->tab_size, ellipses_raster_flags, str8_lit("..."));
         }
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges) UI_TagF("match")
         {

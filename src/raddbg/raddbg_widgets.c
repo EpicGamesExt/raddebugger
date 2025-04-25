@@ -1164,7 +1164,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
   {
     Temp scratch = scratch_begin(0, 0);
     Vec4F32 color = ui_color_from_name(str8_lit("text"));
-    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Code), box->font_size*0.8f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("if"));
+    FNT_Run run = fnt_run_from_string(rd_font_from_slot(RD_FontSlot_Code), box->font_size*0.8f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("if"));
     Vec2F32 p = center_2f32(box->rect);
     p.x -= run.dim.x*0.5f;
     p.y += run.descent;
@@ -1177,7 +1177,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
   {
     Temp scratch = scratch_begin(0, 0);
     Vec4F32 color = ui_color_from_name(str8_lit("breakpoint"));
-    FNT_Run run = fnt_push_run_from_string(scratch.arena, rd_font_from_slot(RD_FontSlot_Icons), box->font_size*0.95f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("x"));
+    FNT_Run run = fnt_run_from_string(rd_font_from_slot(RD_FontSlot_Icons), box->font_size*0.95f, 0, 0, FNT_RasterFlag_Smooth, str8_lit("x"));
     Vec2F32 box_dim = dim_2f32(box->rect);
     Vec2F32 p = center_2f32(box->rect);
     p.x += box_dim.x*0.1f;

@@ -271,7 +271,7 @@ internal FNT_PieceArray fnt_piece_array_copy(Arena *arena, FNT_PieceArray *src);
 
 //- rjf: base cache lookups
 internal FNT_Hash2StyleRasterCacheNode *fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags);
-internal FNT_Run fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string);
+internal FNT_Run fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string);
 
 //- rjf: helpers
 internal String8List fnt_wrapped_string_lines_from_font_size_string_max(Arena *arena, FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 max);

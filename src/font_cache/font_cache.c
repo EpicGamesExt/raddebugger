@@ -568,7 +568,7 @@ fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags)
 }
 
 internal FNT_Run
-fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string)
+fnt_run_from_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string)
 {
   ProfBeginFunction();
   
@@ -695,7 +695,7 @@ fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px,
       if(info == 0)
       {
         ProfBegin("no info found -> miss... fill this hash in the cache");
-        Temp scratch = scratch_begin(&arena, 1);
+        Temp scratch = scratch_begin(0, 0);
         
         // rjf: grab font handle for this tag if we don't have one already
         if(font_handle_mapped_on_miss == 0)
@@ -902,7 +902,7 @@ fnt_wrapped_string_lines_from_font_size_string_max(Arena *arena, FNT_Tag font, F
   String8List list = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    FNT_Run run = fnt_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, 0, string);
+    FNT_Run run = fnt_run_from_string(font, size, base_align_px, tab_size_px, 0, string);
     F32 off_px = 0;
     U64 off_bytes = 0;
     U64 line_start_off_bytes = 0;
@@ -1015,7 +1015,7 @@ fnt_dim_from_tag_size_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_s
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 result = {0};
-  FNT_Run run = fnt_push_run_from_string(scratch.arena, tag, size, base_align_px, tab_size_px, 0, string);
+  FNT_Run run = fnt_run_from_string(tag, size, base_align_px, tab_size_px, 0, string);
   result = run.dim;
   scratch_end(scratch);
   ProfEnd();
@@ -1052,7 +1052,7 @@ fnt_char_pos_from_tag_size_string_p(FNT_Tag tag, F32 size, F32 base_align_px, F3
   F32 best_offset_px = inf32();
   U64 offset_bytes = 0;
   F32 offset_px = 0.f;
-  FNT_Run run = fnt_push_run_from_string(scratch.arena, tag, size, base_align_px, tab_size_px, 0, string);
+  FNT_Run run = fnt_run_from_string(tag, size, base_align_px, tab_size_px, 0, string);
   for(U64 idx = 0; idx <= run.pieces.count; idx += 1)
   {
     F32 this_piece_offset_px = abs_f32(offset_px - p);
