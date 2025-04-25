@@ -8477,7 +8477,6 @@ rd_window_frame(void)
                     {
                       rd_cmd(RD_CmdKind_PushQuery,
                              .ui_key       = sig.box->key,
-                             .off_px       = v2f32(0, sig.box->rect.y1 - sig.box->rect.y0),
                              .expr         = push_str8f(scratch.arena, "$%I64x", tab->id));
                     }
                     else if(ui_middle_clicked(sig))
@@ -8577,8 +8576,7 @@ rd_window_frame(void)
                            .panel = panel->cfg->id,
                            .do_implicit_root = 1,
                            .do_lister = 1,
-                           .ui_key = add_new_box->key,
-                           .off_px = v2f32(0, dim_2f32(add_new_box->rect).y));
+                           .ui_key = add_new_box->key);
                   }
                 }
               }

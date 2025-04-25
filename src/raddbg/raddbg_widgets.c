@@ -1409,7 +1409,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
-                     .off_px = v2f32(0, dim_2f32(thread_box->rect).y),
                      .expr   = ctrl_string_from_handle(scratch.arena, thread->handle));
             }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
@@ -1564,7 +1563,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
-                     .off_px = v2f32(0, dim_2f32(thread_box->rect).y),
                      .expr   = ctrl_string_from_handle(scratch.arena, thread->handle));
             }
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
@@ -1646,7 +1644,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = bp_box->key,
-                     .off_px = v2f32(0, dim_2f32(bp_box->rect).y),
                      .expr = push_str8f(scratch.arena, "$%I64x", bp->id));
             }
             
@@ -1704,7 +1701,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = pin_box->key,
-                     .off_px = v2f32(0, dim_2f32(pin_box->rect).y),
                      .expr = push_str8f(scratch.arena, "$%I64x", pin->id));
             }
             
