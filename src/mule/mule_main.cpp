@@ -2524,6 +2524,19 @@ jit_stepping_tests(void)
 ////////////////////////////////
 // NOTE(allen): Exception Stepping
 
+static void
+exception_filter_test(void)
+{
+  __try
+  {
+    RaiseException(0xc0000095, 0, 0, 0);
+  }
+  __except (EXCEPTION_EXECUTE_HANDLER)
+  {
+    OutputDebugStringA("did an exception\n");
+  }
+}
+
 int *global_null_read_pointer = 0;
 static void
 trip(void){
@@ -2804,6 +2817,8 @@ mule_main(int argc, char** argv)
   optimized_struct_parameters_eval_tests();
   
   fancy_viz_eval_tests();
+  
+  exception_filter_test();
   
   markup_tests();
   

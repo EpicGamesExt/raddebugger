@@ -1213,19 +1213,65 @@ internal String8
 rd_setting_from_name(String8 name)
 {
   String8 result = {0};
+  if(name.size != 0)
   {
-    // rjf: find most-granular config scopes to begin looking for the setting
-    RD_Cfg *view_cfg = rd_cfg_from_id(rd_regs()->view);
-    RD_Cfg *start_cfg = &rd_nil_cfg;
-    if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->panel); }
-    if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->window); }
+    Temp scratch = scratch_begin(0, 0);
     
-    // rjf: scan upwards the config tree until we find the setting
-    RD_Cfg *setting = rd_cfg_child_from_string(view_cfg, name);
-    for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && setting == &rd_nil_cfg; cfg = cfg->parent)
+    // rjf: find most-granular config scopes to begin looking for the setting
+    typedef struct CfgSeedTask CfgSeedTask;
+    struct CfgSeedTask
     {
-      setting = rd_cfg_child_from_string(cfg, name);
+      CfgSeedTask *next;
+      RD_Cfg *cfg;
+      B32 allow_bucket_chains;
+    };
+    RD_Cfg *view_cfg = rd_cfg_from_id(rd_regs()->view);
+    CfgSeedTask panel_task = {0, &rd_nil_cfg, 1};
+    if(panel_task.cfg == &rd_nil_cfg) { panel_task.cfg = rd_cfg_from_id(rd_regs()->panel); }
+    if(panel_task.cfg == &rd_nil_cfg) { panel_task.cfg = rd_cfg_from_id(rd_regs()->window); }
+    CfgSeedTask view_task = {&panel_task, view_cfg, 1};
+    CfgSeedTask *first_task = &view_task;
+    CfgSeedTask *last_task = &panel_task;
+    
+    // rjf: for each task, look for the setting, follow parent chain upwards
+    RD_Cfg *setting = &rd_nil_cfg;
+    for(CfgSeedTask *t = first_task; t != 0; t = t->next)
+    {
+      for(RD_Cfg *cfg = t->cfg; cfg != &rd_nil_cfg; cfg = cfg->parent)
+      {
+        setting = rd_cfg_child_from_string(cfg, name);
+        if(setting != &rd_nil_cfg)
+        {
+          goto break_all;
+        }
+        if(cfg->parent == rd_state->root_cfg && t->allow_bucket_chains)
+        {
+          String8 next_bucket = {0};
+          B32 allow_bucket_chains = 0;
+          if(str8_match(cfg->string, str8_lit("user"), 0))
+          {
+            next_bucket = str8_lit("project");
+          }
+          else if(str8_match(cfg->string, str8_lit("project"), 0))
+          {
+            next_bucket = str8_lit("user");
+          }
+          else
+          {
+            allow_bucket_chains = 1;
+            next_bucket = str8_lit("user");
+          }
+          if(next_bucket.size != 0)
+          {
+            CfgSeedTask *task = push_array(scratch.arena, CfgSeedTask, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->cfg = rd_cfg_child_from_string(rd_state->root_cfg, next_bucket);
+            task->allow_bucket_chains = allow_bucket_chains;
+          }
+        }
+      }
     }
+    break_all:;
     
     // rjf: return resultant child string stored under this key
     result = setting->first->string;
@@ -1233,12 +1279,21 @@ rd_setting_from_name(String8 name)
     // rjf: no result -> look for default in schemas
     if(result.size == 0)
     {
-      result = rd_default_setting_from_names(view_cfg->string, name);
-      for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && result.size == 0; cfg = cfg->parent)
+      for(CfgSeedTask *t = first_task; t != 0; t = t->next)
       {
-        result = rd_default_setting_from_names(cfg->string, name);
+        for(RD_Cfg *cfg = t->cfg; cfg != &rd_nil_cfg; cfg = cfg->parent)
+        {
+          result = rd_default_setting_from_names(cfg->string, name);
+          if(result.size != 0)
+          {
+            goto break_all2;
+          }
+        }
       }
+      break_all2:;
     }
+    
+    scratch_end(scratch);
   }
   return result;
 }
@@ -16030,50 +16085,15 @@ rd_frame(void)
     //
     U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64] = {0};
     {
-      Temp scratch = scratch_begin(0, 0);
-      for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
+      for EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k)
       {
-        if(ctrl_exception_code_kind_default_enable_table[k])
+        String8 name = ctrl_exception_code_kind_lowercase_code_string_table[k];
+        B32 setting = rd_setting_b32_from_name(name);
+        if(setting)
         {
           exception_code_filters[k/64] |= 1ull<<(k%64);
         }
       }
-      RD_CfgList exception_code_filters_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("exception_code_filters"));
-      for(RD_CfgNode *n = exception_code_filters_roots.first; n != 0; n = n->next)
-      {
-        for(RD_Cfg *rule = n->v->first; rule != &rd_nil_cfg; rule = rule->next)
-        {
-          String8 name = rule->string;
-          String8 val_string = rule->first->string;
-          U64 val = 0;
-          if(try_u64_from_str8_c_rules(val_string, &val))
-          {
-            CTRL_ExceptionCodeKind kind = CTRL_ExceptionCodeKind_Null;
-            for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
-                k < CTRL_ExceptionCodeKind_COUNT;
-                k = (CTRL_ExceptionCodeKind)(k+1))
-            {
-              if(str8_match(name, ctrl_exception_code_kind_lowercase_code_string_table[k], 0))
-              {
-                kind = k;
-                break;
-              }
-            }
-            if(kind != CTRL_ExceptionCodeKind_Null)
-            {
-              if(val)
-              {
-                exception_code_filters[kind/64] |= (1ull<<(kind%64));
-              }
-              else
-              {
-                exception_code_filters[kind/64] &= ~(1ull<<(kind%64));
-              }
-            }
-          }
-        }
-      }
-      scratch_end(scratch);
     }
     
     ////////////////////////////

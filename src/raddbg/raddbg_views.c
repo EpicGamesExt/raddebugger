@@ -1677,10 +1677,14 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
                   // do a code-string of ".member_name"
                   String8 member_name = notable_expr->first->next->string;
                   String8 fancy_name = {0};
-                  if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
-                     cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
-                     cell->eval.space.kind == E_SpaceKind_File ||
-                     cell->eval.space.kind == E_SpaceKind_FileSystem)
+                  if(str8_match(member_name, str8_lit("$padding"), StringMatchFlag_RightSideSloppy))
+                  {
+                    fancy_name = str8_lit("Padding");
+                  }
+                  else if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+                          cell->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+                          cell->eval.space.kind == E_SpaceKind_File ||
+                          cell->eval.space.kind == E_SpaceKind_FileSystem)
                   {
                     fancy_name = rd_display_from_code_name(member_name);
                   }

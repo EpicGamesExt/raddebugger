@@ -258,12 +258,90 @@ RD_VocabTable:
     }
     ```
   }
+  
+  // TODO(rjf): the control codes could be fed from the CTRL_ExceptionCodeKindTable, but
+  // we do not support that in this generator - we'd need a way to form a table-generated
+  // string and put it into a table cell...
   {
     project
       ```
       x:
     {
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
+      @default(1) @display_name("Break On Win32 Control-C Exceptions") @description("Code: 0x40010005")
+        win32_ctrl_c: bool;
+      @default(1) @display_name("Break On Win32 Control-Break Exceptions") @description("Code: 0x40010008")
+        win32_ctrl_break: bool;
+      @default(0) @display_name("Break On Win32 WinRT Originate Error Exceptions") @description("Code: 0x40080201")
+        win32_win_rt_originate_error: bool;
+      @default(0) @display_name("Break On Win32 WinRT Transform Error Exceptions") @description("Code: 0x40080202")
+        win32_win_rt_transform_error: bool;
+      @default(0) @display_name("Break On Win32 RPC Call Cancelled Exceptions") @description("Code: 0x0000071a")
+        win32_rpc_call_cancelled: bool;
+      @default(0) @display_name("Break On Win32 Data Type Misalignment Exceptions") @description("Code: 0x80000002")
+        win32_datatype_misalignment: bool;
+      @default(1) @display_name("Break On Win32 Access Violation Exceptions") @description("Code: 0xc0000005")
+        win32_access_violation: bool;
+      @default(0) @display_name("Break On Win32 In Page Error Exceptions") @description("Code: 0xc0000006")
+        win32_in_page_error: bool;
+      @default(1) @display_name("Break On Win32 Invalid Handle Specified Exceptions") @description("Code: 0xc0000008")
+        win32_invalid_handle: bool;
+      @default(0) @display_name("Break On Win32 Not Enough Quota Exceptions") @description("Code: 0xc0000017")
+        win32_not_enough_quota: bool;
+      @default(0) @display_name("Break On Win32 Illegal Instruction Exceptions") @description("Code: 0xc000001d")
+        win32_illegal_instruction: bool;
+      @default(0) @display_name("Break On Win32 Cannot Continue From Exception Exceptions") @description("Code: 0xc0000025")
+        win32_cannot_continue_exception: bool;
+      @default(0) @display_name("Break On Win32 Invalid Exception Disposition Returned By Handler Exceptions") @description("Code: 0xc0000026")
+        win32_invalid_exception_disposition: bool;
+      @default(0) @display_name("Break On Win32 Array Bounds Exceeded Exceptions") @description("Code: 0xc000008c")
+        win32_array_bounds_exceeded: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Denormal Operand Exceptions") @description("Code: 0xc000008d")
+        win32_floating_point_denormal_operand: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Division By Zero Exceptions") @description("Code: 0xc000008e")
+        win32_floating_point_division_by_zero: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Inexact Result Exceptions") @description("Code: 0xc000008f")
+        win32_floating_point_inexact_result: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Invalid Operation Exceptions") @description("Code: 0xc0000090")
+        win32_floating_point_invalid_operation: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Overflow Exceptions") @description("Code: 0xc0000091")
+        win32_floating_point_overflow: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Stack Check Exceptions") @description("Code: 0xc0000092")
+        win32_floating_point_stack_check: bool;
+      @default(0) @display_name("Break On Win32 Floating-Point Underflow Exceptions") @description("Code: 0xc0000093")
+        win32_floating_point_underflow: bool;
+      @default(0) @display_name("Break On Win32 Integer Division By Zero Exceptions") @description("Code: 0xc0000094")
+        win32_integer_division_by_zero: bool;
+      @default(0) @display_name("Break On Win32 Integer Overflow Exceptions") @description("Code: 0xc0000095")
+        win32_integer_overflow: bool;
+      @default(0) @display_name("Break On Win32 Privileged Instruction Exceptions") @description("Code: 0xc0000096")
+        win32_privileged_instruction: bool;
+      @default(0) @display_name("Break On Win32 Stack Overflow Exceptions") @description("Code: 0xc00000fd")
+        win32_stack_overflow: bool;
+      @default(0) @display_name("Break On Win32 Unable To Locate DLL Exceptions") @description("Code: 0xc0000135")
+        win32_unable_to_locate_dll: bool;
+      @default(0) @display_name("Break On Win32 Ordinal Not Found Exceptions") @description("Code: 0xc0000138")
+        win32_ordinal_not_found: bool;
+      @default(0) @display_name("Break On Win32 Entry Point Not Found Exceptions") @description("Code: 0xc0000139")
+        win32_entry_point_not_found: bool;
+      @default(0) @display_name("Break On Win32 DLL Initialization Failed Exceptions") @description("Code: 0xc0000142")
+        win32_dll_initialization_failed: bool;
+      @default(0) @display_name("Break On Win32 Floating Point SSE Multiple Faults Exceptions") @description("Code: 0xc00002b4")
+        win32_floating_point_sse_multiple_faults: bool;
+      @default(0) @display_name("Break On Win32 Floating Point SSE Multiple Traps Exceptions") @description("Code: 0xc00002b5")
+        win32_floating_point_sse_multiple_traps: bool;
+      @default(1) @display_name("Break On Win32 Assertion Failed Exceptions") @description("Code: 0xc0000420")
+        win32_assertion_failed: bool;
+      @default(0) @display_name("Break On Win32 Module Not Found Exceptions") @description("Code: 0xc06d007e")
+        win32_module_not_found: bool;
+      @default(0) @display_name("Break On Win32 Procedure Not Found Exceptions") @description("Code: 0xc06d007f")
+        win32_procedure_not_found: bool;
+      @default(1) @display_name("Break On Win32 Sanitizer Error Detected Exceptions") @description("Code: 0xe073616e")
+        win32_sanitizer_error_detected: bool;
+      @default(0) @display_name("Break On Win32 Sanitizer Raw Access Violation Exceptions") @description("Code: 0xe0736171")
+        win32_sanitizer_raw_access_violation: bool;
+      @default(1) @display_name("Break On Win32 DirectX Debug Layer Exceptions") @description("Code: 0x0000087a")
+        win32_directx_debug_layer: bool;
     }
     ```
   }
