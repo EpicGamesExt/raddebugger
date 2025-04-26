@@ -2402,7 +2402,7 @@ rd_view_ui(Rng2F32 rect)
     }
     
     //- rjf: build contents
-    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_selected && !vs->contents_are_focused ? UI_FocusKind_On : UI_FocusKind_Off)
       RD_Font(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput ? RD_FontSlot_Code : RD_FontSlot_Main)
     {
       if(cmd_name.size != 0)
@@ -4860,6 +4860,11 @@ rd_view_ui(Rng2F32 rect)
         {
           rd_cmd(RD_CmdKind_FocusPanel);
         }
+        
+        //////////////////////////////
+        //- rjf: disable query if text editing is occurring
+        //
+        vs->contents_are_focused = ewv->text_editing;
         
         rd_store_view_scroll_pos(scroll_pos);
       }

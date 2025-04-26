@@ -214,6 +214,9 @@ struct RD_ViewState
   TxtPt query_mark;
   U8 query_buffer[KB(1)];
   U64 query_string_size;
+  
+  // rjf: contents are focused (disables query focus)
+  B32 contents_are_focused;
 };
 
 typedef struct RD_ViewStateSlot RD_ViewStateSlot;
