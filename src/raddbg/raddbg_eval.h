@@ -12,14 +12,6 @@ E_TYPE_ACCESS_FUNCTION_DEF(commands);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands);
 
 ////////////////////////////////
-//~ rjf: `watches` Type Hooks
-
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(watches);
-E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches);
-E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches);
-E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches);
-
-////////////////////////////////
 //~ rjf: `locals` Type Hooks
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(locals);
@@ -70,6 +62,16 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(environment);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(environment);
 E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(environment);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(environment);
+
+////////////////////////////////
+//~ rjf: `watches` Type Hooks
+
+E_TYPE_IREXT_FUNCTION_DEF(watches);
+E_TYPE_ACCESS_FUNCTION_DEF(watches);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(watches);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches);
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches);
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches);
 
 ////////////////////////////////
 //~ rjf: `unattached_processes` Type Hooks

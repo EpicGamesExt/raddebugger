@@ -14,26 +14,26 @@
 ////////////////////////////////
 //~ rjf: Fixed Tab Tables
 
-@table(name   display_name    name_lower     icon)
+@table(name   display_name    name_lower     is_query      icon)
 RD_WatchTabFastPathTable:
 {
-  {Watch           "Watch"             watches           Binoculars            }
-  {Locals          "Locals"            locals            Binoculars            }
-  {Registers       "Registers"         registers         Binoculars            }
-  {Globals         "Globals"           globals           Binoculars            }
-  {ThreadLocals    "Thread Locals"     thread_locals     Binoculars            }
-  {Types           "Types"             types             Binoculars            }
-  {Procedures      "Procedures"        procedures        Binoculars            }
-  {CallStack       "Call Stack"        call_stack        Thread                }
-  {Targets         "Targets"           targets           Target                }
-  {Breakpoints     "Breakpoints"       breakpoints       CircleFilled          }
-  {WatchPins       "Watch Pins"        watch_pins        Pin                   }
-  {Threads         "Threads"           threads           Threads               }
-  {Processes       "Processes"         processes         Scheduler             }
-  {Machines        "Machines"          machines          Machine               }
-  {Modules         "Modules"           modules           Module                }
-  {FilePathMaps    "File Path Map"     file_path_maps    FileOutline           }
-  {AutoViewRules   "Auto View Rules"   auto_view_rules   Binoculars            }
+  {Watch           "Watch"             watches           0                 Binoculars            }
+  {Locals          "Locals"            locals            1                 Binoculars            }
+  {Registers       "Registers"         registers         1                 Binoculars            }
+  {Globals         "Globals"           globals           1                 Binoculars            }
+  {ThreadLocals    "Thread Locals"     thread_locals     1                 Binoculars            }
+  {Types           "Types"             types             1                 Binoculars            }
+  {Procedures      "Procedures"        procedures        1                 Binoculars            }
+  {CallStack       "Call Stack"        call_stack        1                 Thread                }
+  {Targets         "Targets"           targets           1                 Target                }
+  {Breakpoints     "Breakpoints"       breakpoints       1                 CircleFilled          }
+  {WatchPins       "Watch Pins"        watch_pins        1                 Pin                   }
+  {Threads         "Threads"           threads           1                 Threads               }
+  {Processes       "Processes"         processes         1                 Scheduler             }
+  {Machines        "Machines"          machines          1                 Machine               }
+  {Modules         "Modules"           modules           1                 Module                }
+  {FilePathMaps    "File Path Map"     file_path_maps    1                 FileOutline           }
+  {AutoViewRules   "Auto View Rules"   auto_view_rules   1                 Binoculars            }
 }
 
 @table(name   display_name    name_lower     view     query     icon)
@@ -53,7 +53,7 @@ RD_FixedTabTable:
 @gen
 {
   `#define RD_FixedTabXList \\`;
-  @expand(RD_WatchTabFastPathTable a) `X($(a.name_lower))\\`;
+  @expand(RD_WatchTabFastPathTable a) `$(a.is_query -> 'X(' .. a.name_lower .. ')') $(a.is_query == 0 -> 'Y(' .. a.name_lower .. ', watch, ""' .. ')')\\`;
   @expand(RD_ViewTabFastPathTable a) `Y($(a.name_lower), $(a.view), "$(a.query)")\\`;
   @expand(RD_FixedTabTable a) `Z($(a.name_lower))\\`;
   ``;
@@ -67,7 +67,7 @@ RD_FixedTabTable:
 
 @data(String8) rd_tab_fast_path_query_name_table:
 {
-  @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("query:$(a.name_lower)")`,
+  @expand(RD_WatchTabFastPathTable a) `str8_lit_comp("$(a.is_query -> 'query:' .. a.name_lower)")`,
   @expand(RD_ViewTabFastPathTable a) `str8_lit_comp("$(a.query)")`,
 }
 
@@ -315,8 +315,10 @@ RD_VocabTable:
     {
       @default(3.f) @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
         'row_height': @range[1.75f, 5.f] f32,
+      'label': code_string,
       @description("The root expression which is evaluated to produce the watch window.")
         'expression': code_string,
+      @no_expand 'watches': query,
     }
     ```
   }

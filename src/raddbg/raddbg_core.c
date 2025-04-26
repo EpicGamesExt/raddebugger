@@ -2721,6 +2721,10 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_Font(RD_FontSlot_Code)
       {
+        if(expr_string.size == 0)
+        {
+          expr_string = push_str8f(scratch.arena, "query:config.$%I64x.watches", rd_regs()->view);
+        }
         E_Eval eval = e_eval_from_string(expr_string);
         RD_WatchViewState *ewv = rd_view_state(RD_WatchViewState);
         UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
@@ -3412,7 +3416,7 @@ rd_view_ui(Rng2F32 rect)
                       if(cell->flags & RD_WatchCellFlag_Expr && cell->flags & RD_WatchCellFlag_NoEval)
                       {
                         RD_Cfg *cfg = row_info.group_cfg_child;
-                        String8 child_key = str8_lit("expression");
+                        String8 child_key = {0}; // str8_lit("expression");
                         if(cfg == &rd_nil_cfg && editing_complete && new_string.size != 0)
                         {
                           RD_Cfg *new_cfg_parent = row_info.group_cfg_parent;
@@ -11981,22 +11985,6 @@ rd_frame(void)
         }
       }
       
-      //- rjf: add macro for watches group
-      {
-        String8 collection_name = str8_lit("watches");
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name, .flags = E_TypeFlag_EditableChildren,
-                                         .expand =
-                                         {
-                                           .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(watches),
-                                           .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(watches),
-                                           .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
-                                           .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
-                                         });
-        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
-      }
-      
       //- rjf: add macros for all watches which define identifiers
       RD_CfgList watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
       for(RD_CfgNode *n = watches.first; n != 0; n = n->next)
@@ -12204,6 +12192,19 @@ rd_frame(void)
                                                       .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(environment),
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
+                                                    }));
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watches"),
+                                    e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .flags = E_TypeFlag_EditableChildren,
+                                                    .name = str8_lit("watches"),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(watches),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(watches),
+                                                    .expand =
+                                                    {
+                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(watches),
+                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(watches),
+                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
+                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
                                                     }));
         e_string2typekey_map_insert(rd_frame_arena(),
                                     rd_state->meta_name2type_map,

@@ -600,23 +600,23 @@ RD_Query query;
 };
 
 #define RD_FixedTabXList \
-X(watches)\
-X(locals)\
-X(registers)\
-X(globals)\
-X(thread_locals)\
-X(types)\
-X(procedures)\
-X(call_stack)\
-X(targets)\
-X(breakpoints)\
-X(watch_pins)\
-X(threads)\
-X(processes)\
-X(machines)\
-X(modules)\
-X(file_path_maps)\
-X(auto_view_rules)\
+Y(watches, watch, "")\
+X(locals) \
+X(registers) \
+X(globals) \
+X(thread_locals) \
+X(types) \
+X(procedures) \
+X(call_stack) \
+X(targets) \
+X(breakpoints) \
+X(watch_pins) \
+X(threads) \
+X(processes) \
+X(machines) \
+X(modules) \
+X(file_path_maps) \
+X(auto_view_rules) \
 Y(output, text, "query:output")\
 Y(disasm, disasm, "")\
 Y(memory, memory, "")\
