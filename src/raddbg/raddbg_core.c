@@ -6708,7 +6708,10 @@ rd_window_frame(void)
         RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         
         // rjf: close queries
-        if(query_floating_view_task->pressed_outside || (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_selected) || ui_slot_press(UI_EventActionSlot_Cancel))
+        if(query_floating_view_task->pressed_outside ||
+           (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_selected) ||
+           (cmd_name.size != 0 && !vs->query_is_selected) ||
+           ui_slot_press(UI_EventActionSlot_Cancel))
         {
           rd_cmd(RD_CmdKind_CancelQuery);
         }
