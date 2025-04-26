@@ -614,6 +614,27 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema)
 }
 
 ////////////////////////////////
+//~ rjf: Config Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  E_Expr *rhs = expr->first->next;
+  if(rhs->kind == E_ExprKind_LeafIdentifier &&
+     str8_match(str8_prefix(rhs->string, 1), str8_lit("$"), 0))
+  {
+    String8 numeric_part = str8_skip(rhs->string, 1);
+    RD_CfgID id = u64_from_str8(numeric_part, 16);
+    RD_Cfg *cfg = rd_cfg_from_id(id);
+    E_Space space = rd_eval_space_from_cfg(cfg);
+    result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+    result.type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
+    result.mode = E_Mode_Offset;
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Config Collection Type Hooks
 
 typedef struct RD_CfgsIRExt RD_CfgsIRExt;
@@ -626,7 +647,7 @@ struct RD_CfgsIRExt
   Rng1U64 cfgs_idx_range;
 };
 
-E_TYPE_IREXT_FUNCTION_DEF(cfgs)
+E_TYPE_IREXT_FUNCTION_DEF(cfgs_slice)
 {
   RD_CfgsIRExt *ext = push_array(arena, RD_CfgsIRExt, 1);
   {
@@ -666,7 +687,7 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs)
   return result;
 }
 
-E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
+E_TYPE_ACCESS_FUNCTION_DEF(cfgs_slice)
 {
   E_IRTreeAndType result = {&e_irnode_nil};
   RD_Cfg *cfg = &rd_nil_cfg;
@@ -712,7 +733,7 @@ struct RD_CfgsExpandAccel
   Rng1U64 cfgs_idx_range;
 };
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice)
 {
   RD_CfgsExpandAccel *accel = push_array(arena, RD_CfgsExpandAccel, 1);
   E_TypeExpandInfo info = {accel};
@@ -754,7 +775,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs)
   return info;
 }
 
-E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs_slice)
 {
   RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;
   Rng1U64 cmds_idx_range = accel->cmds_idx_range;
@@ -781,12 +802,12 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs)
     for(U64 idx = 0; idx < read_count; idx += 1, dst_idx += 1)
     {
       RD_Cfg *cfg = accel->cfgs.v[idx + read_range.min - cfgs_idx_range.min];
-      evals_out[dst_idx] = e_eval_from_stringf("$%I64x", cfg->id);
+      evals_out[dst_idx] = e_eval_from_stringf("query:config.$%I64x", cfg->id);
     }
   }
 }
 
-E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(cfgs_slice)
 {
   U64 id = 0;
   RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;
@@ -807,7 +828,7 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(cfgs)
   return id;
 }
 
-E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs)
+E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(cfgs_slice)
 {
   U64 num = 0;
   RD_CfgsExpandAccel *accel = (RD_CfgsExpandAccel *)user_data;

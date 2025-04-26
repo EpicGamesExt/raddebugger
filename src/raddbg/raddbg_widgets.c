@@ -1644,7 +1644,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = bp_box->key,
-                     .expr = push_str8f(scratch.arena, "$%I64x", bp->id));
+                     .expr = push_str8f(scratch.arena, "query:config.$%I64x", bp->id));
             }
             
             // rjf: shift+click => enable breakpoint
@@ -1701,7 +1701,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = pin_box->key,
-                     .expr = push_str8f(scratch.arena, "$%I64x", pin->id));
+                     .expr = push_str8f(scratch.arena, "query:config.$%I64x", pin->id));
             }
             
             // rjf: click => remove pin

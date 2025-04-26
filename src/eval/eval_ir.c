@@ -365,7 +365,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprl = expr->first;
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
-      E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
+      E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
       E_TypeKind l_restype_kind = e_type_kind_from_key(l_restype);
       E_TypeKey check_type_key = l_restype;
       E_TypeKind check_type_kind = l_restype_kind;

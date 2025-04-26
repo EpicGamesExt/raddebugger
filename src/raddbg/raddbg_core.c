@@ -5573,6 +5573,7 @@ rd_window_frame(void)
     Temp scratch = scratch_begin(0, 0);
     B32 is_fullscreen = os_window_is_fullscreen(ws->os);
     B32 is_maximized = os_window_is_maximized(ws->os);
+    B32 is_minimized = os_window_is_minimized(ws->os);
     if(is_fullscreen)
     {
       rd_cfg_child_from_string_or_alloc(window, str8_lit("fullscreen"));
@@ -5592,7 +5593,7 @@ rd_window_frame(void)
     
     //- rjf: commit position
     Rng2F32 window_rect = os_rect_from_window(ws->os);
-    if(!is_fullscreen && !is_maximized)
+    if(!is_fullscreen && !is_maximized && !is_minimized)
     {
       Vec2F32 pos = window_rect.p0;
       RD_Cfg *pos_root = rd_cfg_child_from_string_or_alloc(window, str8_lit("pos"));
@@ -5617,7 +5618,7 @@ rd_window_frame(void)
     }
     
     //- rjf: commit size
-    if(!is_fullscreen && !is_maximized)
+    if(!is_fullscreen && !is_maximized && !is_minimized)
     {
       Vec2F32 size = dim_2f32(window_rect);
       RD_Cfg *size_root = rd_cfg_child_from_string_or_alloc(window, str8_lit("size"));
@@ -5642,6 +5643,7 @@ rd_window_frame(void)
     }
     
     //- rjf: commit monitor
+    if(!is_minimized)
     {
       OS_Handle monitor = os_monitor_from_window(ws->os);
       String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
@@ -8448,7 +8450,7 @@ rd_window_frame(void)
                     {
                       rd_cmd(RD_CmdKind_PushQuery,
                              .ui_key       = sig.box->key,
-                             .expr         = push_str8f(scratch.arena, "$%I64x", tab->id));
+                             .expr         = push_str8f(scratch.arena, "query:config.$%I64x", tab->id));
                     }
                     else if(ui_middle_clicked(sig))
                     {
@@ -8543,11 +8545,20 @@ rd_window_frame(void)
                   if(ui_pressed(sig))
                   {
                     rd_cmd(RD_CmdKind_FocusPanel, .panel = panel->cfg->id);
-                    rd_cmd(RD_CmdKind_PushQuery, .expr = str8_lit("query:tab_commands"),
-                           .panel = panel->cfg->id,
-                           .do_implicit_root = 1,
-                           .do_lister = 1,
-                           .ui_key = add_new_box->key);
+                    if(ws->query_is_active &&
+                       ui_key_match(add_new_box->key, ws->query_regs->ui_key))
+                    {
+                      rd_cmd(RD_CmdKind_CancelQuery);
+                    }
+                    else
+                    {
+                      rd_cmd(RD_CmdKind_PushQuery,
+                             .expr = str8_lit("query:tab_commands"),
+                             .panel = panel->cfg->id,
+                             .do_implicit_root = 1,
+                             .do_lister = 1,
+                             .ui_key = add_new_box->key);
+                    }
                   }
                 }
               }
@@ -11880,7 +11891,20 @@ rd_frame(void)
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
       }
       
-      //- rjf: add macros for evallable top-level config trees
+      //- rjf: add macro for top-level config root
+      {
+        String8 name = str8_lit("config");
+        E_TypeKey type_key = e_type_key_cons(.name = name,
+                                             .kind = E_TypeKind_Set,
+                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs));
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
+      }
+      
+      //- rjf: add macros for config "slice" collections (targets, breakpoints, etc.)
       String8 evallable_cfg_names[] =
       {
         str8_lit("breakpoint"),
@@ -11891,29 +11915,68 @@ rd_frame(void)
         str8_lit("recent_project"),
         str8_lit("recent_file"),
       };
-      for EachElement(idx, evallable_cfg_names)
+      for EachElement(cfg_name_idx, evallable_cfg_names)
       {
-        String8 name = evallable_cfg_names[idx];
-        E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-        RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
-        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
+        String8 collection_name = rd_plural_from_code_name(cfg_name);
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+                                                        .irext = E_TYPE_IREXT_FUNCTION_NAME(cfgs_slice),
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs_slice),
+                                                        .expand =
+                                                        {
+                                                          .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs_slice),
+                                                          .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs_slice),
+                                                          .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice),
+                                                          .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs_slice),
+                                                        });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
+      }
+      
+      //- rjf: add macros for evallable top-level individual config entity trees -
+      // things with names either explicitly attached, or that we can infer
+      for EachElement(idx, rd_name_schema_info_table)
+      {
+        String8 name = rd_name_schema_info_table[idx].name;
+        MD_NodePtrList schemas = rd_schemas_from_name(name);
+        B32 is_individually_evallable = 0;
+        for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
         {
-          RD_Cfg *cfg = n->v;
-          String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
-          String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
-          E_Space space = rd_eval_space_from_cfg(cfg);
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          expr->space    = space;
-          expr->mode     = E_Mode_Offset;
-          expr->type_key = type_key;
-          e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", cfg->id), expr);
-          if(exe.size != 0)
+          if(md_node_has_child(n->v, str8_lit("label"), 0) ||
+             md_node_has_child(n->v, str8_lit("executable"), 0))
           {
-            e_string2expr_map_insert(scratch.arena, macro_map, str8_skip_last_slash(exe), expr);
+            is_individually_evallable = 1;
+            break;
           }
-          if(label.size != 0)
+        }
+        if(is_individually_evallable)
+        {
+          E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
+          RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
+          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
           {
-            e_string2expr_map_insert(scratch.arena, macro_map, label, expr);
+            RD_Cfg *cfg = n->v;
+            String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
+            String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
+            if(exe.size != 0 || label.size != 0)
+            {
+              E_Space space = rd_eval_space_from_cfg(cfg);
+              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+              expr->space    = space;
+              expr->mode     = E_Mode_Offset;
+              expr->type_key = type_key;
+              if(exe.size != 0)
+              {
+                e_string2expr_map_insert(scratch.arena, macro_map, str8_skip_last_slash(exe), expr);
+              }
+              if(label.size != 0)
+              {
+                e_string2expr_map_insert(scratch.arena, macro_map, label, expr);
+              }
+            }
           }
         }
       }
@@ -11983,28 +12046,6 @@ rd_frame(void)
         }
       }
       
-      //- rjf: add macros for all config collections
-      for EachElement(cfg_name_idx, evallable_cfg_names)
-      {
-        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
-        String8 collection_name = rd_plural_from_code_name(cfg_name);
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
-                                                        .irext = E_TYPE_IREXT_FUNCTION_NAME(cfgs),
-                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs),
-                                                        .expand =
-                                                        {
-                                                          .info = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs),
-                                                          .range= E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs),
-                                                          .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs),
-                                                          .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs),
-                                                        });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        expr->type_key = collection_type_key;
-        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
-        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
-      }
-      
       //- rjf: add macros for windows/tabs
       {
         RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
@@ -12018,7 +12059,7 @@ rd_frame(void)
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
             expr->type_key = type_key;
-            e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", window->id), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "query:config.$%I64x", window->id), expr);
           }
           RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
           for(RD_PanelNode *p = panel_tree.root;
@@ -12034,7 +12075,7 @@ rd_frame(void)
               expr->space    = space;
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
-              e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "$%I64x", tab->id), expr);
+              e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "query:config.$%I64x", tab->id), expr);
             }
           }
         }
@@ -12545,8 +12586,8 @@ rd_frame(void)
             RD_Cfg *tab = panel_tree.focused->selected_tab;
             String8 expr = push_str8f(scratch.arena,
                                       "query:commands, "
-                                      "query:$%I64x, "
-                                      "query:$%I64x, "
+                                      "query:config.$%I64x, "
+                                      "query:config.$%I64x, "
                                       "query:targets, "
                                       "query:breakpoints, "
                                       "query:recent_files, "
@@ -12646,7 +12687,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_WindowSettings:
           {
-            String8 expr = push_str8f(scratch.arena, "query:$%I64x", rd_regs()->window);
+            String8 expr = push_str8f(scratch.arena, "query:config.$%I64x", rd_regs()->window);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
           }break;
           case RD_CmdKind_CloseWindow:
@@ -13678,7 +13719,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_TabSettings:
           {
-            String8 expr = push_str8f(scratch.arena, "query:$%I64x", rd_regs()->view);
+            String8 expr = push_str8f(scratch.arena, "query:config.$%I64x", rd_regs()->view);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
           }break;
           
@@ -15129,6 +15170,7 @@ rd_frame(void)
               rd_cfg_newf(wdir, "%S/", working_directory);
             }
             rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x", target->id));
           }break;
           
           //- rjf: jit-debugger registration
