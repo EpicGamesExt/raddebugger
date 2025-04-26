@@ -439,7 +439,7 @@ RD_VocabTable:
     {
       'label':            code_string,
       'condition':        code_string,
-      'source_location':  path_pt,
+      'source_location':  string,
       'address_location': code_string,
       'hit_count':        u64,
       'address_range_size': @or(0, 1, 2, 4, 8) u64,
@@ -456,11 +456,11 @@ RD_VocabTable:
     watch_pin,
     ```
       @row_commands(duplicate_cfg, remove_cfg)
-      @collection_commands(add_watch_pin)
+      @collection_commands(add_watch_pin, toggle_watch_pin)
       x:
     {
       'expression':       code_string,
-      'source_location':  path_pt,
+      'source_location':  string,
       'address_location': code_string,
     }
     ```,
@@ -813,7 +813,7 @@ RD_CmdTable:    //               |        |              |                |     
   
   //- rjf: watch pins
   {AddWatchPin                    1        1              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               "$watch_pins,"                                                   }
-  {ToggleWatchPin                 1        0              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Binoculars            "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               ""                                                               }
+  {ToggleWatchPin                 1        0              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               ""                                                               }
   
   //- rjf: auto view rule
   {AddAutoViewRule                1        1              0                0               ""                                               String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "add_auto_view_rule"          "Add Auto View Rule"                          "Adds a new auto view rule."                                                                                       ""                               "$auto_view_rules,"                                              }
@@ -1045,6 +1045,7 @@ RD_DefaultBindingTable:
   
   //- rjf: breakpoints
   { "toggle_breakpoint"           F9        0        0         0          }
+  { "add_address_breakpoint"      F9        0        shift     0          }
   
   //- rjf: attaching
   { "attach"                      F6        0        shift     0          }

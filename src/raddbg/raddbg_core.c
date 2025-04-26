@@ -1109,12 +1109,9 @@ rd_location_from_cfg(RD_Cfg *cfg)
     RD_Cfg *addr_loc = rd_cfg_child_from_string(cfg, str8_lit("address_location"));
     if(src_loc != &rd_nil_cfg)
     {
-      dst_loc.file_path = src_loc->first->string;
-      try_s64_from_str8_c_rules(src_loc->first->first->string, &dst_loc.pt.line);
-      if(!try_s64_from_str8_c_rules(src_loc->first->first->first->string, &dst_loc.pt.column))
-      {
-        dst_loc.pt.column = 1;
-      }
+      String8TxtPtPair loc_description = str8_txt_pt_pair_from_string(src_loc->first->string);
+      dst_loc.file_path = loc_description.string;
+      dst_loc.pt = loc_description.pt;
     }
     else if(addr_loc != &rd_nil_cfg)
     {
@@ -1681,13 +1678,9 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           child_schema = md_child_from_string(n->v, child_key, 0);
         }
         String8 child_type_name = child_schema->first->string;
-        if(str8_match(child_type_name, str8_lit("path_pt"), 0))
-        {
-          read_data = push_str8f(scratch.arena, "%S%s%S%s%S", cfg->first->string, cfg->first->string.size ? ":" : "", cfg->first->first->string, cfg->first->first->first->string.size ? ":" : "", cfg->first->first->first->string);
-        }
-        else if(str8_match(child_type_name, str8_lit("path"), 0) ||
-                str8_match(child_type_name, str8_lit("code_string"), 0) ||
-                str8_match(child_type_name, str8_lit("string"), 0))
+        if(str8_match(child_type_name, str8_lit("path"), 0) ||
+           str8_match(child_type_name, str8_lit("code_string"), 0) ||
+           str8_match(child_type_name, str8_lit("string"), 0))
         {
           read_data = cfg->first->string;
         }
@@ -14991,10 +14984,7 @@ rd_frame(void)
               if(file_path.size != 0 && pt.line != 0)
               {
                 RD_Cfg *src_loc = rd_cfg_new(cfg, str8_lit("source_location"));
-                RD_Cfg *file = rd_cfg_new(src_loc, file_path);
-                RD_Cfg *line = rd_cfg_newf(file, "%I64d", pt.line);
-                RD_Cfg *col  = rd_cfg_newf(line, "%I64d", pt.column);
-                (void)col;
+                rd_cfg_newf(src_loc, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
               }
               else if(expr_string.size != 0)
               {

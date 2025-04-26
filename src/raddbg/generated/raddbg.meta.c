@@ -330,7 +330,7 @@ RD_VocabInfo rd_vocab_info_table[316] =
 {str8_lit_comp("enable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Enable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("disable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Disable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckHollow},
 {str8_lit_comp("add_watch_pin"), str8_lit_comp(""), str8_lit_comp("Add Watch Pin"), str8_lit_comp(""), RD_IconKind_Pin},
-{str8_lit_comp("toggle_watch_pin"), str8_lit_comp(""), str8_lit_comp("Toggle Watch Pin"), str8_lit_comp(""), RD_IconKind_Binoculars},
+{str8_lit_comp("toggle_watch_pin"), str8_lit_comp(""), str8_lit_comp("Toggle Watch Pin"), str8_lit_comp(""), RD_IconKind_Pin},
 {str8_lit_comp("add_auto_view_rule"), str8_lit_comp(""), str8_lit_comp("Add Auto View Rule"), str8_lit_comp(""), RD_IconKind_Binoculars},
 {str8_lit_comp("set_next_statement"), str8_lit_comp(""), str8_lit_comp("Set Next Statement"), str8_lit_comp(""), RD_IconKind_RightArrow},
 {str8_lit_comp("add_target"), str8_lit_comp(""), str8_lit_comp("Add Target"), str8_lit_comp(""), RD_IconKind_Target},
@@ -385,8 +385,8 @@ RD_NameSchemaInfo rd_name_schema_info_table[21] =
 {str8_lit_comp("bitmap"), str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Base Pointer\") @description(\"An expression to describe the base address or offset of the bitmap data.\")\n  'expression': code_string,\n  @order(0) 'w': u64,\n  @order(1) 'h': u64,\n  @display_name(\"Bitmap Format\") @description(\"The pixel format that the bitmap data should be interpreted as being within.\")\n  'fmt': tex2dformat,\n}\n")},
 {str8_lit_comp("geo3d"), str8_lit_comp("@inherit(tab) x:\n{\n  'count': code_string,\n  'vtx': code_string,\n  'vtx_size': code_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
-{str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'source_location':  path_pt,\n  'address_location': code_string,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  string,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
+{str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'source_location':  string,\n  'address_location': code_string,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @row_commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},
@@ -659,7 +659,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[212] =
 { str8_lit_comp("memory"), str8_lit_comp("Opens a Memory tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[109] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -764,6 +764,7 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[108] =
 {str8_lit_comp("toggle_watch_expr_at_mouse"), {OS_Key_D, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("toggle_watch_pin"), {OS_Key_F9, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("toggle_breakpoint"), {OS_Key_F9, 0   }},
+{str8_lit_comp("add_address_breakpoint"), {OS_Key_F9, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("attach"), {OS_Key_F6, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("open_palette"), {OS_Key_F1, 0   }},
 {str8_lit_comp("open_palette"), {OS_Key_P, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},

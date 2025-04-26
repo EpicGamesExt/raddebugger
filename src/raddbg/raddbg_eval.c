@@ -257,13 +257,6 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPathText);
       }
-      else if(str8_match(child_schema->first->string, str8_lit("path_pt"), 0))
-      {
-        Temp scratch = scratch_begin(&arena, 1);
-        String8 string = push_str8f(scratch.arena, "%S%s%S%s%S", child->first->string, child->first->string.size ? ":" : "", child->first->first->string, child->first->first->first->string.size ? ":" : "", child->first->first->first->string);
-        child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), string.size, E_TypeFlag_IsPathText);
-        scratch_end(scratch);
-      }
       else if(str8_match(child_schema->first->string, str8_lit("string"), 0))
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPlainText);
