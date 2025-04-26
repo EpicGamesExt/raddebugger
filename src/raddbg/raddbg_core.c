@@ -12637,7 +12637,7 @@ rd_frame(void)
             // rjf: command has required query -> prep query
             else
             {
-              rd_cmd(RD_CmdKind_PushQuery, .do_implicit_root = 1, .do_lister = 1);
+              rd_cmd(RD_CmdKind_PushQuery, .do_implicit_root = 1, .do_lister = info->query.expr.size != 0);
             }
           }break;
           
@@ -15039,12 +15039,16 @@ rd_frame(void)
                 RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
                 RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
                 rd_cmd(RD_CmdKind_RelocateCfg, .cfg = bp->id);
+                if(rd_regs()->do_lister)
+                {
+                  rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x", bp->id), .do_lister = 0);
+                }
               }
             }
           }break;
           case RD_CmdKind_AddAddressBreakpoint:
           {
-            rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero());
+            rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero(), .do_lister = 1);
           }break;
           
           //- rjf: watch pins
