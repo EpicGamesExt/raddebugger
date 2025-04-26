@@ -65,10 +65,6 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
         {
           query_code_name = rd_singular_from_code_name_plural(query_name);
           collection_name = rd_display_plural_from_code_name(query_code_name);
-          if(str8_match(collection_name, str8_lit("Watches"), 0))
-          {
-            collection_name = str8_lit("Watch");
-          }
         }
         RD_IconKind query_icon_kind = rd_icon_kind_from_code_name(query_code_name);
         if(query_icon_kind != RD_IconKind_Null)
@@ -117,8 +113,8 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
     }
     
-    //- rjf: push view title, if from window, and no file path
-    if(is_within_window && file_path.size == 0 && collection_name.size == 0)
+    //- rjf: push view title, if from window, and no file path, and no label
+    if(is_within_window && file_path.size == 0 && collection_name.size == 0 && label_string.size == 0)
     {
       String8 view_display_name = rd_display_from_code_name(cfg->string);
       if(view_display_name.size != 0)

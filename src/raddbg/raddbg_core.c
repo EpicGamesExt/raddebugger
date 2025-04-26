@@ -11985,56 +11985,8 @@ rd_frame(void)
         }
       }
       
-      //- rjf: add macros for all watches which define identifiers
-      RD_CfgList watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
-      for(RD_CfgNode *n = watches.first; n != 0; n = n->next)
-      {
-        RD_Cfg *watch = n->v;
-        String8 expr = rd_expr_from_cfg(watch);
-        E_Parse parse = e_parse_from_string(expr);
-        if(parse.msgs.max_kind == E_MsgKind_Null)
-        {
-          for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
-          {
-            typedef struct ExprWalkTask ExprWalkTask;
-            struct ExprWalkTask
-            {
-              ExprWalkTask *next;
-              E_Expr *expr;
-            };
-            ExprWalkTask start_task = {0, expr};
-            ExprWalkTask *first_task = &start_task;
-            ExprWalkTask *last_task = first_task;
-            for(ExprWalkTask *t = first_task; t != 0; t = t->next)
-            {
-              switch(t->expr->kind)
-              {
-                case E_ExprKind_Call:{}break;
-                case E_ExprKind_Define:
-                {
-                  E_Expr *lhs = t->expr->first;
-                  E_Expr *rhs = lhs->next;
-                  if(lhs->kind == E_ExprKind_LeafIdentifier)
-                  {
-                    e_string2expr_map_insert(scratch.arena, macro_map, lhs->string, rhs);
-                  }
-                }break;
-                default:
-                {
-                  for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
-                  {
-                    ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
-                    SLLQueuePush(first_task, last_task, task);
-                    task->expr = child;
-                  }
-                }break;
-              }
-            }
-          }
-        }
-      }
-      
       //- rjf: add macros for windows/tabs
+      RD_CfgList watch_tabs = {0};
       {
         RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
         for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
@@ -12064,11 +12016,69 @@ rd_frame(void)
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
               e_string2expr_map_insert(scratch.arena, macro_map, push_str8f(scratch.arena, "query:config.$%I64x", tab->id), expr);
+              if(str8_match(tab->string, str8_lit("watch"), 0))
+              {
+                rd_cfg_list_push(scratch.arena, &watch_tabs, tab);
+              }
             }
           }
         }
       }
       
+      //- rjf: add macros for all watches in all watch tabs which define identifiers
+      for(RD_CfgNode *n = watch_tabs.first; n != 0; n = n->next)
+      {
+        RD_Cfg *watch_tab = n->v;
+        for(RD_Cfg *child = watch_tab->first; child != &rd_nil_cfg; child = child->next)
+        {
+          if(str8_match(child->string, str8_lit("watch"), 0))
+          {
+            RD_Cfg *watch = child;
+            String8 expr = watch->first->string;
+            E_Parse parse = e_parse_from_string(expr);
+            if(parse.msgs.max_kind == E_MsgKind_Null)
+            {
+              for(E_Expr *expr = parse.expr; expr != &e_expr_nil; expr = expr->next)
+              {
+                typedef struct ExprWalkTask ExprWalkTask;
+                struct ExprWalkTask
+                {
+                  ExprWalkTask *next;
+                  E_Expr *expr;
+                };
+                ExprWalkTask start_task = {0, expr};
+                ExprWalkTask *first_task = &start_task;
+                ExprWalkTask *last_task = first_task;
+                for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+                {
+                  switch(t->expr->kind)
+                  {
+                    case E_ExprKind_Call:{}break;
+                    case E_ExprKind_Define:
+                    {
+                      E_Expr *lhs = t->expr->first;
+                      E_Expr *rhs = lhs->next;
+                      if(lhs->kind == E_ExprKind_LeafIdentifier)
+                      {
+                        e_string2expr_map_insert(scratch.arena, macro_map, lhs->string, rhs);
+                      }
+                    }break;
+                    default:
+                    {
+                      for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+                      {
+                        ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                        SLLQueuePush(first_task, last_task, task);
+                        task->expr = child;
+                      }
+                    }break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
       
       //- rjf: add macros for user/project
       {
@@ -15079,28 +15089,68 @@ rd_frame(void)
           case RD_CmdKind_ToggleWatchExpression:
           if(rd_regs()->string.size != 0)
           {
-            RD_CfgList all_existing_watches = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch"));
-            RD_Cfg *existing_watch = &rd_nil_cfg;
-            for(RD_CfgNode *n = all_existing_watches.first; n != 0; n = n->next)
+            // rjf: pick a watch tab from all the windows to toggle this expression within
+            RD_Cfg *watch_tab = &rd_nil_cfg;
             {
-              RD_Cfg *watch = n->v;
-              String8 expr = rd_expr_from_cfg(watch);
-              if(str8_match(expr, rd_regs()->string, 0))
+              B32 watch_tab_has_no_label = 0;
+              B32 watch_tab_matches_src_window = 0;
+              RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
+              for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
               {
-                existing_watch = watch;
+                RD_Cfg *window = n->v;
+                RD_PanelTree panels = rd_panel_tree_from_cfg(scratch.arena, window);
+                for(RD_PanelNode *panel = panels.root;
+                    panel != &rd_nil_panel_node;
+                    panel = rd_panel_node_rec__depth_first_pre(panels.root, panel).next)
+                {
+                  for(RD_CfgNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
+                  {
+                    RD_Cfg *tab = tab_n->v;
+                    RD_Cfg *label = rd_cfg_child_from_string(tab, str8_lit("label"));
+                    if(str8_match(tab->string, str8_lit("watch"), 0) &&
+                       rd_expr_from_cfg(tab).size == 0)
+                    {
+                      B32 tab_has_no_label = (label->first->string.size == 0);
+                      B32 tab_matches_src_window = (window->id == rd_regs()->window);
+                      if(tab_has_no_label > watch_tab_has_no_label ||
+                         tab_matches_src_window > watch_tab_matches_src_window ||
+                         watch_tab == &rd_nil_cfg)
+                      {
+                        watch_tab = tab;
+                        if(tab_has_no_label && tab_matches_src_window)
+                        {
+                          goto end_watch_tab_search;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              end_watch_tab_search:;
+            }
+            
+            // rjf: find the existing watch in the selected tab, if it exists
+            RD_Cfg *existing_watch = &rd_nil_cfg;
+            for(RD_Cfg *child = watch_tab->first; child != &rd_nil_cfg; child = child->next)
+            {
+              if(str8_match(child->string, str8_lit("watch"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
+              {
+                existing_watch = child;
                 break;
               }
             }
-            if(existing_watch == &rd_nil_cfg)
-            {
-              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-              RD_Cfg *watch = rd_cfg_new(project, str8_lit("watch"));
-              RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-              rd_cfg_new(expr, rd_regs()->string);
-            }
-            else
+            
+            // rjf: if this watch exists -> delete it
+            if(existing_watch != &rd_nil_cfg)
             {
               rd_cfg_release(existing_watch);
+            }
+            
+            // rjf: otherwise, create it
+            else if(watch_tab != &rd_nil_cfg)
+            {
+              RD_Cfg *watch = rd_cfg_new(watch_tab, str8_lit("watch"));
+              rd_cfg_new(watch, rd_regs()->string);
             }
           }break;
           
