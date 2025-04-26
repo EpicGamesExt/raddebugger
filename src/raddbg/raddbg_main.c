@@ -53,6 +53,12 @@
 //   which can be edited within the palette or a tab's right-click menu. If a
 //   tab has no per-tab font size set, then it inherits the setting from the
 //   window's font size.
+// - Expressions inserted into a `Watch` tab are now stored per-tab. This makes
+//   many `Watch` tabs more useful, since different tabs can have a different
+//   set of expressions. `Watch` tabs can now also be labeled, so you can
+//   visually distinguish many `Watch` tabs more easily.
+// - All tabs now allow hand-editing of their root expression in their
+//   right-click menu.
 // - Debugger settings have been upgraded to be stored as expressions, rather
 //   than being locked to a specific value. These expressions are evaluated,
 //   like any other expression, and their evaluated value is used when the
@@ -69,7 +75,7 @@
 //   visualize the evaluation value with a slider, which can be used to edit
 //   the value as well.
 // - The hover evaluation feature has been majorly upgraded to support all
-//   features normally available in the `Watch` view.
+//   features normally available in `Watch` tabs.
 // - Added "transient tabs", which are colored differently than normal tabs.
 //   These tabs are automatically opened by the debugger when snapping to
 //   source code which is not already opened. They are automatically replaced
