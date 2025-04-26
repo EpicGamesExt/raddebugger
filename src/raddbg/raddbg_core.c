@@ -276,6 +276,8 @@ rd_name_release(String8 string)
 internal RD_Cfg *
 rd_cfg_alloc(void)
 {
+  rd_state->cfg_change_gen += 1;
+  
   // rjf: allocate
   RD_Cfg *result = rd_state->free_cfg;
   {
@@ -318,6 +320,8 @@ rd_cfg_alloc(void)
 internal void
 rd_cfg_release(RD_Cfg *cfg)
 {
+  rd_state->cfg_change_gen += 1;
+  
   Temp scratch = scratch_begin(0, 0);
   
   // rjf: unhook from context
@@ -1560,6 +1564,21 @@ rd_cmd_name_from_eval(E_Eval eval)
 }
 
 //- rjf: eval space reads/writes
+
+internal U64
+rd_eval_space_gen(void *u, E_Space space)
+{
+  U64 result = 0;
+  switch(space.kind)
+  {
+    case RD_EvalSpaceKind_MetaCfg:
+    case RD_EvalSpaceKind_MetaQuery:
+    {
+      result = rd_state->cfg_change_gen;
+    }break;
+  }
+  return result;
+}
 
 internal B32
 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
@@ -2820,6 +2839,7 @@ rd_view_ui(Rng2F32 rect)
             //
             if(state_dirty) ProfScope("state -> viz blocks")
             {
+              eval = e_eval_from_string(eval.string);
               MemoryZeroStruct(&block_tree);
               MemoryZeroStruct(&block_ranges);
               if(implicit_root || is_first_frame)
@@ -11669,7 +11689,7 @@ rd_frame(void)
       }
       
       //- rjf: try menu bar operations
-      if(rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt")))
+      if(rd_state->alt_menu_bar_enabled)
       {
         if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
@@ -11836,6 +11856,7 @@ rd_frame(void)
       ctx->primary_module = eval_modules_primary;
       
       //- rjf: fill space hooks
+      ctx->space_gen   = rd_eval_space_gen;
       ctx->space_read  = rd_eval_space_read;
       ctx->space_write = rd_eval_space_write;
     }
@@ -12518,6 +12539,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: process top-level graphical commands
     //
+    rd_state->alt_menu_bar_enabled = rd_setting_b32_from_name(str8_lit("focus_menu_bar_with_alt"));
     if(rd_state->frame_depth == 0)
     {
       for(;rd_next_cmd(&cmd);) RD_RegsScope()

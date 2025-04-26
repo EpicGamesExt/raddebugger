@@ -682,6 +682,7 @@ struct E_AutoHookParams
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+typedef U64 E_SpaceGenFunction(void *user_data, E_Space space);
 typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
 
 //- rjf: base context
@@ -703,6 +704,7 @@ struct E_BaseCtx
   
   // rjf: space hooks
   void *space_rw_user_data;
+  E_SpaceGenFunction *space_gen;
   E_SpaceRWFunction *space_read;
   E_SpaceRWFunction *space_write;
 };
@@ -887,6 +889,7 @@ struct E_CacheBundle
   E_IRTreeAndType irtree;
   String8 bytecode;
   E_Interpretation interpretation;
+  U64 space_gen;
   E_MsgList msgs;
 };
 
@@ -1143,7 +1146,6 @@ internal E_Eval e_value_eval_from_eval(E_Eval eval);
 #define e_eval_from_stringf(...) e_eval_from_key(e_key_from_stringf(__VA_ARGS__))
 #define e_value_from_string(string) e_value_eval_from_eval(e_eval_from_string(string)).value
 #define e_value_from_stringf(...) e_value_eval_from_eval(e_eval_from_stringf(__VA_ARGS__)).value
-// TODO(rjf): (replace the old bundle APIs here)
 
 //- rjf: expr-based helpers
 #define e_eval_from_expr(expr) e_eval_from_key(e_key_from_expr(expr))
@@ -1166,5 +1168,16 @@ internal E_Key e_key_wrapf(E_Key key, char *fmt, ...);
 //- rjf: eval-based helpers
 #define e_eval_wrap(eval, string) e_eval_from_key(e_key_wrap((eval).key, (string)))
 #define e_eval_wrapf(eval, ...) e_eval_from_key(e_key_wrapf((eval).key, __VA_ARGS__))
+
+////////////////////////////////
+//~ rjf: Eval Info Extraction
+
+internal U64 e_base_offset_from_eval(E_Eval eval);
+internal Rng1U64 e_range_from_eval(E_Eval eval);
+
+////////////////////////////////
+//~ rjf: Debug Functions
+
+internal String8 e_debug_log_from_expr_string(Arena *arena, String8 string);
 
 #endif // EVAL_CORE_H

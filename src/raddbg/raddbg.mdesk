@@ -327,14 +327,14 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @description("An expression to describe data which should be viewed as text or code.")
+        'expression': code_string,
       @description("The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.")
         'lang': lang,
       @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers':bool,
       @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
         'auto': bool,
-      @description("An expression to describe data which should be viewed as text or code.")
-        'expression': code_string,
     }
     ```
   }

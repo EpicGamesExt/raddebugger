@@ -35,6 +35,7 @@ internal void e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rd
 ////////////////////////////////
 //~ rjf: Space Reading Helpers
 
+internal U64 e_space_gen(E_Space space);
 internal B32 e_space_read(E_Space space, void *out, Rng1U64 range);
 internal B32 e_space_write(E_Space space, void *in, Rng1U64 range);
 

@@ -55,6 +55,17 @@ e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff
 ////////////////////////////////
 //~ rjf: Space Reading Helpers
 
+internal U64
+e_space_gen(E_Space space)
+{
+  U64 result = 0;
+  if(e_base_ctx->space_gen != 0)
+  {
+    result = e_base_ctx->space_gen(e_base_ctx->space_rw_user_data, space);
+  }
+  return result;
+}
+
 internal B32
 e_space_read(E_Space space, void *out, Rng1U64 range)
 {

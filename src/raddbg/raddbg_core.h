@@ -599,6 +599,7 @@ struct RD_State
   Arena *arena;
   B32 quit;
   B32 quit_after_success;
+  B32 alt_menu_bar_enabled;
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   
@@ -715,6 +716,7 @@ struct RD_State
   U64 cfg_id_gen;
   RD_CfgID cfg_last_accessed_id;
   RD_Cfg *cfg_last_accessed;
+  U64 cfg_change_gen;
   
   // rjf: window state cache
   U64 window_state_slots_count;
@@ -923,6 +925,7 @@ internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind
 internal String8 rd_cmd_name_from_eval(E_Eval eval);
 
 //- rjf: eval space reads/writes
+internal U64 rd_eval_space_gen(void *u, E_Space space);
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 

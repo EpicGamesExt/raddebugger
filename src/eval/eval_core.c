@@ -727,7 +727,10 @@ e_key_from_string(String8 string)
   E_CacheNode *node = 0;
   for(E_CacheNode *n = slot->first; n != 0; n = n->string_next)
   {
-    if(e_key_match(parent_key, n->bundle.parent_key) && str8_match(n->bundle.string, string, 0))
+    if(e_key_match(parent_key, n->bundle.parent_key) &&
+       str8_match(n->bundle.string, string, 0) &&
+       (n->bundle.interpretation.space.kind == E_SpaceKind_Null ||
+        e_space_gen(n->bundle.interpretation.space) == n->bundle.space_gen))
     {
       node = n;
       break;
@@ -859,6 +862,7 @@ e_interpretation_from_bundle(E_CacheBundle *bundle)
       e_msg(e_cache->arena, &bundle->msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[interpret.code]);
     }
     bundle->interpretation = interpret;
+    bundle->space_gen = e_space_gen(interpret.space);
   }
   E_Interpretation interpret = bundle->interpretation;
   return interpret;
@@ -1110,6 +1114,193 @@ e_key_wrapf(E_Key key, char *fmt, ...)
   String8 string = push_str8fv(scratch.arena, fmt, args);
   E_Key result = e_key_wrap(key, string);
   va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Eval Info Extraction
+
+internal U64
+e_base_offset_from_eval(E_Eval eval)
+{
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))
+  {
+    eval = e_value_eval_from_eval(eval);
+  }
+  return eval.value.u64;
+}
+
+internal Rng1U64
+e_range_from_eval(E_Eval eval)
+{
+  U64 size = 0;
+  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  if(type->kind == E_TypeKind_Lens)
+  {
+    for EachIndex(idx, type->count)
+    {
+      E_Expr *arg = type->args[idx];
+      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("size"), 0))
+      {
+        size = e_value_from_expr(arg->first->next).u64;
+        break;
+      }
+    }
+  }
+  E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_key_unwrap(type_key, E_TypeUnwrapFlag_All);
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
+                                                               direct_type_kind == E_TypeKind_Union ||
+                                                               direct_type_kind == E_TypeKind_Class ||
+                                                               direct_type_kind == E_TypeKind_Array))
+  {
+    size = e_type_byte_size_from_key(direct_type_key);
+  }
+  if(size == 0 && eval.irtree.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
+                                                        type_kind == E_TypeKind_Union ||
+                                                        type_kind == E_TypeKind_Class ||
+                                                        type_kind == E_TypeKind_Array))
+  {
+    size = e_type_byte_size_from_key(type_key);
+  }
+  if(size == 0)
+  {
+    size = KB(16);
+  }
+  Rng1U64 result = {0};
+  result.min = e_base_offset_from_eval(eval);
+  result.max = result.min + size;
+  return result;
+}
+
+
+////////////////////////////////
+//~ rjf: Debug Functions
+
+internal String8
+e_debug_log_from_expr_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  char *indent_spaces = "                                                                                                                                ";
+  String8List strings = {0};
+  
+  //- rjf: begin expression
+  String8 expr_text = string;
+  str8_list_pushf(scratch.arena, &strings, "`%S`\n", expr_text);
+  
+  //- rjf: parse
+  E_Parse parse = e_push_parse_from_string(scratch.arena, expr_text);
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_Expr *expr;
+      S32 indent;
+    };
+    E_TokenArray tokens = parse.tokens;
+    str8_list_pushf(scratch.arena, &strings, "    tokens:\n");
+    for EachIndex(idx, tokens.count)
+    {
+      E_Token token = tokens.v[idx];
+      String8 token_string = str8_substr(expr_text, token.range);
+      str8_list_pushf(scratch.arena, &strings, "        %S: `%S`\n", e_token_kind_strings[token.kind], token_string);
+    }
+    str8_list_pushf(scratch.arena, &strings, "    expr:\n");
+    Task start_task = {0, parse.expr, 2};
+    Task *first_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      E_Expr *expr = t->expr;
+      str8_list_pushf(scratch.arena, &strings, "%.*s%S", (int)t->indent*4, indent_spaces, e_expr_kind_strings[expr->kind]);
+      switch(expr->kind)
+      {
+        default:{}break;
+        case E_ExprKind_LeafU64:
+        {
+          str8_list_pushf(scratch.arena, &strings, " (%I64u)", expr->value.u64);
+        }break;
+        case E_ExprKind_LeafIdentifier:
+        {
+          str8_list_pushf(scratch.arena, &strings, " (`%S`)", expr->string);
+        }break;
+      }
+      str8_list_pushf(scratch.arena, &strings, "\n");
+      Task *last_task = t;
+      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->next = last_task->next;
+        last_task->next = task;
+        task->expr = child;
+        task->indent = t->indent+1;
+        last_task = task;
+      }
+    }
+  }
+  
+  //- rjf: type
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, parse.expr);
+  {
+    str8_list_pushf(scratch.arena, &strings, "    type:\n");
+    S32 indent = 2;
+    for(E_TypeKey type_key = irtree.type_key;
+        !e_type_key_match(e_type_key_zero(), type_key);
+        type_key = e_type_key_direct(type_key),
+        indent += 1)
+    {
+      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      str8_list_pushf(scratch.arena, &strings, "%.*s%S\n", (int)indent*4, indent_spaces, e_type_kind_basic_string_table[type->kind]);
+    }
+  }
+  
+  //- rjf: irtree
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_IRNode *irnode;
+      S32 indent;
+    };
+    str8_list_pushf(scratch.arena, &strings, "    ir_tree:\n");
+    Task start_task = {0, irtree.root, 2};
+    Task *first_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      E_IRNode *irnode = t->irnode;
+      str8_list_pushf(scratch.arena, &strings, "%.*s", (int)t->indent*4, indent_spaces);
+      switch(irnode->op)
+      {
+        default:{}break;
+#define X(name) case RDI_EvalOp_##name:{str8_list_pushf(scratch.arena, &strings, #name);}break;
+        RDI_EvalOp_XList
+#undef X
+      }
+      if(irnode->value.u64 != 0)
+      {
+        str8_list_pushf(scratch.arena, &strings, " (%I64u)", irnode->value.u64);
+      }
+      str8_list_pushf(scratch.arena, &strings, "\n");
+      Task *last_task = t;
+      for(E_IRNode *child = irnode->first; child != &e_irnode_nil; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->next = last_task->next;
+        last_task->next = task;
+        task->irnode = child;
+        task->indent = t->indent+1;
+        last_task = task;
+      }
+    }
+  }
+  
+  str8_list_pushf(scratch.arena, &strings, "\n");
+  
+  String8 result = str8_list_join(arena, &strings, 0);
   scratch_end(scratch);
   return result;
 }
