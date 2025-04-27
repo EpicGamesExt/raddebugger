@@ -397,9 +397,9 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     if(str8_match(cfg->string, str8_lit("color"), 0))
     {
       String8 tags = rd_cfg_child_from_string(cfg, str8_lit("tags"))->first->string;
-      String8 color_string = rd_cfg_child_from_string(cfg, str8_lit("color"))->first->string;
+      String8 color_string = rd_cfg_child_from_string(cfg, str8_lit("value"))->first->string;
       U32 color_u32 = e_value_from_stringf("(uint32)(%S)", color_string).u32;
-      Vec4F32 color = rgba_from_u32(color_u32);
+      Vec4F32 color = linear_from_srgba(rgba_from_u32(color_u32));
       if(tags.size != 0)
       {
         dr_fstrs_push_new(arena, &result, &params, tags, .color = color);

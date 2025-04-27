@@ -362,7 +362,7 @@ RD_VocabTable:
       @collection_commands(add_color, import_colors) x:
     {
       @display_name('Tags') tags: string,
-      color: @color @hex u32,
+      @display_name('Value') value: @color @hex u32,
     }
     ```
   }
@@ -1299,132 +1299,83 @@ RD_ThemePresetTable:
     DefaultDark default_dark "Default (Dark)",
     ```theme:
     {
-      background: 0x1b1b1bff,
-      alt: background: 0x222222ff,
-      pop: background: 0x355b6eff,
-      fresh: background: 0x31393dff,
-      match: background: 0x31393dff,
-      border: 0x404040ff,
-      text: 0xe5e5e5ff,
-      weak: text: 0xa4a4a4ff,
-      good: text: 0x32a852ff,
-      bad: text: 0xcf5242ff,
-      hover: 0xffffffff,
-      focus: 0xfda200ff,
-      cursor: 0x8aff00ff,
-      selection: 0x99ccffff,
-      inactive: background: 0x0000002f,
-      drop_shadow: 0x0000007f,
-      
-      good_pop:
-      {
-        background: 0x2c5b36ff,
-        border: 0x568761ff,
-        hover: 0xe3f5d3ff,
-        weak: text: 0xe3f5d3ff,
-      }
-      
-      bad_pop:
-      {
-        background: 0x803425ff,
-        hover: 0xff825cff,
-      }
-      
-      code_default: 0xcbcbcbff,
-      code_symbol: 0x42a2cfff,
-      code_type: 0xfec746ff,
-      code_local: 0x98bc80ff,
-      code_register: 0xb7afd5ff,
-      code_keyword: 0xb38d4cff,
-      code_delimiter_or_operator: 0x767676ff,
-      code_numeric: 0x98abb1ff,
-      code_numeric_alt_digit_group: 0x738287ff,
-      code_string: 0x98abb1ff,
-      code_meta: 0xd96759ff,
-      code_comment: 0x717171ff,
-      line_info_0: 0x4f3022ff,
-      line_info_1: 0x4f3e15ff,
-      line_info_2: 0x434e2aff,
-      line_info_3: 0x36241fff,
-      line_info_4: 0x4f3022ff,
-      line_info_5: 0x4f3e15ff,
-      line_info_6: 0x434e2aff,
-      line_info_7: 0x36241fff,
-      thread_0: 0xffcb7fff,
-      thread_1: 0xb2ff65ff,
-      thread_2: 0xff99e5ff,
-      thread_3: 0x6598ffff,
-      thread_4: 0x65ffcbff,
-      thread_5: 0xff9819ff,
-      thread_6: 0x9932ffff,
-      thread_7: 0x65ff4cff,
-      thread_unwound: 0xb2ccd8ff,
-      thread_error: 0xb23219ff,
-      breakpoint: 0xa72911ff,
-      
-      floating:
-      {
-        background: 0x1b1b1baf,
-        background: alt: 0x0000005f,
-        background: fresh: 0x31393d5f,
-        border: 0xbfbfbf1f,
-        scroll_bar:
-        {
-          background: 0x3b3b3b5f,
-          border: 0x5f5f5f5f,
-        }
-      }
-      
-      menu_bar:
-      {
-        background: 0x2b3740ff,
-        border: 0x3e4c57ff,
-      }
-      
-      scroll_bar:
-      {
-        background: 0x2b2b2bff,
-        border: 0x3f3f3fff,
-      }
-      
-      implicit:
-      {
-        background: 0x00000000,
-        border: 0x00000000,
-      }
-      
-      hollow:
-      {
-        background: 0x00000000,
-        border: 0xffffff1f,
-      }
-      
-      tab:
-      {
-        background: 0x6f5135ff,
-        border: 0x8a6e54ff,
-        inactive:
-        {
-          background: 0x2b3740ff,
-          border: 0x3e4c57ff,
-        }
-        auto:
-        {
-          background: 0x693847ff,
-          border: 0x9e6274ff,
-          inactive:
-          {
-            background: 0x2f2633ff,
-            border: 0x685073ff,
-          }
-        }
-      }
-      
-      drop_site:
-      {
-        background: 0xffffff05,
-        border: 0xffffff0f,
-      }
+      color: {tags:"background",                             value: 0x1b1b1bff }
+      color: {tags:"alt background",                         value: 0x222222ff }
+      color: {tags:"pop background",                         value: 0x355b6eff }
+      color: {tags:"fresh background",                       value: 0x31393dff }
+      color: {tags:"match background",                       value: 0x31393dff }
+      color: {tags:"border",                                 value: 0x404040ff }
+      color: {tags:"text",                                   value: 0xe5e5e5ff }
+      color: {tags:"weak text",                              value: 0xa4a4a4ff }
+      color: {tags:"good text",                              value: 0x32a852ff }
+      color: {tags:"bad text",                               value: 0xcf5242ff }
+      color: {tags:"hover",                                  value: 0xffffffff }
+      color: {tags:"focus",                                  value: 0xfda200ff }
+      color: {tags:"cursor",                                 value: 0x8aff00ff }
+      color: {tags:"selection",                              value: 0x99ccffff }
+      color: {tags:"inactive background",                    value: 0x0000002f }
+      color: {tags:"drop_shadow",                            value: 0x0000007f }
+      color: {tags:"good_pop background",                    value: 0x2c5b36ff }
+      color: {tags:"good_pop border",                        value: 0x568761ff }
+      color: {tags:"good_pop hover",                         value: 0xe3f5d3ff }
+      color: {tags:"good_pop weak text",                     value: 0xe3f5d3ff }
+      color: {tags:"bad_pop background",                     value: 0x803425ff }
+      color: {tags:"bad_pop hover",                          value: 0xff825cff }
+      color: {tags:"code_default",                           value: 0xcbcbcbff }
+      color: {tags:"code_symbol",                            value: 0x42a2cfff }
+      color: {tags:"code_type",                              value: 0xfec746ff }
+      color: {tags:"code_local",                             value: 0x98bc80ff }
+      color: {tags:"code_register",                          value: 0xb7afd5ff }
+      color: {tags:"code_keyword",                           value: 0xb38d4cff }
+      color: {tags:"code_delimiter_or_operator",             value: 0x767676ff }
+      color: {tags:"code_numeric",                           value: 0x98abb1ff }
+      color: {tags:"code_numeric_alt_digit_group",           value: 0x738287ff }
+      color: {tags:"code_string",                            value: 0x98abb1ff }
+      color: {tags:"code_meta",                              value: 0xd96759ff }
+      color: {tags:"code_comment",                           value: 0x717171ff }
+      color: {tags:"line_info_0",                            value: 0x4f3022ff }
+      color: {tags:"line_info_1",                            value: 0x4f3e15ff }
+      color: {tags:"line_info_2",                            value: 0x434e2aff }
+      color: {tags:"line_info_3",                            value: 0x36241fff }
+      color: {tags:"line_info_4",                            value: 0x4f3022ff }
+      color: {tags:"line_info_5",                            value: 0x4f3e15ff }
+      color: {tags:"line_info_6",                            value: 0x434e2aff }
+      color: {tags:"line_info_7",                            value: 0x36241fff }
+      color: {tags:"thread_0",                               value: 0xffcb7fff }
+      color: {tags:"thread_1",                               value: 0xb2ff65ff }
+      color: {tags:"thread_2",                               value: 0xff99e5ff }
+      color: {tags:"thread_3",                               value: 0x6598ffff }
+      color: {tags:"thread_4",                               value: 0x65ffcbff }
+      color: {tags:"thread_5",                               value: 0xff9819ff }
+      color: {tags:"thread_6",                               value: 0x9932ffff }
+      color: {tags:"thread_7",                               value: 0x65ff4cff }
+      color: {tags:"thread_unwound",                         value: 0xb2ccd8ff }
+      color: {tags:"thread_error",                           value: 0xb23219ff }
+      color: {tags:"breakpoint",                             value: 0xa72911ff }
+      color: {tags:"floating background",                    value: 0x1b1b1baf }
+      color: {tags:"floating background alt",                value: 0x0000005f }
+      color: {tags:"floating background fresh",              value: 0x31393d5f }
+      color: {tags:"floating border",                        value: 0xbfbfbf1f }
+      color: {tags:"floating scroll_bar background",         value: 0x3b3b3b5f }
+      color: {tags:"floating scroll_bar border",             value: 0x5f5f5f5f }
+      color: {tags:"menu_bar background",                    value: 0x2b3740ff }
+      color: {tags:"menu_bar border",                        value: 0x3e4c57ff }
+      color: {tags:"scroll_bar background",                  value: 0x2b2b2bff }
+      color: {tags:"scroll_bar border",                      value: 0x3f3f3fff }
+      color: {tags:"implicit background",                    value: 0x00000000 }
+      color: {tags:"implicit border",                        value: 0x00000000 }
+      color: {tags:"hollow background",                      value: 0x00000000 }
+      color: {tags:"hollow border",                          value: 0xffffff1f }
+      color: {tags:"tab background",                         value: 0x6f5135ff }
+      color: {tags:"tab border",                             value: 0x8a6e54ff }
+      color: {tags:"tab inactive background",                value: 0x2b3740ff }
+      color: {tags:"tab inactive border",                    value: 0x3e4c57ff }
+      color: {tags:"tab auto background",                    value: 0x693847ff }
+      color: {tags:"tab auto border",                        value: 0x9e6274ff }
+      color: {tags:"tab auto inactive background",           value: 0x2f2633ff }
+      color: {tags:"tab auto inactive border",               value: 0x685073ff }
+      color: {tags:"drop_site background",                   value: 0xffffff05 }
+      color: {tags:"drop_site border",                       value: 0xffffff0f }
     }
     ```
   }

@@ -5498,27 +5498,23 @@ rd_window_frame(void)
     // that windows can have their own colors, and have those override higher-up settings.
     RD_Cfg *preset_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
-    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("theme")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
+    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
     for EachElement(idx, scan_parents)
     {
-      for(RD_Cfg *parent_cfg = scan_parents[idx]; parent_cfg != &rd_nil_cfg; parent_cfg = parent_cfg->parent)
+      RD_Cfg *parent_cfg = scan_parents[idx];
+      if(preset_cfg != &rd_nil_cfg)
       {
-        if(preset_cfg != &rd_nil_cfg)
+        RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));
+        if(possible_preset_cfg != &rd_nil_cfg)
         {
-          RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));
-          if(possible_preset_cfg != &rd_nil_cfg)
-          {
-            preset_cfg = possible_preset_cfg;
-          }
+          preset_cfg = possible_preset_cfg;
         }
-        RD_Cfg *colors_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("colors"));
-        if(colors_cfg != &rd_nil_cfg)
+      }
+      for(RD_Cfg *child = parent_cfg->first; child != &rd_nil_cfg; child = child->next)
+      {
+        if(str8_match(child->string, str8_lit("color"), 0))
         {
-          rd_cfg_list_push_front(scratch.arena, &colors_cfgs, colors_cfg);
-        }
-        if(preset_cfg != &rd_nil_cfg && colors_cfg != &rd_nil_cfg)
-        {
-          break;
+          rd_cfg_list_push_front(scratch.arena, &colors_cfgs, child);
         }
       }
     }
@@ -5553,7 +5549,7 @@ rd_window_frame(void)
       for(RD_CfgNode *n = colors_cfgs.first; n != 0; n = n->next)
       {
         ThemeTask *t = push_array(scratch.arena, ThemeTask, 1);
-        SLLQueuePush(first_task, last_task, t);
+        SLLQueuePushFront(first_task, last_task, t);
         t->tree = md_tree_from_string(scratch.arena, rd_string_from_cfg_tree(scratch.arena, n->v));
       }
     }
@@ -5574,17 +5570,14 @@ rd_window_frame(void)
       MD_Node *tree_root = t->tree;
       for(MD_Node *n = tree_root; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, tree_root).next)
       {
-        if(n->flags & MD_NodeFlag_Numeric && md_node_is_nil(n->first))
+        if(str8_match(n->string, str8_lit("color"), 0))
         {
-          U64 color_srgba_u64 = 0;
-          try_u64_from_str8_c_rules(n->string, &color_srgba_u64);
-          Vec4F32 color_srgba = rgba_from_u32((U32)color_srgba_u64);
-          Vec4F32 color_linear = linear_from_srgba(color_srgba);
-          String8List tags = {0};
-          for(MD_Node *parent = n->parent; parent != tree_root && !md_node_is_nil(parent); parent = parent->parent)
-          {
-            str8_list_push(scratch.arena, &tags, push_str8_copy(rd_frame_arena(), parent->string));
-          }
+          MD_Node *tags_child = md_child_from_string(n, str8_lit("tags"), 0);
+          MD_Node *value_child = md_child_from_string(n, str8_lit("value"), 0);
+          U8 split_char = ' ';
+          String8List tags = str8_split(scratch.arena, tags_child->first->string, &split_char, 1, 0);
+          U32 color_u32 = e_value_from_string(value_child->first->string).u32;
+          Vec4F32 color_linear = linear_from_srgba(rgba_from_u32(color_u32));
           ThemePatternNode *node = push_array(scratch.arena, ThemePatternNode, 1);
           node->pattern.tags = str8_array_from_list(rd_frame_arena(), &tags);
           node->pattern.linear = color_linear;
@@ -15209,8 +15202,22 @@ rd_frame(void)
             {
               rd_cfg_release(n->v);
             }
-            // String8 color_preset = rd_setting_from_name(str8_lit("color_preset"));
-            // String8 color_file = rd_setting_from_name(str8_lit("color_file"));
+            String8 color_preset = rd_setting_from_name(str8_lit("color_preset"));
+            String8 color_file = rd_setting_from_name(str8_lit("color_file"));
+            RD_ThemePreset preset = RD_ThemePreset_DefaultDark;
+            // TODO(rjf): map preset via string
+            MD_Node *theme_tree = rd_state->theme_preset_trees[preset];
+            for(MD_Node *n = theme_tree; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
+            {
+              if(str8_match(n->string, str8_lit("color"), 0))
+              {
+                RD_Cfg *color = rd_cfg_new(parent, str8_lit("color"));
+                RD_Cfg *tags = rd_cfg_new(color, str8_lit("tags"));
+                RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
+                rd_cfg_new(tags, md_child_from_string(n, str8_lit("tags"), 0)->first->string);
+                rd_cfg_new(value, md_child_from_string(n, str8_lit("value"), 0)->first->string);
+              }
+            }
           }break;
           
           //- rjf: watches

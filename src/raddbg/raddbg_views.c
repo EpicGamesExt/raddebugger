@@ -3648,10 +3648,11 @@ RD_VIEW_UI_FUNCTION_DEF(color)
       RD_Font(RD_FontSlot_Code)
     {
       UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
+      UI_Signal h_sig  = {0};
       ui_spacer(ui_em(1.f, 1.f));
       UI_PrefWidth(ui_em(3.f, 1.f))
       {
-        UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
+        h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
       }
       ui_spacer(ui_em(1.f, 1.f));
       UI_PrefWidth(ui_children_sum(1)) UI_Column
@@ -3688,6 +3689,18 @@ RD_VIEW_UI_FUNCTION_DEF(color)
             ui_labelf("%.2f", hsva.z);
             ui_labelf("%.2f", rgba.w);
           }
+        }
+      }
+      if(ui_dragging(h_sig) || ui_dragging(sv_sig))
+      {
+        // TODO(rjf): hard-coding U32 committing for now
+        E_Type *type = e_type_from_key__cached(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+        if(type->kind == E_TypeKind_U32)
+        {
+          Vec4F32 new_rgba = rgba_from_hsva(hsva);
+          U32 u32 = u32_from_rgba(new_rgba);
+          String8 string = push_str8f(scratch.arena, "0x%x", u32);
+          rd_commit_eval_value_string(eval, string);
         }
       }
     }
