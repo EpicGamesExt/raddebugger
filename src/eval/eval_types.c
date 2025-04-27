@@ -1382,14 +1382,14 @@ e_expand_rule_from_type_key(E_TypeKey key)
 {
   E_TypeExpandRule *rule = &e_type_expand_rule__default;
   {
-    E_Type *type = e_type_from_key__cached(key);
+    E_Type *type = e_type_from_key__cached(e_type_key_unwrap(key, E_TypeUnwrapFlag_Meta));
     if(type->expand.info != 0)
     {
       rule = &type->expand;
     }
     for(E_Type *lens_type = type;
         lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
-        lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+        lens_type = e_type_from_key__cached(e_type_key_unwrap(lens_type->direct_type_key, E_TypeUnwrapFlag_Meta)))
     {
       if(lens_type->expand.info != 0)
       {
@@ -1746,6 +1746,8 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     }break;
     
     case E_TypeKind_MetaExpr:
+    case E_TypeKind_MetaDisplayName:
+    case E_TypeKind_MetaDescription:
     {
       E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, prec, skip_return);
@@ -1905,7 +1907,7 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
     
     //- rjf: if we have meta-expression tags in the type chain, defer
     // to the next type in the chain.
-    else if(kind == E_TypeKind_MetaExpr)
+    else if(E_TypeKind_FirstMeta <= kind && kind <= E_TypeKind_LastMeta)
     {
       done = 0;
     }

@@ -91,6 +91,8 @@ E_TypeKind_FirstSigned2    = E_TypeKind_S8,
 E_TypeKind_LastSigned2     = E_TypeKind_S512,
 E_TypeKind_FirstIncomplete = E_TypeKind_IncompleteStruct,
 E_TypeKind_LastIncomplete  = E_TypeKind_IncompleteEnum,
+E_TypeKind_FirstMeta       = E_TypeKind_MetaExpr,
+E_TypeKind_LastMeta        = E_TypeKind_MetaDescription,
 } E_TypeKind;
 
 typedef U32 E_ExprKind;

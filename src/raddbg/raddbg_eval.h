@@ -40,6 +40,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(cfgs);
 //~ rjf: Config Slice Type Hooks
 
 E_TYPE_IREXT_FUNCTION_DEF(cfgs_slice);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_query);
 E_TYPE_ACCESS_FUNCTION_DEF(cfgs_slice);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(cfgs_slice);

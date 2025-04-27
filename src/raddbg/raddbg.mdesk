@@ -90,6 +90,7 @@ RD_VocabTable:
   {source_location      _                           "Source Location"           _                     Null                                           }
   {address_location     _                           "Address Location"          _                     Null                                           }
   {target               _                           "Target"                    _                     Target                                         }
+  {color                _                           "Color"                     _                     Palette                                        }
   {executable           _                           "Executable"                _                     Module                                         }
   {arguments            arguments                   "Arguments"                 "Arguments"           Null                                           }
   {exe                  exes                        "Executable"                _                     Module                                         }
@@ -227,6 +228,14 @@ RD_VocabTable:
       'main_font': string,
       'code_font': string,
       
+      //- rjf: colors
+      @display_name('Color Preset')
+        'color_preset': string,
+      @display_name('Color File')
+        'color_file': path,
+      @display_name('Colors')
+        'colors': query,
+      
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
         'thread_lines': bool,
@@ -342,6 +351,18 @@ RD_VocabTable:
         win32_sanitizer_raw_access_violation: bool;
       @default(1) @display_name("Break On Win32 DirectX Debug Layer Exceptions") @description("Code: 0x0000087a")
         win32_directx_debug_layer: bool;
+    }
+    ```
+  }
+  
+  //- rjf: colors
+  {
+    color,
+    ```
+      @collection_commands(add_color, import_colors) x:
+    {
+      @display_name('Tags') tags: string,
+      color: @color @hex u32,
     }
     ```
   }
@@ -896,6 +917,10 @@ RD_CmdTable:    //               |        |              |                |     
   //- rjf: auto view rule
   {AddAutoViewRule                1        1              0                0               ""                                               String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "add_auto_view_rule"          "Add Auto View Rule"                          "Adds a new auto view rule."                                                                                       ""                               "$auto_view_rules,"                                              }
   
+  //- rjf: colors
+  {AddColor                       1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "add_color"                   "Add Color"                                   "Adds a new color."                                                                                                ""                               ""                                                               }
+  {ImportColors                   1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "import_colors"               "Import Colors"                               "Imports all colors from a loaded color theme file or color theme preset."                                         ""                               ""                                                               }
+  
   //- rjf: line operations
   {SetNextStatement               1        1              1                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           RightArrow            "set_next_statement"          "Set Next Statement"                          "Sets the selected thread's instruction pointer to the cursor's position."                                         ""                               "$text_pt,"                                                      }
   
@@ -1405,7 +1430,15 @@ RD_ThemePresetTable:
   }
   
   { DefaultLight     default_light    "Default (Light)"   }
-  { VSDark           vs_dark          "VS (Dark)"         }
+  
+  {
+    VSDark vs_dark "VS (Dark)",
+    ```theme:
+    {
+      background: 0x1b0000ff,
+    }
+    ```
+  }
   { VSLight          vs_light         "VS (Light)"        }
   { SolarizedDark    solarized_dark   "Solarized (Dark)"  }
   { SolarizedLight   solarized_light  "Solarized (Light)" }
@@ -1414,7 +1447,7 @@ RD_ThemePresetTable:
   { FarManager       far_manager      "Far Manager"       }
 }
 
-@table(name                                display_name                                           name_lower                                   default_dark        default_light        vs_dark            vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager         desc)
+@table(name                                display_name                                           name_lower                                   default_dark        default_light       vs_dark            vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager         desc)
 RD_ThemeColorTable:
 {
   {Null                                     "Null"                                                 null                                         0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          ""}

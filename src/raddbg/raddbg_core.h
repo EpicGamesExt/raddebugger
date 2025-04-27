@@ -608,6 +608,8 @@ struct RD_State
   String8 user_path;
   Arena *project_path_arena;
   String8 project_path;
+  Arena *theme_path_arena;
+  String8 theme_path;
   
   // rjf: serialized config debug string keys
   U128 user_cfg_string_key;

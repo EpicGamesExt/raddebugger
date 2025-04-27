@@ -269,6 +269,11 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         child_type_key = e_type_key_basic(E_TypeKind_U64);
         wrap_child_w_meta_expr = 1;
       }
+      else if(str8_match(child_schema->first->string, str8_lit("u32"), 0))
+      {
+        child_type_key = e_type_key_basic(E_TypeKind_U32);
+        wrap_child_w_meta_expr = 1;
+      }
       else if(str8_match(child_schema->first->string, str8_lit("f32"), 0))
       {
         child_type_key = e_type_key_basic(E_TypeKind_F32);
@@ -338,6 +343,28 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
         if(!md_node_is_nil(description))
         {
           child_type_key = e_type_key_cons_meta_description(child_type_key, description->first->string);
+        }
+      }
+      
+      //- rjf: extend child type with hex lens
+      {
+        MD_Node *hex = md_tag_from_string(child_schema->first, str8_lit("hex"), 0);
+        if(!md_node_is_nil(hex))
+        {
+          child_type_key = e_type_key_cons(.kind = E_TypeKind_Lens,
+                                           .name = str8_lit("hex"),
+                                           .direct_key = child_type_key);
+        }
+      }
+      
+      //- rjf: extend child type with color lens
+      {
+        MD_Node *color = md_tag_from_string(child_schema->first, str8_lit("color"), 0);
+        if(!md_node_is_nil(color))
+        {
+          child_type_key = e_type_key_cons(.kind = E_TypeKind_Lens,
+                                           .name = str8_lit("color"),
+                                           .direct_key = child_type_key);
         }
       }
       
@@ -665,6 +692,40 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice)
     info.expr_count = (accel->cmds.count + accel->cfgs.count);
   }
   scratch_end(scratch);
+  return info;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_query)
+{
+  RD_CfgsExpandAccel *accel = push_array(arena, RD_CfgsExpandAccel, 1);
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_Cfg *root_cfg = rd_cfg_from_eval_space(eval.space);
+    String8 child_key = e_string_from_id(eval.space.u64s[1]);
+    String8 child_key_singular = rd_singular_from_code_name_plural(child_key);
+    if(child_key_singular.size != 0)
+    {
+      child_key = child_key_singular;
+    }
+    String8List cmds = {0};
+    MD_NodePtrList schemas = rd_schemas_from_name(child_key);
+    for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
+    {
+      MD_Node *schema = n->v;
+      MD_Node *collection_cmds_root = md_tag_from_string(schema, str8_lit("collection_commands"), 0);
+      for MD_EachNode(cmd, collection_cmds_root->first)
+      {
+        str8_list_push(scratch.arena, &cmds, cmd->string);
+      }
+    }
+    RD_CfgList children = rd_cfg_child_list_from_string(scratch.arena, root_cfg, child_key);
+    accel->cmds = str8_array_from_list(arena, &cmds);
+    accel->cmds_idx_range = r1u64(0, accel->cmds.count);
+    accel->cfgs = rd_cfg_array_from_list(arena, &children);
+    accel->cfgs_idx_range = r1u64(accel->cmds.count + 0, accel->cmds.count + accel->cfgs.count);
+    scratch_end(scratch);
+  }
+  E_TypeExpandInfo info = {accel, accel->cfgs.count + accel->cmds.count};
   return info;
 }
 

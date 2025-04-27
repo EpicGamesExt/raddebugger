@@ -183,6 +183,8 @@ e_token_kind_strings:
   `LastSigned2     = E_TypeKind_S512`,
   `FirstIncomplete = E_TypeKind_IncompleteStruct`,
   `LastIncomplete  = E_TypeKind_IncompleteEnum`,
+  `FirstMeta       = E_TypeKind_MetaExpr`,
+  `LastMeta        = E_TypeKind_MetaDescription`,
 }
 
 @data(String8) e_type_kind_basic_string_table:

@@ -1780,6 +1780,17 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           U64 value = e_value_from_string(value_string_casted).u64;
           read_data = push_str8_copy(scratch.arena, str8_struct(&value));
         }
+        else if(str8_match(child_type_name, str8_lit("u32"), 0))
+        {
+          String8 value_string = cfg->first->string;
+          if(value_string.size == 0)
+          {
+            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+          }
+          String8 value_string_casted = push_str8f(scratch.arena, "(uint32)(%S)", value_string);
+          U64 value = e_value_from_string(value_string_casted).u64;
+          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+        }
         else if(str8_match(child_type_name, str8_lit("f32"), 0))
         {
           String8 value_string = cfg->first->string;
@@ -4741,6 +4752,10 @@ rd_view_ui(Rng2F32 rect)
                           {
                             CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row->eval.space);
                             RD_Cfg *cfg = rd_cfg_from_eval_space(row->eval.space);
+                            if(cfg == &rd_nil_cfg)
+                            {
+                              cfg = rd_cfg_from_eval_space(row->block->eval.space);
+                            }
                             RD_RegsScope(.cfg = cfg->id, .ctrl_entity = entity->handle)
                             {
                               if(cfg != &rd_nil_cfg || entity != &ctrl_entity_nil)
@@ -5483,7 +5498,7 @@ rd_window_frame(void)
     // that windows can have their own colors, and have those override higher-up settings.
     RD_Cfg *preset_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
-    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
+    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("theme")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
     for EachElement(idx, scan_parents)
     {
       for(RD_Cfg *parent_cfg = scan_parents[idx]; parent_cfg != &rd_nil_cfg; parent_cfg = parent_cfg->parent)
@@ -10864,6 +10879,7 @@ rd_init(CmdLine *cmdln)
                                   cmd_line_has_flag(cmdln, str8_lit("q")));
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
+  rd_state->theme_path_arena = arena_alloc();
   rd_state->user_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_user_data_string_key"));
   rd_state->project_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_project_data_string_key"));
   rd_state->cmdln_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_cmdln_data_string_key"));
@@ -12304,6 +12320,19 @@ rd_frame(void)
                                                     {
                                                       .info    = E_TYPE_EXPAND_INFO_FUNCTION_NAME(call_stack),
                                                     }));
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("colors"),
+                                    e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .flags = E_TypeFlag_EditableChildren,
+                                                    .name = str8_lit("colors"),
+                                                    .irext  = E_TYPE_IREXT_FUNCTION_NAME(cfgs_slice),
+                                                    .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs_slice),
+                                                    .expand =
+                                                    {
+                                                      .info        = E_TYPE_EXPAND_INFO_FUNCTION_NAME(cfgs_query),
+                                                      .range       = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(cfgs_slice),
+                                                      .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice),
+                                                      .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs_slice),
+                                                    }));
       }
       
       //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
@@ -12846,7 +12875,9 @@ rd_frame(void)
           case RD_CmdKind_OpenUser:
           case RD_CmdKind_OpenProject:
           {
-            String8 file_root_key = (kind == RD_CmdKind_OpenUser ? str8_lit("user") : str8_lit("project"));
+            String8 file_root_key = (kind == RD_CmdKind_OpenUser    ? str8_lit("user") :
+                                     kind == RD_CmdKind_OpenProject ? str8_lit("project") :
+                                     str8_lit("other"));
             RD_Cfg *file_root = rd_cfg_child_from_string(rd_state->root_cfg, file_root_key);
             
             //- rjf: load the new file's data
@@ -15162,6 +15193,24 @@ rd_frame(void)
           {
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
             rd_cfg_new(project, str8_lit("auto_view_rule"));
+          }break;
+          
+          //- rjf: colors
+          case RD_CmdKind_AddColor:
+          {
+            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+            rd_cfg_new(parent, str8_lit("color"));
+          }break;
+          case RD_CmdKind_ImportColors:
+          {
+            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+            RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("color"));
+            for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
+            {
+              rd_cfg_release(n->v);
+            }
+            // String8 color_preset = rd_setting_from_name(str8_lit("color_preset"));
+            // String8 color_file = rd_setting_from_name(str8_lit("color_file"));
           }break;
           
           //- rjf: watches

@@ -945,7 +945,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     EV_Key key = row->key;
     EV_Block *block = row->block;
     E_Eval block_eval = row->block->eval;
-    E_TypeKey block_type_key = block_eval.irtree.type_key;
+    E_TypeKey block_type_key = e_type_key_unwrap(block_eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key__cached(block_type_key);
     RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
@@ -1277,7 +1277,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells queries
     //
-    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery)
+    else if(row->eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
+            (row->eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+             e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_Meta)) == E_TypeKind_Set))
     {
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
@@ -1339,8 +1341,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
             row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
             row->eval.space.kind == E_SpaceKind_File)
     {
-      if(e_type_kind_from_key(row->eval.irtree.type_key) == E_TypeKind_Array &&
-         e_type_kind_from_key(e_type_key_direct(row->eval.irtree.type_key)) == E_TypeKind_U8)
+      E_TypeKey substantive_row_eval_type = e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
+      if(e_type_kind_from_key(substantive_row_eval_type) == E_TypeKind_Array &&
+         e_type_kind_from_key(e_type_key_direct(substantive_row_eval_type)) == E_TypeKind_U8)
       {
         info.can_expand = 0;
       }
@@ -1742,7 +1745,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           // rjf: determine if code
           B32 is_code = 1;
           {
-            E_Type *type = e_type_from_key__cached(cell->eval.irtree.type_key);
+            E_Type *type = e_type_from_key__cached(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_Meta));
             if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
             {
               is_code = 0;

@@ -417,9 +417,9 @@ ev_expand_rule_from_type_key(E_TypeKey type_key)
 {
   EV_ExpandRule *rule = &ev_nil_expand_rule;
   {
-    E_TypeKey k = type_key;
+    E_TypeKey k = e_type_key_unwrap(type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind kind = e_type_kind_from_key(k);
-    for(;kind == E_TypeKind_Lens; k = e_type_key_direct(k), kind = e_type_kind_from_key(k))
+    for(;kind == E_TypeKind_Lens; k = e_type_key_direct(e_type_key_unwrap(k, E_TypeUnwrapFlag_Meta)), kind = e_type_kind_from_key(k))
     {
       E_Type *type = e_type_from_key__cached(k);
       EV_ExpandRule *candidate = ev_expand_rule_from_string(type->name);
@@ -536,10 +536,10 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
     tree.total_item_count += 1;
     
     //- rjf: generate initial task, for root's evaluation
-    typedef struct Task Task;
-    struct Task
+    typedef struct BlockTreeBuildTask BlockTreeBuildTask;
+    struct BlockTreeBuildTask
     {
-      Task *next;
+      BlockTreeBuildTask *next;
       EV_Block *parent_block;
       E_Eval eval;
       E_Expr *next_expr;
@@ -548,12 +548,12 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       B32 default_expanded;
       B32 force_expanded;
     };
-    Task start_task = {0, tree.root, tree.root->eval, tree.root->eval.expr->next, 1, 0};
-    Task *first_task = &start_task;
-    Task *last_task = first_task;
+    BlockTreeBuildTask start_task = {0, tree.root, tree.root->eval, tree.root->eval.expr->next, 1, 0};
+    BlockTreeBuildTask *first_task = &start_task;
+    BlockTreeBuildTask *last_task = first_task;
     
     //- rjf: iterate all expansions & generate blocks for each
-    for(Task *t = first_task; t != 0; t = t->next)
+    for(BlockTreeBuildTask *t = first_task; t != 0; t = t->next)
     {
       // rjf: get task key
       EV_Key key = ev_key_make(ev_hash_from_key(t->parent_block->key), t->child_id);
@@ -704,7 +704,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
           E_Eval child_eval = {0};
           type_expand_rule->range(arena, type_expand_info.user_data, t->eval, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
           EV_Key child_key = child_keys[idx];
-          Task *task = push_array(scratch.arena, Task, 1);
+          BlockTreeBuildTask *task = push_array(scratch.arena, BlockTreeBuildTask, 1);
           SLLQueuePush(first_task, last_task, task);
           task->parent_block       = expansion_block;
           task->eval               = child_eval;
@@ -718,7 +718,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       // rjf: if this expr has a sibling, push another task to continue the chain
       if(t->next_expr != &e_expr_nil)
       {
-        Task *task = push_array(scratch.arena, Task, 1);
+        BlockTreeBuildTask *task = push_array(scratch.arena, BlockTreeBuildTask, 1);
         task->next = t->next;
         t->next = task;
         task->parent_block       = t->parent_block;
@@ -1744,6 +1744,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       //
       case E_TypeKind_Modifier:
       case E_TypeKind_MetaDescription:
+      case E_TypeKind_MetaDisplayName:
       {
         need_pop = 1;
         need_new_task = 1;
