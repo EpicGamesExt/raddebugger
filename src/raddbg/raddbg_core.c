@@ -4535,6 +4535,7 @@ rd_view_ui(Rng2F32 rect)
                         else
                         {
                           // rjf: compute visual params
+                          ProfBegin("compute visual params");
                           B32 cell_has_fancy_editors = (!(cell->flags & RD_WatchCellFlag_NoEval));
                           B32 is_button = !!(cell_info.flags & RD_WatchCellFlag_Button);
                           B32 has_background = !!(cell_info.flags & RD_WatchCellFlag_Background);
@@ -4549,6 +4550,7 @@ rd_view_ui(Rng2F32 rect)
                             is_button = 0;
                             is_activated_on_single_click = 0;
                           }
+                          ProfEnd();
                           
                           // rjf: determine query needle
                           String8 needle = rd_view_query_input();

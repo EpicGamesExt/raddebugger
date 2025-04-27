@@ -2810,6 +2810,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: focus is hot & copy event -> remember to copy this box tree's text content
     if(is_focus_hot &&
        evt->flags & UI_EventFlag_Copy &&
+       !(evt->flags & UI_EventFlag_Delete) &&
        !ui_key_match(ui_key_zero(), box->key))
     {
       ui_state->clipboard_copy_key = box->key;
