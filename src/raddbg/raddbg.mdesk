@@ -225,8 +225,10 @@ RD_VocabTable:
       @default(1)  'scrolling_animations': bool,
       
       //- rjf: fonts
-      'main_font': string,
-      'code_font': string,
+      @display_name('UI Font') @description("The name or path to the font used when displaying non-code UI elements.")
+        'main_font': string,
+      @display_name('Code Font') @description("The name or path to the font used when displaying code.")
+        'code_font': string,
       
       //- rjf: colors
       @display_name('Color Preset')

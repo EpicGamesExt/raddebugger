@@ -318,18 +318,64 @@ fp_font_open(String8 path)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  String16 path16 = str16_from_8(scratch.arena, path);
   FP_DWrite_Font font = {0};
   HRESULT error = 0;
   
-  //- rjf: open font file reference
-  error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
+  //- rjf: build initial path task
+  typedef struct PathTask PathTask;
+  struct PathTask
+  {
+    PathTask *next;
+    String8 path;
+  };
+  PathTask start_task = {0, path};
+  PathTask *first_task = &start_task;
+  PathTask *last_task = first_task;
   
-  //- rjf: open font face
-  error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+  //- rjf: try to open font
+  for(PathTask *t = first_task; t != 0 && font.file == 0; t = t->next)
+  {
+    String16 path16 = str16_from_8(scratch.arena, t->path);
+    error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
+    error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+    
+    // rjf: failure trying just the normal path? -> generate new tasks that search in system folders
+    if(t == first_task && font.file == 0)
+    {
+      // rjf: generate task for user-installed fonts
+      {
+        HKEY reg_key = 0;
+        LSTATUS status = 0;
+        char name[256] = {0};
+        char data[256] = {0};
+        DWORD name_size = sizeof(name);
+        DWORD data_size = sizeof(data);
+        DWORD type = 0;
+        status = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\\Fonts", 0, KEY_QUERY_VALUE, &reg_key);
+        status = RegEnumValueA(reg_key, 0, name, &name_size, 0, &type, data, &data_size);
+        String8 user_fonts_path = str8_cstring(data);
+        PathTask *task = push_array(scratch.arena, PathTask, 1);
+        task->path = push_str8f(scratch.arena, "%s/%S", user_fonts_path, path);
+        SLLQueuePush(first_task, last_task, task);
+      }
+      
+      // rjf: generate task for windows directory (C:/Windows/Fonts, generally)
+      {
+        char windows_path[256] = {0};
+        GetWindowsDirectoryA(windows_path, sizeof(windows_path));
+        PathTask *task = push_array(scratch.arena, PathTask, 1);
+        task->path = push_str8f(scratch.arena, "%s/Fonts/%S", windows_path, path);
+        SLLQueuePush(first_task, last_task, task);
+      }
+    }
+  }
   
   //- rjf: handlify & return
-  FP_Handle handle = fp_dwrite_handle_from_font(font);
+  FP_Handle handle = {0};
+  if(font.file != 0)
+  {
+    handle = fp_dwrite_handle_from_font(font);
+  }
   scratch_end(scratch);
   ProfEnd();
   return handle;

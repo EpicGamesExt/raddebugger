@@ -207,10 +207,6 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] Setting the code_font/main_font values to a font name doesn't work.
-//     Should probably make note that you have to set it to a path to a TTF,
-//     since that's not normally how Windows fonts work.
-//
 // [ ] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
 //
@@ -422,6 +418,9 @@
 //     size dynamically
 // [x] automatically start search query with selected text
 // [x] @feature processor/data breakpoints
+// [x] Setting the code_font/main_font values to a font name doesn't work.
+//     Should probably make note that you have to set it to a path to a TTF,
+//     since that's not normally how Windows fonts work.
 
 ////////////////////////////////
 //~ rjf: Build Options

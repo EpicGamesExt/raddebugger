@@ -10394,7 +10394,11 @@ rd_font_from_slot(RD_FontSlot slot)
   
   // rjf: map name -> tag
   FNT_Tag result = {0};
-  if(font_name.size == 0)
+  if(font_name.size != 0)
+  {
+    result = fnt_tag_from_path(font_name);
+  }
+  if(font_name.size == 0 || fnt_tag_match(fnt_tag_zero(), result))
   {
     switch(slot)
     {
@@ -10403,11 +10407,6 @@ rd_font_from_slot(RD_FontSlot slot)
       case RD_FontSlot_Code: {result = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);}break;
       case RD_FontSlot_Icons:{result = fnt_tag_from_static_data_string(&rd_icon_font_bytes);}break;
     }
-  }
-  else
-  {
-    // TODO(rjf): need to handle "system font names" here.
-    result = fnt_tag_from_path(font_name);
   }
   return result;
 }

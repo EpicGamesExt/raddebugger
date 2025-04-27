@@ -141,16 +141,22 @@ fnt_tag_from_path(String8 path)
   }
   
   //- rjf: allocate & push new node if we don't have an existing one
-  FNT_FontHashNode *new_node = 0;
   if(existing_node == 0)
   {
+    FP_Handle handle = fp_font_open(path);
     FNT_FontHashSlot *slot = &fnt_state->font_hash_table[slot_idx];
-    new_node = push_array(fnt_state->permanent_arena, FNT_FontHashNode, 1);
-    new_node->tag = result;
-    new_node->handle = fp_font_open(path);
-    new_node->metrics = fp_metrics_from_font(new_node->handle);
-    new_node->path = push_str8_copy(fnt_state->permanent_arena, path);
-    SLLQueuePush_N(slot->first, slot->last, new_node, hash_next);
+    existing_node = push_array(fnt_state->permanent_arena, FNT_FontHashNode, 1);
+    existing_node->tag = result;
+    existing_node->handle = handle;
+    existing_node->metrics = fp_metrics_from_font(existing_node->handle);
+    existing_node->path = push_str8_copy(fnt_state->permanent_arena, path);
+    SLLQueuePush_N(slot->first, slot->last, existing_node, hash_next);
+  }
+  
+  //- rjf: tag result must be zero if this is not a valid font
+  if(fp_handle_match(existing_node->handle, fp_handle_zero()))
+  {
+    MemoryZeroStruct(&result);
   }
   
   //- rjf: return
