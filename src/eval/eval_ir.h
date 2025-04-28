@@ -99,6 +99,5 @@ internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
 internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, String8 member_name);
 internal E_Expr *e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index);
 internal E_Expr *e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree);
-internal E_Expr *e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key);
 
 #endif // EVAL_IR_H

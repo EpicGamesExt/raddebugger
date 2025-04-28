@@ -335,18 +335,6 @@ e_expr_ref(Arena *arena, E_Expr *ref)
 }
 
 internal E_Expr *
-e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
-  E_Expr *lhs = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
-  lhs->type_key = type_key;
-  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
-  e_expr_push_child(root, lhs);
-  e_expr_push_child(root, rhs_ref);
-  return root;
-}
-
-internal E_Expr *
 e_expr_copy(Arena *arena, E_Expr *src)
 {
   E_Expr *result = &e_expr_nil;
@@ -1195,7 +1183,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         // rjf: no identifier after `.`? -> error
         else
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing identifier after `.`.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing member name after `%S`.", token_string);
         }
       }
       

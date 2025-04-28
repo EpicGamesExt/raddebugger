@@ -1275,13 +1275,13 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       case E_ExprKind_Call:
       {
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, 1, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, 1, lhs);
         e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
         
         // rjf: calling a type? -> treat as a cast of that type
-        if(lhs_irtree.mode == E_Mode_Null)
+        if(lhs_irtree.mode == E_Mode_Null && lhs_type != &e_type_nil)
         {
           E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, disallow_chained_casts, expr->first->next);
           e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
@@ -2540,24 +2540,6 @@ e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree)
   rhs_bytecode->mode = rhs_irtree->mode;
   rhs_bytecode->type_key = rhs_irtree->type_key;
   rhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &rhs_oplist);
-  e_expr_push_child(root, rhs_bytecode);
-  return root;
-}
-
-internal E_Expr *
-e_expr_irext_cast(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree, E_TypeKey type_key)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
-  E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
-  E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
-  rhs_bytecode->string = e_string_from_expr(arena, rhs, str8_zero());
-  rhs_bytecode->space = rhs->space;
-  rhs_bytecode->mode = rhs_irtree->mode;
-  rhs_bytecode->type_key = rhs_irtree->type_key;
-  rhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &rhs_oplist);
-  E_Expr *lhs = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
-  lhs->type_key = type_key;
-  e_expr_push_child(root, lhs);
   e_expr_push_child(root, rhs_bytecode);
   return root;
 }

@@ -2120,9 +2120,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
           type_kind == E_TypeKind_Enum))
       {
         got_commit_data = 1;
-        E_Expr *src_expr = e_parse_from_string(string).expr;
-        E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
-        E_Eval src_eval = e_eval_from_expr(src_expr__casted);
+        E_Eval src_eval = e_eval_from_stringf("(%S)(%S)", e_type_string_from_key(scratch.arena, type_key), string);
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
         commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
       }
