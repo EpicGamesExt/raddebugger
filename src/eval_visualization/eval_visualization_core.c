@@ -96,7 +96,7 @@ ev_expansion_type_from_key(E_TypeKey type_key)
     {
       E_Type *type = e_type_from_key__cached(key);
       if(type->expand.info != 0 ||
-         ev_expand_rule_from_string(type->name))
+         ev_expand_rule_from_string(type->name) != &ev_nil_expand_rule)
       {
         done = 1;
         result = key;
@@ -123,7 +123,8 @@ internal B32
 ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
-  if(!e_type_key_match(ev_expansion_type_from_key(type_key), e_type_key_zero()))
+  E_TypeKey ev_expansion_type_key = ev_expansion_type_from_key(type_key);
+  if(!e_type_key_match(ev_expansion_type_key, e_type_key_zero()))
   {
     result = 1;
   }
