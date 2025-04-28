@@ -198,8 +198,6 @@ enum
   LNK_ConfigFlag_Fixed                   = (1 << 0),
   LNK_ConfigFlag_Merge                   = (1 << 1),
   LNK_ConfigFlag_EnvLib                  = (1 << 2),
-  LNK_ConfigFlag_DelayUnload             = (1 << 3),
-  LNK_ConfigFlag_DelayBind               = (1 << 4),
   LNK_ConfigFlag_CheckUnusedDelayLoadDll = (1 << 5),
   LNK_ConfigFlag_NoTsAware               = (1 << 6),
   LNK_ConfigFlag_WriteImageChecksum      = (1 << 8),
@@ -306,6 +304,7 @@ typedef struct LNK_Config
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;
   U64                         opt_iter_count;
+  LNK_ImportTableFlags        import_table_flags;
   LNK_GuardFlags              guard_flags;
   LNK_DebugInfoGuidType       guid_type;
   Guid                        guid;
@@ -374,6 +373,7 @@ typedef struct LNK_Config
   U64                         symbol_table_cap_internal;
   U64                         symbol_table_cap_weak;
   U64                         symbol_table_cap_lib;
+  U64                         data_dir_count;
   B32                         build_imp_lib;
   B32                         build_exp;
   LNK_SwitchState             write_temp_files;
