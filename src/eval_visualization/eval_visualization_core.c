@@ -101,6 +101,10 @@ ev_expansion_type_from_key(E_TypeKey type_key)
         done = 1;
         result = key;
       }
+      else
+      {
+        done = 0;
+      }
     }
     
     //- rjf: if we have meta-expression tags in the type chain, defer

@@ -2251,31 +2251,22 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
     Temp scratch = scratch_begin(&arena, 1);
     String8List allowed_children = {0};
     {
-#if 0 // TODO(rjf): @eval
-      E_Type *stripped_type = e_type_from_key__cached(type->direct_type_key);
-      // TODO(rjf): this is kind of ugly due to the need to call irext,
-      // i wish it was possible to have an easier way to "strip" the current
-      // lens & evaluate the wrapped expression?
-      E_IRTreeAndType irtree_stripped = *irtree;
-      irtree_stripped.type_key = type->direct_type_key;
-      irtree_stripped.user_data = stripped_type->irext ? stripped_type->irext(scratch.arena, expr, &irtree_stripped).user_data : 0;
-      E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(irtree_stripped.type_key);
-      // TODO(rjf): @eval before expanding a type, ALWAYS select the parent key
-      E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, expr, &irtree_stripped, filter);
+      E_Eval eval_stripped = e_eval_wrapf(eval, "raw($)");
+      E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(eval_stripped.irtree.type_key);
+      E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, eval_stripped, filter);
       if(expand_info.expr_count < 4096)
       {
-        E_Expr **exprs = push_array(scratch.arena, E_Expr *, expand_info.expr_count);
-        String8 *exprs_strings = push_array(scratch.arena, String8, expand_info.expr_count);
+        E_Eval *evals = push_array(scratch.arena, E_Eval, expand_info.expr_count);
         for EachIndex(idx, expand_info.expr_count)
         {
-          exprs[idx] = &e_expr_nil;
+          evals[idx] = e_eval_nil;
         }
-        expand_rule->range(scratch.arena, expand_info.user_data, expr, &irtree_stripped, filter, r1u64(0, expand_info.expr_count), exprs, exprs_strings);
+        expand_rule->range(scratch.arena, expand_info.user_data, eval_stripped, filter, r1u64(0, expand_info.expr_count), evals);
         for EachIndex(idx, expand_info.expr_count)
         {
-          if(exprs[idx]->kind == E_ExprKind_MemberAccess)
+          if(evals[idx].expr->kind == E_ExprKind_MemberAccess)
           {
-            String8 name = exprs[idx]->first->next->string;
+            String8 name = evals[idx].expr->first->next->string;
             B32 name_is_allowed = 1;
             for EachIndex(arg_idx, type->count)
             {
@@ -2292,7 +2283,6 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
           }
         }
       }
-#endif
     }
     allowed_children_array = str8_array_from_list(arena, &allowed_children);
     scratch_end(scratch);
@@ -2476,8 +2466,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
       }
       
       // rjf: compute struct.base_ptr IR tree
-      E_IRTreeAndType override = {&e_irnode_nil};
-      result = e_push_irtree_and_type_from_expr(arena, &override, 0, 0, 0, idx_expr);
+      result = e_push_irtree_and_type_from_expr(arena, 0, 0, 0, 0, idx_expr);
       
       scratch_end(scratch);
     }break;

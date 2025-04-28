@@ -88,7 +88,7 @@ internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
 E_TYPE_ACCESS_FUNCTION_DEF(default);
-internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, B32 disallow_chained_casts,  E_Expr *root_expr);
+internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32 disallow_autohooks, B32 disallow_chained_fastpaths, B32 disallow_chained_casts,  E_Expr *root_expr);
 
 //- rjf: irtree -> linear ops/bytecode
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
