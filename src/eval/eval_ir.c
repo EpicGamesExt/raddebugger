@@ -1273,7 +1273,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
         
         // rjf: calling a type? -> treat as a cast of that type
-        if(lhs_irtree.mode == E_Mode_Null && lhs_type != &e_type_nil)
+        if(lhs_irtree.mode == E_Mode_Null && lhs_type != &e_type_nil && lhs_type->kind != E_TypeKind_Lens && lhs_type->kind != E_TypeKind_LensSpec)
         {
           E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, disallow_chained_casts, expr->first->next);
           e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
@@ -1331,8 +1331,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         // left-hand-side of the dot operator as the first argument. this is a fast path
         // which prevents paren nesting in simple cases, to easily chain multiple
         // calls - for example, bin(2).digits(4)
-        else if(lhs_type == &e_type_nil &&
-                lhs->kind == E_ExprKind_MemberAccess)
+        else if(lhs->kind == E_ExprKind_MemberAccess)
         {
           E_Expr *callee = lhs->first->next;
           E_Expr *first_arg = e_expr_ref(arena, lhs->first);
@@ -1349,10 +1348,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             disallow_autohooks = 1;
           }
           result = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, call);
-          E_MsgList new_msgs = {0};
-          e_msg_list_concat_in_place(&new_msgs, &lhs_irtree.msgs);
-          e_msg_list_concat_in_place(&new_msgs, &result.msgs);
-          result.msgs = new_msgs;
+          // NOTE(rjf): we do not want to accumulate messages from the original left-hand-side evaluation in this case, because
+          // this path only occurs if the member access fails specifically.
         }
         
         // rjf: calling a lens? -> generate IR for the first argument; if enabled, wrap
