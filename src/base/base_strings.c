@@ -1198,11 +1198,11 @@ str8_array_from_list(Arena *arena, String8List *list)
 }
 
 internal String8Array *
-str8_array_from_list_arr(Arena *arena, String8List **lists, U64 count)
+str8_array_from_list_arr(Arena *arena, String8List *lists, U64 count)
 {
   String8Array *result = push_array(arena, String8Array, count);
   for (U64 idx = 0; idx < count; idx += 1) {
-    result[idx] = str8_array_from_list(arena, lists[idx]);
+    result[idx] = str8_array_from_list(arena, &lists[idx]);
   }
   return result;
 }
@@ -2744,6 +2744,65 @@ str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out)
 }
 
 ////////////////////////////////
+
+internal int
+str8_compar(String8 a, String8 b, B32 ignore_case)
+{
+  int cmp = 0;
+  U64 size = Min(a.size, b.size);
+  if (ignore_case) {
+    for (U64 i = 0; i < size; ++i) {
+      U8 la = char_to_lower(a.str[i]);
+      U8 lb = char_to_lower(b.str[i]);
+      if (la < lb) {
+        cmp = -1;
+        break;
+      } else if (la > lb) {
+        cmp = +1;
+        break;
+      }
+    } 
+  } else {
+    for (U64 i = 0; i < size; ++i) {
+      if (a.str[i] < b.str[i]) {
+        cmp = -1;
+        break;
+      } else if (a.str[i] > b.str[i]) {
+        cmp = +1;
+        break;
+      }
+    } 
+  }
+  
+  if (cmp == 0) {
+    // shorter prefix must precede longer prefixes
+    if (a.size > b.size) {
+      cmp = +1;
+    } else if (b.size > a.size) {
+      cmp = -1;
+    }
+  }
+  
+  return cmp;
+}
+
+internal int
+str8_compar_ignore_case(const void *a, const void *b)
+{
+  return str8_compar(*(String8*)a, *(String8*)b, 1);
+}
+
+internal int
+str8_compar_case_sensitive(const void *a, const void *b)
+{
+  return str8_compar(*(String8*)a, *(String8*)b, 0);
+}
+
+internal int
+str8_is_before_case_sensitive(const void *a, const void *b)
+{
+  int cmp = str8_compar_case_sensitive(a, b);
+  return cmp < 0;
 //~ rjf: Basic String Hashes
 
 #if !defined(XXH_IMPLEMENTATION)
