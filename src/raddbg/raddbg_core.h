@@ -655,6 +655,9 @@ struct RD_State
   // rjf: key map (constructed from-scratch each frame)
   RD_KeyMap *key_map;
   
+  // rjf: slot -> font tag map (constructed from-scratch each frame)
+  FNT_Tag font_slot_table[RD_FontSlot_COUNT];
+  
   // rjf: theme target (constructed from-scratch each frame)
   RD_Theme *theme;
   RD_Theme *theme_target;

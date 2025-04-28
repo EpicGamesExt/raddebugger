@@ -79,38 +79,65 @@ ev_hash_from_key(EV_Key key)
 
 //- rjf: type info -> expandability/editablity
 
+internal E_TypeKey
+ev_expansion_type_from_key(E_TypeKey type_key)
+{
+  E_TypeKey result = zero_struct;
+  for(E_TypeKey key = type_key;
+      !e_type_key_match(key, e_type_key_zero());
+      key = e_type_key_direct(key))
+  {
+    B32 done = 1;
+    E_TypeKind kind = e_type_kind_from_key(key);
+    
+    //- rjf: lenses -> try to see if this lens has special expansion rules. if
+    // so, choose the current eval
+    if(kind == E_TypeKind_Lens)
+    {
+      E_Type *type = e_type_from_key__cached(key);
+      if(type->expand.info != 0 ||
+         ev_expand_rule_from_string(type->name))
+      {
+        done = 1;
+        result = key;
+      }
+    }
+    
+    //- rjf: if we have meta-expression tags in the type chain, defer
+    // to the next type in the chain.
+    else if(E_TypeKind_FirstMeta <= kind && kind <= E_TypeKind_LastMeta)
+    {
+      done = 0;
+    }
+    
+    //- rjf: break if done
+    if(done)
+    {
+      break;
+    }
+  }
+  return result;
+}
+
 internal B32
 ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
+  if(!e_type_key_match(ev_expansion_type_from_key(type_key), e_type_key_zero()))
   {
-    if(!result && e_type_kind_from_key(type_key) == E_TypeKind_Lens)
+    result = 1;
+  }
+  else
+  {
+    E_TypeKey default_expansion_type_key = e_default_expansion_type_from_key(type_key);
+    E_TypeKind kind = e_type_kind_from_key(default_expansion_type_key);
+    if(kind == E_TypeKind_Enum)
     {
-      for(E_Type *lens_type = e_type_from_key__cached(type_key);
-          lens_type->kind == E_TypeKind_Lens;
-          lens_type = e_type_from_key__cached(lens_type->direct_type_key))
-      {
-        if(lens_type->expand.info != 0)
-        {
-          result = 1;
-          break;
-        }
-      }
+      result = (mode == E_Mode_Null);
     }
-    if(!result)
+    else if(kind != E_TypeKind_Null)
     {
-      E_TypeKey expand_type_key = e_default_expansion_type_from_key(type_key);
-      E_TypeKind expand_type_kind = e_type_kind_from_key(expand_type_key);
-      if(expand_type_kind == E_TypeKind_Struct ||
-         expand_type_kind == E_TypeKind_Union ||
-         expand_type_kind == E_TypeKind_Class ||
-         expand_type_kind == E_TypeKind_Array ||
-         expand_type_kind == E_TypeKind_Set ||
-         e_type_kind_is_pointer_or_ref(expand_type_kind) ||
-         (expand_type_kind == E_TypeKind_Enum && mode == E_Mode_Null))
-      {
-        result = 1;
-      }
+      result = 1;
     }
   }
   return result;
@@ -512,7 +539,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
 //~ rjf: Block Building
 
 internal EV_BlockTree
-ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval)
+ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root_eval)
 {
   ProfBeginFunction();
   EV_BlockTree tree = {&ev_nil_block};
@@ -528,7 +555,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
     MemoryCopyStruct(tree.root, &ev_nil_block);
     tree.root->key              = root_key;
     tree.root->string           = str8_zero();
-    tree.root->eval             = eval;
+    tree.root->eval             = root_eval;
     tree.root->type_expand_rule = &e_type_expand_rule__default;
     tree.root->viz_expand_rule  = &ev_nil_expand_rule;
     tree.root->row_count  = 1;
@@ -574,21 +601,26 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
       
       // rjf: unpack eval
       E_Mode mode = t->eval.irtree.mode;
-      E_TypeKey type_key = t->eval.irtree.type_key;
+      E_Eval eval = t->eval;
+      E_TypeKey expansion_type_key = ev_expansion_type_from_key(eval.irtree.type_key);
+      if(!e_type_key_match(expansion_type_key, e_type_key_zero()))
+      {
+        eval.irtree.type_key = expansion_type_key;
+      }
       
       // rjf: get expansion rules from type
-      E_TypeExpandRule *type_expand_rule = e_expand_rule_from_type_key(type_key);
-      EV_ExpandRule *viz_expand_rule = ev_expand_rule_from_type_key(type_key);
+      E_TypeExpandRule *type_expand_rule = e_expand_rule_from_type_key(eval.irtree.type_key);
+      EV_ExpandRule *viz_expand_rule = ev_expand_rule_from_type_key(eval.irtree.type_key);
       
       // rjf: skip if no expansion rule, & type info disallows expansion
-      if(viz_expand_rule == &ev_nil_expand_rule && !ev_type_key_and_mode_is_expandable(type_key, mode))
+      if(viz_expand_rule == &ev_nil_expand_rule && !ev_type_key_and_mode_is_expandable(eval.irtree.type_key, mode))
       {
         continue;
       }
       
       // rjf: get top-level lookup/expansion info
-      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, t->eval, filter);
-      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, t->eval.expr);
+      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, eval, filter);
+      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, eval.expr);
       
       // rjf: determine expansion info
       U64 expansion_row_count = type_expand_info.expr_count;
@@ -615,7 +647,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
         expansion_block->parent                   = t->parent_block;
         expansion_block->key                      = key;
         expansion_block->split_relative_idx       = t->split_relative_idx;
-        expansion_block->eval                     = t->eval;
+        expansion_block->eval                     = eval;
         expansion_block->type_expand_info         = type_expand_info;
         expansion_block->type_expand_rule         = type_expand_rule;
         expansion_block->viz_expand_info          = viz_expand_info;
@@ -702,7 +734,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval
         {
           Rng1U64 child_range = r1u64(split_relative_idx, split_relative_idx+1);
           E_Eval child_eval = {0};
-          type_expand_rule->range(arena, type_expand_info.user_data, t->eval, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
+          type_expand_rule->range(arena, type_expand_info.user_data, eval, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
           EV_Key child_key = child_keys[idx];
           BlockTreeBuildTask *task = push_array(scratch.arena, BlockTreeBuildTask, 1);
           SLLQueuePush(first_task, last_task, task);

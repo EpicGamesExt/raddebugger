@@ -315,6 +315,7 @@ internal U64 ev_hash_from_key(EV_Key key);
 //~ rjf: Type Info Helpers
 
 //- rjf: type info -> expandability/editablity
+internal E_TypeKey ev_expansion_type_from_key(E_TypeKey type_key);
 internal B32 ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode);
 internal B32 ev_type_key_is_editable(E_TypeKey type_key);
 
@@ -351,7 +352,7 @@ internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
 ////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval eval);
+internal EV_BlockTree ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root_eval);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////

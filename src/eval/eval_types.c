@@ -1264,7 +1264,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
         U64 last_member_off = 0;
         for(U64 member_idx = 0; member_idx < type->count; member_idx += 1)
         {
-          if(type->members[member_idx].kind == E_MemberKind_DataField)
+          if(type->members[member_idx].name.size != 0 && type->members[member_idx].kind == E_MemberKind_DataField)
           {
             E_MemberNode *n = push_array(scratch.arena, E_MemberNode, 1);
             MemoryCopyStruct(&n->v, &type->members[member_idx]);

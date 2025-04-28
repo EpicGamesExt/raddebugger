@@ -4570,6 +4570,7 @@ rd_view_ui(Rng2F32 rect)
                           
                           // rjf: form cell build parameters
                           RD_CellParams cell_params = {0};
+                          ProfScope("form cell build parameters")
                           {
                             // rjf: set up base parameters
                             cell_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
@@ -10389,35 +10390,8 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
 internal FNT_Tag
 rd_font_from_slot(RD_FontSlot slot)
 {
-  // rjf: determine key name for this font slot
-  String8 key = {0};
-  switch(slot)
-  {
-    default:{}break;
-    case RD_FontSlot_Main:{key = str8_lit("main_font");}break;
-    case RD_FontSlot_Code:{key = str8_lit("code_font");}break;
-  }
-  
-  // rjf: determine font name
-  String8 font_name = rd_setting_from_name(key);
-  
-  // rjf: map name -> tag
-  FNT_Tag result = {0};
-  if(font_name.size != 0)
-  {
-    result = fnt_tag_from_path(font_name);
-  }
-  if(font_name.size == 0 || fnt_tag_match(fnt_tag_zero(), result))
-  {
-    switch(slot)
-    {
-      default:
-      case RD_FontSlot_Main: {result = fnt_tag_from_static_data_string(&rd_default_main_font_bytes);}break;
-      case RD_FontSlot_Code: {result = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);}break;
-      case RD_FontSlot_Icons:{result = fnt_tag_from_static_data_string(&rd_icon_font_bytes);}break;
-    }
-  }
-  return result;
+  FNT_Tag tag = rd_state->font_slot_table[slot];
+  return tag;
 }
 
 internal FNT_RasterFlags
@@ -11607,6 +11581,26 @@ rd_frame(void)
         }
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: get fonts from config
+  //
+  ProfScope("get fonts from config")
+  {
+    String8 main_font_name = rd_setting_from_name(str8_lit("main_font"));
+    String8 code_font_name = rd_setting_from_name(str8_lit("code_font"));
+    rd_state->font_slot_table[RD_FontSlot_Main]  = fnt_tag_from_path(main_font_name);
+    rd_state->font_slot_table[RD_FontSlot_Code]  = fnt_tag_from_path(code_font_name);
+    if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Main], fnt_tag_zero()))
+    {
+      rd_state->font_slot_table[RD_FontSlot_Main] = fnt_tag_from_static_data_string(&rd_default_main_font_bytes);
+    }
+    if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Code], fnt_tag_zero()))
+    {
+      rd_state->font_slot_table[RD_FontSlot_Code] = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);
+    }
+    rd_state->font_slot_table[RD_FontSlot_Icons] = fnt_tag_from_static_data_string(&rd_icon_font_bytes);
   }
   
   //////////////////////////////
