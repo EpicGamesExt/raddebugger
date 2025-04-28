@@ -2477,7 +2477,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
       
       // rjf: compute struct.base_ptr IR tree
       E_IRTreeAndType override = {&e_irnode_nil};
-      result = e_push_irtree_and_type_from_expr(arena, &override, 0, 0, idx_expr);
+      result = e_push_irtree_and_type_from_expr(arena, &override, 0, 0, 0, idx_expr);
       
       scratch_end(scratch);
     }break;

@@ -144,7 +144,7 @@ U8 e_type_kind_basic_byte_size_table[61] =
 0,
 };
 
-String8 e_expr_kind_strings[48] =
+String8 e_expr_kind_strings[49] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -193,10 +193,11 @@ str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
+str8_lit_comp("Unsigned"),
 str8_lit_comp("Define"),
 };
 
-E_OpInfo e_expr_kind_op_info_table[48] =
+E_OpInfo e_expr_kind_op_info_table[49] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -245,6 +246,7 @@ E_OpInfo e_expr_kind_op_info_table[48] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
+{ E_OpKind_Null, 0, str8_lit_comp("unsigned "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Binary, 13, str8_lit_comp(""), str8_lit_comp(" = "), str8_lit_comp(""), str8_lit_comp("") },
 };
 

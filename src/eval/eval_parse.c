@@ -672,6 +672,10 @@ e_type_key_from_expr(E_Expr *expr)
   {
     // TODO(rjf): do we support E_ExprKind_Func here?
     default:{}break;
+    case E_ExprKind_LeafIdentifier:
+    {
+      result = e_leaf_type_from_name(expr->string);
+    }break;
     case E_ExprKind_TypeIdent:
     {
       result = expr->type_key;
@@ -867,6 +871,13 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           }
         }
         
+        // rjf: try 'unsigned' marker
+        if(str8_match(token_string, str8_lit("unsigned"), 0))
+        {
+          prefix_unary_kind = E_ExprKind_Unsigned;
+          prefix_unary_precedence = 2;
+        }
+        
         // rjf: consume valid op
         if(prefix_unary_precedence != 0)
         {
@@ -875,6 +886,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         }
         
         // rjf: try casting expression
+#if 0
         if(prefix_unary_precedence == 0 && str8_match(token_string, str8_lit("("), 0))
         {
           E_Token some_type_identifier_maybe = e_token_at_it(it+1, &tokens);
@@ -915,6 +927,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
             }
           }
         }
+#endif
         
         // rjf: break if we got no operators
         if(prefix_unary_precedence == 0)
@@ -1341,7 +1354,16 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
           E_Expr *rhs = rhs_expr_parse.expr;
           it = rhs_expr_parse.last_token;
-          if(rhs == &e_expr_nil)
+          if(rhs == &e_expr_nil && binary_kind == E_ExprKind_Mul)
+          {
+            // NOTE(rjf): C-style pointer syntax is shared with multiplication.
+            // carving out a special case here to allow "unfinished *s" to be
+            // treated as pointers instead.
+            E_Expr *ptee = atom;
+            atom = e_push_expr(arena, E_ExprKind_Ptr, token_string.str);
+            e_expr_push_child(atom, ptee);
+          }
+          else if(rhs == &e_expr_nil)
           {
             e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of `%S`.", token_string);
           }

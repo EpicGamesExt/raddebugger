@@ -430,26 +430,41 @@ e_auto_hook_map_make(Arena *arena, U64 slots_count)
 internal void
 e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params)
 {
+  // rjf: get type key
   E_TypeKey type_key = params->type_key;
   if(params->type_pattern.size != 0)
   {
     E_Parse parse = e_push_parse_from_string(arena, params->type_pattern);
     type_key = e_type_key_from_expr(parse.expr);
   }
-  E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
-  node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
-  U8 pattern_split = '?';
-  node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
-  node->expr = e_parse_from_string(params->tag_expr_string).expr;
-  if(!e_type_key_match(e_type_key_zero(), type_key))
+  
+  // rjf: get type pattern parts
+  String8List pattern_parts = {0};
+  if(e_type_key_match(e_type_key_zero(), type_key))
   {
-    U64 hash = e_hash_from_string(5381, node->type_string);
-    U64 slot_idx = hash%map->slots_count;
-    SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
+    U8 pattern_split = '?';
+    pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, StringSplitFlag_KeepEmpties);
   }
-  else
+  
+  // rjf: if the type key is nonzero, *or* we have type patterns, then insert
+  // into map accordingle
+  if(!e_type_key_match(e_type_key_zero(), type_key) ||
+     pattern_parts.node_count != 0)
   {
-    SLLQueuePush_N(map->first_pattern, map->last_pattern, node, pattern_order_next);
+    E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
+    node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
+    node->type_pattern_parts = pattern_parts;
+    node->expr = e_parse_from_string(params->tag_expr_string).expr;
+    if(!e_type_key_match(e_type_key_zero(), type_key))
+    {
+      U64 hash = e_hash_from_string(5381, node->type_string);
+      U64 slot_idx = hash%map->slots_count;
+      SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
+    }
+    else
+    {
+      SLLQueuePush_N(map->first_pattern, map->last_pattern, node, pattern_order_next);
+    }
   }
 }
 
@@ -825,7 +840,7 @@ e_irtree_from_bundle(E_CacheBundle *bundle)
     bundle->flags |= E_CacheBundleFlag_IRTree;
     E_IRTreeAndType overridden = e_irtree_from_key(bundle->parent_key);
     E_Parse parse = e_parse_from_bundle(bundle);
-    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &overridden, 0, 0, parse.expr);
+    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &overridden, 0, 0, 0, parse.expr);
     E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->irtree.msgs);
     e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }
@@ -1243,7 +1258,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, parse.expr);
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, 0, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;

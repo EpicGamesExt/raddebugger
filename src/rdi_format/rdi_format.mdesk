@@ -1376,7 +1376,7 @@ rdi_eval_typegroup_conversion_kind_matrix:
 @data(`struct {RDI_U8 *str; RDI_U64 size;}`) @c_file
 rdi_eval_conversion_kind_message_string_table:
 {
-  @expand(RDI_EvalTypeGroupTable a) `{(RDI_U8 *)"$(a.error_string)", sizeof("$(a.error_string)")}`
+  @expand(RDI_EvalConversionKindTable a) `{(RDI_U8 *)"$(a.error_string)", sizeof("$(a.error_string)")}`
 }
 
 ////////////////////////////////
@@ -1503,7 +1503,7 @@ rdi_hash(RDI_U8 *ptr, RDI_U64 size)
       @expand(RDI_TypeKindTable a) `   case RDI_TypeKind_$(a.name): {result = (RDI_U8*)"$(a.name)"; *size_out = sizeof("$(a.name)")-1;}break;`,
       `}`;
     `return result;`;
-   `}`;
+    `}`;
   ``;
 }
 

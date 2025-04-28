@@ -492,7 +492,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       E_Expr *exprl = expr->first;
       E_Expr *exprr = exprl->next;
       E_IRTreeAndType l = *lhs_irtree;
-      E_IRTreeAndType r = e_push_irtree_and_type_from_expr(arena, overridden, 0, 0, exprr);
+      E_IRTreeAndType r = e_push_irtree_and_type_from_expr(arena, overridden, 0, 0, 0, exprr);
       e_msg_list_concat_in_place(&result.msgs, &r.msgs);
       E_TypeKey l_restype = e_type_key_unwrap(l.type_key, E_TypeUnwrapFlag_AllDecorative);
       E_TypeKey r_restype = e_type_key_unwrap(r.type_key, E_TypeUnwrapFlag_AllDecorative);
@@ -585,7 +585,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
 //- rjf: top-level irtree/type extraction
 
 internal E_IRTreeAndType
-e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr)
+e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden, B32 disallow_autohooks, B32 disallow_chained_fastpaths, B32 disallow_chained_casts, E_Expr *root_expr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -636,7 +636,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, lhs);
         e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         
         // rjf: try all IR trees in chain
@@ -693,7 +693,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -752,7 +752,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = r_tree.type_key;
         E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative);
@@ -780,12 +780,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         // rjf: unpack operands
         E_Expr *cast_type_expr = expr->first;
         E_Expr *casted_expr = cast_type_expr->next;
-        E_IRTreeAndType cast_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, cast_type_expr);
+        E_IRTreeAndType cast_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, cast_type_expr);
         e_msg_list_concat_in_place(&result.msgs, &cast_irtree.msgs);
         E_TypeKey cast_type = cast_irtree.type_key;
         E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
-        E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, casted_expr);
+        E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, casted_expr);
         e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
         E_TypeKey casted_type = e_type_key_unwrap(casted_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
@@ -840,7 +840,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         E_Expr *r_expr = expr->first;
         E_TypeKey r_type = zero_struct;
         E_Space space = r_expr->space;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         r_type = r_tree.type_key;
         
@@ -868,7 +868,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: evaluate operand tree
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: fill output
@@ -882,7 +882,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -910,14 +910,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       //- rjf: unary operations
       case E_ExprKind_Pos:
       {
-        result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, expr->first);
+        result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, expr->first);
       }break;
       case E_ExprKind_Neg:
       case E_ExprKind_BitNot:
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -950,7 +950,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         // rjf: unpack operand
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
@@ -1005,8 +1005,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         B32 is_comparison = e_expr_kind_is_comparison(kind);
         E_Expr *l_expr = expr->first;
         E_Expr *r_expr = l_expr->next;
-        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, l_expr);
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, l_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey l_type = e_type_key_unwrap(l_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
@@ -1229,9 +1229,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         E_Expr *c_expr = expr->first;
         E_Expr *l_expr = c_expr->next;
         E_Expr *r_expr = l_expr->next;
-        E_IRTreeAndType c_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, c_expr);
-        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, l_expr);
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, r_expr);
+        E_IRTreeAndType c_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, c_expr);
+        E_IRTreeAndType l_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, l_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &c_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
@@ -1275,18 +1275,72 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       case E_ExprKind_Call:
       {
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, 1, lhs);
         e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
         E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+        
+        // rjf: calling a type? -> treat as a cast of that type
+        if(lhs_irtree.mode == E_Mode_Null)
+        {
+          E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, disallow_chained_casts, expr->first->next);
+          e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
+          E_TypeKey cast_type = lhs_irtree.type_key;
+          E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
+          U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
+          E_TypeKey casted_type = casted_tree.type_key;
+          E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
+          U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
+          U8 in_group  = e_type_group_from_kind(casted_type_kind);
+          U8 out_group = e_type_group_from_kind(cast_type_kind);
+          RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
+          
+          // rjf: bad conditions? -> error if applicable, exit
+          if(casted_tree.root->op == 0)
+          {
+            break;
+          }
+          else if(cast_type_kind == E_TypeKind_Null)
+          {
+            break;
+          }
+          else if(conversion_rule != RDI_EvalConversionKind_Noop &&
+                  conversion_rule != RDI_EvalConversionKind_Legal)
+          {
+            String8 text = str8_lit("Unknown cast conversion rule.");
+            if(conversion_rule < RDI_EvalConversionKind_COUNT)
+            {
+              text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
+            }
+            e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
+            break;
+          }
+          
+          // rjf: generate casted result
+          {
+            E_IRNode *in_tree = e_irtree_resolve_to_value(arena, casted_tree.mode, casted_tree.root, casted_type);
+            E_IRNode *new_tree = in_tree;
+            if(conversion_rule == RDI_EvalConversionKind_Legal)
+            {
+              new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
+            }
+            if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
+            {
+              new_tree = e_irtree_trunc(arena, in_tree, cast_type);
+            }
+            result.root     = new_tree;
+            result.type_key = cast_type;
+            result.mode     = E_Mode_Value;
+          }
+        }
         
         // rjf: calling an unresolved leaf-identifier member access, and we can determine
         // that that identifer maps to a type? -> generate a call expression with the
         // left-hand-side of the dot operator as the first argument. this is a fast path
         // which prevents paren nesting in simple cases, to easily chain multiple
         // calls - for example, bin(2).digits(4)
-        if(lhs_type == &e_type_nil &&
-           lhs->kind == E_ExprKind_MemberAccess)
+        else if(lhs_type == &e_type_nil &&
+                lhs->kind == E_ExprKind_MemberAccess)
         {
           E_Expr *callee = lhs->first->next;
           E_Expr *first_arg = e_expr_ref(arena, lhs->first);
@@ -1297,7 +1351,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
           {
             e_expr_push_child(call, e_expr_copy(arena, arg));
           }
-          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, call);
+          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, call);
           E_MsgList new_msgs = {0};
           e_msg_list_concat_in_place(&new_msgs, &lhs_irtree.msgs);
           e_msg_list_concat_in_place(&new_msgs, &result.msgs);
@@ -1337,7 +1391,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
           Temp scratch = scratch_begin(&arena, 1);
           
           // rjf: generate result via first argument to lens
-          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs->next);
+          result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, disallow_chained_casts, lhs->next);
           
           // rjf: count extra arguments
           U64 arg_count = 0;
@@ -1379,7 +1433,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
             }
             else
             {
-              result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, lhs->next);
+              result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, disallow_chained_casts, lhs->next);
               result.type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Lenses);
             }
           }
@@ -1522,9 +1576,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
         if(!string_mapped && overridden->root != &e_irnode_nil)
         {
-          // TODO(rjf): @eval
           E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, overridden, string);
-          E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, overridden, disallow_autohooks, disallow_chained_fastpaths, access);
+          E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, overridden, disallow_autohooks, 1, 1, access);
           if(access_irtree.root != &e_irnode_nil)
           {
             string_mapped = 1;
@@ -1892,7 +1945,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
           {
             generated = 1;
             e_string2expr_map_inc_poison(e_ir_ctx->macro_map, string);
-            result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, macro_expr);
+            result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, macro_expr);
             e_string2expr_map_dec_poison(e_ir_ctx->macro_map, string);
           }
         }
@@ -1977,15 +2030,45 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
         result.type_key = expr->type_key;
         result.mode = E_Mode_Null;
       }break;
+      case E_ExprKind_Unsigned:
+      {
+        E_IRTreeAndType direct_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, expr->first);
+        result = direct_irtree;
+        E_TypeKey direct_type_key = result.type_key;
+        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+        if(e_type_kind_is_signed(direct_type_kind))
+        {
+          E_TypeKind new_kind = direct_type_kind;
+          switch(direct_type_kind)
+          {
+            default:{}break;
+            case E_TypeKind_Char8: {new_kind = E_TypeKind_UChar8;}break;
+            case E_TypeKind_Char16:{new_kind = E_TypeKind_UChar16;}break;
+            case E_TypeKind_Char32:{new_kind = E_TypeKind_UChar32;}break;
+            case E_TypeKind_S8:{new_kind = E_TypeKind_U8;}break;
+            case E_TypeKind_S16:{new_kind = E_TypeKind_U16;}break;
+            case E_TypeKind_S32:{new_kind = E_TypeKind_U32;}break;
+            case E_TypeKind_S64:{new_kind = E_TypeKind_U64;}break;
+            case E_TypeKind_S128:{new_kind = E_TypeKind_U128;}break;
+            case E_TypeKind_S256:{new_kind = E_TypeKind_U256;}break;
+            case E_TypeKind_S512:{new_kind = E_TypeKind_U512;}break;
+          }
+          result.type_key = e_type_key_basic(new_kind);
+        }
+        else
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->first->location, "Cannot apply an `unsigned` modifier to this type.");
+        }
+      }break;
       case E_ExprKind_Ptr:
       {
-        E_IRTreeAndType ptee_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, expr->first);
+        E_IRTreeAndType ptee_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, expr->first);
         result = ptee_irtree;
         result.type_key = e_type_key_cons_ptr(e_base_ctx->primary_module->arch, result.type_key, 1, 0);
       }break;
       case E_ExprKind_Array:
       {
-        E_IRTreeAndType element_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, expr->first);
+        E_IRTreeAndType element_irtree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, expr->first);
         result = element_irtree;
         result.type_key = e_type_key_cons_array(result.type_key, expr->value.u64, 0);
       }break;
@@ -1999,12 +2082,72 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_overridden,
       {
         E_Expr *lhs = expr->first;
         E_Expr *rhs = lhs->next;
-        result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, rhs);
+        result = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, disallow_chained_fastpaths, disallow_chained_casts, rhs);
         if(lhs->kind != E_ExprKind_LeafIdentifier)
         {
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
         }
       }break;
+    }
+    
+    //- rjf: if our currently-computed result is just a type, and we have
+    // a chained expression, then treat the first expression as a cast on
+    // the second.
+    if(!disallow_chained_casts && result.mode == E_Mode_Null && expr->next != &e_expr_nil)
+    {
+      // rjf: unpack
+      E_IRTreeAndType cast_type_tree = result;
+      E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, overridden, disallow_autohooks, 1, disallow_chained_casts, expr->next);
+      e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
+      E_TypeKey cast_type = cast_type_tree.type_key;
+      E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
+      U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
+      E_TypeKey casted_type = casted_tree.type_key;
+      E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
+      U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
+      U8 in_group  = e_type_group_from_kind(casted_type_kind);
+      U8 out_group = e_type_group_from_kind(cast_type_kind);
+      RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
+      
+      // rjf: bad conditions? -> error if applicable, exit
+      if(casted_tree.root->op == 0)
+      {
+        goto end_cast_gen;
+      }
+      else if(cast_type_kind == E_TypeKind_Null)
+      {
+        goto end_cast_gen;
+      }
+      else if(conversion_rule != RDI_EvalConversionKind_Noop &&
+              conversion_rule != RDI_EvalConversionKind_Legal)
+      {
+        String8 text = str8_lit("Unknown cast conversion rule.");
+        if(conversion_rule < RDI_EvalConversionKind_COUNT)
+        {
+          text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
+        }
+        e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
+        goto end_cast_gen;
+      }
+      
+      // rjf: generate casted result
+      {
+        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, casted_tree.mode, casted_tree.root, casted_type);
+        E_IRNode *new_tree = in_tree;
+        if(conversion_rule == RDI_EvalConversionKind_Legal)
+        {
+          new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
+        }
+        if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
+        {
+          new_tree = e_irtree_trunc(arena, in_tree, cast_type);
+        }
+        result.root     = new_tree;
+        result.type_key = cast_type;
+        result.mode     = E_Mode_Value;
+      }
+      
+      end_cast_gen:;
     }
     
     //- rjf: check chained expressions for simple wrappers

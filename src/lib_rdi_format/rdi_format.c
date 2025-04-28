@@ -160,12 +160,12 @@ struct {RDI_EvalConversionKind dst_typegroups[RDI_EvalTypeGroup_COUNT];} rdi_eva
 
 struct {RDI_U8 *str; RDI_U64 size;} rdi_eval_conversion_kind_message_string_table[6] =
 {
-{(RDI_U8 *)"Other", sizeof("Other")},
-{(RDI_U8 *)"U", sizeof("U")},
-{(RDI_U8 *)"S", sizeof("S")},
-{(RDI_U8 *)"F32", sizeof("F32")},
-{(RDI_U8 *)"F64", sizeof("F64")},
-{(RDI_U8 *)"COUNT", sizeof("COUNT")},
+{(RDI_U8 *)"", sizeof("")},
+{(RDI_U8 *)"", sizeof("")},
+{(RDI_U8 *)"Cannot convert between these types.", sizeof("Cannot convert between these types.")},
+{(RDI_U8 *)"Cannot convert to this type.", sizeof("Cannot convert to this type.")},
+{(RDI_U8 *)"Cannot convert this type.", sizeof("Cannot convert this type.")},
+{(RDI_U8 *)"", sizeof("")},
 };
 
 RDI_PROC RDI_U64

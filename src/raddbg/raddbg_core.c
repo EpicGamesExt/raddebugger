@@ -1301,36 +1301,48 @@ rd_setting_from_name(String8 name)
 internal B32
 rd_setting_b32_from_name(String8 name)
 {
-  Temp scratch = scratch_begin(0, 0);
+  B32 result = 0;
   String8 value = rd_setting_from_name(name);
-  String8 expr = push_str8f(scratch.arena, "(bool)(%S)", value);
-  E_Eval eval = e_eval_from_string(expr);
-  B32 result = !!e_value_eval_from_eval(eval).value.u64;
-  scratch_end(scratch);
+  if(value.size != 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 expr = push_str8f(scratch.arena, "(bool)(%S)", value);
+    E_Eval eval = e_eval_from_string(expr);
+    result = !!e_value_eval_from_eval(eval).value.u64;
+    scratch_end(scratch);
+  }
   return result;
 }
 
 internal U64
 rd_setting_u64_from_name(String8 name)
 {
-  Temp scratch = scratch_begin(0, 0);
+  U64 result = 0;
   String8 value = rd_setting_from_name(name);
-  String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", value);
-  E_Eval eval = e_eval_from_string(expr);
-  U64 result = e_value_eval_from_eval(eval).value.u64;
-  scratch_end(scratch);
+  if(value.size != 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", value);
+    E_Eval eval = e_eval_from_string(expr);
+    result = e_value_eval_from_eval(eval).value.u64;
+    scratch_end(scratch);
+  }
   return result;
 }
 
 internal F32
 rd_setting_f32_from_name(String8 name)
 {
-  Temp scratch = scratch_begin(0, 0);
+  F32 result = 0.f;
   String8 value = rd_setting_from_name(name);
-  String8 expr = push_str8f(scratch.arena, "(float32)(%S)", value);
-  E_Eval eval = e_eval_from_string(expr);
-  F32 result = e_value_eval_from_eval(eval).value.f32;
-  scratch_end(scratch);
+  if(value.size != 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 expr = push_str8f(scratch.arena, "(float32)(%S)", value);
+    E_Eval eval = e_eval_from_string(expr);
+    result = e_value_eval_from_eval(eval).value.f32;
+    scratch_end(scratch);
+  }
   return result;
 }
 
@@ -4357,16 +4369,15 @@ rd_view_ui(Rng2F32 rect)
                       F32 cell_slider_value = 0.f;
                       if(str8_match(cell_type->name, str8_lit("range1"), 0) && cell_type->args != 0 && cell_type->count >= 2)
                       {
-                        E_Expr *min_expr = cell_type->args[0];
-                        E_Expr *max_expr = cell_type->args[1];
+                        E_Key min_key = e_key_from_expr(cell_type->args[0]);
+                        E_Key max_key = e_key_from_expr(cell_type->args[1]);
                         E_ParentKey(cell->eval.key)
                         {
                           E_TypeKey slider_value_type = e_type_key_unwrap(cell_type->direct_type_key, E_TypeUnwrapFlag_AllDecorative);
                           slider_value_type_kind = e_type_kind_from_key(slider_value_type);
-                          E_Expr *min_casted = e_expr_ref_cast(scratch.arena, slider_value_type, min_expr);
-                          E_Expr *max_casted = e_expr_ref_cast(scratch.arena, slider_value_type, max_expr);
-                          cell_slider_min = e_value_from_expr(min_casted);
-                          cell_slider_max = e_value_from_expr(max_casted);
+                          String8 slider_type_name = e_type_string_from_key(scratch.arena, slider_value_type);
+                          cell_slider_min = e_value_from_key(e_key_wrapf(min_key, "(%S)$", slider_type_name));
+                          cell_slider_max = e_value_from_key(e_key_wrapf(max_key, "(%S)$", slider_type_name));
                         }
                       }
                       switch(slider_value_type_kind)
