@@ -1806,6 +1806,46 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   scratch_end(scratch);
 }
 
+internal String8List
+lnk_unwrap_rsp(Arena *arena, String8List arg_list)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List result = {0};
+
+  for (String8Node *curr = arg_list.first; curr != 0; curr = curr->next) {
+    B32 is_rsp = str8_match_lit("@", curr->string, StringMatchFlag_RightSideSloppy);
+    if (is_rsp) {
+      // remove "@"
+      String8 name = str8_skip(curr->string, 1);
+
+      if (os_file_path_exists(name)) {
+        // read rsp from disk
+        String8 file = lnk_read_data_from_file_path(scratch.arena, name);
+        
+        // parse rsp
+        String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);
+        
+        // handle case where rsp references another rsp
+        String8List list = lnk_unwrap_rsp(arena, rsp_args);
+
+        // push arguments from rsp
+        list = str8_list_copy(arena, &list);
+        str8_list_concat_in_place(&result, &list);
+       } else {
+        lnk_error(LNK_Error_Cmdl, "unable to find rsp: %S", name);
+      }
+    } else {
+      // push regular argument
+      String8 str = push_str8_copy(arena, curr->string);
+      str8_list_push(arena, &result, str);
+    }
+  }
+  
+  scratch_end(scratch);
+  return result;
+}
+
 internal LNK_Config *
 lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 {
