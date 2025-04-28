@@ -1074,9 +1074,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     } else {
       String8 value = value_strings.first->string;
       if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
-        config->flags |= LNK_ConfigFlag_DelayUnload;
+        config->flags |= LNK_ImportTableFlag_EmitUiat;
       } else if (str8_match_lit("nobind", value, StringMatchFlag_CaseInsensitive)) {
-        config->flags &= ~LNK_ConfigFlag_DelayBind;
+        config->flags &= ~LNK_ImportTableFlag_EmitBiat;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value);
       }
@@ -1558,7 +1558,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_DelayBind: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_DelayBind);
+    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ImportTableFlag_EmitBiat);
   } break;
 
   case LNK_CmdSwitch_Rad_DoMerge: {
@@ -1918,6 +1918,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   config->stack_commit              = KB(1);
   config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
   config->pdb_hash_type_name_length = 8;
+  config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
@@ -1973,7 +1974,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   
   // don't emit bind table with /ALLOWBIND:NO
   if (config->dll_characteristics & PE_DllCharacteristic_NO_BIND) {
-    config->flags &= ~LNK_ConfigFlag_DelayBind;
+    config->flags &= ~LNK_ImportTableFlag_EmitBiat;
   }
   
   // set flags for /OPT
