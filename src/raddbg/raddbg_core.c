@@ -3269,7 +3269,7 @@ rd_view_ui(Rng2F32 rect)
                       case RD_EvalSpaceKind_MetaCtrlEntity:
                       {
                         CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-                        rd_cmd(RD_CmdKind_PushQuery, .expr = ctrl_string_from_handle(scratch.arena, entity->handle));
+                        rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:control.%S", ctrl_string_from_handle(scratch.arena, entity->handle)));
                       }break;
                     }
                     if(did_cmd)
@@ -11995,6 +11995,19 @@ rd_frame(void)
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
       }
       
+      //- rjf: add macro for top-level control root
+      {
+        String8 name = str8_lit("control");
+        E_TypeKey type_key = e_type_key_cons(.name = name,
+                                             .kind = E_TypeKind_Set,
+                                             .access = E_TYPE_ACCESS_FUNCTION_NAME(control));
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        expr->type_key = type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, name, type_key);
+      }
+      
       //- rjf: add macros for config "slice" collections (targets, breakpoints, etc.)
       String8 evallable_cfg_names[] =
       {
@@ -12209,7 +12222,6 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
-          e_string2expr_map_insert(scratch.arena, macro_map, ctrl_string_from_handle(scratch.arena, entity->handle), expr);
           if(entity->string.size != 0)
           {
             e_string2expr_map_insert(scratch.arena, macro_map, entity->string, expr);

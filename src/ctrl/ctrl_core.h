@@ -771,7 +771,6 @@ internal void ctrl_handle_list_push(Arena *arena, CTRL_HandleList *list, CTRL_Ha
 internal CTRL_HandleList ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src);
 internal String8 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle);
 internal CTRL_Handle ctrl_handle_from_string(String8 string);
-internal E_Eval ctrl_eval_from_handle(CTRL_Handle handle);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions

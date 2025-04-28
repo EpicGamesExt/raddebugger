@@ -1387,7 +1387,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       info.cell_style_key = str8_lit("call_stack_frame");
       CTRL_Entity *process = ctrl_process_from_entity(info.callstack_thread);
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, info.callstack_vaddr);
-      E_Eval module_eval = ctrl_eval_from_handle(module->handle);
+      E_Eval module_eval = e_eval_from_stringf("query:control.%S", ctrl_string_from_handle(scratch.arena, module->handle));
       RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
       RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
       RD_Cfg *w_cfg = style->first;

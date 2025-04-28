@@ -37,6 +37,11 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(schema);
 E_TYPE_ACCESS_FUNCTION_DEF(cfgs);
 
 ////////////////////////////////
+//~ rjf: Control Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(control);
+
+////////////////////////////////
 //~ rjf: Config Slice Type Hooks
 
 E_TYPE_IREXT_FUNCTION_DEF(cfgs_slice);

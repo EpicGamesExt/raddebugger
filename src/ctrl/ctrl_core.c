@@ -217,16 +217,6 @@ ctrl_handle_from_string(String8 string)
   return handle;
 }
 
-internal E_Eval
-ctrl_eval_from_handle(CTRL_Handle handle)
-{
-  Temp scratch = scratch_begin(0, 0);
-  String8 string = ctrl_string_from_handle(scratch.arena, handle);
-  E_Eval eval = e_eval_from_string(string);
-  scratch_end(scratch);
-  return eval;
-}
-
 ////////////////////////////////
 //~ rjf: Trap Type Functions
 

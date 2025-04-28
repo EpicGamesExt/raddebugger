@@ -555,6 +555,27 @@ E_TYPE_ACCESS_FUNCTION_DEF(cfgs)
 }
 
 ////////////////////////////////
+//~ rjf: Control Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(control)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  E_Expr *rhs = expr->first->next;
+  if(rhs->kind == E_ExprKind_LeafIdentifier &&
+     str8_match(str8_prefix(rhs->string, 1), str8_lit("$"), 0))
+  {
+    CTRL_Handle handle = ctrl_handle_from_string(rhs->string);
+    CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
+    E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
+    result.root = e_irtree_set_space(arena, space, e_irtree_const_u(arena, 0));
+    result.type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, ctrl_entity_kind_code_name_table[entity->kind]);
+    result.mode = E_Mode_Offset;
+  }
+  return result;
+}
+
+
+////////////////////////////////
 //~ rjf: Config Collection Type Hooks
 
 typedef struct RD_CfgsIRExt RD_CfgsIRExt;
@@ -1329,8 +1350,10 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities)
   U64 read_count = dim_1u64(read_range);
   for(U64 out_idx = 0; out_idx < read_count; out_idx += 1)
   {
+    Temp scratch = scratch_begin(&arena, 1);
     CTRL_Entity *entity = entities->v[out_idx + read_range.min];
-    evals_out[out_idx] = ctrl_eval_from_handle(entity->handle);
+    evals_out[out_idx] = e_eval_from_stringf("query:control.%S", ctrl_string_from_handle(scratch.arena, entity->handle));
+    scratch_end(scratch);
   }
 }
 
