@@ -3649,10 +3649,16 @@ RD_VIEW_UI_FUNCTION_DEF(color)
     {
       UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
       UI_Signal h_sig  = {0};
+      UI_Signal a_sig  = {0};
       ui_spacer(ui_em(1.f, 1.f));
       UI_PrefWidth(ui_em(3.f, 1.f))
       {
         h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
+      }
+      ui_spacer(ui_em(1.f, 1.f));
+      UI_PrefWidth(ui_em(3.f, 1.f))
+      {
+        a_sig  = ui_alpha_pickerf(&hsva.w, "alpha_picker");
       }
       ui_spacer(ui_em(1.f, 1.f));
       UI_PrefWidth(ui_children_sum(1)) UI_Column
@@ -3691,7 +3697,7 @@ RD_VIEW_UI_FUNCTION_DEF(color)
           }
         }
       }
-      if(ui_dragging(h_sig) || ui_dragging(sv_sig))
+      if(ui_dragging(h_sig) || ui_dragging(sv_sig) || ui_dragging(a_sig))
       {
         // TODO(rjf): hard-coding U32 committing for now
         E_Type *type = e_type_from_key__cached(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));

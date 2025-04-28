@@ -2241,17 +2241,24 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
         UI_ThemePattern *p = &theme->patterns[idx];
         U64 match_count = 0;
         B32 name_matches = 0;
-        for EachIndex(key_tags_idx, tags.count+1)
+        for EachIndex(p_tags_idx, p->tags.count)
         {
-          String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
-          for EachIndex(p_tags_idx, p->tags.count)
+          B32 p_tag_in_key = 0;
+          for EachIndex(key_tags_idx, tags.count+1)
           {
+            String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
             if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
             {
               name_matches = (key_tags_idx == tags.count);
+              p_tag_in_key = 1;
               match_count += 1;
               break;
             }
+          }
+          if(!p_tag_in_key)
+          {
+            name_matches = 0;
+            break;
           }
         }
         if(name_matches && match_count > best_match_count)
