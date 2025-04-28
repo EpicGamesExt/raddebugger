@@ -12719,6 +12719,7 @@ rd_frame(void)
                                       "query:breakpoints, "
                                       "query:recent_files, "
                                       "query:recent_projects, "
+                                      "query:machines, "
                                       "query:processes, "
                                       "query:threads, "
                                       "query:modules, "

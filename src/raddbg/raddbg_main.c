@@ -34,6 +34,33 @@
 //   view which maps `Bitmap` to `bitmap(base, width, height)`. In this case,
 //   `base`, `width`, and `height` are recognized as being member names of
 //   `Bitmap`. This is equivalent to `bitmap($.base, $.width, $.height)`.
+// - Breakpoints have been upgraded to support flags for breaking on writing,
+//   reading, or execution, as well as an address range size. When used with
+//   an address location, this can be used to express hardware data
+//   breakpoints, where the CPU will break when it sees particular addresses
+//   being written to, read from, or executed, regardless of where that code
+//   occurs. There is a maximum limit of four such breakpoints on a processor.
+//   Theoretically, this means a limit of four per thread, but for now, the
+//   debugger only supports four global data breakpoints. In the future, we
+//   plan to allow organizing these by thread, in which case the total number
+//   of data breakpoints we support will increase.
+// - A new `table` view has been added, which allows one to define custom rules
+//   for how rows of a watch expansion are formed. The first argument a `table`
+//   is the expression which should be evaluated (like other views), and the
+//   remaining arguments are used to express a number of expressions which
+//   should be used to generated cells for each row in the expansion. For
+//   instance, `table(my_int_array, $, $*4, $*8)` would expand `my_int_array`,
+//   but instead of the default row structure (which displays an expression
+//   string, a value string, and a type string), three cells would be generated
+//   per row: one with the value of each element, one with that value
+//   multiplied by 4, and one multiplied by 8.
+// - A new `sequence` view has been added. This is a simple view which simply
+//   takes a single integer scalar argument `n`, and returns a sequence of
+//   integers, from `0`, `1`, `2`, all the way to `n`. This sequence can be
+//   expanded. This can compose with the `table` view, to easily generate `n`
+//   rows, and use each integer as a value in each cell expression. As an
+//   example, `table(sequence(1000), array1[$], array2[$])` would display
+//   elements of `array1` and `array2` in each row, side-by-side.
 // - The F1 command palette has been replaced by a substantially more powerful
 //   "everything palette" (referred to in the UI simply as "palette"), opened
 //   with the `Open Palette` command. This palette lists commands and allows
