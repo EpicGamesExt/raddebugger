@@ -485,13 +485,16 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   U64 string_table_off = symbol_array_off + sizeof(COFF_Symbol16) * symbol_count;
   
   // rjf: read optional header
-  U16      optional_magic     = 0;
-  U64      image_base         = 0;
-  U64      entry_point        = 0;
-  U32      data_dir_count     = 0;
-  U64      virt_section_align = 0;
-  U64      file_section_align = 0;
-  Rng1U64 *data_dir_franges   = 0;
+  U16                  optional_magic     = 0;
+  U64                  image_base         = 0;
+  U64                  entry_point        = 0;
+  PE_WindowsSubsystem  subsystem          = 0;
+  U32                 *check_sum          = 0;
+  U32                  data_dir_count     = 0;
+  U64                  virt_section_align = 0;
+  U64                  file_section_align = 0;
+  Rng1U64              data_dir_range     = {0};
+  Rng1U64             *data_dir_franges   = 0;
   if(valid && optional_size > 0)
   {
     // rjf: read magic number
@@ -504,15 +507,17 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     {
       case PE_PE32_MAGIC:
       {
-        PE_OptionalHeader32 pe_optional = {0};
-        if(str8_deserial_read_struct(data, optional_range.min, &pe_optional) == sizeof(pe_optional))
+        PE_OptionalHeader32 *pe_optional = str8_deserial_get_raw_ptr(data, optional_range.min, sizeof(*pe_optional));
+        if(pe_optional)
         {
-          image_base               = pe_optional.image_base;
-          entry_point              = pe_optional.entry_point_va;
-          virt_section_align       = pe_optional.section_alignment;
-          file_section_align       = pe_optional.file_alignment;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count  = pe_optional.data_dir_count;
+          image_base               = pe_optional->image_base;
+          entry_point              = pe_optional->entry_point_va;
+          subsystem                = pe_optional->subsystem;
+          check_sum                = &pe_optional->check_sum;
+          virt_section_align       = pe_optional->section_alignment;
+          file_section_align       = pe_optional->file_alignment;
+          reported_data_dir_offset = sizeof(*pe_optional);
+          reported_data_dir_count  = pe_optional->data_dir_count;
         }
         else
         {
@@ -521,15 +526,17 @@ pe_bin_info_from_data(Arena *arena, String8 data)
       }break;
       case PE_PE32PLUS_MAGIC:
       {
-        PE_OptionalHeader32Plus pe_optional = {0};
-        if(str8_deserial_read_struct(data, optional_range.min, &pe_optional) == sizeof(pe_optional))
+        PE_OptionalHeader32Plus *pe_optional = str8_deserial_get_raw_ptr(data, optional_range.min, sizeof(*pe_optional));
+        if(pe_optional)
         {
-          image_base               = pe_optional.image_base;
-          entry_point              = pe_optional.entry_point_va;
-          virt_section_align       = pe_optional.section_alignment;
-          file_section_align       = pe_optional.file_alignment;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count  = pe_optional.data_dir_count;
+          image_base               = pe_optional->image_base;
+          entry_point              = pe_optional->entry_point_va;
+          subsystem                = pe_optional->subsystem;
+          check_sum                = &pe_optional->check_sum;
+          virt_section_align       = pe_optional->section_alignment;
+          file_section_align       = pe_optional->file_alignment;
+          reported_data_dir_offset = sizeof(*pe_optional);
+          reported_data_dir_count  = pe_optional->data_dir_count;
         }
         else
         {
@@ -558,6 +565,9 @@ pe_bin_info_from_data(Arena *arena, String8 data)
         Assert(!"unable to read data directory");
       }
     }
+
+    // export directory range
+    data_dir_range = rng_1u64(reported_data_dir_offset, reported_data_dir_offset + data_dir_count * sizeof(PE_DataDirectory));
   }
   
   // rjf: extract tls header
@@ -604,6 +614,8 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.image_base          = image_base;
     info.entry_point         = entry_point;
     info.is_pe32             = (optional_magic == PE_PE32_MAGIC);
+    info.subsystem           = subsystem;
+    info.check_sum           = check_sum;
     info.virt_section_align  = virt_section_align;
     info.file_section_align  = file_section_align;
     info.section_count       = clamped_sec_count;
@@ -611,6 +623,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.section_table_range = rng_1u64(sec_array_off, sec_array_off + sizeof(COFF_SectionHeader) * clamped_sec_count);
     info.symbol_table_range  = rng_1u64(symbol_array_off, symbol_array_off + sizeof(COFF_Symbol16) * symbol_count);
     info.string_table_range  = rng_1u64(string_table_off, data.size);
+    info.data_dir_range      = data_dir_range;
     info.data_dir_franges    = data_dir_franges;
     info.data_dir_count      = data_dir_count;
     info.tls_header          = tls_header;
