@@ -3565,7 +3565,7 @@ rd_eval_color_from_eval(E_Eval eval)
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(color)
 {
   EV_ExpandInfo info = {0};
-  info.row_count = 8;
+  info.row_count = 12;
   info.single_item = 1;
   return info;
 }

@@ -15209,7 +15209,10 @@ rd_frame(void)
           case RD_CmdKind_AddColor:
           {
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
-            rd_cfg_new(parent, str8_lit("color"));
+            RD_Cfg *color = rd_cfg_new(parent, str8_lit("color"));
+            rd_cfg_new(color, str8_lit("tags"));
+            RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
+            rd_cfg_new(value, str8_lit("0xffffffff"));
           }break;
           case RD_CmdKind_ImportColors:
           {

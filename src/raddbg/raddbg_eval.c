@@ -740,9 +740,24 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_query)
       }
     }
     RD_CfgList children = rd_cfg_child_list_from_string(scratch.arena, root_cfg, child_key);
+    RD_CfgList children__filtered = children;
+    if(filter.size != 0)
+    {
+      MemoryZeroStruct(&children__filtered);
+      for(RD_CfgNode *n = children.first; n != 0; n = n->next)
+      {
+        DR_FStrList cfg_fstrs = rd_title_fstrs_from_cfg(scratch.arena, n->v);
+        String8 cfg_string = dr_string_from_fstrs(scratch.arena, &cfg_fstrs);
+        FuzzyMatchRangeList ranges = fuzzy_match_find(scratch.arena, filter, cfg_string);
+        if(ranges.count == ranges.needle_part_count)
+        {
+          rd_cfg_list_push(scratch.arena, &children__filtered, n->v);
+        }
+      }
+    }
     accel->cmds = str8_array_from_list(arena, &cmds);
     accel->cmds_idx_range = r1u64(0, accel->cmds.count);
-    accel->cfgs = rd_cfg_array_from_list(arena, &children);
+    accel->cfgs = rd_cfg_array_from_list(arena, &children__filtered);
     accel->cfgs_idx_range = r1u64(accel->cmds.count + 0, accel->cmds.count + accel->cfgs.count);
     scratch_end(scratch);
   }
