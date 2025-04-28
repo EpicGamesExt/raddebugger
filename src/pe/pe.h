@@ -993,20 +993,23 @@ struct PE_HandlerScope
 typedef struct PE_BinInfo PE_BinInfo;
 struct PE_BinInfo
 {
-  Arch            arch;
-  U64             image_base;
-  U64             entry_point;
-  B32             is_pe32;
-  U64             virt_section_align;
-  U64             file_section_align;
-  U64             section_count;
-  U64             symbol_count;
-  Rng1U64         section_table_range;
-  Rng1U64         symbol_table_range;
-  Rng1U64         string_table_range;
-  Rng1U64        *data_dir_franges;
-  U32             data_dir_count;
-  PE_TLSHeader64  tls_header;
+  Arch                 arch;
+  U64                  image_base;
+  U64                  entry_point;
+  B32                  is_pe32;
+  PE_WindowsSubsystem  subsystem;
+  U32                 *check_sum;
+  U64                  virt_section_align;
+  U64                  file_section_align;
+  U64                  section_count;
+  U64                  symbol_count;
+  Rng1U64              section_table_range;
+  Rng1U64              symbol_table_range;
+  Rng1U64              string_table_range;
+  Rng1U64              data_dir_range;
+  Rng1U64             *data_dir_franges;
+  U32                  data_dir_count;
+  PE_TLSHeader64       tls_header;
 };
 
 typedef struct PE_DebugInfo
