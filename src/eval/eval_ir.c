@@ -1554,16 +1554,20 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
         if(!string_mapped && parent != 0 && parent->root != &e_irnode_nil)
         {
-          E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, parent, string);
-          E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, parent, disallow_autohooks, 1, 1, access);
-          if(access_irtree.root != &e_irnode_nil)
+          for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
           {
-            string_mapped = 1;
-            E_OpList oplist = e_oplist_from_irtree(scratch.arena, access_irtree.root);
-            mapped_type_key = access_irtree.type_key;
-            mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-            mapped_bytecode_mode = access_irtree.mode;
-            e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
+            E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, prev, string);
+            E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, prev, disallow_autohooks, 1, 1, access);
+            if(access_irtree.root != &e_irnode_nil)
+            {
+              string_mapped = 1;
+              E_OpList oplist = e_oplist_from_irtree(scratch.arena, access_irtree.root);
+              mapped_type_key = access_irtree.type_key;
+              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+              mapped_bytecode_mode = access_irtree.mode;
+              e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
+              break;
+            }
           }
         }
         
