@@ -40,7 +40,7 @@
 //   the editing of bindings, just like the old command palette (although it
 //   now also supports searching for command bindings themselves, in addition
 //   to the original searching support for command names and descriptions).
-//   However, this palette now also lists: targets, breakpoints, recent files,
+//   However, this palette now also lists targets, breakpoints, recent files,
 //   recent projects, settings (including tab settings, window settings, user
 //   settings, project settings), attached processes, threads, modules,
 //   functions, types, and global variables. This can be used to quickly search
@@ -53,6 +53,10 @@
 //   which can be edited within the palette or a tab's right-click menu. If a
 //   tab has no per-tab font size set, then it inherits the setting from the
 //   window's font size.
+// - The fonts which the debugger uses can now be set through settings UI
+//   (including the palette).
+// - The debugger now accepts system font file names in addition to full font
+//   file paths to specify font settings.
 // - Expressions inserted into a `Watch` tab are now stored per-tab. This makes
 //   many `Watch` tabs more useful, since different tabs can have a different
 //   set of expressions. `Watch` tabs can now also be labeled, so you can
@@ -249,9 +253,6 @@
 //      color to white (or the inverse of the background color, or whatever) so
 //      that the user can see what things on the screen use that theme color.
 //
-//  [ ] I had to go into the user file to change the font. That should probably
-//      be in the theme window?
-//
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
 //
@@ -421,6 +422,8 @@
 // [x] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
 //     since that's not normally how Windows fonts work.
+//  [x] I had to go into the user file to change the font. That should probably
+//      be in the theme window?
 
 ////////////////////////////////
 //~ rjf: Build Options
