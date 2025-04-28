@@ -98,6 +98,18 @@ t_invoke_linker(String8 cmdline)
   return exit_code;
 }
 
+internal int
+t_invoke_linkerf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0,0);
+  va_list args;
+  va_strat(args, fmt);
+  String8 cmdline = push_str8fv(scratch.arena, fmt, args);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8
 t_make_file_path(Arena *arena, String8 name)
 {
@@ -167,6 +179,93 @@ t_coff_section_header_from_name(String8 string_table, COFF_SectionHeader *sectio
 }
 
 ////////////////////////////////////////////////////////////////
+
+internal T_Result
+t_simple_link_test(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  U8 text_payload[] = { 0xC3 };
+
+  String8 main_obj;
+  {
+    COFF_ObjWriter  *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect  = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), COFF_SectionFlag_CntCode, str8_array_fixed(text_payload));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 main_obj_name = str8_lit("main.obj");
+  if (!t_write_file(main_obj_name, main_obj)) {
+    goto exit;
+  }
+
+  int file_align = 512;
+  int virt_align = 4096;
+  String8 out_name = str8_lit("a.exe");
+  int linker_exit_code = t_invoke_linkerf("/entry:my_entry /subsystem:console /fixed /filealign:%d /align:%d /out:%S %S", file_align, virt_align, out_name, main_obj_name);
+  if (linker_exit_code == 0) {
+    String8             exe           = t_read_file(scratch.arena, out_name);
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+    if (pe.is_pe32) {
+      goto exit;
+    }
+    if (pe.section_count == 0) {
+      goto exit;
+    }
+    if (pe.arch != Arch_x64) {
+      goto exit;
+    }
+    if (pe.subsystem != PE_WindowsSubsystem_WINDOWS_CUI) {
+      goto exit;
+    }
+    if (pe.virt_section_align != virt_align) {
+      goto exit;
+    }
+    if (pe.file_section_align != file_align) {
+      goto exit;
+    }
+    if (pe.symbol_count != 0) {
+      goto exit;
+    }
+
+    // check section alignment
+    for (U64 sect_idx = 0; sect_idx < pe.section_count; sect_idx += 1) {
+      COFF_SectionHeader *sect_header = &section_table[sect_idx];
+      if (AlignPadPow2(text_section->fsize, file_align) != 0) {
+        goto exit;
+      }
+      if (AlignPadPow2(text_section->voff, virt_align) != 0) {
+        goto exit;
+      }
+    }
+
+    COFF_SectionHeader *text_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+    if (!text_section) {
+      goto exit;
+    }
+    if (text_section->foff != file_align) { 
+      goto exit;
+    }
+
+    String8 text_data = str8_substr(exe, rng_1u64(text_section->foff, text_section->foff + text_section->vsize));
+    if (!str8_match(text_data, str8_array_fixed(text_payload), 0)) {
+      goto exit;
+    }
+
+    result = T_Result_Pass;
+  }
+
+exit:;
+  scratch_end(scratch);
+  return result;
+}
 
 internal T_Result
 t_abs_vs_weak(void)
@@ -382,6 +481,7 @@ entry_point(CmdLine *cmdline)
     char *label;
     T_Result (*r)(void);
   } target_array[] = {
+    { "simple_link_test",   t_simple_link_test  },
     { "undef_section",      t_undef_section     },
     { "abs_vs_weak",        t_abs_vs_weak       },
     { "find_merged_pdata",  t_find_merged_pdata },
