@@ -86,6 +86,13 @@ e_key_match(E_Key a, E_Key b)
   return result;
 }
 
+internal E_Key
+e_key_zero(void)
+{
+  E_Key key = {0};
+  return key;
+}
+
 ////////////////////////////////
 //~ rjf: Type Key Type Functions
 
@@ -883,6 +890,27 @@ e_interpretation_from_bundle(E_CacheBundle *bundle)
   return interpret;
 }
 
+//- rjf: key -> full expression string
+
+internal String8
+e_full_expr_string_from_key(Arena *arena, E_Key key)
+{
+  E_CacheBundle *bundle = e_cache_bundle_from_key(key);
+  String8 result = push_str8_copy(arena, bundle->string);
+  if(!e_key_match(bundle->parent_key, e_key_zero()))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    typedef struct ParentResolveTask ParentResolveTask;
+    struct ParentResolveTask
+    {
+      ParentResolveTask *next;
+      E_Key key;
+    };
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 //- rjf: comprehensive bundle
 
 internal E_Eval
@@ -960,9 +988,6 @@ e_value_eval_from_eval(E_Eval eval)
   ProfEnd();
   return eval;
 }
-
-//- rjf: string-based helpers
-// TODO(rjf): (replace the old bundle APIs here)
 
 //- rjf: type key -> auto hooks
 

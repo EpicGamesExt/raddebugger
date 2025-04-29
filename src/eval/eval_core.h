@@ -1016,6 +1016,7 @@ internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
 //~ rjf: Key Type Functions
 
 internal B32 e_key_match(E_Key a, E_Key b);
+internal E_Key e_key_zero(void);
 
 ////////////////////////////////
 //~ rjf: Type Key Type Functions
@@ -1130,6 +1131,9 @@ internal E_Interpretation e_interpretation_from_bundle(E_CacheBundle *bundle);
 #define e_irtree_from_key(key) e_irtree_from_bundle(e_cache_bundle_from_key(key))
 #define e_bytecode_from_key(key) e_bytecode_from_bundle(e_cache_bundle_from_key(key))
 #define e_interpretation_from_key(key) e_interpretation_from_bundle(e_cache_bundle_from_key(key))
+
+//- rjf: key -> full expression string
+internal String8 e_full_expr_string_from_key(Arena *arena, E_Key key);
 
 //- rjf: comprehensive bundle
 internal E_Eval e_eval_from_bundle(E_CacheBundle *bundle);

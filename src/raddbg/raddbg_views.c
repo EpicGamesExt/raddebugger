@@ -944,7 +944,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     E_Type *row_type = e_type_from_key__cached(row->eval.irtree.type_key);
     EV_Key key = row->key;
     EV_Block *block = row->block;
-    E_Eval block_eval = row->block->eval;
+    E_Eval block_eval = e_eval_from_key(row->block->eval.key);
     E_TypeKey block_type_key = e_type_key_unwrap(block_eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
     E_Type *block_type = e_type_from_key__cached(block_type_key);

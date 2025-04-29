@@ -2251,7 +2251,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
     Temp scratch = scratch_begin(&arena, 1);
     String8List allowed_children = {0};
     {
-      E_Eval eval_stripped = e_eval_wrapf(eval, "raw($)");
+      E_Eval eval_stripped = e_eval_wrapf(eval, "q:raw($)");
       E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(eval_stripped.irtree.type_key);
       E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, eval_stripped, filter);
       if(expand_info.expr_count < 4096)
