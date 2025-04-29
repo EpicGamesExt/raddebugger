@@ -4371,14 +4371,6 @@ rd_view_ui(Rng2F32 rect)
                       ////////////
                       //- rjf: unpack cell info
                       //
-                      U64 cell_id = rd_id_from_watch_cell(cell);
-                      RD_WatchPt cell_pt = {row->block->key, row->key, cell_id};
-                      RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
-                      B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
-                      RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-                      E_TypeKey cell_type_key = cell->eval.irtree.type_key;
-                      E_Type *cell_type = e_type_from_key__cached(cell_type_key);
-                      E_Eval cell_value_eval = e_value_eval_from_eval(cell->eval);
                       F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
                       F32 next_cell_x_px = cell_x_px + cell_width_px;
                       F32 cell_width_strictness = 0.f;
@@ -4386,6 +4378,19 @@ rd_view_ui(Rng2F32 rect)
                       {
                         cell_width_strictness = 1.f;
                       }
+                      F32 visual_row_string_max_size_px = cell_width_px * 1.5f;
+                      if(cell->flags & RD_WatchCellFlag_Expr && !(cell->flags & RD_WatchCellFlag_NoEval))
+                      {
+                        visual_row_string_max_size_px /= 2.f;
+                      }
+                      U64 cell_id = rd_id_from_watch_cell(cell);
+                      RD_WatchPt cell_pt = {row->block->key, row->key, cell_id};
+                      RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
+                      B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
+                      RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), visual_row_string_max_size_px);
+                      E_TypeKey cell_type_key = cell->eval.irtree.type_key;
+                      E_Type *cell_type = e_type_from_key__cached(cell_type_key);
+                      E_Eval cell_value_eval = e_value_eval_from_eval(cell->eval);
                       B32 cell_toggled = (cell_value_eval.value.u64 != 0);
                       B32 next_cell_toggled = cell_toggled;
                       
@@ -4613,11 +4618,16 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.expanded_out         = &next_row_expanded;
                             cell_params.search_needle        = needle;
-                            cell_params.meta_fstrs = cell_info.expr_fstrs;
-                            cell_params.value_fstrs = cell_info.eval_fstrs;
+                            cell_params.meta_fstrs           = cell_info.expr_fstrs;
+                            cell_params.value_fstrs          = cell_info.eval_fstrs;
                             if(row_height_px > ui_top_font_size()*3.5f)
                             {
                               cell_params.description = cell_info.description;
+                            }
+                            if(cell_selected && ewv->text_editing && cell->flags & RD_WatchCellFlag_NoEval)
+                            {
+                              MemoryZeroStruct(&cell_params.meta_fstrs);
+                              MemoryZeroStruct(&cell_params.description);
                             }
                             
                             // rjf: apply expander (or substitute space)
@@ -11992,6 +12002,7 @@ rd_frame(void)
         {
           String8 name = names[idx];
           E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                               .flags = E_TypeFlag_StubSingleLineExpansion,
                                                .name = name,
                                                .access = E_TYPE_ACCESS_FUNCTION_NAME(commands),
                                                .expand =
@@ -12300,7 +12311,9 @@ rd_frame(void)
       //- rjf: add macro / lookup rules for unattached processes
       {
         String8 collection_name = str8_lit("unattached_processes");
-        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name,
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                        .name = collection_name,
+                                                        .flags = E_TypeFlag_StubSingleLineExpansion,
                                                         .expand =
                                                         {
                                                           .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),
@@ -12336,7 +12349,7 @@ rd_frame(void)
                                                     }));
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watches"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
-                                                    .flags = E_TypeFlag_EditableChildren,
+                                                    .flags = E_TypeFlag_EditableChildren|E_TypeFlag_StubSingleLineExpansion,
                                                     .name = str8_lit("watches"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(watches),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(watches),
@@ -12351,6 +12364,7 @@ rd_frame(void)
                                     rd_state->meta_name2type_map,
                                     str8_lit("call_stack"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .flags = E_TypeFlag_StubSingleLineExpansion,
                                                     .name = str8_lit("call_stack"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(call_stack),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(call_stack),
@@ -12360,6 +12374,7 @@ rd_frame(void)
                                                     }));
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("theme_colors"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
+                                                    .flags = E_TypeFlag_StubSingleLineExpansion,
                                                     .name = str8_lit("theme_colors"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(cfgs_slice),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs_slice),
@@ -12417,6 +12432,7 @@ rd_frame(void)
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                         .flags = E_TypeFlag_StubSingleLineExpansion,
                                          .name = name,
                                          .expand =
                                          {

@@ -2138,16 +2138,23 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         {
           expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
           expand_data->type = e_type_from_key__cached(type_key);
-          expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
-          expand_data->expand_info = expand_data->expand_rule->info(arena, eval, params->filter);
         }
         switch(task_idx)
         {
           //- rjf: step 0 -> generate opener symbol
           case 0:
           {
-            need_pop = 0;
-            *out_string = expansion_opener_symbol;
+            if(expand_data->type->flags & E_TypeFlag_StubSingleLineExpansion)
+            {
+              *out_string = push_str8f(arena, "%S...%S", expansion_opener_symbol, expansion_closer_symbol);
+            }
+            else
+            {
+              need_pop = 0;
+              expand_data->expand_rule = e_expand_rule_from_type_key(type_key);
+              expand_data->expand_info = expand_data->expand_rule->info(arena, eval, params->filter);
+              *out_string = expansion_opener_symbol;
+            }
           }break;
           
           default:
