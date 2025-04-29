@@ -340,6 +340,9 @@ rd_cfg_release(RD_Cfg *cfg)
     RD_Cfg *c = n->v;
     rd_name_release(c->string);
     SLLStackPush(rd_state->free_cfg, c);
+    c->first = c->last = c->prev = c->parent = 0;
+    c->id = 0;
+    c->string = str8_zero();
     U64 hash = d_hash_from_string(str8_struct(&c->id));
     U64 slot_idx = hash%rd_state->cfg_id_slots_count;
     for(RD_CfgNode *n = rd_state->cfg_id_slots[slot_idx].first; n != 0; n = n->next)
