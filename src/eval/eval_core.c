@@ -961,6 +961,7 @@ e_eval_from_bundle(E_CacheBundle *bundle)
   E_Eval eval =
   {
     .key       = bundle->key,
+    .parent_key= bundle->parent_key,
     .string    = bundle->string,
     .expr      = e_parse_from_bundle(bundle).expr,
     .irtree    = e_irtree_from_bundle(bundle),

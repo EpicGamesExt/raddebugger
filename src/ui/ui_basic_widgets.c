@@ -565,18 +565,38 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
   
   // rjf: hue => rgb
   Vec3F32 hue_rgb = rgb_from_hsv(v3f32(data->hue, 1, 1));
+  Vec3F32 hue_rgb_linear = linear_from_srgb(hue_rgb);
   
-  // rjf: white -> rgb background
+  // rjf: rgb background
   {
-    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
+    dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb_linear.x, hue_rgb_linear.y, hue_rgb_linear.z, 1), 4.f, 0, 1.f);
+  }
+  
+  // rjf: white gradient overlay
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb_linear.x, hue_rgb_linear.y, hue_rgb_linear.z, 0), 4.f, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = v4f32(1, 1, 1, 1);
   }
   
-  // rjf: black gradient overlay
+  // rjf: black gradient overlay pt. 1
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 1.f);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 1.f);
+  }
+  
+  // rjf: black gradient overlay pt. 2
   {
     R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
     inst->colors[Corner_01] = v4f32(0, 0, 0, 1);
     inst->colors[Corner_11] = v4f32(0, 0, 0, 1);
+  }
+  
+  // rjf: black gradient overlay pt. 3
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 0.2f);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 0.2f);
   }
   
   // rjf: indicator
@@ -588,7 +608,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
                           center.y - half_size,
                           center.x + half_size,
                           center.y + half_size);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2.f, 2.f, 1.f);
   }
 }
 
@@ -677,13 +697,13 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
     F32 hue1 = (F32)(seg+1)/6;
     Vec3F32 rgb0 = rgb_from_hsv(v3f32(hue0, 1, 1));
     Vec3F32 rgb1 = rgb_from_hsv(v3f32(hue1, 1, 1));
-    Vec4F32 rgba0 = v4f32(rgb0.x, rgb0.y, rgb0.z, 1);
-    Vec4F32 rgba1 = v4f32(rgb1.x, rgb1.y, rgb1.z, 1);
+    Vec4F32 rgba0_linear = linear_from_srgba(v4f32(rgb0.x, rgb0.y, rgb0.z, 1));
+    Vec4F32 rgba1_linear = linear_from_srgba(v4f32(rgb1.x, rgb1.y, rgb1.z, 1));
     R_Rect2DInst *inst = dr_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0.f);
-    inst->colors[Corner_00] = rgba0;
-    inst->colors[Corner_01] = rgba1;
-    inst->colors[Corner_10] = rgba0;
-    inst->colors[Corner_11] = rgba1;
+    inst->colors[Corner_00] = rgba0_linear;
+    inst->colors[Corner_01] = rgba1_linear;
+    inst->colors[Corner_10] = rgba0_linear;
+    inst->colors[Corner_11] = rgba1_linear;
     rect.y0 += segment_dim;
     rect.y1 += segment_dim;
   }
@@ -691,13 +711,13 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
   // rjf: indicator
   {
     Vec2F32 box_rect_dim = dim_2f32(box->rect);
-    Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + data->hue*box_rect_dim.y);
-    F32 half_size = box->font_size * (0.5f + box->active_t*0.2f);
+    Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + (data->hue)*box_rect_dim.y);
+    F32 half_size = box_rect_dim.x * (0.52f + 0.02f * box->active_t);
     Rng2F32 rect = r2f32p(center.x - half_size,
-                          center.y - 2.f,
+                          center.y - box->font_size * (0.5f + 0.1f * box->active_t),
                           center.x + half_size,
-                          center.y + 2.f);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+                          center.y + box->font_size * (0.5f + 0.1f * box->active_t));
+    dr_rect(rect, v4f32(1, 1, 1, 1), 1.f, 2.f, 1.f);
   }
 }
 
@@ -779,12 +799,12 @@ internal UI_BOX_CUSTOM_DRAW(ui_alpha_picker_draw)
   {
     Vec2F32 box_rect_dim = dim_2f32(box->rect);
     Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + (1-data->alpha)*box_rect_dim.y);
-    F32 half_size = box->font_size * (0.5f + box->active_t*0.2f);
+    F32 half_size = box_rect_dim.x * (0.52f + 0.02f * box->active_t);
     Rng2F32 rect = r2f32p(center.x - half_size,
-                          center.y - 2.f,
+                          center.y - box->font_size * (0.5f + 0.1f * box->active_t),
                           center.x + half_size,
-                          center.y + 2.f);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+                          center.y + box->font_size * (0.5f + 0.1f * box->active_t));
+    dr_rect(rect, v4f32(1, 1, 1, 1), 1.f, 2.f, 1.f);
   }
 }
 

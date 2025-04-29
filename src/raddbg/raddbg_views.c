@@ -3485,8 +3485,11 @@ rd_eval_color_from_eval(E_Eval eval)
       {
         default:{}break;
         
-        // rjf: leaf u32 -> take all 4 components
+        // rjf: leaf >u32/s32 -> take all 4 components
         case E_TypeKind_U32:
+        case E_TypeKind_S32:
+        case E_TypeKind_U64:
+        case E_TypeKind_S64:
         {
           component_evals[0] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0xff000000) >> 24) / 255.f"));
           component_evals[1] = e_value_eval_from_eval(e_eval_wrapf(t->eval, "(float32)(($ & 0x00ff0000) >> 16) / 255.f"));
@@ -3521,40 +3524,42 @@ rd_eval_color_from_eval(E_Eval eval)
         break;
       }
     }
-    if(lens_type->kind == E_TypeKind_Lens)
+    String8 format_string = str8_lit("rgba");
+    if(lens_type->kind == E_TypeKind_Lens && lens_type->count > 0)
     {
-      if(lens_type->count < 1 || str8_match(lens_type->args[0]->string, str8_lit("rgba"), 0))
-      {
-        result.rgba_evals[0] = component_evals[0];
-        result.rgba_evals[1] = component_evals[1];
-        result.rgba_evals[2] = component_evals[2];
-        result.rgba_evals[3] = component_evals[3];
-      }
-      else if(str8_match(lens_type->args[0]->string, str8_lit("argb"), 0))
-      {
-        result.rgba_evals[0] = component_evals[1];
-        result.rgba_evals[1] = component_evals[2];
-        result.rgba_evals[2] = component_evals[3];
-        result.rgba_evals[3] = component_evals[0];
-      }
-      else if(str8_match(lens_type->args[0]->string, str8_lit("bgra"), 0))
-      {
-        result.rgba_evals[0] = component_evals[2];
-        result.rgba_evals[1] = component_evals[1];
-        result.rgba_evals[2] = component_evals[0];
-        result.rgba_evals[3] = component_evals[3];
-      }
-      else if(str8_match(lens_type->args[0]->string, str8_lit("abgr"), 0))
-      {
-        result.rgba_evals[0] = component_evals[3];
-        result.rgba_evals[1] = component_evals[2];
-        result.rgba_evals[2] = component_evals[1];
-        result.rgba_evals[3] = component_evals[0];
-      }
-      for EachIndex(idx, 4)
-      {
-        result.rgba.v[idx] = e_value_eval_from_eval(result.rgba_evals[idx]).value.f32;
-      }
+      format_string = lens_type->args[0]->string;
+    }
+    if(str8_match(format_string, str8_lit("rgba"), 0))
+    {
+      result.rgba_evals[0] = component_evals[0];
+      result.rgba_evals[1] = component_evals[1];
+      result.rgba_evals[2] = component_evals[2];
+      result.rgba_evals[3] = component_evals[3];
+    }
+    else if(str8_match(format_string, str8_lit("argb"), 0))
+    {
+      result.rgba_evals[0] = component_evals[1];
+      result.rgba_evals[1] = component_evals[2];
+      result.rgba_evals[2] = component_evals[3];
+      result.rgba_evals[3] = component_evals[0];
+    }
+    else if(str8_match(format_string, str8_lit("bgra"), 0))
+    {
+      result.rgba_evals[0] = component_evals[2];
+      result.rgba_evals[1] = component_evals[1];
+      result.rgba_evals[2] = component_evals[0];
+      result.rgba_evals[3] = component_evals[3];
+    }
+    else if(str8_match(format_string, str8_lit("abgr"), 0))
+    {
+      result.rgba_evals[0] = component_evals[3];
+      result.rgba_evals[1] = component_evals[2];
+      result.rgba_evals[2] = component_evals[1];
+      result.rgba_evals[3] = component_evals[0];
+    }
+    for EachIndex(idx, 4)
+    {
+      result.rgba.v[idx] = e_value_eval_from_eval(result.rgba_evals[idx]).value.f32;
     }
   }
   
@@ -3573,72 +3578,43 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(color)
 RD_VIEW_UI_FUNCTION_DEF(color)
 {
   Temp scratch = scratch_begin(0, 0);
-  Vec2F32 dim = dim_2f32(rect);
-  F32 padding = ui_top_font_size()*3.f;
-  F32 sv_dim_px = Min(dim.x, dim.y);
-  if(sv_dim_px == dim.x)
+  
+  //////////////////////////////
+  //- rjf: unpack state
+  //
+  typedef struct RD_ColorViewState RD_ColorViewState;
+  struct RD_ColorViewState
   {
-    padding = ui_top_font_size()*30.f;
+    B32 initialized;
+    U32 start_rgba_u32;
+    Vec4F32 hsva;
+  };
+  RD_ColorViewState *state = rd_view_state(RD_ColorViewState);
+  RD_EvalColor eval_color = rd_eval_color_from_eval(eval);
+  U32 rgba_u32 = u32_from_rgba(eval_color.rgba);
+  if(!state->initialized || rgba_u32 != state->start_rgba_u32)
+  {
+    Vec4F32 rgba = eval_color.rgba;
+    Vec4F32 hsva = hsva_from_rgba(rgba);
+    state->initialized = 1;
+    state->start_rgba_u32 = rgba_u32;
+    state->hsva = hsva;
   }
+  Vec4F32 hsva = state->hsva;
+  Vec4F32 rgba = rgba_from_hsva(hsva);
+  
+  //////////////////////////////
+  //- rjf: calculate dimensions
+  //
+  Vec2F32 dim = dim_2f32(rect);
+  F32 sv_dim_px = Min(dim.x, dim.y);
+  F32 padding = sv_dim_px*0.2f;
   sv_dim_px -= padding*2.f;
   sv_dim_px = Min(sv_dim_px, ui_top_font_size()*70.f);
-  RD_EvalColor eval_color = rd_eval_color_from_eval(eval);
-  Vec4F32 rgba = eval_color.rgba;
-  Vec4F32 hsva = hsva_from_rgba(rgba);
   
   //////////////////////////////
-  //- rjf: too small -> just show components
+  //- rjf: build UI
   //
-  if(dim.y <= ui_top_font_size()*12.f)
-  {
-    //- rjf: build text box
-    UI_Box *text_box = &ui_nil_box;
-    UI_WidthFill RD_Font(RD_FontSlot_Code)
-    {
-      text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-      DR_FStrList fstrs = {0};
-      {
-        DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.x), .color = linear_from_srgba(v4f32(1.f, 0.25f, 0.25f, 1.f)), .underline_thickness = 4.f);
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.y), .color = linear_from_srgba(v4f32(0.25f, 1.f, 0.25f, 1.f)), .underline_thickness = 4.f);
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.z), .color = linear_from_srgba(v4f32(0.25f, 0.25f, 1.f, 1.f)), .underline_thickness = 4.f);
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "));
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, push_str8f(scratch.arena, "%.2f", rgba.w), .color = v4f32(1.f,   1.f,   1.f, 1.f), .underline_thickness = 4.f);
-        dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(")"));
-      }
-      ui_box_equip_display_fstrs(text_box, &fstrs);
-    }
-    
-    //- rjf: build color box
-    UI_Box *color_box = &ui_nil_box;
-    UI_PrefWidth(ui_em(1.875f, 1.f)) UI_ChildLayoutAxis(Axis2_Y)
-    {
-      color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
-      UI_Parent(color_box) UI_PrefHeight(ui_em(1.875f, 1.f)) UI_Padding(ui_pct(1, 0))
-      {
-        UI_BackgroundColor(rgba) UI_CornerRadius(ui_top_font_size()*0.5f)
-          ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
-      }
-    }
-    
-    //- rjf: space
-    ui_spacer(ui_em(0.375f, 1.f));
-    
-    //- rjf: hover color box -> show components
-    UI_Signal sig = ui_signal_from_box(color_box);
-    if(ui_hovering(sig))
-    {
-      ui_do_color_tooltip_hsva(hsva);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: large enough -> full color picker
-  //
-  else
   {
     UI_WidthFill UI_HeightFill
       UI_PrefHeight(ui_children_sum(1)) UI_Column UI_Padding(ui_pct(1.f, 0.f))
@@ -3701,17 +3677,23 @@ RD_VIEW_UI_FUNCTION_DEF(color)
       {
         // TODO(rjf): hard-coding U32 committing for now
         E_Type *type = e_type_from_key__cached(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
-        if(type->kind == E_TypeKind_U32)
+        if(type->kind == E_TypeKind_U32 ||
+           type->kind == E_TypeKind_S32 ||
+           type->kind == E_TypeKind_U64 ||
+           type->kind == E_TypeKind_S64)
         {
           Vec4F32 new_rgba = rgba_from_hsva(hsva);
           U32 u32 = u32_from_rgba(new_rgba);
           String8 string = push_str8f(scratch.arena, "0x%x", u32);
-          rd_commit_eval_value_string(eval, string);
+          if(rd_commit_eval_value_string(eval, string))
+          {
+            state->start_rgba_u32 = u32;
+            state->hsva = hsva;
+          }
         }
       }
     }
   }
-  
   scratch_end(scratch);
 }
 

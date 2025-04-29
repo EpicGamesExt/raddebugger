@@ -2326,24 +2326,27 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {
-    MD_NodePtrList schemas = rd_schemas_from_name(schema_name);
-    
-    E_Expr *primary_expr = eval.expr;
-    E_Expr **args = 0;
-    U64 args_count = 0;
+    // rjf: get expression evaluation
+    E_Eval expr_eval = eval;
     if(eval.expr->kind == E_ExprKind_Call)
     {
-      primary_expr = eval.expr->first->next;
+      expr_eval = e_eval_from_expr(eval.expr->first->next);
     }
+    
+    // rjf: get arguments to view
+    E_Expr **args = 0;
+    U64 args_count = 0;
     if(type->args != 0)
     {
       args = type->args;
       args_count = type->count;
     }
-    E_Eval primary_eval = e_eval_from_expr(primary_expr);
+    
+    // rjf: reflect expr & arguments in cfg tree
     RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-    rd_cfg_new_replace(expr_root, e_full_expr_string_from_key(scratch.arena, primary_eval.key));
+    rd_cfg_new_replace(expr_root, e_full_expr_string_from_key(scratch.arena, expr_eval.key));
     {
+      MD_NodePtrList schemas = rd_schemas_from_name(schema_name);
       U64 unnamed_order_idx = 0;
       for EachIndex(arg_idx, args_count)
       {
@@ -3284,13 +3287,17 @@ rd_view_ui(Rng2F32 rect)
                         }
                         else if(e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Set)
                         {
-                          rd_cmd(RD_CmdKind_PushQuery, .expr = e_string_from_expr(scratch.arena, eval.expr, str8_zero()));
+                          rd_cmd(RD_CmdKind_PushQuery, .expr = e_full_expr_string_from_key(scratch.arena, eval.key));
                         }
                         else
                         {
                           did_cmd = 0;
                         }
                       }break; 
+                      case RD_EvalSpaceKind_MetaQuery:
+                      {
+                        rd_cmd(RD_CmdKind_PushQuery, .expr = e_full_expr_string_from_key(scratch.arena, eval.key));
+                      }break;
                       case RD_EvalSpaceKind_MetaUnattachedProcess:
                       {
                         U64 pid = eval.value.u128.u64[0];
@@ -4496,14 +4503,14 @@ rd_view_ui(Rng2F32 rect)
                             UI_Flags(0)
                           {
                             // rjf: 'pull out' button
-                            UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(ui_top_font_size()*1.5f,
-                                                                       ui_top_font_size()*1.5f,
-                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f,
-                                                                       ui_top_font_size()*1.5f + ui_top_font_size()*3.f))
-                              UI_CornerRadius(ui_top_font_size()*1.5f)
+                            UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(floor_f32(ui_top_font_size()*1.5f),
+                                                                       floor_f32(ui_top_font_size()*1.5f),
+                                                                       floor_f32(ui_top_font_size()*1.5f + ui_top_font_size()*3.f),
+                                                                       floor_f32(ui_top_font_size()*1.5f + ui_top_font_size()*3.f)))
+                              UI_CornerRadius(floor_f32(ui_top_font_size()*1.5f))
                               UI_TextAlignment(UI_TextAlign_Center)
                               RD_Font(RD_FontSlot_Icons)
-                              UI_FontSize(ui_top_font_size()*0.8f)
+                              UI_FontSize(floor_f32(ui_top_font_size()*0.9f))
                             {
                               UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                       UI_BoxFlag_Floating|
@@ -4786,6 +4793,8 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: has a command name? -> push command
                           else if(cell_info.cmd_name.size != 0)
                           {
+                            String8 cmd_name = cell_info.cmd_name;
+                            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
                             CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row->eval.space);
                             RD_Cfg *cfg = rd_cfg_from_eval_space(row->eval.space);
                             if(cfg == &rd_nil_cfg)
@@ -4794,13 +4803,13 @@ rd_view_ui(Rng2F32 rect)
                             }
                             RD_RegsScope(.cfg = cfg->id, .ctrl_entity = entity->handle)
                             {
-                              if(cfg != &rd_nil_cfg || entity != &ctrl_entity_nil)
+                              if(!(cmd_kind_info->query.flags & RD_QueryFlag_Required))
                               {
                                 rd_push_cmd(cell_info.cmd_name, rd_regs());
                               }
                               else
                               {
-                                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cell_info.cmd_name);
+                                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
                               }
                             }
                           }
@@ -5548,7 +5557,7 @@ rd_window_frame(void)
       }
       for(RD_Cfg *child = parent_cfg->first; child != &rd_nil_cfg; child = child->next)
       {
-        if(str8_match(child->string, str8_lit("color"), 0))
+        if(str8_match(child->string, str8_lit("theme_color"), 0))
         {
           rd_cfg_list_push_front(scratch.arena, &colors_cfgs, child);
         }
@@ -5606,7 +5615,7 @@ rd_window_frame(void)
       MD_Node *tree_root = t->tree;
       for(MD_Node *n = tree_root; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, tree_root).next)
       {
-        if(str8_match(n->string, str8_lit("color"), 0))
+        if(str8_match(n->string, str8_lit("theme_color"), 0))
         {
           MD_Node *tags_child = md_child_from_string(n, str8_lit("tags"), 0);
           MD_Node *value_child = md_child_from_string(n, str8_lit("value"), 0);
@@ -11638,8 +11647,8 @@ rd_frame(void)
     RD_Theme *theme_srgba = push_array(scratch.arena, RD_Theme, 1);
     
     //- rjf: gather globally-applying config options
-    RD_CfgList preset_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("color_preset"));
-    RD_CfgList colors_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("colors"));
+    RD_CfgList preset_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("theme_preset"));
+    RD_CfgList colors_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("theme_colors"));
     
     //- rjf: assume default-dark
     MemoryCopy(theme_srgba->colors, rd_theme_preset_colors_table[RD_ThemePreset_DefaultDark], sizeof(rd_theme_preset_colors__default_dark));
@@ -12349,10 +12358,9 @@ rd_frame(void)
                                                     {
                                                       .info    = E_TYPE_EXPAND_INFO_FUNCTION_NAME(call_stack),
                                                     }));
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("colors"),
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("theme_colors"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
-                                                    .flags = E_TypeFlag_EditableChildren,
-                                                    .name = str8_lit("colors"),
+                                                    .name = str8_lit("theme_colors"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(cfgs_slice),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs_slice),
                                                     .expand =
@@ -15227,33 +15235,39 @@ rd_frame(void)
             rd_cfg_new(project, str8_lit("auto_view_rule"));
           }break;
           
-          //- rjf: colors
-          case RD_CmdKind_AddColor:
+          //- rjf: themes
+          case RD_CmdKind_OpenTheme:
+          {
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_Cfg *theme_file = rd_cfg_child_from_string_or_alloc(user, str8_lit("theme_file"));
+            rd_cfg_new_replace(theme_file, rd_regs()->file_path);
+          }break;
+          case RD_CmdKind_AddThemeColor:
           {
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
-            RD_Cfg *color = rd_cfg_new(parent, str8_lit("color"));
+            RD_Cfg *color = rd_cfg_new(parent, str8_lit("theme_color"));
             rd_cfg_new(color, str8_lit("tags"));
             RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
             rd_cfg_new(value, str8_lit("0xffffffff"));
           }break;
-          case RD_CmdKind_ImportColors:
+          case RD_CmdKind_ForkLoadedThemeColors:
           {
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
-            RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("color"));
+            RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
             for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
             {
               rd_cfg_release(n->v);
             }
-            String8 color_preset = rd_setting_from_name(str8_lit("color_preset"));
-            String8 color_file = rd_setting_from_name(str8_lit("color_file"));
+            String8 color_preset = rd_setting_from_name(str8_lit("theme_preset"));
+            String8 color_file = rd_setting_from_name(str8_lit("theme_file"));
             RD_ThemePreset preset = RD_ThemePreset_DefaultDark;
             // TODO(rjf): map preset via string
             MD_Node *theme_tree = rd_state->theme_preset_trees[preset];
             for(MD_Node *n = theme_tree; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
             {
-              if(str8_match(n->string, str8_lit("color"), 0))
+              if(str8_match(n->string, str8_lit("theme_color"), 0))
               {
-                RD_Cfg *color = rd_cfg_new(parent, str8_lit("color"));
+                RD_Cfg *color = rd_cfg_new(parent, str8_lit("theme_color"));
                 RD_Cfg *tags = rd_cfg_new(color, str8_lit("tags"));
                 RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
                 rd_cfg_new(tags, md_child_from_string(n, str8_lit("tags"), 0)->first->string);

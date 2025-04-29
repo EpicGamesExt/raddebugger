@@ -230,8 +230,10 @@ RD_CmdKind_DisableBreakpoint,
 RD_CmdKind_AddWatchPin,
 RD_CmdKind_ToggleWatchPin,
 RD_CmdKind_AddAutoViewRule,
-RD_CmdKind_AddColor,
-RD_CmdKind_ImportColors,
+RD_CmdKind_OpenTheme,
+RD_CmdKind_AddThemeColor,
+RD_CmdKind_ForkLoadedThemeColors,
+RD_CmdKind_SaveThemeColors,
 RD_CmdKind_SetNextStatement,
 RD_CmdKind_AddTarget,
 RD_CmdKind_SelectTarget,
@@ -673,8 +675,8 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[20];
 extern String8 rd_tab_fast_path_query_name_table[20];
-extern RD_VocabInfo rd_vocab_info_table[319];
-extern RD_NameSchemaInfo rd_name_schema_info_table[22];
+extern RD_VocabInfo rd_vocab_info_table[322];
+extern RD_NameSchemaInfo rd_name_schema_info_table[23];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];

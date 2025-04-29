@@ -340,6 +340,7 @@ typedef struct E_Eval E_Eval;
 struct E_Eval
 {
   E_Key key;
+  E_Key parent_key;
   String8 string;
   E_Expr *expr;
   E_IRTreeAndType irtree;
@@ -993,7 +994,7 @@ read_only global E_String2NumMap e_string2num_map_nil = {0};
 read_only global E_String2ExprMap e_string2expr_map_nil = {0};
 read_only global E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 read_only global E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-read_only global E_Eval e_eval_nil = {{0}, {0}, &e_expr_nil, {&e_irnode_nil}};
+read_only global E_Eval e_eval_nil = {{0}, {0}, {0}, &e_expr_nil, {&e_irnode_nil}};
 read_only global E_Module e_module_nil = {&rdi_parsed_nil};
 read_only global E_CacheBundle e_cache_bundle_nil = {0, {0}, {0}, {0}, {{0}, 0, &e_expr_nil, &e_expr_nil}, {&e_irnode_nil}};
 thread_static E_BaseCtx *e_base_ctx = 0;

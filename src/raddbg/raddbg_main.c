@@ -188,10 +188,6 @@
 // [ ] config hot-reloading, using cfg wins
 // [ ] undo/redo, using cfg wins
 // [ ] back/forward, using cfg wins
-// [ ] autocompletion lister, file lister, function lister, command lister,
-//     etc., all need to be merged, and optionally contextualized/filtered.
-//     right-clicking a tab should be equivalent to spawning a command lister,
-//     but only with commands that are directly
 //
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
 //
@@ -463,6 +459,10 @@
 //     since that's not normally how Windows fonts work.
 //  [x] I had to go into the user file to change the font. That should probably
 //      be in the theme window?
+// [x] autocompletion lister, file lister, function lister, command lister,
+//     etc., all need to be merged, and optionally contextualized/filtered.
+//     right-clicking a tab should be equivalent to spawning a command lister,
+//     but only with commands that are directly
 
 ////////////////////////////////
 //~ rjf: Build Options
