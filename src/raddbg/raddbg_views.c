@@ -823,9 +823,9 @@ rd_id_from_watch_cell(RD_WatchCell *cell)
 {
   U64 result = 5381;
   result = e_hash_from_string(result, str8_struct(&cell->kind));
-  if(!(cell->flags & RD_WatchCellFlag_Expr))
+  result = e_hash_from_string(result, str8_struct(&cell->index));
+  if(cell->index != 0)
   {
-    result = e_hash_from_string(result, str8_struct(&cell->index));
     result = e_hash_from_string(result, str8_struct(&cell->default_pct));
   }
   return result;
@@ -1166,12 +1166,12 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) != &rd_nil_cfg)
     {
       info.can_expand = 0;
-      RD_WatchCellFlags extra_flags = 0;
-      if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+      RD_WatchCellFlags extra_flags = RD_WatchCellFlag_Expr;
+      if(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)) == E_TypeKind_Function)
       {
-        extra_flags |= RD_WatchCellFlag_NoEval;
+        extra_flags &= ~RD_WatchCellFlag_Expr;
       }
-      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = extra_flags|RD_WatchCellFlag_Expr|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = extra_flags|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
     ////////////////////////////
