@@ -4,7 +4,8 @@
 ////////////////////////////////
 //~ rjf: 0.9.16 release notes
 //
-// - "View rules", now simply called "views", have been formally integrated
+// - **Formal integration of views (view rules) into the evaluation language.**
+//   "View rules", now simply called "views", have been formally integrated
 //   into the debugger evaluation language. They now appear similar to function
 //   calls, and are expressed directly within an expression. For example, an
 //   expression `dynamic_array` with a view rule `slice` from prior versions
@@ -18,96 +19,107 @@
 //   required in some cases (e.g. the `fmt`/format parameter for `bitmap`), are
 //   expressed using `name = value` syntax:
 //   `bitmap(base, width, height, fmt=bgra8)`.
-// - "Auto view rules", now simply called "type views", have been upgraded
-//   to support type pattern-matching. This makes them usable for generic types
-//   in various languages. This pattern-matching is done by using `?` characters
-//   in a pattern, to specify placeholders for various parts of a type name.
-//   For example, the pattern `DynamicArray<?>` would match
-//   `DynamicArray<int>`, `DynamicArray<float>`, and so on.
-// - Type views have been upgraded to support a larger number of possibilities.
-//   Instead of mapping to a set of views which are applied to some other
-//   expression, type views can remap the expression itself, and apply
-//   additional views. These expressions can refer to the originating
-//   expression either explicitly using the `$` character, or implicitly in
-//   some cases. For instance, a type like
-//   `struct Bitmap {U8 *base; U32 width; U32 height;};` can be used in a type
-//   view which maps `Bitmap` to `bitmap(base, width, height)`. In this case,
-//   `base`, `width`, and `height` are recognized as being member names of
-//   `Bitmap`. This is equivalent to `bitmap($.base, $.width, $.height)`.
-// - Breakpoints have been upgraded to support flags for breaking on writing,
-//   reading, or execution, as well as an address range size. When used with
-//   an address location, this can be used to express hardware data
-//   breakpoints, where the CPU will break when it sees particular addresses
-//   being written to, read from, or executed, regardless of where that code
-//   occurs. There is a maximum limit of four such breakpoints on a processor.
-//   Theoretically, this means a limit of four per thread, but for now, the
-//   debugger only supports four global data breakpoints. In the future, we
-//   plan to allow organizing these by thread, in which case the total number
-//   of data breakpoints we support will increase.
-// - A new `table` view has been added, which allows one to define custom rules
-//   for how rows of a watch expansion are formed. The first argument a `table`
-//   is the expression which should be evaluated (like other views), and the
-//   remaining arguments are used to express a number of expressions which
-//   should be used to generated cells for each row in the expansion. For
+// - **Support for generics in type views (auto view rules)**. "Auto view
+//   rules", now simply called "type views", have been upgraded to support type
+//   pattern-matching. This makes them usable for generic types in various
+//   languages. This pattern-matching is done by using `?` characters in a
+//   pattern, to specify placeholders for various parts of a type name. For
+//   example, the pattern `DynamicArray<?>` would match `DynamicArray<int>`,
+//   `DynamicArray<float>`, and so on. `?(?)` would match all function types.
+// - **Usage of the source expression within type views.** Type views have been
+//   upgraded to support a larger number of possibilities. Instead of mapping
+//   to a set of views which are applied to some other expression, type views
+//   can remap the expression itself, and apply additional views. These
+//   expressions can refer to the originating expression either explicitly
+//   using the `$` character, or implicitly in some cases. For instance, a type
+//   like `struct Bitmap {U8 *base; U32 width; U32 height;};` can be used in a
+//   type view which maps `Bitmap` to `bitmap(base, width, height)`. In this
+//   case, `base`, `width`, and `height` are recognized as being member names
+//   of `Bitmap`. This is equivalent to `bitmap($.base, $.width, $.height)`.
+// - **Hardware data breakpoints.** Breakpoints have been upgraded to support
+//   flags for breaking on writing, reading, or execution, as well as an
+//   address range size. When used with an address location, this can be used
+//   to express hardware data breakpoints, where the CPU will break when it
+//   sees particular addresses being written to, read from, or executed,
+//   regardless of which code does it. There is a maximum limit of four such
+//   breakpoints on a processor. Theoretically, this means a limit of four per
+//   thread, but for now, the debugger only supports four global data
+//   breakpoints. In the future, we plan to allow organizing these by thread,
+//   in which case the total number of data breakpoints we support will
+//   increase.
+// - **A new `table` view** has been added, which allows one to define custom
+//   rules for how rows of a watch expansion are formed. The first argument a
+//   `table` is the expression which should be evaluated (like other views),
+//   and the remaining arguments are used to express a number of expressions
+//   which should be used to generated cells for each row in the expansion. For
 //   instance, `table(my_int_array, $, $*4, $*8)` would expand `my_int_array`,
 //   but instead of the default row structure (which displays an expression
 //   string, a value string, and a type string), three cells would be generated
 //   per row: one with the value of each element, one with that value
 //   multiplied by 4, and one multiplied by 8.
-// - A new `sequence` view has been added. This is a simple view which simply
-//   takes a single integer scalar argument `n`, and returns a sequence of
-//   integers, from `0`, `1`, `2`, all the way to `n`. This sequence can be
+// - **A new `sequence` view** has been added. This is a simple view which
+//   simply takes a single integer scalar argument `n`, and returns a sequence
+//   of integers, from `0`, `1`, `2`, all the way to `n`. This sequence can be
 //   expanded. This can compose with the `table` view, to easily generate `n`
 //   rows, and use each integer as a value in each cell expression. As an
 //   example, `table(sequence(1000), array1[$], array2[$])` would display
 //   elements of `array1` and `array2` in each row, side-by-side.
-// - The F1 command palette has been replaced by a substantially more powerful
-//   "everything palette" (referred to in the UI simply as "palette"), opened
-//   with the `Open Palette` command. This palette lists commands and allows
-//   the editing of bindings, just like the old command palette (although it
-//   now also supports searching for command bindings themselves, in addition
-//   to the original searching support for command names and descriptions).
-//   However, this palette now also lists targets, breakpoints, recent files,
-//   recent projects, settings (including tab settings, window settings, user
-//   settings, project settings), attached processes, threads, modules,
-//   functions, types, and global variables. This can be used to quickly search
-//   for a large set of possible things, and either jump to them or edit them.
-// - The tab right-click menu has been upgraded to show all tab-related
-//   settings, including ones specially-defined for specific visualizers (like
-//   the width and height parameters to the bitmap visualizer).
-// - The debugger UI now more flexibly supports a larger set of possible
-//   combinations of font sizes. Each tab can have a specific font size set,
-//   which can be edited within the palette or a tab's right-click menu. If a
-//   tab has no per-tab font size set, then it inherits the setting from the
-//   window's font size.
-// - The fonts which the debugger uses can now be set through settings UI
-//   (including the palette).
-// - The debugger now accepts system font file names in addition to full font
-//   file paths to specify font settings.
-// - Expressions inserted into a `Watch` tab are now stored per-tab. This makes
-//   many `Watch` tabs more useful, since different tabs can have a different
-//   set of expressions. `Watch` tabs can now also be labeled, so you can
-//   visually distinguish many `Watch` tabs more easily.
-// - All tabs now allow hand-editing of their root expression in their
-//   right-click menu.
-// - Debugger settings have been upgraded to be stored as expressions, rather
-//   than being locked to a specific value. These expressions are evaluated,
-//   like any other expression, and their evaluated value is used when the
-//   setting value is actually needed.
-// - The `slice` view has been streamlined and simplified. When an expression
-//   with a `slice` view is expanded, it will simply expand to the slice's
-//   contents, which matches the behavior with static arrays.
-// - The `slice` view now supports `first, one_past_last` pointer pairs, as
-//   well as `base_pointer, length` pairs.
-// - The debugger now displays toggle switches as an additional visualization
-//   and editor for all boolean evaluations.
-// - A new `range1` view has been added, which expresses bounds for some scalar
-//   value. When this view is used in an evaluation, the debugger will
+// - **The everything palette**. The F1 command palette has been replaced by a
+//   substantially more powerful "everything palette" (referred to in the UI
+//   simply as "palette"), opened with the `Open Palette` command. This palette
+//   lists commands and allows the editing of bindings, just like the old
+//   command palette (although it now also supports searching for command
+//   bindings themselves, in addition to the original searching support for
+//   command names and descriptions). However, this palette now also lists
+//   targets, breakpoints, recent files, recent projects, settings (including
+//   tab settings, window settings, user settings, project settings), attached
+//   processes, threads, modules, functions, types, and global variables. This
+//   can be used to quickly search for a large set of possible things, and
+//   either jump to them or edit them. The old `Run Command` command still
+//   exists, and still presents a command palette, which is simply a
+//   special-case of the generalized palette. But this command is no longer
+//   bound to F1 by default.
+// - **Upgraded per-tab settings.** The tab right-click menu has been upgraded
+//   to show all tab-related settings, including ones specially-defined for
+//   specific visualizers (like the width and height parameters to the bitmap
+//   visualizer). The debugger UI now also supports per-tab font sizes. If a
+//   tab has no per-tab font size set, then it inherits the window's font size.
+//   Each tab's root expression is now also editable in this interface. The tab
+//   right-click menu's options also show up in the palette when the
+//   corresponding tab is focused. They can also be manually opened with the
+//   `Tab Settings` command.
+// - **UI for setting the font.** The fonts which the debugger uses can now be
+//   set through settings UI (including the palette), rather than just through
+//   the configuration files.
+// - **Support for searching system font folders for fonts.** The debugger now
+//   accepts system font file names in addition to full font file paths to
+//   specify font settings.
+// - **Per-`Watch` expressions and labels.** Expressions inserted into a
+//   `Watch` tab are now stored per-tab. This makes many `Watch` tabs more
+//   useful, since different tabs can have a different set of expressions.
+//   `Watch` tabs can now also be labeled, so you can visually distinguish
+//   many `Watch` tabs more easily.
+// - **Settings expressions.** Debugger settings have been upgraded to be
+//   stored as expressions, rather than being locked to a specific value.
+//   These expressions are evaluated, like any other expression, and their
+//   evaluated value is used when the setting value is actually needed.
+// - **Upgrades to the `slice` view.** The `slice` view has been streamlined
+//   and simplified. When an expression with a `slice` view is expanded, it
+//   will simply expand to the slice's contents, which matches the behavior
+//   with static arrays. The `slice` view now also supports
+//   `first, one_past_last` pointer pairs, as well as `base_pointer, length`
+//   pairs.
+// - **Boolean evaluation toggle-switches.** The debugger now displays toggle
+//   switches as an additional visualization and editor for all boolean
+//   evaluations.
+// - **A new `range1` view** has been added, which expresses bounds for some
+//   scalar value. When this view is used in an evaluation, the debugger will
 //   visualize the evaluation value with a slider, which can be used to edit
 //   the value as well.
-// - The hover evaluation feature has been majorly upgraded to support all
-//   features normally available in `Watch` tabs.
-// - Added "transient tabs", which are colored differently than normal tabs.
+// - **Merging of `Watch` UI with hover evaluation.** The hover evaluation
+//   feature has been majorly upgraded to support all features normally
+//   available in `Watch` tabs.
+// - Added **transient tabs**, which are colored differently than normal tabs.
 //   These tabs are automatically opened by the debugger when snapping to
 //   source code which is not already opened. They are automatically replaced
 //   and recycled when the debugger needs to snap to new locations. This will
