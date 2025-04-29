@@ -2336,8 +2336,9 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
       args = type->args;
       args_count = type->count;
     }
+    E_Eval primary_eval = e_eval_from_expr(primary_expr);
     RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-    rd_cfg_new_replace(expr_root, e_string_from_expr(scratch.arena, primary_expr, str8_zero()));
+    rd_cfg_new_replace(expr_root, e_full_expr_string_from_key(scratch.arena, primary_eval.key));
     {
       U64 unnamed_order_idx = 0;
       for EachIndex(arg_idx, args_count)
