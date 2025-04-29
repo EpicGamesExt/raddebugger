@@ -1947,6 +1947,21 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       // rjf: child key -> look up & edit child
       else
       {
+        // rjf: modifying a label? -> poison this identifier in the macro map
+        if(str8_match(child_key, str8_lit("label"), 0))
+        {
+          String8 pre_edit_label = rd_label_from_cfg(root_cfg);
+          if(!str8_match(pre_edit_label, write_string, 0))
+          {
+            E_Expr *expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, pre_edit_label);
+            if(expr != &e_expr_nil)
+            {
+              e_string2expr_map_inc_poison(e_ir_ctx->macro_map, pre_edit_label);
+              e_string2expr_map_insert(e_cache->arena, e_ir_ctx->macro_map, write_string, expr);
+            }
+          }
+        }
+        
         // rjf: zero-range? delete child
         if(range.min == range.max)
         {
@@ -12069,23 +12084,15 @@ rd_frame(void)
           for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
           {
             RD_Cfg *cfg = n->v;
-            String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
-            String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
-            if(exe.size != 0 || label.size != 0)
+            String8 label = rd_label_from_cfg(cfg);
+            if(label.size != 0)
             {
               E_Space space = rd_eval_space_from_cfg(cfg);
               E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
               expr->space    = space;
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
-              if(exe.size != 0)
-              {
-                e_string2expr_map_insert(scratch.arena, macro_map, str8_skip_last_slash(exe), expr);
-              }
-              if(label.size != 0)
-              {
-                e_string2expr_map_insert(scratch.arena, macro_map, label, expr);
-              }
+              e_string2expr_map_insert(scratch.arena, macro_map, label, expr);
             }
           }
         }
