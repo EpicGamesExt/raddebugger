@@ -567,7 +567,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     }
 
     // export directory range
-    data_dir_range = rng_1u64(reported_data_dir_offset, reported_data_dir_offset + data_dir_count * sizeof(PE_DataDirectory));
+    data_dir_range = rng_1u64(optional_range.min + reported_data_dir_offset, optional_range.min + reported_data_dir_offset + data_dir_count * sizeof(PE_DataDirectory));
   }
   
   // rjf: extract tls header
