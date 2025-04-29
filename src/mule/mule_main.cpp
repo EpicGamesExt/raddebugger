@@ -248,7 +248,6 @@ struct Discriminated_Union
     } fourth;
   };
 };
-
 raddbg_auto_view_rule(Discriminated_Union,
                       kind == Kind.First ? first :
                       kind == Kind.Second ? second :
@@ -414,11 +413,28 @@ type_coverage_eval_tests(void)
   
   Has_Enums has_enums = {(Kind)4, (Flag)7};
   
-  Discriminated_Union discriminated_union = {Kind_First};
+  Discriminated_Union discriminated_union = {0};
+  
+  discriminated_union.kind = Kind_First;
   discriminated_union.first.x = 16;
   discriminated_union.first.y = 8;
   discriminated_union.first.vector.x = 4.f;
   discriminated_union.first.vector.y = 2.f;
+  
+  discriminated_union.kind = Kind_Second;
+  discriminated_union.second.x = 123;
+  discriminated_union.second.y = 3.14f;
+  
+  discriminated_union.kind = Kind_Third;
+  discriminated_union.third.few_params = few_params1;
+  discriminated_union.third.pairs[0] = memory_[0];
+  discriminated_union.third.pairs[1] = memory_[1];
+  discriminated_union.third.pairs[2] = memory_[2];
+  discriminated_union.third.pairs[3] = memory_[3];
+  
+  discriminated_union.kind = Kind_Fourth;
+  discriminated_union.fourth.sub_kind = Kind_First;
+  discriminated_union.fourth.flags = (Flag)7;
   
   Linked_List list = {&list, &list, 0};
   
