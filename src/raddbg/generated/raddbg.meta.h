@@ -16,6 +16,7 @@ RD_RegSlot_Thread,
 RD_RegSlot_CtrlEntity,
 RD_RegSlot_Window,
 RD_RegSlot_Panel,
+RD_RegSlot_Tab,
 RD_RegSlot_View,
 RD_RegSlot_PrevTab,
 RD_RegSlot_DstPanel,
@@ -137,7 +138,7 @@ RD_CmdKind_OpenTab,
 RD_CmdKind_BuildTab,
 RD_CmdKind_DuplicateTab,
 RD_CmdKind_CloseTab,
-RD_CmdKind_MoveTab,
+RD_CmdKind_MoveView,
 RD_CmdKind_TabBarTop,
 RD_CmdKind_TabBarBottom,
 RD_CmdKind_TabSettings,
@@ -544,6 +545,7 @@ CTRL_Handle thread;
 CTRL_Handle ctrl_entity;
 RD_CfgID window;
 RD_CfgID panel;
+RD_CfgID tab;
 RD_CfgID view;
 RD_CfgID prev_tab;
 RD_CfgID dst_panel;
@@ -632,6 +634,7 @@ Z(getting_started)\
 .ctrl_entity = rd_regs()->ctrl_entity,\
 .window = rd_regs()->window,\
 .panel = rd_regs()->panel,\
+.tab = rd_regs()->tab,\
 .view = rd_regs()->view,\
 .prev_tab = rd_regs()->prev_tab,\
 .dst_panel = rd_regs()->dst_panel,\
@@ -672,7 +675,7 @@ extern String8 rd_tab_fast_path_view_name_table[20];
 extern String8 rd_tab_fast_path_query_name_table[20];
 extern RD_VocabInfo rd_vocab_info_table[319];
 extern RD_NameSchemaInfo rd_name_schema_info_table[22];
-extern Rng1U64 rd_reg_slot_range_table[42];
+extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];

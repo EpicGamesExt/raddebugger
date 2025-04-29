@@ -886,6 +886,7 @@ entry_point(CmdLine *cmd_line)
                     RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_id(dst_ws->cfg_id));
                     rd_regs()->window = dst_ws->cfg_id;
                     rd_regs()->panel  = panel_tree.focused->cfg->id;
+                    rd_regs()->tab    = panel_tree.focused->selected_tab->id;
                     rd_regs()->view   = panel_tree.focused->selected_tab->id;
                     scratch_end(scratch);
                   }

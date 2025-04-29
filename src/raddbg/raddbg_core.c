@@ -1229,6 +1229,10 @@ rd_setting_from_name(String8 name)
       B32 allow_bucket_chains;
     };
     RD_Cfg *view_cfg = rd_cfg_from_id(rd_regs()->view);
+    if(view_cfg == &rd_nil_cfg)
+    {
+      view_cfg = rd_cfg_from_id(rd_regs()->tab);
+    }
     CfgSeedTask panel_task = {0, &rd_nil_cfg, 1};
     if(panel_task.cfg == &rd_nil_cfg) { panel_task.cfg = rd_cfg_from_id(rd_regs()->panel); }
     if(panel_task.cfg == &rd_nil_cfg) { panel_task.cfg = rd_cfg_from_id(rd_regs()->window); }
@@ -5777,7 +5781,8 @@ rd_window_frame(void)
   //- rjf: @window_frame_part fill panel/view interaction registers
   //
   rd_regs()->panel = panel_tree.focused->cfg->id;
-  rd_regs()->view  = panel_tree.focused->selected_tab->id;
+  rd_regs()->tab   = panel_tree.focused->selected_tab->id;
+  rd_regs()->view = panel_tree.focused->selected_tab->id;
   
   //////////////////////////////
   //- rjf: @window_frame_part build UI
@@ -5791,7 +5796,7 @@ rd_window_frame(void)
     {
       // rjf: get top-level font size info
       F32 top_level_font_size = 0;
-      RD_RegsScope(.view = 0) top_level_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+      RD_RegsScope(.view = 0, .tab = 0) top_level_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
       
       // rjf: build icon info
       UI_IconInfo icon_info = {0};
@@ -6046,6 +6051,7 @@ rd_window_frame(void)
     if(rd_drag_is_active() && window_is_focused)
       RD_RegsScope(.window = rd_state->drag_drop_regs->window,
                    .panel = rd_state->drag_drop_regs->panel,
+                   .tab = 0,
                    .view = rd_state->drag_drop_regs->view)
     {
       Temp scratch = scratch_begin(0, 0);
@@ -6458,7 +6464,7 @@ rd_window_frame(void)
           
           // rjf: determine size of hover evaluation container
           EV_BlockTree predicted_block_tree = {0};
-          RD_RegsScope(.view = view->id)
+          RD_RegsScope(.view = view->id, .tab = 0)
           {
             predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
           }
@@ -6601,7 +6607,7 @@ rd_window_frame(void)
         
         // rjf: compute query view's top-level rectangle
         Rng2F32 rect = {0};
-        RD_RegsScope(.view = view->id)
+        RD_RegsScope(.view = view->id, .tab = 0)
         {
           F32 row_height_px = ui_top_font_size() * rd_setting_f32_from_name(str8_lit("row_height"));
           Vec2F32 content_rect_center = center_2f32(content_rect);
@@ -7781,7 +7787,7 @@ rd_window_frame(void)
                   rd_cmd(RD_CmdKind_SplitPanel,
                          .dst_panel  = split_panel->cfg->id,
                          .panel      = rd_state->drag_drop_regs->panel,
-                         .view       = rd_state->drag_drop_regs->view,
+                         .view      = rd_state->drag_drop_regs->view,
                          .dir2       = dir);
                 }
               }
@@ -7873,7 +7879,7 @@ rd_window_frame(void)
               rd_cmd(RD_CmdKind_SplitPanel,
                      .dst_panel  = split_panel->cfg->id,
                      .panel      = rd_state->drag_drop_regs->panel,
-                     .view       = rd_state->drag_drop_regs->view,
+                     .view      = rd_state->drag_drop_regs->view,
                      .dir2       = dir);
             }
             
@@ -8184,7 +8190,7 @@ rd_window_frame(void)
                   }
                   else
                   {
-                    rd_cmd(RD_CmdKind_MoveTab,
+                    rd_cmd(RD_CmdKind_MoveView,
                            .dst_panel = panel->cfg->id,
                            .panel = rd_state->drag_drop_regs->panel,
                            .view = rd_state->drag_drop_regs->view,
@@ -8276,7 +8282,8 @@ rd_window_frame(void)
           {
             //- rjf: push interaction registers, fill with per-view states
             rd_push_regs(.panel = panel->cfg->id,
-                         .view  = selected_tab->id);
+                         .tab = selected_tab->id,
+                         .view = selected_tab->id);
             {
               String8 view_expr = rd_expr_from_cfg(selected_tab);
               String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
@@ -8480,7 +8487,7 @@ rd_window_frame(void)
               //- rjf: build tab
               DR_FStrList tab_fstrs = tab_task->fstrs;
               F32 tab_width_px = tab_task->tab_width;
-              if(tab != &rd_nil_cfg) RD_RegsScope(.panel = panel->cfg->id, .view = tab->id)
+              if(tab != &rd_nil_cfg) RD_RegsScope(.panel = panel->cfg->id, .view = tab->id, .tab = tab->id)
               {
                 // rjf: gather info for this tab
                 B32 tab_is_selected = (tab == panel->selected_tab);
@@ -8693,10 +8700,10 @@ rd_window_frame(void)
           //
           if(tab_drop_is_active && rd_drag_drop() && rd_state->drag_drop_regs_slot == RD_RegSlot_View)
           {
-            rd_cmd(RD_CmdKind_MoveTab,
+            rd_cmd(RD_CmdKind_MoveView,
                    .dst_panel = panel->cfg->id,
                    .panel     = rd_state->drag_drop_regs->panel,
-                   .view      = rd_state->drag_drop_regs->view,
+                   .view     = rd_state->drag_drop_regs->view,
                    .prev_tab  = tab_drop_prev->id);
           }
           
@@ -8757,11 +8764,11 @@ rd_window_frame(void)
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
         {
-          rd_cmd(RD_CmdKind_IncFontSize, .view = 0);
+          rd_cmd(RD_CmdKind_IncFontSize, .tab = 0, .view = 0);
         }
         else if(evt->delta_2f32.y > 0)
         {
-          rd_cmd(RD_CmdKind_DecFontSize, .view = 0);
+          rd_cmd(RD_CmdKind_DecFontSize, .tab = 0, .view = 0);
         }
       }
     }
@@ -11758,6 +11765,7 @@ rd_frame(void)
         RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_id(ws->cfg_id));
         rd_regs()->window = ws->cfg_id;
         rd_regs()->panel  = panel_tree.focused->cfg->id;
+        rd_regs()->tab    = panel_tree.focused->selected_tab->id;
         rd_regs()->view   = panel_tree.focused->selected_tab->id;
         scratch_end(scratch);
       }
@@ -12743,7 +12751,7 @@ rd_frame(void)
                                       "query:thread_locals, "
                                       ,
                                       tab->id, window->id);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id);
+            rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id, .tab = tab->id);
           }break;
           
           //- rjf: command fast paths
@@ -13102,7 +13110,7 @@ rd_frame(void)
           case RD_CmdKind_IncFontSize:
           {
             RD_Cfg *cfg = &rd_nil_cfg;
-            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->view); }
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->tab); }
             if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->window); }
             if(cfg != &rd_nil_cfg)
             {
@@ -13117,7 +13125,7 @@ rd_frame(void)
           case RD_CmdKind_DecFontSize:
           {
             RD_Cfg *cfg = &rd_nil_cfg;
-            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->view); }
+            if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->tab); }
             if(cfg == &rd_nil_cfg) { cfg = rd_cfg_from_id(rd_regs()->window); }
             if(cfg != &rd_nil_cfg)
             {
@@ -13272,7 +13280,7 @@ rd_frame(void)
                 {
                   if(!rd_cfg_is_project_filtered(n->v))
                   {
-                    rd_cmd(RD_CmdKind_FocusTab, .panel = origin_panel->cfg->id, .view = n->v->id);
+                    rd_cmd(RD_CmdKind_FocusTab, .panel = origin_panel->cfg->id, .tab = n->v->id);
                     break;
                   }
                 }
@@ -13281,7 +13289,7 @@ rd_frame(void)
               {
                 rd_cmd(RD_CmdKind_ClosePanel);
               }
-              rd_cmd(RD_CmdKind_FocusTab, .panel = new_panel_cfg->id, .view = dragdrop_tab->id);
+              rd_cmd(RD_CmdKind_FocusTab, .panel = new_panel_cfg->id, .tab = dragdrop_tab->id);
             }
             
             // rjf: focus new panel
@@ -13638,7 +13646,7 @@ rd_frame(void)
           //- rjf: panel tab controls
           case RD_CmdKind_FocusTab:
           {
-            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->tab);
             RD_Cfg *panel = tab->parent;
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, panel);
             RD_PanelNode *panel_node = rd_panel_node_from_tree_cfg(panel_tree.root, panel);
@@ -13690,7 +13698,7 @@ rd_frame(void)
             }
             if(next_selected_tab != &rd_nil_cfg)
             {
-              rd_cmd(RD_CmdKind_FocusTab, .view = next_selected_tab->id);
+              rd_cmd(RD_CmdKind_FocusTab, .tab = next_selected_tab->id);
             }
           }break;
           case RD_CmdKind_PrevTab:
@@ -13721,13 +13729,13 @@ rd_frame(void)
             }
             if(next_selected_tab != &rd_nil_cfg)
             {
-              rd_cmd(RD_CmdKind_FocusTab, .view = next_selected_tab->id);
+              rd_cmd(RD_CmdKind_FocusTab, .tab = next_selected_tab->id);
             }
           }break;
           case RD_CmdKind_MoveTabRight:
           case RD_CmdKind_MoveTabLeft:
           {
-            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->tab);
             RD_Cfg *window = rd_window_from_cfg(tab);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
             RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_tree.root, tab->parent);
@@ -13764,9 +13772,9 @@ rd_frame(void)
             {
               new_prev = filtered_tabs.last->v;
             }
-            rd_cmd(RD_CmdKind_MoveTab,
+            rd_cmd(RD_CmdKind_MoveView,
                    .dst_panel = panel->cfg->id,
-                   .view      = tab->id,
+                   .view     = tab->id,
                    .prev_tab  = new_prev->id);
           }break;
           case RD_CmdKind_BuildTab:
@@ -13781,18 +13789,18 @@ rd_frame(void)
               RD_Cfg *project = rd_cfg_new(tab, str8_lit("project"));
               rd_cfg_new(project, rd_state->project_path);
             }
-            rd_cmd(RD_CmdKind_FocusTab, .view = tab->id);
+            rd_cmd(RD_CmdKind_FocusTab, .tab = tab->id);
           }break;
           case RD_CmdKind_DuplicateTab:
           {
-            RD_Cfg *src = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *src = rd_cfg_from_id(rd_regs()->tab);
             RD_Cfg *dst = rd_cfg_deep_copy(src);
             rd_cfg_insert_child(src->parent, src, dst);
-            rd_cmd(RD_CmdKind_FocusTab, .view = dst->id);
+            rd_cmd(RD_CmdKind_FocusTab, .tab = dst->id);
           }break;
           case RD_CmdKind_CloseTab:
           {
-            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->tab);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, tab);
             RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_tree.root, tab->parent);
             B32 found_selected = 0;
@@ -13812,20 +13820,20 @@ rd_frame(void)
                 }
               }
             }
-            rd_cmd(RD_CmdKind_FocusTab, .view = next_selected_tab->id);
+            rd_cmd(RD_CmdKind_FocusTab, .tab = next_selected_tab->id);
             rd_cfg_release(tab);
           }break;
-          case RD_CmdKind_MoveTab:
+          case RD_CmdKind_MoveView:
           {
-            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->view);
+            RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
             RD_Cfg *prev_tab = rd_cfg_from_id(rd_regs()->prev_tab);
-            RD_Cfg *src_panel = tab->parent;
+            RD_Cfg *src_panel = view->parent;
             RD_Cfg *dst_panel = rd_cfg_from_id(rd_regs()->dst_panel);
-            if(dst_panel != &rd_nil_cfg && prev_tab != tab)
+            if(dst_panel != &rd_nil_cfg && prev_tab != view)
             {
-              rd_cfg_unhook(src_panel, tab);
-              rd_cfg_insert_child(dst_panel, prev_tab, tab);
-              rd_cmd(RD_CmdKind_FocusTab, .panel = dst_panel->id, .view = tab->id);
+              rd_cfg_unhook(src_panel, view);
+              rd_cfg_insert_child(dst_panel, prev_tab, view);
+              rd_cmd(RD_CmdKind_FocusTab, .panel = dst_panel->id, .tab = view->id);
               rd_cmd(RD_CmdKind_FocusPanel, .panel = dst_panel->id);
               RD_PanelTree src_panel_tree = rd_panel_tree_from_cfg(scratch.arena, src_panel);
               RD_PanelNode *src_panel_node = rd_panel_node_from_tree_cfg(src_panel_tree.root, src_panel);
@@ -13837,7 +13845,7 @@ rd_frame(void)
                 {
                   if(!rd_cfg_is_project_filtered(n->v))
                   {
-                    rd_cmd(RD_CmdKind_FocusTab, .panel = src_panel->id, .view = n->v->id);
+                    rd_cmd(RD_CmdKind_FocusTab, .panel = src_panel->id, .tab = n->v->id);
                     src_panel_is_empty = 0;
                     break;
                   }
@@ -13861,7 +13869,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_TabSettings:
           {
-            String8 expr = push_str8f(scratch.arena, "query:config.$%I64x", rd_regs()->view);
+            String8 expr = push_str8f(scratch.arena, "query:config.$%I64x", rd_regs()->tab);
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_big_rows = 1, .do_lister = 1);
           }break;
           
@@ -14564,7 +14572,7 @@ rd_frame(void)
               {
                 RD_Cfg *tab = tab_n->v;
                 if(rd_cfg_is_project_filtered(tab)) { continue; }
-                RD_RegsScope(.view = tab->id)
+                RD_RegsScope(.tab = tab->id, .view = tab->id)
                 {
                   if(str8_match(tab->string, str8_lit("text"), 0) &&
                      rd_view_cfg_b32_from_string(str8_lit("auto")))
@@ -14629,7 +14637,7 @@ rd_frame(void)
                 {
                   RD_Cfg *tab = tab_n->v;
                   if(rd_cfg_is_project_filtered(tab)) { continue; }
-                  RD_RegsScope(.view = tab->id)
+                  RD_RegsScope(.view = tab->id, .tab = tab->id)
                   {
                     B32 tab_is_selected = (tab == panel->selected_tab);
                     String8 expr_string = rd_expr_from_cfg(tab);
@@ -14795,7 +14803,8 @@ rd_frame(void)
               
               // rjf: move cursor & snap-to-cursor
               if(dst_panel != &rd_nil_panel_node) RD_RegsScope(.panel = dst_panel->cfg->id,
-                                                               .view  = dst_tab->id)
+                                                               .view = dst_tab->id,
+                                                               .tab = dst_tab->id)
               {
                 rd_cmd(RD_CmdKind_FocusTab);
                 if(point.line != 0)
@@ -14830,6 +14839,7 @@ rd_frame(void)
               
               // rjf: move cursor & snap-to-cursor
               if(dst_panel != &rd_nil_panel_node) RD_RegsScope(.panel = dst_panel->cfg->id,
+                                                               .tab = dst_tab->id,
                                                                .view  = dst_tab->id)
               {
                 rd_cmd(RD_CmdKind_FocusTab);
@@ -14866,7 +14876,7 @@ rd_frame(void)
             // rjf: non-floating -> embed in tab parameter
             else
             {
-              view = rd_cfg_from_id(rd_regs()->view);
+              view = rd_cfg_from_id(rd_regs()->tab);
             }
             
             // rjf: determine if the target view is a lister (and thus already has a command)
@@ -16389,7 +16399,7 @@ rd_frame(void)
           {
             continue;
           }
-          RD_RegsScope(.view = tab->id)
+          RD_RegsScope(.tab = tab->id, .view = tab->id)
           {
             String8 eval_string = rd_expr_from_cfg(tab);
             String8 file_path = rd_file_path_from_eval_string(scratch.arena, eval_string);
