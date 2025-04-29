@@ -2241,6 +2241,7 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
         UI_ThemePattern *p = &theme->patterns[idx];
         U64 match_count = 0;
         B32 name_matches = 0;
+        B32 all_p_tags_in_key = 1;
         for EachIndex(p_tags_idx, p->tags.count)
         {
           B32 p_tag_in_key = 0;
@@ -2249,7 +2250,10 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
             String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
             if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
             {
-              name_matches = (key_tags_idx == tags.count);
+              if(key_tags_idx == tags.count)
+              {
+                name_matches = 1;
+              }
               p_tag_in_key = 1;
               match_count += 1;
               break;
@@ -2257,11 +2261,11 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
           }
           if(!p_tag_in_key)
           {
-            name_matches = 0;
+            all_p_tags_in_key = 0;
             break;
           }
         }
-        if(name_matches && match_count > best_match_count)
+        if(name_matches && all_p_tags_in_key && match_count > best_match_count)
         {
           pattern = p;
           best_match_count = match_count;

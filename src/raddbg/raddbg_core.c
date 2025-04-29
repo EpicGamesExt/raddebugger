@@ -3836,7 +3836,7 @@ rd_view_ui(Rng2F32 rect)
                 String8 group_cfg_name = {0};
                 {
                   E_IRTreeAndType block_irtree = selection_block->eval.irtree;
-                  E_TypeKey block_type_key = block_irtree.type_key;
+                  E_TypeKey block_type_key = e_type_key_unwrap(block_irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
                   E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
                   if(block_type_kind == E_TypeKind_Set)
                   {
