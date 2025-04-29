@@ -2069,82 +2069,23 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
       }break;
     }
     
-    //- rjf: if our currently-computed result is just a type, and we have
-    // a chained expression, then treat the first expression as a cast on
-    // the second.
-    if(!disallow_chained_casts && result.mode == E_Mode_Null && expr->next != &e_expr_nil)
-    {
-      // rjf: unpack
-      E_IRTreeAndType cast_type_tree = result;
-      E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, disallow_chained_casts, expr->next);
-      e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
-      E_TypeKey cast_type = cast_type_tree.type_key;
-      E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
-      U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
-      E_TypeKey casted_type = casted_tree.type_key;
-      E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
-      U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
-      U8 in_group  = e_type_group_from_kind(casted_type_kind);
-      U8 out_group = e_type_group_from_kind(cast_type_kind);
-      RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
-      
-      // rjf: bad conditions? -> error if applicable, exit
-      if(casted_tree.root->op == 0)
-      {
-        goto end_cast_gen;
-      }
-      else if(cast_type_kind == E_TypeKind_Null)
-      {
-        goto end_cast_gen;
-      }
-      else if(conversion_rule != RDI_EvalConversionKind_Noop &&
-              conversion_rule != RDI_EvalConversionKind_Legal)
-      {
-        String8 text = str8_lit("Unknown cast conversion rule.");
-        if(conversion_rule < RDI_EvalConversionKind_COUNT)
-        {
-          text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
-        }
-        e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
-        goto end_cast_gen;
-      }
-      
-      // rjf: generate casted result
-      {
-        E_IRNode *in_tree = e_irtree_resolve_to_value(arena, casted_tree.mode, casted_tree.root, casted_type);
-        E_IRNode *new_tree = in_tree;
-        if(conversion_rule == RDI_EvalConversionKind_Legal)
-        {
-          new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
-        }
-        if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
-        {
-          new_tree = e_irtree_trunc(arena, in_tree, cast_type);
-        }
-        result.root     = new_tree;
-        result.type_key = cast_type;
-        result.mode     = E_Mode_Value;
-      }
-      
-      end_cast_gen:;
-    }
-    
     //- rjf: check chained expressions for simple wrappers
     if(!disallow_chained_fastpaths)
     {
-      struct
+      local_persist struct
       {
         String8 shorthand;
         String8 full_name;
       }
       shorthand_lens_pair_table[] =
       {
-        {str8_lit("x"), str8_lit("hex")},
-        {str8_lit("b"), str8_lit("bin")},
-        {str8_lit("o"), str8_lit("oct")},
-        {str8_lit("d"), str8_lit("dec")},
+        {str8_lit_comp("x"), str8_lit_comp("hex")},
+        {str8_lit_comp("b"), str8_lit_comp("bin")},
+        {str8_lit_comp("o"), str8_lit_comp("oct")},
+        {str8_lit_comp("d"), str8_lit_comp("dec")},
       };
-      for(E_Expr *chained_expr = expr->next;
+      E_Expr *first_chained = expr->next;
+      for(E_Expr *chained_expr = first_chained;
           chained_expr != &e_expr_nil;
           chained_expr = chained_expr->next)
       {
