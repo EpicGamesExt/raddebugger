@@ -103,11 +103,12 @@ t_invoke_linkerf(char *fmt, ...)
 {
   Temp scratch = scratch_begin(0,0);
   va_list args;
-  va_strat(args, fmt);
+  va_start(args, fmt);
   String8 cmdline = push_str8fv(scratch.arena, fmt, args);
+  int exit_code = t_invoke_linker(cmdline);
   va_end(args);
   scratch_end(scratch);
-  return result;
+  return exit_code;
 }
 
 internal String8
@@ -180,6 +181,24 @@ t_coff_section_header_from_name(String8 string_table, COFF_SectionHeader *sectio
 
 ////////////////////////////////////////////////////////////////
 
+internal COFF_ObjSection *
+t_push_text_section(COFF_ObjWriter *obj_writer, String8 data)
+{
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".text"), COFF_SectionFlag_CntCode|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemExecute|COFF_SectionFlag_Align1Bytes, data);
+}
+
+internal COFF_ObjSection *
+t_push_data_section(COFF_ObjWriter *obj_writer, String8 data)
+{
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".data"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite, data);
+}
+
+internal COFF_ObjSection *
+t_push_rdata_section(COFF_ObjWriter *obj_writer, String8 data)
+{
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead, data);
+}
+
 internal T_Result
 t_simple_link_test(void)
 {
@@ -238,10 +257,10 @@ t_simple_link_test(void)
     // check section alignment
     for (U64 sect_idx = 0; sect_idx < pe.section_count; sect_idx += 1) {
       COFF_SectionHeader *sect_header = &section_table[sect_idx];
-      if (AlignPadPow2(text_section->fsize, file_align) != 0) {
+      if (AlignPadPow2(sect_header->fsize, file_align) != 0) {
         goto exit;
       }
-      if (AlignPadPow2(text_section->voff, virt_align) != 0) {
+      if (AlignPadPow2(sect_header->voff, virt_align) != 0) {
         goto exit;
       }
     }
@@ -313,27 +332,153 @@ t_abs_vs_weak(void)
     }
   }
 
-  int linker_exit_code = t_invoke_linker(str8_lit("/subsystem:console /entry:my_entry /out:a.exe abs.obj text.obj"));
-  if (linker_exit_code == 0) {
-    String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
-    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
-    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
-    String8             string_table  = str8_substr(exe, pe.string_table_range);
+  int abs_vs_weak_exit_code = t_invoke_linker(str8_lit("/subsystem:console /entry:my_entry /out:a.exe abs.obj text.obj"));
+  if (abs_vs_weak_exit_code != 0) {
+    goto exit;
+  }
 
-    COFF_SectionHeader *text_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
-    if (text_section) {
-      String8 text_data = str8_substr(exe, rng_1u64(text_section->foff, text_section->foff + text_section->fsize));
-      String8 inst      = str8_prefix(text_data, 2);
-      if (str8_match(inst, str8_array(text_code, 2), 0)) {
-        String8 imm          = str8_prefix(str8_skip(text_data, 2), 8);
-        U64     expected_imm = abs_value;
-        if (str8_match(imm, str8_struct(&expected_imm), 0)) {
-          result = T_Result_Pass;
-        }
+  int weak_vs_abs_exit_code = t_invoke_linker(str8_lit("/subsystem:console /entry:my_entry /out:a.exe text.obj abs.obj"));
+  if (weak_vs_abs_exit_code != 0) {
+    goto exit;
+  }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  COFF_SectionHeader *text_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  if (text_section) {
+    String8 text_data = str8_substr(exe, rng_1u64(text_section->foff, text_section->foff + text_section->fsize));
+    String8 inst      = str8_prefix(text_data, 2);
+    if (str8_match(inst, str8_array(text_code, 2), 0)) {
+      String8 imm          = str8_prefix(str8_skip(text_data, 2), 8);
+      U64     expected_imm = abs_value;
+      if (str8_match(imm, str8_struct(&expected_imm), 0)) {
+        result = T_Result_Pass;
       }
     }
   }
   
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_abs_vs_regular(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  String8 shared_symbol_name = str8_lit("foo");
+
+  U8 regular_payload[] = { 0xC0, 0xFF, 0xEE };
+  String8 regular_obj_name = str8_lit("regular.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(regular_payload));
+    coff_obj_writer_push_symbol_extern(obj_writer, shared_symbol_name, 0, data_sect);
+    String8 regular_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(regular_obj_name, regular_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 abs_obj_name = str8_lit("abs.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, shared_symbol_name, 0x1234, COFF_SymStorageClass_External);
+    String8 abs_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(abs_obj_name, abs_obj)) {
+      goto exit;
+    }
+  }
+
+  U8 entry_text[] = { 0xC3 };
+  String8 entry_obj_name = str8_lit("entry.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(entry_obj_name, entry_obj)) {
+      goto exit;
+    }
+  }
+
+  // TODO: validate that linker issues multiply defined symbol error
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe abs.obj regular.obj entry.obj");
+  if (linker_exit_code != 0) {
+    int regular_vs_abs_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe regular.obj abs.obj entry.obj");
+    if (regular_vs_abs_exit_code != 0) {
+      result = T_Result_Pass;
+    }
+  }
+  
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_abs_vs_common(void)
+{
+
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  String8 shared_symbol_name = str8_lit("foo");
+
+  String8 common_obj_name = str8_lit("common.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_common(obj_writer, shared_symbol_name, 321);
+    String8 common_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(common_obj_name, common_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 abs_obj_name = str8_lit("abs.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, shared_symbol_name, 0x1234, COFF_SymStorageClass_External);
+    String8 abs_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(abs_obj_name, abs_obj)) {
+      goto exit;
+    }
+  }
+
+  U8 entry_text[] = { 0xC3 };
+  String8 entry_obj_name = str8_lit("entry.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(entry_obj_name, entry_obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe abs.obj common.obj entry.obj");
+  if (linker_exit_code == 0) {
+    // TODO: validate that linker issues multiply defined symbol error
+    int common_vs_abs = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe common.obj abs.obj entry.obj");
+    if (common_vs_abs != 0) {
+      result = T_Result_Pass;
+    }
+  }
+
 exit:;
   scratch_end(scratch);
   return result;
@@ -467,6 +612,65 @@ t_find_merged_pdata(void)
   return result;
 }
 
+internal T_Result
+t_base_relocs(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  // main.obj
+  String8 entry_name = str8_lit("my_entry");
+  U64 mov_func_name64 = 2;
+  U64 mov_func_name32 = 16;
+  U8 main_text[] = {
+    0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // mov rax, func_name
+    0xff, 0xd0,                                                  // call rax
+    0x48, 0x31, 0xc0,                                            // xor rax, rax
+    0xb8, 0x00, 0x00, 0x00, 0x00,                                // mov eax, func_name
+    0xff, 0xd0,                                                  // call rax
+    0xc3                                                         // ret
+  };
+
+  // func.obj
+  String8 func_name   = str8_lit("foo");
+  U8      func_text[] = { 0xc3 };
+
+  String8 main_obj_name = str8_lit("main.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect  = t_push_text_section(obj_writer, str8_array_fixed(main_text));
+    COFF_ObjSymbol  *func_undef = coff_obj_writer_push_symbol_undef(obj_writer, func_name);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, mov_func_name64, func_undef, COFF_Reloc_X64_Addr64);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, mov_func_name32, func_undef, COFF_Reloc_X64_Addr32);
+    coff_obj_writer_push_symbol_extern(obj_writer, entry_name, 0, text_sect);
+    String8 main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(main_obj_name, main_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 func_obj_name = str8_lit("func.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(func_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, func_name, 0, text_sect);
+    String8 func_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(func_obj_name, func_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 out_name = str8_lit("a.exe");
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /dynamicbase /dll /largeaddressaware:no /out:%S %S %S", entry_name, out_name, main_obj_name, func_obj_name);
+  
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -484,7 +688,10 @@ entry_point(CmdLine *cmdline)
     { "simple_link_test",   t_simple_link_test  },
     { "undef_section",      t_undef_section     },
     { "abs_vs_weak",        t_abs_vs_weak       },
+    { "abs_vs_regular",     t_abs_vs_regular    },
+    { "abs_vs_common",      t_abs_vs_common     },
     { "find_merged_pdata",  t_find_merged_pdata },
+    //{ "base_relocs",        t_base_relocs       },
   };
 
   //
