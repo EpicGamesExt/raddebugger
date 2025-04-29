@@ -1516,7 +1516,14 @@ e_type_match(E_TypeKey l, E_TypeKey r)
       {
         default:
         {
-          result = 1;
+          if(e_type_kind_is_basic_or_enum(luk))
+          {
+            result = 1;
+          }
+          else
+          {
+            result = 0;
+          }
         }break;
         
         case E_TypeKind_Ptr:

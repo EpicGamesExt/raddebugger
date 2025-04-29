@@ -945,7 +945,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
       {
         E_Token next_token = e_token_at_it(it+1, &tokens);
         String8 next_token_string = str8_substr(text, next_token.range);
-        if(next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
+        if(next_token.range.min == token.range.max && next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
         {
           it += 2;
           resolution_qualifier = token_string;

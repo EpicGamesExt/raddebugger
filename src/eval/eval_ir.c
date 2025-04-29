@@ -1232,7 +1232,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_TypeKind c_type_kind = e_type_kind_from_key(c_type);
         E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-        E_TypeKey result_type = l_type;
         
         // rjf: bad conditions? -> error if applicable, exit
         if(c_tree.root->op == 0 || l_tree.root->op == 0 || r_tree.root->op == 0)
@@ -1243,12 +1242,37 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         {
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Conditional term must be an integer or boolean type.");
         }
-        else if(!e_type_match(l_type, r_type))
+        
+        // rjf: determine the resultant type - if the left/right types match, then we
+        // can just pick the left type, and defer 100% of our interpretation. however,
+        // if the types do *not* match, then we need to pre-emptively evaluate the
+        // condition, and pick the result based on that.
+        B32 ternary_is_dynamic = 0;
+        E_TypeKey result_type = l_type;
+        if(!e_type_match(l_type, r_type))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left and right terms must have matching types.");
+          ternary_is_dynamic = 1;
         }
         
-        // rjf: generate
+        // rjf: generate dynamic ternary
+        if(ternary_is_dynamic)
+        {
+          E_IRNode *c_value_tree = e_irtree_resolve_to_value(arena, c_tree.mode, c_tree.root, c_type);
+          E_OpList oplist = e_oplist_from_irtree(scratch.arena, c_value_tree);
+          String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+          E_Interpretation interpretation = e_interpret(bytecode);
+          if(interpretation.value.u64 != 0)
+          {
+            result = l_tree;
+          }
+          else
+          {
+            result = r_tree;
+          }
+        }
+        
+        // rjf: generate static ternary
+        else
         {
           E_IRNode *c_value_tree = e_irtree_resolve_to_value(arena, c_tree.mode, c_tree.root, c_type);
           E_IRNode *l_value_tree = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_type);

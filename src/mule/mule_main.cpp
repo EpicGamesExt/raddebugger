@@ -249,6 +249,13 @@ struct Discriminated_Union
   };
 };
 
+raddbg_auto_view_rule(Discriminated_Union,
+                      kind == Kind.First ? first :
+                      kind == Kind.Second ? second :
+                      kind == Kind.Third ? third :
+                      kind == Kind.Fourth ? fourth :
+                      $);
+
 struct Linked_List{
   Linked_List *next;
   Linked_List *prev;
