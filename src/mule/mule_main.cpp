@@ -1266,7 +1266,19 @@ struct Derived : Base
   int b;
   int a;
   virtual ~Derived() = default;
-  virtual void Foo() {a += 1;}
+  virtual void Foo()
+  {
+    x += 1;
+    y += 1;
+    y += 1;
+    z += 1;
+    z += 1;
+    z += 1;
+    a += 1;
+    a += 1;
+    a += 1;
+    a += 1;
+  }
 };
 
 struct DerivedA : Base

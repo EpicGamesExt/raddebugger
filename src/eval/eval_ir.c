@@ -2153,6 +2153,74 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
       }
     }
     
+    //- rjf: if the evaluated type has a virtual table pointer, then we must
+    // pre-emptively evaluate this ir tree, and determine a more resolved type.
+    {
+      E_TypeKey type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative);
+      if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(type_key)))
+      {
+        E_TypeKey ptee_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_All);
+        E_TypeKind ptee_kind = e_type_kind_from_key(ptee_key);
+        if(ptee_kind == E_TypeKind_Struct || 
+           ptee_kind == E_TypeKind_Class)
+        {
+          E_Type *ptee_type = e_type_from_key__cached(ptee_key);
+          B32 has_vtable = 0;
+          for(U64 idx = 0; idx < ptee_type->count; idx += 1)
+          {
+            if(ptee_type->members[idx].kind == E_MemberKind_VirtualMethod)
+            {
+              has_vtable = 1;
+              break;
+            }
+          }
+          if(has_vtable)
+          {
+            E_OpList oplist = e_oplist_from_irtree(scratch.arena, result.root);
+            String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+            E_Interpretation interpret = e_interpret(bytecode);
+            U64 ptr_vaddr = interpret.value.u64;
+            U64 addr_size = e_type_byte_size_from_key(type_key);
+            U64 class_base_vaddr = 0;
+            U64 vtable_vaddr = 0;
+            if(e_space_read(interpret.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
+               e_space_read(interpret.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+            {
+              Arch arch = e_base_ctx->primary_module->arch;
+              U32 rdi_idx = 0;
+              RDI_Parsed *rdi = 0;
+              U64 module_base = 0;
+              for(U64 idx = 0; idx < e_base_ctx->modules_count; idx += 1)
+              {
+                if(contains_1u64(e_base_ctx->modules[idx].vaddr_range, vtable_vaddr))
+                {
+                  arch = e_base_ctx->modules[idx].arch;
+                  rdi_idx = (U32)idx;
+                  rdi = e_base_ctx->modules[idx].rdi;
+                  module_base = e_base_ctx->modules[idx].vaddr_range.min;
+                  break;
+                }
+              }
+              if(rdi != 0)
+              {
+                U64 vtable_voff = vtable_vaddr - module_base;
+                U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
+                RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
+                if(global_var->link_flags & RDI_LinkFlag_TypeScoped)
+                {
+                  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
+                  RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+                  E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
+                  E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 1, 0);
+                  result.type_key = ptr_to_derived_type_key;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
     //- rjf: equip previous task's irtree
     if(t->overridden != 0)
     {
