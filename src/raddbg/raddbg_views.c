@@ -780,11 +780,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            rd_cmd(RD_CmdKind_IncFontSize);
+            rd_cmd(RD_CmdKind_IncViewFontSize);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            rd_cmd(RD_CmdKind_DecFontSize);
+            rd_cmd(RD_CmdKind_DecViewFontSize);
           }
         }
       }
@@ -2870,11 +2870,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            rd_cmd(RD_CmdKind_IncFontSize);
+            rd_cmd(RD_CmdKind_IncViewFontSize);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            rd_cmd(RD_CmdKind_DecFontSize);
+            rd_cmd(RD_CmdKind_DecViewFontSize);
           }
         }
       }

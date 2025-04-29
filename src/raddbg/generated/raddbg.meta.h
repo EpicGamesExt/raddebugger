@@ -99,8 +99,10 @@ RD_CmdKind_UpOneFrame,
 RD_CmdKind_DownOneFrame,
 RD_CmdKind_SelectEntity,
 RD_CmdKind_DeselectEntity,
-RD_CmdKind_IncFontSize,
-RD_CmdKind_DecFontSize,
+RD_CmdKind_IncWindowFontSize,
+RD_CmdKind_DecWindowFontSize,
+RD_CmdKind_IncViewFontSize,
+RD_CmdKind_DecViewFontSize,
 RD_CmdKind_OpenWindow,
 RD_CmdKind_WindowSettings,
 RD_CmdKind_CloseWindow,
@@ -675,7 +677,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[20];
 extern String8 rd_tab_fast_path_query_name_table[20];
-extern RD_VocabInfo rd_vocab_info_table[322];
+extern RD_VocabInfo rd_vocab_info_table[324];
 extern RD_NameSchemaInfo rd_name_schema_info_table[23];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];
