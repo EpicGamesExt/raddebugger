@@ -568,6 +568,21 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_U64);
     }
+    else if(Case("u128") || Case("uint128") || Case("uint128_t") || Case("U128"))
+    {
+      found = 1;
+      key = e_type_key_basic(E_TypeKind_U128);
+    }
+    else if(Case("u256") || Case("uint256") || Case("uint256_t") || Case("U256"))
+    {
+      found = 1;
+      key = e_type_key_basic(E_TypeKind_U256);
+    }
+    else if(Case("u512") || Case("uint512") || Case("uint512_t") || Case("U512"))
+    {
+      found = 1;
+      key = e_type_key_basic(E_TypeKind_U512);
+    }
     else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t") || Case("S8"))
     {
       found = 1;
@@ -602,6 +617,16 @@ e_leaf_type_from_name(String8 name)
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S64);
+    }
+    else if(Case("s256") || Case("i256") || Case("int256") || Case("int256_t") || Case("S256"))
+    {
+      found = 1;
+      key = e_type_key_basic(E_TypeKind_S256);
+    }
+    else if(Case("s512") || Case("i512") || Case("int512") || Case("int512_t") || Case("S512"))
+    {
+      found = 1;
+      key = e_type_key_basic(E_TypeKind_S512);
     }
     else if(Case("void"))
     {
@@ -786,7 +811,6 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
   //////////////////////////////
   //- rjf: parse chain of expressions
   //
-  E_Expr *possible_cast = &e_expr_nil;
   for(U64 chain_count = 0; it < it_opl && chain_count < max_chain_count;)
   {
     ////////////////////////////
@@ -895,14 +919,23 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
     }
     
     ////////////////////////////
-    //- rjf: parse atom
+    //- rjf: parse atom, gather cast tasks
     //
-    E_Expr *atom = &e_expr_nil;
-    String8 atom_implicit_member_name = {0};
-    if(it < it_opl)
+    typedef struct CastTask CastTask;
+    struct CastTask
     {
+      CastTask *next;
+      E_Expr *type_expr;
+    };
+    CastTask *first_cast = 0;
+    CastTask *last_cast = 0;
+    E_Expr *atom = &e_expr_nil;
+    for(B32 done = 0; !done && it < it_opl;)
+    {
+      E_Expr *possible_cast = atom;
       E_Token token = e_token_at_it(it, &tokens);
       String8 token_string = str8_substr(text, token.range);
+      done = 1;
       
       //////////////////////////
       //- rjf: consume resolution qualifiers
@@ -935,9 +968,6 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         atom = nested_parse.expr;
         it = nested_parse.last_token;
         
-        // rjf: this may have been a cast
-        possible_cast = atom;
-        
         // rjf: expect )
         E_Token close_paren_maybe = e_token_at_it(it, &tokens);
         String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
@@ -951,6 +981,9 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         {
           it += 1;
         }
+        
+        // rjf: this may have been a cast, so keep parsing after this
+        done = 0;
       }
       
       //////////////////////////
@@ -1094,10 +1127,30 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         it += 1;
       }
       
+      //////////////////////////
+      //- rjf: not a recognized atom pattern
+      //
+      else
+      {
+        done = 1;
+      }
+      
+      //////////////////////////
       //- rjf: upgrade atom w/ qualifier
+      //
       if(atom != &e_expr_nil && resolution_qualifier.size != 0)
       {
         atom->qualifier = resolution_qualifier;
+      }
+      
+      //////////////////////////
+      //- rjf: gather cast
+      //
+      if(possible_cast != &e_expr_nil && possible_cast != atom)
+      {
+        CastTask *t = push_array(scratch.arena, CastTask, 1);
+        t->type_expr = possible_cast;
+        SLLQueuePushFront(first_cast, last_cast, t);
       }
     }
     
@@ -1226,13 +1279,6 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         }
       }
       
-      // rjf: if this is a postfix unary, then we know the previous expression
-      // could not have been a cast.
-      if(is_postfix_unary)
-      {
-        possible_cast = &e_expr_nil;
-      }
-      
       // rjf: quit if this doesn't look like any patterns of postfix unary we know
       if(!is_postfix_unary)
       {
@@ -1241,16 +1287,17 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
     }
     
     ////////////////////////////
-    //- rjf: if we have an atom, and we have a potential cast expression, then remove
-    // the cast from the chain, and build a cast tree
-    if(atom != &e_expr_nil && possible_cast != &e_expr_nil && atom != possible_cast)
+    //- rjf: upgrade `atom` w/ previously parsed casts
+    //
+    if(atom != &e_expr_nil)
     {
-      E_Expr *casted = atom;
-      DLLRemove_NPZ(&e_expr_nil, result.expr, result.last_expr, possible_cast, next, prev);
-      atom = e_push_expr(arena, E_ExprKind_Cast, atom->location);
-      e_expr_push_child(atom, possible_cast);
-      e_expr_push_child(atom, casted);
-      possible_cast = &e_expr_nil;
+      for(CastTask *cast = first_cast; cast != 0; cast = cast->next)
+      {
+        E_Expr *rhs = atom;
+        atom = e_push_expr(arena, E_ExprKind_Cast, cast->type_expr->location);
+        e_expr_push_child(atom, cast->type_expr);
+        e_expr_push_child(atom, rhs);
+      }
     }
     
     ////////////////////////////
@@ -1302,7 +1349,6 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         // precedence
         if(binary_precedence != 0 && binary_precedence <= max_precedence)
         {
-          possible_cast = &e_expr_nil;
           E_Parse rhs_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it+1, it_opl), binary_precedence-1, 1);
           e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
           E_Expr *rhs = rhs_expr_parse.expr;
@@ -1335,7 +1381,6 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("?"), 0) && 13 <= max_precedence)
         {
           it += 1;
-          possible_cast = &e_expr_nil;
           
           // rjf: parse middle expression
           E_Parse middle_expr_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);

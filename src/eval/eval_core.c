@@ -847,7 +847,7 @@ e_irtree_from_bundle(E_CacheBundle *bundle)
     bundle->flags |= E_CacheBundleFlag_IRTree;
     E_IRTreeAndType parent = e_irtree_from_key(bundle->parent_key);
     E_Parse parse = e_parse_from_bundle(bundle);
-    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, 0, 0, 0, parse.expr);
+    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, 0, 0, parse.expr);
     E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->irtree.msgs);
     e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }
@@ -1326,7 +1326,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, 0, parse.expr);
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;

@@ -2466,7 +2466,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
       }
       
       // rjf: compute struct.base_ptr IR tree
-      result = e_push_irtree_and_type_from_expr(arena, 0, 0, 0, 0, idx_expr);
+      result = e_push_irtree_and_type_from_expr(arena, 0, 0, 1, idx_expr);
       
       scratch_end(scratch);
     }break;
