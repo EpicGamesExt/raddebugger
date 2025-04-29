@@ -2323,6 +2323,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {
     MD_NodePtrList schemas = rd_schemas_from_name(schema_name);
+    
     E_Expr *primary_expr = eval.expr;
     E_Expr **args = 0;
     U64 args_count = 0;
@@ -4747,7 +4748,7 @@ rd_view_ui(Rng2F32 rect)
                                   cell->eval.space.kind == E_SpaceKind_File ||
                                   cell->eval.space.kind == E_SpaceKind_Null)
                           {
-                            RD_RegsScope(.expr = e_string_from_expr(scratch.arena, cell->eval.expr, e_string_from_expr(scratch.arena, row->eval.expr, str8_zero())))
+                            RD_RegsScope(.expr = e_full_expr_string_from_key(scratch.arena, cell->eval.key))
                               rd_drag_begin(RD_RegSlot_Expr);
                           }
                         }

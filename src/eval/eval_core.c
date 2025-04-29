@@ -900,12 +900,54 @@ e_full_expr_string_from_key(Arena *arena, E_Key key)
   if(!e_key_match(bundle->parent_key, e_key_zero()))
   {
     Temp scratch = scratch_begin(&arena, 1);
+    
+    //- NOTE(rjf): any individual eval does not contain all information for
+    // reconstructing an entire "flattened" expression string. this is because
+    // one evaluation may be e.g. `$.x`, in the context of `foobar`, and so
+    // the full thing is evaluated as equivalent to `foobar.x`. In that case,
+    // `foobar` is referred to via the "parent key" of the evaluation for
+    // `$.x`.
+    //
+    // because parents may themselves have parents, e.g. `$.x` in the context
+    // of `$` in the context of `foobar`, we need to apply the parent
+    // expression strings to each parent.
+    //
+    // we do this in order, from oldest ancestor to the passed-in evaluation
+    // key, so we gather the fully-resolved string at the end of the chain.
+    
+    //- rjf: gather the entire chain of parents (in order of deepest ancestor -> shallowest)
     typedef struct ParentResolveTask ParentResolveTask;
     struct ParentResolveTask
     {
       ParentResolveTask *next;
-      E_Key key;
+      E_CacheBundle *bundle;
     };
+    ParentResolveTask start_task = {0, bundle};
+    ParentResolveTask *first_task = &start_task;
+    ParentResolveTask *last_task = first_task;
+    for(ParentResolveTask *t = first_task, *next = 0; t != 0; (t = next, next = 0))
+    {
+      if(!e_key_match(t->bundle->parent_key, e_key_zero()))
+      {
+        ParentResolveTask *task = push_array(scratch.arena, ParentResolveTask, 1);
+        SLLQueuePushFront(first_task, last_task, task);
+        task->bundle = e_cache_bundle_from_key(t->bundle->parent_key);
+        next = task;
+      }
+    }
+    
+    //- rjf: walk the chain of tasks, from deepest -> shallowest, producing a
+    // more fully resolved string at each step
+    String8 parent_string = {0};
+    for(ParentResolveTask *t = first_task; t != 0; t = t->next)
+    {
+      E_Parse parse = e_parse_from_bundle(t->bundle);
+      parent_string = e_string_from_expr(scratch.arena, parse.expr, parent_string);
+    }
+    
+    //- rjf: take final string as result
+    result = push_str8_copy(arena, parent_string);
+    
     scratch_end(scratch);
   }
   return result;
