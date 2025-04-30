@@ -117,7 +117,7 @@ t_invoke_linker_with_time_out(U64 time_out, String8 cmdline)
     if (os_handle_match(linker_handle, os_handle_zero())) {
       fprintf(stderr, "unable to start process: %.*s\n", str8_varg(g_linker));
     } else {
-      B32 was_joined = os_process_join_exit_code(linker_handle, os_now_microseconds() + time_out, &exit_code);
+      B32 was_joined = os_process_join_exit_code(linker_handle, time_out, &exit_code);
       if (!was_joined) {
         os_process_kill(linker_handle);
         exit_code = T_LINKER_TIME_OUT_EXIT_CODE;
@@ -234,7 +234,8 @@ t_coff_section_header_from_name(String8 string_table, COFF_SectionHeader *sectio
 
 typedef enum
 {
-  T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable = 0x4d3,
+  T_MsvcLinkExitCode_UnresolvedExternals         = 1120,
+  T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable = 1235,
 } T_MsvcLinkExitCode;
 
 internal COFF_ObjSection *
@@ -606,10 +607,76 @@ t_undef_weak(void)
   int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /out:a.exe %S %S %S %S", entry_symbol_name, weak_obj_name, entry_obj_name, ptr_obj_name, undef_obj_name);
 
   T_Linker link_ident = t_ident_linker();
-  if (link_ident == T_Linker_MSVC && linker_exit_code != T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable) {
+  if (linker_exit_code != 0) {
     goto exit;
   }
 
+  result = T_Result_Pass;
+
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_weak_tag(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  U32 weak_tag_expected_value = 0x12345678;
+  String8 weak_tag_obj_name = str8_lit("weak_tag.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSymbol *tag_symbol  = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("abs"), weak_tag_expected_value, COFF_SymStorageClass_Static);
+    COFF_ObjSymbol *weak_first  = coff_obj_writer_push_symbol_weak(obj_writer, str8_lit("strong_first"), COFF_WeakExt_SearchAlias, tag_symbol);
+    COFF_ObjSymbol *weak_second = coff_obj_writer_push_symbol_weak(obj_writer, str8_lit("strong_second"), COFF_WeakExt_SearchAlias, weak_first);
+
+    U8 sect_data[] = { 0, 0, 0, 0 };
+    COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_array_fixed(sect_data));
+    coff_obj_writer_section_push_reloc(obj_writer, sect, 0, weak_second, COFF_Reloc_X64_Addr32);
+
+    String8 weak_tag_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(weak_tag_obj_name, weak_tag_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 entry_name = str8_lit("my_entry");
+  U8 entry_text[] = { 0xC3 };
+  String8 entry_obj_name = str8_lit("entry.obj");
+  {
+    COFF_ObjWriter  *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect  = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, entry_name, 0, text_sect);
+    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(entry_obj_name, entry_obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe %S %S", weak_tag_obj_name, entry_obj_name);
+  if (linker_exit_code == 0) {
+    String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+    COFF_SectionHeader *data_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+    if (!data_section) {
+      goto exit;
+    }
+    if (data_section->vsize != 4) {
+      goto exit;
+    }
+    String8 data = str8_substr(exe, rng_1u64(data_section->foff, data_section->foff + data_section->vsize));
+    if (str8_match(data, str8_struct(&weak_tag_expected_value), 0)) {
+      result = T_Result_Pass;
+    }
+  }
 
 exit:;
   scratch_end(scratch);
@@ -788,10 +855,11 @@ t_weak_cycle(void)
     }
   }
 
-  int linker_exit_code = t_invoke_linker_with_time_outf(3 * 1000 * 1000, "/subsystem:console /entry:my_entry %S %S %S", entry_obj_name, ab_obj_name, ba_obj_name);
+  U64 time_out = os_now_microseconds() + 3 * 1000 * 1000; // give a generous 3 seconds
+  int linker_exit_code = t_invoke_linker_with_time_outf(time_out, "/subsystem:console /entry:my_entry %S %S %S", entry_obj_name, ab_obj_name, ba_obj_name);
   if (linker_exit_code != T_LINKER_TIME_OUT_EXIT_CODE) {
     if (t_ident_linker() == T_Linker_MSVC) {
-      if (linker_exit_code == 1120) {
+      if (linker_exit_code == T_MsvcLinkExitCode_UnresolvedExternals) {
         result = T_Result_Pass;
       }
     } else {
@@ -884,6 +952,7 @@ entry_point(CmdLine *cmdline)
     { "abs_vs_common",      t_abs_vs_common     },
     { "undef_weak",         t_undef_weak        },
     { "weak_cycle",         t_weak_cycle        },
+    { "weak_tag",           t_weak_tag          },
     { "find_merged_pdata",  t_find_merged_pdata },
     //{ "base_relocs",        t_base_relocs       },
   };
