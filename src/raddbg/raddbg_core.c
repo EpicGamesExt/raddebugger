@@ -4934,13 +4934,6 @@ rd_view_ui(Rng2F32 rect)
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
                             rd_set_autocomp_regs(.ui_key = sig.box->key, .string = input, .cursor = cell_edit_state->cursor);
-#if 0 // TODO(rjf): @cfg (autocompletion)
-                            rd_set_autocomp_lister_query(.ui_key       = sig.box->key,
-                                                         .off_px       = v2f32(0, dim_2f32(sig.box->rect).y),
-                                                         .string       = input,
-                                                         .cursor       = cell_edit_state->cursor,
-                                                         .lister_flags = cell_autocomp_flags);
-#endif
                           }
                         }
                       }
@@ -6631,7 +6624,7 @@ rd_window_frame(void)
         RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
         rd_cfg_new_replace(input, ws->autocomp_regs->string);
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_new_replacef(expr, "query:locals, query:procedures, query:types");
+        rd_cfg_new_replacef(expr, "query:locals, query:globals, query:thread_locals, query:procedures, query:types");
         
         // rjf: determine container size
         EV_BlockTree predicted_block_tree = {0};
