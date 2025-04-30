@@ -414,72 +414,6 @@ typedef enum RD_FontSlot
 RD_FontSlot;
 
 ////////////////////////////////
-//~ rjf: Lister Types
-
-typedef U32 RD_ListerItemFlags;
-enum
-{
-  RD_ListerItemFlag_IsNonCode      = (1<<0),
-  RD_ListerItemFlag_Bindings       = (1<<1),
-  RD_ListerItemFlag_Autocompletion = (1<<2),
-};
-
-typedef struct RD_ListerItem RD_ListerItem;
-struct RD_ListerItem
-{
-  RD_ListerItemFlags flags;
-  RD_IconKind icon_kind;
-  String8 string;
-  String8 kind_name;
-  String8 display_name;
-  String8 description;
-  String8 search_tags;
-  FuzzyMatchRangeList kind_name__matches;
-  FuzzyMatchRangeList display_name__matches;
-  FuzzyMatchRangeList description__matches;
-  U64 group;
-};
-
-typedef struct RD_ListerItemChunkNode RD_ListerItemChunkNode;
-struct RD_ListerItemChunkNode
-{
-  RD_ListerItemChunkNode *next;
-  RD_ListerItem *v;
-  U64 count;
-  U64 cap;
-};
-
-typedef struct RD_ListerItemChunkList RD_ListerItemChunkList;
-struct RD_ListerItemChunkList
-{
-  RD_ListerItemChunkNode *first;
-  RD_ListerItemChunkNode *last;
-  U64 chunk_count;
-  U64 total_count;
-};
-
-typedef struct RD_ListerItemArray RD_ListerItemArray;
-struct RD_ListerItemArray
-{
-  RD_ListerItem *v;
-  U64 count;
-};
-
-typedef struct RD_Lister RD_Lister;
-struct RD_Lister
-{
-  RD_Lister *next;
-  Arena *arena;
-  RD_Regs *regs;
-  UI_ScrollPt scroll_pt;
-  U64 selected_item_hash;
-  U8 input_buffer[1024];
-  U64 input_string_size;
-  TxtPt input_cursor;
-  TxtPt input_mark;
-};
-
-////////////////////////////////
 //~ rjf: Per-Window State
 
 typedef struct RD_WindowState RD_WindowState;
@@ -518,11 +452,6 @@ struct RD_WindowState
   B32 menu_bar_focused_on_press;
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
-  
-  // rjf: lister state
-  RD_Lister *top_query_lister;
-  RD_Lister *autocomp_lister;
-  U64 autocomp_lister_last_frame_idx;
   
   // rjf: drop-completion state
   Arena *drop_completion_arena;
@@ -1022,29 +951,10 @@ internal void rd_set_hover_eval(Vec2F32 pos, String8 string);
 ////////////////////////////////
 //~ rjf: Autocompletion Lister
 
-internal void rd_set_autocomp_regs_(RD_Regs *regs);
-#define rd_set_autocomp_regs(...) rd_set_autocomp_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
-
-////////////////////////////////
-//~ rjf: Lister Functions
-
-internal void rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkList *list, U64 cap, RD_ListerItem *item);
-#define rd_lister_item_chunk_list_push_new(arena, list, cap, ...) rd_lister_item_chunk_list_push((arena), (list), (cap), &(RD_ListerItem){.string = {0}, __VA_ARGS__})
-internal RD_ListerItemArray rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list);
-internal int rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b);
-internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
-internal RD_ListerItemArray rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, String8 needle, U64 cursor_off);
-internal U64 rd_hash_from_lister_item(RD_ListerItem *item);
-
 internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
-#if 0 // TODO(rjf): @cfg (lister)
-internal RD_ListerParams rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void rd_set_autocomp_lister_query_(RD_ListerParams *params);
-#define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})
-#endif
-internal void rd_set_autocomp_lister_query_(RD_Regs *regs);
-#define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
+internal void rd_set_autocomp_regs_(RD_Regs *regs);
+#define rd_set_autocomp_regs(...) rd_set_autocomp_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
