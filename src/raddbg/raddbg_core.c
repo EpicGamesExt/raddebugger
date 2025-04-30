@@ -6632,6 +6632,7 @@ rd_window_frame(void)
         {
           String8 expr = rd_expr_from_cfg(view);
           E_Eval list_eval = e_eval_from_string(expr);
+          ev_key_set_expansion(rd_view_eval_view(), ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
           predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), rd_view_query_input(), list_eval);
         }
         F32 row_height_px = ui_top_px_height();
@@ -6652,6 +6653,7 @@ rd_window_frame(void)
         }
         
         // rjf: push task
+        if(predicted_block_tree.total_row_count > 1)
         {
           FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
@@ -6740,6 +6742,7 @@ rd_window_frame(void)
           EV_BlockTree predicted_block_tree = {0};
           RD_RegsScope(.view = view->id, .tab = 0)
           {
+            ev_key_set_expansion(rd_view_eval_view(), ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
             predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
           }
           F32 row_height_px = ui_top_px_height();
@@ -6888,6 +6891,7 @@ rd_window_frame(void)
           F32 row_height_px = ui_top_font_size() * rd_setting_f32_from_name(str8_lit("row_height"));
           Vec2F32 content_rect_center = center_2f32(content_rect);
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
+          ev_key_set_expansion(rd_view_eval_view(), ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), rd_view_query_input(), query_eval);
           F32 query_width_px = floor_f32(content_rect_dim.x * 0.35f);
           F32 max_query_height_px = content_rect_dim.y*0.8f;
