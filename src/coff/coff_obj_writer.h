@@ -6,7 +6,8 @@ typedef enum
   COFF_SymbolLocation_Null,
   COFF_SymbolLocation_Section,
   COFF_SymbolLocation_Abs,
-  COFF_SymbolLocation_Undef
+  COFF_SymbolLocation_Undef,
+  COFF_SymbolLocation_Common,
 } COFF_SymbolLocationType;
 
 typedef struct COFF_SymbolLocation

@@ -1086,6 +1086,14 @@ os_process_join_exit_code(OS_Handle handle, U64 endt_us, int *exit_code_out)
   return result; 
 }
 
+internal B32
+os_process_kill(OS_Handle handle)
+{
+  HANDLE process = (HANDLE)handle.u64[0];
+  BOOL was_terminated = TerminateProcess(process, 999);
+  return was_terminated;
+}
+
 internal void
 os_process_detach(OS_Handle handle)
 {
