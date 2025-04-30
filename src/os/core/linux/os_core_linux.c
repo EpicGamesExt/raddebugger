@@ -786,6 +786,12 @@ os_process_detach(OS_Handle handle)
   NotImplemented;
 }
 
+internal B32
+os_process_kill(OS_Handle handle)
+{
+  NotImplemented;
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 

@@ -149,6 +149,16 @@ coff_obj_writer_push_symbol_sect(COFF_ObjWriter *obj_writer, String8 name, COFF_
   return s;
 }
 
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_common(COFF_ObjWriter *obj_writer, String8 name, U32 size)
+{
+  COFF_SymbolType type = {0};
+  COFF_SymbolLocation loc = {0};
+  loc.type = COFF_SymbolLocation_Common;
+  COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, size, loc, type, COFF_SymStorageClass_External);
+  return s;
+}
+
 internal COFF_ObjSection *
 coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data)
 {
@@ -264,9 +274,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
 
       U64 start_symbol_idx = symbol_idx;
       if (s->storage_class == COFF_SymStorageClass_WeakExternal) {
-        Assert(s->aux_symbols.node_count <= 1);
-
-        if (s->aux_symbols.node_count == 1) {
+        if (s->aux_symbols.node_count > 0) {
           COFF_ObjSymbolWeak *s_weak = (COFF_ObjSymbolWeak *)s->aux_symbols.first->string.str;
           COFF_SymbolWeakExt *d_weak = push_array(scratch.arena, COFF_SymbolWeakExt, 1);
           d_weak->tag_index       = s_weak->tag->idx;
@@ -276,9 +284,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
           symbol_idx += 1;
         }
       } else if (s->storage_class == COFF_SymStorageClass_Static) {
-        Assert(s->aux_symbols.node_count <= 1);
-
-        if (s->aux_symbols.node_count == 1) {
+        if (s->aux_symbols.node_count > 0) {
           Assert(s->loc.type == COFF_SymbolLocation_Section);
           COFF_ObjSection *sect = s->loc.u.section;
 
@@ -294,11 +300,16 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
           str8_list_push(scratch.arena, &symbol_table, str8_struct(d_sd));
           symbol_idx += 1;
         }
-      } else {
-        Assert(s->aux_symbols.node_count == 0);
       }
 
-      d->aux_symbol_count = (U8)(symbol_idx - start_symbol_idx);
+      U8 processed_aux_symbol_count = (U8)(symbol_idx - start_symbol_idx);
+
+      for (U64 aux_idx = processed_aux_symbol_count; aux_idx < s->aux_symbols.node_count; aux_idx += 1) {
+        COFF_Symbol16 *a = push_array(scratch.arena, COFF_Symbol16, 1);
+        str8_list_push(scratch.arena, &symbol_table, str8_struct(a));
+      }
+
+      d->aux_symbol_count = (U8)s->aux_symbols.node_count;
     }
   }
 
