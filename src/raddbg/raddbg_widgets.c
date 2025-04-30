@@ -387,9 +387,9 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
         dst_color = rgba_secondary;
       }
       dr_fstrs_push_new(arena, &result, &params, src_string, .color = src_color);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = rgba_secondary);
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+      dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &result, &params, dst_string, .color = dst_color);
     }
     

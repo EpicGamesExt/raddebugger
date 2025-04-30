@@ -6969,7 +6969,12 @@ rd_window_frame(void)
           if(input != &rd_nil_cfg)
           {
             String8 path_chopped = str8_chop_last_slash(input->first->string);
-            rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_Cfg *current_path = rd_cfg_child_from_string_or_alloc(user, str8_lit("current_path"));
+            if(!str8_match(current_path->first->string, path_chopped, 0))
+            {
+              rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+            }
           }
         }
       }
@@ -15100,30 +15105,33 @@ rd_frame(void)
           case RD_CmdKind_CompleteQuery:
           {
             // rjf: unpack params
+            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
             RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
             String8 cmd_name = rd_view_query_cmd();
+            
+            // rjf: find out if this view is a lister
+            B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
             
             // rjf: push command
             if(cmd_name.size != 0) RD_RegsScope()
             {
+              if(is_lister)
+              {
+                rd_regs()->view = ws->query_regs->view;
+              }
               rd_push_cmd(cmd_name, rd_regs());
             }
-            
-            // rjf: find out if this view is a lister
-            B32 is_lister = (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg);
             
             // rjf: complete query, either by closing the query popup, or closing the
             // tab-embedded query edit
             RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
             if(is_lister)
             {
-              RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
-              RD_WindowState *ws = rd_window_state_from_cfg(window);
               ws->query_is_active = 0;
             }
             else if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
             {
-              RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
               RD_ViewState *vs = rd_view_state_from_cfg(view);
               vs->query_is_selected = 0;
               vs->query_string_size = 0;
@@ -15355,6 +15363,13 @@ rd_frame(void)
           {
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
             rd_cfg_new(project, str8_lit("auto_view_rule"));
+          }break;
+          
+          //- rjf: file path maps
+          case RD_CmdKind_AddFilePathMap:
+          {
+            RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            rd_cfg_new(project, str8_lit("file_path_map"));
           }break;
           
           //- rjf: themes
