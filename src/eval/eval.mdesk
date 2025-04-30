@@ -91,9 +91,9 @@ E_ExprKindTable:
   { Address              UnaryPrefix         2        "&"               ""        ""        "" }
   
   { Cast                 Null                1        "("               ")"       ""        "" }
-  { Sizeof               UnaryPrefix         1        "sizeof"          "("       ")"       "" }
-  { Typeof               UnaryPrefix         1        "typeof"          "("       ")"       "" }
-  { ByteSwap             UnaryPrefix         1        "bswap"           "("       ")"       "" }
+  { Sizeof               UnaryPrefix         1        "sizeof "         ""        ""        "" }
+  { Typeof               UnaryPrefix         1        "typeof "         ""        ""        "" }
+  { ByteSwap             UnaryPrefix         1        "bswap "          ""        ""        "" }
   
   { Pos                  UnaryPrefix         2        "+"               ""        ""        "" }
   { Neg                  UnaryPrefix         2        "-"               ""        ""        "" }
