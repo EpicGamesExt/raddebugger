@@ -3211,6 +3211,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //- rjf: determine autocompletion string
   //
   String8 autocomplete_hint_string = {0};
+  if(is_focus_active)
   {
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
