@@ -2364,7 +2364,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                       top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min) * params->line_height_px,
                                       top_container_box->rect.x1,
                                       top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min + 1) * params->line_height_px);
-      R_Rect2DInst *inst = dr_rect(pad_2f32(drop_line_rect, 8.f), color, 0, 0, 4.f);
+      R_Rect2DInst *inst = dr_rect(drop_line_rect, color, 0, 0, 1.f);
       inst->colors[Corner_10] = inst->colors[Corner_11] = v4f32(color.x, color.y, color.z, 0);
     }
     ui_box_equip_draw_bucket(text_container_box, bucket);
