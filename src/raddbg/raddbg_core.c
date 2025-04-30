@@ -2620,6 +2620,13 @@ rd_view_ui(Rng2F32 rect)
       UI_Transparency(1-search_row_open_t)
       {
         UI_Signal sig = rd_cellf(&params, "###search");
+        // TODO(rjf)
+#if 0
+        if(ui_is_focus_active())
+        {
+          rd_set_autocomp_regs(.ui_key = sig.box->key, .string = str8(vs->query_buffer, vs->query_string_size), .cursor = vs->query_cursor);
+        }
+#endif
         if(ui_pressed(sig))
         {
           vs->query_is_selected = 1;
