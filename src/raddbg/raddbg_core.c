@@ -4266,25 +4266,27 @@ rd_view_ui(Rng2F32 rect)
                 if(ui_key_match(ui_drop_hot_key(), drop_target->key))
                 {
                   Vec2F32 drop_pos = sub_2f32(ui_mouse(), rect.p0);
+                  RD_RegSlot drag_slot = rd_state->drag_drop_regs_slot;
+                  RD_Regs *drag_regs = rd_state->drag_drop_regs;
                   
-                  //- rjf: obtain best fit for "previous row" drag/drops
+                  //- rjf: obtain best fit for target block & prev-row for this drag
                   EV_Block *watches_block = &ev_nil_block;
-                  U64 best_prev_row_num = 0;
+                  U64 best_prev_row_block_num = 0;
                   F32 best_prev_row_y = 0;
                   F32 best_prev_row_distance = inf32();
                   {
                     U64 local_row_idx = 0;
                     F32 row_y = 0;
-                    EV_Row *prev_row = 0;
-                    RD_WatchRowInfo *prev_row_info = 0;
                     for(EV_WindowedRowNode *row_node = rows.first; row_node != 0; row_node = row_node->next, local_row_idx += 1)
                     {
                       EV_Row *row = &row_node->row;
                       F32 row_height = row_height_px*row->visual_size;
                       RD_WatchRowInfo *row_info = &row_infos[local_row_idx];
                       E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
-                      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr &&
-                         block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches))
+                      if(drag_slot == RD_RegSlot_Expr &&
+                         block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) &&
+                         (drag_regs->cfg == 0 ||
+                          (drag_regs->cfg != row_info->group_cfg_child->id)))
                       {
                         if(watches_block == &ev_nil_block && row_y <= drop_pos.y && drop_pos.y <= row_y + row_height)
                         {
@@ -4294,55 +4296,60 @@ rd_view_ui(Rng2F32 rect)
                         if(row_distance <= best_prev_row_distance)
                         {
                           U64 row_num = ev_block_num_from_id(row->block, row->key.child_id);
-                          best_prev_row_num = row_num-1;
+                          best_prev_row_block_num = row_num-1;
                           best_prev_row_distance = row_distance;
                           best_prev_row_y = row_y;
                           watches_block = row->block;
                         }
                       }
                       row_y += row_height;
-                      prev_row = row;
-                      prev_row_info = row_info;
+                    }
+                  }
+                  
+                  //- rjf: unpack block/previous row info
+                  B32 drag_target_is_good = 0;
+                  RD_Cfg *drag_parent_cfg = &rd_nil_cfg;
+                  RD_Cfg *drag_prev_cfg = &rd_nil_cfg;
+                  if(watches_block != &ev_nil_block)
+                  {
+                    EV_Key prev_row_key = ev_key_make(ev_hash_from_key(watches_block->key), ev_block_id_from_num(watches_block, best_prev_row_block_num));
+                    U64 prev_row_num = ev_num_from_key(&block_ranges, prev_row_key);
+                    EV_Row *prev_row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, prev_row_num);
+                    RD_WatchRowInfo prev_row_info = rd_watch_row_info_from_row(scratch.arena, prev_row);
+                    drag_parent_cfg = rd_cfg_from_eval_space(watches_block->eval.space);
+                    drag_prev_cfg = prev_row_info.group_cfg_child;
+                    if(drag_regs->cfg == 0 || drag_prev_cfg->id != drag_regs->cfg)
+                    {
+                      drag_target_is_good = 1;
                     }
                   }
                   
                   //- rjf: drop
-                  if(rd_drag_drop())
+                  if(drag_target_is_good && rd_drag_drop() && drag_parent_cfg != &rd_nil_cfg)
                   {
-                    RD_RegSlot drop_slot = rd_state->drag_drop_regs_slot;
-                    RD_Regs *drop_regs = rd_state->drag_drop_regs;
-                    switch(drop_slot)
+                    switch(drag_slot)
                     {
                       default:{}break;
                       case RD_RegSlot_Expr:
-                      if(watches_block != &ev_nil_block)
                       {
-                        RD_Cfg *parent_cfg = rd_cfg_from_eval_space(watches_block->eval.space);
-                        EV_Key prev_row_key = ev_key_make(ev_hash_from_key(watches_block->key), ev_block_id_from_num(watches_block, best_prev_row_num));
-                        U64 prev_row_num = ev_num_from_key(&block_ranges, prev_row_key);
-                        EV_Row *prev_row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, prev_row_num);
-                        RD_WatchRowInfo prev_row_info = rd_watch_row_info_from_row(scratch.arena, prev_row);
-                        RD_Cfg *prev_cfg = prev_row_info.group_cfg_child;
-                        if(parent_cfg != &rd_nil_cfg)
+                        RD_Cfg *cfg = rd_cfg_from_id(drag_regs->cfg);
+                        if(cfg != &rd_nil_cfg)
                         {
-                          RD_Cfg *cfg = rd_cfg_from_id(drop_regs->cfg);
-                          if(cfg->parent == parent_cfg)
-                          {
-                            rd_cfg_unhook(cfg->parent, cfg);
-                          }
-                          else
-                          {
-                            cfg = rd_cfg_alloc();
-                            rd_cfg_equip_stringf(cfg, "watch");
-                            rd_cfg_new(cfg, rd_state->drag_drop_regs->expr);
-                          }
-                          rd_cfg_insert_child(parent_cfg, prev_cfg, cfg);
+                          rd_cfg_unhook(cfg->parent, cfg);
                         }
+                        if(cfg == &rd_nil_cfg)
+                        {
+                          cfg = rd_cfg_alloc();
+                          rd_cfg_equip_stringf(cfg, "watch");
+                          rd_cfg_new(cfg, drag_regs->expr);
+                        }
+                        rd_cfg_insert_child(drag_parent_cfg, drag_prev_cfg, cfg);
                       }break;
                     }
                   }
                   
                   //- rjf: draw drop position
+                  if(drag_target_is_good)
                   {
                     DR_Bucket *bucket = dr_bucket_make();
                     DR_BucketScope(bucket) UI_TagF("pop")
