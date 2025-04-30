@@ -343,13 +343,6 @@ internal EV_ExpandRule *ev_expand_rule_from_string(String8 string);
 internal EV_ExpandRule *ev_expand_rule_from_type_key(E_TypeKey type_key);
 
 ////////////////////////////////
-//~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
-
-#if 0 // TODO(rjf): @cfg (dynamic type resolution)
-internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
-#endif
-
-////////////////////////////////
 //~ rjf: Block Building
 
 internal EV_BlockTree ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root_eval);

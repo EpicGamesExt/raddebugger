@@ -9671,40 +9671,6 @@ rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off)
   return query;
 }
 
-internal String8
-rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off)
-{
-  // rjf: find start of path
-  U64 path_start_off = 0;
-  {
-    B32 single_quoted = 0;
-    B32 double_quoted = 0;
-    for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
-    {
-      if(input.str[off] == '\'')
-      {
-        single_quoted ^= 1;
-      }
-      if(input.str[off] == '\"')
-      {
-        double_quoted ^= 1;
-      }
-      if(char_is_space(input.str[off]) && !single_quoted && !double_quoted)
-      {
-        path_start_off = off+1;
-      }
-    }
-  }
-  
-  // rjf: form path
-  String8 path = str8_skip(str8_prefix(input, cursor_off), path_start_off);
-  if(path.size >= 1 && path.str[0] == '"')  { path = str8_skip(path, 1); }
-  if(path.size >= 1 && path.str[0] == '\'') { path = str8_skip(path, 1); }
-  if(path.size >= 1 && path.str[path.size-1] == '"')  { path = str8_chop(path, 1); }
-  if(path.size >= 1 && path.str[path.size-1] == '\'') { path = str8_chop(path, 1); }
-  return path;
-}
-
 internal void
 rd_set_autocomp_regs_(RD_Regs *regs)
 {
