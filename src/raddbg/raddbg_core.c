@@ -12518,6 +12518,7 @@ rd_frame(void)
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
                                                         .name = collection_name,
                                                         .flags = E_TypeFlag_StubSingleLineExpansion,
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(unattached_processes),
                                                         .expand =
                                                         {
                                                           .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),

@@ -574,7 +574,6 @@ E_TYPE_ACCESS_FUNCTION_DEF(control)
   return result;
 }
 
-
 ////////////////////////////////
 //~ rjf: Config Collection Type Hooks
 
@@ -1144,6 +1143,53 @@ struct RD_UnattachedProcessesAccel
   U64 infos_count;
 };
 
+E_TYPE_ACCESS_FUNCTION_DEF(unattached_processes)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_MemberAccess)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    // rjf: extract pid / name id from access string
+    U64 pid = 0;
+    U64 string_id = 0;
+    {
+      String8 pid_string = {0};
+      String8 name_id_string = {0};
+      U8 split_char = '$';
+      String8List parts = str8_split(scratch.arena, expr->first->next->string, &split_char, 1, 0);
+      if(parts.first != 0 && parts.first->next != 0)
+      {
+        pid_string = parts.first->string;
+        name_id_string = parts.first->next->string;
+        pid = u64_from_str8(pid_string, 16);
+        string_id = u64_from_str8(name_id_string, 16);
+      }
+    }
+    
+    // rjf: get machine entity from space
+    E_OpList oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree->root);
+    String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+    E_Interpretation interpret = e_interpret(bytecode);
+    CTRL_Entity *machine = rd_ctrl_entity_from_eval_space(interpret.space);
+    
+    // rjf: build evaluation for this unattached process
+    if(machine != &ctrl_entity_nil)
+    {
+      E_IRNode *value_irnode = e_push_irnode(arena, RDI_EvalOp_ConstU128);
+      value_irnode->value.u128.u64[0] = pid;
+      value_irnode->value.u128.u64[1] = string_id;
+      E_Space space = rd_eval_space_from_ctrl_entity(machine, RD_EvalSpaceKind_MetaUnattachedProcess);
+      result.root = e_irtree_set_space(arena, space, value_irnode);
+      result.type_key = e_type_key_basic(E_TypeKind_U128);
+      result.mode = E_Mode_Value;
+    }
+    
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
 {
   E_TypeExpandInfo info = {0};
@@ -1239,13 +1285,9 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes)
   E_TypeKey unattached_process_type = e_type_key_cons(.kind = E_TypeKind_U128, .name = str8_lit("unattached_process"));
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
-#if 0 // TODO(rjf): @eval
-    E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafValue, 0);
-    expr->type_key = unattached_process_type;
-    expr->value.u128.u64[0] = accel->infos[idx].pid;
-    expr->value.u128.u64[1] = e_id_from_string(accel->infos[idx].name);
-    expr->space = rd_eval_space_from_ctrl_entity(accel->machines[idx], RD_EvalSpaceKind_MetaUnattachedProcess);
-#endif
+    CTRL_Entity *machine = accel->machines[idx];
+    String8 string = ctrl_string_from_handle(arena, machine->handle);
+    evals_out[out_idx] = e_eval_wrapf(eval, "query:control.%S.unattached_processes.$%I64x$%I64x", string, accel->infos[idx].pid, e_id_from_string(accel->infos[idx].name));
   }
 }
 

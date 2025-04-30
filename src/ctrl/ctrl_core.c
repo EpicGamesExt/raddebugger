@@ -189,7 +189,7 @@ ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src)
 internal String8
 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle)
 {
-  String8 result = push_str8f(arena, "$0x%I64x$0x%I64x", handle.machine_id, handle.dmn_handle.u64[0]);
+  String8 result = push_str8f(arena, "$%I64x$%I64x", handle.machine_id, handle.dmn_handle.u64[0]);
   return result;
 }
 
@@ -203,14 +203,11 @@ ctrl_handle_from_string(String8 string)
     String8List parts = str8_split(scratch.arena, string, &split, 1, 0);
     if(parts.first && parts.first->next)
     {
-      CTRL_MachineID machine_id = 0;
+      CTRL_MachineID machine_id = u64_from_str8(parts.first->string, 16);
       DMN_Handle dmn_handle = {0};
-      if(try_u64_from_str8_c_rules(parts.first->string, &machine_id) &&
-         try_u64_from_str8_c_rules(parts.first->next->string, &dmn_handle.u64[0]))
-      {
-        handle.machine_id = machine_id;
-        handle.dmn_handle = dmn_handle;
-      }
+      dmn_handle.u64[0] = u64_from_str8(parts.first->next->string, 16);
+      handle.machine_id = machine_id;
+      handle.dmn_handle = dmn_handle;
     }
     scratch_end(scratch);
   }

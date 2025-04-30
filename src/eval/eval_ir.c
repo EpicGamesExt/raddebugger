@@ -1523,8 +1523,50 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_Space mapped_bytecode_space = zero_struct;
         String8 mapped_bytecode = {0};
         
+        //- rjf: try to map name as parent expression signifier ('$')
+        if(qualifier.size == 0 && !string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
+        {
+          E_IRTreeAndType *parent_irtree = parent;
+          if(disallow_autohooks)
+          {
+            for(E_IRTreeAndType *prev = parent_irtree->prev; prev != 0; prev = prev->prev)
+            {
+              parent_irtree = prev;
+            }
+          }
+          E_OpList oplist = e_oplist_from_irtree(arena, parent_irtree->root);
+          string_mapped = 1;
+          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+          mapped_bytecode_mode = parent_irtree->mode;
+          mapped_type_key = parent_irtree->type_key;
+          disallow_autohooks = 1;
+          E_MsgList msgs = e_msg_list_copy(arena, &parent_irtree->msgs);
+          e_msg_list_concat_in_place(&result.msgs, &msgs);
+        }
+        
+        //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
+        if(qualifier.size == 0 && !string_mapped && parent != 0 && parent->root != &e_irnode_nil)
+        {
+          for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
+          {
+            E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, prev, string);
+            E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, prev, disallow_autohooks, 1, access);
+            if(access_irtree.root != &e_irnode_nil)
+            {
+              string_mapped = 1;
+              E_OpList oplist = e_oplist_from_irtree(scratch.arena, access_irtree.root);
+              mapped_type_key = access_irtree.type_key;
+              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+              mapped_bytecode_mode = access_irtree.mode;
+              e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
+              break;
+            }
+          }
+        }
+        
         //- rjf: form namespaceified fallback versions of this lookup string
         String8List namespaceified_strings = {0};
+        if(!string_mapped)
         {
           E_Module *module = e_base_ctx->primary_module;
           RDI_Parsed *rdi = module->rdi;
@@ -1546,47 +1588,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             String8 namespaceified_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, string);
             str8_list_push_front(scratch.arena, &namespaceified_strings, namespaceified_string);
             last_past_scope_resolution_pos = past_next_scope_resolution_pos;
-          }
-        }
-        
-        //- rjf: try to map name as parent expression signifier ('$')
-        if(!string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
-        {
-          E_IRTreeAndType *parent_irtree = parent;
-          if(disallow_autohooks)
-          {
-            for(E_IRTreeAndType *prev = parent_irtree->prev; prev != 0; prev = prev->prev)
-            {
-              parent_irtree = prev;
-            }
-          }
-          E_OpList oplist = e_oplist_from_irtree(arena, parent_irtree->root);
-          string_mapped = 1;
-          mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-          mapped_bytecode_mode = parent_irtree->mode;
-          mapped_type_key = parent_irtree->type_key;
-          disallow_autohooks = 1;
-          E_MsgList msgs = e_msg_list_copy(arena, &parent_irtree->msgs);
-          e_msg_list_concat_in_place(&result.msgs, &msgs);
-        }
-        
-        //- rjf: try to map name as implicit access of overridden expression ('$.member_name', where the $. prefix is omitted)
-        if(!string_mapped && parent != 0 && parent->root != &e_irnode_nil)
-        {
-          for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
-          {
-            E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, prev, string);
-            E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, prev, disallow_autohooks, 1, access);
-            if(access_irtree.root != &e_irnode_nil)
-            {
-              string_mapped = 1;
-              E_OpList oplist = e_oplist_from_irtree(scratch.arena, access_irtree.root);
-              mapped_type_key = access_irtree.type_key;
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = access_irtree.mode;
-              e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
-              break;
-            }
           }
         }
         

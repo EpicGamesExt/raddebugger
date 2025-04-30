@@ -99,6 +99,10 @@
 //   useful, since different tabs can have a different set of expressions.
 //   `Watch` tabs can now also be labeled, so you can visually distinguish
 //   many `Watch` tabs more easily.
+// - **Evaluation drag/drop.** Evaluations in a watch tree can be dragged and
+//   dropped. This can be used to create new top-level rows in a `Watch` tab,
+//   or to drag evaluations between `Watch` tabs, or to drag evaluations to
+//   source or disassembly views and pin the evaluation to some location there.
 // - **Settings expressions.** Debugger settings have been upgraded to be
 //   stored as expressions, rather than being locked to a specific value.
 //   These expressions are evaluated, like any other expression, and their

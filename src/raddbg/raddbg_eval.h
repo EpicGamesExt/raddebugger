@@ -82,6 +82,7 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches);
 ////////////////////////////////
 //~ rjf: `unattached_processes` Type Hooks
 
+E_TYPE_ACCESS_FUNCTION_DEF(unattached_processes);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(unattached_processes);
 
