@@ -889,6 +889,10 @@ RD_CmdTable:    //               |        |              |                |     
   {Paste                          1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Clipboard             "paste"                       "Paste"                                       "Pastes the current contents of the clipboard."                                                                    ""                               ""                                                               }
   {InsertText                     0        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "insert_text"                 "Insert Text"                                 "Inserts the text that was used to cause this command."                                                            ""                               ""                                                               }
   
+  //- rjf: secondary navigation
+  {MoveNext                       1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_next"                   "Move Next"                                   "Moves the cursor or selection to the next element."                                                               ""                               ""                                                               }
+  {MovePrev                       1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "move_prev"                   "Move Previous"                               "Moves the cursor or selection to the previous element."                                                           ""                               ""                                                               }
+  
   //- rjf: code navigation
   {GoToLine                       1        1              0                0               ""                                               Cursor             null              Nil                     Null       0  0  0  0  1  0  1                                                           Null                  "goto_line"                   "Go To Line"                                  "Jumps to a line number in the current code file."                                                                 ""                               ""                                                               }
   {GoToAddress                    1        1              0                0               ""                                               Vaddr              null              Nil                     Null       0  0  0  0  1  0  1                                                           Null                  "goto_address"                "Go To Address"                               "Jumps to an address in the current memory or disassembly view."                                                   ""                               ""                                                               }
@@ -1148,6 +1152,10 @@ RD_DefaultBindingTable:
   { "paste"                       V         ctrl     0         0          }
   { "paste"                       Insert    0        shift     0          }
   { "insert_text"                 Null      0        0         0          }
+  
+  //- rjf: secondary navigation
+  { "move_next"                   Tab       0        0         0          }
+  { "move_prev"                   Tab       0        shift     0          }
   
   //- rjf: code navigation
   { "goto_line"                   G         ctrl     0         0          }

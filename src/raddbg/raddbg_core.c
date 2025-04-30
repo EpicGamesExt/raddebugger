@@ -4902,19 +4902,20 @@ rd_view_ui(Rng2F32 rect)
                           {
                             ui_pop_background_color();
                           }
-#if 0 // TODO(rjf): @cfg (autocompletion)
                           if(ui_is_focus_active() &&
                              selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
                              txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
+                            rd_set_autocomp_regs(.ui_key = sig.box->key, .string = input, .cursor = cell_edit_state->cursor);
+#if 0 // TODO(rjf): @cfg (autocompletion)
                             rd_set_autocomp_lister_query(.ui_key       = sig.box->key,
                                                          .off_px       = v2f32(0, dim_2f32(sig.box->rect).y),
                                                          .string       = input,
                                                          .cursor       = cell_edit_state->cursor,
                                                          .lister_flags = cell_autocomp_flags);
-                          }
 #endif
+                          }
                         }
                       }
                       
@@ -4993,7 +4994,8 @@ rd_view_ui(Rng2F32 rect)
                           }
                           
                           // rjf: this watch window is a lister? -> move cursor & accept
-                          if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg)
+                          if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg ||
+                             rd_cfg_child_from_string(view, str8_lit("expr_lister")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             rd_cmd(RD_CmdKind_Accept);
@@ -5502,14 +5504,6 @@ rd_store_view_expr_string(String8 string)
 }
 
 internal void
-rd_store_view_filter(String8 string)
-{
-  RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-  RD_Cfg *filter = rd_cfg_child_from_string_or_alloc(view, str8_lit("filter"));
-  rd_cfg_new_replace(filter, string);
-}
-
-internal void
 rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
@@ -5653,8 +5647,9 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->r = r_window_equip(ws->os);
     ws->ui = ui_state_alloc();
     ws->drop_completion_arena = arena_alloc();
-    ws->hover_eval_arena = arena_alloc();
     ws->query_arena = arena_alloc();
+    ws->hover_eval_arena = arena_alloc();
+    ws->autocomp_arena = arena_alloc();
     ws->last_dpi = os_dpi_from_window(ws->os);
     OS_Handle zero_monitor = {0};
     if(!os_handle_match(zero_monitor, preferred_monitor))
@@ -6585,10 +6580,9 @@ rd_window_frame(void)
       FloatingViewTask *next;
       RD_Cfg *view;
       Rng2F32 rect;
-      String8 view_name;
-      String8 expr;
       B32 is_focused;
       B32 is_anchored;
+      B32 only_secondary_navigation;
       B32 reset_open;
       UI_Signal signal; // NOTE(rjf): output, from build
       B32 pressed;
@@ -6600,7 +6594,57 @@ rd_window_frame(void)
     FloatingViewTask *last_floating_view_task = 0;
     RD_Font(RD_FontSlot_Code)
     {
-      //- rjf: try to add hover eval first
+      //- rjf: add autocompletion view task
+      if(ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index)
+      {
+        // rjf: build view
+        RD_Cfg *root = rd_immediate_cfg_from_keyf("autocomp_view_%I64x", window->id);
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
+        rd_cfg_child_from_string_or_alloc(view, str8_lit("expr_lister"));
+        RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
+        RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
+        rd_cfg_new_replace(input, ws->autocomp_regs->string);
+        RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+        rd_cfg_new_replacef(expr, "query:locals, query:procedures, query:types");
+        
+        // rjf: determine container size
+        EV_BlockTree predicted_block_tree = {0};
+        RD_RegsScope(.view = view->id, .tab = 0)
+        {
+          String8 expr = rd_expr_from_cfg(view);
+          E_Eval list_eval = e_eval_from_string(expr);
+          predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), rd_view_query_input(), list_eval);
+        }
+        F32 row_height_px = ui_top_px_height();
+        U64 max_row_count = (U64)floor_f32(ui_top_font_size()*30.f / row_height_px);
+        U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count - 1);
+        F32 width_px = floor_f32(40.f*ui_top_font_size());
+        F32 height_px = needed_row_count*row_height_px;
+        
+        // rjf: determine list top-level rect
+        Rng2F32 rect = r2f32p(0, 0, 0, 0);
+        if(!ui_key_match(ui_key_zero(), ws->autocomp_regs->ui_key))
+        {
+          UI_Box *anchor_box = ui_box_from_key(ws->autocomp_regs->ui_key);
+          rect.x0 = anchor_box->rect.x0;
+          rect.y0 = anchor_box->rect.y1;
+          rect.x1 = rect.x0 + width_px;
+          rect.y1 = rect.y0 + height_px;
+        }
+        
+        // rjf: push task
+        {
+          FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
+          SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
+          t->view          = view;
+          t->rect          = rect;
+          t->is_focused    = 1;
+          t->is_anchored   = 1;
+          t->only_secondary_navigation = 1;
+        }
+      }
+      
+      //- rjf: try to add hover eval
       {
         B32 build_hover_eval = (hover_eval_is_open && !rd_drag_is_active());
         
@@ -6668,15 +6712,8 @@ rd_window_frame(void)
           EV_ExpandRule *expand_rule = ev_expand_rule_from_type_key(hover_eval.irtree.type_key);
           RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(expand_rule->string);
           
-          // rjf: determine view name
-          String8 view_name = str8_lit("watch");
-          if(view_ui_rule != &rd_nil_view_ui_rule)
-          {
-            view_name = view_ui_rule->name;
-          }
-          
           // rjf: build view
-          RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view");
+          RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_view_%I64x", ws->cfg_id);
           RD_Cfg *view = rd_view_from_eval(root, hover_eval);
           rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
           
@@ -6715,8 +6752,6 @@ rd_window_frame(void)
             hover_eval_floating_view_task = t;
             t->view          = view;
             t->rect          = rect;
-            t->view_name     = view_name;
-            t->expr          = hover_eval_expr;
             t->is_focused    = ws->hover_eval_focused;
             t->is_anchored   = 1;
           }
@@ -6864,8 +6899,6 @@ rd_window_frame(void)
           query_floating_view_task = t;
           t->view          = view;
           t->rect          = rect;
-          t->view_name     = str8_lit("watch");
-          t->expr          = query_expr;
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
           t->reset_open    = reset_open;
@@ -6888,16 +6921,10 @@ rd_window_frame(void)
         // rjf: unpack
         RD_Cfg *view      = t->view;    
         Rng2F32 rect      = t->rect;
-        String8 view_name = t->view_name;
-        String8 expr      = t->expr;
         B32 is_focused    = t->is_focused;
         B32 is_anchored   = t->is_anchored;
+        B32 only_secondary_navigation = t->only_secondary_navigation;
         F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate, .reset = t->reset_open, .initial = 0.f);
-        
-        // rjf: build cfg tree
-        RD_Cfg *expr_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
-        rd_cfg_new_replace(expr_root, expr);
         
         // rjf: push view regs
         rd_push_regs(.view = view->id);
@@ -6916,6 +6943,9 @@ rd_window_frame(void)
         
         // rjf: build
         UI_Focus(is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+          UI_PermissionFlags(only_secondary_navigation ?
+                             UI_PermissionFlag_KeyboardSecondary|UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX|UI_PermissionFlag_ScrollY :
+                             UI_PermissionFlag_All)
         {
           // rjf: build top-level container box
           UI_Box *container = &ui_nil_box;
@@ -9601,6 +9631,22 @@ rd_set_hover_eval(Vec2F32 pos, String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: Autocompletion Lister
+
+internal void
+rd_set_autocomp_regs_(RD_Regs *regs)
+{
+  RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+  if(ws->autocomp_last_frame_index < rd_state->frame_index)
+  {
+    ws->autocomp_last_frame_index = rd_state->frame_index;
+    arena_clear(ws->autocomp_arena);
+    ws->autocomp_regs = rd_regs_copy(ws->autocomp_arena, regs);
+  }
+}
+
+////////////////////////////////
 //~ rjf: Lister Functions
 
 internal void
@@ -11503,8 +11549,9 @@ rd_frame(void)
             arena_release(lister->arena);
           }
           arena_release(ws->drop_completion_arena);
-          arena_release(ws->hover_eval_arena);
           arena_release(ws->query_arena);
+          arena_release(ws->hover_eval_arena);
+          arena_release(ws->autocomp_arena);
           arena_release(ws->arena);
           DLLRemove_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
           DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
@@ -15094,6 +15141,8 @@ rd_frame(void)
               RD_Cfg *window_query = rd_immediate_cfg_from_keyf("window_query_%p", window);
               rd_cfg_release_all_children(window_query);
               view = rd_cfg_child_from_string_or_alloc(window_query, str8_lit("watch"));
+              RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+              rd_cfg_new_replace(expr, rd_regs()->expr);
             }
             
             // rjf: non-floating -> embed in tab parameter
@@ -16242,6 +16291,30 @@ rd_frame(void)
             UI_Event evt = zero_struct;
             evt.kind   = UI_EventKind_Text;
             evt.string = rd_regs()->string;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          
+          //- rjf: secondary navigation
+          case RD_CmdKind_MoveNext:
+          {
+            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
+            evt.delta_unit = UI_EventDeltaUnit_Char;
+            evt.delta_2s32 = v2s32(+0, +1);
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_MovePrev:
+          {
+            RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
+            evt.delta_unit = UI_EventDeltaUnit_Char;
+            evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
         }

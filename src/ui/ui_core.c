@@ -565,14 +565,22 @@ ui_next_event(UI_Event **ev)
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_Keyboard) &&
-         (n->v.kind == UI_EventKind_Press ||
-          n->v.kind == UI_EventKind_Release) &&
+      if((n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release ||
+          n->v.kind == UI_EventKind_Navigate ||
+          n->v.kind == UI_EventKind_Edit) &&
          (n->v.key != OS_Key_LeftMouseButton &&
           n->v.key != OS_Key_MiddleMouseButton &&
           n->v.key != OS_Key_RightMouseButton))
       {
-        good = 0;
+        if((perms & UI_PermissionFlag_Keyboard) == UI_PermissionFlag_KeyboardSecondary)
+        {
+          good = !!(n->v.flags & UI_EventFlag_Secondary);
+        }
+        else if(!(perms & UI_PermissionFlag_Keyboard))
+        {
+          good = 0;
+        }
       }
       else if(!(perms & UI_PermissionFlag_Text) && (n->v.kind == UI_EventKind_Text))
       {

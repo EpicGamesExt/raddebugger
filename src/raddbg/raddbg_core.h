@@ -543,6 +543,11 @@ struct RD_WindowState
   U64 hover_eval_firstt_us;
   U64 hover_eval_lastt_us;
   
+  // rjf: autocompletion state
+  U64 autocomp_last_frame_index;
+  Arena *autocomp_arena;
+  RD_Regs *autocomp_regs;
+  
   // rjf: error state
   U8 error_buffer[512];
   U64 error_string_size;
@@ -988,7 +993,6 @@ internal Arena *rd_push_view_arena(void);
 
 //- rjf: storing view-attached state
 internal void rd_store_view_expr_string(String8 string);
-internal void rd_store_view_filter(String8 string);
 internal void rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target);
 internal void rd_store_view_scroll_pos(UI_ScrollPt2 pos);
 internal void rd_store_view_param(String8 key, String8 value);
@@ -1014,6 +1018,12 @@ internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_Stri
 //~ rjf: Hover Eval
 
 internal void rd_set_hover_eval(Vec2F32 pos, String8 string);
+
+////////////////////////////////
+//~ rjf: Autocompletion Lister
+
+internal void rd_set_autocomp_regs_(RD_Regs *regs);
+#define rd_set_autocomp_regs(...) rd_set_autocomp_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Lister Functions
