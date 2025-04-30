@@ -104,9 +104,11 @@ void optimized_struct_parameters_eval_tests(void);
 // NOTE(allen): Type Coverage Eval
 
 #include <vector>
+#include <memory>
 #include <stdint.h>
 
 raddbg_auto_view_rule(std::vector<?>, slice(_Mypair._Myval2));
+raddbg_auto_view_rule(std::unique_ptr<?>, _Mypair._Myval2);
 
 struct Basics
 {
@@ -1278,6 +1280,7 @@ struct Base
   int x;
   int y;
   int z;
+  Base(){x = 1; y = 2; z = 3;}
   virtual ~Base() = default;
   virtual void Foo() = 0;
 };
@@ -1308,6 +1311,7 @@ struct DerivedA : Base
 {
   float a;
   float b;
+  DerivedA() {a = 123.f; b = 123.f;}
   virtual void Foo() {a += 1;}
   virtual ~DerivedA() = default;
 };
@@ -1316,6 +1320,7 @@ struct DerivedB : Base
 {
   double c;
   double d;
+  DerivedB() {c = 123.0; d = 123.0;}
   virtual void Foo() {c += 1;}
   virtual ~DerivedB() = default;
 };
@@ -1555,6 +1560,21 @@ extended_type_coverage_eval_tests(void){
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
+    
+    std::unique_ptr<Base> ridiculous_cplusplus_base_class = std::make_unique<DerivedB>();
+    
+    std::vector<std::unique_ptr<Base>> ridiculous_cplusplus_array;
+    for(int i = 0; i < 1024; i += 1)
+    {
+      if((i & 1) == 1)
+      {
+        ridiculous_cplusplus_array.push_back(std::make_unique<DerivedA>());
+      }
+      else
+      {
+        ridiculous_cplusplus_array.push_back(std::make_unique<DerivedB>());
+      }
+    }
     
     Base *base_array[1024] = {0};
     for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)

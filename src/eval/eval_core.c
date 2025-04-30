@@ -1075,6 +1075,11 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
             continue;
           }
           U64 pattern_part_pos = str8_find_needle(type_string, scan_pos, n->string, 0);
+          if(pattern_part_pos > scan_pos && n == auto_hook_node->type_pattern_parts.first)
+          {
+            fits_this_type_string = 0;
+            break;
+          }
           if(pattern_part_pos >= type_string.size)
           {
             fits_this_type_string = 0;

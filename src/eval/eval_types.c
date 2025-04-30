@@ -2450,30 +2450,44 @@ E_TYPE_ACCESS_FUNCTION_DEF(slice)
     {
       Temp scratch = scratch_begin(&arena, 1);
       
-      // rjf: compute bytecode of struct
-      E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree->root);
-      String8 lhs_bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
-      
-      // rjf: build expression tree to access base pointer's member, then do an index
-      E_Expr *idx_expr = e_push_expr(scratch.arena, E_ExprKind_ArrayIndex, 0);
-      E_Expr *dot_expr = e_push_expr(scratch.arena, E_ExprKind_MemberAccess, 0);
-      E_Expr *lhs_expr = e_push_expr(scratch.arena, E_ExprKind_LeafBytecode, 0);
-      E_Expr *base_ptr_expr = e_push_expr(scratch.arena, E_ExprKind_LeafIdentifier, 0);
-      e_expr_push_child(dot_expr, lhs_expr);
-      e_expr_push_child(dot_expr, base_ptr_expr);
-      e_expr_push_child(idx_expr, dot_expr);
-      e_expr_push_child(idx_expr, e_expr_ref(scratch.arena, expr->first->next));
+      // rjf: compute ir tree for struct base
+      E_IRNode *struct_base_tree = &e_irnode_nil;
       {
-        lhs_expr->mode = lhs_irtree->mode;
-        lhs_expr->bytecode = lhs_bytecode;
-        lhs_expr->type_key = e_type_key_unwrap(lhs_irtree->type_key, E_TypeUnwrapFlag_Lenses);
-      }
-      {
-        base_ptr_expr->string = ext->base_ptr_member->name;
+        E_OpList lhs_oplist = e_oplist_from_irtree(scratch.arena, lhs_irtree->root);
+        String8 lhs_bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
+        struct_base_tree = e_irtree_bytecode_no_copy(arena, lhs_bytecode);
+        if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(lhs_irtree->type_key, E_TypeUnwrapFlag_AllDecorative))))
+        {
+          struct_base_tree = e_irtree_resolve_to_value(arena, lhs_irtree->mode, lhs_irtree->root, lhs_irtree->type_key);
+        }
       }
       
-      // rjf: compute struct.base_ptr IR tree
-      result = e_push_irtree_and_type_from_expr(arena, 0, 0, 1, idx_expr);
+      // rjf: compute ir tree for base pointer value calculation
+      E_IRNode *base_ptr_tree = &e_irnode_nil;
+      if(struct_base_tree != &e_irnode_nil)
+      {
+        base_ptr_tree = struct_base_tree;
+        if(ext->base_ptr_member->off != 0)
+        {
+          base_ptr_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, struct_base_tree, e_irtree_const_u(arena, ext->base_ptr_member->off));
+        }
+        base_ptr_tree = e_irtree_mem_read_type(arena, base_ptr_tree, ext->base_ptr_member->type_key);
+      }
+      
+      // rjf: compute ir tree for adding to the base ptr member
+      E_IRNode *idxed_base_tree = &e_irnode_nil;
+      if(base_ptr_tree != &e_irnode_nil)
+      {
+        E_IRTreeAndType idx_irtree = e_push_irtree_and_type_from_expr(arena, 0, 0, 1, expr->first->next);
+        E_IRNode *idx_root = e_irtree_resolve_to_value(arena, idx_irtree.mode, idx_irtree.root, idx_irtree.type_key);
+        E_IRNode *off_root = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, idx_root, e_irtree_const_u(arena, e_type_byte_size_from_key(e_type_key_unwrap(ext->base_ptr_member->type_key, E_TypeUnwrapFlag_All))));
+        idxed_base_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, base_ptr_tree, off_root);
+      }
+      
+      // rjf: form final result
+      result.root = idxed_base_tree;
+      result.type_key = e_type_key_unwrap(ext->base_ptr_member->type_key, E_TypeUnwrapFlag_All);
+      result.mode = E_Mode_Offset;
       
       scratch_end(scratch);
     }break;
@@ -2492,7 +2506,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(slice)
     }
     else if(accel->opl_ptr_member != 0 && accel->base_ptr_member != 0)
     {
-      count = e_value_eval_from_eval(e_eval_wrapf(eval, "$.%S - $.%S", accel->opl_ptr_member->name, accel->base_ptr_member->name)).value.u64;
+      count = e_value_eval_from_eval(e_eval_wrapf(eval, "raw($.%S) - raw($.%S)", accel->opl_ptr_member->name, accel->base_ptr_member->name)).value.u64;
     }
   }
   E_TypeExpandInfo info = {0, count};

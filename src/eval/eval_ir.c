@@ -457,9 +457,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
         E_IRNode *new_tree = l.root;
         E_TypeKey new_tree_type = r_type;
         E_Mode mode = l.mode;
-        if(l_restype_kind == E_TypeKind_Ptr ||
-           l_restype_kind == E_TypeKind_LRef ||
-           l_restype_kind == E_TypeKind_RRef)
+        if(e_type_kind_is_pointer_or_ref(l_restype_kind))
         {
           new_tree = e_irtree_resolve_to_value(arena, l.mode, new_tree, l_restype);
           if(l.mode != E_Mode_Null)
@@ -627,7 +625,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
       {
         // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, lhs);
+        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, parent, 0, 1, lhs);
         e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         
         // rjf: try all IR trees in chain
@@ -831,7 +829,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_Expr *r_expr = expr->first;
         E_TypeKey r_type = zero_struct;
         E_Space space = r_expr->space;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, 1, 1, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         r_type = r_tree.type_key;
         
@@ -859,7 +857,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
       {
         // rjf: evaluate operand tree
         E_Expr *r_expr = expr->first;
-        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, r_expr);
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, 1, 1, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
         // rjf: fill output
