@@ -6846,6 +6846,10 @@ rd_window_frame(void)
           }
         }
         
+        // rjf: store expression
+        RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+        rd_cfg_new_replace(expr, query_expr);
+        
         // rjf: evaluate query expression
         E_Eval query_eval = e_eval_from_string(query_expr);
         
@@ -13045,7 +13049,9 @@ rd_frame(void)
             // rjf: command has required query -> prep query
             else
             {
-              rd_cmd(RD_CmdKind_PushQuery, .do_implicit_root = 1, .do_lister = info->query.expr.size != 0);
+              rd_cmd(RD_CmdKind_PushQuery,
+                     .do_implicit_root = 1,
+                     .do_lister = info->query.expr.size != 0);
             }
           }break;
           
