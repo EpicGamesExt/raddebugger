@@ -607,11 +607,15 @@ rd_cfg_array_from_list(Arena *arena, RD_CfgList *list)
 }
 
 internal RD_CfgList
-rd_cfg_tree_list_from_string(Arena *arena, String8 string)
+rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string)
 {
   RD_CfgList result = {0};
   Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: parse the string as metadesk
   MD_Node *root = md_tree_from_string(scratch.arena, string);
+  
+  //- rjf: iterate the top-level metadesk trees, generate new cfg trees for each
   for MD_EachNode(tln, root->first)
   {
     RD_Cfg *dst_root_n = &rd_nil_cfg;
@@ -619,14 +623,39 @@ rd_cfg_tree_list_from_string(Arena *arena, String8 string)
     MD_NodeRec rec = {0};
     for(MD_Node *src_n = tln; !md_node_is_nil(src_n); src_n = rec.next)
     {
+      // rjf: lookup schema for this string
+      MD_Node *schema = &md_nil_node;
+      {
+        MD_NodePtrList schemas = rd_schemas_from_name(dst_active_parent_n->parent->string);
+        for(MD_NodePtrNode *n = schemas.first; n != 0 && schema == &md_nil_node; n = n->next)
+        {
+          schema = md_child_from_string(n->v, dst_active_parent_n->string, 0);
+        }
+      }
+      
+      // rjf: extract & transform metadesk node's string (it is raw textual data, so we need to
+      // go escaped -> raw, and derelativize paths)
+      String8 dst_n_string = {0};
+      {
+        String8 src_n_string = src_n->string;
+        String8 src_n_string__raw = raw_from_escaped_str8(scratch.arena, src_n_string);
+        if(str8_match(schema->first->string, str8_lit("path"), 0) &&
+           !md_node_has_tag(schema->first, str8_lit("absolute"), 0))
+        {
+          src_n_string__raw = path_absolute_dst_from_relative_dst_src(scratch.arena, src_n_string__raw, root_path);
+        }
+        dst_n_string = src_n_string__raw;
+      }
+      
+      // rjf: allocate, fill, & insert new cfg for this metadesk node
       RD_Cfg *dst_n = rd_cfg_alloc();
-      String8 src_n_string = src_n->string;
-      String8 src_n_string__raw = raw_from_escaped_str8(scratch.arena, src_n_string);
-      rd_cfg_equip_string(dst_n, src_n_string__raw);
+      rd_cfg_equip_string(dst_n, dst_n_string);
       if(dst_active_parent_n != &rd_nil_cfg)
       {
         rd_cfg_insert_child(dst_active_parent_n, dst_active_parent_n->last, dst_n);
       }
+      
+      // rjf: recurse
       rec = md_node_rec_depth_first_pre(src_n, tln);
       if(dst_active_parent_n == &rd_nil_cfg)
       {
@@ -648,7 +677,7 @@ rd_cfg_tree_list_from_string(Arena *arena, String8 string)
 }
 
 internal String8
-rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg)
+rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strings = {0};
@@ -658,49 +687,92 @@ rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg)
     {
       NestTask *next;
       RD_Cfg *cfg;
+      MD_Node *schema;
       B32 is_simple;
     };
     NestTask *top_nest_task = 0;
     RD_CfgRec rec = {0};
     for(RD_Cfg *c = cfg; c != &rd_nil_cfg; c = rec.next)
     {
+      // rjf: look up parent's schemas
+      MD_NodePtrList schemas = {0};
+      if(top_nest_task != 0)
+      {
+        RD_Cfg *parent = top_nest_task->cfg;
+        schemas = rd_schemas_from_name(parent->string);
+      }
+      
+      // rjf: look up child schema
+      MD_Node *c_schema = &md_nil_node;
+      for(MD_NodePtrNode *n = schemas.first; n != 0 && c_schema == &md_nil_node; n = n->next)
+      {
+        c_schema = md_child_from_string(n->v, c->string, 0);
+      }
+      
       // rjf: push name of this node
       if(c->string.size != 0 || c->first == &rd_nil_cfg)
       {
+        // rjf: extract the textualized form for this string (we may need to escape / relativize)
+        String8 c_serialized_string = c->string;
+        {
+          MD_Node *c_schema = &md_nil_node;
+          if(top_nest_task != 0)
+          {
+            c_schema = top_nest_task->schema;
+          }
+          
+          // rjf: paths -> relativize
+          if(str8_match(c_schema->first->string, str8_lit("path"), 0) &&
+             !md_node_has_tag(c_schema->first, str8_lit("absolute"), 0))
+          {
+            String8 path_absolute = c->string;
+            String8 path_relative = path_relative_dst_from_absolute_dst_src(arena, path_absolute, root_path);
+            c_serialized_string = path_relative;
+          }
+          
+          // rjf: all strings -> escape
+          c_serialized_string = escaped_from_raw_str8(arena, c_serialized_string);
+        }
+        
+        // rjf: generate all strings for this node's string
         String8List c_name_strings = {0};
-        B32 name_can_be_pushed_standalone = 0;
         {
-          Temp temp = temp_begin(scratch.arena);
-          MD_TokenizeResult c_name_tokenize = md_tokenize_from_text(temp.arena, c->string);
-          name_can_be_pushed_standalone = (c_name_tokenize.tokens.count == 1 && c_name_tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|
-                                                                                                                     MD_TokenFlag_Numeric|
-                                                                                                                     MD_TokenFlag_StringLiteral|
-                                                                                                                     MD_TokenFlag_Symbol));
-          temp_end(temp);
+          B32 name_can_be_pushed_standalone = 0;
+          {
+            Temp temp = temp_begin(scratch.arena);
+            MD_TokenizeResult c_name_tokenize = md_tokenize_from_text(temp.arena, c_serialized_string);
+            name_can_be_pushed_standalone = (c_name_tokenize.tokens.count == 1 && c_name_tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|
+                                                                                                                       MD_TokenFlag_Numeric|
+                                                                                                                       MD_TokenFlag_StringLiteral|
+                                                                                                                       MD_TokenFlag_Symbol));
+            temp_end(temp);
+          }
+          if(name_can_be_pushed_standalone)
+          {
+            str8_list_push(scratch.arena, &c_name_strings, c_serialized_string);
+          }
+          else
+          {
+            str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
+            str8_list_push(scratch.arena, &c_name_strings, c_serialized_string);
+            str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
+          }
         }
-        if(name_can_be_pushed_standalone)
-        {
-          str8_list_push(scratch.arena, &c_name_strings, c->string);
-        }
-        else
-        {
-          String8 c_name_escaped = escaped_from_raw_str8(scratch.arena, c->string);
-          str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
-          str8_list_push(scratch.arena, &c_name_strings, c_name_escaped);
-          str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
-        }
+        
+        // rjf: if we're in a simple nesting task, then just break children by space
         if(top_nest_task != 0 && top_nest_task->is_simple)
         {
           str8_list_push(scratch.arena, &strings, str8_lit(" "));
         }
+        
+        // rjf: join c's strings with main string list
         str8_list_concat_in_place(&strings, &c_name_strings);
       }
       
       // rjf: grab next recursion
       rec = rd_cfg_rec__depth_first(cfg, c);
       
-      // rjf: determine if this node is simple, and can be encoded on a single line -
-      // if so, push a new nesting task onto the stack
+      // rjf: push a new nesting task before descending to children
       if(c->first != &rd_nil_cfg)
       {
         B32 is_simple_children_list = 1;
@@ -714,6 +786,7 @@ rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg)
         }
         NestTask *task = push_array(scratch.arena, NestTask, 1);
         task->cfg = c;
+        task->schema = c_schema;
         task->is_simple = is_simple_children_list;
         SLLStackPush(top_nest_task, task);
       }
@@ -5717,7 +5790,7 @@ rd_window_frame(void)
       {
         ThemeTask *t = push_array(scratch.arena, ThemeTask, 1);
         SLLQueuePushFront(first_task, last_task, t);
-        t->tree = md_tree_from_string(scratch.arena, rd_string_from_cfg_tree(scratch.arena, n->v));
+        t->tree = md_tree_from_string(scratch.arena, rd_string_from_cfg_tree(scratch.arena, str8_zero(), n->v));
       }
     }
     
@@ -12707,7 +12780,7 @@ rd_frame(void)
       for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
       {
         String8 text = text_n->string;
-        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, text);
+        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, str8_zero(), text);
         String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
         for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
         {
@@ -13098,7 +13171,7 @@ rd_frame(void)
             RD_CfgList file_cfg_list = {0};
             if(file_is_okay)
             {
-              file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_data);
+              file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_path, file_data);
             }
             
             //- rjf: store path
@@ -13221,7 +13294,7 @@ rd_frame(void)
             str8_list_pushf(scratch.arena, &strings, "// raddbg %s %S file\n\n", BUILD_VERSION_STRING_LITERAL, bucket_name);
             for(RD_Cfg *child = tree_root->first; child != &rd_nil_cfg; child = child->next)
             {
-              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, child));
+              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, child));
             }
             String8 data = str8_list_join(scratch.arena, &strings, 0);
             B32 temp_write_good = os_write_data_to_file_path(temp_path, data);

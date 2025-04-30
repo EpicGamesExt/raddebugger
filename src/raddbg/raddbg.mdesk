@@ -112,6 +112,8 @@ RD_VocabTable:
   {recent_file          _                           "Recent File"               _                     FileOutline                                    }
   {src                  _                           "Source"                    _                     Null                                           }
   {dst                  _                           "Destination"               _                     Null                                           }
+  {source               _                           "Source"                    _                     Null                                           }
+  {dest                 _                           "Destination"               _                     Null                                           }
   {conversion_task      _                           "Conversion Task"           _                     Null                                           }
   {conversion_fail      _                           "Conversion Fail"           _                     Null                                           }
   {lang                 _                           "Language"                  _                     Null                                           }
@@ -581,7 +583,7 @@ RD_VocabTable:
   //- rjf: file path maps
   {
     file_path_map,
-    ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source':path, 'dest':path}```,
+    ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @absolute path, 'dest': @absolute path}```,
   }
   
   //- rjf: auto view rules

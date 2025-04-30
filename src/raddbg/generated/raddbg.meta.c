@@ -52,7 +52,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[325] =
+RD_VocabInfo rd_vocab_info_table[327] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -87,6 +87,8 @@ RD_VocabInfo rd_vocab_info_table[325] =
 {str8_lit_comp("recent_file"), str8_lit_comp("recent_files"), str8_lit_comp("Recent File"), str8_lit_comp("Recent Files"), RD_IconKind_FileOutline},
 {str8_lit_comp("src"), str8_lit_comp("srcs"), str8_lit_comp("Source"), str8_lit_comp("Sources"), RD_IconKind_Null},
 {str8_lit_comp("dst"), str8_lit_comp("dsts"), str8_lit_comp("Destination"), str8_lit_comp("Destinations"), RD_IconKind_Null},
+{str8_lit_comp("source"), str8_lit_comp("sources"), str8_lit_comp("Source"), str8_lit_comp("Sources"), RD_IconKind_Null},
+{str8_lit_comp("dest"), str8_lit_comp("dests"), str8_lit_comp("Destination"), str8_lit_comp("Destinations"), RD_IconKind_Null},
 {str8_lit_comp("conversion_task"), str8_lit_comp("conversion_tasks"), str8_lit_comp("Conversion Task"), str8_lit_comp("Conversion Tasks"), RD_IconKind_Null},
 {str8_lit_comp("conversion_fail"), str8_lit_comp("conversion_fails"), str8_lit_comp("Conversion Fail"), str8_lit_comp("Conversion Fails"), RD_IconKind_Null},
 {str8_lit_comp("lang"), str8_lit_comp("langs"), str8_lit_comp("Language"), str8_lit_comp("Languages"), RD_IconKind_Null},
@@ -398,7 +400,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[23] =
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint)\nx:\n{\n  'label':            code_string,\n  'condition':        code_string,\n  'source_location':  string,\n  'address_location': code_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       code_string,\n  'source_location':  string,\n  'address_location': code_string,\n}\n")},
-{str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source':path, 'dest':path}")},
+{str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @absolute path, 'dest': @absolute path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("@collection_commands(add_auto_view_rule) @row_commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}")},
 {str8_lit_comp("recent_project"), str8_lit_comp("x:{'path':path}")},
 {str8_lit_comp("recent_file"), str8_lit_comp("x:{'path':path}")},

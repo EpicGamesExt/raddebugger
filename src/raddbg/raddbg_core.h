@@ -865,8 +865,8 @@ internal RD_Cfg *rd_cfg_child_from_string_or_parent(RD_Cfg *parent, String8 stri
 internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
 internal RD_CfgArray rd_cfg_array_from_list(Arena *arena, RD_CfgList *list);
-internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
-internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
+internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string);
+internal String8 rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
 internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
 internal void rd_cfg_list_push_front(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);

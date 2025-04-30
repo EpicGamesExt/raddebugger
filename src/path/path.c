@@ -90,7 +90,7 @@ path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src)
   if(dst_style == PathStyle_Relative)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    String8 dst_from_src_absolute = push_str8f(scratch.arena, "%S/%S", src, dst);
+    String8 dst_from_src_absolute = push_str8f(scratch.arena, "%S/%S", str8_chop_last_slash(src), dst);
     String8 dst_from_src_absolute_normalized = path_normalized_from_string(arena, dst_from_src_absolute);
     result = dst_from_src_absolute_normalized;
     scratch_end(scratch);
@@ -160,10 +160,10 @@ path_char_from_style(PathStyle style)
   String8 result = str8_zero();
   switch (style)
   {
-  case PathStyle_Null:     break;
-  case PathStyle_Relative: break;
-  case PathStyle_WindowsAbsolute: result = str8_lit("\\"); break;
-  case PathStyle_UnixAbsolute:    result = str8_lit("/");  break;
+    case PathStyle_Null:     break;
+    case PathStyle_Relative: break;
+    case PathStyle_WindowsAbsolute: result = str8_lit("\\"); break;
+    case PathStyle_UnixAbsolute:    result = str8_lit("/");  break;
   }
   return result;
 }
