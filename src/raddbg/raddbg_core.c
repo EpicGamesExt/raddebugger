@@ -4025,6 +4025,32 @@ rd_view_ui(Rng2F32 rect)
         }
         
         //////////////////////////////
+        //- rjf: autocomplete watches -> feed autocompletion info forward
+        //
+        if(rd_watch_pt_match(ewv->cursor, ewv->mark) &&
+           rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
+        {
+          U64 row_num = ev_num_from_key(&block_ranges, ewv->cursor.key);
+          EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), &block_ranges, row_num);
+          RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+          RD_WatchCell *cell = row_info.cells.first;
+          if(cell != 0)
+          {
+            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, 0, &row_info, cell, ui_top_font(), ui_top_font_size(), dim_2f32(rect).y);
+            String8 string = dr_string_from_fstrs(ui_build_arena(), &cell_info.eval_fstrs);
+            if(string.size != 0)
+            {
+              UI_Event evt = zero_struct;
+              {
+                evt.kind = UI_EventKind_AutocompleteHint;
+                evt.string = string;
+              }
+              ui_event_list_push(ui_build_arena(), ui_state->events, &evt);
+            }
+          }
+        }
+        
+        //////////////////////////////
         //- rjf: build ui
         //
         B32 pressed = 0;
@@ -4995,7 +5021,7 @@ rd_view_ui(Rng2F32 rect)
                           
                           // rjf: this watch window is a lister? -> move cursor & accept
                           if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg ||
-                             rd_cfg_child_from_string(view, str8_lit("expr_lister")) != &rd_nil_cfg)
+                             rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             rd_cmd(RD_CmdKind_Accept);
@@ -6600,7 +6626,7 @@ rd_window_frame(void)
         // rjf: build view
         RD_Cfg *root = rd_immediate_cfg_from_keyf("autocomp_view_%I64x", window->id);
         RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
-        rd_cfg_child_from_string_or_alloc(view, str8_lit("expr_lister"));
+        rd_cfg_child_from_string_or_alloc(view, str8_lit("autocomplete"));
         RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
         RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
         rd_cfg_new_replace(input, ws->autocomp_regs->string);

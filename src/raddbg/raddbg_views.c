@@ -1161,9 +1161,9 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     ////////////////////////////
-    //- rjf: @watch_row_build_cells expr lister rows
+    //- rjf: @watch_row_build_cells autocomplete rows
     //
-    else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("expr_lister")) != &rd_nil_cfg)
+    else if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("autocomplete")) != &rd_nil_cfg)
     {
       info.can_expand = 0;
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
