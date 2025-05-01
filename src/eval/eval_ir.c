@@ -2172,6 +2172,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
     
     //- rjf: if the evaluated type has a virtual table pointer, then we must
     // pre-emptively evaluate this ir tree, and determine a more resolved type.
+    if(!disallow_autohooks && result.mode != E_Mode_Null)
     {
       E_TypeKey type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Modifiers);
       if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(type_key)))
@@ -2193,15 +2194,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
           }
           if(has_vtable)
           {
-            E_OpList oplist = e_oplist_from_irtree(scratch.arena, result.root);
+            E_IRNode *class_base_value_tree = e_irtree_resolve_to_value(scratch.arena, result.mode, result.root, result.type_key);
+            E_OpList oplist = e_oplist_from_irtree(scratch.arena, class_base_value_tree);
             String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
             E_Interpretation interpret = e_interpret(bytecode);
-            U64 ptr_vaddr = interpret.value.u64;
-            U64 addr_size = e_type_byte_size_from_key(type_key);
-            U64 class_base_vaddr = 0;
+            U64 class_base_vaddr = interpret.value.u64;
             U64 vtable_vaddr = 0;
-            if(e_space_read(interpret.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
-               e_space_read(interpret.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+            U64 addr_size = e_type_byte_size_from_key(type_key);
+            if(e_space_read(interpret.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
             {
               Arch arch = e_base_ctx->primary_module->arch;
               U32 rdi_idx = 0;
