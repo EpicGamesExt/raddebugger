@@ -5038,9 +5038,15 @@ rd_view_ui(Rng2F32 rect)
                             {
                               cfg = rd_cfg_from_eval_space(row->block->eval.space);
                             }
+                            if(entity == &ctrl_entity_nil)
+                            {
+                              entity = rd_ctrl_entity_from_eval_space(row->eval.space);
+                            }
                             RD_RegsScope(.cfg = cfg->id, .ctrl_entity = entity->handle)
                             {
-                              if(!(cmd_kind_info->query.flags & RD_QueryFlag_Required))
+                              if(!(cmd_kind_info->query.flags & RD_QueryFlag_Required) ||
+                                 (cmd_kind_info->query.slot == RD_RegSlot_Cfg && cfg != &rd_nil_cfg) ||
+                                 (cmd_kind_info->query.slot == RD_RegSlot_CtrlEntity && entity != &ctrl_entity_nil))
                               {
                                 rd_push_cmd(cell_info.cmd_name, rd_regs());
                               }
