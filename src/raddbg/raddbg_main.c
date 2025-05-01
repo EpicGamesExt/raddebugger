@@ -182,89 +182,23 @@
 //     configuration.
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.
+// - Fixed substantial unnecessary memory usage with very large output logs.
 // - Made several visual improvements.
 
 ////////////////////////////////
-//~ rjf: feature cleanup, code dedup, code elimination pass:
+//~ rjf: 0.9.16 TODO notes
 //
-// [ ] *ALL* expressions in watch windows need to be editable.
-//
-// [ ] config hot-reloading, using cfg wins
-// [ ] undo/redo, using cfg wins
-// [ ] back/forward, using cfg wins
-//
+// [ ] fix operator precedence in (u64)&foo - merge prefix-unary parsing with atom parsing loop
+// [ ] autocompletion lister
+// [ ] "pop out" (hitting enter on visualizers should open them as tabs)
+// [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
+// [ ] finish theme editing, build themes - replace code colors map with new theme stuff
+// [ ] maybe add extra caching layer to process memory querying? we pay a pretty
+//     heavy cost even to just read 8 bytes...
+// [ ] odin's demo is busted - need to revert PDB conversion type index changes.
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
 //
-// [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
-// single step over the first instruction of that line, even if the thread
-// would've stopped at the first instruction due to the step, were that bp not
-// there.
-//
-// [ ] if a breakpoint matches the entry point's starting address, its hit count
-// is not correctly incremented.
-// [ ] odin's demo is busted - need to revert PDB conversion type index changes.
-
-////////////////////////////////
-//~ rjf: post-0.9.12 TODO notes
-//
-// [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
-//      - actually this seems to be potentially because of incomplete src-line-map info...
-// [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
-//
-// [ ] CLI argument over-mangling?
-// [ ] fix light themes
-// [ ] disasm starting address - need to use debug info for more correct
-//     results...
-//  [ ] linked list view rule
-//  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-//  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
-//  to prioritize the primary rdi
-//  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
-//      module/symbol, in cases where one line maps to many voffs
-//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
-//  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
-//  [ ] visualize all breakpoints everywhere - source view should show up in
-//      disasm, disasm should show up in source view, function should show up in
-//      both, etc.
-//    [ ] ** Function breakpoints should show up in the source listing. Without
-//        them being visible, it is confusing when you run and you stop there,
-//        because you're like "wait why did it stop" and then you later remember
-//        that's because there was a function breakpoint there.
-
-////////////////////////////////
-//~ rjf: Frontend/UI Pass Tasks
-//
-// [ ] "Browse..." buttons should adopt a more relevant starting search path,
-//     if possible
-//
-// [ ] For the Scheduler window, it would be nice if you could dim or
-//     folderize threads that are not your threads - eg., if a thread doesn't
-//     have any resolved stack pointers in your executable code, then you can
-//     ignore it when you are focusing on your own code. I don't know what the
-//     best way to detect this is, other than by walking the call stack... one
-//     way might be to just have a way to separate threads you've named from
-//     threads you haven't? Or, there could even be a debugger-specific API
-//     that you use to tag them. Just some way that would make it easier to
-//     focus on your own threads.
-
-////////////////////////////////
-//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
-//
-// [ ] "root" concept in hash store, which buckets keys & allows usage code to
-//     jettison a collection of keys in retained mode fashion
-//
-// [ ] Jeff Notes
-//  [ ] sum view rule
-//  [ ] plot view rule
-//  [ ] histogram view rule
-//  [ ] max view rule
-//  [ ] min view rule
-//
-// [ ] use backslashes on windows by default, forward slashes elsewhere (?)
-//
-// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
-//     support it?
-//
+//- readme improvements
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
 //      perhaps be per-project, yet it sounded like it was meant to be somewhat
@@ -277,45 +211,76 @@
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
 //
-//  [ ] ** One very nice feature of RemedyBG that I use all the time is the
-//      ability to put "$err, hr" into the watch window, which will just show
-//      the value of GetLastError() as a string. This is super useful for
-//      debugging, so you don't have to litter your own code with it.
-//      (NOTE(rjf): NtQueryInformationThread)
-//
-//  [ ] Tooltip Coverage:
-//   [ ] lock icon
-//   [ ] "rotation arrow" icon next to executables
-//
-//  [ ] For theme editing, when you hove the mouse over a theme color entry and
-//      it highlights that entry, it might help to temporarily change that
-//      color to white (or the inverse of the background color, or whatever) so
-//      that the user can see what things on the screen use that theme color.
-//
-//  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
-//      to error messages that are byte-based instead of line-based.
-//
-// [ ] @feature debug info overrides (both path-based AND module-based)
-//
-// [ ] C++ virtual inheritance member visualization in watch window
+//- no immediate action but check before release:
+// [ ] user switching
+// [ ] project switching
 
 ////////////////////////////////
-//~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
+//~ rjf: post-0.9.16 TODO notes
 //
-//  [ ] The hex format for color values in the config file was a real
-//      mindbender. It's prefixed with "0x", so I was assuming it was either
-//      Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
-//      my surprise, it was neither - it was actually web format (RRGGBBAA),
-//      which I was not expecting because that is normally written with a
-//      number sign (#AARRGGBB) not an 0x.
+//- watch improvements
+// [ ] *ALL* expressions in watch windows need to be editable.
 //
+//- cfg improvements
+// [ ] config hot-reloading, using cfg wins
+// [ ] undo/redo, using cfg wins
+// [ ] back/forward, using cfg wins
+//  [ ]  mouse back button should make view to go back after I double clicked
+//       on function to open it
+//
+//- stepping or breakpoint oddness/fixes
+// [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
+// single step over the first instruction of that line, even if the thread
+// would've stopped at the first instruction due to the step, were that bp not
+// there.
+// [ ] if a breakpoint matches the entry point's starting address, its hit count
+// is not correctly incremented.
+// [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
+//      - actually this seems to be potentially because of incomplete src-line-map info...
+// [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
+//
+//- ui improvements
+// [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
+// [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
+// [ ] tooltip coverage pass (row commands, etc.)
+// [ ] visualize all breakpoints everywhere - source view should show up in
+//     disasm, disasm should show up in source view, function should show up in
+//     both, etc.
+//  [ ] ** Function breakpoints should show up in the source listing. Without
+//      them being visible, it is confusing when you run and you stop there,
+//      because you're like "wait why did it stop" and then you later remember
+//      that's because there was a function breakpoint there.
+// [ ] (reported by forrest) 'set-next-statement' -> prioritize current
+//     module/symbol, in cases where one line maps to many voffs
+// [ ] "Browse..." buttons should adopt a more relevant starting search path,
+//     if possible
+//  [ ] (since browse buttons are currently gone i should just add them backin
+//       while respecting this old todo)
+// [ ] For the Scheduler window, it would be nice if you could dim or
+//     folderize threads that are not your threads - eg., if a thread doesn't
+//     have any resolved stack pointers in your executable code, then you can
+//     ignore it when you are focusing on your own code. I don't know what the
+//     best way to detect this is, other than by walking the call stack... one
+//     way might be to just have a way to separate threads you've named from
+//     threads you haven't? Or, there could even be a debugger-specific API
+//     that you use to tag them. Just some way that would make it easier to
+//     focus on your own threads.
+// [ ] use backslashes on windows by default, forward slashes elsewhere (?)
+// [ ] For theme editing, when you hove the mouse over a theme color entry and
+//     it highlights that entry, it might help to temporarily change that
+//     color to white (or the inverse of the background color, or whatever) so
+//     that the user can see what things on the screen use that theme color.
+// [ ] The hex format for color values in the config file was a real
+//     mindbender. It's prefixed with "0x", so I was assuming it was either
+//     Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
+//     my surprise, it was neither - it was actually web format (RRGGBBAA),
+//     which I was not expecting because that is normally written with a
+//     number sign (#AARRGGBB) not an 0x.
+// [ ] It'd be nice to have a "goto byte" option for source views, for jumping
+//     to error messages that are byte-based instead of line-based.
 //  [ ] Clicking on either side of a scroll bar is idiosyncratic. Normally,
 //      that is "page up" / "page down", but here it is "smooth scroll upward"
 //      / "smooth scroll downward" for some reason?
-//
-//  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
-//  [ ]  mouse back button should make view to go back after I double clicked
-//       on function to open it
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
@@ -323,54 +288,84 @@
 //  [ ]  default font size is too small for me - not only source code, but
 //       menus/tab/watch names (which don't resize). Maybe you could query
 //       Windows for initial font size?
-// [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
-
-////////////////////////////////
-//~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
-//
-// [ ] eval wide/async transforms (e.g. diff(blob1, blob2))
-// [ ] search-in-all-files
-// [ ] memory view
-//  [ ] memory view mutation controls
-//  [ ] memory view user-made annotations
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
-// [ ] @feature automatically snap to search matches when searching source files
-
-////////////////////////////////
-//~ rjf: Cold, Clean-up Tasks That Probably Only Ryan Notices
-// (E.G. Because They Are Code-Related Or Because Nobody Cares)
-//
-// [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
-//     code slice params)
-
-////////////////////////////////
-//~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)
-//
-// [ ] @feature visualize jump destinations in disasm
-// [ ] @feature serializing eval view maps (?)
-// [ ] @feature multidimensional `array`
-// [ ] @feature 2-vector, 3-vector, quaternion
-// [ ] @feature audio waveform views
-// [ ] @feature smart scopes - expression operators for "grab me the first type X"
-// [ ] @feature "pinning" watch expressions, to attach it to a particular scope/evaluation
-//              context
-//
-// [ ] @feature just-in-time debugging
-// [ ] @feature step-out-of-loop
-//
-// [ ] long-term future notes from martins
-//  [ ] core dump saving/loading
-//  [ ] parallel call stacks view
-//  [ ] parallel watch view
-//  [ ] mixed native/interpreted/jit debugging
-//      - it seems python has a top-level linked list of interpreter states,
-//        which should allow the debugger to map native callstacks to python
-//        code
-//
 // [ ] fancy string runs can include "weakness" information for text truncation
 //     ... can prioritize certain parts of strings to be truncated before
 //     others. would be good for e.g. the middle of a path
+//
+//- visualizer improvements
+// [ ] disasm starting address - need to use debug info for more correct results...
+// [ ] linked list view
+// [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
+// [ ] multidimensional `array`
+// [ ] 2-vector, 3-vector, quaternion
+// [ ] audio waveform views
+//
+//- eval improvements
+// [ ] serializing eval view maps (?)
+// [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
+//  to prioritize the primary rdi
+// [ ] wide transforms
+//  [ ] sum
+//  [ ] plot
+//  [ ] max view rule
+//  [ ] min view rule
+//  [ ] histogram view rule
+//  [ ] diffs?
+//  [ ] ** One very nice feature of RemedyBG that I use all the time is the
+//      ability to put "$err, hr" into the watch window, which will just show
+//      the value of GetLastError() as a string. This is super useful for
+//      debugging, so you don't have to litter your own code with it.
+//      (NOTE(rjf): NtQueryInformationThread)
+// [ ] C++ virtual inheritance member visualization
+// [ ] smart scopes - expression operators for "grab me the first type X"
+// [ ] "pinning" watch expressions, to attach it to a particular scope/evaluation context
+//
+//- control improvements
+// [ ] debug info overrides (both path-based AND module-based)
+// [ ] symbol server
+// [ ] can it ignore stepping into _RTC_CheckStackVars generated functions?
+// [ ] jump table thunks, on code w/o /INCREMENTAL:NO
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
+// [ ] just-in-time debugging
+// [ ] step-out-of-loop
+//
+//- late-conversion performance improvements
+// [ ] investigate wide-conversion performance
+//  [ ] oversubscribing cores?
+//  [ ] conversion crashes?
+//  [ ] fastpath lookup to determine debug info relevance?
+// [ ] live++ investigations - ctrl+alt+f11 in UE?
+//
+//- memory usage improvements
+// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+//     jettison a collection of keys in retained mode fashion
+//
+//- short-to-medium term future features
+// [ ] search-in-all-files
+//  [ ] automatically snap to search matches when searching source files
+// [ ] memory view
+//  [ ] memory view mutation controls
+//  [ ] memory view user-made annotations
+//  [ ] memory view searching
+// [ ] disasm view
+//  [ ] visualize jump destinations in disasm
+//
+//- longer-term future features
+// [ ] long-term future notes from martins
+// [ ] core dump saving/loading
+// [ ] parallel call stacks view
+// [ ] parallel watch view
+// [ ] mixed native/interpreted/jit debugging
+//     - it seems python has a top-level linked list of interpreter states,
+//       which should allow the debugger to map native callstacks to python
+//       code
+//
+//- code cleanup
+// [ ] eliminate explicit font parameters in the various ui paths (e.g.
+//     code slice params)
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
 
@@ -467,6 +462,47 @@
 //     etc., all need to be merged, and optionally contextualized/filtered.
 //     right-clicking a tab should be equivalent to spawning a command lister,
 //     but only with commands that are directly
+// [x] tab opening
+// [x] query listers
+// [x] watch-window-defined query completion
+// [x] rebindings
+// [x] correct breakpoint/watch pin location visualization
+// [x] config saving/loading
+// [x] "pin hover eval"
+// [x] member filtering
+// [x] filtering is busted on ctrl_entities, cgs
+// [x] right-click menus -> specialize query
+// [x] writing ctrl entity names
+// [x] saved view rules need to be applied when watch loads!!!
+// [x] mechanism to promote tab -> non-auto
+// [x] focusing a hover eval makes icons disappear! (seems to only work with
+// table demo in mule_main)
+// [x] need to distinguish between auto-genn'd expressions and editable expressions
+// in watches. if I put in array[0] in the watch window, it just shows up as
+// [0] (same for member names, foo.a shows as .a)
+// [x] types in watch windows are missing!
+// [x] MISSING ERRORS IN WATCH WINDOW
+// [x] fix everything lister stopping at targets?
+// [x] strange bug where typing on a non-editable expression cell (e.g. bp
+// right-click menu) causes cmd icons to shift over
+// [x] acceleration pass:
+// [x] default setting schema lookup
+// [x] evaluation, esp. setting evaluation (evaluation cache)
+// [x] string -> run?
+// [x] fix glitchiness when mutating cfgs - the cfgs evaluations are cached, and
+// never are recomputed!!!!
+// [x] fix editing source locations textually
+// [x] see if I can make padding member names nicer
+// [x] settings / exception filters
+// [x] why does 'cut' not work???
+// [x] disallow chained fast paths when evaluating callee in call expr
+// [x] missing function type decorations in lister etc.
+// [x] dynamic type resolution
+// [x] ensure "file picking", for file path map remap, works
+// [x] paths in cfg -> relativization on save, de-relativization on load
+// [x] "add hover eval to watch" (expr drag & drop -> watch window)
+// [x] unattached process evaluation - need a string to evaluate so I can generate
+// the evals
 
 ////////////////////////////////
 //~ rjf: Build Options
