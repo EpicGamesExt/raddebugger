@@ -676,6 +676,7 @@ struct UI_State
   //- rjf: build state machine state
   B32 is_in_open_ctx_menu;
   B32 tooltip_can_overflow_window;
+  UI_Key tooltip_anchor_key;
   String8Array current_gen_tags;
   U64 current_gen_tags_gen;
   UI_TagsKeyStackNode *tags_key_stack_top;

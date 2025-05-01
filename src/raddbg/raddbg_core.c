@@ -2780,7 +2780,7 @@ rd_view_ui(Rng2F32 rect)
           UI_Padding(ui_pct(1, 0))
         {
           ui_labelf("use");
-          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero());
+          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero(), 1);
           ui_labelf("to search for commands and options");
         }
       }
@@ -4979,6 +4979,12 @@ rd_view_ui(Rng2F32 rect)
                           RD_RegsScope(.ctrl_entity = cell_info.entity->handle, .no_rich_tooltip = 1) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
                         }
                         
+                        // rjf: hover -> rich hover commands (mini only)
+                        if(ui_hovering(sig) && cell_info.cmd_name.size != 0 && cell->px != 0)
+                        {
+                          RD_RegsScope(.cmd_name = cell_info.cmd_name, .ui_key = sig.box->key) rd_set_hover_regs(RD_RegSlot_CmdName);
+                        }
+                        
                         // rjf: dragging -> drag/drop
                         if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()) &&
                            (!cell_selected || !ewv->text_editing))
@@ -6135,9 +6141,27 @@ rd_window_frame(void)
       RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
       RD_Regs *regs = (((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs : rd_state->hover_regs));
       CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
+      ui_state->tooltip_anchor_key = regs->ui_key;
+      ui_state->tooltip_can_overflow_window = rd_drag_is_active();
       switch(slot)
       {
         default:{}break;
+        
+        ////////////////////////
+        //- rjf: command tooltips
+        //
+        case RD_RegSlot_CmdName:
+        UI_Tooltip
+        {
+          String8 cmd_name = regs->cmd_name;
+          DR_FStrList fstrs = rd_title_fstrs_from_code_name(scratch.arena, cmd_name);
+          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(5, 1))
+          {
+            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fstrs(box, &fstrs);
+            rd_cmd_binding_buttons(cmd_name, str8_zero(), 0);
+          }
+        }break;
         
         ////////////////////////
         //- rjf: file path tooltips
@@ -6294,13 +6318,16 @@ rd_window_frame(void)
           UI_Row
           {
             rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), rd_state->drag_drop_regs->expr);
-            ui_spacer(ui_em(2.f, 1.f));
             E_Eval eval = e_eval_from_string(rd_state->drag_drop_regs->expr);
             if(eval.irtree.mode != E_Mode_Null)
             {
               EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
               String8 value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*20.f, eval);
-              rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+              if(value_string.size != 0)
+              {
+                ui_spacer(ui_em(2.f, 1.f));
+                rd_code_label(1.f, 0, ui_color_from_name(str8_lit("text")), value_string);
+              }
             }
           }
         }break;
@@ -6584,6 +6611,7 @@ rd_window_frame(void)
           UI_Focus(UI_FocusKind_On)
           UI_BlurSize(10*rd_state->popup_t)
           UI_Transparency(1-rd_state->popup_t)
+          UI_TagF("floating")
         {
           bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|
                                              UI_BoxFlag_Floating|
@@ -6591,7 +6619,8 @@ rd_window_frame(void)
                                              UI_BoxFlag_Scroll|
                                              UI_BoxFlag_DefaultFocusNav|
                                              UI_BoxFlag_DisableFocusOverlay|
-                                             UI_BoxFlag_DrawBackgroundBlur, "###popup_%p", ws);
+                                             UI_BoxFlag_DrawBackgroundBlur|
+                                             UI_BoxFlag_DrawBackground, "###popup_%p", ws);
         }
         if(rd_state->popup_active) UI_Parent(bg_box) UI_Transparency(1-rd_state->popup_t)
         {
@@ -7420,7 +7449,7 @@ rd_window_frame(void)
                     ui_labelf("Search for commands and options by pressing ");
                     UI_Flags(UI_BoxFlag_DrawBorder)
                       UI_TextAlignment(UI_TextAlign_Center)
-                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero());
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, str8_zero(), 1);
                   }
                   ui_spacer(ui_em(1.f, 1.f));
                   UI_TagF("pop")
@@ -7577,198 +7606,41 @@ rd_window_frame(void)
           Temp scratch = scratch_begin(0, 0);
           RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
           CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-          B32 have_targets = (targets.count != 0);
           B32 can_send_signal = !d_ctrl_targets_running();
-          B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
-          B32 can_pause = (!can_send_signal);
-          B32 can_stop  = (processes.count != 0);
-          B32 can_step =  (processes.count != 0 && can_send_signal);
-          
-          //- rjf: play button
-          if(can_play || !have_targets || processes.count == 0)
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            UI_TagF(can_play ? "good" : "weak")
+          typedef struct CenterButtonTask CenterButtonTask;
+          struct CenterButtonTask
           {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Play]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig) && !can_play)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
-            }
-            if(ui_hovering(sig) && can_play)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-              {
-                if(can_stop)
-                {
-                  ui_labelf("Resume all processes");
-                }
-                else
-                {
-                  ui_labelf("Launch all active targets:");
-                  for(RD_CfgNode *n = targets.first; n != 0; n = n->next)
-                  {
-                    RD_Cfg *target = n->v;
-                    B32 target_is_enabled = !rd_disabled_from_cfg(target);
-                    if(target_is_enabled)
-                    {
-                      DR_FStrList title_fstrs = rd_title_fstrs_from_cfg(ui_build_arena(), target);
-                      UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                      ui_box_equip_display_fstrs(box, &title_fstrs);
-                    }
-                  }
-                }
-              }
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_Run);
-            }
-          }
-          
-          //- rjf: restart button
-          else UI_TextAlignment(UI_TextAlign_Center)
-            UI_TagF("good")
+            String8 cmd_name;
+            String8 tag;
+            B32 is_enabled;
+          };
+          CenterButtonTask center_button_tasks[] =
           {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Redo]);
+            {rd_cmd_kind_info_table[RD_CmdKind_Run].string,      str8_lit("good"), (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index())},
+            {rd_cmd_kind_info_table[RD_CmdKind_Restart].string,  str8_lit("good"), processes.count != 0},
+            {rd_cmd_kind_info_table[RD_CmdKind_Halt].string,     str8_lit("weak"), !can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_KillAll].string,  str8_lit("bad"),  processes.count != 0},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepOver].string, str8_lit("weak"), can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepInto].string, str8_lit("weak"), can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepOut].string,  str8_lit("weak"), processes.count != 0 && can_send_signal},
+          };
+          UI_TextAlignment(UI_TextAlign_Center)
+            for EachElement(idx, center_button_tasks)
+            UI_Flags(center_button_tasks[idx].is_enabled ? 0 : UI_BoxFlag_Disabled)
+            UI_Tag(center_button_tasks[idx].is_enabled ? center_button_tasks[idx].tag : str8_lit(""))
+          {
+            String8 cmd_name = center_button_tasks[idx].cmd_name;
+            UI_Signal sig = ui_button(rd_icon_kind_text_table[rd_icon_kind_from_code_name(cmd_name)]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig))
             {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-              {
-                ui_labelf("Restart");
-              }
+              RD_RegsScope(.cmd_name = cmd_name, .ui_key = sig.box->key) rd_set_hover_regs(RD_RegSlot_CmdName);
             }
             if(ui_clicked(sig))
             {
-              rd_cmd(RD_CmdKind_Restart);
+              rd_push_cmd(cmd_name, rd_regs());
             }
           }
-          
-          //- rjf: pause button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
-            UI_TagF("weak")
-          {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Pause]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig) && !can_pause)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Disabled: Already halted");
-            }
-            if(ui_hovering(sig) && can_pause)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Halt all attached processes");
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_Halt);
-            }
-          }
-          
-          //- rjf: stop button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            UI_TagF(can_stop ? "bad" : "weak")
-          {
-            UI_Signal sig = {0};
-            {
-              sig = ui_button(rd_icon_kind_text_table[RD_IconKind_Stop]);
-              os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            }
-            if(ui_hovering(sig) && !can_stop)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main) ui_labelf("Disabled: No processes are running");
-            }
-            if(ui_hovering(sig) && can_stop)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Kill all attached processes");
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_KillAll);
-            }
-          }
-          
-          //- rjf: step over button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            UI_TagF("weak")
-          {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOver]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig))
-            {
-              if(can_play)
-              {
-                UI_Tooltip RD_Font(RD_FontSlot_Main) ui_labelf("Step Over");
-              }
-              else
-              {
-                UI_Tooltip RD_Font(RD_FontSlot_Main)
-                  ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
-              }
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_StepOver);
-            }
-          }
-          
-          //- rjf: step into button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            UI_TagF("weak")
-          {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepInto]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig))
-            {
-              if(can_play)
-              {
-                UI_Tooltip RD_Font(RD_FontSlot_Main)
-                  ui_labelf("Step Into");
-              }
-              else
-              {
-                UI_Tooltip RD_Font(RD_FontSlot_Main)
-                  ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
-              }
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_StepInto);
-            }
-          }
-          
-          //- rjf: step out button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
-            UI_TagF("weak")
-          {
-            UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOut]);
-            os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig) && !can_step && can_pause)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Disabled: Running");
-            }
-            if(ui_hovering(sig) && !can_step && !can_stop)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Disabled: No processes are running");
-            }
-            if(ui_hovering(sig) && can_step)
-            {
-              UI_Tooltip RD_Font(RD_FontSlot_Main)
-                ui_labelf("Step Out");
-            }
-            if(ui_clicked(sig))
-            {
-              rd_cmd(RD_CmdKind_StepOut);
-            }
-          }
-          
           scratch_end(scratch);
         }
         
@@ -15917,7 +15789,7 @@ rd_frame(void)
   //- rjf: animate confirmation
   //
   {
-    F32 rate = rd_setting_b32_from_name(str8_lit("menu_animations")) ? 1 - pow_f32(2, (-10.f * rd_state->frame_dt)) : 1.f;
+    F32 rate = rd_setting_b32_from_name(str8_lit("menu_animations")) ? 1 - pow_f32(2, (-30.f * rd_state->frame_dt)) : 1.f;
     B32 popup_open = rd_state->popup_active;
     rd_state->popup_t += rate * ((F32)!!popup_open-rd_state->popup_t);
     if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)

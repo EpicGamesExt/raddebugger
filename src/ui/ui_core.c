@@ -805,6 +805,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->ctx_menu_changed = 0;
     ui_state->default_animation_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
     ui_state->tooltip_can_overflow_window = 0;
+    ui_state->tooltip_anchor_key = ui_key_zero();
     ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
     ui_state->tags_cache_slots_count = 512;
     ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
@@ -1245,6 +1246,22 @@ ui_end_build(void)
       ui_state->ctx_menu_root->fixed_position = new_root_rect.p0;
       ui_state->ctx_menu_root->fixed_size = dim_2f32(new_root_rect);
       ui_state->ctx_menu_root->rect = new_root_rect;
+    }
+  }
+  
+  //- rjf: anchor tooltips
+  if(!ui_key_match(ui_state->tooltip_anchor_key, ui_key_zero()))
+  {
+    UI_Box *anchor_box = ui_box_from_key(ui_state->tooltip_anchor_key);
+    if(!ui_box_is_nil(anchor_box))
+    {
+      ui_state->tooltip_root->rect.x0 = anchor_box->rect.x0;
+      ui_state->tooltip_root->rect.y0 = anchor_box->rect.y1 + anchor_box->font_size*0.5f;
+    }
+    else
+    {
+      ui_state->tooltip_root->rect.x0 = 10000;
+      ui_state->tooltip_root->rect.y0 = 10000;
     }
   }
   

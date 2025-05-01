@@ -714,7 +714,7 @@ rd_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
-rd_cmd_binding_buttons(String8 name, String8 filter)
+rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
 {
   Temp scratch = scratch_begin(0, 0);
   RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_name(scratch.arena, name);
@@ -722,6 +722,7 @@ rd_cmd_binding_buttons(String8 name, String8 filter)
   //- rjf: build buttons for each binding
   UI_CornerRadius(ui_top_font_size()*0.5f) for(RD_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
   {
+    ui_spacer(ui_em(1.f, 1.f));
     RD_Binding binding = n->v->binding;
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
                                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
@@ -826,40 +827,41 @@ rd_cmd_binding_buttons(String8 name, String8 filter)
         rd_state->bind_change_active = 0;
       }
     }
-    
-    //- rjf: space
-    ui_spacer(ui_em(1.f, 1.f));
   }
   
   //- rjf: build "add new binding" button
-  B32 adding_new_binding = (rd_state->bind_change_active &&
-                            str8_match(rd_state->bind_change_cmd_name, name, 0) &&
-                            rd_state->bind_change_binding_id == 0);
-  RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "") UI_CornerRadius(ui_top_font_size()*0.5f)
+  if(add_new)
   {
-    ui_set_next_text_alignment(UI_TextAlign_Center);
-    ui_set_next_group_key(ui_key_zero());
-    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.5f, 1));
-    UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                            UI_BoxFlag_Clickable|
-                                            UI_BoxFlag_DrawActiveEffects|
-                                            UI_BoxFlag_DrawHotEffects|
-                                            UI_BoxFlag_DrawBorder|
-                                            UI_BoxFlag_DrawBackground,
-                                            "%S###add_binding", rd_icon_kind_text_table[RD_IconKind_Add]);
-    UI_Signal sig = ui_signal_from_box(box);
-    if(ui_clicked(sig))
+    B32 adding_new_binding = (rd_state->bind_change_active &&
+                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
+                              rd_state->bind_change_binding_id == 0);
+    ui_spacer(ui_em(1.f, 1.f));
+    RD_Font(RD_FontSlot_Icons) UI_TagF(adding_new_binding ? "pop" : "") UI_CornerRadius(ui_top_font_size()*0.5f)
     {
-      if(!rd_state->bind_change_active && ui_clicked(sig))
+      ui_set_next_text_alignment(UI_TextAlign_Center);
+      ui_set_next_group_key(ui_key_zero());
+      ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.5f, 1));
+      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                              UI_BoxFlag_Clickable|
+                                              UI_BoxFlag_DrawActiveEffects|
+                                              UI_BoxFlag_DrawHotEffects|
+                                              UI_BoxFlag_DrawBorder|
+                                              UI_BoxFlag_DrawBackground,
+                                              "%S###add_binding", rd_icon_kind_text_table[RD_IconKind_Add]);
+      UI_Signal sig = ui_signal_from_box(box);
+      if(ui_clicked(sig))
       {
-        arena_clear(rd_state->bind_change_arena);
-        rd_state->bind_change_active = 1;
-        rd_state->bind_change_cmd_name = push_str8_copy(rd_state->bind_change_arena, name);
-        rd_state->bind_change_binding_id = 0;
-      }
-      else if(rd_state->bind_change_active && ui_clicked(sig))
-      {
-        rd_state->bind_change_active = 0;
+        if(!rd_state->bind_change_active && ui_clicked(sig))
+        {
+          arena_clear(rd_state->bind_change_arena);
+          rd_state->bind_change_active = 1;
+          rd_state->bind_change_cmd_name = push_str8_copy(rd_state->bind_change_arena, name);
+          rd_state->bind_change_binding_id = 0;
+        }
+        else if(rd_state->bind_change_active && ui_clicked(sig))
+        {
+          rd_state->bind_change_active = 0;
+        }
       }
     }
   }
@@ -913,7 +915,7 @@ rd_cmd_spec_button(String8 name)
         UI_TagF("weak")
         UI_FastpathCodepoint(0)
       {
-        rd_cmd_binding_buttons(name, str8_zero());
+        rd_cmd_binding_buttons(name, str8_zero(), 1);
       }
     }
   }
@@ -3473,7 +3475,7 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       UI_PrefWidth(ui_children_sum(1)) UI_Row UI_Padding(ui_em(1.f, 1.f))
       {
-        rd_cmd_binding_buttons(params->bindings_name, params->search_needle);
+        rd_cmd_binding_buttons(params->bindings_name, params->search_needle, 1);
       }
     }
   }
