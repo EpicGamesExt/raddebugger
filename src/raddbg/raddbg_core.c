@@ -12200,6 +12200,7 @@ rd_frame(void)
           case RD_CmdKind_StepOver:
           case RD_CmdKind_Restart:
           {
+            // rjf: reset hit counts
             CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
@@ -12209,6 +12210,41 @@ rd_frame(void)
                 RD_Cfg *hit_count = rd_cfg_child_from_string_or_alloc(n->v, str8_lit("hit_count"));
                 rd_cfg_new_replace(hit_count, str8_lit("0"));
               }
+            }
+            
+            // rjf: determine if we have active targets
+            RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
+            B32 has_active_targets = 0;
+            for(RD_CfgNode *n = targets.first; n != 0; n = n->next)
+            {
+              RD_Cfg *target = n->v;
+              if(!rd_disabled_from_cfg(target))
+              {
+                has_active_targets = 1;
+                break;
+              }
+            }
+            
+            // rjf: run -> no active targets, no processes? -> do helper for launch-and-run
+            if((kind == RD_CmdKind_Run ||
+                kind == RD_CmdKind_StepInto ||
+                kind == RD_CmdKind_StepOver) && processes.count == 0)
+            {
+              if(!has_active_targets)
+              {
+                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[kind == RD_CmdKind_Run ? RD_CmdKind_LaunchAndRun : RD_CmdKind_LaunchAndStepInto].string);
+                break;
+              }
+            }
+            
+            // rjf: if this is a low-level operation, e.g. launch-and-run or launch-and-step-into,
+            // and we do not have any active targets, then let's just select the ones that we are
+            // launching.
+            if(!has_active_targets &&
+               (kind == RD_CmdKind_LaunchAndRun ||
+                kind == RD_CmdKind_LaunchAndStepInto))
+            {
+              rd_cmd(RD_CmdKind_SelectTarget, .cfg = rd_regs()->cfg);
             }
           } // fallthrough
           default:

@@ -1222,7 +1222,15 @@ internal int
 e_type_qsort_compare_members_offset(E_Member *a, E_Member *b)
 {
   int result = 0;
-  if(a->off < b->off)
+  if(a->kind < b->kind)
+  {
+    result = -1;
+  }
+  else if(a->kind > b->kind)
+  {
+    result = +1;
+  }
+  else if(a->off < b->off)
   {
     result = -1;
   }
@@ -1272,7 +1280,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
             n->v.inheritance_key_chain = task->inheritance_chain;
             SLLQueuePush(members_list.first, members_list.last, n);
             members_list.count += 1;
-            members_need_offset_sort = members_need_offset_sort || (n->v.off < last_member_off);
+            members_need_offset_sort = members_need_offset_sort || (type->members[member_idx].kind == E_MemberKind_DataField && n->v.off < last_member_off);
             last_member_off = n->v.off;
           }
           else if(type->members[member_idx].kind == E_MemberKind_Base)
