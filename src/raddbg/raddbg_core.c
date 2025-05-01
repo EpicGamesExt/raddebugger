@@ -5044,6 +5044,15 @@ rd_view_ui(Rng2F32 rect)
                             }
                             RD_RegsScope(.cfg = cfg->id, .ctrl_entity = entity->handle)
                             {
+                              if(cfg != &rd_nil_cfg)
+                              {
+                                RD_PanelTree panels = rd_panel_tree_from_cfg(scratch.arena, cfg);
+                                RD_PanelNode *parent_panel_node = rd_panel_node_from_tree_cfg(panels.root, cfg->parent);
+                                if(parent_panel_node != &rd_nil_panel_node)
+                                {
+                                  rd_regs()->tab = rd_regs()->view = cfg->id;
+                                }
+                              }
                               if(!(cmd_kind_info->query.flags & RD_QueryFlag_Required) ||
                                  (cmd_kind_info->query.slot == RD_RegSlot_Cfg && cfg != &rd_nil_cfg) ||
                                  (cmd_kind_info->query.slot == RD_RegSlot_CtrlEntity && entity != &ctrl_entity_nil))

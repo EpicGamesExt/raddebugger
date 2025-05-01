@@ -1775,18 +1775,27 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               Temp scratch = scratch_begin(&arena, 1);
               
               // rjf: read string data
+#define EV_STRING_ITER_STRING_BUFFER_CAPACITY 4096
               U64 string_memory_addr = ptr_data->value_eval.value.u64;
-              U64 string_buffer_size = 4096;
+              U64 string_buffer_size = EV_STRING_ITER_STRING_BUFFER_CAPACITY;
               U8 *string_buffer = push_array(scratch.arena, U8, string_buffer_size);
-              for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
+              if(type_kind == E_TypeKind_Array && ptr_data->value_eval.irtree.mode == E_Mode_Value)
               {
-                B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
-                if(read_good)
-                {
-                  break;
-                }
+                StaticAssert(sizeof(ptr_data->value_eval.value.u512.u8) <= EV_STRING_ITER_STRING_BUFFER_CAPACITY, ev_string_iter_value_string_buffer_size_check);
+                MemoryCopy(string_buffer, ptr_data->value_eval.value.u512.u8, sizeof(ptr_data->value_eval.value.u512.u8));
               }
-              string_buffer[string_buffer_size-1] = 0;
+              else
+              {
+                for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
+                {
+                  B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+                  if(read_good)
+                  {
+                    break;
+                  }
+                }
+                string_buffer[string_buffer_size-1] = 0;
+              }
               
               // rjf: check element size - if non-U8, assume UTF-16 or UTF-32 based on type, and convert
               U64 element_size = ptr_data->direct_type->byte_size;

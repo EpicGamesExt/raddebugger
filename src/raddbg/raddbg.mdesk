@@ -364,7 +364,9 @@ RD_VocabTable:
   {
     theme_color,
     ```
-      @collection_commands(add_theme_color, fork_loaded_theme_colors, save_theme_colors) x:
+      @collection_commands(add_theme_color, fork_loaded_theme_colors, save_theme_colors)
+      @row_commands(remove_cfg)
+      x:
     {
       @display_name('Tags') tags: string,
       @display_name('Value') value: @color @hex u32,
@@ -403,6 +405,7 @@ RD_VocabTable:
   {
     tab,
     ```
+      @expand_commands(duplicate_tab, close_tab)
       x:
     {
       @default(11) @display_name('Tab Font Size') @description("Controls the tab's font size.")
