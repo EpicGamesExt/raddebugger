@@ -2173,7 +2173,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
     //- rjf: if the evaluated type has a virtual table pointer, then we must
     // pre-emptively evaluate this ir tree, and determine a more resolved type.
     {
-      E_TypeKey type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative);
+      E_TypeKey type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_Modifiers);
       if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(type_key)))
       {
         E_TypeKey ptee_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_All);
