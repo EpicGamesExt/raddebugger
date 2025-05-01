@@ -3574,8 +3574,8 @@ rd_view_ui(Rng2F32 rect)
                       os_set_clipboard_text(op.copy);
                     }
                     
-                    // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
-                    if(autocomplete_hint_string.size != 0)
+                    // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
+                    if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
                     {
                       take_autocomplete = 1;
                       RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, string, edit_state->cursor.column-1);
@@ -6679,7 +6679,7 @@ rd_window_frame(void)
         F32 row_height_px = ui_top_px_height();
         U64 max_row_count = (U64)floor_f32(ui_top_font_size()*30.f / row_height_px);
         U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count - 1);
-        F32 width_px = floor_f32(40.f*ui_top_font_size());
+        F32 width_px = floor_f32(30.f*ui_top_font_size());
         F32 height_px = needed_row_count*row_height_px;
         
         // rjf: determine list top-level rect
@@ -9777,6 +9777,8 @@ rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 c
   }
   
   //- rjf: cursor is on right-hand-side of dot? -> show members of left-hand-side
+  B32 did_special_cursor_case = 0;
+  if(!did_special_cursor_case)
   {
     E_Expr *dot_expr = &e_expr_nil;
     if(cursor_expr->kind == E_ExprKind_MemberAccess && cursor_off == cursor_expr->range.max)
@@ -9789,12 +9791,21 @@ rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 c
     }
     if(dot_expr != &e_expr_nil)
     {
+      did_special_cursor_case = 1;
       E_Eval lhs_eval = e_eval_from_expr(dot_expr->first);
       E_Eval type_of_lhs_eval = e_eval_wrapf(lhs_eval, "typeof($)");
       result.list_expr = e_full_expr_string_from_key(arena, type_of_lhs_eval.key);
       result.filter = cursor_expr->string;
       result.replaced_range = union_1u64(dot_expr->range, cursor_expr->range);
     }
+  }
+  
+  //- rjf: cursor is on a leaf-identifier? -> replace just that identifier, keep the original list expression
+  if(!did_special_cursor_case && cursor_expr->kind == E_ExprKind_LeafIdentifier)
+  {
+    did_special_cursor_case = 1;
+    result.filter = str8_prefix(cursor_expr->string, cursor_off - cursor_expr->range.min);
+    result.replaced_range = cursor_expr->range;
   }
   
   scratch_end(scratch);

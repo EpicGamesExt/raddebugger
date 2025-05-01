@@ -3573,8 +3573,8 @@ rd_cell(RD_CellParams *params, String8 string)
       // rjf: map this action to an op
       UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
       
-      // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
-      if(autocomplete_hint_string.size != 0)
+      // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
+      if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
       {
         RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, edit_string, params->cursor->column-1);
         String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(autocomp_cursor_info.replaced_range.min+1, autocomp_cursor_info.replaced_range.max+1), autocomplete_hint_string);
