@@ -12088,6 +12088,15 @@ rd_frame(void)
               }
             }
             
+            // rjf: run -> no targets at all, no processes? -> do helper for add-target
+            if((kind == RD_CmdKind_Run ||
+                kind == RD_CmdKind_StepInto ||
+                kind == RD_CmdKind_StepOver) && targets.count == 0 && processes.count == 0)
+            {
+              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+              break;
+            }
+            
             // rjf: run -> no active targets, no processes? -> do helper for launch-and-run
             if((kind == RD_CmdKind_Run ||
                 kind == RD_CmdKind_StepInto ||

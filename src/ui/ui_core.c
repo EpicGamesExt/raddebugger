@@ -1255,8 +1255,11 @@ ui_end_build(void)
     UI_Box *anchor_box = ui_box_from_key(ui_state->tooltip_anchor_key);
     if(!ui_box_is_nil(anchor_box))
     {
-      ui_state->tooltip_root->rect.x0 = anchor_box->rect.x0;
-      ui_state->tooltip_root->rect.y0 = anchor_box->rect.y1 + anchor_box->font_size*0.5f;
+      Vec2F32 dim = dim_2f32(ui_state->tooltip_root->rect);
+      ui_state->tooltip_root->fixed_position.x = ui_state->tooltip_root->rect.x0 = anchor_box->rect.x0;
+      ui_state->tooltip_root->fixed_position.y = ui_state->tooltip_root->rect.y0 = anchor_box->rect.y1 + anchor_box->font_size*0.5f;
+      ui_state->tooltip_root->rect.x1 = ui_state->tooltip_root->rect.x0 + dim.x;
+      ui_state->tooltip_root->rect.y1 = ui_state->tooltip_root->rect.y0 + dim.y;
     }
     else
     {
