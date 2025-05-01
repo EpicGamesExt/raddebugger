@@ -455,12 +455,17 @@ t_abs_vs_regular(void)
     }
   }
 
-  U8 entry_text[] = { 0xC3 };
+  U8 entry_text[] = { 
+    0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00, // mov rax, $imm
+    0xC3 // ret
+  };
   String8 entry_obj_name = str8_lit("entry.obj");
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    COFF_ObjSymbol *shared_symbol = coff_obj_writer_push_symbol_undef(obj_writer, shared_symbol_name);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 3, shared_symbol, COFF_Reloc_X64_Addr32Nb);
     String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(entry_obj_name, entry_obj)) {
@@ -469,13 +474,19 @@ t_abs_vs_regular(void)
   }
 
   // TODO: validate that linker issues multiply defined symbol error
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe abs.obj regular.obj entry.obj");
-  if (linker_exit_code != 0) {
-    int regular_vs_abs_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe regular.obj abs.obj entry.obj");
-    if (regular_vs_abs_exit_code != 0) {
-      result = T_Result_Pass;
-    }
+  int abs_vs_regular_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe abs.obj regular.obj entry.obj");
+  if (abs_vs_regular_exit_code == 0) {
+    // linker should complain about multiply defined symbol
+    goto exit;
   }
+
+  int regular_vs_abs_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe regular.obj abs.obj entry.obj");
+  if (regular_vs_abs_exit_code == 0) {
+    // linker should complain even if the regular is before abs
+    goto exit;
+  }
+
+  result = T_Result_Pass;
   
   exit:;
   scratch_end(scratch);
@@ -903,6 +914,13 @@ t_base_relocs(void)
     COFF_ObjSymbol  *func_undef = coff_obj_writer_push_symbol_undef(obj_writer, func_name);
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, mov_func_name64, func_undef, COFF_Reloc_X64_Addr64);
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, mov_func_name32, func_undef, COFF_Reloc_X64_Addr32);
+
+    // linker must not produce base relocations for absolute symbol
+    U8 data[4] = {0};
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(data));
+    COFF_ObjSymbol *abs_symbol = coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("abs"), 0x12345678, COFF_SymStorageClass_Static);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, abs_symbol, COFF_Reloc_X64_Addr32);
+
     coff_obj_writer_push_symbol_extern(obj_writer, entry_name, 0, text_sect);
     String8 main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -924,7 +942,7 @@ t_base_relocs(void)
   }
 
   String8 out_name = str8_lit("a.exe");
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /dynamicbase /dll /largeaddressaware:no /out:%S %S %S", entry_name, out_name, main_obj_name, func_obj_name);
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /dynamicbase /largeaddressaware:no /out:%S %S %S", entry_name, out_name, main_obj_name, func_obj_name);
   
 exit:;
   scratch_end(scratch);
