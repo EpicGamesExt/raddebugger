@@ -9801,21 +9801,6 @@ rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 c
   return result;
 }
 
-internal String8
-rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
-{
-  U64 word_start_off = 0;
-  for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
-  {
-    if(!char_is_alpha(input.str[off]) && !char_is_digit(input.str[off], 10) && input.str[off] != '_')
-    {
-      word_start_off = off+1;
-    }
-  }
-  String8 query = str8_skip(str8_prefix(input, cursor_off), word_start_off);
-  return query;
-}
-
 internal void
 rd_set_autocomp_regs_(RD_Regs *regs)
 {

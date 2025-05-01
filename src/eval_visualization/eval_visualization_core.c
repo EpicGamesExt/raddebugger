@@ -1575,8 +1575,11 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         else if(str8_match(type->name, str8_lit("hex"), 0)) { lens_params.radix = 16; }
         else if(str8_match(type->name, str8_lit("digits"), 0) && type->count >= 1)
         {
-          E_Value value = e_value_from_expr(type->args[0]);
-          lens_params.min_digits = value.u64;
+          E_ParentKey(eval.key)
+          {
+            E_Value value = e_value_from_expr(type->args[0]);
+            lens_params.min_digits = value.u64;
+          }
         }
         else if(str8_match(type->name, str8_lit("no_string"), 0))
         {
@@ -1596,8 +1599,11 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   element_type_kind == E_TypeKind_S8 ||
                   element_type_kind == E_TypeKind_U8)))
         {
-          lens_params.limit_strings = 1;
-          lens_params.limit_strings_size = e_value_from_expr(type->args[0]).u64;
+          E_ParentKey(eval.key)
+          {
+            lens_params.limit_strings = 1;
+            lens_params.limit_strings_size = e_value_from_expr(type->args[0]).u64;
+          }
         }
         else
         {

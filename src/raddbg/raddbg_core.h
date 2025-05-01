@@ -963,7 +963,6 @@ internal void rd_set_hover_eval(Vec2F32 pos, String8 string);
 //~ rjf: Autocompletion Lister
 
 internal RD_AutocompCursorInfo rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 cursor_off);
-internal String8 rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal void rd_set_autocomp_regs_(RD_Regs *regs);
 #define rd_set_autocomp_regs(...) rd_set_autocomp_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 

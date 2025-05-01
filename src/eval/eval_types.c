@@ -2339,7 +2339,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
 {
   E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
   U64 count = 1;
-  if(type->args != 0 && type->count > 0)
+  if(type->args != 0 && type->count > 0) E_ParentKey(eval.key)
   {
     E_Key count_key = e_key_from_expr(type->args[0]);
     E_Value count_value = e_value_from_key(count_key);
