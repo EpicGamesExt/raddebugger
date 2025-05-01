@@ -3578,13 +3578,12 @@ rd_view_ui(Rng2F32 rect)
                     if(autocomplete_hint_string.size != 0)
                     {
                       take_autocomplete = 1;
-                      String8 word_query = rd_lister_query_word_from_input_string_off(string, edit_state->cursor.column-1);
-                      U64 word_off = (U64)(word_query.str - string.str);
-                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
+                      RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, string, edit_state->cursor.column-1);
+                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info.replaced_range.min+1, autocomp_cursor_info.replaced_range.max+1), autocomplete_hint_string);
                       new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
                       MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
                       edit_state->input_size = new_string.size;
-                      edit_state->cursor = edit_state->mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info.replaced_range.min+autocomplete_hint_string.size);
                       string = str8(edit_state->input_buffer, edit_state->input_size);
                       op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
                     }
@@ -4956,7 +4955,10 @@ rd_view_ui(Rng2F32 rect)
                              txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                            rd_set_autocomp_regs(.ui_key = sig.box->key, .string = input, .cursor = cell_edit_state->cursor);
+                            RD_AutocompCursorInfo cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, input, cell_edit_state->cursor.column-1);
+                            rd_set_autocomp_regs(.ui_key = sig.box->key,
+                                                 .string = cursor_info.filter,
+                                                 .expr = cursor_info.list_expr);
                           }
                         }
                       }
@@ -6663,7 +6665,7 @@ rd_window_frame(void)
         RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
         rd_cfg_new_replace(input, ws->autocomp_regs->string);
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_new_replacef(expr, "query:locals, query:globals, query:thread_locals, query:procedures, query:types");
+        rd_cfg_new_replace(expr, ws->autocomp_regs->expr);
         
         // rjf: determine container size
         EV_BlockTree predicted_block_tree = {0};
@@ -9722,8 +9724,85 @@ rd_set_hover_eval(Vec2F32 pos, String8 string)
 ////////////////////////////////
 //~ rjf: Autocompletion Lister
 
+internal RD_AutocompCursorInfo
+rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 cursor_off)
+{
+  RD_AutocompCursorInfo result = {0};
+  {
+    result.list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
+    result.filter = input;
+    result.replaced_range = r1u64(0, input.size);
+  }
+  Temp scratch = scratch_begin(&arena, 1);
+  E_Parse parse = e_parse_from_string(input);
+  
+  //- rjf: cursor offset -> cursor containing node
+  E_Expr *cursor_expr = &e_expr_nil;
+  E_Expr *cursor_expr_parent = &e_expr_nil;
+  {
+    typedef struct ExprWalkTask ExprWalkTask;
+    struct ExprWalkTask
+    {
+      ExprWalkTask *next;
+      E_Expr *parent;
+      E_Expr *expr;
+    };
+    ExprWalkTask start_task = {0, &e_expr_nil, parse.expr};
+    ExprWalkTask *first_task = &start_task;
+    ExprWalkTask *last_task = first_task;
+    for(E_Expr *chain = parse.expr->next; chain != &e_expr_nil; chain = chain->next)
+    {
+      ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+      SLLQueuePush(first_task, last_task, task);
+      task->parent = &e_expr_nil;
+      task->expr = chain;
+    }
+    for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+    {
+      E_Expr *e = t->expr;
+      if(contains_1u64(e->range, cursor_off) || cursor_off == e->range.max)
+      {
+        cursor_expr_parent = t->parent;
+        cursor_expr = e;
+        break;
+      }
+      for(E_Expr *child = e->first; child != &e_expr_nil; child = child->next)
+      {
+        ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+        SLLQueuePush(first_task, last_task, task);
+        task->parent = e;
+        task->expr = child;
+      }
+    }
+  }
+  
+  //- rjf: cursor is on right-hand-side of dot? -> show members of left-hand-side
+  {
+    E_Expr *dot_expr = &e_expr_nil;
+    if(cursor_expr->kind == E_ExprKind_MemberAccess && cursor_off == cursor_expr->range.max)
+    {
+      dot_expr = cursor_expr;
+    }
+    else if(cursor_expr_parent->kind == E_ExprKind_MemberAccess && cursor_expr == cursor_expr_parent->first->next)
+    {
+      dot_expr = cursor_expr_parent;
+    }
+    if(dot_expr != &e_expr_nil)
+    {
+      E_Eval lhs_eval = e_eval_from_expr(dot_expr->first);
+      E_Eval type_of_lhs_eval = e_eval_wrapf(lhs_eval, "typeof($)");
+      result.list_expr = e_full_expr_string_from_key(arena, type_of_lhs_eval.key);
+      result.filter = cursor_expr->string;
+      result.replaced_range = union_1u64(dot_expr->range, cursor_expr->range);
+    }
+  }
+  
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8
-rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off)
+rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
 {
   U64 word_start_off = 0;
   for(U64 off = 0; off < input.size && off < cursor_off; off += 1)

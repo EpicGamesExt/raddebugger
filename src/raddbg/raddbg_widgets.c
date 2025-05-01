@@ -3576,13 +3576,12 @@ rd_cell(RD_CellParams *params, String8 string)
       // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(autocomplete_hint_string.size != 0)
       {
-        String8 word_query = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
-        U64 word_off = (U64)(word_query.str - edit_string.str);
-        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
+        RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, edit_string, params->cursor->column-1);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(autocomp_cursor_info.replaced_range.min+1, autocomp_cursor_info.replaced_range.max+1), autocomplete_hint_string);
         new_string.size = Min(params->edit_buffer_size, new_string.size);
         MemoryCopy(params->edit_buffer, new_string.str, new_string.size);
         params->edit_string_size_out[0] = new_string.size;
-        params->cursor[0] = params->mark[0] = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+        params->cursor[0] = params->mark[0] = txt_pt(1, 1+autocomp_cursor_info.replaced_range.min+autocomplete_hint_string.size);
         edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
         op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
         MemoryZeroStruct(&autocomplete_hint_string);
@@ -3652,8 +3651,8 @@ rd_cell(RD_CellParams *params, String8 string)
       DR_FStrList code_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, ui_color_from_name(str8_lit("text")), edit_string);
       if(autocomplete_hint_string.size != 0)
       {
-        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
-        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
+        RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, edit_string, params->cursor->column-1);
+        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, params->cursor->column-1 - autocomp_cursor_info.replaced_range.min);
         U64 off = 0;
         U64 cursor_off = params->cursor->column-1;
         DR_FStrNode *prev_n = 0;

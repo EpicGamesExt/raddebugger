@@ -1177,20 +1177,28 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         // rjf: look for member name
         E_Token member_name_maybe = e_token_at_it(it, &tokens);
         String8 member_name_maybe_string = str8_substr(text, member_name_maybe.range);
+        B32 member_name_is_good = (member_name_maybe.kind == E_TokenKind_Identifier);
         
-        // rjf: if we have a member name, build dot-operator tree
-        if(member_name_maybe.kind == E_TokenKind_Identifier)
+        // rjf: build dot-operator tree
+        E_Expr *lhs = atom;
+        E_Expr *rhs = &e_expr_nil;
+        if(member_name_is_good)
         {
-          it += 1;
-          E_Expr *lhs = atom;
-          E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, member_name_maybe.range);
+          rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, member_name_maybe.range);
           rhs->string = member_name_maybe_string;
-          atom = e_push_expr(arena, E_ExprKind_MemberAccess, token.range);
-          e_expr_push_child(atom, lhs);
+        }
+        atom = e_push_expr(arena, E_ExprKind_MemberAccess, token.range);
+        e_expr_push_child(atom, lhs);
+        if(member_name_is_good)
+        {
           e_expr_push_child(atom, rhs);
         }
         
         // rjf: no identifier after `.`? -> error
+        if(member_name_is_good)
+        {
+          it += 1;
+        }
         else
         {
           e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Missing member name after `%S`.", token_string);
