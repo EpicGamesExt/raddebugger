@@ -137,6 +137,13 @@ os_window_close(OS_Handle handle)
 }
 
 internal void
+os_window_set_title(OS_Handle window, String8 title)
+{
+  if(os_handle_match(handle, os_handle_zero())) {return;}
+  // TODO(rjf)
+}
+
+internal void
 os_window_first_paint(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}

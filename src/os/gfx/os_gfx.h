@@ -143,6 +143,7 @@ internal String8 os_get_clipboard_text(Arena *arena);
 
 internal OS_Handle      os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title);
 internal void           os_window_close(OS_Handle window);
+internal void           os_window_set_title(OS_Handle window, String8 title);
 internal void           os_window_first_paint(OS_Handle window);
 internal void           os_window_focus(OS_Handle window);
 internal B32            os_window_is_focused(OS_Handle window);

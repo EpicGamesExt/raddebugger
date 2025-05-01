@@ -1085,6 +1085,16 @@ os_window_close(OS_Handle handle)
 }
 
 internal void
+os_window_set_title(OS_Handle handle, String8 title)
+{
+  Temp scratch = scratch_begin(0, 0);
+  OS_W32_Window *window = os_w32_window_from_handle(handle);
+  String16 title16 = str16_from_8(scratch.arena, title);
+  SetWindowTextW(window->hwnd, (WCHAR *)title16.str);
+  scratch_end(scratch);
+}
+
+internal void
 os_window_first_paint(OS_Handle window_handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(window_handle);

@@ -180,6 +180,7 @@
 //     `raddbg_auto_view_rule(DynamicArray<?>, slice)`: declares an
 //     auto-view-rule from source code, rather than from debugger
 //     configuration.
+// - The debugger now incorporates the loaded project in all window titles.
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.
 // - Fixed substantial unnecessary memory usage with very large output logs.

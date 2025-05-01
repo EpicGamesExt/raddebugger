@@ -5591,6 +5591,13 @@ rd_store_view_paramf(String8 key, char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Window Functions
 
+internal String8
+rd_push_window_title(Arena *arena)
+{
+  String8 result = push_str8f(arena, "%S - %s", str8_skip_last_slash(rd_state->project_path), BUILD_TITLE " (" BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL ")");
+  return result;
+}
+
 internal RD_Cfg *
 rd_window_from_cfg(RD_Cfg *cfg)
 {
@@ -5684,7 +5691,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->cfg_id = id;
     ws->arena = arena_alloc();
     {
-      String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
+      String8 title = rd_push_window_title(scratch.arena);
       ws->os = os_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*OS_WindowFlag_UseDefaultPosition)|OS_WindowFlag_CustomBorder, title);
     }
     ws->r = r_window_equip(ws->os);
@@ -12603,6 +12610,16 @@ rd_frame(void)
               if(recent_projects.count > 32)
               {
                 rd_cfg_release(recent_projects.last->v);
+              }
+            }
+            
+            //- rjf: update all window titles
+            if(file_is_okay)
+            {
+              String8 window_title = rd_push_window_title(scratch.arena);
+              for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
+              {
+                os_window_set_title(ws->os, window_title);
               }
             }
           }break;

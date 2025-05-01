@@ -944,6 +944,7 @@ internal void rd_store_view_paramf(String8 key, char *fmt, ...);
 ////////////////////////////////
 //~ rjf: Window Functions
 
+internal String8 rd_push_window_title(Arena *arena);
 internal RD_Cfg *rd_window_from_cfg(RD_Cfg *cfg);
 internal RD_WindowState *rd_window_state_from_cfg(RD_Cfg *cfg);
 internal RD_WindowState *rd_window_state_from_os_handle(OS_Handle os);

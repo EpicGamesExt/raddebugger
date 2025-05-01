@@ -46,6 +46,11 @@ os_window_close(OS_Handle window)
 }
 
 internal void
+os_window_set_title(OS_Handle window, String8 title)
+{
+}
+
+internal void
 os_window_first_paint(OS_Handle window)
 {
 }
