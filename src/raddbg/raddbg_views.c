@@ -2336,6 +2336,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
 typedef struct RD_MemoryViewState RD_MemoryViewState;
 struct RD_MemoryViewState
 {
+  Rng1U64 last_view_range;
+  Rng1U64 last_cursor_range;
   B32 center_cursor;
   B32 contain_cursor;
 };
@@ -2352,42 +2354,44 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
   RD_MemoryViewState *mv = rd_view_state(RD_MemoryViewState);
   
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  Rng1U64 space_range = e_range_from_eval(eval);
+  F32 main_font_size = ui_bottom_font_size();
+  Rng1U64 view_range = e_range_from_eval(eval);
   U64 base_offset = e_base_offset_from_eval(eval);
   U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
   if(size == 0)
   {
     size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
   }
-  space_range = r1u64(base_offset, base_offset+size);
+  view_range = r1u64(base_offset, base_offset+size);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-    space_range = rd_whole_range_from_eval_space(eval.space);
+    view_range = rd_whole_range_from_eval_space(eval.space);
   }
-  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity && dim_1u64(space_range) == KB(16))
+  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity && dim_1u64(view_range) == KB(16))
   {
-    space_range = r1u64(0, 0x7FFFFFFFFFFFull);
+    view_range = r1u64(0, 0x7FFFFFFFFFFFull);
   }
-  U64 cursor          = rd_view_cfg_u64_from_string(str8_lit("cursor_vaddr"));
-  U64 mark            = rd_view_cfg_u64_from_string(str8_lit("mark_vaddr"));
-  U64 bytes_per_cell  = rd_view_cfg_u64_from_string(str8_lit("bytes_per_cell"));
+  U64 cursor_base_vaddr = rd_view_cfg_u64_from_string(str8_lit("cursor"));
+  U64 mark_base_vaddr   = rd_view_cfg_u64_from_string(str8_lit("mark"));
+  U64 cursor_size       = rd_view_cfg_u64_from_string(str8_lit("cursor_size"));
+  cursor_size = ClampBot(1, cursor_size);
+  U64 initial_cursor_base_vaddr  = cursor_base_vaddr;
+  U64 initial_mark_base_vaddr    = mark_base_vaddr;
   U64 num_columns     = rd_view_cfg_u64_from_string(str8_lit("num_columns"));
   if(num_columns == 0)
   {
     num_columns = 16;
   }
   num_columns = ClampBot(1, num_columns);
-  bytes_per_cell = ClampBot(1, bytes_per_cell);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   Vec4F32 selection_color = ui_color_from_name(str8_lit("selection"));
-  Vec4F32 border_color = ui_color_from_name(str8_lit("border"));
+  Vec4F32 border_color = ui_color_from_name(str8_lit("selection"));
   
   //////////////////////////////
   //- rjf: process commands
@@ -2408,7 +2412,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }break;
       case RD_CmdKind_GoToAddress:
       {
-        cursor = mark = cmd->regs->vaddr;
+        cursor_base_vaddr = mark_base_vaddr = cmd->regs->vaddr;
         mv->center_cursor = 1;
       }break;
     }
@@ -2422,47 +2426,68 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   F32 font_size = ui_top_font_size();
   F32 big_glyph_advance = fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
   F32 row_height_px = floor_f32(font_size*2.f);
-  F32 cell_width_px = floor_f32(font_size*2.f * bytes_per_cell);
-  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
-  Vec2F32 panel_dim = dim_2f32(rect);
-  F32 footer_dim = font_size*10.f;
-  Rng2F32 header_rect = r2f32p(0, 0, panel_dim.x, row_height_px);
-  Rng2F32 footer_rect = r2f32p(0, panel_dim.y-footer_dim, panel_dim.x, panel_dim.y);
-  Rng2F32 content_rect = r2f32p(0, row_height_px, panel_dim.x-scroll_bar_dim, footer_rect.y0);
+  F32 cell_width_px = floor_f32(font_size*2.f);
   
   //////////////////////////////
   //- rjf: determine legal scroll range
   //
-  Rng1S64 scroll_idx_rng = r1s64(0, dim_1u64(space_range)/num_columns);
+  U64 view_range_last = view_range.max;
+  if(view_range_last != 0)
+  {
+    view_range_last -= 1;
+  }
+  Rng1S64 scroll_idx_rng = r1s64(0, (view_range_last - view_range.min) / num_columns);
   
   //////////////////////////////
-  //- rjf: determine info about visible range of rows
+  //- rjf: determine visible range of rows
   //
   Rng1S64 viz_range_rows = {0};
-  Rng1U64 viz_range_bytes = {0};
   S64 num_possible_visible_rows = 0;
   {
-    num_possible_visible_rows = dim_2f32(content_rect).y/row_height_px;
+    num_possible_visible_rows = dim_2f32(rect).y/row_height_px;
     viz_range_rows.min = scroll_pos.y.idx + (S64)scroll_pos.y.off - !!(scroll_pos.y.off<0);
     viz_range_rows.max = scroll_pos.y.idx + (S64)scroll_pos.y.off + num_possible_visible_rows,
     viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
     viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
-    viz_range_bytes.min = space_range.min + viz_range_rows.min*num_columns;
-    viz_range_bytes.max = space_range.min + (viz_range_rows.max+1)*num_columns+1;
-    if(viz_range_bytes.min > viz_range_bytes.max)
-    {
-      Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
-    }
-    viz_range_bytes = intersect_1u64(space_range, viz_range_bytes);
   }
+  
+  //////////////////////////////
+  //- rjf: calculate rectangles
+  //
+  F32 scroll_bar_dim = floor_f32(main_font_size*1.5f);
+  Vec2F32 panel_dim = dim_2f32(rect);
+  F32 footer_dim = floor_f32(main_font_size*10.f);
+  Rng2F32 header_rect = r2f32p(0, 0, panel_dim.x, row_height_px);
+  Rng2F32 footer_rect = r2f32p(0, panel_dim.y-footer_dim, panel_dim.x-scroll_bar_dim, panel_dim.y);
+  Rng2F32 content_rect = r2f32p(0, row_height_px, panel_dim.x-scroll_bar_dim, panel_dim.y);
+  
+  //////////////////////////////
+  //- rjf: bump backwards if we are past the first
+  if(viz_range_rows.min > 0)
+  {
+    viz_range_rows.min -= 1;
+    content_rect.y0 -= row_height_px;
+  }
+  
+  //////////////////////////////
+  //- rjf: determine visible range of bytes
+  //
+  Rng1U64 viz_range_bytes = {0};
+  viz_range_bytes.min = view_range.min + (viz_range_rows.min)*num_columns;
+  viz_range_bytes.max = view_range.min + (viz_range_rows.max+1)*num_columns+1;
+  if(viz_range_bytes.min > viz_range_bytes.max)
+  {
+    Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
+  }
+  viz_range_bytes = intersect_1u64(view_range, viz_range_bytes);
   
   //////////////////////////////
   //- rjf: take keyboard controls
   //
   UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
   {
-    U64 next_cursor = cursor;
-    U64 next_mark = mark;
+    U64 next_cursor_base_vaddr = cursor_base_vaddr;
+    U64 next_mark_base_vaddr = mark_base_vaddr;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       Vec2S64 cell_delta = {0};
@@ -2479,11 +2504,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         {
           if(evt->delta_2s32.x < 0)
           {
-            cell_delta.x = -(S64)(cursor%num_columns);
+            cell_delta.x = -(S64)(cursor_base_vaddr%num_columns);
           }
           else if(evt->delta_2s32.x > 0)
           {
-            cell_delta.x = (num_columns-1) - (S64)(cursor%num_columns);
+            cell_delta.x = (num_columns-1) - (S64)(cursor_base_vaddr%num_columns);
           }
           if(evt->delta_2s32.y < 0)
           {
@@ -2500,31 +2525,31 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         good_action = 1;
       }
-      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor != mark)
+      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor_base_vaddr != mark_base_vaddr)
       {
         MemoryZeroStruct(&cell_delta);
       }
       if(good_action)
       {
-        cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor);
-        cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor/num_columns));
-        next_cursor += cell_delta.x;
-        next_cursor += cell_delta.y*num_columns;
+        cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor_base_vaddr);
+        cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor_base_vaddr/num_columns));
+        next_cursor_base_vaddr += cell_delta.x;
+        next_cursor_base_vaddr += cell_delta.y*num_columns;
       }
-      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor != mark)
+      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
       {
         if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
         {
-          next_cursor = Min(cursor, mark);
+          next_cursor_base_vaddr = Min(cursor_base_vaddr, mark_base_vaddr);
         }
         else
         {
-          next_cursor = Max(cursor, mark);
+          next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
         }
       }
       if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
       {
-        next_mark = next_cursor;
+        next_mark_base_vaddr = next_cursor_base_vaddr;
       }
       if(good_action)
       {
@@ -2532,21 +2557,54 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         ui_eat_event(evt);
       }
     }
-    cursor = next_cursor;
-    mark = next_mark;
+    cursor_base_vaddr = next_cursor_base_vaddr;
+    mark_base_vaddr = next_mark_base_vaddr;
   }
   
   //////////////////////////////
   //- rjf: clamp cursor
   //
+  Rng1U64 cursor_valid_rng = view_range;
+  if(cursor_valid_rng.max != 0)
   {
-    Rng1U64 cursor_valid_rng = space_range;
-    if(cursor_valid_rng.max != 0)
-    {
-      cursor_valid_rng.max -= 1;
-    }
-    cursor = clamp_1u64(cursor_valid_rng, cursor);
-    mark = clamp_1u64(cursor_valid_rng, mark);
+    cursor_valid_rng.max -= 1;
+  }
+  if(cursor_base_vaddr != initial_cursor_base_vaddr)
+  {
+    cursor_base_vaddr = clamp_1u64(cursor_valid_rng, cursor_base_vaddr);
+  }
+  if(mark_base_vaddr != initial_mark_base_vaddr)
+  {
+    mark_base_vaddr = clamp_1u64(cursor_valid_rng, mark_base_vaddr);
+  }
+  
+  //////////////////////////////
+  //- rjf: unpack post-move cursor/mark info
+  //
+  Rng1U64 cursor_range = r1u64(cursor_base_vaddr, cursor_base_vaddr + cursor_size);
+  Rng1U64 mark_range   = r1u64(mark_base_vaddr, mark_base_vaddr + cursor_size);
+  Rng1U64 selection = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size-1),
+                                 r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size-1));
+  
+  //////////////////////////////
+  //- rjf: center cursor if range has changed
+  //
+  if(mv->last_view_range.max != view_range.max ||
+     mv->last_view_range.min != view_range.min)
+  {
+    mv->center_cursor = 1;
+    mv->last_view_range = view_range;
+  }
+  
+  //////////////////////////////
+  //- rjf: match mark to cursor if cursor has changed
+  //
+  if(mv->last_cursor_range.min != cursor_range.min ||
+     mv->last_cursor_range.max != cursor_range.max)
+  {
+    mv->contain_cursor = 1;
+    mv->last_cursor_range = cursor_range;
+    mark_range = cursor_range;
   }
   
   //////////////////////////////
@@ -2555,7 +2613,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   if(mv->center_cursor)
   {
     mv->center_cursor = 0;
-    S64 cursor_row_idx = cursor/num_columns;
+    S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
     S64 new_idx = (cursor_row_idx-num_possible_visible_rows/2+1);
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
     ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
@@ -2567,7 +2625,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   if(mv->contain_cursor)
   {
     mv->contain_cursor = 0;
-    S64 cursor_row_idx = cursor/num_columns;
+    S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
     Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
     S64 min_delta = Min(0, cursor_viz_range.min-viz_range_rows.min);
     S64 max_delta = Max(0, cursor_viz_range.max-viz_range_rows.max);
@@ -2577,11 +2635,12 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
-  //- rjf: produce fancy string runs for all possible byte values in all cells
+  //- rjf: produce fancy strings for all possible byte values in all cells
   //
   DR_FStrList byte_fstrs[256] = {0};
   {
-    Vec4F32 full_color = ui_color_from_name(str8_lit("text"));
+    Vec4F32 full_color = {0};
+    UI_TagF("neutral") full_color = ui_color_from_name(str8_lit("text"));
     Vec4F32 zero_color = full_color;
     UI_TagF("weak") zero_color = ui_color_from_name(str8_lit("text"));
     for(U64 idx = 0; idx < ArrayCount(byte_fstrs); idx += 1)
@@ -2760,26 +2819,48 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
+  //- rjf: build scroll bar
+  //
+  UI_Parent(container_box) UI_FontSize(main_font_size)
+  {
+    ui_set_next_fixed_x(content_rect.x1);
+    ui_set_next_fixed_y(0);
+    ui_set_next_fixed_width(scroll_bar_dim);
+    ui_set_next_fixed_height(dim_2f32(rect).y);
+    {
+      scroll_pos.y = ui_scroll_bar(Axis2_Y,
+                                   ui_px(scroll_bar_dim, 1.f),
+                                   scroll_pos.y,
+                                   scroll_idx_rng,
+                                   num_possible_visible_rows);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build header
   //
   UI_Box *header_box = &ui_nil_box;
-  UI_Parent(container_box)
+  UI_Parent(container_box) UI_TagF("floating")
   {
-    UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f)) UI_Row
-      header_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom, "table_header");
+    UI_Rect(r2f32p(0, 0, dim_2f32(rect).x - scroll_bar_dim, row_height_px))
+      header_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|
+                                             UI_BoxFlag_DrawBackground|
+                                             UI_BoxFlag_DrawDropShadow|
+                                             UI_BoxFlag_DrawBackgroundBlur|
+                                             UI_BoxFlag_Floating, "table_header");
     UI_Parent(header_box)
       RD_Font(RD_FontSlot_Code)
       UI_FontSize(font_size)
-      UI_TagF("weak")
     {
       UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
         UI_TextAlignment(UI_TextAlign_Center)
       {
-        Rng1U64 col_selection_rng = r1u64(cursor%num_columns, mark%num_columns);
-        for(U64 row_off = 0; row_off < num_columns*bytes_per_cell; row_off += bytes_per_cell)
+        Rng1U64 col_selection_rng = r1u64(cursor_base_vaddr%num_columns, mark_base_vaddr%num_columns);
+        for(U64 row_off = 0; row_off < num_columns; row_off += 1)
         {
-          ui_labelf("%I64X", row_off);
+          B32 column_is_selected = (selection.min%num_columns <= row_off && row_off <= selection.max%num_columns);
+          UI_TagF(column_is_selected ? "" : "weak") ui_labelf("%I64X", row_off);
         }
       }
       ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
@@ -2788,20 +2869,46 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
-  //- rjf: build scroll bar
+  //- rjf: build footer
   //
-  UI_Parent(container_box)
+  UI_Box *footer_box = &ui_nil_box;
+  UI_Parent(container_box) UI_FontSize(main_font_size) UI_TagF("floating")
   {
-    ui_set_next_fixed_x(content_rect.x1);
-    ui_set_next_fixed_y(content_rect.y0);
-    ui_set_next_fixed_width(scroll_bar_dim);
-    ui_set_next_fixed_height(dim_2f32(content_rect).y);
+    ui_set_next_fixed_x(footer_rect.x0);
+    ui_set_next_fixed_y(footer_rect.y0);
+    ui_set_next_fixed_width(dim_2f32(footer_rect).x);
+    ui_set_next_fixed_height(dim_2f32(footer_rect).y);
+    footer_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow, "footer");
+    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code)
     {
-      scroll_pos.y = ui_scroll_bar(Axis2_Y,
-                                   ui_px(scroll_bar_dim, 1.f),
-                                   scroll_pos.y,
-                                   scroll_idx_rng,
-                                   num_possible_visible_rows);
+      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TagF("weak")
+        UI_PrefHeight(ui_em(2.f, 0.f))
+      {
+        ui_labelf("Address:");
+        ui_labelf("U8:");
+        ui_labelf("U16:");
+        ui_labelf("U32:");
+        ui_labelf("U64:");
+      }
+      UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
+        UI_PrefHeight(ui_em(2.f, 0.f))
+      {
+        ui_labelf("%016I64X", cursor_base_vaddr);
+        {
+          U64 as_u8  = 0;
+          U64 as_u16 = 0;
+          U64 as_u32 = 0;
+          U64 as_u64 = 0;
+          e_space_read(eval.space, &as_u64, r1u64(cursor_base_vaddr, cursor_base_vaddr+1));
+          as_u32 = *(U32 *)&as_u64;
+          as_u16 = *(U16 *)&as_u64;
+          as_u8  =  *(U8 *)&as_u64;
+          ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
+          ui_labelf("%04X (%I64u)",  as_u16, as_u16);
+          ui_labelf("%08X (%I64u)",  as_u32, as_u32);
+          ui_labelf("%016I64X (%I64u)", as_u64, as_u64);
+        }
+      }
     }
   }
   
@@ -2815,10 +2922,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     ui_set_next_fixed_y(content_rect.y0);
     ui_set_next_fixed_width(dim_2f32(content_rect).x);
     ui_set_next_fixed_height(dim_2f32(content_rect).y);
-    ui_set_next_child_layout_axis(Axis2_Y);
     scrollable_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
                                                UI_BoxFlag_Scroll|
-                                               UI_BoxFlag_AllowOverflowX|
                                                UI_BoxFlag_AllowOverflowY,
                                                "scrollable_box");
     container_box->view_off.x = container_box->view_off_target.x = scroll_pos.x.idx + scroll_pos.x.off;
@@ -2833,7 +2938,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   UI_Parent(scrollable_box) UI_WidthFill UI_HeightFill
   {
     ui_set_next_child_layout_axis(Axis2_Y);
-    ui_set_next_hover_cursor(OS_Cursor_IBar);
     row_container_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "row_container");
     UI_Parent(row_container_box)
     {
@@ -2888,11 +2992,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         mv->contain_cursor = 1;
       }
-      cursor = mouse_hover_byte_num-1;
-      cursor = clamp_1u64(space_range, cursor);
+      cursor_base_vaddr = mouse_hover_byte_num-1;
       if(ui_pressed(sig))
       {
-        mark = cursor;
+        mark_base_vaddr = cursor_base_vaddr;
       }
     }
     
@@ -2922,24 +3025,25 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   UI_Parent(row_container_box) RD_Font(RD_FontSlot_Code) UI_FontSize(font_size)
   {
-    Rng1U64 selection = r1u64(cursor, mark);
     U8 *row_ascii_buffer = push_array(scratch.arena, U8, num_columns);
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f))
       for(S64 row_idx = viz_range_rows.min; row_idx <= viz_range_rows.max; row_idx += 1)
     {
-      Rng1U64 row_range_bytes = r1u64(space_range.min + row_idx*num_columns,
-                                      space_range.min + (row_idx+1)*num_columns);
-      if(row_range_bytes.min >= space_range.max)
+      Rng1U64 row_range_bytes = r1u64(view_range.min + row_idx*num_columns, view_range.min + (row_idx+1)*num_columns);
+      if(row_range_bytes.min >= view_range.max)
       {
         break;
       }
-      B32 row_is_boundary = 0;
-      if(row_range_bytes.min%64 == 0)
+      UI_BoxFlags row_flags = 0;
+      if(row_range_bytes.min <= selection.min && selection.min < row_range_bytes.max)
       {
-        row_is_boundary = 1;
-        ui_set_next_tag(str8_lit("pop"));
+        row_flags |= UI_BoxFlag_DrawSideTop;
       }
-      UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop*!!row_is_boundary, "row_%I64x", row_range_bytes.min);
+      if(row_range_bytes.min <= selection.max && selection.max < row_range_bytes.max)
+      {
+        row_flags |= UI_BoxFlag_DrawSideBottom;
+      }
+      UI_Box *row = ui_build_box_from_stringf(row_flags, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
       {
         UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f))
@@ -2999,6 +3103,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 cell_flags |= UI_BoxFlag_DrawBackground;
                 cell_bg_rgba = selection_color;
                 cell_bg_rgba.w *= 0.2f;
+              }
+              if(selection.min%num_columns == col_idx)
+              {
+                cell_flags |= UI_BoxFlag_DrawSideLeft;
+              }
+              if(selection.max%num_columns == col_idx)
+              {
+                cell_flags |= UI_BoxFlag_DrawSideRight;
               }
               
               // rjf: build
@@ -3109,53 +3221,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
-  //- rjf: build footer
-  //
-  UI_Box *footer_box = &ui_nil_box;
-  UI_Parent(container_box)
-  {
-    ui_set_next_fixed_x(footer_rect.x0);
-    ui_set_next_fixed_y(footer_rect.y0);
-    ui_set_next_fixed_width(dim_2f32(footer_rect).x);
-    ui_set_next_fixed_height(dim_2f32(footer_rect).y);
-    footer_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, "footer");
-    UI_Parent(footer_box) RD_Font(RD_FontSlot_Code) UI_FontSize(font_size)
-    {
-      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TagF("weak")
-        UI_PrefHeight(ui_px(row_height_px, 0.f))
-      {
-        ui_labelf("Address:");
-        ui_labelf("U8:");
-        ui_labelf("U16:");
-        ui_labelf("U32:");
-        ui_labelf("U64:");
-      }
-      UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
-        UI_PrefHeight(ui_px(row_height_px, 0.f))
-      {
-        B32 cursor_in_range = (viz_range_bytes.min <= cursor && cursor+8 <= viz_range_bytes.max);
-        ui_labelf("%016I64X", cursor);
-        if(cursor_in_range)
-        {
-          U64 as_u8  = 0;
-          U64 as_u16 = 0;
-          U64 as_u32 = 0;
-          U64 as_u64 = 0;
-          U64 cursor_off = cursor-viz_range_bytes.min;
-          as_u8  = (U64)*(U8 *)(visible_memory + cursor_off);
-          as_u16 = (U64)*(U16*)(visible_memory + cursor_off);
-          as_u32 = (U64)*(U32*)(visible_memory + cursor_off);
-          as_u64 = (U64)*(U64*)(visible_memory + cursor_off);
-          ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
-          ui_labelf("%04X (%I64u)",  as_u16, as_u16);
-          ui_labelf("%08X (%I64u)",  as_u32, as_u32);
-          ui_labelf("%016I64X (%I64u)", as_u64, as_u64);
-        }
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: scroll
   //
   {
@@ -3169,13 +3234,30 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   }
   
   //////////////////////////////
+  //- rjf: re-clamp
+  //
+  if(cursor_base_vaddr != initial_cursor_base_vaddr)
+  {
+    cursor_base_vaddr = clamp_1u64(cursor_valid_rng, cursor_base_vaddr);
+  }
+  if(mark_base_vaddr != initial_mark_base_vaddr)
+  {
+    mark_base_vaddr = clamp_1u64(cursor_valid_rng, mark_base_vaddr);
+  }
+  
+  //////////////////////////////
   //- rjf: save parameters
   //
-  rd_store_view_param_u64(str8_lit("cursor_vaddr"), cursor);
-  rd_store_view_param_u64(str8_lit("mark_vaddr"), mark);
+  if(cursor_base_vaddr != initial_cursor_base_vaddr)
+  {
+    rd_store_view_param_u64(str8_lit("cursor"), cursor_base_vaddr);
+  }
+  if(mark_base_vaddr != initial_mark_base_vaddr)
+  {
+    rd_store_view_param_u64(str8_lit("mark"), mark_base_vaddr);
+  }
   rd_store_view_scroll_pos(scroll_pos);
   
-  hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
 }

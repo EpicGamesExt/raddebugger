@@ -245,6 +245,10 @@ RD_VocabTable:
       @display_name('Theme Colors') @description("Additional theme colors which are applied on top of the theme file or preset.")
         'theme_colors': query,
       
+      //- rjf: autocompletion
+      @display_name('Autocompletion Lister') @description("Enables the autocompletion lister while typing expressions.") @default(1)
+        'autocompletion_lister': bool,
+      
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
         'thread_lines': bool,
@@ -487,14 +491,16 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @description("An expression to describe the base address or offset of the memory view.")
+      @display_name("Base Address") @description("An expression to describe the base address or offset of the memory view.")
         'expression': code_string,
-      @description("The number of bytes of the viewed memory range.")
+      @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")
         'size': code_string,
+      @display_name("Cursor Address") @description("The address of the cursor.")
+        'cursor': code_string,
+      @display_name("Cursor Size") @description("The size, in bytes, of the cursor.")
+        'cursor_size': @range[1, 16] u64,
       @default(16) @description("The number of columns to build before building new rows.")
         'num_columns': @range[1, 64] u64,
-      @default(1) @description("The number of bytes that each cell should represent.")
-        'bytes_per_cell': @range[1, 8] u64,
     }
     ```
   }
@@ -1358,6 +1364,7 @@ RD_ThemePresetTable:
       theme_color: {tags:"text",                                   value: 0xe5e5e5ff }
       theme_color: {tags:"weak text",                              value: 0xa4a4a4ff }
       theme_color: {tags:"good text",                              value: 0x32a852ff }
+      theme_color: {tags:"neutral text",                           value: 0x3a90bbff }
       theme_color: {tags:"bad text",                               value: 0xcf5242ff }
       theme_color: {tags:"hover",                                  value: 0xffffffff }
       theme_color: {tags:"focus",                                  value: 0xfda200ff }

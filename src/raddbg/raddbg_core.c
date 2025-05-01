@@ -6675,7 +6675,7 @@ rd_window_frame(void)
     RD_Font(RD_FontSlot_Code)
     {
       //- rjf: add autocompletion view task
-      if(ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index)
+      if(rd_setting_b32_from_name(str8_lit("autocompletion_lister")) && ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index)
       {
         // rjf: build view
         RD_Cfg *root = rd_immediate_cfg_from_keyf("autocomp_view_%I64x", window->id);
@@ -7616,18 +7616,18 @@ rd_window_frame(void)
           };
           CenterButtonTask center_button_tasks[] =
           {
-            {rd_cmd_kind_info_table[RD_CmdKind_Run].string,      str8_lit("good"), (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index())},
-            {rd_cmd_kind_info_table[RD_CmdKind_Restart].string,  str8_lit("good"), processes.count != 0},
-            {rd_cmd_kind_info_table[RD_CmdKind_Halt].string,     str8_lit("weak"), !can_send_signal},
-            {rd_cmd_kind_info_table[RD_CmdKind_KillAll].string,  str8_lit("bad"),  processes.count != 0},
-            {rd_cmd_kind_info_table[RD_CmdKind_StepOver].string, str8_lit("weak"), can_send_signal},
-            {rd_cmd_kind_info_table[RD_CmdKind_StepInto].string, str8_lit("weak"), can_send_signal},
-            {rd_cmd_kind_info_table[RD_CmdKind_StepOut].string,  str8_lit("weak"), processes.count != 0 && can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_Run].string,      str8_lit("good"),    (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index())},
+            {rd_cmd_kind_info_table[RD_CmdKind_Restart].string,  str8_lit("neutral"), processes.count != 0},
+            {rd_cmd_kind_info_table[RD_CmdKind_Halt].string,     str8_lit("weak"),    !can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_KillAll].string,  str8_lit("bad"),     processes.count != 0},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepOver].string, str8_lit("weak"),    can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepInto].string, str8_lit("weak"),    can_send_signal},
+            {rd_cmd_kind_info_table[RD_CmdKind_StepOut].string,  str8_lit("weak"),    processes.count != 0 && can_send_signal},
           };
           UI_TextAlignment(UI_TextAlign_Center)
             for EachElement(idx, center_button_tasks)
             UI_Flags(center_button_tasks[idx].is_enabled ? 0 : UI_BoxFlag_Disabled)
-            UI_Tag(center_button_tasks[idx].is_enabled ? center_button_tasks[idx].tag : str8_lit(""))
+            UI_Tag(center_button_tasks[idx].is_enabled ? center_button_tasks[idx].tag : str8_lit("weak"))
           {
             String8 cmd_name = center_button_tasks[idx].cmd_name;
             UI_Signal sig = ui_button(rd_icon_kind_text_table[rd_icon_kind_from_code_name(cmd_name)]);
@@ -10161,7 +10161,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
       }
       else
       {
-        log_user_errorf("Couldn't evaluate \"%S\" as an address.", string);
+        log_user_errorf("Couldn't evaluate `%S` as an address.", string);
       }
     }break;
   }
