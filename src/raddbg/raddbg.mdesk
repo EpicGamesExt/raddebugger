@@ -409,7 +409,7 @@ RD_VocabTable:
   {
     tab,
     ```
-      @expand_commands(duplicate_tab, close_tab)
+      @row_commands(duplicate_tab, close_tab)
       x:
     {
       @default(11) @display_name('Tab Font Size') @description("Controls the tab's font size.")

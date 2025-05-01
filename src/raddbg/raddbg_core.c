@@ -13337,24 +13337,27 @@ rd_frame(void)
             RD_Cfg *tab = rd_cfg_from_id(rd_regs()->tab);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, tab);
             RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_tree.root, tab->parent);
-            B32 found_selected = 0;
-            RD_Cfg *next_selected_tab = &rd_nil_cfg;
-            for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
+            if(panel->selected_tab == tab)
             {
-              if(n->v == panel->selected_tab)
+              B32 found_selected = 0;
+              RD_Cfg *next_selected_tab = &rd_nil_cfg;
+              for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
               {
-                found_selected = 1;
-              }
-              else if(!rd_cfg_is_project_filtered(n->v))
-              {
-                next_selected_tab = n->v;
-                if(found_selected)
+                if(n->v == panel->selected_tab)
                 {
-                  break;
+                  found_selected = 1;
+                }
+                else if(!rd_cfg_is_project_filtered(n->v))
+                {
+                  next_selected_tab = n->v;
+                  if(found_selected)
+                  {
+                    break;
+                  }
                 }
               }
+              rd_cmd(RD_CmdKind_FocusTab, .tab = next_selected_tab->id);
             }
-            rd_cmd(RD_CmdKind_FocusTab, .tab = next_selected_tab->id);
             rd_cfg_release(tab);
           }break;
           case RD_CmdKind_MoveView:

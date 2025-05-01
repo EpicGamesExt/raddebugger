@@ -1906,7 +1906,13 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
-  Rng1U64 range = e_range_from_eval(eval);
+  U64 base_offset = e_base_offset_from_eval(eval);
+  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  if(size == 0)
+  {
+    size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+  }
+  Rng1U64 range = r1u64(base_offset, base_offset+size);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
   String8 lang = rd_view_cfg_from_string(str8_lit("lang"))->first->string;
   if(lang.size == 0)
@@ -2174,7 +2180,13 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  Rng1U64 range = e_range_from_eval(eval);
+  U64 base_offset = e_base_offset_from_eval(eval);
+  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  if(size == 0)
+  {
+    size = KB(16);
+  }
+  Rng1U64 range = r1u64(base_offset, base_offset+size);
   Arch arch = rd_arch_from_eval(eval);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
@@ -2210,6 +2222,10 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     if(rd_setting_b32_from_name(str8_lit("show_symbol_names")))
     {
       style_flags |= DASM_StyleFlag_SymbolNames;
+    }
+    if(str8_match(rd_setting_from_name(str8_lit("syntax")), str8_lit("att"), 0))
+    {
+      syntax = DASM_Syntax_ATT;
     }
   }
   U128 dasm_key = rd_key_from_eval_space_range(space, range, 0);
@@ -2343,6 +2359,13 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: unpack parameterization info
   //
   Rng1U64 space_range = e_range_from_eval(eval);
+  U64 base_offset = e_base_offset_from_eval(eval);
+  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  if(size == 0)
+  {
+    size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+  }
+  space_range = r1u64(base_offset, base_offset+size);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
