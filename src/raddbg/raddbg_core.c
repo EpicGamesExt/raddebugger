@@ -14314,10 +14314,10 @@ rd_frame(void)
               rd_cfg_new_replace(expr, rd_regs()->expr);
             }
             
-            // rjf: non-floating -> embed in tab parameter
+            // rjf: non-floating -> embed in view
             else
             {
-              view = rd_cfg_from_id(rd_regs()->tab);
+              view = rd_cfg_from_id(rd_regs()->view);
             }
             
             // rjf: determine if the target view is a lister (and thus already has a command)

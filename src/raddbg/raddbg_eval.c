@@ -436,7 +436,16 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
         MD_Node *tag = md_tag_from_string(schema, str8_lit("expand_commands"), 0);
         for MD_EachNode(arg, tag->first)
         {
-          str8_list_push(scratch.arena, &commands_list, arg->string);
+          RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(arg->string);
+          FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, rd_display_from_code_name(cmd_kind_info->string));
+          FuzzyMatchRangeList desc_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->description);
+          FuzzyMatchRangeList tags_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->search_tags);
+          if(name_matches.count == name_matches.needle_part_count ||
+             desc_matches.count == desc_matches.needle_part_count ||
+             tags_matches.count == tags_matches.needle_part_count)
+          {
+            str8_list_push(scratch.arena, &commands_list, arg->string);
+          }
         }
       }
       commands = str8_array_from_list(arena, &commands_list);
