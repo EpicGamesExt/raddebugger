@@ -5415,22 +5415,6 @@ rd_lang_kind_from_eval(E_Eval eval)
   {
     lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(file_path));
   }
-  if(lang_kind == TXT_LangKind_Null)
-  {
-    E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-    if(type->kind == E_TypeKind_Lens)
-    {
-      for EachIndex(idx, type->count)
-      {
-        E_Expr *arg = type->args[idx];
-        if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("lang"), 0))
-        {
-          lang_kind = txt_lang_kind_from_extension(arg->first->next->string);
-          break;
-        }
-      }
-    }
-  }
   scratch_end(scratch);
   return lang_kind;
 }

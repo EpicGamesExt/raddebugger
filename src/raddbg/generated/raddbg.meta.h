@@ -275,8 +275,12 @@ RD_CmdKind_OpenModules,
 RD_CmdKind_OpenFilePathMaps,
 RD_CmdKind_OpenAutoViewRules,
 RD_CmdKind_OpenOutput,
+RD_CmdKind_OpenText,
 RD_CmdKind_OpenDisasm,
 RD_CmdKind_OpenMemory,
+RD_CmdKind_OpenBitmap,
+RD_CmdKind_OpenColor,
+RD_CmdKind_OpenGeo3D,
 RD_CmdKind_COUNT,
 RD_CmdKind_FirstTabFastPathCmd = RD_CmdKind_OpenWatch,
 } RD_CmdKind;
@@ -629,8 +633,12 @@ X(modules) \
 X(file_path_maps) \
 X(auto_view_rules) \
 Y(output, text, "query:output")\
+Y(text, text, "")\
 Y(disasm, disasm, "")\
 Y(memory, memory, "")\
+Y(bitmap, bitmap, "")\
+Y(color, color, "")\
+Y(geo3d, geo3d, "")\
 Z(getting_started)\
 
 #define rd_regs_lit_init_top \
@@ -678,9 +686,9 @@ Z(getting_started)\
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
-extern String8 rd_tab_fast_path_view_name_table[20];
-extern String8 rd_tab_fast_path_query_name_table[20];
-extern RD_VocabInfo rd_vocab_info_table[329];
+extern String8 rd_tab_fast_path_view_name_table[24];
+extern String8 rd_tab_fast_path_query_name_table[24];
+extern RD_VocabInfo rd_vocab_info_table[333];
 extern RD_NameSchemaInfo rd_name_schema_info_table[23];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];

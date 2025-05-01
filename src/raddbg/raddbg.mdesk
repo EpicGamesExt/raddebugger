@@ -40,8 +40,12 @@ RD_WatchTabFastPathTable:
 RD_ViewTabFastPathTable:
 {
   {Output          "Output"            output      text            "query:output"    List                  }
+  {Text            "Text"              text        text            ""                FileOutline           }
   {Disasm          "Disassembly"       disasm      disasm          ""                Glasses               }
   {Memory          "Memory"            memory      memory          ""                Grid                  }
+  {Bitmap          "Bitmap"            bitmap      bitmap          ""                Bitmap                }
+  {Color           "Color"             color       color           ""                Palette               }
+  {Geo3D           "Geometry (3D)"     geo3d       geo3d           ""                Cube                  }
 }
 
 @table(name   display_name    name_lower    icon)
@@ -437,7 +441,7 @@ RD_VocabTable:
       @description("An expression to describe data which should be viewed as text or code.")
         'expression': code_string,
       @description("The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.")
-        'lang': lang,
+        'lang': code_string,
       @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers':bool,
       @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
@@ -452,9 +456,9 @@ RD_VocabTable:
     {
       @description("An expression to describe the base address or offset of the disassembly.")
         'expression': code_string,
-      'arch':              arch,
-      'syntax':            dasm_syntax,
-      'size':              code_string,
+      'arch':        code_string,
+      'syntax':      code_string,
+      'size':        code_string,
       @default(1) @description("Controls whether or not addresses are shown in the disassembly text.")
         'show_addresses':    bool,
       @default(0) @description("Controls whether or not code bytes are shown in the disassembly text.")
@@ -494,7 +498,7 @@ RD_VocabTable:
       @order(0) 'w': u64,
       @order(1) 'h': u64,
       @display_name("Bitmap Format") @description("The pixel format that the bitmap data should be interpreted as being within.")
-        'fmt': tex2dformat,
+        'fmt': code_string,
     }
     ```
   }
@@ -513,6 +517,8 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
+      @display_name("Expression") @description("An expression to describe the base address of the index buffer.")
+        'expression': code_string,
       'count': code_string,
       'vtx': code_string,
       'vtx_size': code_string,

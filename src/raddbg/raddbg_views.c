@@ -1908,7 +1908,15 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
   Rng1U64 range = e_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval(eval);
+  String8 lang = rd_view_cfg_from_string(str8_lit("lang"))->first->string;
+  if(lang.size == 0)
+  {
+    rd_regs()->lang_kind = rd_lang_kind_from_eval(eval);
+  }
+  else
+  {
+    rd_regs()->lang_kind = txt_lang_kind_from_extension(lang);
+  }
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -3307,6 +3315,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //- rjf: equip loading info
   //
   if(offset_range.max != offset_range.min &&
+     eval.string.size != 0 &&
      eval.msgs.max_kind == E_MsgKind_Null &&
      (u128_match(data_hash, u128_zero()) ||
       r_handle_match(texture, r_handle_zero()) ||
@@ -3790,7 +3799,8 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: equip loading info
   //
-  if(eval.msgs.max_kind == E_MsgKind_Null &&
+  if(eval.string.size != 0 &&
+     eval.msgs.max_kind == E_MsgKind_Null &&
      (r_handle_match(idxs_buffer, r_handle_zero()) ||
       r_handle_match(vtxs_buffer, r_handle_zero())))
   {
