@@ -11428,7 +11428,7 @@ rd_frame(void)
                                                  .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(commands),
                                                  .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(commands),
                                                });
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           expr->type_key = type_key;
           expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
           e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
@@ -11457,7 +11457,7 @@ rd_frame(void)
         E_TypeKey type_key = e_type_key_cons(.name = name,
                                              .kind = E_TypeKind_Set,
                                              .access = E_TYPE_ACCESS_FUNCTION_NAME(cfgs));
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
@@ -11470,7 +11470,7 @@ rd_frame(void)
         E_TypeKey type_key = e_type_key_cons(.name = name,
                                              .kind = E_TypeKind_Set,
                                              .access = E_TYPE_ACCESS_FUNCTION_NAME(control));
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
@@ -11502,7 +11502,7 @@ rd_frame(void)
                                                           .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice),
                                                           .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(cfgs_slice),
                                                         });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
@@ -11536,7 +11536,7 @@ rd_frame(void)
             if(label.size != 0)
             {
               E_Space space = rd_eval_space_from_cfg(cfg);
-              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
               expr->space    = space;
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
@@ -11556,7 +11556,7 @@ rd_frame(void)
           {
             E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, window->string);
             E_Space space = rd_eval_space_from_cfg(window);
-            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
             expr->type_key = type_key;
@@ -11572,7 +11572,7 @@ rd_frame(void)
               RD_Cfg *tab = tab_n->v;
               E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, tab->string);
               E_Space space = rd_eval_space_from_cfg(tab);
-              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+              E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
               expr->space    = space;
               expr->mode     = E_Mode_Offset;
               expr->type_key = type_key;
@@ -11645,7 +11645,7 @@ rd_frame(void)
       {
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("user"));
         E_Space space = rd_eval_space_from_cfg(rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user")));
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = type_key;
@@ -11654,7 +11654,7 @@ rd_frame(void)
       {
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, str8_lit("project"));
         E_Space space = rd_eval_space_from_cfg(rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")));
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = type_key;
@@ -11679,7 +11679,7 @@ rd_frame(void)
         {
           CTRL_Entity *entity = array.v[idx];
           E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = type_key;
@@ -11719,7 +11719,7 @@ rd_frame(void)
                                                           .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(ctrl_entities),
                                                           .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(ctrl_entities)
                                                         });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
@@ -11738,7 +11738,7 @@ rd_frame(void)
                                                           .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(unattached_processes),
                                                           .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(unattached_processes)
                                                         });
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaCtrlEntity);
         e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
@@ -11823,7 +11823,7 @@ rd_frame(void)
         for EachElement(idx, collection_infos)
         {
           String8 collection_name = collection_infos[idx].name;
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
           expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
                                            .name = collection_name,
                                            .expand =
@@ -11847,7 +11847,7 @@ rd_frame(void)
       for EachElement(idx, debug_info_table_collection_names)
       {
         String8 name = debug_info_table_collection_names[idx];
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set,
                                          .flags = E_TypeFlag_StubSingleLineExpansion,
@@ -11869,7 +11869,7 @@ rd_frame(void)
         U128 hash = hs_hash_from_key(key, 0);
         String8 data = hs_data_from_hash(hs_scope, hash);
         E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         space.u128 = key;
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
@@ -11982,7 +11982,7 @@ rd_frame(void)
         {
           type_flags |= E_TypeFlag_ArrayLikeExpansion;
         }
-        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_LensSpec,
                                          .flags = type_flags,
                                          .name = lens_table[idx].name,

@@ -429,12 +429,12 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       // rjf: bad conditions? -> error if applicable, exit
       if(exprr->kind != E_ExprKind_LeafIdentifier)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Expected member name.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->range, "Expected member name.");
         break;
       }
       else if(!r_found)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->range, "Could not find a member named `%S`.", exprr->string);
         break;
       }
       else if(l.root == &e_irnode_nil ||
@@ -447,7 +447,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
               check_type_kind != E_TypeKind_Union &&
               check_type_kind != E_TypeKind_Enum)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->range, "Cannot perform member access on this type.");
         break;
       }
       
@@ -506,22 +506,22 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       }
       else if(l_restype_kind != E_TypeKind_Ptr && l_restype_kind != E_TypeKind_Array)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot index into this type.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->range, "Cannot index into this type.");
         break;
       }
       else if(!e_type_kind_is_integer(r_restype_kind))
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index with this type.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->range, "Cannot index with this type.");
         break;
       }
       else if(l_restype_kind == E_TypeKind_Ptr && direct_type_size == 0)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into pointers of zero-sized types.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->range, "Cannot index into pointers of zero-sized types.");
         break;
       }
       else if(l_restype_kind == E_TypeKind_Array && direct_type_size == 0)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into arrays of zero-sized types.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->range, "Cannot index into arrays of zero-sized types.");
         break;
       }
       
@@ -699,12 +699,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
                  r_type_kind == E_TypeKind_LRef ||
                  r_type_kind == E_TypeKind_RRef))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference pointers of zero-sized types.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->range, "Cannot dereference pointers of zero-sized types.");
           break;
         }
         else if(r_type_direct_size == 0 && r_type_kind == E_TypeKind_Array)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference arrays of zero-sized types.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->range, "Cannot dereference arrays of zero-sized types.");
           break;
         }
         else if(r_type_kind != E_TypeKind_Array &&
@@ -712,7 +712,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
                 r_type_kind != E_TypeKind_LRef &&
                 r_type_kind != E_TypeKind_RRef)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference this type.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->range, "Cannot dereference this type.");
           break;
         }
         
@@ -800,7 +800,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
           {
             text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
           }
-          e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
+          e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, text);
           break;
         }
         
@@ -880,7 +880,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         // rjf: bad conditions? -> error if applicable, exit
         if(!e_type_kind_is_integer(r_type_kind) || (r_type_size != 8 && r_type_size != 4 && r_type_size != 2))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Byteswapping this type is not supported.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Byteswapping this type is not supported.");
           break;
         }
         
@@ -921,7 +921,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         }
         else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Cannot use this operator on this type.");
           break;
         }
         
@@ -954,7 +954,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         }
         else if(!rdi_eval_op_typegroup_are_compatible(op, r_type_group))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Cannot use this operator on this type.");
           break;
         }
         
@@ -1086,7 +1086,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             if(!rdi_eval_op_typegroup_are_compatible(op, l_type_group) ||
                !rdi_eval_op_typegroup_are_compatible(op, r_type_group))
             {
-              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Cannot use this operator on this type.");
               break;
             }
             
@@ -1238,7 +1238,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         }
         else if(!e_type_kind_is_integer(c_type_kind) && c_type_kind != E_TypeKind_Bool)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Conditional term must be an integer or boolean type.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Conditional term must be an integer or boolean type.");
         }
         
         // rjf: determine the resultant type - if the left/right types match, then we
@@ -1326,7 +1326,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             {
               text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
             }
-            e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, text);
+            e_msg(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, text);
             break;
           }
           
@@ -1357,7 +1357,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         {
           E_Expr *callee = lhs->first->next;
           E_Expr *first_arg = e_expr_ref(arena, lhs->first);
-          E_Expr *call = e_push_expr(arena, E_ExprKind_Call, 0);
+          E_Expr *call = e_push_expr(arena, E_ExprKind_Call, r1u64(0, 0));
           e_expr_push_child(call, callee);
           e_expr_push_child(call, first_arg);
           for(E_Expr *arg = lhs->next; arg != &e_expr_nil; arg = arg->next)
@@ -1430,7 +1430,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         // rjf: calling any other type? -> not valid
         else
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->location, "Calling this type is not supported.");
+          e_msgf(arena, &result.msgs, E_MsgKind_InterpretationError, expr->range, "Calling this type is not supported.");
         }
         
         // rjf: strip overrides and lenses if needed
@@ -1962,7 +1962,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         //- rjf: error on failure-to-generate
         if(!generated && !str8_match(string, str8_lit("$"), 0))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", string);
+          e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->range, "`%S` could not be found.", string);
         }
         
         scratch_end(scratch);
@@ -2053,7 +2053,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         }
         else
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->first->location, "Cannot apply an `unsigned` modifier to this type.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->first->range, "Cannot apply an `unsigned` modifier to this type.");
         }
       }break;
       case E_ExprKind_Ptr:
@@ -2070,7 +2070,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
       }break;
       case E_ExprKind_Func:
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Function type expressions are currently not supported.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Function type expressions are currently not supported.");
       }break;
       
       //- rjf: definitions
@@ -2081,7 +2081,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         result = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, rhs);
         if(lhs->kind != E_ExprKind_LeafIdentifier)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->range, "Left side of assignment must be an unused identifier.");
         }
       }break;
     }
@@ -2502,8 +2502,8 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
 internal E_Expr *
 e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, String8 member_name)
 {
-  E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
-  E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
+  E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, r1u64(0, 0));
+  E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->range);
   E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
   lhs_bytecode->string = e_string_from_expr(arena, lhs, str8_zero());
   lhs_bytecode->qualifier = lhs->qualifier;
@@ -2511,43 +2511,9 @@ e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtre
   lhs_bytecode->mode = lhs_irtree->mode;
   lhs_bytecode->type_key = lhs_irtree->type_key;
   lhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
-  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, 0);
+  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, r1u64(0, 0));
   rhs->string = push_str8_copy(arena, member_name);
   e_expr_push_child(root, lhs_bytecode);
   e_expr_push_child(root, rhs);
-  return root;
-}
-
-internal E_Expr *
-e_expr_irext_array_index(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, U64 index)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
-  E_Expr *lhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, lhs->location);
-  E_OpList lhs_oplist = e_oplist_from_irtree(arena, lhs_irtree->root);
-  lhs_bytecode->string = e_string_from_expr(arena, lhs, str8_zero());
-  lhs_bytecode->qualifier = lhs->qualifier;
-  lhs_bytecode->space = lhs->space;
-  lhs_bytecode->mode = lhs_irtree->mode;
-  lhs_bytecode->type_key = lhs_irtree->type_key;
-  lhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &lhs_oplist);
-  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-  rhs->value.u64 = index;
-  e_expr_push_child(root, lhs_bytecode);
-  e_expr_push_child(root, rhs);
-  return root;
-}
-
-internal E_Expr *
-e_expr_irext_deref(Arena *arena, E_Expr *rhs, E_IRTreeAndType *rhs_irtree)
-{
-  E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
-  E_Expr *rhs_bytecode = e_push_expr(arena, E_ExprKind_LeafBytecode, rhs->location);
-  E_OpList rhs_oplist = e_oplist_from_irtree(arena, rhs_irtree->root);
-  rhs_bytecode->string = e_string_from_expr(arena, rhs, str8_zero());
-  rhs_bytecode->space = rhs->space;
-  rhs_bytecode->mode = rhs_irtree->mode;
-  rhs_bytecode->type_key = rhs_irtree->type_key;
-  rhs_bytecode->bytecode = e_bytecode_from_oplist(arena, &rhs_oplist);
-  e_expr_push_child(root, rhs_bytecode);
   return root;
 }

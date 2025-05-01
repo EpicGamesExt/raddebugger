@@ -32,7 +32,7 @@ struct E_Msg
 {
   E_Msg *next;
   E_MsgKind kind;
-  void *location;
+  Rng1U64 range;
   String8 text;
 };
 
@@ -253,7 +253,7 @@ struct E_Expr
   E_Expr *next;
   E_Expr *prev;
   E_Expr *ref;
-  void *location;
+  Rng1U64 range;
   E_ExprKind kind;
   E_Mode mode;
   E_Space space;
@@ -1030,8 +1030,8 @@ internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 ////////////////////////////////
 //~ rjf: Message Functions
 
-internal void e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, String8 text);
-internal void e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, char *fmt, ...);
+internal void e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, Rng1U64 range, String8 text);
+internal void e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, Rng1U64 range, char *fmt, ...);
 internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
 internal E_MsgList e_msg_list_copy(Arena *arena, E_MsgList *src);
 

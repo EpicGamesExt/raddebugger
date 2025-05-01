@@ -2768,12 +2768,6 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(file)
     if(0 <= idx && idx < accel->fields.count)
     {
       String8 name = accel->fields.v[idx];
-      expr = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
-      E_Expr *lhs = e_expr_ref(arena, expr);
-      E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafIdentifier, 0);
-      rhs->string = push_str8_copy(arena, name);
-      e_expr_push_child(expr, lhs);
-      e_expr_push_child(expr, rhs);
       evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", name);
     }
   }

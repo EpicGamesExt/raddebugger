@@ -129,25 +129,25 @@ e_type_key_list_copy(Arena *arena, E_TypeKeyList *src)
 //~ rjf: Message Functions
 
 internal void
-e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, String8 text)
+e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, Rng1U64 range, String8 text)
 {
   E_Msg *msg = push_array(arena, E_Msg, 1);
   SLLQueuePush(msgs->first, msgs->last, msg);
   msgs->count += 1;
   msgs->max_kind = Max(kind, msgs->max_kind);
   msg->kind = kind;
-  msg->location = location;
+  msg->range = range;
   msg->text = text;
 }
 
 internal void
-e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, char *fmt, ...)
+e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, Rng1U64 range, char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
   String8 text = push_str8fv(arena, fmt, args);
   va_end(args);
-  e_msg(arena, msgs, kind, location, text);
+  e_msg(arena, msgs, kind, range, text);
 }
 
 internal void
@@ -173,7 +173,7 @@ e_msg_list_copy(Arena *arena, E_MsgList *src)
   E_MsgList dst = {0};
   for(E_Msg *msg = src->first; msg != 0; msg = msg->next)
   {
-    e_msg(arena, &dst, msg->kind, msg->location, msg->text);
+    e_msg(arena, &dst, msg->kind, msg->range, msg->text);
   }
   return dst;
 }
@@ -881,7 +881,7 @@ e_interpretation_from_bundle(E_CacheBundle *bundle)
     E_Interpretation interpret = e_interpret(bytecode);
     if(E_InterpretationCode_Good < interpret.code && interpret.code < E_InterpretationCode_COUNT)
     {
-      e_msg(e_cache->arena, &bundle->msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[interpret.code]);
+      e_msg(e_cache->arena, &bundle->msgs, E_MsgKind_InterpretationError, r1u64(0, 0), e_interpretation_code_display_strings[interpret.code]);
     }
     bundle->interpretation = interpret;
     bundle->space_gen = e_space_gen(interpret.space);

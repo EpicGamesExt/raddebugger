@@ -17,7 +17,7 @@ internal E_TokenArray e_token_array_make_first_opl(E_Token *first, E_Token *opl)
 ////////////////////////////////
 //~ rjf: Expression Tree Building Functions
 
-internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
+internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, Rng1U64 range);
 internal void e_expr_insert_child(E_Expr *parent, E_Expr *prev, E_Expr *child);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
 internal void e_expr_remove_child(E_Expr *parent, E_Expr *child);
