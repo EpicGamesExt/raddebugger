@@ -391,7 +391,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   //
   // symbol table
   //
-  if (symbol_table.total_size) {
+  if (symbol_table.total_size || string_table.total_size > sizeof(*string_table_size)) {
     file_header->symbol_table_foff = srl.total_size;
     str8_list_concat_in_place(&srl, &symbol_table);
   }
@@ -399,8 +399,10 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   //
   // string table
   //
-  *string_table_size = safe_cast_u32(string_table.total_size);
-  str8_list_concat_in_place(&srl, &string_table);
+  if (string_table.total_size) {
+    *string_table_size = safe_cast_u32(string_table.total_size);
+    str8_list_concat_in_place(&srl, &string_table);
+  }
 
   //
   // join
