@@ -3308,7 +3308,7 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) == 0)
       {
-        ui_spacer(ui_em(0.5f, 1.f));
+        ui_spacer(ui_em(1.f, 1.f));
       }
       UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
       ui_box_equip_display_fstrs(name_box, &lhs_name_fstrs);
@@ -3318,7 +3318,7 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       UI_Row
       {
-        ui_spacer(ui_em(0.5f, 1.f));
+        ui_spacer(ui_em(1.f, 1.f));
         UI_Box *desc_box = ui_label(params->description).box;
         FuzzyMatchRangeList desc_fuzzy_matches = fuzzy_match_find(scratch.arena, params->search_needle, params->description);
         ui_box_equip_fuzzy_match_ranges(desc_box, &desc_fuzzy_matches);

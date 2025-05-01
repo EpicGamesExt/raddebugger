@@ -4834,6 +4834,9 @@ rd_view_ui(Rng2F32 rect)
                           RD_CellParams cell_params = {0};
                           ProfScope("form cell build parameters")
                           {
+                            E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
+                            B32 cells_are_editable = !!(block_type->flags & E_TypeFlag_EditableChildren);
+                            
                             // rjf: set up base parameters
                             cell_params.flags                = (RD_CellFlag_KeyboardClickable|RD_CellFlag_NoBackground|RD_CellFlag_CodeContents);
                             cell_params.depth                = (cell->flags & RD_WatchCellFlag_Indented ? row_depth : 0);
@@ -4857,17 +4860,30 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: apply expander (or substitute space)
-                            if(row_is_expandable && cell == row_info->cells.first)
+                            if(!ewv->text_editing || !cell_selected)
                             {
-                              cell_params.flags |= RD_CellFlag_Expander;
+                              if(row_is_expandable && cell == row_info->cells.first)
+                              {
+                                cell_params.flags |= RD_CellFlag_Expander;
+                              }
+                              else if(cells_are_editable && row_depth == !implicit_root && cell == row_info->cells.first)
+                              {
+                                cell_params.flags |= RD_CellFlag_ExpanderPlaceholder;
+                              }
+                              else if(row_depth != 0 && cell == row_info->cells.first)
+                              {
+                                cell_params.flags |= RD_CellFlag_ExpanderSpace;
+                              }
                             }
-                            else if(row_depth == !implicit_root && cell == row_info->cells.first)
+                            
+                            // rjf: apply blank cell ghost text
+                            if(row_info->cells.first == row_info->cells.last &&
+                               cells_are_editable &&
+                               row->eval.expr == &e_expr_nil)
                             {
-                              cell_params.flags |= RD_CellFlag_ExpanderSpace;
-                            }
-                            else if(row_depth != 0 && cell == row_info->cells.first)
-                            {
-                              cell_params.flags |= RD_CellFlag_ExpanderSpace;
+                              ghost_text = str8_lit("Expression");
+                              is_non_code = (!cell_selected || !ewv->text_editing);
+                              cell_params.flags &= ~(RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder);
                             }
                             
                             // rjf: apply single-click-activation
@@ -6629,6 +6645,7 @@ rd_window_frame(void)
       B32 pressed;
       B32 pressed_outside;
     };
+    FloatingViewTask *autocomp_floating_view_task = 0;
     FloatingViewTask *hover_eval_floating_view_task = 0;
     FloatingViewTask *query_floating_view_task = 0;
     FloatingViewTask *first_floating_view_task = 0;
@@ -6679,6 +6696,7 @@ rd_window_frame(void)
         {
           FloatingViewTask *t = push_array(scratch.arena, FloatingViewTask, 1);
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
+          autocomp_floating_view_task = t;
           t->view          = view;
           t->rect          = rect;
           t->is_focused    = 1;
@@ -7085,6 +7103,28 @@ rd_window_frame(void)
     //- rjf: @window_ui_part do special handling of floating view interactions
     //
     {
+      //- rjf: autocompletion view early-closing rules
+      if(autocomp_floating_view_task)
+      {
+        B32 has_autocomplete_hint = 0;
+        B32 has_accept_operation = 0;
+        for(UI_Event *evt = 0; ui_next_event(&evt);)
+        {
+          if(evt->kind == UI_EventKind_AutocompleteHint)
+          {
+            has_autocomplete_hint = 1;
+          }
+          if(evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Accept)
+          {
+            has_accept_operation = 1;
+          }
+        }
+        if(has_autocomplete_hint && has_accept_operation)
+        {
+          autocomp_floating_view_task->signal.box->transparency = 1;
+        }
+      }
+      
       //- rjf: hover eval focus rules
       if(hover_eval_floating_view_task)
       {
