@@ -1418,7 +1418,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: @watch_row_build_cells root-level type rows
     //
-    else if(row->eval.irtree.mode == E_Mode_Null && row->block->eval.irtree.mode != E_Mode_Null)
+    else if(row->eval.irtree.mode == E_Mode_Null && (e_type_key_match(row->block->eval.irtree.type_key, e_type_key_zero()) || row->block->eval.irtree.mode != E_Mode_Null))
     {
       info.cell_style_key = str8_lit("root_type");
       RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);

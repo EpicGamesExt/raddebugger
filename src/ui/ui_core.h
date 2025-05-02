@@ -908,6 +908,7 @@ internal UI_Key            ui_top_tags_key(void);
 
 //- rjf: theme color lookups
 internal Vec4F32           ui_color_from_name(String8 name);
+internal Vec4F32           ui_color_from_tags_key_extras(UI_Key key, String8Array extras);
 internal Vec4F32           ui_color_from_tags_key_name(UI_Key key, String8 name);
 
 //- rjf: box node construction

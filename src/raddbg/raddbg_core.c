@@ -5752,10 +5752,13 @@ rd_window_frame(void)
   //- rjf: @window_frame_part compute window's theme
   //
   {
+    HS_Scope *hs_scope = hs_scope_open();
+    
     //- rjf: for this window, scan upwards, and then try the project, then the user, until we
     // find explicit preset / colors trees in the config. we will prefer the tightest ones, so
     // that windows can have their own colors, and have those override higher-up settings.
     RD_Cfg *preset_cfg = &rd_nil_cfg;
+    RD_Cfg *file_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
     RD_Cfg *theme_parents[] =
     {
@@ -5771,12 +5774,20 @@ rd_window_frame(void)
     for EachIndex(idx, theme_parents_count)
     {
       RD_Cfg *parent_cfg = theme_parents[idx];
-      if(preset_cfg != &rd_nil_cfg)
+      if(preset_cfg == &rd_nil_cfg)
       {
-        RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));
+        RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme_preset"));
         if(possible_preset_cfg != &rd_nil_cfg)
         {
           preset_cfg = possible_preset_cfg;
+        }
+      }
+      if(file_cfg == &rd_nil_cfg)
+      {
+        RD_Cfg *possible_file_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme_file"));
+        if(possible_file_cfg != &rd_nil_cfg)
+        {
+          file_cfg = possible_file_cfg;
         }
       }
       for(RD_Cfg *child = parent_cfg->first; child != &rd_nil_cfg; child = child->next)
@@ -5803,6 +5814,21 @@ rd_window_frame(void)
       }
     }
     
+    //- rjf: map the file config to the associated theme file parse
+    MD_Node *file_tree = &md_nil_node;
+    if(file_cfg != &rd_nil_cfg)
+    {
+      String8 path = file_cfg->first->string;
+      U64 endt_us = 0;
+      if(ws->frames_alive == 0)
+      {
+        endt_us = os_now_microseconds()+50000;
+      }
+      U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
+      String8 data = hs_data_from_hash(hs_scope, hash);
+      file_tree = md_tree_from_string(scratch.arena, data);
+    }
+    
     //- rjf: build tasks for color applications - each task comprises of a metadesk
     // tree, describing the color patterns
     typedef struct ThemeTask ThemeTask;
@@ -5811,7 +5837,7 @@ rd_window_frame(void)
       ThemeTask *next;
       MD_Node *tree;
     };
-    ThemeTask start_task = {0, preset_tree};
+    ThemeTask start_task = {0, !md_node_is_nil(file_tree) ? file_tree : preset_tree};
     ThemeTask *first_task = &start_task;
     ThemeTask *last_task = first_task;
     {
@@ -5867,6 +5893,8 @@ rd_window_frame(void)
         ws->theme->patterns[idx] = n->pattern;
       }
     }
+    
+    hs_scope_close(hs_scope);
   }
   
   //////////////////////////////
@@ -8852,6 +8880,7 @@ rd_window_frame(void)
             UI_TextAlignment(UI_TextAlign_Center)
               UI_PrefWidth(ui_px(tab_bar_vheight, 1.f))
               UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
+              UI_TagF(".")
             {
               ui_set_next_child_layout_axis(Axis2_Y);
               UI_Box *container = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "###add_new_tab");
@@ -9431,8 +9460,10 @@ rd_window_frame(void)
           // rjf: draw focus overlay
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
-            Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("focus"));
-            color.w *= 0.09f*b->focus_hot_t;
+            String8 extras[] = {str8_lit("focus"), str8_lit("overlay")};
+            String8Array extras_array = {extras, ArrayCount(extras)};
+            Vec4F32 color = ui_color_from_tags_key_extras(b->tags_key, extras_array);
+            color.w *= b->focus_hot_t;
             R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
           }
@@ -9446,7 +9477,9 @@ rd_window_frame(void)
               rect = pad_2f32(rect, 1.f);
               rect = intersect_2f32(window_rect, rect);
             }
-            Vec4F32 color = ui_color_from_tags_key_name(box->tags_key, str8_lit("focus"));
+            String8 extras[] = {str8_lit("focus"), str8_lit("border")};
+            String8Array extras_array = {extras, ArrayCount(extras)};
+            Vec4F32 color = ui_color_from_tags_key_extras(b->tags_key, extras_array);
             color.w *= b->focus_active_t;
             R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, border_softness*1.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
@@ -14628,10 +14661,10 @@ rd_frame(void)
               rd_cfg_release(n->v);
             }
             String8 color_preset = rd_setting_from_name(str8_lit("theme_preset"));
-            String8 color_file = rd_setting_from_name(str8_lit("theme_file"));
             RD_ThemePreset preset = RD_ThemePreset_DefaultDark;
             // TODO(rjf): map preset via string
             MD_Node *theme_tree = rd_state->theme_preset_trees[preset];
+            String8 color_file = rd_setting_from_name(str8_lit("theme_file"));
             for(MD_Node *n = theme_tree; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
             {
               if(str8_match(n->string, str8_lit("theme_color"), 0))

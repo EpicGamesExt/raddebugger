@@ -1174,6 +1174,19 @@ str8_array_reserve(Arena *arena, U64 count)
   return arr;
 }
 
+internal String8Array
+str8_array_copy(Arena *arena, String8Array array)
+{
+  String8Array result = {0};
+  result.count = array.count;
+  result.v = push_array(arena, String8, result.count);
+  for EachIndex(idx, result.count)
+  {
+    result.v[idx] = push_str8_copy(arena, array.v[idx]);
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String Path Helpers
 

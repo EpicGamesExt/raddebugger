@@ -2221,12 +2221,17 @@ ui_color_from_name(String8 name)
 }
 
 internal Vec4F32
-ui_color_from_tags_key_name(UI_Key key, String8 name)
+ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
 {
   Vec4F32 result = {0};
+  if(ui_state->theme_pattern_cache_slots_count && extras.count > 0)
   {
-    //- rjf: compute final key, mixing (tags_key, name)
-    UI_Key final_key = ui_key_from_string(key, name);
+    //- rjf: compute final key, mixing (tags_key, extras)
+    UI_Key final_key = key;
+    for EachIndex(idx, extras.count)
+    {
+      final_key = ui_key_from_string(final_key, extras.v[idx]);
+    }
     
     //- rjf: map to existing node
     U64 slot_idx = final_key.u64[0]%ui_state->theme_pattern_cache_slots_count;
@@ -2273,12 +2278,12 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
         for EachIndex(p_tags_idx, p->tags.count)
         {
           B32 p_tag_in_key = 0;
-          for EachIndex(key_tags_idx, tags.count+1)
+          for EachIndex(key_tags_idx, tags.count + extras.count)
           {
-            String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : name;
+            String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : extras.v[key_tags_idx - tags.count];
             if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
             {
-              if(key_tags_idx == tags.count)
+              if(key_tags_idx == tags.count + extras.count - 1)
               {
                 name_matches = 1;
               }
@@ -2298,7 +2303,7 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
           pattern = p;
           best_match_count = match_count;
         }
-        if(match_count == tags.count+1)
+        if(match_count == tags.count + extras.count)
         {
           break;
         }
@@ -2317,6 +2322,14 @@ ui_color_from_tags_key_name(UI_Key key, String8 name)
       result = node->pattern->linear;
     }
   }
+  return result;
+}
+
+internal Vec4F32
+ui_color_from_tags_key_name(UI_Key key, String8 name)
+{
+  String8Array extras = {&name, 1};
+  Vec4F32 result = ui_color_from_tags_key_extras(key, extras);
   return result;
 }
 
