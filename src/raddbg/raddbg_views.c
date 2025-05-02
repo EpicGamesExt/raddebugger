@@ -1416,6 +1416,47 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     ////////////////////////////
+    //- rjf: @watch_row_build_cells root-level type rows
+    //
+    else if(row->eval.irtree.mode == E_Mode_Null && row->block->eval.irtree.mode != E_Mode_Null)
+    {
+      info.cell_style_key = str8_lit("root_type");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
+                                  .default_pct = 0.50f,
+                                  .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "typeof($)"),    .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "sizeof($)"),    .default_pct = 0.15f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
+    //- rjf: @watch_row_build_cells sub-type rows
+    //
+    else if(row->eval.irtree.mode == E_Mode_Null)
+    {
+      info.cell_style_key = str8_lit("sub_type");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
+                                  .default_pct = 0.35f,
+                                  .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "typeof($)"),    .default_pct = 0.35f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "sizeof($)"),    .default_pct = 0.15f, .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "(uint64)(&$)"), .default_pct = 0.15f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
     //- rjf: @watch_row_build_cells catchall (normal rows)
     //
     else
