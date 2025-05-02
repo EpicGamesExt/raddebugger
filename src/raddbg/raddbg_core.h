@@ -85,6 +85,7 @@ enum
   RD_EvalSpaceKind_MetaQuery,
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCmd,
+  RD_EvalSpaceKind_MetaTheme,
   RD_EvalSpaceKind_MetaCtrlEntity,
   RD_EvalSpaceKind_MetaUnattachedProcess,
 };

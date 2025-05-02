@@ -5819,7 +5819,7 @@ rd_window_frame(void)
     if(file_cfg != &rd_nil_cfg)
     {
       String8 path = file_cfg->first->string;
-      U64 endt_us = 0;
+      U64 endt_us = os_now_microseconds()+100;
       if(ws->frames_alive == 0)
       {
         endt_us = os_now_microseconds()+50000;
@@ -11304,6 +11304,31 @@ rd_frame(void)
         }
       }
       
+      //- rjf: add macro for themes
+      {
+        String8 names[] =
+        {
+          str8_lit("themes"),
+        };
+        for EachElement(idx, names)
+        {
+          String8 name = names[idx];
+          E_TypeKey type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                               .flags = E_TypeFlag_StubSingleLineExpansion,
+                                               .name = name,
+                                               .access = E_TYPE_ACCESS_FUNCTION_NAME(themes),
+                                               .expand =
+                                               {
+                                                 .info  = E_TYPE_EXPAND_INFO_FUNCTION_NAME(themes),
+                                                 .range = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(themes),
+                                               });
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
+          expr->type_key = type_key;
+          expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+          e_string2expr_map_insert(scratch.arena, macro_map, name, expr);
+        }
+      }
+      
       //- rjf: build schema types & cache (name -> type) mapping
       for EachElement(idx, rd_name_schema_info_table)
       {
@@ -14679,16 +14704,24 @@ rd_frame(void)
           }break;
           case RD_CmdKind_SaveTheme:
           {
-            String8 dst_path = rd_regs()->file_path;
-            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
-            RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
-            String8List strings = {0};
-            for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
+            String8 name = rd_regs()->string;
+            if(name.size != 0)
             {
-              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, n->v));
+              String8 themes_folder = push_str8f(scratch.arena, "%S/raddbg/themes", os_get_process_info()->user_program_data_path);
+              if(os_make_directory(themes_folder))
+              {
+                String8 dst_path = push_str8f(scratch.arena, "%S/%S", themes_folder, name);
+                RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+                RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
+                String8List strings = {0};
+                for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
+                {
+                  str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, n->v));
+                }
+                String8 data = str8_list_join(scratch.arena, &strings, 0);
+                os_write_data_to_file_path(dst_path, data);
+              }
             }
-            String8 data = str8_list_join(scratch.arena, &strings, 0);
-            os_write_data_to_file_path(dst_path, data);
           }break;
           
           //- rjf: watches

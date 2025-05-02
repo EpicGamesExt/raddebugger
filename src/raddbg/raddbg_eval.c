@@ -85,6 +85,79 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(commands)
 }
 
 ////////////////////////////////
+//~ rjf: `themes` Type Hooks
+
+E_TYPE_ACCESS_FUNCTION_DEF(themes)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_ArrayIndex &&
+     expr->first->next->kind == E_ExprKind_LeafStringLiteral)
+  {
+    String8 theme_name = expr->first->next->string;
+    E_TypeKey theme_type = e_type_key_cons(.kind = E_TypeKind_U64, .name = str8_lit("theme"));
+    result.type_key = theme_type;
+    result.mode = E_Mode_Value;
+    result.root = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaTheme), e_irtree_const_u(arena, e_id_from_string(theme_name)));
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(themes)
+{
+  E_TypeExpandInfo result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: gather presets
+    String8List names = {0};
+    for EachEnumVal(RD_ThemePreset, p)
+    {
+      String8 name = rd_theme_preset_display_string_table[p];
+      FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, name);
+      if(name_matches.count == name_matches.needle_part_count)
+      {
+        str8_list_push(scratch.arena, &names, name);
+      }
+    }
+    
+    //- rjf: gather theme files
+    {
+      String8 theme_folder = push_str8f(scratch.arena, "%S/raddbg/themes", os_get_process_info()->user_program_data_path);
+      OS_FileIter *it = os_file_iter_begin(scratch.arena, theme_folder, OS_FileIterFlag_SkipFolders);
+      for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+      {
+        String8 name = info.name;
+        FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, name);
+        if(name_matches.count == name_matches.needle_part_count)
+        {
+          str8_list_push(scratch.arena, &names, name);
+        }
+      }
+      os_file_iter_end(it);
+    }
+    
+    //- rjf: flatten & build accelerator
+    String8Array *accel = push_array(arena, String8Array, 1);
+    *accel = str8_array_from_list(arena, &names);
+    result.user_data = accel;
+    result.expr_count = accel->count;
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(themes)
+{
+  U64 out_idx = 0;
+  String8Array *accel = (String8Array *)user_data;
+  for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
+  {
+    String8 name = accel->v[idx];
+    evals_out[out_idx] = e_eval_wrapf(eval, "$[\"%S\"]", name);
+  }
+}
+
+////////////////////////////////
 //~ rjf: `locals` Type Hooks
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(locals)
