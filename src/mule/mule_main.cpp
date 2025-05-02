@@ -257,6 +257,44 @@ raddbg_type_view(Discriminated_Union,
                  kind == Kind.Fourth ? fourth :
                  $);
 
+struct Crazy_Union
+{
+  Kind kind;
+  union
+  {
+    struct
+    {
+      int first_and_third__x;
+      int first_and_third__y;
+      int first_and_third__z;
+    } first_and_third;
+    struct
+    {
+      char *second__name;
+      Pair second__pairs[16];
+    } second;
+  };
+  union
+  {
+    struct
+    {
+      char *first__name;
+      int first__x;
+    } first;
+    struct
+    {
+      char *third__name;
+      Function_Few_Params_Type *third__few_params;
+    } third;
+  };
+};
+raddbg_type_view(Crazy_Union,
+                 kind == Kind.First ? only($, first_and_third, first) :
+                 kind == Kind.Second ? only($, second) :
+                 kind == Kind.Third ? only($, first_and_third, third) :
+                 kind == Kind.Fourth ? kind :
+                 $);
+
 struct Linked_List{
   Linked_List *next;
   Linked_List *prev;
@@ -414,6 +452,13 @@ type_coverage_eval_tests(void)
   Vector_R2 vector = {1.f, 2.f};
   
   Has_Enums has_enums = {(Kind)4, (Flag)7};
+  
+  Crazy_Union crazy_union = {0};
+  
+  crazy_union.kind = Kind_First;
+  crazy_union.kind = Kind_Second;
+  crazy_union.kind = Kind_Third;
+  crazy_union.kind = Kind_Fourth;
   
   Discriminated_Union discriminated_union = {0};
   
