@@ -6063,6 +6063,14 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: @window_ui_part calculate code color slot RGBAs
+    //
+    for EachEnumVal(RD_CodeColorSlot, s)
+    {
+      ws->theme_code_colors[s] = ui_color_from_name(rd_code_color_slot_name_table[s]);
+    }
+    
+    ////////////////////////////
     //- rjf: @window_ui_part calculate top-level rectangles/sizes
     //
     Rng2F32 window_rect = os_client_rect_from_window(ws->os);
@@ -9685,32 +9693,34 @@ rd_set_autocomp_regs_(RD_Regs *regs)
 //- rjf: colors
 
 internal Vec4F32
-rd_rgba_from_theme_color(RD_ThemeColor color)
+rd_rgba_from_code_color_slot(RD_CodeColorSlot slot)
 {
-  return rd_state->theme->colors[color];
+  RD_WindowState *ws = rd_window_state_from_cfg(rd_cfg_from_id(rd_regs()->window));
+  Vec4F32 result = ws->theme_code_colors[slot];
+  return result;
 }
 
-internal RD_ThemeColor
-rd_theme_color_from_txt_token_kind(TXT_TokenKind kind)
+internal RD_CodeColorSlot
+rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind)
 {
-  RD_ThemeColor color = RD_ThemeColor_CodeDefault;
+  RD_CodeColorSlot color = RD_CodeColorSlot_CodeDefault;
   switch(kind)
   {
     default:break;
-    case TXT_TokenKind_Keyword:{color = RD_ThemeColor_CodeKeyword;}break;
-    case TXT_TokenKind_Numeric:{color = RD_ThemeColor_CodeNumeric;}break;
-    case TXT_TokenKind_String: {color = RD_ThemeColor_CodeString;}break;
-    case TXT_TokenKind_Meta:   {color = RD_ThemeColor_CodeMeta;}break;
-    case TXT_TokenKind_Comment:{color = RD_ThemeColor_CodeComment;}break;
-    case TXT_TokenKind_Symbol: {color = RD_ThemeColor_CodeDelimiterOperator;}break;
+    case TXT_TokenKind_Keyword:{color = RD_CodeColorSlot_CodeKeyword;}break;
+    case TXT_TokenKind_Numeric:{color = RD_CodeColorSlot_CodeNumeric;}break;
+    case TXT_TokenKind_String: {color = RD_CodeColorSlot_CodeString;}break;
+    case TXT_TokenKind_Meta:   {color = RD_CodeColorSlot_CodeMeta;}break;
+    case TXT_TokenKind_Comment:{color = RD_CodeColorSlot_CodeComment;}break;
+    case TXT_TokenKind_Symbol: {color = RD_CodeColorSlot_CodeDelimiterOperator;}break;
   }
   return color;
 }
 
-internal RD_ThemeColor
-rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string)
+internal RD_CodeColorSlot
+rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string)
 {
-  RD_ThemeColor color = RD_ThemeColor_CodeDefault;
+  RD_CodeColorSlot color = RD_CodeColorSlot_CodeDefault;
   if(kind == TXT_TokenKind_Identifier || kind == TXT_TokenKind_Keyword)
   {
     CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
@@ -9724,7 +9734,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
       if(local_num != 0)
       {
         mapped = 1;
-        color = RD_ThemeColor_CodeLocal;
+        color = RD_CodeColorSlot_CodeLocal;
       }
     }
     
@@ -9735,7 +9745,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
       if(member_num != 0)
       {
         mapped = 1;
-        color = RD_ThemeColor_CodeLocal;
+        color = RD_CodeColorSlot_CodeLocal;
       }
     }
     
@@ -9746,7 +9756,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
       if(reg_num != 0)
       {
         mapped = 1;
-        color = RD_ThemeColor_CodeRegister;
+        color = RD_CodeColorSlot_CodeRegister;
       }
     }
     
@@ -9757,7 +9767,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
       if(alias_num != 0)
       {
         mapped = 1;
-        color = RD_ThemeColor_CodeRegister;
+        color = RD_CodeColorSlot_CodeRegister;
       }
     }
     
@@ -9773,11 +9783,11 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
         case RDI_SectionKind_GlobalVariables:
         case RDI_SectionKind_ThreadVariables:
         {
-          color = RD_ThemeColor_CodeSymbol;
+          color = RD_CodeColorSlot_CodeSymbol;
         }break;
         case RDI_SectionKind_TypeNodes:
         {
-          color = RD_ThemeColor_CodeType;
+          color = RD_CodeColorSlot_CodeType;
         }break;
       }
     }
@@ -10998,123 +11008,6 @@ rd_frame(void)
       rd_state->font_slot_table[RD_FontSlot_Code] = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);
     }
     rd_state->font_slot_table[RD_FontSlot_Icons] = fnt_tag_from_static_data_string(&rd_icon_font_bytes);
-  }
-  
-  //////////////////////////////
-  //- rjf: build theme from config
-  //
-  ProfScope("build theme from config")
-  {
-    RD_Theme *theme_srgba = push_array(scratch.arena, RD_Theme, 1);
-    
-    //- rjf: gather globally-applying config options
-    RD_CfgList preset_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("theme_preset"));
-    RD_CfgList colors_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("theme_colors"));
-    
-    //- rjf: assume default-dark
-    MemoryCopy(theme_srgba->colors, rd_theme_preset_colors_table[RD_ThemePreset_DefaultDark], sizeof(rd_theme_preset_colors__default_dark));
-    
-    //- rjf: apply explicitly-specified presets
-    for(RD_CfgNode *n = preset_roots.first; n != 0; n = n->next)
-    {
-      RD_Cfg *preset = n->v;
-      String8 preset_name = preset->first->string;
-      RD_ThemePreset preset_kind = (RD_ThemePreset)0;
-      B32 found_preset_kind = 0;
-      for(RD_ThemePreset p = (RD_ThemePreset)0; p < RD_ThemePreset_COUNT; p = (RD_ThemePreset)(p+1))
-      {
-        if(str8_match(preset_name, rd_theme_preset_code_string_table[p], StringMatchFlag_CaseInsensitive))
-        {
-          found_preset_kind = 1;
-          preset_kind = p;
-          break;
-        }
-      }
-      if(found_preset_kind)
-      {
-        MemoryCopy(theme_srgba->colors, rd_theme_preset_colors_table[preset_kind], sizeof(rd_theme_preset_colors__default_dark));
-      }
-    }
-    
-    //- rjf: apply explicitly-specified color codes
-    for(RD_CfgNode *n = colors_roots.first; n != 0; n = n->next)
-    {
-      RD_Cfg *colors = n->v;
-      for(RD_Cfg *color = colors->first; color != &rd_nil_cfg; color = color->next)
-      {
-        String8 name = color->string;
-        RD_ThemeColor color_code = RD_ThemeColor_Null;
-        for(RD_ThemeColor c = RD_ThemeColor_Null; c < RD_ThemeColor_COUNT; c = (RD_ThemeColor)(c+1))
-        {
-          if(str8_match(rd_theme_color_cfg_string_table[c], name, StringMatchFlag_CaseInsensitive))
-          {
-            color_code = c;
-            break;
-          }
-        }
-        if(color_code != RD_ThemeColor_Null)
-        {
-          U64 color_val = 0;
-          if(try_u64_from_str8_c_rules(color->first->string, &color_val))
-          {
-            Vec4F32 color_rgba = rgba_from_u32((U32)color_val);
-            theme_srgba->colors[color_code] = color_rgba;
-          }
-        }
-      }
-    }
-    
-    //- rjf: srgba -> linear, compute final theme
-    rd_state->theme_target = push_array(rd_frame_arena(), RD_Theme, 1);
-    RD_Theme *theme = rd_state->theme_target;
-    for EachEnumVal(RD_ThemeColor, c)
-    {
-      theme->colors[c] = linear_from_srgba(theme_srgba->colors[c]);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: animate theme
-  //
-  {
-    Temp scratch = scratch_begin(0, 0);
-    RD_Theme *last = push_array(scratch.arena, RD_Theme, 1);
-    if(rd_state->theme != 0)
-    {
-      MemoryCopyStruct(last, rd_state->theme);
-    }
-    rd_state->theme = push_array(rd_frame_arena(), RD_Theme, 1);
-    RD_Theme *current = rd_state->theme;
-    RD_Theme *target = rd_state->theme_target;
-    if(last)
-    {
-      MemoryCopyStruct(current, last);
-    }
-    if(rd_state->frame_index <= 2)
-    {
-      MemoryCopyStruct(current, target);
-    }
-    else
-    {
-      F32 rate = 1 - pow_f32(2, (-50.f * rd_state->frame_dt));
-      for(RD_ThemeColor color = RD_ThemeColor_Null;
-          color < RD_ThemeColor_COUNT;
-          color = (RD_ThemeColor)(color+1))
-      {
-        if(abs_f32(target->colors[color].x - current->colors[color].x) > 0.01f ||
-           abs_f32(target->colors[color].y - current->colors[color].y) > 0.01f ||
-           abs_f32(target->colors[color].z - current->colors[color].z) > 0.01f ||
-           abs_f32(target->colors[color].w - current->colors[color].w) > 0.01f)
-        {
-          rd_request_frame();
-        }
-        current->colors[color].x += (target->colors[color].x - current->colors[color].x) * rate;
-        current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
-        current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
-        current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
-      }
-    }
-    scratch_end(scratch);
   }
   
   //////////////////////////////

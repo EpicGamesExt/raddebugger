@@ -409,12 +409,6 @@ struct RD_RegsNode
 ////////////////////////////////
 //~ rjf: Structured Theme Types, Parsed From Config
 
-typedef struct RD_Theme RD_Theme;
-struct RD_Theme
-{
-  Vec4F32 colors[RD_ThemeColor_COUNT];
-};
-
 typedef enum RD_FontSlot
 {
   RD_FontSlot_Main,
@@ -451,6 +445,7 @@ struct RD_WindowState
   
   // rjf: theme (recomputed each frame)
   UI_Theme *theme;
+  Vec4F32 theme_code_colors[RD_CodeColorSlot_COUNT];
   
   // rjf: font raster flags (recomputed each frame)
   FNT_RasterFlags font_slot_raster_flags[RD_FontSlot_COUNT];
@@ -602,10 +597,6 @@ struct RD_State
   
   // rjf: slot -> font tag map (constructed from-scratch each frame)
   FNT_Tag font_slot_table[RD_FontSlot_COUNT];
-  
-  // rjf: theme target (constructed from-scratch each frame)
-  RD_Theme *theme;
-  RD_Theme *theme_target;
   
   // rjf: meta name -> eval type key map (constructed from-scratch each frame)
   E_String2TypeKeyMap *meta_name2type_map;
@@ -970,9 +961,9 @@ internal void rd_set_autocomp_regs_(RD_Regs *regs);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
-internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
-internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
+internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
+internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
+internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
 
 //- rjf: fonts
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);

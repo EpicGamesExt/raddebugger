@@ -2467,7 +2467,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               params->font,
               ui_top_text_raster_flags(),
-              rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault),
+              rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault),
               params->font_size,
             };
             dr_fstrs_push_new(scratch.arena, &line_fstrs, &fstr_params, line_string);
@@ -2494,12 +2494,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               
               // rjf: token -> token color
-              RD_ThemeColor token_theme_color = rd_theme_color_from_txt_token_kind(token->kind);
-              RD_ThemeColor lookup_theme_color = rd_theme_color_from_txt_token_kind_lookup_string(token->kind, token_string);
-              Vec4F32 token_color = rd_rgba_from_theme_color(token_theme_color);
-              if(lookup_theme_color != RD_ThemeColor_CodeDefault)
+              RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
+              RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+              Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
+              if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
               {
-                Vec4F32 lookup_color = rd_rgba_from_theme_color(lookup_theme_color);
+                Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
                 F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
                 token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
               }
@@ -2921,7 +2921,7 @@ rd_fstrs_from_rich_string(Arena *arena, String8 string)
       {
         fstr.params.font = rd_font_from_slot(RD_FontSlot_Code);
         fstr.params.raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code);
-        fstr.params.color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+        fstr.params.color = rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault);
       }
     }
     dr_fstrs_push(arena, &fstrs, &fstr);
@@ -2996,8 +2996,8 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
   indirection_size_change = 0;
   for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
-    RD_ThemeColor token_color = rd_theme_color_from_txt_token_kind(token->kind);
-    Vec4F32 token_color_rgba = rd_rgba_from_theme_color(token_color);
+    RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
+    Vec4F32 token_color_rgba = rd_rgba_from_code_color_slot(token_color_slot);
     token_color_rgba.w *= alpha;
     String8 token_string = str8_substr(string, token->range);
     if(str8_match(token_string, str8_lit("{"), 0)) { indirection_counter += 1; }
@@ -3022,10 +3022,10 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
       case TXT_TokenKind_Identifier:
       case TXT_TokenKind_Keyword:
       {
-        RD_ThemeColor lookup_theme_color = rd_theme_color_from_txt_token_kind_lookup_string(token->kind, token_string);
-        if(lookup_theme_color != RD_ThemeColor_CodeDefault)
+        RD_CodeColorSlot lookup_theme_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+        if(lookup_theme_color_slot != RD_CodeColorSlot_CodeDefault)
         {
-          Vec4F32 lookup_color = rd_rgba_from_theme_color(lookup_theme_color);
+          Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_theme_color_slot);
           F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
           token_color_rgba = mix_4f32(token_color_rgba, lookup_color, lookup_color_mix_t);
         }
@@ -3043,7 +3043,7 @@ rd_fstrs_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, 
       }break;
       case TXT_TokenKind_Numeric:
       {
-        Vec4F32 token_color_rgba_alt = rd_rgba_from_theme_color(RD_ThemeColor_CodeNumericAltDigitGroup);
+        Vec4F32 token_color_rgba_alt = rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeNumericAltDigitGroup);
         token_color_rgba_alt.w *= alpha;
         F32 font_size = ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f));
         
