@@ -2,11 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Generated Code
-
-#include "generated/eval_visualization.meta.c"
-
-////////////////////////////////
 //~ rjf: Nil/Identity View Rule Hooks
 
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(nil)

@@ -176,10 +176,9 @@
 //   - `raddbg_entry_point(name)`, e.g. `raddbg_entry_point(entry_point)`:
 //     declares the entry point for an executable, which the debugger will use
 //     when stepping into a program, rather than the defaults (e.g. `main`).
-//   - `raddbg_auto_view_rule(<type|pattern>, <view_rule>)`, e.g.
-//     `raddbg_auto_view_rule(DynamicArray<?>, slice)`: declares an
-//     auto-view-rule from source code, rather than from debugger
-//     configuration.
+//   - `raddbg_type_view(<type|pattern>, <expression>)`, e.g.
+//     `raddbg_type_view(DynamicArray<?>, slice($))`: declares a type view from
+//      source code, rather than from debugger configuration.
 // - The debugger now incorporates the loaded project in all window titles.
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.

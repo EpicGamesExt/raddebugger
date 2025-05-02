@@ -107,8 +107,8 @@ void optimized_struct_parameters_eval_tests(void);
 #include <memory>
 #include <stdint.h>
 
-raddbg_auto_view_rule(std::vector<?>, slice(_Mypair._Myval2));
-raddbg_auto_view_rule(std::unique_ptr<?>, _Mypair._Myval2);
+raddbg_type_view(std::vector<?>, slice(_Mypair._Myval2));
+raddbg_type_view(std::unique_ptr<?>, _Mypair._Myval2);
 
 struct Basics
 {
@@ -156,7 +156,7 @@ struct Dynamic_Array
   Pair *pairs;
   int count;
 };
-raddbg_auto_view_rule(Dynamic_Array, slice($));
+raddbg_type_view(Dynamic_Array, slice($));
 
 struct Struct_With_Embedded_Arrays
 {
@@ -189,14 +189,14 @@ union Vector_R2
   };
   float v[2];
 };
-raddbg_auto_view_rule(Vector_R2, only($, x, y));
+raddbg_type_view(Vector_R2, only($, x, y));
 
 typedef union Matrix4x4F32 Matrix4x4F32;
 union Matrix4x4F32
 {
   float elements[4][4];
 };
-raddbg_auto_view_rule(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
+raddbg_type_view(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
 
 enum Kind
 {
@@ -250,12 +250,12 @@ struct Discriminated_Union
     } fourth;
   };
 };
-raddbg_auto_view_rule(Discriminated_Union,
-                      kind == Kind.First ? first :
-                      kind == Kind.Second ? second :
-                      kind == Kind.Third ? third :
-                      kind == Kind.Fourth ? fourth :
-                      $);
+raddbg_type_view(Discriminated_Union,
+                 kind == Kind.First ? first :
+                 kind == Kind.Second ? second :
+                 kind == Kind.Third ? third :
+                 kind == Kind.Fourth ? fourth :
+                 $);
 
 struct Linked_List{
   Linked_List *next;
@@ -1716,7 +1716,7 @@ struct Bitmap
   int width;
   int height;
 };
-raddbg_auto_view_rule(Bitmap, lens:bitmap(base, width, height));
+raddbg_type_view(Bitmap, lens:bitmap(base, width, height));
 
 static unsigned int
 mule_bswap_u32(unsigned int x)
@@ -1837,7 +1837,7 @@ fancy_viz_eval_tests(void)
   }
   int x2 = 0;
   
-  //- rjf: auto-view-rule'd bitmaps
+  //- rjf: type-viewed bitmaps
   Bitmap foo = {(unsigned char *)&pixels[0], 18, 18};
   raddbg_pin(foo);
   

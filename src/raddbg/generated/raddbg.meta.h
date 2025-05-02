@@ -233,7 +233,7 @@ RD_CmdKind_EnableBreakpoint,
 RD_CmdKind_DisableBreakpoint,
 RD_CmdKind_AddWatchPin,
 RD_CmdKind_ToggleWatchPin,
-RD_CmdKind_AddAutoViewRule,
+RD_CmdKind_AddTypeView,
 RD_CmdKind_AddFilePathMap,
 RD_CmdKind_OpenTheme,
 RD_CmdKind_AddThemeColor,
@@ -273,7 +273,7 @@ RD_CmdKind_OpenProcesses,
 RD_CmdKind_OpenMachines,
 RD_CmdKind_OpenModules,
 RD_CmdKind_OpenFilePathMaps,
-RD_CmdKind_OpenAutoViewRules,
+RD_CmdKind_OpenTypeViews,
 RD_CmdKind_OpenOutput,
 RD_CmdKind_OpenText,
 RD_CmdKind_OpenDisasm,
@@ -631,7 +631,7 @@ X(processes) \
 X(machines) \
 X(modules) \
 X(file_path_maps) \
-X(auto_view_rules) \
+X(type_views) \
 Y(output, text, "query:output")\
 Y(text, text, "")\
 Y(disasm, disasm, "")\
@@ -688,7 +688,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[333];
+extern RD_VocabInfo rd_vocab_info_table[332];
 extern RD_NameSchemaInfo rd_name_schema_info_table[23];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];

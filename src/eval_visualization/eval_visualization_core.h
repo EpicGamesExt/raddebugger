@@ -221,11 +221,6 @@ struct EV_WindowedRowList
 };
 
 ////////////////////////////////
-//~ rjf: Generated Code
-
-#include "generated/eval_visualization.meta.h"
-
-////////////////////////////////
 //~ rjf: String Generation Types
 
 typedef U32 EV_StringFlags;

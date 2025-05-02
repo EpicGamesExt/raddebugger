@@ -2388,12 +2388,14 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   E_TypeKey type_key = eval.irtree.type_key;
   E_Type *type = e_type_from_key__cached(type_key);
   String8 schema_name = str8_lit("watch");
+  B32 type_is_visualizer = 0;
   if(type->kind == E_TypeKind_Lens)
   {
     RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(type->name);
     if(view_ui_rule != &rd_nil_view_ui_rule)
     {
       schema_name = type->name;
+      type_is_visualizer = 1;
     }
   }
   RD_Cfg *view = rd_cfg_child_from_string_or_alloc(parent, schema_name);
@@ -2401,7 +2403,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   {
     // rjf: get expression evaluation
     E_Eval expr_eval = eval;
-    if(eval.expr->kind == E_ExprKind_Call)
+    if(eval.expr->kind == E_ExprKind_Call && type_is_visualizer)
     {
       expr_eval = e_eval_from_expr(eval.expr->first->next);
     }
@@ -8456,6 +8458,17 @@ rd_window_frame(void)
               }
             }
             
+            //- rjf: visualizers -> accept expression drops
+            UI_Box *view_drop_site = &ui_nil_box;
+            {
+              RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(selected_tab->string);
+              if(view_ui_rule != &rd_nil_view_ui_rule && rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
+              {
+                UI_FixedSize(dim_2f32(content_rect))
+                  view_drop_site = ui_build_box_from_stringf(UI_BoxFlag_DropSite|UI_BoxFlag_Floating, "drop_site_%I64x", selected_tab->id);
+              }
+            }
+            
             //- rjf: build view container
             UI_Box *view_container_box = &ui_nil_box;
             UI_FixedWidth(dim_2f32(content_rect).x)
@@ -8492,6 +8505,23 @@ rd_window_frame(void)
             UI_Parent(view_container_box) if(selected_tab != &rd_nil_cfg) ProfScope("build tab view")
             {
               rd_view_ui(content_rect);
+            }
+            
+            //- rjf: accept expression drops
+            if(view_drop_site != &ui_nil_box)
+            {
+              UI_Signal sig = ui_signal_from_box(view_drop_site);
+              if(ui_key_match(view_drop_site->key, ui_drop_hot_key()))
+              {
+                UI_Parent(view_drop_site) UI_WidthFill UI_HeightFill UI_TagF("drop_site") UI_Transparency(0.5f)
+                {
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                }
+                if(rd_drag_drop())
+                {
+                  rd_store_view_expr_string(rd_state->drag_drop_regs->expr);
+                }
+              }
             }
             
             //- rjf: pop interaction registers; commit if this is the selected view
@@ -11374,7 +11404,7 @@ rd_frame(void)
         str8_lit("watch_pin"),
         str8_lit("target"),
         str8_lit("file_path_map"),
-        str8_lit("auto_view_rule"),
+        str8_lit("type_view"),
         str8_lit("recent_project"),
         str8_lit("recent_file"),
       };
@@ -11885,9 +11915,9 @@ rd_frame(void)
     ev_select_expand_rule_table(expand_rule_table);
     
     ////////////////////////////
-    //- rjf: gather auto-view-rules from loaded modules
+    //- rjf: gather config from loaded modules
     //
-    RD_CfgList immediate_auto_view_rules = {0};
+    RD_CfgList immediate_type_views = {0};
     CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
     for EachIndex(idx, modules.count)
     {
@@ -11906,20 +11936,20 @@ rd_frame(void)
           RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
           rd_cfg_release_all_children(immediate_root);
           rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
-          rd_cfg_list_push(scratch.arena, &immediate_auto_view_rules, n->v);
+          rd_cfg_list_push(scratch.arena, &immediate_type_views, n->v);
         }
       }
     }
     
     ////////////////////////////
-    //- rjf: add auto-hook rules for auto-view-rules
+    //- rjf: add auto-hook rules for type views
     //
     {
-      RD_CfgList auto_view_rules = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("auto_view_rule"));
+      RD_CfgList type_views = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("type_view"));
       RD_CfgList rules_lists[] =
       {
-        auto_view_rules,
-        immediate_auto_view_rules,
+        type_views,
+        immediate_type_views,
       };
       for EachElement(list_idx, rules_lists)
       {
@@ -11927,9 +11957,9 @@ rd_frame(void)
         for(RD_CfgNode *n = list.first; n != 0; n = n->next)
         {
           RD_Cfg *rule = n->v;
-          String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
-          String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("view_rule"))->first->string;
-          e_auto_hook_map_insert_new(scratch.arena, auto_hook_map, .type_pattern = type_string, .tag_expr_string = view_rule_string);
+          String8 type_string = rd_cfg_child_from_string(rule, str8_lit("type"))->first->string;
+          String8 expr_string = rd_cfg_child_from_string(rule, str8_lit("expr"))->first->string;
+          e_auto_hook_map_insert_new(scratch.arena, auto_hook_map, .type_pattern = type_string, .tag_expr_string = expr_string);
         }
       }
     }
@@ -14619,11 +14649,11 @@ rd_frame(void)
             }
           }break;
           
-          //- rjf: auto view rules
-          case RD_CmdKind_AddAutoViewRule:
+          //- rjf: type views
+          case RD_CmdKind_AddTypeView:
           {
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-            rd_cfg_new(project, str8_lit("auto_view_rule"));
+            rd_cfg_new(project, str8_lit("type_view"));
           }break;
           
           //- rjf: file path maps

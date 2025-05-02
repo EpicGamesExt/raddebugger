@@ -333,11 +333,11 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
     }
     
-    //- rjf: special case: auto view rule
-    if(str8_match(cfg->string, str8_lit("auto_view_rule"), 0))
+    //- rjf: special case: type views
+    if(str8_match(cfg->string, str8_lit("type_view"), 0))
     {
       String8 src_string = rd_cfg_child_from_string(cfg, str8_lit("type"))->first->string;
-      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("view_rule"))->first->string;
+      String8 dst_string = rd_cfg_child_from_string(cfg, str8_lit("expr"))->first->string;
       Vec4F32 src_color = rgba;
       Vec4F32 dst_color = rgba;
       DR_FStrList src_fstrs = {0};
@@ -354,7 +354,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
       if(dst_string.size == 0)
       {
-        dst_string = str8_lit("(view rule)");
+        dst_string = str8_lit("(expression)");
         dst_color = rgba_secondary;
         dr_fstrs_push_new(arena, &dst_fstrs, &params, dst_string, .color = dst_color);
       }

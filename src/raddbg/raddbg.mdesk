@@ -33,7 +33,7 @@ RD_WatchTabFastPathTable:
   {Machines        "Machines"          machines          1                 Machine               }
   {Modules         "Modules"           modules           1                 Module                }
   {FilePathMaps    "File Path Map"     file_path_maps    1                 FileOutline           }
-  {AutoViewRules   "Auto View Rules"   auto_view_rules   1                 Binoculars            }
+  {TypeViews       "Type Views"        type_views        1                 Binoculars            }
 }
 
 @table(name   display_name    name_lower     view     query     icon)
@@ -83,11 +83,11 @@ RD_VocabTable:
 // NOTE(rjf): the _ character is used as a fastpath for default rules. when
 // pluralizing, you just append an `s`, and so on.
 {
-  {auto_view_rule       _                           "Auto View Rule"            _                     Binoculars                                     }
+  {type_view            _                           "Type View"                 _                     Binoculars                                     }
   {file_path_map        _                           "File Path Map"             _                     FileOutline                                    }
   {watch_pin            _                           "Watch Pin"                 _                     Pin                                            }
   {watch                watches                     "Watch"                     "Watches"             Binoculars                                     }
-  {view_rule            _                           "View Rule"                 _                     Binoculars                                     }
+  {view                 _                           "View"                      _                     Binoculars                                     }
   {breakpoint           _                           "Breakpoint"                _                     CircleFilled                                   }
   {condition            _                           "Condition"                 _                     Null                                           }
   {location             _                           "Location"                  _                     Null                                           }
@@ -110,7 +110,6 @@ RD_VocabTable:
   {stdin_path           _                           "Standard Input Path"       _                     Null                                           }
   {window               _                           "Window"                    _                     Window                                         }
   {panel                _                           "Panel"                     _                     Null                                           }
-  {view                 _                           "View"                      _                     Null                                           }
   {tab                  _                           "Tab"                       _                     Null                                           }
   {recent_project       _                           "Recent Project"            _                     Briefcase                                      }
   {recent_file          _                           "Recent File"               _                     FileOutline                                    }
@@ -611,10 +610,10 @@ RD_VocabTable:
     ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @absolute path, 'dest': @absolute path}```,
   }
   
-  //- rjf: auto view rules
+  //- rjf: type views
   {
-    auto_view_rule,
-    ```@collection_commands(add_auto_view_rule) @row_commands(remove_cfg) x:{'type':code_string, 'view_rule':code_string}```,
+    type_view,
+    ```@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':code_string, 'expr':code_string}```,
   }
   
   //- rjf: recent projects
@@ -961,8 +960,8 @@ RD_CmdTable:    //               |        |              |                |     
   {AddWatchPin                    1        1              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               "$watch_pins,"                                                   }
   {ToggleWatchPin                 1        0              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               ""                                                               }
   
-  //- rjf: auto view rule
-  {AddAutoViewRule                0        0              0                0               ""                                               String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "add_auto_view_rule"          "Add Auto View Rule"                          "Adds a new auto view rule."                                                                                       ""                               "$auto_view_rules,"                                              }
+  //- rjf: type views
+  {AddTypeView                    0        0              0                0               ""                                               String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Binoculars            "add_type_view"               "Add Type View"                               "Adds a new type view."                                                                                            ""                               ""                                                               }
   
   //- rjf: file path maps
   {AddFilePathMap                 0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "add_file_path_map"           "Add File Path Map"                           "Adds a new file path map."                                                                                        ""                               ""                                                               }

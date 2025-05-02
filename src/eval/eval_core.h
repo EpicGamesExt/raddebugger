@@ -645,7 +645,7 @@ struct E_String2TypeKeyMap
 };
 
 ////////////////////////////////
-//~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)
+//~ rjf: Type Pattern -> Hook Key Data Structure (Type Views)
 
 typedef struct E_AutoHookNode E_AutoHookNode;
 struct E_AutoHookNode

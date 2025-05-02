@@ -119,49 +119,6 @@ struct RD_WatchRowCellInfo
   RD_ViewUIRule *view_ui_rule;
 };
 
-typedef enum RD_WatchViewColumnKind
-{
-  RD_WatchViewColumnKind_Expr,
-  RD_WatchViewColumnKind_Value,
-  RD_WatchViewColumnKind_Type,
-  RD_WatchViewColumnKind_ViewRule,
-  RD_WatchViewColumnKind_Member,
-  RD_WatchViewColumnKind_CallStackFrame,
-  RD_WatchViewColumnKind_CallStackFrameSelection,
-  RD_WatchViewColumnKind_Module,
-  RD_WatchViewColumnKind_COUNT
-}
-RD_WatchViewColumnKind;
-
-typedef struct RD_WatchViewColumnParams RD_WatchViewColumnParams;
-struct RD_WatchViewColumnParams
-{
-  String8 string;
-  String8 display_string;
-  String8 view_rule;
-  B32 is_non_code;
-  B32 dequote_string;
-  B32 rangify_braces;
-};
-
-typedef struct RD_WatchViewColumn RD_WatchViewColumn;
-struct RD_WatchViewColumn
-{
-  RD_WatchViewColumn *next;
-  RD_WatchViewColumn *prev;
-  RD_WatchViewColumnKind kind;
-  F32 pct;
-  U8 string_buffer[1024];
-  U64 string_size;
-  U8 display_string_buffer[1024];
-  U64 display_string_size;
-  U8 view_rule_buffer[1024];
-  U64 view_rule_size;
-  B32 is_non_code;
-  B32 dequote_string;
-  B32 rangify_braces;
-};
-
 typedef struct RD_WatchPt RD_WatchPt;
 struct RD_WatchPt
 {
