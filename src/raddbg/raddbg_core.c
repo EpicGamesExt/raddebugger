@@ -10399,6 +10399,11 @@ rd_init(CmdLine *cmdln)
         user_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
       }
     }
+    if(project_path.size != 0)
+    {
+      arena_clear(rd_state->project_path_arena);
+      rd_state->project_path = push_str8_copy(rd_state->project_path_arena, project_path);
+    }
     
     // rjf: do initial load of user (project will be loaded by the initial user load if not specified)
     rd_cmd(RD_CmdKind_OpenUser, .file_path = user_path);
