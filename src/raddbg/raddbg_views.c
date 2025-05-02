@@ -1197,6 +1197,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         MD_Node *cmds_root = md_tag_from_string(schema, str8_lit("row_commands"), 0);
         for MD_EachNode(cmd, cmds_root->first)
         {
+          B32 is_file_only = md_node_has_tag(cmd, str8_lit("file"), 0);
+          if(is_file_only && e_eval_from_string(rd_expr_from_cfg(evalled_cfg)).space.kind != E_SpaceKind_File)
+          {
+            continue;
+          }
           String8 cmd_name = cmd->string;
           RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
           switch(cmd_kind)

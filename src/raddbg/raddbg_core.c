@@ -8462,7 +8462,9 @@ rd_window_frame(void)
             UI_Box *view_drop_site = &ui_nil_box;
             {
               RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(selected_tab->string);
-              if(view_ui_rule != &rd_nil_view_ui_rule && rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
+              if(view_ui_rule != &rd_nil_view_ui_rule && rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_Expr &&
+                 !str8_match(selected_tab->string, str8_lit("text"), 0) &&
+                 !str8_match(selected_tab->string, str8_lit("disasm"), 0))
               {
                 UI_FixedSize(dim_2f32(content_rect))
                   view_drop_site = ui_build_box_from_stringf(UI_BoxFlag_DropSite|UI_BoxFlag_Floating, "drop_site_%I64x", selected_tab->id);
@@ -8513,7 +8515,7 @@ rd_window_frame(void)
               UI_Signal sig = ui_signal_from_box(view_drop_site);
               if(ui_key_match(view_drop_site->key, ui_drop_hot_key()))
               {
-                UI_Parent(view_drop_site) UI_WidthFill UI_HeightFill UI_TagF("drop_site") UI_Transparency(0.5f)
+                UI_Parent(view_drop_site) UI_WidthFill UI_HeightFill UI_TagF("drop_site")
                 {
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                 }
@@ -10396,15 +10398,14 @@ rd_init(CmdLine *cmdln)
       {
         user_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
       }
-      if(project_path.size == 0)
-      {
-        project_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
-      }
     }
     
-    // rjf: do initial load
-    rd_cmd(RD_CmdKind_OpenUser,    .file_path = user_path);
-    rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
+    // rjf: do initial load of user (project will be loaded by the initial user load if not specified)
+    rd_cmd(RD_CmdKind_OpenUser, .file_path = user_path);
+    if(project_path.size != 0)
+    {
+      rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
+    }
     
     scratch_end(scratch);
   }
@@ -12483,6 +12484,24 @@ rd_frame(void)
               }
             }
             
+            //- rjf: if we've just loaded the user, and we do not have a project path,
+            // then we should try to look at the user's data for recent projects and
+            // load one of those, *or* just the default.
+            if(file_is_okay && kind == RD_CmdKind_OpenUser && rd_state->project_path.size == 0)
+            {
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_Cfg *recent_project = rd_cfg_child_from_string(user, str8_lit("recent_project"));
+              String8 project_path = rd_path_from_cfg(recent_project);
+              if(project_path.size == 0)
+              {
+                String8 user_program_data_path = os_get_process_info()->user_program_data_path;
+                String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
+                os_make_directory(user_data_folder);
+                project_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
+              }
+              rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
+            }
+            
             //- rjf: update all window titles
             if(file_is_okay)
             {
@@ -13218,6 +13237,13 @@ rd_frame(void)
             RD_Cfg *dst = rd_cfg_deep_copy(src);
             rd_cfg_insert_child(src->parent, src, dst);
             rd_cmd(RD_CmdKind_FocusTab, .tab = dst->id);
+          }break;
+          case RD_CmdKind_CopyTabFullPath:
+          {
+            RD_Cfg *tab = rd_cfg_from_id(rd_regs()->tab);
+            String8 expr = rd_expr_from_cfg(tab);
+            String8 full_path = rd_file_path_from_eval_string(scratch.arena, expr);
+            os_set_clipboard_text(full_path);
           }break;
           case RD_CmdKind_CloseTab:
           {

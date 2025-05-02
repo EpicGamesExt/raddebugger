@@ -1262,6 +1262,52 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: dragging cfgs/entities/expressions? -> drop site
+  //
+  B32 drop_can_hit_lines = 0;
+  RD_Cfg *drop_cfg = &rd_nil_cfg;
+  CTRL_Entity *drop_thread = &ctrl_entity_nil;
+  String8 drop_expr = {0};
+  Vec4F32 drop_color = pop_color;
+  UI_Key drop_site_key = ui_key_from_stringf(top_container_box->key, "drop_site");
+  if(rd_drag_is_active())
+  {
+    RD_Cfg *cfg = rd_cfg_from_id(rd_state->drag_drop_regs->cfg);
+    if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg &&
+       (str8_match(cfg->string, str8_lit("breakpoint"), 0) ||
+        str8_match(cfg->string, str8_lit("watch_pin"), 0)))
+    {
+      drop_can_hit_lines = 1;
+      drop_cfg = cfg;
+      drop_color = linear_from_srgba(rd_color_from_cfg(cfg));
+      if(drop_color.w == 0)
+      {
+        drop_color = pop_color;
+      }
+    }
+    if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
+    {
+      drop_can_hit_lines = 1;
+      drop_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_state->drag_drop_regs->thread);
+      drop_color = rd_color_from_ctrl_entity(drop_thread);
+      if(drop_color.w == 0)
+      {
+        drop_color = pop_color;
+      }
+    }
+    if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
+    {
+      drop_can_hit_lines = 1;
+      drop_expr = rd_state->drag_drop_regs->expr;
+    }
+    if(drop_can_hit_lines) UI_WidthFill UI_HeightFill
+    {
+      UI_Box *drop_site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_Floating, drop_site_key);
+      ui_signal_from_box(drop_site_box);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build per-line background colors
   //
   Vec4F32 *line_bg_colors = push_array(scratch.arena, Vec4F32, dim_1s64(params->line_num_range)+1);
@@ -2102,10 +2148,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
-  B32 line_drag_drop = 0;
-  RD_Cfg *line_drag_cfg = &rd_nil_cfg;
-  CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
-  Vec4F32 line_drag_drop_color = pop_color;
   {
     //- rjf: determine mouse drag range
     TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
@@ -2181,46 +2223,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
              .lines = lines);
     }
     
-    //- rjf: dragging threads, breakpoints, or watch pins over this slice ->
-    // drop target
-    if(rd_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
-    {
-      CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_state->drag_drop_regs->thread);
-      RD_Cfg *cfg = rd_cfg_from_id(rd_state->drag_drop_regs->cfg);
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg &&
-         (str8_match(cfg->string, str8_lit("breakpoint"), 0) ||
-          str8_match(cfg->string, str8_lit("watch_pin"), 0)))
-      {
-        line_drag_drop = 1;
-        line_drag_cfg = cfg;
-        line_drag_drop_color = linear_from_srgba(rd_color_from_cfg(cfg));
-        if(line_drag_drop_color.w == 0)
-        {
-          line_drag_drop_color = pop_color;
-        }
-      }
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
-      {
-        line_drag_drop = 1;
-        line_drag_cfg = cfg;
-        line_drag_drop_color = pop_color;
-      }
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
-      {
-        line_drag_drop = 1;
-        line_drag_ctrl_entity = thread;
-        line_drag_drop_color = rd_color_from_ctrl_entity(thread);
-        if(line_drag_drop_color.w == 0)
-        {
-          line_drag_drop_color = pop_color;
-        }
-      }
-    }
-    
     //- rjf: drop target is dropped -> process
-    if(contains_1s64(params->line_num_range, mouse_pt.line) && contains_2f32(clipped_top_container_rect, ui_mouse()))
+    if(drop_can_hit_lines && ui_key_match(ui_drop_hot_key(), drop_site_key) && rd_drag_drop())
     {
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr && rd_drag_drop())
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
       {
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
@@ -2231,24 +2237,23 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && line_drag_cfg != &rd_nil_cfg && rd_drag_drop())
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && drop_cfg != &rd_nil_cfg)
       {
-        RD_Cfg *dropped_cfg = line_drag_cfg;
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
         rd_cmd(RD_CmdKind_RelocateCfg,
-               .cfg        = dropped_cfg->id,
+               .cfg        = drop_cfg->id,
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
-      if(line_drag_ctrl_entity != &ctrl_entity_nil && rd_drag_drop())
+      if(drop_thread != &ctrl_entity_nil)
       {
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
-        CTRL_Entity *thread = line_drag_ctrl_entity;
+        CTRL_Entity *thread = drop_thread;
         U64 new_rip_vaddr = line_vaddr;
         if(params->line_vaddrs[line_idx] == 0)
         {
@@ -2355,12 +2360,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: dragging/dropping which applies to lines over this slice -> visualize
   //
-  if(line_drag_drop && contains_2f32(clipped_top_container_rect, ui_mouse()))
+  if(drop_can_hit_lines && ui_key_match(drop_site_key, ui_drop_hot_key()))
   {
     DR_Bucket *bucket = dr_bucket_make();
     DR_BucketScope(bucket)
     {
-      Vec4F32 color = line_drag_drop_color;
+      Vec4F32 color = drop_color;
       color.w *= 0.2f;
       Rng2F32 drop_line_rect = r2f32p(top_container_box->rect.x0,
                                       top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min) * params->line_height_px,

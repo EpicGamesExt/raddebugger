@@ -139,6 +139,7 @@ RD_CmdKind_MoveTabLeft,
 RD_CmdKind_OpenTab,
 RD_CmdKind_BuildTab,
 RD_CmdKind_DuplicateTab,
+RD_CmdKind_CopyTabFullPath,
 RD_CmdKind_CloseTab,
 RD_CmdKind_MoveView,
 RD_CmdKind_TabBarTop,
@@ -688,8 +689,8 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[332];
-extern RD_NameSchemaInfo rd_name_schema_info_table[23];
+extern RD_VocabInfo rd_vocab_info_table[333];
+extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
