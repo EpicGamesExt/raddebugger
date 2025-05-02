@@ -237,11 +237,11 @@ RD_VocabTable:
         'code_font': string,
       
       //- rjf: theme
-      @display_name('Theme Preset') @description("The selected built-in theme preset.")
+      @no_expand @display_name('User Theme Preset') @description("The selected built-in theme preset.")
         'theme_preset': string,
-      @no_expand @display_name('Theme File') @description("The path from which theme data is loaded, overriding the preset.")
+      @no_expand @no_expand @display_name('User Theme File') @description("The path from which theme data is loaded, overriding the preset.")
         'theme_file': path,
-      @display_name('Theme Colors') @description("Additional theme colors which are applied on top of the theme file or preset.")
+      @display_name('User Theme') @description("The user's theme, which describes all colors used throughout the UI.")
         'theme_colors': query,
       
       //- rjf: autocompletion
@@ -291,11 +291,11 @@ RD_VocabTable:
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
       //- rjf: theme
-      @display_name('Project Theme Preset') @description("The selected built-in project theme preset.")
+      @no_expand @display_name('Project Theme Preset') @description("The selected built-in project theme preset.")
         'theme_preset': string,
       @no_expand @display_name('Project Theme File') @description("The path from which project's theme data is loaded, overriding the preset.")
         'theme_file': path,
-      @display_name('Project Theme Colors') @description("Additional theme colors which are applied on top of the project's theme file or preset.")
+      @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
         'theme_colors': query,
       
       //- rjf: exception settings
@@ -381,7 +381,7 @@ RD_VocabTable:
   {
     theme_color,
     ```
-      @collection_commands(add_theme_color, fork_loaded_theme_colors, save_theme_colors)
+      @collection_commands(open_theme, add_theme_color, fork_loaded_theme, save_theme)
       @row_commands(remove_cfg)
       x:
     {
@@ -978,10 +978,10 @@ RD_CmdTable:    //               |        |              |                |     
   {AddFilePathMap                 0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "add_file_path_map"           "Add File Path Map"                           "Adds a new file path map."                                                                                        ""                               ""                                                               }
   
   //- rjf: themes
-  {OpenTheme                      1        1              0                0               `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           Palette               "open_theme"                  "Open Theme"                                  "Opens a theme file."                                                                                              "color"                          ""                                                               }
+  {OpenTheme                      0        0              0                0               `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           Palette               "open_theme"                  "Open Theme"                                  "Opens a theme file."                                                                                              "color"                          ""                                                               }
   {AddThemeColor                  0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "add_theme_color"             "Add Theme Color"                             "Adds a new theme color."                                                                                          ""                               ""                                                               }
-  {ForkLoadedThemeColors          0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "fork_loaded_theme_colors"    "Fork Loaded Theme Colors"                    "Imports all colors from a loaded color theme file or color theme preset, so they can be individually edited."     ""                               ""                                                               }
-  {SaveThemeColors                0        0              0                0               `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           Save                  "save_theme_colors"           "Save Theme Colors"                           "Saves all theme colors to a new theme file."                                                                      ""                               ""                                                               }
+  {ForkLoadedTheme                0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "fork_loaded_theme"           "Fork Loaded Theme"                           "Imports all colors from the loaded color theme file or color theme preset, so they can be individually edited."   ""                               ""                                                               }
+  {SaveTheme                      0        0              0                0               `folder:\\"$input\\"`                            FilePath           null              Nil                     Null       1  0  0  0  0  1  1                                                           Save                  "save_theme"                  "Save Theme"                                  "Saves all theme colors to a new theme file."                                                                      ""                               ""                                                               }
   
   //- rjf: line operations
   {SetNextStatement               1        1              1                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           RightArrow            "set_next_statement"          "Set Next Statement"                          "Sets the selected thread's instruction pointer to the cursor's position."                                         ""                               "$text_pt,"                                                      }

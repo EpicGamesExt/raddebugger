@@ -6612,6 +6612,7 @@ rd_window_frame(void)
     {
       FloatingViewTask *next;
       RD_Cfg *view;
+      RD_Regs *regs;
       Rng2F32 rect;
       B32 is_focused;
       B32 is_anchored;
@@ -6941,6 +6942,7 @@ rd_window_frame(void)
           SLLQueuePush(first_floating_view_task, last_floating_view_task, t);
           query_floating_view_task = t;
           t->view          = view;
+          t->regs          = ws->query_regs;
           t->rect          = rect;
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
@@ -6970,8 +6972,13 @@ rd_window_frame(void)
         F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate, .reset = t->reset_open, .initial = 0.f);
         
         // rjf: push view regs
-        rd_push_regs(.view = view->id);
+        rd_push_regs();
         {
+          if(t->regs != 0)
+          {
+            rd_regs()->cfg = t->regs->cfg;
+          }
+          rd_regs()->view = view->id;
           String8 view_expr = rd_expr_from_cfg(view);
           String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
           // NOTE(rjf): we want to only fill out this view's file path slot if it
@@ -14709,7 +14716,7 @@ rd_frame(void)
             RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
             rd_cfg_new(value, str8_lit("0xffffffff"));
           }break;
-          case RD_CmdKind_ForkLoadedThemeColors:
+          case RD_CmdKind_ForkLoadedTheme:
           {
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
             RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
@@ -14733,6 +14740,19 @@ rd_frame(void)
                 rd_cfg_new(value, md_child_from_string(n, str8_lit("value"), 0)->first->string);
               }
             }
+          }break;
+          case RD_CmdKind_SaveTheme:
+          {
+            String8 dst_path = rd_regs()->file_path;
+            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+            RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
+            String8List strings = {0};
+            for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
+            {
+              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, n->v));
+            }
+            String8 data = str8_list_join(scratch.arena, &strings, 0);
+            os_write_data_to_file_path(dst_path, data);
           }break;
           
           //- rjf: watches
