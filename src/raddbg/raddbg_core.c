@@ -14659,8 +14659,8 @@ rd_frame(void)
           //- rjf: themes
           case RD_CmdKind_OpenTheme:
           {
-            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-            RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(user, str8_lit("theme"));
+            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+            RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(parent, str8_lit("theme"));
             rd_cfg_new_replace(theme, rd_regs()->string);
           }break;
           case RD_CmdKind_AddThemeColor:
