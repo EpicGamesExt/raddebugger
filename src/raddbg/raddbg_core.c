@@ -5757,10 +5757,20 @@ rd_window_frame(void)
     // that windows can have their own colors, and have those override higher-up settings.
     RD_Cfg *preset_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
-    RD_Cfg *scan_parents[] = {window, rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")), rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))};
-    for EachElement(idx, scan_parents)
+    RD_Cfg *theme_parents[] =
     {
-      RD_Cfg *parent_cfg = scan_parents[idx];
+      rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")),
+      rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))
+    };
+    U64 theme_parents_count = ArrayCount(theme_parents);
+    if(!rd_setting_b32_from_name(str8_lit("use_project_theme")))
+    {
+      theme_parents[0] = theme_parents[1];
+      theme_parents_count -= 1;
+    }
+    for EachIndex(idx, theme_parents_count)
+    {
+      RD_Cfg *parent_cfg = theme_parents[idx];
       if(preset_cfg != &rd_nil_cfg)
       {
         RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("color_preset"));

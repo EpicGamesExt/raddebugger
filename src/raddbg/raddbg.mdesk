@@ -414,6 +414,10 @@ RD_VocabTable:
         'row_height': @range[1.75f, 5.f] f32,
       @default(3.f) @description("Controls the height of tabs, in multiples of the font size.")
         'tab_height': @range[1.75f, 5.f] f32,
+      
+      //- rjf: theme settings
+      @default(1) @display_name('Use Project Theme') @description("Prefer using the project theme for this window, if any. If off, only the user's theme settings will be used.")
+        'use_project_theme': bool,
     }
     ```
   }
