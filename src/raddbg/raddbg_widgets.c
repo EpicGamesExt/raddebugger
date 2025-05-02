@@ -2404,6 +2404,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       TxtRngColorPairNode *n = push_array(scratch.arena, TxtRngColorPairNode, 1);
       n->rng = result.mouse_expr_rng;
       n->color = ui_color_from_name(str8_lit("background"));
+      n->color.w *= 0.2f;
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
     }
   }
@@ -2591,7 +2592,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 ceil_f32(line_box->rect.y1) + 1.f,
               };
               Vec4F32 color = n->color;
-              color.w = ClampTop(color.w, 0.1f);
               if(!is_focused)
               {
                 color.w *= 0.5f;

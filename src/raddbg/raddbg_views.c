@@ -3147,7 +3147,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               {
                 cell_flags |= UI_BoxFlag_DrawBackground;
                 cell_bg_rgba = selection_color;
-                cell_bg_rgba.w *= 0.2f;
               }
               if(selection.min%num_columns == col_idx)
               {

@@ -382,7 +382,7 @@ RD_VocabTable:
     theme_color,
     ```
       @collection_commands(open_theme, add_theme_color, fork_loaded_theme, save_theme)
-      @row_commands(remove_cfg)
+      @row_commands(duplicate_cfg, remove_cfg)
       x:
     {
       @display_name('Tags') tags: string,
@@ -1379,7 +1379,7 @@ RD_ThemePresetTable:
       theme_color: {tags:"hover",                                  value: 0xffffffff }
       theme_color: {tags:"focus",                                  value: 0xfda200ff }
       theme_color: {tags:"cursor",                                 value: 0x8aff00ff }
-      theme_color: {tags:"selection",                              value: 0x99ccffff }
+      theme_color: {tags:"selection",                              value: 0x99ccff0f }
       theme_color: {tags:"inactive background",                    value: 0x0000002f }
       theme_color: {tags:"drop_shadow",                            value: 0x0000007f }
       theme_color: {tags:"good_pop background",                    value: 0x2c5b36ff }

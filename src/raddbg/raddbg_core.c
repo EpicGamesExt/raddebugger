@@ -8589,7 +8589,7 @@ rd_window_frame(void)
           U64 tab_task_count = 0;
           F32 tab_close_width_px = ui_top_font_size()*2.5f;
           F32 max_tab_width_px = ui_top_font_size()*20.f;
-          if(build_panel)
+          if(build_panel) UI_TagF("tab")
           {
             B32 reset = (ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
             for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
@@ -8748,7 +8748,7 @@ rd_window_frame(void)
                     UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                       RD_Font(RD_FontSlot_Icons)
                       UI_FontSize(ui_top_font_size()*0.75f)
-                      UI_TagF(".") UI_TagF("weak") UI_TagF("implicit")
+                      UI_TagF(".") UI_TagF("tab") UI_TagF("weak") UI_TagF("implicit")
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
                     {
