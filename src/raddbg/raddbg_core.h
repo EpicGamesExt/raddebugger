@@ -915,16 +915,15 @@ internal UI_ScrollPt2 rd_view_scroll_pos(void);
 internal EV_View *rd_view_eval_view(void);
 internal String8 rd_view_query_cmd(void);
 internal String8 rd_view_query_input(void);
-internal RD_Cfg *rd_view_cfg_from_string(String8 string);
-internal E_Value rd_view_cfg_value_from_string(String8 string);
-internal B32 rd_view_cfg_b32_from_string(String8 string);
-internal U64 rd_view_cfg_u64_from_string(String8 string);
-internal F32 rd_view_cfg_f32_from_string(String8 string);
+internal String8 rd_view_setting_from_name(String8 string);
+internal E_Value rd_view_setting_value_from_name(String8 string);
+internal B32 rd_view_setting_b32_from_name(String8 string);
+internal U64 rd_view_setting_u64_from_name(String8 string);
+internal F32 rd_view_setting_f32_from_name(String8 string);
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 internal TXT_LangKind rd_lang_kind_from_eval(E_Eval eval);
 internal Arch rd_arch_from_eval(E_Eval eval);
-internal R_Tex2DFormat rd_tex2dformat_from_eval(E_Eval eval);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);

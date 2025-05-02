@@ -5367,45 +5367,48 @@ rd_view_query_input(void)
   return string;
 }
 
-internal RD_Cfg *
-rd_view_cfg_from_string(String8 string)
+internal String8
+rd_view_setting_from_name(String8 name)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-  RD_Cfg *cfg = rd_cfg_child_from_string(view, string);
-  return cfg;
+  String8 result = rd_cfg_child_from_string(view, name)->first->string;
+  if(result.size == 0)
+  {
+    result = rd_default_setting_from_names(view->string, name);
+  }
+  return result;
 }
 
 internal E_Value
-rd_view_cfg_value_from_string(String8 string)
+rd_view_setting_value_from_name(String8 name)
 {
-  RD_Cfg *root = rd_view_cfg_from_string(string);
-  String8 expr = root->first->string;
+  String8 expr = rd_view_setting_from_name(name);
   E_Eval eval = e_eval_from_string(expr);
   E_Value result = e_value_eval_from_eval(eval).value;
   return result;
 }
 
 internal B32
-rd_view_cfg_b32_from_string(String8 string)
+rd_view_setting_b32_from_name(String8 name)
 {
-  RD_Cfg *root = rd_view_cfg_from_string(string);
-  B32 result = !!e_value_from_stringf("(bool)(%S)", root->first->string).u64;
+  String8 string = rd_view_setting_from_name(name);
+  B32 result = !!e_value_from_stringf("(bool)(%S)", string).u64;
   return result;
 }
 
 internal U64
-rd_view_cfg_u64_from_string(String8 string)
+rd_view_setting_u64_from_name(String8 name)
 {
-  RD_Cfg *root = rd_view_cfg_from_string(string);
-  U64 result = e_value_from_stringf("(uint64)(%S)", root->first->string).u64;
+  String8 string = rd_view_setting_from_name(name);
+  U64 result = e_value_from_stringf("(uint64)(%S)", string).u64;
   return result;
 }
 
 internal F32
-rd_view_cfg_f32_from_string(String8 string)
+rd_view_setting_f32_from_name(String8 name)
 {
-  RD_Cfg *root = rd_view_cfg_from_string(string);
-  F32 result = e_value_from_stringf("(float32)(%S)", root->first->string).f32;
+  String8 string = rd_view_setting_from_name(name);
+  F32 result = e_value_from_stringf("(float32)(%S)", string).f32;
   return result;
 }
 
@@ -5464,57 +5467,6 @@ rd_arch_from_eval(E_Eval eval)
   }
   
   return arch;
-}
-
-internal R_Tex2DFormat
-rd_tex2dformat_from_eval(E_Eval eval)
-{
-  R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8;
-  B32 got_fmt = 0;
-  
-  // rjf: try explicitly passed formats
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind == E_ExprKind_Define && str8_match(arg->first->string, str8_lit("fmt"), 0))
-      {
-        got_fmt = 1;
-        for EachEnumVal(R_Tex2DFormat, f)
-        {
-          if(str8_match(arg->first->next->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
-          {
-            fmt = f;
-            break;
-          }
-        }
-      }
-    }
-  }
-  
-  // rjf: try implicit non-define arguments
-  if(type->kind == E_TypeKind_Lens)
-  {
-    for EachIndex(idx, type->count)
-    {
-      E_Expr *arg = type->args[idx];
-      if(arg->kind == E_ExprKind_LeafIdentifier)
-      {
-        for EachEnumVal(R_Tex2DFormat, f)
-        {
-          if(str8_match(arg->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
-          {
-            fmt = f;
-            break;
-          }
-        }
-      }
-    }
-  }
-  
-  return fmt;
 }
 
 //- rjf: pushing/attaching view resources
@@ -8698,7 +8650,7 @@ rd_window_frame(void)
               {
                 // rjf: gather info for this tab
                 B32 tab_is_selected = (tab == panel->selected_tab);
-                B32 tab_is_auto = rd_view_cfg_b32_from_string(str8_lit("auto"));
+                B32 tab_is_auto = rd_view_setting_b32_from_name(str8_lit("auto"));
                 
                 // rjf: begin vertical region for this tab
                 ui_set_next_child_layout_axis(Axis2_Y);
@@ -12088,6 +12040,16 @@ rd_frame(void)
               }
             }
             
+            // rjf: run -> no active targets, no processes, but we only have one target? -> just launch it, then select it
+            if((kind == RD_CmdKind_Run ||
+                kind == RD_CmdKind_StepInto ||
+                kind == RD_CmdKind_StepOver) && processes.count == 0 && targets.count == 1 && !has_active_targets)
+            {
+              rd_cmd(kind == RD_CmdKind_Run ? RD_CmdKind_LaunchAndRun : RD_CmdKind_LaunchAndStepInto, .cfg = targets.first->v->id);
+              rd_cmd(RD_CmdKind_SelectTarget, .cfg = targets.first->v->id);
+              break;
+            }
+            
             // rjf: run -> no targets at all, no processes? -> do helper for add-target
             if((kind == RD_CmdKind_Run ||
                 kind == RD_CmdKind_StepInto ||
@@ -12100,13 +12062,10 @@ rd_frame(void)
             // rjf: run -> no active targets, no processes? -> do helper for launch-and-run
             if((kind == RD_CmdKind_Run ||
                 kind == RD_CmdKind_StepInto ||
-                kind == RD_CmdKind_StepOver) && processes.count == 0)
+                kind == RD_CmdKind_StepOver) && processes.count == 0 && !has_active_targets)
             {
-              if(!has_active_targets)
-              {
-                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[kind == RD_CmdKind_Run ? RD_CmdKind_LaunchAndRun : RD_CmdKind_LaunchAndStepInto].string);
-                break;
-              }
+              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[kind == RD_CmdKind_Run ? RD_CmdKind_LaunchAndRun : RD_CmdKind_LaunchAndStepInto].string);
+              break;
             }
             
             // rjf: if this is a low-level operation, e.g. launch-and-run or launch-and-step-into,
@@ -14010,7 +13969,7 @@ rd_frame(void)
                 RD_RegsScope(.tab = tab->id, .view = tab->id)
                 {
                   if(str8_match(tab->string, str8_lit("text"), 0) &&
-                     rd_view_cfg_b32_from_string(str8_lit("auto")))
+                     rd_view_setting_b32_from_name(str8_lit("auto")))
                   {
                     panel_w_auto = panel;
                     view_w_auto = tab;

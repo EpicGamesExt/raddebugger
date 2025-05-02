@@ -1898,23 +1898,23 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   rd_regs()->file_path     = rd_file_path_from_eval(rd_frame_arena(), eval);
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
-  rd_regs()->cursor.line   = rd_view_cfg_value_from_string(str8_lit("cursor_line")).s64;
-  rd_regs()->cursor.column = rd_view_cfg_value_from_string(str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line     = rd_view_cfg_value_from_string(str8_lit("mark_line")).s64;
-  rd_regs()->mark.column   = rd_view_cfg_value_from_string(str8_lit("mark_column")).s64;
+  rd_regs()->cursor.line   = rd_view_setting_value_from_name(str8_lit("cursor_line")).s64;
+  rd_regs()->cursor.column = rd_view_setting_value_from_name(str8_lit("cursor_column")).s64;
+  rd_regs()->mark.line     = rd_view_setting_value_from_name(str8_lit("mark_line")).s64;
+  rd_regs()->mark.column   = rd_view_setting_value_from_name(str8_lit("mark_column")).s64;
   if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
   U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
     size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
   }
   Rng1U64 range = r1u64(base_offset, base_offset+size);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  String8 lang = rd_view_cfg_from_string(str8_lit("lang"))->first->string;
+  String8 lang = rd_view_setting_from_name(str8_lit("lang"));
   if(lang.size == 0)
   {
     rd_regs()->lang_kind = rd_lang_kind_from_eval(eval);
@@ -2181,7 +2181,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     space = auto_space;
   }
   U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
     size = KB(16);
@@ -2360,14 +2360,13 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: unpack parameterization info
   //
   F32 main_font_size = ui_bottom_font_size();
-  Rng1U64 view_range = e_range_from_eval(eval);
   U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_cfg_value_from_string(str8_lit("size")).u64;
+  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
     size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
   }
-  view_range = r1u64(base_offset, base_offset+size);
+  Rng1U64 view_range = r1u64(base_offset, base_offset+size);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
@@ -2377,13 +2376,13 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   {
     view_range = r1u64(0, 0x7FFFFFFFFFFFull);
   }
-  U64 cursor_base_vaddr = rd_view_cfg_u64_from_string(str8_lit("cursor"));
-  U64 mark_base_vaddr   = rd_view_cfg_u64_from_string(str8_lit("mark"));
-  U64 cursor_size       = rd_view_cfg_u64_from_string(str8_lit("cursor_size"));
+  U64 cursor_base_vaddr = rd_view_setting_u64_from_name(str8_lit("cursor"));
+  U64 mark_base_vaddr   = rd_view_setting_u64_from_name(str8_lit("mark"));
+  U64 cursor_size       = rd_view_setting_u64_from_name(str8_lit("cursor_size"));
   cursor_size = ClampBot(1, cursor_size);
   U64 initial_cursor_base_vaddr  = cursor_base_vaddr;
   U64 initial_mark_base_vaddr    = mark_base_vaddr;
-  U64 num_columns     = rd_view_cfg_u64_from_string(str8_lit("num_columns"));
+  U64 num_columns     = rd_view_setting_u64_from_name(str8_lit("num_columns"));
   if(num_columns == 0)
   {
     num_columns = 16;
@@ -3378,8 +3377,17 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: evaluate expression
   //
-  Vec2S32 dim = v2s32((S32)rd_view_cfg_u64_from_string(str8_lit("w")), (S32)rd_view_cfg_u64_from_string(str8_lit("h")));
-  R_Tex2DFormat fmt = rd_tex2dformat_from_eval(eval);
+  Vec2S32 dim = v2s32((S32)rd_view_setting_u64_from_name(str8_lit("w")), (S32)rd_view_setting_u64_from_name(str8_lit("h")));
+  String8 fmt_string = rd_view_setting_from_name(str8_lit("fmt"));
+  R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8;
+  for EachNonZeroEnumVal(R_Tex2DFormat, f)
+  {
+    if(str8_match(fmt_string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+    {
+      fmt = f;
+      break;
+    }
+  }
   U64 base_offset = e_base_offset_from_eval(eval);
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
@@ -3387,11 +3395,11 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: unpack params
   //
-  F32 zoom = rd_view_cfg_value_from_string(str8_lit("zoom")).f32;
+  F32 zoom = rd_view_setting_value_from_name(str8_lit("zoom")).f32;
   Vec2F32 view_center_pos =
   {
-    rd_view_cfg_value_from_string(str8_lit("x")).f32,
-    rd_view_cfg_value_from_string(str8_lit("y")).f32,
+    rd_view_setting_value_from_name(str8_lit("x")).f32,
+    rd_view_setting_value_from_name(str8_lit("y")).f32,
   };
   if(zoom == 0)
   {
@@ -3517,7 +3525,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
           case R_Tex2DFormat_R8:     {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, 0, 0, 1);}break;
           case R_Tex2DFormat_RG8:    {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, 0, 1);}break;
           case R_Tex2DFormat_RGBA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[3]/255.f);}break;
-          case R_Tex2DFormat_BGRA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[3]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[0]/255.f);}break;
+          case R_Tex2DFormat_BGRA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[3]/255.f);}break;
           case R_Tex2DFormat_R16:    {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, 0, 0, 1);}break;
           case R_Tex2DFormat_RGBA16: {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[1]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[2]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[3]/(F32)max_U16);}break;
           case R_Tex2DFormat_R32:    {color = v4f32(((F32 *)(data.str+off_bytes))[0], 0, 0, 1);}break;
@@ -3883,12 +3891,12 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 count        = rd_view_cfg_u64_from_string(str8_lit("count"));
-  U64 vtx_base_off = rd_view_cfg_u64_from_string(str8_lit("vtx"));
-  U64 vtx_size     = rd_view_cfg_u64_from_string(str8_lit("vtx_size"));
-  F32 yaw_target   = rd_view_cfg_f32_from_string(str8_lit("yaw"));
-  F32 pitch_target = rd_view_cfg_f32_from_string(str8_lit("pitch"));
-  F32 zoom_target  = rd_view_cfg_f32_from_string(str8_lit("zoom"));
+  U64 count        = rd_view_setting_u64_from_name(str8_lit("count"));
+  U64 vtx_base_off = rd_view_setting_u64_from_name(str8_lit("vtx"));
+  U64 vtx_size     = rd_view_setting_u64_from_name(str8_lit("vtx_size"));
+  F32 yaw_target   = rd_view_setting_f32_from_name(str8_lit("yaw"));
+  F32 pitch_target = rd_view_setting_f32_from_name(str8_lit("pitch"));
+  F32 zoom_target  = rd_view_setting_f32_from_name(str8_lit("zoom"));
   
   //////////////////////////////
   //- rjf: evaluate & unpack expression
