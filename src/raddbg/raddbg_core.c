@@ -3307,6 +3307,11 @@ rd_view_ui(Rng2F32 rect)
                       String8 cmd_name = rd_cmd_name_from_eval(eval);
                       rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = cmd_name);
                     }break;
+                    case RD_EvalSpaceKind_MetaTheme:
+                    {
+                      String8 name = e_string_from_id(eval.value.u64);
+                      rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
+                    }break;
                   }
                   
                   // rjf: if we do not have a specific command, then we can just
@@ -5754,11 +5759,8 @@ rd_window_frame(void)
   {
     HS_Scope *hs_scope = hs_scope_open();
     
-    //- rjf: for this window, scan upwards, and then try the project, then the user, until we
-    // find explicit preset / colors trees in the config. we will prefer the tightest ones, so
-    // that windows can have their own colors, and have those override higher-up settings.
-    RD_Cfg *preset_cfg = &rd_nil_cfg;
-    RD_Cfg *file_cfg = &rd_nil_cfg;
+    //- rjf: try to find theme settings from the project, then the user.
+    RD_Cfg *theme_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
     RD_Cfg *theme_parents[] =
     {
@@ -5774,20 +5776,12 @@ rd_window_frame(void)
     for EachIndex(idx, theme_parents_count)
     {
       RD_Cfg *parent_cfg = theme_parents[idx];
-      if(preset_cfg == &rd_nil_cfg)
+      if(theme_cfg == &rd_nil_cfg)
       {
-        RD_Cfg *possible_preset_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme_preset"));
-        if(possible_preset_cfg != &rd_nil_cfg)
+        RD_Cfg *possible_theme_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme"));
+        if(possible_theme_cfg != &rd_nil_cfg)
         {
-          preset_cfg = possible_preset_cfg;
-        }
-      }
-      if(file_cfg == &rd_nil_cfg)
-      {
-        RD_Cfg *possible_file_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme_file"));
-        if(possible_file_cfg != &rd_nil_cfg)
-        {
-          file_cfg = possible_file_cfg;
+          theme_cfg = possible_theme_cfg;
         }
       }
       for(RD_Cfg *child = parent_cfg->first; child != &rd_nil_cfg; child = child->next)
@@ -5799,34 +5793,34 @@ rd_window_frame(void)
       }
     }
     
-    //- rjf: map the preset config to the associated preset tree
-    MD_Node *preset_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
-    if(preset_cfg != &rd_nil_cfg)
+    //- rjf: map the theme config to the associated tree (either from a preset, or from a file)
+    MD_Node *theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
+    if(theme_cfg != &rd_nil_cfg)
     {
-      String8 preset_name = preset_cfg->first->string;
-      for EachEnumVal(RD_ThemePreset, p)
+      String8 theme_name = theme_cfg->first->string;
+      if(theme_name.size != 0)
       {
-        if(str8_match(preset_name, rd_theme_preset_code_string_table[p], 0))
+        for EachEnumVal(RD_ThemePreset, p)
         {
-          preset_tree = rd_state->theme_preset_trees[p];
-          break;
+          if(str8_match(theme_name, rd_theme_preset_display_string_table[p], 0))
+          {
+            theme_tree = rd_state->theme_preset_trees[p];
+            break;
+          }
+        }
+        if(theme_tree == &md_nil_node)
+        {
+          String8 path = push_str8f(scratch.arena, "%S/raddbg/themes/%S", os_get_process_info()->user_program_data_path, theme_name);
+          U64 endt_us = os_now_microseconds()+100;
+          if(ws->frames_alive == 0)
+          {
+            endt_us = os_now_microseconds()+50000;
+          }
+          U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          theme_tree = md_tree_from_string(scratch.arena, data);
         }
       }
-    }
-    
-    //- rjf: map the file config to the associated theme file parse
-    MD_Node *file_tree = &md_nil_node;
-    if(file_cfg != &rd_nil_cfg)
-    {
-      String8 path = file_cfg->first->string;
-      U64 endt_us = os_now_microseconds()+100;
-      if(ws->frames_alive == 0)
-      {
-        endt_us = os_now_microseconds()+50000;
-      }
-      U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
-      String8 data = hs_data_from_hash(hs_scope, hash);
-      file_tree = md_tree_from_string(scratch.arena, data);
     }
     
     //- rjf: build tasks for color applications - each task comprises of a metadesk
@@ -5837,7 +5831,7 @@ rd_window_frame(void)
       ThemeTask *next;
       MD_Node *tree;
     };
-    ThemeTask start_task = {0, !md_node_is_nil(file_tree) ? file_tree : preset_tree};
+    ThemeTask start_task = {0, theme_tree};
     ThemeTask *first_task = &start_task;
     ThemeTask *last_task = first_task;
     {
@@ -14666,8 +14660,8 @@ rd_frame(void)
           case RD_CmdKind_OpenTheme:
           {
             RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-            RD_Cfg *theme_file = rd_cfg_child_from_string_or_alloc(user, str8_lit("theme_file"));
-            rd_cfg_new_replace(theme_file, rd_regs()->file_path);
+            RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(user, str8_lit("theme"));
+            rd_cfg_new_replace(theme, rd_regs()->string);
           }break;
           case RD_CmdKind_AddThemeColor:
           {
