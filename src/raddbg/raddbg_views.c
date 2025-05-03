@@ -2066,7 +2066,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: build bottom bar
   //
-  if(!file_is_missing && key_has_data) UI_FontSize(main_font_size)
+  if(!file_is_missing && key_has_data) UI_FontSize(main_font_size) UI_TagF(file_is_out_of_date ? "bad_pop" : ".")
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
@@ -2075,7 +2075,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_TagF("weak")
     {
-      if(file_is_out_of_date) UI_TagF("bad_pop")
+      if(file_is_out_of_date) 
       {
         UI_Box *box = &ui_nil_box;
         RD_Font(RD_FontSlot_Icons)
@@ -2085,11 +2085,11 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         UI_Signal sig = ui_signal_from_box(box);
         if(ui_hovering(sig)) UI_Tooltip
         {
-          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
+          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1)) UI_TextPadding(0)
           {
-            ui_labelf("This file has changed since ", out_of_date_dbgi_name);
+            UI_TagF("weak") ui_labelf("This file has changed since ");
             ui_label(out_of_date_dbgi_name);
-            ui_labelf(" was produced.");
+            UI_TagF("weak") ui_labelf(" was produced.");
           }
         }
       }
