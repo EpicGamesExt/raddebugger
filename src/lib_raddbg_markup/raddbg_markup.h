@@ -209,7 +209,7 @@ raddbg_encode_utf16(wchar_t *str, unsigned __int32 codepoint)
 static inline int
 raddbg_is_attached__impl(void)
 {
-  return !!raddbg_is_attached_byte_marker;
+  return !!raddbg_is_attached_byte_marker[0];
 }
 
 static inline void

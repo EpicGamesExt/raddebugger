@@ -451,14 +451,14 @@ type_coverage_eval_tests(void)
   
   Has_Enums has_enums = {(Kind)4, (Flag)7};
   
-  Crazy_Union crazy_union = {0};
+  Crazy_Union crazy_union = {};
   
   crazy_union.kind = Kind_First;
   crazy_union.kind = Kind_Second;
   crazy_union.kind = Kind_Third;
   crazy_union.kind = Kind_Fourth;
   
-  Discriminated_Union discriminated_union = {0};
+  Discriminated_Union discriminated_union = {};
   
   discriminated_union.kind = Kind_First;
   discriminated_union.first.x = 16;
@@ -2581,6 +2581,52 @@ debug_string_tests(void)
 }
 
 ////////////////////////////////
+//~ rjf: Thread Name Test
+
+#if _WIN32
+DWORD dummy_thread(void *p)
+{
+  Sleep(10);
+  return 0;
+}
+#endif
+
+static void
+thread_name_tests(void)
+{
+#if _WIN32
+  DWORD id = 0;
+  HANDLE h = CreateThread(0, 0, dummy_thread, 0, CREATE_SUSPENDED, &id);
+  {
+#pragma pack(push, 8)
+    typedef struct THREADNAME_INFO THREADNAME_INFO;
+    struct THREADNAME_INFO
+    {
+      DWORD dwType;
+      LPCSTR szName;
+      DWORD dwThreadID;
+      DWORD dwFlags;
+    };
+#pragma pack(pop)
+    THREADNAME_INFO info;
+    info.dwType = 0x1000;
+    info.szName = "dummy_thread";
+    info.dwThreadID = id;
+    info.dwFlags = 0;
+    __try
+    {
+      RaiseException(0x406D1388, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except(1)
+    {
+    }
+  }
+  ResumeThread(h);
+  WaitForSingleObject(h, INFINITE);
+#endif
+}
+
+////////////////////////////////
 //~ rjf: Interrupt Stepping Tests
 
 #include <assert.h>
@@ -2945,6 +2991,8 @@ mule_main(int argc, char** argv)
   recursion_stepping_tests();
   
   debug_string_tests();
+  
+  thread_name_tests();
   
   jit_stepping_tests();
   

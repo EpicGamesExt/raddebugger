@@ -1251,14 +1251,14 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
         CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
-        if(thread != &ctrl_entity_nil)
-        {
-          ctrl_entity_equip_string(store, thread, event->string);
-        }
-        else
+        if(event->entity_id != 0)
         {
           CTRL_Entity *pending_name = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadName, Arch_Null, ctrl_handle_zero(), event->entity_id);
           ctrl_entity_equip_string(store, pending_name, event->string);
+        }
+        else if(thread != &ctrl_entity_nil)
+        {
+          ctrl_entity_equip_string(store, thread, event->string);
         }
       }break;
       case CTRL_EventKind_ThreadColor:
