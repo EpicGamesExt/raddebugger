@@ -6,6 +6,9 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
+#include <string>
+#include <vector>
+#include <memory>
 #define RADDBG_MARKUP_IMPLEMENTATION
 #include "lib_raddbg_markup/raddbg_markup.h"
 
@@ -103,12 +106,7 @@ void optimized_struct_parameters_eval_tests(void);
 ////////////////////////////////
 // NOTE(allen): Type Coverage Eval
 
-#include <vector>
-#include <memory>
 #include <stdint.h>
-
-raddbg_type_view(std::vector<?>, slice(_Mypair._Myval2));
-raddbg_type_view(std::unique_ptr<?>, _Mypair._Myval2);
 
 struct Basics
 {
@@ -552,6 +550,9 @@ type_coverage_eval_tests(void)
   const int32_t x1 = 3;
   const int32_t y1 = -10;
   const int32_t z1 = x1 + y1;
+  
+  std::string small_cplusplus_string = "smallstr";
+  std::string cplusplus_string = "This is a C++ string!";
   
   std::vector<int> int_vector;
   int_vector.push_back(1);

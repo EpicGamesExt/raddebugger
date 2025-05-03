@@ -12,6 +12,10 @@
 # define RADDBG_MARKUP_VSNPRINTF vsnprintf
 #endif
 
+#if !defined(RADDBG_MARKUP_STL_TYPE_VIEWS)
+# define RADDBG_MARKUP_STL_TYPE_VIEWS 1
+#endif
+
 ////////////////////////////////
 //~ Usage Macros
 
@@ -382,5 +386,23 @@ raddbg_add_or_remove_breakpoint__impl(void *ptr, int set, int size, int r, int w
 
 #endif // defined(_WIN32)
 #endif // defined(RADDBG_MARKUP_IMPLEMENTATION)
+
+////////////////////////////////
+//~ Win32 STL Type Views
+
+#if defined(_WIN32) && defined(RADDBG_MARKUP_IMPLEMENTATION) && RADDBG_MARKUP_STL_TYPE_VIEWS
+# if defined(_VECTOR_)
+raddbg_type_view(std::vector<?>, slice(_Mypair._Myval2));
+# endif
+# if defined(_MEMORY_)
+raddbg_type_view(std::unique_ptr<?>, _Mypair._Myval2);
+# endif
+# if defined(_STRING_)
+raddbg_type_view(std::basic_string<?>, _Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : _Mypair._Myval2._Bx._Ptr);
+# endif
+# if defined(_STRING_VIEW_)
+// TODO(rjf)
+# endif
+#endif // defined(_WIN32) && defined(RADDBG_MARKUP_IMPLEMENTATION) && RADDBG_MARKUP_STL_TYPE_VIEWS
 
 #endif // RADDBG_MARKUP_H
