@@ -2597,30 +2597,8 @@ thread_name_tests(void)
 #if _WIN32
   DWORD id = 0;
   HANDLE h = CreateThread(0, 0, dummy_thread, 0, CREATE_SUSPENDED, &id);
-  {
-#pragma pack(push, 8)
-    typedef struct THREADNAME_INFO THREADNAME_INFO;
-    struct THREADNAME_INFO
-    {
-      DWORD dwType;
-      LPCSTR szName;
-      DWORD dwThreadID;
-      DWORD dwFlags;
-    };
-#pragma pack(pop)
-    THREADNAME_INFO info;
-    info.dwType = 0x1000;
-    info.szName = "dummy_thread";
-    info.dwThreadID = id;
-    info.dwFlags = 0;
-    __try
-    {
-      RaiseException(0x406D1388, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
-    }
-    __except(1)
-    {
-    }
-  }
+  raddbg_thread_id_name(id, "dummy_thread");
+  raddbg_thread_id_color_u32(id, 0xff1f23ff);
   ResumeThread(h);
   WaitForSingleObject(h, INFINITE);
 #endif

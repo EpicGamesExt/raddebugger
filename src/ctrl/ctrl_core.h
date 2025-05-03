@@ -843,6 +843,7 @@ internal CTRL_Entity *ctrl_entity_from_handle(CTRL_EntityStore *store, CTRL_Hand
 internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
 internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
 internal CTRL_Entity *ctrl_process_from_entity(CTRL_Entity *entity);
+internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityStore *store, U64 id);
 internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
 internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
 internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);

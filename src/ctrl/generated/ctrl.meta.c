@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 ctrl_entity_kind_code_name_table[10] =
+String8 ctrl_entity_kind_code_name_table[11] =
 {
 {0},
 str8_lit_comp("root"),
@@ -15,10 +15,11 @@ str8_lit_comp("module"),
 str8_lit_comp("entry_point"),
 str8_lit_comp("debug_info_path"),
 str8_lit_comp("pending_thread_name"),
+str8_lit_comp("pending_thread_color"),
 str8_lit_comp("breakpoint"),
 };
 
-String8 ctrl_entity_kind_display_string_table[10] =
+String8 ctrl_entity_kind_display_string_table[11] =
 {
 {0},
 str8_lit_comp("Root"),
@@ -29,6 +30,7 @@ str8_lit_comp("Module"),
 str8_lit_comp("EntryPoint"),
 str8_lit_comp("DebugInfoPath"),
 str8_lit_comp("PendingThreadName"),
+str8_lit_comp("PendingThreadColor"),
 str8_lit_comp("Breakpoint"),
 };
 

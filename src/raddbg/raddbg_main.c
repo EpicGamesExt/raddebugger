@@ -164,8 +164,8 @@
 //   - `raddbg_log(format, ...)`, e.g.
 //     `raddbg_log("This is a number: %i", 123)`: Writes a debug string for a
 //     debugger to read and display in its UI.
-//   - `raddbg_thread_color_hex(hexcode)`, e.g.
-//     `raddbg_thread_color_hex(0xff0000ff)`: Sets the calling thread's color.
+//   - `raddbg_thread_color_u32(hexcode)`, e.g.
+//     `raddbg_thread_color_u32(0xff0000ff)`: Sets the calling thread's color.
 //     - Also can be done with individual `[0, 1]` color components:
 //       `raddbg_thread_color_rgba(1.f, 0.f, 0.f, 1.f)`
 //   - `raddbg_pin(<expr>)`, e.g.

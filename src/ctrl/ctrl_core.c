@@ -1024,6 +1024,21 @@ ctrl_process_from_entity(CTRL_Entity *entity)
 }
 
 internal CTRL_Entity *
+ctrl_thread_from_id(CTRL_EntityStore *store, U64 id)
+{
+  CTRL_Entity *thread = &ctrl_entity_nil;
+  CTRL_EntityArray threads = ctrl_entity_array_from_kind(store, CTRL_EntityKind_Thread);
+  for EachIndex(idx, threads.count)
+  {
+    if(threads.v[idx]->id == id)
+    {
+      thread = threads.v[idx];
+    }
+  }
+  return thread;
+}
+
+internal CTRL_Entity *
 ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr)
 {
   CTRL_Entity *result = &ctrl_entity_nil;
@@ -1239,6 +1254,17 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
             break;
           }
         }
+        CTRL_EntityArray pending_thread_colors = ctrl_entity_array_from_kind(store, CTRL_EntityKind_PendingThreadColor);
+        for EachIndex(idx, pending_thread_colors.count)
+        {
+          CTRL_Entity *entity = pending_thread_colors.v[idx];
+          if(entity->id == event->entity_id)
+          {
+            thread->rgba = entity->rgba;
+            ctrl_entity_release(store, entity);
+            break;
+          }
+        }
         thread->stack_base = event->stack_base;
         ctrl_query_cached_rip_from_thread(store, event->entity);
       }break;
@@ -1250,21 +1276,46 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       case CTRL_EventKind_ThreadName:
       {
         CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
-        CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
-        if(event->entity_id != 0)
+        CTRL_Entity *thread = &ctrl_entity_nil;
+        if(event->entity_id == 0)
+        {
+          thread = ctrl_entity_from_handle(store, event->entity);
+        }
+        else
+        {
+          thread = ctrl_thread_from_id(store, event->entity_id);
+        }
+        if(thread != &ctrl_entity_nil)
+        {
+          ctrl_entity_equip_string(store, thread, event->string);
+        }
+        else
         {
           CTRL_Entity *pending_name = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadName, Arch_Null, ctrl_handle_zero(), event->entity_id);
           ctrl_entity_equip_string(store, pending_name, event->string);
         }
-        else if(thread != &ctrl_entity_nil)
-        {
-          ctrl_entity_equip_string(store, thread, event->string);
-        }
       }break;
       case CTRL_EventKind_ThreadColor:
       {
-        CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
-        thread->rgba = event->rgba;
+        CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
+        CTRL_Entity *thread = &ctrl_entity_nil;
+        if(event->entity_id == 0)
+        {
+          thread = ctrl_entity_from_handle(store, event->entity);
+        }
+        else
+        {
+          thread = ctrl_thread_from_id(store, event->entity_id);
+        }
+        if(thread != &ctrl_entity_nil)
+        {
+          thread->rgba = event->rgba;
+        }
+        else
+        {
+          CTRL_Entity *pending = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadColor, Arch_Null, ctrl_handle_zero(), event->entity_id);
+          pending->rgba = event->rgba;
+        }
       }break;
       case CTRL_EventKind_ThreadFrozen:
       {
@@ -4399,7 +4450,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->msg_id     = msg->msg_id;
       out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
       out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
-      out_evt->rgba       = event->code;
+      out_evt->entity_id  = event->code;
+      out_evt->rgba       = event->user_data;
     }break;
     case DMN_EventKind_SetBreakpoint:
     {

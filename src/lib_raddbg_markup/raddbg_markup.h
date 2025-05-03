@@ -19,25 +19,15 @@
 ////////////////////////////////
 //~ Usage Macros
 
-#if defined(RADDBG_MARKUP_STUBS)
-# define raddbg_is_attached(...)                      (0)
-# define raddbg_thread_name(fmt, ...)                 ((void)0)
-# define raddbg_thread_color_hex(hexcode)             ((void)0)
-# define raddbg_thread_color_rgba(r, g, b, a)         ((void)0)
-# define raddbg_break(...)                            ((void)0)
-# define raddbg_break_if(expr, ...)                   ((void)expr)
-# define raddbg_watch(fmt, ...)                       ((void)0)
-# define raddbg_pin(expr, ...)
-# define raddbg_log(fmt, ...)                         ((void)0)
-# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__}
-# define raddbg_type_view(type, ...)             struct raddbg_gen_data_id(){int __unused__}
-# define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
-# define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
-#else
+#if !defined(RADDBG_MARKUP_STUBS)
 # define raddbg_is_attached(...)                      raddbg_is_attached__impl()
-# define raddbg_thread_name(fmt, ...)                 raddbg_thread_name__impl((fmt), __VA_ARGS__)
-# define raddbg_thread_color_hex(hexcode)             raddbg_thread_color__impl((hexcode))
-# define raddbg_thread_color_rgba(r, g, b, a)         raddbg_thread_color__impl(((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
+# define raddbg_thread_id(...)                        raddbg_thread_id__impl()
+# define raddbg_thread_name(fmt, ...)                 raddbg_thread_name__impl(raddbg_thread_id(), (fmt), __VA_ARGS__)
+# define raddbg_thread_id_name(id, fmt, ...)          raddbg_thread_name__impl((id), (fmt), __VA_ARGS__)
+# define raddbg_thread_color_u32(u32)                 raddbg_thread_color__impl(raddbg_thread_id(), (u32))
+# define raddbg_thread_color_rgba(r, g, b, a)         raddbg_thread_color__impl(raddbg_thread_id(), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
+# define raddbg_thread_id_color_u32(id, u32)          raddbg_thread_color__impl((id), (u32))
+# define raddbg_thread_id_color_rgba(id, r, g, b, a)  raddbg_thread_color__impl((id), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
 # define raddbg_break(...)                            raddbg_break__impl()
 # define raddbg_break_if(expr, ...)                   ((expr) ? raddbg_break__impl() : (void)0)
 # define raddbg_watch(fmt, ...)                       raddbg_watch__impl((fmt), __VA_ARGS__)
@@ -47,6 +37,24 @@
 # define raddbg_type_view(type, ...)                  raddbg_exe_data static char raddbg_gen_data_id()[] = ("type_view: {type: \"" #type "\", expr: \"" #__VA_ARGS__ "\"}")
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
+#else
+# define raddbg_is_attached(...)                      (0)
+# define raddbg_thread_id(...)                        ((void)0)
+# define raddbg_thread_name(fmt, ...)                 ((void)0)
+# define raddbg_thread_id_name(id, fmt, ...)          ((void)0)
+# define raddbg_thread_color_u32(u32)                 ((void)0)
+# define raddbg_thread_color_rgba(r, g, b, a)         ((void)0)
+# define raddbg_thread_id_color_u32(id, u32)          ((void)0)
+# define raddbg_thread_id_color_rgba(id, r, g, b, a)  ((void)0)
+# define raddbg_break(...)                            ((void)0)
+# define raddbg_break_if(expr, ...)                   ((void)expr)
+# define raddbg_watch(fmt, ...)                       ((void)0)
+# define raddbg_pin(expr, ...)
+# define raddbg_log(fmt, ...)                         ((void)0)
+# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_type_view(type, ...)                  struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
+# define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
 #endif
 
 ////////////////////////////////
@@ -212,8 +220,15 @@ raddbg_is_attached__impl(void)
   return !!raddbg_is_attached_byte_marker[0];
 }
 
+static inline int
+raddbg_thread_id__impl(void)
+{
+  DWORD result = GetCurrentThreadId();
+  return result;
+}
+
 static inline void
-raddbg_thread_name__impl(char *fmt, ...)
+raddbg_thread_name__impl(int id, char *fmt, ...)
 {
   // rjf: resolve variadic arguments
   char buffer[512] = {0};
@@ -247,7 +262,7 @@ raddbg_thread_name__impl(char *fmt, ...)
   }
   
   // rjf: set thread name, windows 10 style
-  if(SetThreadDescription_function)
+  if(SetThreadDescription_function && id == GetCurrentThreadId())
   {
     WCHAR buffer16[1024] = {0};
     int name_length = 0;
@@ -277,7 +292,7 @@ raddbg_thread_name__impl(char *fmt, ...)
     THREADNAME_INFO info;
     info.dwType = 0x1000;
     info.szName = name;
-    info.dwThreadID = GetCurrentThreadId();
+    info.dwThreadID = id;
     info.dwFlags = 0;
 #pragma warning(push)
 #pragma warning(disable: 6320 6322)
@@ -293,7 +308,7 @@ raddbg_thread_name__impl(char *fmt, ...)
 }
 
 static inline void
-raddbg_thread_color__impl(unsigned int hexcode)
+raddbg_thread_color__impl(int id, unsigned int hexcode)
 {
   if(raddbg_is_attached())
   {
@@ -302,13 +317,13 @@ raddbg_thread_color__impl(unsigned int hexcode)
     struct RADDBG_ThreadColorInfo
     {
       DWORD dwThreadID;
-      DWORD _pad0_;
+      DWORD _pad_0;
       DWORD rgba;
-      DWORD _pad1_;
+      DWORD _pad_1;
     };
 #pragma pack(pop)
     RADDBG_ThreadColorInfo info;
-    info.dwThreadID = GetCurrentThreadId();
+    info.dwThreadID = id;
     info.rgba = hexcode;
 #pragma warning(push)
 #pragma warning(disable: 6320 6322)

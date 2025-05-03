@@ -2524,7 +2524,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case DMN_W32_EXCEPTION_RADDBG_SET_THREAD_COLOR:
                   {
                     e->kind = DMN_EventKind_SetThreadColor;
-                    e->code = exception->ExceptionInformation[1];
+                    e->code = exception->ExceptionInformation[0];
+                    e->user_data = exception->ExceptionInformation[1];
                   }break;
                   
                   //- rjf: fill set-data-breakpoint info
