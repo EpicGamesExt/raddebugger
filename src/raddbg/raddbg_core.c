@@ -16057,6 +16057,16 @@ rd_frame(void)
     }
   }
   
+  //////////////////////////////
+  //- rjf: [windows] clear pages from working set shortly after startup, many of which will not be needed
+  //
+#if OS_WINDOWS
+  if(rd_state->frame_index == 10)
+  {
+    SetProcessWorkingSetSize(GetCurrentProcess(), max_U64, max_U64);
+  }
+#endif
+  
   scratch_end(scratch);
   ProfEnd();
 }
