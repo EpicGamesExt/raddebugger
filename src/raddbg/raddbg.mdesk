@@ -1631,7 +1631,77 @@ RD_ThemePresetTable:
   
   //- rjf: to-do
   { VSLight          vs_light         "VS (Light)"        }
-  { SolarizedDark    solarized_dark   "Solarized (Dark)"  }
+  
+  //- rjf: solarized (dark) theme
+  { SolarizedDark    solarized_dark   "Solarized (Dark)",
+    ```theme:
+    {
+      theme_color:{tags: background, value: 0x002a35ff}
+      theme_color:{tags: "alt background", value: 0x053542ff}
+      theme_color:{tags: "pop background", value: 0x355b6eff}
+      theme_color:{tags: "fresh background", value: 0x31393dff}
+      theme_color:{tags: "match background", value: 0x31393dff}
+      theme_color:{tags: border, value: 0x65166ff}
+      theme_color:{tags: text, value: 0xeee8d5ff}
+      theme_color:{tags: "weak text", value: 0x93a1a1ff}
+      theme_color:{tags: "good text", value: 0x32a852ff}
+      theme_color:{tags: "neutral text", value: 0x3a90bbff}
+      theme_color:{tags: "bad text", value: 0xcf5242ff}
+      theme_color:{tags: hover, value: 0xca4b16ff}
+      theme_color:{tags: "focus overlay", value: 0xca4b151f}
+      theme_color:{tags: "focus border", value: 0xca4b16ff}
+      theme_color:{tags: cursor, value: 0xca4b16ff}
+      theme_color:{tags: selection, value: 0x99ccff0f}
+      theme_color:{tags: "inactive background", value: 0x0000002f}
+      theme_color:{tags: drop_shadow, value: 0x0000007f}
+      theme_color:{tags: "good_pop background", value: 0x5f8700ff}
+      theme_color:{tags: "good_pop border", value: 0x5f8700ff}
+      theme_color:{tags: "bad_pop background", value: 0x810000ff}
+      theme_color:{tags: code_default, value: 0x839496ff}
+      theme_color:{tags: code_symbol, value: 0xb3880eff}
+      theme_color:{tags: code_type, value: 0xb3880eff}
+      theme_color:{tags: code_local, value: 0xeee8d5ff}
+      theme_color:{tags: code_register, value: 0xeee8d5ff}
+      theme_color:{tags: code_keyword, value: 0x849804ff}
+      theme_color:{tags: code_delimiter_or_operator, value: 0x839496ff}
+      theme_color:{tags: code_numeric, value: 0x2aa198ff}
+      theme_color:{tags: code_numeric_alt_digit_group, value: 0x19766bff}
+      theme_color:{tags: code_string, value: 0x2aa198ff}
+      theme_color:{tags: code_meta, value: 0xca4b16ff}
+      theme_color:{tags: code_comment, value: 0x586e75ff}
+      theme_color:{tags: line_info_0, value: 0x4f3022ff}
+      theme_color:{tags: line_info_1, value: 0x4f3e15ff}
+      theme_color:{tags: line_info_2, value: 0x434e2aff}
+      theme_color:{tags: line_info_3, value: 0x36241fff}
+      theme_color:{tags: thread_0, value: 0xffcb7fff}
+      theme_color:{tags: thread_1, value: 0xb2ff65ff}
+      theme_color:{tags: thread_unwound, value: 0xb2ccd8ff}
+      theme_color:{tags: thread_error, value: 0xb23219ff}
+      theme_color:{tags: breakpoint, value: 0xa72911ff}
+      theme_color:{tags: "floating background", value: 0x2a3574}
+      theme_color:{tags: "floating background alt", value: 0x4f}
+      theme_color:{tags: "floating background fresh", value: 0x31393d5f}
+      theme_color:{tags: "floating scroll_bar background", value: 0x53542ff}
+      theme_color:{tags: "scroll_bar background", value: 0x53542ff}
+      theme_color:{tags: "implicit background", value: 0x00000000}
+      theme_color:{tags: "implicit border", value: 0x00000000}
+      theme_color:{tags: "hollow background", value: 0x00000000}
+      theme_color:{tags: "hollow border", value: 0xffffff1f}
+      theme_color:{tags: "tab background", value: 0x586e75ff}
+      theme_color:{tags: "tab border", value: 0x90abb3ff}
+      theme_color:{tags: "tab inactive background", value: 0x0}
+      theme_color:{tags: "tab inactive border", value: 0x33494fff}
+      theme_color:{tags: "tab auto background", value: 0x565ed2ff}
+      theme_color:{tags: "tab auto border", value: 0xa2a6dfff}
+      theme_color:{tags: "tab auto inactive background", value: 0}
+      theme_color:{tags: "tab auto inactive border", value: 0x595fbcff}
+      theme_color:{tags: "drop_site background", value: 0xffffff05}
+      theme_color:{tags: "drop_site border", value: 0xffffff0f}
+    }
+    ```
+  }
+  
+  //- rjf: todo
   { SolarizedLight   solarized_light  "Solarized (Light)" }
   { HandmadeHero     handmade_hero    "Handmade Hero"     }
   
