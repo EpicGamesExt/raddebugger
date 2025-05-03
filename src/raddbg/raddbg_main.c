@@ -183,6 +183,9 @@
 // - Fixed an annoyance where the debugger would open a console window, even
 //   for graphical programs, causing a flicker.
 // - Fixed substantial unnecessary memory usage with very large output logs.
+// - Fixed a debugger regression which was incorrectly using thread name events
+//   when those events were sent to name a suspended thread by a different
+//   thread. (#430)
 // - Made several visual improvements.
 
 ////////////////////////////////
