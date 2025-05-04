@@ -237,8 +237,10 @@ RD_VocabTable:
         'code_font': string,
       
       //- rjf: theme
-      @display_name('User Theme') 'theme': string,
-      @no_expand @display_name('User Theme') @description("The user's theme, which describes all colors used throughout the UI.")
+      @default("Default (Dark)") @display_name('User Theme')
+        @description("The user's theme, which describes all colors used throughout the UI.")
+        'theme': string,
+      @no_expand @display_name('User Theme')
         'theme_colors': query,
       
       //- rjf: autocompletion
@@ -294,7 +296,8 @@ RD_VocabTable:
         @default(1) use_default_ue_type_views: bool,
       
       //- rjf: theme
-      @display_name('Project Theme') 'theme': string,
+      @default("None") @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
+        'theme': string,
       @no_expand @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
         'theme_colors': query,
       
@@ -1365,9 +1368,6 @@ RD_IconTable:
 @table(name_upper  name_lower  display_string  cfg)
 RD_ThemePresetTable:
 {
-  //- rjf: stub
-  {None none "None" ""}
-  
   //- rjf: default dark theme
   {
     DefaultDark default_dark "Default (Dark)",

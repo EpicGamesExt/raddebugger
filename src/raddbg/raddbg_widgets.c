@@ -3211,6 +3211,7 @@ rd_cell(RD_CellParams *params, String8 string)
   B32 build_slider        = !!(params->flags & RD_CellFlag_Slider) && !is_focus_active;
   B32 build_bindings      = !!(params->flags & RD_CellFlag_Bindings) && !is_focus_active;
   B32 build_lhs_name_desc = (params->meta_fstrs.node_count != 0 || params->description.size != 0);
+  B32 build_line_edit     = (params->pre_edit_value.size != 0 || params->value_fstrs.node_count != 0);
   DR_FStrList lhs_name_fstrs = params->meta_fstrs;
   DR_FStrList value_name_fstrs = params->value_fstrs;
   
@@ -3237,6 +3238,7 @@ rd_cell(RD_CellParams *params, String8 string)
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
+                                      (!!build_lhs_name_desc*UI_BoxFlag_DisableFocusBorder)|
                                       (!!(params->flags & RD_CellFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       (!!(params->flags & RD_CellFlag_Button)*UI_BoxFlag_DrawHotEffects)|
@@ -3297,6 +3299,10 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     UI_Parent(box) UI_WidthFill UI_ChildLayoutAxis(Axis2_Y)
     {
+      if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) == 0)
+      {
+        ui_spacer(ui_em(1.f, 1.f));
+      }
       lhs_box = ui_build_box_from_stringf(0, "lhs_box");
     }
   }
@@ -3313,10 +3319,6 @@ rd_cell(RD_CellParams *params, String8 string)
     }
     UI_Row
     {
-      if(ui_top_text_alignment() == UI_TextAlign_Left && (params->flags & (RD_CellFlag_Expander|RD_CellFlag_ExpanderSpace|RD_CellFlag_ExpanderPlaceholder)) == 0)
-      {
-        ui_spacer(ui_em(1.f, 1.f));
-      }
       UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
       ui_box_equip_display_fstrs(name_box, &lhs_name_fstrs);
       ui_box_equip_fuzzy_match_ranges(name_box, &fuzzy_matches);
@@ -3325,7 +3327,6 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       UI_Row
       {
-        ui_spacer(ui_em(1.f, 1.f));
         UI_Box *desc_box = ui_label(params->description).box;
         FuzzyMatchRangeList desc_fuzzy_matches = fuzzy_match_find(scratch.arena, params->search_needle, params->description);
         ui_box_equip_fuzzy_match_ranges(desc_box, &desc_fuzzy_matches);
@@ -3334,20 +3335,114 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build reset-to-default, if line edit is embedded & it is marked
+  //
+#if 0
+  if(!is_focus_active && !is_focus_active_disabled)
+  {
+    UI_TagF(".")
+      UI_TagF("weak")
+      UI_TagF("implicit")
+      UI_Parent(box)
+      UI_PrefWidth(ui_em(2.f, 1.f))
+    {
+      UI_Column
+        UI_Padding(ui_pct(1, 0))
+        UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_CornerRadius(ui_top_font_size()*0.5f)
+        UI_HoverCursor(OS_Cursor_HandPoint)
+        RD_Font(RD_FontSlot_Icons)
+        UI_TextAlignment(UI_TextAlign_Center)
+      {
+        UI_Box *edit_start_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                           UI_BoxFlag_DrawHotEffects|
+                                                           UI_BoxFlag_DrawBorder|
+                                                           UI_BoxFlag_DrawBackground|
+                                                           UI_BoxFlag_DisableFocusOverlay|
+                                                           UI_BoxFlag_DisableFocusBorder|
+                                                           UI_BoxFlag_Clickable,
+                                                           "%S##undo", rd_icon_kind_text_table[RD_IconKind_Undo]);
+        UI_Signal sig = ui_signal_from_box(edit_start_box);
+      }
+    }
+  }
+#endif
+  
+  //////////////////////////////
   //- rjf: build line edit container box
   //
   UI_Box *edit_box = &ui_nil_box;
-  UI_Parent(box) if((is_focus_active || is_focus_active_disabled) ||
-                    params->pre_edit_value.size != 0 ||
-                    params->value_fstrs.node_count != 0)
+  if((is_focus_active || is_focus_active_disabled) || build_line_edit)
+    UI_Parent(box)
   {
+    B32 is_editing = (is_focus_active || is_focus_active_disabled);
     UI_Size edit_box_size = ui_pct(1, 0);
     if(build_lhs_name_desc)
     {
-      edit_box_size = ui_children_sum(1);
+      F32 px_size = is_editing ? (floor_f32(dim_2f32(box->rect).x*0.5f)) : floor_f32(dr_dim_from_fstrs(&value_name_fstrs).x + ui_top_font_size()*1.5f);
+      edit_box_size = ui_px(px_size, 1.f);
     }
     UI_PrefWidth(edit_box_size)
-      edit_box = ui_build_box_from_stringf(0, "edit_box");
+    {
+      if(ui_top_px_height() > ui_top_font_size()*3.f)
+      {
+        ui_set_next_pref_width(ui_children_sum(1));
+        UI_Column UI_Padding(ui_em(1, 0)) UI_Focus(UI_FocusKind_On)
+        {
+          UI_PrefHeight(ui_em(3.f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
+            edit_box = ui_build_box_from_stringf((!!is_editing*UI_BoxFlag_DrawBorder)|
+                                                 UI_BoxFlag_Clickable|
+                                                 UI_BoxFlag_DisableFocusOverlay,
+                                                 "edit_box");
+          if(params->line_edit_key_out)
+          {
+            params->line_edit_key_out[0] = edit_box->key;
+          }
+        }
+        ui_spacer(ui_em(1.f, 1.f));
+      }
+      else
+      {
+        edit_box = ui_build_box_from_stringf(0, "edit_box");
+        if(params->line_edit_key_out)
+        {
+          params->line_edit_key_out[0] = edit_box->key;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build edit-button, if line edit is embedded, and has no string
+  //
+  if(!is_focus_active && !is_focus_active_disabled && build_lhs_name_desc && build_line_edit && value_name_fstrs.total_size == 0)
+  {
+    UI_TagF(".")
+      UI_TagF("weak")
+      UI_TagF("implicit")
+      UI_Parent(box)
+      UI_PrefWidth(ui_em(2.f, 1.f))
+    {
+      UI_Column
+        UI_Padding(ui_pct(1, 0))
+        UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_CornerRadius(ui_top_font_size()*0.5f)
+        UI_HoverCursor(OS_Cursor_HandPoint)
+        RD_Font(RD_FontSlot_Icons)
+        UI_TextAlignment(UI_TextAlign_Center)
+      {
+        UI_Box *edit_start_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                           UI_BoxFlag_DrawHotEffects|
+                                                           UI_BoxFlag_DrawBorder|
+                                                           UI_BoxFlag_DrawBackground|
+                                                           UI_BoxFlag_DisableFocusOverlay|
+                                                           UI_BoxFlag_DisableFocusBorder|
+                                                           UI_BoxFlag_Clickable,
+                                                           "%S##edit", rd_icon_kind_text_table[RD_IconKind_Pencil]);
+        UI_Signal sig = ui_signal_from_box(edit_start_box);
+      }
+      ui_spacer(ui_em(1.f, 1.f));
+    }
   }
   
   //////////////////////////////
@@ -3374,7 +3469,7 @@ rd_cell(RD_CellParams *params, String8 string)
     UI_PrefWidth(ui_children_sum(1.f))
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))
-      UI_Row UI_Padding(ui_px(padding_px, 1.f))
+      UI_Row
       UI_PrefWidth(ui_em(3.5f, 1.f))
       UI_PrefHeight(ui_px(height_px, 1.f))
       UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
@@ -3410,6 +3505,7 @@ rd_cell(RD_CellParams *params, String8 string)
         params->toggled_out[0] ^= 1;
       }
     }
+    ui_spacer(ui_em(1.f, 1.f));
   }
   
   //////////////////////////////
@@ -3422,7 +3518,7 @@ rd_cell(RD_CellParams *params, String8 string)
     UI_PrefWidth(ui_children_sum(1.f))
       UI_HeightFill
       UI_Column UI_Padding(ui_px(padding_px, 1.f))
-      UI_Row UI_Padding(ui_px(padding_px, 1.f))
+      UI_Row
       UI_PrefWidth(ui_pct(0.5f - 0.2f*(!!build_lhs_name_desc), 0.f))
       UI_PrefHeight(ui_px(height_px, 1.f))
       UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
@@ -3469,6 +3565,7 @@ rd_cell(RD_CellParams *params, String8 string)
         ui_spacer(ui_pct(1-Clamp(0, params->slider_value_out[0], 1), 0.f));
       }
     }
+    ui_spacer(ui_em(1.f, 1.f));
   }
   
   //////////////////////////////

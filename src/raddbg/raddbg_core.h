@@ -968,6 +968,7 @@ internal void rd_set_autocomp_regs_(RD_Regs *regs);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
+internal UI_Theme *rd_ui_theme_from_tree(MD_Node *tree);
 internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);

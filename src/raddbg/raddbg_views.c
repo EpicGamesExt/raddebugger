@@ -1851,6 +1851,25 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       dr_fstrs_push_new(arena, &fstrs, &params, name);
       result.expr_fstrs = fstrs;
     }break;
+    
+    //- rjf: unattached processes
+    case RD_EvalSpaceKind_MetaTheme:
+    {
+      String8 name = e_string_from_id(cell->eval.value.u64);
+      DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Main), rd_raster_flags_from_slot(RD_FontSlot_Main), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+      DR_FStrList fstrs = {0};
+      UI_TagF("weak")
+      {
+        dr_fstrs_push_new(arena, &fstrs, &params,
+                          rd_icon_kind_text_table[RD_IconKind_Palette],
+                          .font = rd_font_from_slot(RD_FontSlot_Icons),
+                          .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                          .color = ui_color_from_name(str8_lit("text")));
+      }
+      dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+      dr_fstrs_push_new(arena, &fstrs, &params, name);
+      result.eval_fstrs = fstrs;
+    }break;
   }
   scratch_end(scratch);
   return result;

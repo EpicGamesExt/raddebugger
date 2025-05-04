@@ -68,6 +68,7 @@ struct RD_CellParams
   U8 *edit_buffer;
   U64 edit_buffer_size;
   U64 *edit_string_size_out;
+  UI_Key *line_edit_key_out;
 };
 
 ////////////////////////////////

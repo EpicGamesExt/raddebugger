@@ -4837,6 +4837,7 @@ rd_view_ui(Rng2F32 rect)
                           }
                           
                           // rjf: form cell build parameters
+                          UI_Key line_edit_key = {0};
                           RD_CellParams cell_params = {0};
                           ProfScope("form cell build parameters")
                           {
@@ -4851,6 +4852,7 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_buffer          = cell_edit_state->input_buffer;
                             cell_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
+                            cell_params.line_edit_key_out    = &line_edit_key;
                             cell_params.expanded_out         = &next_row_expanded;
                             cell_params.search_needle        = needle;
                             cell_params.meta_fstrs           = cell_info.expr_fstrs;
@@ -4968,7 +4970,7 @@ rd_view_ui(Rng2F32 rect)
                             {
                               list_expr = cursor_info.list_expr;
                             }
-                            rd_set_autocomp_regs(.ui_key = sig.box->key,
+                            rd_set_autocomp_regs(.ui_key = line_edit_key,
                                                  .string = cursor_info.filter,
                                                  .expr = list_expr);
                           }
@@ -5801,7 +5803,7 @@ rd_window_frame(void)
     if(rd_setting_b32_from_name(str8_lit("use_project_theme")))
     {
       theme_cfg = theme_cfgs[0];
-      if(theme_cfg == &rd_nil_cfg || str8_match(theme_cfg->first->string, rd_theme_preset_display_string_table[RD_ThemePreset_None], 0))
+      if(theme_cfg == &rd_nil_cfg)
       {
         theme_cfg = theme_cfgs[1];
       }
@@ -5814,7 +5816,7 @@ rd_window_frame(void)
       String8 theme_name = theme_cfg->first->string;
       if(theme_name.size != 0)
       {
-        for EachNonZeroEnumVal(RD_ThemePreset, p)
+        for EachEnumVal(RD_ThemePreset, p)
         {
           if(str8_match(theme_name, rd_theme_preset_display_string_table[p], 0))
           {
@@ -9642,10 +9644,17 @@ rd_autocomp_primary_list_expr_from_dst_eval(Arena *arena, E_Eval dst_eval)
 {
   String8 result = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
   {
+    E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
     if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg && str8_match(e_string_from_id(dst_eval.space.u64s[1]), str8_lit("theme"), 0))
     {
       result = str8_lit("query:themes");
     }
+#if 0
+    else if(e_type_kind_from_key(maybe_enum_type) == E_TypeKind_Enum)
+    {
+      result = e_type_string_from_key(arena, maybe_enum_type);
+    }
+#endif
   }
   return result;
 }
