@@ -220,7 +220,7 @@ RD_VocabTable:
   {
     user
       ```
-      x:
+      @expand_commands(edit_user_theme) x:
     {
       //- rjf: animations
       @default(1)  'hover_animations':     bool,
@@ -237,8 +237,8 @@ RD_VocabTable:
         'code_font': string,
       
       //- rjf: theme
-      @no_expand 'theme': string,
-      @display_name('User Theme') @description("The user's theme, which describes all colors used throughout the UI.")
+      @display_name('User Theme') 'theme': string,
+      @no_expand @display_name('User Theme') @description("The user's theme, which describes all colors used throughout the UI.")
         'theme_colors': query,
       
       //- rjf: autocompletion
@@ -283,7 +283,7 @@ RD_VocabTable:
   {
     project
       ```
-      x:
+      @expand_commands(edit_project_theme) x:
     {
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
@@ -294,8 +294,8 @@ RD_VocabTable:
         @default(1) use_default_ue_type_views: bool,
       
       //- rjf: theme
-      @no_expand 'theme': string,
-      @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
+      @display_name('Project Theme') 'theme': string,
+      @no_expand @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
         'theme_colors': query,
       
       //- rjf: exception settings
@@ -381,7 +381,7 @@ RD_VocabTable:
   {
     theme_color,
     ```
-      @collection_commands(open_theme, add_theme_color, fork_loaded_theme, save_theme)
+      @collection_commands(add_theme_color, fork_theme, save_theme)
       @row_commands(duplicate_cfg, remove_cfg)
       x:
     {
@@ -982,9 +982,10 @@ RD_CmdTable:    //               |        |              |                |     
   {AddFilePathMap                 0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           FileOutline           "add_file_path_map"           "Add File Path Map"                           "Adds a new file path map."                                                                                        ""                               ""                                                               }
   
   //- rjf: themes
-  {OpenTheme                      0        0              0                0               "query:themes"                                   String             null              Nil                     Null       1  0  0  0  0  1  1                                                           Palette               "open_theme"                  "Open Theme"                                  "Opens a theme."                                                                                                   "color"                          ""                                                               }
+  {EditUserTheme                  0        0              0                0               "query:themes"                                   String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "edit_user_theme"             "Edit User Theme"                             "Edits the current user's theme."                                                                                  "color"                          ""                                                               }
+  {EditProjectTheme               0        0              0                0               "query:themes"                                   String             null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "edit_project_theme"          "Edit Project Theme"                          "Edits the current project's theme."                                                                               "color"                          ""                                                               }
   {AddThemeColor                  0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "add_theme_color"             "Add Theme Color"                             "Adds a new theme color."                                                                                          ""                               ""                                                               }
-  {ForkLoadedTheme                0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "fork_loaded_theme"           "Fork Loaded Theme"                           "Imports all colors from the loaded color theme file or color theme preset, so they can be individually edited."   ""                               ""                                                               }
+  {ForkTheme                      0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Palette               "fork_theme"                  "Fork Theme"                                  "Imports all colors from the current theme so they can be individually edited."                                    ""                               ""                                                               }
   {SaveTheme                      0        0              0                0               ""                                               String             null              Nil                     Null       1  0  0  0  0  1  1                                                           Save                  "save_theme"                  "Save Theme"                                  "Saves all theme colors to a new theme file."                                                                      ""                               ""                                                               }
   
   //- rjf: line operations
@@ -1364,6 +1365,9 @@ RD_IconTable:
 @table(name_upper  name_lower  display_string  cfg)
 RD_ThemePresetTable:
 {
+  //- rjf: stub
+  {None none "None" ""}
+  
   //- rjf: default dark theme
   {
     DefaultDark default_dark "Default (Dark)",

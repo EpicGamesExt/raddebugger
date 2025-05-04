@@ -236,9 +236,10 @@ RD_CmdKind_AddWatchPin,
 RD_CmdKind_ToggleWatchPin,
 RD_CmdKind_AddTypeView,
 RD_CmdKind_AddFilePathMap,
-RD_CmdKind_OpenTheme,
+RD_CmdKind_EditUserTheme,
+RD_CmdKind_EditProjectTheme,
 RD_CmdKind_AddThemeColor,
-RD_CmdKind_ForkLoadedTheme,
+RD_CmdKind_ForkTheme,
 RD_CmdKind_SaveTheme,
 RD_CmdKind_SetNextStatement,
 RD_CmdKind_AddTarget,
@@ -387,6 +388,7 @@ RD_CodeColorSlot_COUNT,
 
 typedef enum RD_ThemePreset
 {
+RD_ThemePreset_None,
 RD_ThemePreset_DefaultDark,
 RD_ThemePreset_DefaultLight,
 RD_ThemePreset_VSDark,
@@ -559,16 +561,16 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[333];
+extern RD_VocabInfo rd_vocab_info_table[334];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];
 extern String8 rd_code_color_slot_name_table[14];
-extern String8 rd_theme_preset_display_string_table[10];
-extern String8 rd_theme_preset_code_string_table[10];
-extern String8 rd_theme_preset_cfg_string_table[10];
+extern String8 rd_theme_preset_display_string_table[11];
+extern String8 rd_theme_preset_code_string_table[11];
+extern String8 rd_theme_preset_cfg_string_table[11];
 read_only global U8 rd_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x43,0x62,0x25,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0xa3,0x60,0xa4,0x23,0x00,0x00,0x01,0xb0,0x00,0x00,0x06,0x12,0x63,0x76,0x74,0x20,

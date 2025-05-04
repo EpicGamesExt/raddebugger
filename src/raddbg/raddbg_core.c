@@ -4962,10 +4962,15 @@ rd_view_ui(Rng2F32 rect)
                              txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
+                            String8 list_expr = rd_autocomp_primary_list_expr_from_dst_eval(scratch.arena, cell->eval);
                             RD_AutocompCursorInfo cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, input, cell_edit_state->cursor.column-1);
+                            if(cursor_info.list_expr.size != 0)
+                            {
+                              list_expr = cursor_info.list_expr;
+                            }
                             rd_set_autocomp_regs(.ui_key = sig.box->key,
                                                  .string = cursor_info.filter,
-                                                 .expr = cursor_info.list_expr);
+                                                 .expr = list_expr);
                           }
                         }
                       }
@@ -5760,28 +5765,26 @@ rd_window_frame(void)
     HS_Scope *hs_scope = hs_scope_open();
     
     //- rjf: try to find theme settings from the project, then the user.
-    RD_Cfg *theme_cfg = &rd_nil_cfg;
     RD_CfgList colors_cfgs = {0};
     RD_Cfg *theme_parents[] =
     {
       rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project")),
       rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"))
     };
-    U64 theme_parents_count = ArrayCount(theme_parents);
-    if(!rd_setting_b32_from_name(str8_lit("use_project_theme")))
+    RD_Cfg *theme_cfgs[] =
     {
-      theme_parents[0] = theme_parents[1];
-      theme_parents_count -= 1;
-    }
-    for EachIndex(idx, theme_parents_count)
+      &rd_nil_cfg,
+      &rd_nil_cfg,
+    };
+    for EachIndex(idx, ArrayCount(theme_parents))
     {
       RD_Cfg *parent_cfg = theme_parents[idx];
-      if(theme_cfg == &rd_nil_cfg)
+      if(theme_cfgs[idx] == &rd_nil_cfg)
       {
         RD_Cfg *possible_theme_cfg = rd_cfg_child_from_string(parent_cfg, str8_lit("theme"));
         if(possible_theme_cfg != &rd_nil_cfg)
         {
-          theme_cfg = possible_theme_cfg;
+          theme_cfgs[idx] = possible_theme_cfg;
         }
       }
       for(RD_Cfg *child = parent_cfg->first; child != &rd_nil_cfg; child = child->next)
@@ -5793,6 +5796,17 @@ rd_window_frame(void)
       }
     }
     
+    //- rjf: choose which theme cfg to use
+    RD_Cfg *theme_cfg = theme_cfgs[1];
+    if(rd_setting_b32_from_name(str8_lit("use_project_theme")))
+    {
+      theme_cfg = theme_cfgs[0];
+      if(theme_cfg == &rd_nil_cfg || str8_match(theme_cfg->first->string, rd_theme_preset_display_string_table[RD_ThemePreset_None], 0))
+      {
+        theme_cfg = theme_cfgs[1];
+      }
+    }
+    
     //- rjf: map the theme config to the associated tree (either from a preset, or from a file)
     MD_Node *theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
     if(theme_cfg != &rd_nil_cfg)
@@ -5800,7 +5814,7 @@ rd_window_frame(void)
       String8 theme_name = theme_cfg->first->string;
       if(theme_name.size != 0)
       {
-        for EachEnumVal(RD_ThemePreset, p)
+        for EachNonZeroEnumVal(RD_ThemePreset, p)
         {
           if(str8_match(theme_name, rd_theme_preset_display_string_table[p], 0))
           {
@@ -9623,12 +9637,24 @@ rd_set_hover_eval(Vec2F32 pos, String8 string)
 ////////////////////////////////
 //~ rjf: Autocompletion Lister
 
+internal String8
+rd_autocomp_primary_list_expr_from_dst_eval(Arena *arena, E_Eval dst_eval)
+{
+  String8 result = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
+  {
+    if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg && str8_match(e_string_from_id(dst_eval.space.u64s[1]), str8_lit("theme"), 0))
+    {
+      result = str8_lit("query:themes");
+    }
+  }
+  return result;
+}
+
 internal RD_AutocompCursorInfo
 rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 cursor_off)
 {
   RD_AutocompCursorInfo result = {0};
   {
-    result.list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
     result.filter = input;
     result.replaced_range = r1u64(0, input.size);
   }
@@ -14697,11 +14723,15 @@ rd_frame(void)
           }break;
           
           //- rjf: themes
-          case RD_CmdKind_OpenTheme:
+          case RD_CmdKind_EditUserTheme:
           {
-            RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
-            RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(parent, str8_lit("theme"));
-            rd_cfg_new_replace(theme, rd_regs()->string);
+            RD_Cfg *parent = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x.theme_colors", parent->id));
+          }break;
+          case RD_CmdKind_EditProjectTheme:
+          {
+            RD_Cfg *parent = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+            rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x.theme_colors", parent->id));
           }break;
           case RD_CmdKind_AddThemeColor:
           {
@@ -14711,7 +14741,7 @@ rd_frame(void)
             RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
             rd_cfg_new(value, str8_lit("0xffffffff"));
           }break;
-          case RD_CmdKind_ForkLoadedTheme:
+          case RD_CmdKind_ForkTheme:
           {
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
             RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
