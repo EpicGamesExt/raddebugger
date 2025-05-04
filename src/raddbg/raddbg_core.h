@@ -540,7 +540,6 @@ struct RD_State
   Arena *arena;
   B32 quit;
   B32 quit_after_success;
-  B32 alt_menu_bar_enabled;
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   
@@ -551,6 +550,12 @@ struct RD_State
   String8 project_path;
   Arena *theme_path_arena;
   String8 theme_path;
+  
+  // rjf: unpacked settings (cached, because they need to be used
+  // earlier than setting evaluation is legal in a frame)
+  B32 alt_menu_bar_enabled;
+  B32 use_default_stl_type_views;
+  B32 use_default_ue_type_views;
   
   // rjf: serialized config debug string keys
   U128 user_cfg_string_key;

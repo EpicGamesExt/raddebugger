@@ -287,6 +287,12 @@ RD_VocabTable:
     {
       @default(2) @display_name('Project Tab Width') 'tab_width': @range[1, 32] u64,
       
+      //- rjf: visualizers
+      @display_name('Use Default C++ STL Type Visualizers') @description("Enables the built-in type views for C++ STL types.")
+        @default(1) use_default_stl_type_views: bool,
+      @display_name('Use Default Unreal Engine Type Visualizers') @description("Enables the built-in type views for Unreal Engine types.")
+        @default(1) use_default_ue_type_views: bool,
+      
       //- rjf: theme
       @no_expand 'theme': string,
       @display_name('Project Theme') @description("The project's theme, which describes all colors used throughout the UI, and can override the user's theme.")
