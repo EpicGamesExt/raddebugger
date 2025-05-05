@@ -10742,34 +10742,6 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: garbage collect untouched window states
-  //
-  if(rd_state->frame_depth == 0) DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1)
-  {
-    for EachIndex(slot_idx, rd_state->window_state_slots_count)
-    {
-      for(RD_WindowState *ws = rd_state->window_state_slots[slot_idx].first, *next; ws != 0; ws = next)
-      {
-        next = ws->hash_next;
-        if(ws->last_frame_index_touched+2 < rd_state->frame_index)
-        {
-          ui_state_release(ws->ui);
-          r_window_unequip(ws->os, ws->r);
-          os_window_close(ws->os);
-          arena_release(ws->drop_completion_arena);
-          arena_release(ws->query_arena);
-          arena_release(ws->hover_eval_arena);
-          arena_release(ws->autocomp_arena);
-          arena_release(ws->arena);
-          DLLRemove_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
-          DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
-          SLLStackPush_N(rd_state->free_window_state, ws, order_next);
-        }
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: garbage collect untouched view states
   //
   if(rd_state->frame_depth == 0)
@@ -16167,6 +16139,34 @@ rd_frame(void)
       if(rd_state->last_focused_window == w->cfg_id)
       {
         MemoryCopyStruct(rd_regs(), window_regs);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: garbage collect untouched window states
+  //
+  {
+    for EachIndex(slot_idx, rd_state->window_state_slots_count)
+    {
+      for(RD_WindowState *ws = rd_state->window_state_slots[slot_idx].first, *next; ws != 0; ws = next)
+      {
+        next = ws->hash_next;
+        RD_Cfg *cfg = rd_cfg_from_id(ws->cfg_id);
+        if(cfg == &rd_nil_cfg || ws->last_frame_index_touched < rd_state->frame_index)
+        {
+          ui_state_release(ws->ui);
+          r_window_unequip(ws->os, ws->r);
+          os_window_close(ws->os);
+          arena_release(ws->drop_completion_arena);
+          arena_release(ws->query_arena);
+          arena_release(ws->hover_eval_arena);
+          arena_release(ws->autocomp_arena);
+          arena_release(ws->arena);
+          DLLRemove_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
+          DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
+          SLLStackPush_N(rd_state->free_window_state, ws, order_next);
+        }
       }
     }
   }
