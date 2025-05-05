@@ -15,9 +15,6 @@
 #include "lib_rdi_format/rdi_format.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
-#define XXH_STATIC_LINKING_ONLY
-#include "third_party/xxHash/xxhash.h"
-#include "third_party/xxHash/xxhash.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"

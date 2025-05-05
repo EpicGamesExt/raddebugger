@@ -995,6 +995,439 @@ ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 }
 
 ////////////////////////////////
+//~ rjf: Type Parsing/Conversion Tasks
+
+ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work)
+{
+  ProfBeginFunction();
+  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  P2R_ITypeFwdMapFillIn *in = (P2R_ITypeFwdMapFillIn *)input;
+  ProfScope("fill itype fwd map") for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+  {
+    //- rjf: skip if not in the actually stored itype range
+    if(itype < in->tpi_leaf->itype_first)
+    {
+      continue;
+    }
+    
+    //- rjf: determine if this itype resolves to another
+    CV_TypeId itype_fwd = 0;
+    CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[itype-in->tpi_leaf->itype_first];
+    CV_LeafKind kind = range->hdr.kind;
+    U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+    if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
+       range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
+       range->hdr.size >= 2)
+    {
+      U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+      U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+      switch(kind)
+      {
+        default:{}break;
+        
+        //- rjf: CLASS/STRUCTURE
+        case CV_LeafKind_CLASS:
+        case CV_LeafKind_STRUCTURE:
+        {
+          // rjf: unpack leaf header
+          CV_LeafStruct *lf_struct = (CV_LeafStruct *)itype_leaf_first;
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_struct->props & CV_TypeProp_FwdRef)
+          {
+            // rjf: unpack rest of leaf
+            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = numeric_ptr + size.encoded_size;
+            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+            U8 *unique_name_ptr = name_ptr + name.size + 1;
+            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+            
+            // rjf: lookup
+            B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: CLASS2/STRUCT2
+        case CV_LeafKind_CLASS2:
+        case CV_LeafKind_STRUCT2:
+        {
+          // rjf: unpack leaf header
+          CV_LeafStruct2 *lf_struct = (CV_LeafStruct2 *)itype_leaf_first;
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_struct->props & CV_TypeProp_FwdRef)
+          {
+            // rjf: unpack rest of leaf
+            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
+            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+            U8 *unique_name_ptr = name_ptr + name.size + 1;
+            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+            
+            // rjf: lookup
+            B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: UNION
+        case CV_LeafKind_UNION:
+        {
+          // rjf: unpack leaf
+          CV_LeafUnion *lf_union = (CV_LeafUnion *)itype_leaf_first;
+          U8 *numeric_ptr = (U8 *)(lf_union + 1);
+          CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+          U8 *name_ptr = numeric_ptr + size.encoded_size;
+          String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+          U8 *unique_name_ptr = name_ptr + name.size + 1;
+          String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves tos
+          if(lf_union->props & CV_TypeProp_FwdRef)
+          {
+            B32 do_unique_name_lookup = (((lf_union->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_union->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: ENUM
+        case CV_LeafKind_ENUM:
+        {
+          // rjf: unpack leaf
+          CV_LeafEnum *lf_enum = (CV_LeafEnum*)itype_leaf_first;
+          U8 *name_ptr = (U8 *)(lf_enum + 1);
+          String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+          U8 *unique_name_ptr = name_ptr + name.size + 1;
+          String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_enum->props & CV_TypeProp_FwdRef)
+          {
+            B32 do_unique_name_lookup = (((lf_enum->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_enum->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+      }
+    }
+    
+    //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
+    if(itype_fwd != 0 && itype_fwd < in->tpi_leaf->itype_opl)
+    {
+      in->itype_fwd_map[itype] = itype_fwd;
+    }
+  }
+  ProfEnd();
+  return 0;
+}
+
+ASYNC_WORK_DEF(p2r_itype_chain_build_work)
+{
+  ProfBeginFunction();
+  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Temp scratch = scratch_begin(&arena, 1);
+  P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)input;
+  ProfScope("dependency itype chain build")
+  {
+    for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+    {
+      //- rjf: push initial itype - should be final-visited-itype for this itype
+      {
+        P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+        c->itype = itype;
+        SLLStackPush(in->itype_chains[itype], c);
+      }
+      
+      //- rjf: skip basic types for dependency walk
+      if(itype < in->tpi_leaf->itype_first)
+      {
+        continue;
+      }
+      
+      //- rjf: walk dependent types, push to chain
+      P2R_TypeIdChain start_walk_task = {0, itype};
+      P2R_TypeIdChain *first_walk_task = &start_walk_task;
+      P2R_TypeIdChain *last_walk_task = &start_walk_task;
+      for(P2R_TypeIdChain *walk_task = first_walk_task;
+          walk_task != 0;
+          walk_task = walk_task->next)
+      {
+        CV_TypeId walk_itype = in->itype_fwd_map[walk_task->itype] ? in->itype_fwd_map[walk_task->itype] : walk_task->itype;
+        if(walk_itype < in->tpi_leaf->itype_first)
+        {
+          continue;
+        }
+        CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[walk_itype-in->tpi_leaf->itype_first];
+        CV_LeafKind kind = range->hdr.kind;
+        U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+        if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
+           range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
+           range->hdr.size >= 2)
+        {
+          U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+          U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+          switch(kind)
+          {
+            default:{}break;
+            
+            //- rjf: MODIFIER
+            case CV_LeafKind_MODIFIER:
+            {
+              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: POINTER
+            case CV_LeafKind_POINTER:
+            {
+              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: PROCEDURE
+            case CV_LeafKind_PROCEDURE:
+            {
+              CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
+              
+              // rjf: push return itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk return itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              
+              // rjf: unpack arglist range
+              CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
+              if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                 arglist_range->hdr.size<2 ||
+                 arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+              {
+                break;
+              }
+              U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
+              U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+              if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+              {
+                break;
+              }
+              
+              // rjf: unpack arglist info
+              CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+              CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+              U32 arglist_itypes_count = arglist->count;
+              
+              // rjf: push arg types to chain
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk arg types
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: MFUNCTION
+            case CV_LeafKind_MFUNCTION:
+            {
+              CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->arg_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->this_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->arg_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->this_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              
+              // rjf: unpack arglist range
+              CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
+              if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                 arglist_range->hdr.size<2 ||
+                 arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+              {
+                break;
+              }
+              U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
+              U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+              if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+              {
+                break;
+              }
+              
+              // rjf: unpack arglist info
+              CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+              CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+              U32 arglist_itypes_count = arglist->count;
+              
+              // rjf: push arg types to chain
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk arg types
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: BITFIELD
+            case CV_LeafKind_BITFIELD:
+            {
+              CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: ARRAY
+            case CV_LeafKind_ARRAY:
+            {
+              CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->entry_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->index_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->entry_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->index_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+            
+            //- rjf: ENUM
+            case CV_LeafKind_ENUM:
+            {
+              CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->base_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->base_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+          }
+        }
+      }
+    }
+  }
+  scratch_end(scratch);
+  ProfEnd();
+  return 0;
+}
+
+////////////////////////////////
 //~ rjf: UDT Conversion Tasks
 
 ASYNC_WORK_DEF(p2r_udt_convert_work)
@@ -1002,7 +1435,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
   ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)input;
-#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[itype]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
   RDIM_UDTChunkList *udts = push_array(arena, RDIM_UDTChunkList, 1);
   RDI_U64 udts_chunk_cap = 1024;
   ProfScope("convert UDT info")
@@ -1640,21 +2073,21 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)input;
-#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[itype]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
   
   //////////////////////////
   //- rjf: set up outputs for this sym stream
   //
-  U64 sym_procedures_chunk_cap       = 1024;
+  U64 sym_procedures_chunk_cap = 1024;
   U64 sym_global_variables_chunk_cap = 1024;
   U64 sym_thread_variables_chunk_cap = 1024;
-  U64 sym_scopes_chunk_cap           = 1024;
-  U64 sym_inline_sites_chunk_cap     = 1024;
-  RDIM_SymbolChunkList     sym_procedures       = {0};
-  RDIM_SymbolChunkList     sym_global_variables = {0};
-  RDIM_SymbolChunkList     sym_thread_variables = {0};
-  RDIM_ScopeChunkList      sym_scopes           = {0};
-  RDIM_InlineSiteChunkList sym_inline_sites     = {0};
+  U64 sym_scopes_chunk_cap = 1024;
+  U64 sym_inline_sites_chunk_cap = 1024;
+  RDIM_SymbolChunkList sym_procedures = {0};
+  RDIM_SymbolChunkList sym_global_variables = {0};
+  RDIM_SymbolChunkList sym_thread_variables = {0};
+  RDIM_ScopeChunkList sym_scopes = {0};
+  RDIM_InlineSiteChunkList sym_inline_sites = {0};
   
   //////////////////////////
   //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -2865,9 +3298,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: join ipi/tpi hash/leaf parses
   //
   PDB_TpiHashParsed *tpi_hash = 0;
-  CV_LeafParsed     *tpi_leaf = 0;
+  CV_LeafParsed *tpi_leaf = 0;
   PDB_TpiHashParsed *ipi_hash = 0;
-  CV_LeafParsed     *ipi_leaf = 0;
+  CV_LeafParsed *ipi_leaf = 0;
   {
     tpi_hash = async_task_join_struct(tpi_hash_task, PDB_TpiHashParsed);
     tpi_leaf = async_task_join_struct(tpi_leaf_task, CV_LeafParsed);
@@ -2876,551 +3309,546 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 1: construct all types from TPI
+  //- rjf: types pass 1: produce type forward resolution map
+  //
+  // this map is used to resolve usage of "incomplete structs" in codeview's
+  // type info. this often happens when e.g. "struct Foo" is used to refer to
+  // a later-defined "Foo", which actually contains members  and so on. we want
+  // to hook types up to their actual destination complete types wherever
+  // possible, and so this map can be used to do that in subsequent stages.
+  //
+  CV_TypeId *itype_fwd_map = 0;
+  CV_TypeId itype_first = 0;
+  CV_TypeId itype_opl = 0;
+  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
+  {
+    //- rjf: allocate forward resolution map
+    itype_first = tpi_leaf->itype_first;
+    itype_opl = tpi_leaf->itype_opl;
+    itype_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
+    
+    //- rjf: kick off tasks to fill forward resolution map
+    U64 task_size_itypes = 1024;
+    U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
+    P2R_ITypeFwdMapFillIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeFwdMapFillIn, tasks_count);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, tasks_count);
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      tasks_inputs[idx].tpi_hash      = tpi_hash;
+      tasks_inputs[idx].tpi_leaf      = tpi_leaf;
+      tasks_inputs[idx].itype_first   = idx*task_size_itypes;
+      tasks_inputs[idx].itype_opl     = tasks_inputs[idx].itype_first + task_size_itypes;
+      tasks_inputs[idx].itype_opl     = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
+      tasks_inputs[idx].itype_fwd_map = itype_fwd_map;
+      tasks[idx] = async_task_launch(scratch.arena, p2r_itype_fwd_map_fill_work, .input = &tasks_inputs[idx]);
+    }
+    
+    //- rjf: join all tasks
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      async_task_join(tasks[idx]);
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: types pass 2: produce per-itype itype chain
+  //
+  // this pass is to ensure that subsequent passes always produce types for
+  // dependent itypes first - guaranteeing rdi's "only reference backward"
+  // rule (which eliminates cycles). each itype slot gets a list of itypes,
+  // starting with the deepest dependency - when types are produced per-itype,
+  // this chain is walked, so that deeper dependencies are built first, and
+  // as such, always show up *earlier* in the actually built types.
+  //
+  P2R_TypeIdChain **itype_chains = 0;
+  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
+  {
+    //- rjf: allocate itype chain table
+    itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
+    
+    //- rjf: kick off tasks to fill itype chain table
+    U64 task_size_itypes = 1024;
+    U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
+    P2R_ITypeChainBuildIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeChainBuildIn, tasks_count);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, tasks_count);
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      tasks_inputs[idx].tpi_leaf      = tpi_leaf;
+      tasks_inputs[idx].itype_first   = idx*task_size_itypes;
+      tasks_inputs[idx].itype_opl     = tasks_inputs[idx].itype_first + task_size_itypes;
+      tasks_inputs[idx].itype_opl     = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
+      tasks_inputs[idx].itype_chains  = itype_chains;
+      tasks_inputs[idx].itype_fwd_map = itype_fwd_map;
+      tasks[idx] = async_task_launch(scratch.arena, p2r_itype_chain_build_work, .input = &tasks_inputs[idx]);
+    }
+    
+    //- rjf: join all tasks
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      async_task_join(tasks[idx]);
+    }
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: types pass 3: construct all types from TPI
   //
   // this doesn't gather struct/class/union/enum members, which is done by
   // subsequent passes, to build RDI "UDT" information, which is distinct
   // from regular type info.
   //
-  RDIM_Type         **itype_type_ptrs = 0;
-  RDIM_TypeChunkList  all_types       = {0};
-#define p2r_type_ptr_from_itype(itype) (((itype) < tpi_leaf->itype_opl) ? itype_type_ptrs[itype] : 0)
-  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: construct all root/stub types from TPI")
+  RDIM_Type **itype_type_ptrs = 0;
+  RDIM_TypeChunkList all_types = {0};
+#define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
+  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
-    itype_type_ptrs = push_array(arena, RDIM_Type *, tpi_leaf->itype_opl);
-
-    //////////////////////////
-    //- build basic type
-    //
+    itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
+    for(CV_TypeId root_itype = 0; root_itype < itype_opl; root_itype += 1)
     {
-      RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
-
-      RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
-      RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
-      RDI_TypeKind int_type        = rdim_int_type_from_data_model(data_model);
-      RDI_TypeKind uint_type       = rdim_unsigned_int_type_from_data_model(data_model);
-      RDI_TypeKind long_type       = rdim_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
-      RDI_TypeKind long_long_type  = rdim_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
-
-      struct
+      for(P2R_TypeIdChain *itype_chain = itype_chains[root_itype];
+          itype_chain != 0;
+          itype_chain = itype_chain->next)
       {
-        char *       name;
-        RDI_TypeKind kind_rdi;
-        CV_LeafKind  kind_cv;
-        B32          make_pointer_near;
-        B32          make_pointer_32;
-        B32          make_pointer_64;
-      }
-      table[] =
-      {
-        { ""                     , RDI_TypeKind_NULL       , CV_BasicType_NOTYPE     , 0, 0, 0 },
-        { "void"                 , RDI_TypeKind_Void       , CV_BasicType_VOID       , 1, 1, 1 },
-        { "HRESULT"              , RDI_TypeKind_Handle     , CV_BasicType_HRESULT    , 0, 1, 1 },
-        { "signed char"          , RDI_TypeKind_Char8      , CV_BasicType_CHAR       , 1, 1, 1 },
-        { "short"                , short_type              , CV_BasicType_SHORT      , 1, 1, 1 },
-        { "long"                 , long_type               , CV_BasicType_LONG       , 1, 1, 1 },
-        { "long long"            , long_long_type          , CV_BasicType_QUAD       , 1, 1, 1 },
-        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_OCT        , 1, 1, 1 }, // Clang type
-        { "unsigned char"        , RDI_TypeKind_UChar8     , CV_BasicType_UCHAR      , 1, 1, 1 },
-        { "unsigned short"       , ushort_type             , CV_BasicType_USHORT     , 1, 1, 1 },
-        { "unsigned long"        , ulong_type              , CV_BasicType_ULONG      , 1, 1, 1 },
-        { "unsigned long long"   , ulong_long_type         , CV_BasicType_UQUAD      , 1, 1, 1 },
-        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UOCT       , 1, 1, 1 }, // Clang type
-        { "bool"                 , RDI_TypeKind_S8         , CV_BasicType_BOOL8      , 1, 1, 1 },
-        { "__bool16"             , RDI_TypeKind_S16        , CV_BasicType_BOOL16     , 1, 1, 1 }, // not real C type
-        { "__bool32"             , RDI_TypeKind_S32        , CV_BasicType_BOOL32     , 1, 1, 1 }, // not real C type
-        { "float"                , RDI_TypeKind_F32        , CV_BasicType_FLOAT32    , 1, 1, 1 },
-        { "double"               , RDI_TypeKind_F64        , CV_BasicType_FLOAT64    , 1, 1, 1 },
-        { "long double"          , RDI_TypeKind_F80        , CV_BasicType_FLOAT80    , 1, 1, 1 },
-        { "__float128"           , RDI_TypeKind_F128       , CV_BasicType_FLOAT128   , 1, 1, 1 }, // Clang type
-        { "__float48"            , RDI_TypeKind_F48        , CV_BasicType_FLOAT48    , 1, 1, 1 }, // not real C type
-        { "__float32pp"          , RDI_TypeKind_F32PP      , CV_BasicType_FLOAT32PP  , 1, 1, 1 }, // not real C type
-        { "_Complex float"       , RDI_TypeKind_ComplexF32 , CV_BasicType_COMPLEX32  , 0, 0, 0 },
-        { "_Complex double"      , RDI_TypeKind_ComplexF64 , CV_BasicType_COMPLEX64  , 0, 0, 0 },
-        { "_Complex long double" , RDI_TypeKind_ComplexF80 , CV_BasicType_COMPLEX80  , 0, 0, 0 },
-        { "_Complex __float128"  , RDI_TypeKind_ComplexF128, CV_BasicType_COMPLEX128 , 0, 0, 0 },
-        { "__int8"               , RDI_TypeKind_S8         , CV_BasicType_INT8       , 1, 1, 1 },
-        { "__uint8"              , RDI_TypeKind_U8         , CV_BasicType_UINT8      , 1, 1, 1 },
-        { "__int16"              , RDI_TypeKind_S16        , CV_BasicType_INT16      , 1, 1, 1 },
-        { "__uint16"             , RDI_TypeKind_U16        , CV_BasicType_UINT16     , 1, 1, 1 },
-        { "int"                  , int_type                , CV_BasicType_INT32      , 1, 1, 1 },
-        { "unsigned int"         , uint_type               , CV_BasicType_UINT32     , 1, 1, 1 },
-        { "__int64"              , RDI_TypeKind_S64        , CV_BasicType_INT64      , 1, 1, 1 },
-        { "__uint64"             , RDI_TypeKind_U64        , CV_BasicType_UINT64     , 1, 1, 1 },
-        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_INT128     , 1, 1, 1 },
-        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UINT128    , 1, 1, 1 },
-        { "char"                 , RDI_TypeKind_Char8      , CV_BasicType_RCHAR      , 1, 1, 1 }, // always ASCII
-        { "wchar_t"              , RDI_TypeKind_UChar16    , CV_BasicType_WCHAR      , 1, 1, 1 }, // on windows always UTF-16
-        { "char8_t"              , RDI_TypeKind_Char8      , CV_BasicType_CHAR8      , 1, 1, 1 }, // always UTF-8
-        { "char16_t"             , RDI_TypeKind_Char16     , CV_BasicType_CHAR16     , 1, 1, 1 }, // always UTF-16
-        { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     , 1, 1, 1 }, // always UTF-32
-        { "__pointer"            , ptr_type                , CV_BasicType_PTR        , 0, 0, 0 }
-      };
-
-      for(U64 i = 0; i < ArrayCount(table); i += 1)
-      {
-        U64 builtin_size;
-        if(table[i].kind_rdi == RDI_TypeKind_Void || table[i].kind_rdi == RDI_TypeKind_Handle)
+        CV_TypeId itype = (root_itype != itype_chain->itype && itype_chain->itype < itype_opl && itype_fwd_map[itype_chain->itype]) ? itype_fwd_map[itype_chain->itype] : itype_chain->itype;
+        B32 itype_is_basic = (itype < 0x1000);
+        
+        //////////////////////////
+        //- rjf: skip forward-reference itypes - all future resolutions will
+        // reference whatever this itype resolves to, and so there is no point
+        // in filling out this slot
+        //
+        if(itype_fwd_map[root_itype] != 0)
         {
-          builtin_size = arch_addr_size;
+          continue;
         }
-        else
+        
+        //////////////////////////
+        //- rjf: skip already produced dependencies
+        //
+        if(itype_type_ptrs[itype] != 0)
         {
-          builtin_size = rdi_size_from_basic_type_kind(table[i].kind_rdi);
+          continue;
         }
-
-        RDIM_Type *builtin = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-        builtin->kind      = table[i].kind_rdi;
-        builtin->name      = str8_cstring(table[i].name);
-        builtin->byte_size = builtin_size;
-
-        itype_type_ptrs[table[i].kind_cv] = builtin;
-
-        if(table[i].make_pointer_near)
+        
+        //////////////////////////
+        //- rjf: build basic type
+        //
+        if(itype_is_basic)
         {
-          CV_TypeIndex near_ptr_itype = table[i].kind_cv | 0x100;
-          RDIM_Type *ptr_near    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_near->kind         = RDI_TypeKind_Ptr;
-          ptr_near->byte_size    = 2;
-          ptr_near->direct_type  = builtin;
-
-          itype_type_ptrs[near_ptr_itype] = ptr_near;
-        }
-        if(table[i].make_pointer_32)
-        {
-          CV_TypeIndex ptr_32_itype = table[i].kind_cv | 0x400;
-          RDIM_Type *ptr_32    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_32->kind         = RDI_TypeKind_Ptr;
-          ptr_32->byte_size    = 4;
-          ptr_32->direct_type  = builtin;
-
-          itype_type_ptrs[ptr_32_itype] = ptr_32;
-        }
-        if(table[i].make_pointer_64)
-        {
-          CV_TypeIndex ptr_64_itype = table[i].kind_cv | 0x600;
-          RDIM_Type *ptr_64    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_64->kind         = RDI_TypeKind_Ptr;
-          ptr_64->byte_size    = 8;
-          ptr_64->direct_type  = builtin;
-
-          itype_type_ptrs[ptr_64_itype] = ptr_64;
-        }
-      }
-    }
-
-    //////////////////////////
-    //- rjf: build non-basic type
-    //
-    for(CV_TypeId itype = tpi_leaf->itype_first; itype < tpi_leaf->itype_opl; itype += 1)
-    {
-      RDIM_Type   *dst_type           = 0;
-      CV_RecRange *range              = &tpi_leaf->leaf_ranges.ranges[itype-tpi_leaf->itype_first];
-      CV_LeafKind  kind               = range->hdr.kind;
-      U64          header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-
-      if(range->off+range->hdr.size <= tpi_leaf->data.size &&
-         range->off+2+header_struct_size <= tpi_leaf->data.size &&
-         range->hdr.size >= 2)
-      {
-        U8 *itype_leaf_first = tpi_leaf->data.str + range->off+2;
-        U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
-        switch(kind)
-        {
-          //- rjf: MODIFIER
-          case CV_LeafKind_MODIFIER:
-          {
-            // rjf: unpack leaf
-            CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
-            
-            // rjf: cv -> rdi flags
-            RDI_TypeModifierFlags flags = 0;
-            if(lf->flags & CV_ModifierFlag_Const)    {flags |= RDI_TypeModifierFlag_Const;}
-            if(lf->flags & CV_ModifierFlag_Volatile) {flags |= RDI_TypeModifierFlag_Volatile;}
-            
-            // rjf: fill type
-            if(flags == 0)
-            {
-              dst_type = p2r_type_ptr_from_itype(lf->itype);
-            }
-            else
-            {
-              dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-              dst_type->kind        = RDI_TypeKind_Modifier;
-              dst_type->flags       = flags;
-              dst_type->direct_type = p2r_type_ptr_from_itype(lf->itype);
-              dst_type->byte_size   = dst_type->direct_type ? dst_type->direct_type->byte_size : 0;
-            }
-          }break;
+          RDIM_Type *dst_type = 0;
           
-          //- rjf: POINTER
-          case CV_LeafKind_POINTER:
-          {
-            // TODO(rjf): if ptr_mode in {PtrMem, PtrMethod} then output a member pointer instead
-            
-            // rjf: unpack leaf
-            CV_LeafPointer *lf = (CV_LeafPointer *)itype_leaf_first;
-            RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
-            CV_PointerKind ptr_kind = CV_PointerAttribs_Extract_Kind(lf->attribs);
-            CV_PointerMode ptr_mode = CV_PointerAttribs_Extract_Mode(lf->attribs);
-            U32            ptr_size = CV_PointerAttribs_Extract_Size(lf->attribs);
-            
-            // rjf: cv -> rdi modifier flags
-            RDI_TypeModifierFlags modifier_flags = 0;
-            if(lf->attribs & CV_PointerAttrib_Const)      {modifier_flags |= RDI_TypeModifierFlag_Const;}
-            if(lf->attribs & CV_PointerAttrib_Volatile)   {modifier_flags |= RDI_TypeModifierFlag_Volatile;}
-            if(lf->attribs & CV_PointerAttrib_Restricted) {modifier_flags |= RDI_TypeModifierFlag_Restrict;}
-            
-            // rjf: cv info -> rdi pointer type kind
-            RDI_TypeKind type_kind = RDI_TypeKind_Ptr;
-            {
-              if(lf->attribs & CV_PointerAttrib_LRef)
-              {
-                type_kind = RDI_TypeKind_LRef;
-              }
-              else if(lf->attribs & CV_PointerAttrib_RRef)
-              {
-                type_kind = RDI_TypeKind_RRef;
-              }
-              if(ptr_mode == CV_PointerMode_LRef)
-              {
-                type_kind = RDI_TypeKind_LRef;
-              }
-              else if(ptr_mode == CV_PointerMode_RRef)
-              {
-                type_kind = RDI_TypeKind_RRef;
-              }
-            }
-            
-            // rjf: fill type
-            if(modifier_flags != 0)
-            {
-              RDIM_Type *pointer_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-              dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-              dst_type->kind             = RDI_TypeKind_Modifier;
-              dst_type->flags            = modifier_flags;
-              dst_type->direct_type      = pointer_type;
-              dst_type->byte_size        = arch_addr_size;
-              pointer_type->kind         = type_kind;
-              pointer_type->byte_size    = arch_addr_size;
-              pointer_type->direct_type  = direct_type;
-            }
-            else
-            {
-              dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-              dst_type->kind        = type_kind;
-              dst_type->byte_size   = arch_addr_size;
-              dst_type->direct_type = direct_type;
-            }
-          }break;
+          // rjf: unpack itype
+          CV_BasicPointerKind cv_basic_ptr_kind  = CV_BasicPointerKindFromTypeId(itype);
+          CV_BasicType        cv_basic_type_code = CV_BasicTypeFromTypeId(itype);
           
-          //- rjf: PROCEDURE
-          case CV_LeafKind_PROCEDURE:
+          // rjf: get basic type slot, fill if unfilled
+          RDIM_Type *basic_type = itype_type_ptrs[cv_basic_type_code];
+          if(basic_type == 0)
           {
-            // TODO(rjf): handle call_kind & attribs
-            
-            // rjf: unpack leaf
-            CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
-            RDIM_Type *ret_type = p2r_type_ptr_from_itype(lf->ret_itype);
-            
-            // rjf: fill type's basics
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            dst_type->kind        = RDI_TypeKind_Function;
+            RDI_TypeKind type_kind = p2r_rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
+            U32 byte_size = rdi_size_from_basic_type_kind(type_kind);
+            basic_type = dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+            if(byte_size == 0xffffffff)
+            {
+              byte_size = arch_addr_size;
+            }
+            basic_type->kind      = type_kind;
+            basic_type->name      = cv_type_name_from_basic_type(cv_basic_type_code);
+            basic_type->byte_size = byte_size;
+          }
+          
+          // rjf: nonzero ptr kind -> form ptr type to basic tpye
+          if(cv_basic_ptr_kind != 0)
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+            dst_type->kind        = RDI_TypeKind_Ptr;
             dst_type->byte_size   = arch_addr_size;
-            dst_type->direct_type = ret_type;
-            
-            // rjf: unpack arglist range
-            CV_RecRange *arglist_range = &tpi_leaf->leaf_ranges.ranges[lf->arg_itype-tpi_leaf->itype_first];
-            if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
-               arglist_range->hdr.size<2 ||
-               arglist_range->off + arglist_range->hdr.size > tpi_leaf->data.size)
-            {
-              break;
-            }
-            U8 *arglist_first = tpi_leaf->data.str + arglist_range->off + 2;
-            U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
-            if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
-            {
-              break;
-            }
-            
-            // rjf: unpack arglist info
-            CV_LeafArgList *arglist              = (CV_LeafArgList*)arglist_first;
-            CV_TypeId      *arglist_itypes_base  = (CV_TypeId *)(arglist+1);
-            U32             arglist_itypes_count = arglist->count;
-            
-            // rjf: build param type array
-            RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count);
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              params[idx] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
-            }
-            
-            // rjf: fill dst type
-            dst_type->count = arglist_itypes_count;
-            dst_type->param_types = params;
-          }break;
+            dst_type->direct_type = basic_type;
+          }
           
-          //- rjf: MFUNCTION
-          case CV_LeafKind_MFUNCTION:
+          // rjf: fill this itype's slot with the finished type
+          itype_type_ptrs[itype] = dst_type;
+        }
+        
+        //////////////////////////
+        //- rjf: build non-basic type
+        //
+        if(!itype_is_basic && itype >= itype_first)
+        {
+          RDIM_Type *dst_type = 0;
+          CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[itype-itype_first];
+          CV_LeafKind kind = range->hdr.kind;
+          U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+          if(range->off+range->hdr.size <= tpi_leaf->data.size &&
+             range->off+2+header_struct_size <= tpi_leaf->data.size &&
+             range->hdr.size >= 2)
           {
-            // TODO(rjf): handle call_kind & attribs
-            // TODO(rjf): preserve "this_adjust"
-            
-            // rjf: unpack leaf
-            CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
-            RDIM_Type *ret_type  = p2r_type_ptr_from_itype(lf->ret_itype);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            dst_type->kind        = (lf->this_itype != 0) ? RDI_TypeKind_Method : RDI_TypeKind_Function;
-            dst_type->byte_size   = arch_addr_size;
-            dst_type->direct_type = ret_type;
-            
-            // rjf: unpack arglist range
-            CV_RecRange *arglist_range = &tpi_leaf->leaf_ranges.ranges[lf->arg_itype-tpi_leaf->itype_first];
-            if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
-               arglist_range->hdr.size<2 ||
-               arglist_range->off + arglist_range->hdr.size > tpi_leaf->data.size)
+            U8 *itype_leaf_first = tpi_leaf->data.str + range->off+2;
+            U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+            switch(kind)
             {
-              break;
+              //- rjf: MODIFIER
+              case CV_LeafKind_MODIFIER:
+              {
+                // rjf: unpack leaf
+                CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+                
+                // rjf: cv -> rdi flags
+                RDI_TypeModifierFlags flags = 0;
+                if(lf->flags & CV_ModifierFlag_Const)    {flags |= RDI_TypeModifierFlag_Const;}
+                if(lf->flags & CV_ModifierFlag_Volatile) {flags |= RDI_TypeModifierFlag_Volatile;}
+                
+                // rjf: fill type
+                if(flags == 0)
+                {
+                  dst_type = p2r_type_ptr_from_itype(lf->itype);
+                }
+                else
+                {
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type->kind        = RDI_TypeKind_Modifier;
+                  dst_type->flags       = flags;
+                  dst_type->direct_type = p2r_type_ptr_from_itype(lf->itype);
+                  dst_type->byte_size   = dst_type->direct_type ? dst_type->direct_type->byte_size : 0;
+                }
+              }break;
+              
+              //- rjf: POINTER
+              case CV_LeafKind_POINTER:
+              {
+                // TODO(rjf): if ptr_mode in {PtrMem, PtrMethod} then output a member pointer instead
+                
+                // rjf: unpack leaf
+                CV_LeafPointer *lf = (CV_LeafPointer *)itype_leaf_first;
+                RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
+                CV_PointerKind ptr_kind = CV_PointerAttribs_Extract_Kind(lf->attribs);
+                CV_PointerMode ptr_mode = CV_PointerAttribs_Extract_Mode(lf->attribs);
+                U32            ptr_size = CV_PointerAttribs_Extract_Size(lf->attribs);
+                
+                // rjf: cv -> rdi modifier flags
+                RDI_TypeModifierFlags modifier_flags = 0;
+                if(lf->attribs & CV_PointerAttrib_Const)      {modifier_flags |= RDI_TypeModifierFlag_Const;}
+                if(lf->attribs & CV_PointerAttrib_Volatile)   {modifier_flags |= RDI_TypeModifierFlag_Volatile;}
+                if(lf->attribs & CV_PointerAttrib_Restricted) {modifier_flags |= RDI_TypeModifierFlag_Restrict;}
+                
+                // rjf: cv info -> rdi pointer type kind
+                RDI_TypeKind type_kind = RDI_TypeKind_Ptr;
+                {
+                  if(lf->attribs & CV_PointerAttrib_LRef)
+                  {
+                    type_kind = RDI_TypeKind_LRef;
+                  }
+                  else if(lf->attribs & CV_PointerAttrib_RRef)
+                  {
+                    type_kind = RDI_TypeKind_RRef;
+                  }
+                  if(ptr_mode == CV_PointerMode_LRef)
+                  {
+                    type_kind = RDI_TypeKind_LRef;
+                  }
+                  else if(ptr_mode == CV_PointerMode_RRef)
+                  {
+                    type_kind = RDI_TypeKind_RRef;
+                  }
+                }
+                
+                // rjf: fill type
+                if(modifier_flags != 0)
+                {
+                  RDIM_Type *pointer_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type->kind             = RDI_TypeKind_Modifier;
+                  dst_type->flags            = modifier_flags;
+                  dst_type->direct_type      = pointer_type;
+                  dst_type->byte_size        = arch_addr_size;
+                  pointer_type->kind         = type_kind;
+                  pointer_type->byte_size    = arch_addr_size;
+                  pointer_type->direct_type  = direct_type;
+                }
+                else
+                {
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type->kind        = type_kind;
+                  dst_type->byte_size   = arch_addr_size;
+                  dst_type->direct_type = direct_type;
+                }
+              }break;
+              
+              //- rjf: PROCEDURE
+              case CV_LeafKind_PROCEDURE:
+              {
+                // TODO(rjf): handle call_kind & attribs
+                
+                // rjf: unpack leaf
+                CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
+                RDIM_Type *ret_type = p2r_type_ptr_from_itype(lf->ret_itype);
+                
+                // rjf: fill type's basics
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                dst_type->kind        = RDI_TypeKind_Function;
+                dst_type->byte_size   = arch_addr_size;
+                dst_type->direct_type = ret_type;
+                
+                // rjf: unpack arglist range
+                CV_RecRange *arglist_range = &tpi_leaf->leaf_ranges.ranges[lf->arg_itype-itype_first];
+                if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                   arglist_range->hdr.size<2 ||
+                   arglist_range->off + arglist_range->hdr.size > tpi_leaf->data.size)
+                {
+                  break;
+                }
+                U8 *arglist_first = tpi_leaf->data.str + arglist_range->off + 2;
+                U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+                if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+                {
+                  break;
+                }
+                
+                // rjf: unpack arglist info
+                CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+                CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+                U32 arglist_itypes_count = arglist->count;
+                
+                // rjf: build param type array
+                RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count);
+                for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+                {
+                  params[idx] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
+                }
+                
+                // rjf: fill dst type
+                dst_type->count = arglist_itypes_count;
+                dst_type->param_types = params;
+              }break;
+              
+              //- rjf: MFUNCTION
+              case CV_LeafKind_MFUNCTION:
+              {
+                // TODO(rjf): handle call_kind & attribs
+                // TODO(rjf): preserve "this_adjust"
+                
+                // rjf: unpack leaf
+                CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
+                RDIM_Type *ret_type  = p2r_type_ptr_from_itype(lf->ret_itype);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                dst_type->kind        = (lf->this_itype != 0) ? RDI_TypeKind_Method : RDI_TypeKind_Function;
+                dst_type->byte_size   = arch_addr_size;
+                dst_type->direct_type = ret_type;
+                
+                // rjf: unpack arglist range
+                CV_RecRange *arglist_range = &tpi_leaf->leaf_ranges.ranges[lf->arg_itype-itype_first];
+                if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                   arglist_range->hdr.size<2 ||
+                   arglist_range->off + arglist_range->hdr.size > tpi_leaf->data.size)
+                {
+                  break;
+                }
+                U8 *arglist_first = tpi_leaf->data.str + arglist_range->off + 2;
+                U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+                if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+                {
+                  break;
+                }
+                
+                // rjf: unpack arglist info
+                CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+                CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+                U32 arglist_itypes_count = arglist->count;
+                
+                // rjf: build param type array
+                U64 num_this_extras = 1;
+                if(lf->this_itype == 0)
+                {
+                  num_this_extras = 0;
+                }
+                RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count+num_this_extras);
+                for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+                {
+                  params[idx+num_this_extras] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
+                }
+                if(lf->this_itype != 0)
+                {
+                  params[0] = p2r_type_ptr_from_itype(lf->this_itype);
+                }
+                
+                // rjf: fill dst type
+                dst_type->count = arglist_itypes_count+num_this_extras;
+                dst_type->param_types = params;
+              }break;
+              
+              //- rjf: BITFIELD
+              case CV_LeafKind_BITFIELD:
+              {
+                // rjf: unpack leaf
+                CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
+                RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                dst_type->kind        = RDI_TypeKind_Bitfield;
+                dst_type->off         = lf->pos;
+                dst_type->count       = lf->len;
+                dst_type->byte_size   = direct_type?direct_type->byte_size:0;
+                dst_type->direct_type = direct_type;
+              }break;
+              
+              //- rjf: ARRAY
+              case CV_LeafKind_ARRAY:
+              {
+                // rjf: unpack leaf
+                CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
+                RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->entry_itype);
+                U8 *numeric_ptr = (U8*)(lf + 1);
+                CV_NumericParsed array_count = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+                U64 full_size = cv_u64_from_numeric(&array_count);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                dst_type->kind        = RDI_TypeKind_Array;
+                dst_type->direct_type = direct_type;
+                dst_type->byte_size   = full_size;
+                dst_type->count       = (direct_type && direct_type->byte_size) ? (dst_type->byte_size/direct_type->byte_size) : 0;
+              }break;
+              
+              //- rjf: CLASS/STRUCTURE
+              case CV_LeafKind_CLASS:
+              case CV_LeafKind_STRUCTURE:
+              {
+                // TODO(rjf): handle props
+                
+                // rjf: unpack leaf
+                CV_LeafStruct *lf = (CV_LeafStruct *)itype_leaf_first;
+                U8 *numeric_ptr = (U8*)(lf + 1);
+                CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+                U64 size_u64 = cv_u64_from_numeric(&size);
+                U8 *name_ptr = numeric_ptr + size.encoded_size;
+                String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                if(lf->props & CV_TypeProp_FwdRef)
+                {
+                  dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
+                  dst_type->name = name;
+                }
+                else
+                {
+                  dst_type->kind      = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
+                  dst_type->byte_size = (U32)size_u64;
+                  dst_type->name      = name;
+                }
+              }break;
+              
+              //- rjf: CLASS2/STRUCT2
+              case CV_LeafKind_CLASS2:
+              case CV_LeafKind_STRUCT2:
+              {
+                // TODO(rjf): handle props
+                
+                // rjf: unpack leaf
+                CV_LeafStruct2 *lf = (CV_LeafStruct2 *)itype_leaf_first;
+                U8 *numeric_ptr = (U8*)(lf + 1);
+                CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+                U64 size_u64 = cv_u64_from_numeric(&size);
+                U8 *name_ptr = numeric_ptr + size.encoded_size;
+                String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                if(lf->props & CV_TypeProp_FwdRef)
+                {
+                  dst_type->kind = (kind == CV_LeafKind_CLASS2 ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
+                  dst_type->name = name;
+                }
+                else
+                {
+                  dst_type->kind      = (kind == CV_LeafKind_CLASS2 ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
+                  dst_type->byte_size = (U32)size_u64;
+                  dst_type->name      = name;
+                }
+              }break;
+              
+              //- rjf: UNION
+              case CV_LeafKind_UNION:
+              {
+                // TODO(rjf): handle props
+                
+                // rjf: unpack leaf
+                CV_LeafUnion *lf = (CV_LeafUnion *)itype_leaf_first;
+                U8 *numeric_ptr = (U8*)(lf + 1);
+                CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+                U64 size_u64 = cv_u64_from_numeric(&size);
+                U8 *name_ptr = numeric_ptr + size.encoded_size;
+                String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                if(lf->props & CV_TypeProp_FwdRef)
+                {
+                  dst_type->kind = RDI_TypeKind_IncompleteUnion;
+                  dst_type->name = name;
+                }
+                else
+                {
+                  dst_type->kind      = RDI_TypeKind_Union;
+                  dst_type->byte_size = (U32)size_u64;
+                  dst_type->name      = name;
+                }
+              }break;
+              
+              //- rjf: ENUM
+              case CV_LeafKind_ENUM:
+              {
+                // TODO(rjf): handle props
+                
+                // rjf: unpack leaf
+                CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
+                RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->base_itype);
+                U8 *name_ptr = (U8 *)(lf + 1);
+                String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+                
+                // rjf: fill type
+                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                if(lf->props & CV_TypeProp_FwdRef)
+                {
+                  dst_type->kind = RDI_TypeKind_IncompleteEnum;
+                  dst_type->name = name;
+                }
+                else
+                {
+                  dst_type->kind        = RDI_TypeKind_Enum;
+                  dst_type->direct_type = direct_type;
+                  dst_type->byte_size   = direct_type ? direct_type->byte_size : 0;
+                  dst_type->name        = name;
+                }
+              }break;
             }
-            U8 *arglist_first = tpi_leaf->data.str + arglist_range->off + 2;
-            U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
-            if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
-            {
-              break;
-            }
-            
-            // rjf: unpack arglist info
-            CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
-            CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
-            U32 arglist_itypes_count = arglist->count;
-            
-            // rjf: build param type array
-            U64 num_this_extras = 1;
-            if(lf->this_itype == 0)
-            {
-              num_this_extras = 0;
-            }
-            RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count+num_this_extras);
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              params[idx+num_this_extras] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
-            }
-            if(lf->this_itype != 0)
-            {
-              params[0] = p2r_type_ptr_from_itype(lf->this_itype);
-            }
-            
-            // rjf: fill dst type
-            dst_type->count = arglist_itypes_count+num_this_extras;
-            dst_type->param_types = params;
-          }break;
+          }
           
-          //- rjf: BITFIELD
-          case CV_LeafKind_BITFIELD:
-          {
-            // rjf: unpack leaf
-            CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
-            RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            dst_type->kind        = RDI_TypeKind_Bitfield;
-            dst_type->off         = lf->pos;
-            dst_type->count       = lf->len;
-            dst_type->byte_size   = direct_type?direct_type->byte_size:0;
-            dst_type->direct_type = direct_type;
-          }break;
-          
-          //- rjf: ARRAY
-          case CV_LeafKind_ARRAY:
-          {
-            // rjf: unpack leaf
-            CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
-            RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->entry_itype);
-            U8 *numeric_ptr = (U8*)(lf + 1);
-            CV_NumericParsed array_count = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U64 full_size = cv_u64_from_numeric(&array_count);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            dst_type->kind        = RDI_TypeKind_Array;
-            dst_type->direct_type = direct_type;
-            dst_type->byte_size   = full_size;
-          }break;
-          
-          //- rjf: CLASS/STRUCTURE
-          case CV_LeafKind_CLASS:
-          case CV_LeafKind_STRUCTURE:
-          {
-            // TODO(rjf): handle props
-            
-            // rjf: unpack leaf
-            CV_LeafStruct *lf = (CV_LeafStruct *)itype_leaf_first;
-            U8 *numeric_ptr = (U8*)(lf + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U64 size_u64 = cv_u64_from_numeric(&size);
-            U8 *name_ptr = numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            if(lf->props & CV_TypeProp_FwdRef)
-            {
-              dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
-            }
-            else
-            {
-              dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
-            }
-
-            B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
-                                         ((lf->props & CV_TypeProp_HasUniqueName) != 0));
-            if(do_unique_name_lookup)
-            {
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            }
-
-            dst_type->name      = name;
-            dst_type->byte_size = safe_cast_u32(size_u64);
-          }break;
-          
-          //- rjf: CLASS2/STRUCT2
-          case CV_LeafKind_CLASS2:
-          case CV_LeafKind_STRUCT2:
-          {
-            // TODO(rjf): handle props
-            
-            // rjf: unpack leaf
-            CV_LeafStruct2 *lf = (CV_LeafStruct2 *)itype_leaf_first;
-            U8 *numeric_ptr = (U8*)(lf + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U64 size_u64 = cv_u64_from_numeric(&size);
-            U8 *name_ptr = numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            if(lf->props & CV_TypeProp_FwdRef)
-            {
-              dst_type->kind = (kind == CV_LeafKind_CLASS2 ? RDI_TypeKind_IncompleteClass : RDI_TypeKind_IncompleteStruct);
-              dst_type->name = name;
-            }
-            else
-            {
-              dst_type->kind      = (kind == CV_LeafKind_CLASS2 ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
-              dst_type->byte_size = (U32)size_u64;
-              dst_type->name      = name;
-            }
-
-            B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
-                                         ((lf->props & CV_TypeProp_HasUniqueName) != 0));
-            if(do_unique_name_lookup)
-            {
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            }
-          }break;
-          
-          //- rjf: UNION
-          case CV_LeafKind_UNION:
-          {
-            // TODO(rjf): handle props
-            
-            // rjf: unpack leaf
-            CV_LeafUnion *lf = (CV_LeafUnion *)itype_leaf_first;
-            U8 *numeric_ptr = (U8*)(lf + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U64 size_u64 = cv_u64_from_numeric(&size);
-            U8 *name_ptr = numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            if(lf->props & CV_TypeProp_FwdRef)
-            {
-              dst_type->kind = RDI_TypeKind_IncompleteUnion;
-              dst_type->name = name;
-            }
-            else
-            {
-              dst_type->kind      = RDI_TypeKind_Union;
-              dst_type->byte_size = (U32)size_u64;
-              dst_type->name      = name;
-            }
-
-            B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
-                                         ((lf->props & CV_TypeProp_HasUniqueName) != 0));
-            if(do_unique_name_lookup)
-            {
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            }
-          }break;
-          
-          //- rjf: ENUM
-          case CV_LeafKind_ENUM:
-          {
-            // TODO(rjf): handle props
-            
-            // rjf: unpack leaf
-            CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
-            RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->base_itype);
-            U8 *name_ptr = (U8 *)(lf + 1);
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            
-            // rjf: fill type
-            dst_type = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-            if(lf->props & CV_TypeProp_FwdRef)
-            {
-              dst_type->kind = RDI_TypeKind_IncompleteEnum;
-              dst_type->name = name;
-            }
-            else
-            {
-              dst_type->kind        = RDI_TypeKind_Enum;
-              dst_type->direct_type = direct_type;
-              dst_type->byte_size   = direct_type ? direct_type->byte_size : 0;
-              dst_type->name        = name;
-            }
-
-            B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
-                                         ((lf->props & CV_TypeProp_HasUniqueName) != 0));
-            if(do_unique_name_lookup)
-            {
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            }
-          }break;
+          //- rjf: store finalized type to this itype's slot
+          itype_type_ptrs[itype] = dst_type;
         }
       }
-      
-      //- rjf: store finalized type to this itype's slot
-      itype_type_ptrs[itype] = dst_type;
     }
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 2: kick off UDT build
+  //- rjf: types pass 4: kick off UDT build
   //
   U64 udt_task_size_itypes = 4096;
-  U64 udt_tasks_count = (tpi_leaf->itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
+  U64 udt_tasks_count = ((U64)itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
   P2R_UDTConvertIn *udt_tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, udt_tasks_count);
   ASYNC_Task **udt_tasks = push_array(scratch.arena, ASYNC_Task *, udt_tasks_count);
-  if(in->flags & P2R_ConvertFlag_UDTs) ProfScope("types pass 2: kick off UDT build")
+  if(in->flags & P2R_ConvertFlag_UDTs) ProfScope("types pass 4: kick off UDT build")
   {
     for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
     {
       udt_tasks_inputs[idx].tpi_leaf        = tpi_leaf;
       udt_tasks_inputs[idx].itype_first     = idx*udt_task_size_itypes;
       udt_tasks_inputs[idx].itype_opl       = udt_tasks_inputs[idx].itype_first + udt_task_size_itypes;
-      udt_tasks_inputs[idx].itype_opl       = ClampTop(udt_tasks_inputs[idx].itype_opl, tpi_leaf->itype_opl);
+      udt_tasks_inputs[idx].itype_opl       = ClampTop(udt_tasks_inputs[idx].itype_opl, itype_opl);
+      udt_tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
       udt_tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
       udt_tasks[idx] = async_task_launch(scratch.arena, p2r_udt_convert_work, .input = &udt_tasks_inputs[idx]);
     }
@@ -3479,6 +3907,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         tasks_inputs[idx].tpi_hash                     = tpi_hash;
         tasks_inputs[idx].tpi_leaf                     = tpi_leaf;
         tasks_inputs[idx].ipi_leaf                     = ipi_leaf;
+        tasks_inputs[idx].itype_fwd_map                = itype_fwd_map;
         tasks_inputs[idx].itype_type_ptrs              = itype_type_ptrs;
         tasks_inputs[idx].link_name_map                = link_name_map;
         if(idx < global_stream_subdivision_tasks_count)

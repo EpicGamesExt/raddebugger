@@ -439,153 +439,6 @@ rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r
 }
 
 ////////////////////////////////
-//~ Data Model
-
-RDI_PROC RDI_TypeKind
-rdim_short_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S16;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U16;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_int_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S32;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U32;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_long_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-RDI_PROC RDI_TypeKind
-rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model)
-{
-  switch(data_model)
-  {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
-  }
-  return RDI_TypeKind_NULL;
-}
-
-////////////////////////////////
 //~ rjf: [Building] Binary Section List Building
 
 RDI_PROC RDIM_BinarySection *
@@ -1216,10 +1069,9 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
     }
     else
     {
-      left_dst->last_op->next  = right_destroyed->first_op;
-      left_dst->last_op        = right_destroyed->last_op;
-      left_dst->op_count      += right_destroyed->op_count;
-      left_dst->encoded_size  += right_destroyed->encoded_size;
+      left_dst->last_op = right_destroyed->last_op;
+      left_dst->op_count += right_destroyed->op_count;
+      left_dst->encoded_size += right_destroyed->encoded_size;
     }
     rdim_memzero_struct(right_destroyed);
   }
@@ -1307,59 +1159,10 @@ rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
 
 ////////////////////////////////
 
-RDI_PROC RDIM_Type *
-rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
-{
-  RDI_U64 type_idx = 0;
-  if (type_kind != RDI_TypeKind_NULL) {
-    type_idx = (type_kind - RDI_TypeKind_FirstBuiltIn) + 1;
-    }
-  RDIM_Type *builtin  = &list.first->v[type_idx];
-  return builtin;
-}
-
-RDI_PROC RDIM_TypeChunkList
-rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
-{
-  RDIM_TypeChunkList list = {0};
-
-  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
-
-  RDIM_Type *null_type = rdim_type_chunk_list_push(arena, &list, type_cap);
-
-  for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
-  {
-    RDIM_String8 name = {0};
-    name.str = rdi_string_from_type_kind(type_kind, &name.size);
-
-    RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
-    type->name      = name;
-    type->kind      = type_kind;
-    type->byte_size = rdi_size_from_basic_type_kind(type_kind);
-  }
-
-  RDIM_Type *void_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Void);
-  void_type->byte_size = rdi_addr_size_from_arch(arch);
-
-  RDIM_Type *handle_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Handle);
-  handle_type->byte_size = rdi_addr_size_from_arch(arch);
-
-  return list;
-}
-
-////////////////////////////////
-
 RDI_PROC void
 rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx)
 {
   RDI_U64 type_pos = rdim_idx_from_type(type);
-
-  if(type->kind == RDI_TypeKind_NULL)
-  {
-    type_indices[type_pos] = 0;
-    return;
-  }
-
   if(type_indices[type_pos] == 0)
   {
     if(type->param_types)
@@ -1383,8 +1186,6 @@ rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx)
 RDI_PROC RDI_U64 *
 rdim_make_type_indices(RDIM_Arena *arena, RDIM_TypeChunkList *types)
 {
-  ProfBeginFunction();
-
   RDI_U64 *type_indices       = rdim_push_array(arena, RDI_U64, types->total_count + 1);
   RDI_U64  type_indices_count = 1;
 
@@ -1396,7 +1197,6 @@ rdim_make_type_indices(RDIM_Arena *arena, RDIM_TypeChunkList *types)
     }
   }
 
-  ProfEnd();
   return type_indices;
 }
 
@@ -2393,7 +2193,6 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
           RDI_U32 type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, &n->v[idx]); // TODO(rjf): @u64_to_u32
-          if(type_idx == 0) {continue;}
           rdim_bake_name_map_push(arena, map, n->v[idx].name, type_idx);
         }
       }
@@ -3238,11 +3037,6 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
       RDIM_Type    *src     = &n->v[chunk_idx];
       U64           dst_idx = rdim_final_idx_from_type(type_indices, src);
       RDI_TypeNode *dst     = &type_nodes[dst_idx];
-
-      if(src->kind == RDI_TypeKind_NULL)
-      {
-        continue;
-      }
       
       //- rjf: fill shared type node info
       dst->kind      = src->kind;
@@ -3533,7 +3327,7 @@ rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
 }
 
 RDI_PROC U64
-rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
+rdim_bake_location(Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
 {
   U64 location_data_off = location_data_blobs->total_size;
 
