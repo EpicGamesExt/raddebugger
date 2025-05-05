@@ -130,7 +130,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(themes)
         FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, name);
         if(name_matches.count == name_matches.needle_part_count)
         {
-          str8_list_push(scratch.arena, &names, name);
+          str8_list_push(scratch.arena, &names, push_str8_copy(arena, name));
         }
       }
       os_file_iter_end(it);

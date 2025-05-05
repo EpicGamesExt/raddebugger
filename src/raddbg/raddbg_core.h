@@ -968,7 +968,7 @@ internal void rd_set_autocomp_regs_(RD_Regs *regs);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: colors
-internal UI_Theme *rd_ui_theme_from_tree(MD_Node *tree);
+internal MD_Node *rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name);
 internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
@@ -1008,8 +1008,8 @@ internal Arena *rd_frame_arena(void);
 ////////////////////////////////
 //~ rjf: Registers
 
-internal RD_Regs *rd_regs(void);
-internal RD_Regs *rd_base_regs(void);
+#define rd_regs() (&rd_state->top_regs->v)
+#define rd_base_regs() (&rd_state->base_regs.v)
 internal RD_Regs *rd_push_regs_(RD_Regs *regs);
 #define rd_push_regs(...) rd_push_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 internal RD_Regs *rd_pop_regs(void);

@@ -5188,10 +5188,10 @@ rd_view_ui(Rng2F32 rect)
                             rd_cmd(RD_CmdKind_SelectThread, .thread = cell_info.entity->handle);
                           }
                           
-                          // rjf: other cases, but this watch window is floating? -> push query
-                          else if(view_is_floating)
+                          // rjf: other cases, but this watch window is floating, and this has a cfg/entity? -> push query
+                          else if(view_is_floating && (cell_info.entity != &ctrl_entity_nil || cell_info.cfg != &rd_nil_cfg))
                           {
-                            rd_cmd(RD_CmdKind_PushQuery, .expr = cell->eval.string);
+                            rd_cmd(RD_CmdKind_PushQuery, .expr = e_full_expr_string_from_key(scratch.arena, cell->eval.key));
                           }
                         }
                         
@@ -5815,33 +5815,10 @@ rd_window_frame(void)
     }
     
     //- rjf: map the theme config to the associated tree (either from a preset, or from a file)
-    MD_Node *theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
-    if(theme_cfg != &rd_nil_cfg)
+    MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme_cfg->first->string);
+    if(colors_cfgs.count == 0 && theme_tree == &md_nil_node)
     {
-      String8 theme_name = theme_cfg->first->string;
-      if(theme_name.size != 0)
-      {
-        for EachEnumVal(RD_ThemePreset, p)
-        {
-          if(str8_match(theme_name, rd_theme_preset_display_string_table[p], 0))
-          {
-            theme_tree = rd_state->theme_preset_trees[p];
-            break;
-          }
-        }
-        if(theme_tree == &md_nil_node)
-        {
-          String8 path = push_str8f(scratch.arena, "%S/raddbg/themes/%S", os_get_process_info()->user_program_data_path, theme_name);
-          U64 endt_us = os_now_microseconds()+100;
-          if(ws->frames_alive == 0)
-          {
-            endt_us = os_now_microseconds()+50000;
-          }
-          U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
-          String8 data = hs_data_from_hash(hs_scope, hash);
-          theme_tree = md_tree_from_string(scratch.arena, data);
-        }
-      }
+      theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
     }
     
     //- rjf: build tasks for color applications - each task comprises of a metadesk
@@ -9769,6 +9746,38 @@ rd_set_autocomp_regs_(RD_Regs *regs)
 
 //- rjf: colors
 
+internal MD_Node *
+rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  MD_Node *theme_tree = &md_nil_node;
+  if(theme_name.size != 0)
+  {
+    for EachEnumVal(RD_ThemePreset, p)
+    {
+      if(str8_match(theme_name, rd_theme_preset_display_string_table[p], 0))
+      {
+        theme_tree = rd_state->theme_preset_trees[p];
+        break;
+      }
+    }
+    if(theme_tree == &md_nil_node)
+    {
+      String8 path = push_str8f(scratch.arena, "%S/raddbg/themes/%S", os_get_process_info()->user_program_data_path, theme_name);
+      U64 endt_us = os_now_microseconds()+100;
+      if(rd_state->frame_index <= 5)
+      {
+        endt_us = os_now_microseconds()+50000;
+      }
+      U128 hash = fs_hash_from_path_range(path, r1u64(0, max_U64), endt_us);
+      String8 data = hs_data_from_hash(scope, hash);
+      theme_tree = md_tree_from_string(arena, data);
+    }
+  }
+  scratch_end(scratch);
+  return theme_tree;
+}
+
 internal Vec4F32
 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot)
 {
@@ -10120,20 +10129,6 @@ rd_frame_arena(void)
 
 ////////////////////////////////
 //~ rjf: Registers
-
-internal RD_Regs *
-rd_regs(void)
-{
-  RD_Regs *regs = &rd_state->top_regs->v;
-  return regs;
-}
-
-internal RD_Regs *
-rd_base_regs(void)
-{
-  RD_Regs *regs = &rd_state->base_regs.v;
-  return regs;
-}
 
 internal RD_Regs *
 rd_push_regs_(RD_Regs *regs)
@@ -12194,26 +12189,33 @@ rd_frame(void)
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
             RD_Cfg *tab = panel_tree.focused->selected_tab;
-            String8 expr = push_str8f(scratch.arena,
-                                      "query:commands, "
-                                      "query:config.$%I64x, "
-                                      "query:config.$%I64x, "
-                                      "query:targets, "
-                                      "query:breakpoints, "
-                                      "query:recent_files, "
-                                      "query:recent_projects, "
-                                      "query:machines, "
-                                      "query:processes, "
-                                      "query:threads, "
-                                      "query:modules, "
-                                      "query:user_settings, "
-                                      "query:project_settings, "
-                                      "query:procedures, "
-                                      "query:types, "
-                                      "query:globals, "
-                                      "query:thread_locals, "
-                                      ,
-                                      tab->id, window->id);
+            String8List exprs = {0};
+            {
+              str8_list_pushf(scratch.arena, &exprs, "query:commands");
+              if(tab != &rd_nil_cfg)
+              {
+                str8_list_pushf(scratch.arena, &exprs, "query:config.$%I64x", tab->id);
+              }
+              if(window != &rd_nil_cfg)
+              {
+                str8_list_pushf(scratch.arena, &exprs, "query:config.$%I64x", window->id);
+              }
+              str8_list_pushf(scratch.arena, &exprs, "query:targets");
+              str8_list_pushf(scratch.arena, &exprs, "query:breakpoints");
+              str8_list_pushf(scratch.arena, &exprs, "query:recent_files");
+              str8_list_pushf(scratch.arena, &exprs, "query:recent_projects");
+              str8_list_pushf(scratch.arena, &exprs, "query:machines");
+              str8_list_pushf(scratch.arena, &exprs, "query:processes");
+              str8_list_pushf(scratch.arena, &exprs, "query:threads");
+              str8_list_pushf(scratch.arena, &exprs, "query:modules");
+              str8_list_pushf(scratch.arena, &exprs, "query:user_settings");
+              str8_list_pushf(scratch.arena, &exprs, "query:project_settings");
+              str8_list_pushf(scratch.arena, &exprs, "query:procedures");
+              str8_list_pushf(scratch.arena, &exprs, "query:types");
+              str8_list_pushf(scratch.arena, &exprs, "query:globals");
+              str8_list_pushf(scratch.arena, &exprs, "query:thread_locals");
+            }
+            String8 expr = str8_list_join(scratch.arena, &exprs, &(StringJoin){.sep = str8_lit(", ")});
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id, .tab = tab->id);
           }break;
           
@@ -14749,25 +14751,36 @@ rd_frame(void)
           }break;
           case RD_CmdKind_AddThemeColor:
           {
+            HS_Scope *hs_scope = hs_scope_open();
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
+            RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(parent, str8_lit("theme"));
+            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme->first->string);
+            if(theme_tree == &md_nil_node)
+            {
+              rd_cfg_new_replace(theme, rd_theme_preset_display_string_table[RD_ThemePreset_DefaultDark]);
+            }
             RD_Cfg *color = rd_cfg_new(parent, str8_lit("theme_color"));
             rd_cfg_new(color, str8_lit("tags"));
             RD_Cfg *value = rd_cfg_new(color, str8_lit("value"));
             rd_cfg_new(value, str8_lit("0xffffffff"));
+            hs_scope_close(hs_scope);
           }break;
           case RD_CmdKind_ForkTheme:
           {
+            HS_Scope *hs_scope = hs_scope_open();
             RD_Cfg *parent = rd_cfg_from_id(rd_regs()->cfg);
             RD_CfgList colors = rd_cfg_child_list_from_string(scratch.arena, parent, str8_lit("theme_color"));
             for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
             {
               rd_cfg_release(n->v);
             }
-            String8 color_preset = rd_setting_from_name(str8_lit("theme_preset"));
-            RD_ThemePreset preset = RD_ThemePreset_DefaultDark;
-            // TODO(rjf): map preset via string
-            MD_Node *theme_tree = rd_state->theme_preset_trees[preset];
-            String8 color_file = rd_setting_from_name(str8_lit("theme_file"));
+            RD_Cfg *theme_cfg = rd_cfg_child_from_string(parent, str8_lit("theme"));
+            String8 theme_name = theme_cfg->first->string;
+            MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, theme_name);
+            if(theme_tree == &md_nil_node)
+            {
+              theme_tree = rd_state->theme_preset_trees[RD_ThemePreset_DefaultDark];
+            }
             for(MD_Node *n = theme_tree; !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
             {
               if(str8_match(n->string, str8_lit("theme_color"), 0))
@@ -14779,8 +14792,11 @@ rd_frame(void)
                 rd_cfg_new(value, md_child_from_string(n, str8_lit("value"), 0)->first->string);
               }
             }
+            rd_cfg_release(theme_cfg);
+            hs_scope_close(hs_scope);
           }break;
           case RD_CmdKind_SaveTheme:
+          case RD_CmdKind_SaveAndSetTheme:
           {
             String8 name = rd_regs()->string;
             if(name.size != 0)
@@ -14797,7 +14813,19 @@ rd_frame(void)
                   str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, n->v));
                 }
                 String8 data = str8_list_join(scratch.arena, &strings, 0);
-                os_write_data_to_file_path(dst_path, data);
+                if(os_write_data_to_file_path(dst_path, data))
+                {
+                  for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
+                  {
+                    rd_cfg_release(n->v);
+                  }
+                  RD_Cfg *theme = rd_cfg_child_from_string_or_alloc(parent, str8_lit("theme"));
+                  rd_cfg_new_replace(theme, name);
+                }
+                else
+                {
+                  log_user_errorf("Could not successfully write to '%S'.", dst_path);
+                }
               }
             }
           }break;

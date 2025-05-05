@@ -241,6 +241,7 @@ RD_CmdKind_EditProjectTheme,
 RD_CmdKind_AddThemeColor,
 RD_CmdKind_ForkTheme,
 RD_CmdKind_SaveTheme,
+RD_CmdKind_SaveAndSetTheme,
 RD_CmdKind_SetNextStatement,
 RD_CmdKind_AddTarget,
 RD_CmdKind_SelectTarget,
@@ -560,7 +561,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[334];
+extern RD_VocabInfo rd_vocab_info_table[335];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern Rng1U64 rd_reg_slot_range_table[43];
 extern String8 rd_binding_version_remap_old_name_table[8];

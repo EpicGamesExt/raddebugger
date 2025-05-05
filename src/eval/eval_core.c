@@ -1219,6 +1219,24 @@ e_base_offset_from_eval(E_Eval eval)
   return eval.value.u64;
 }
 
+internal U64
+e_range_size_from_eval(E_Eval eval)
+{
+  U64 result = 256;
+  E_TypeKey type_unwrapped = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+  E_TypeKind type_unwrapped_kind = e_type_kind_from_key(type_unwrapped);
+  if(e_type_kind_is_pointer_or_ref(type_unwrapped_kind) ||
+     type_unwrapped_kind == E_TypeKind_Function)
+  {
+    result = KB(16);
+  }
+  else
+  {
+    result = e_type_byte_size_from_key(type_unwrapped);
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Debug Functions
 

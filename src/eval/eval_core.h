@@ -1179,6 +1179,7 @@ internal E_Key e_key_wrapf(E_Key key, char *fmt, ...);
 //~ rjf: Eval Info Extraction
 
 internal U64 e_base_offset_from_eval(E_Eval eval);
+internal U64 e_range_size_from_eval(E_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Debug Functions

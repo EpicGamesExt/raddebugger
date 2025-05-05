@@ -1868,6 +1868,38 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       }
       dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
       dr_fstrs_push_new(arena, &fstrs, &params, name);
+      {
+        HS_Scope *hs_scope = hs_scope_open();
+        MD_Node *theme_tree = rd_theme_tree_from_name(scratch.arena, hs_scope, name);
+        U64 color_idx = 0;
+        for(MD_Node *n = theme_tree; color_idx < 4 && !md_node_is_nil(n); n = md_node_rec_depth_first_pre(n, theme_tree).next)
+        {
+          if(str8_match(n->string, str8_lit("theme_color"), 0))
+          {
+            String8 tags = md_child_from_string(n, str8_lit("tags"), 0)->first->string;
+            if(str8_match(tags, str8_lit("background"), 0) ||
+               str8_match(tags, str8_lit("text"), 0) ||
+               str8_match(tags, str8_lit("focus border"), 0) ||
+               str8_match(tags, str8_lit("menu_bar background"), 0) ||
+               str8_match(tags, str8_lit("tab background"), 0) ||
+               str8_match(tags, str8_lit("code_default"), 0))
+            {
+              U64 color = 0;
+              if(try_u64_from_str8_c_rules(md_child_from_string(n, str8_lit("value"), 0)->first->string, &color))
+              {
+                dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
+                dr_fstrs_push_new(arena, &fstrs, &params,
+                                  rd_icon_kind_text_table[RD_IconKind_CircleFilled],
+                                  .font = rd_font_from_slot(RD_FontSlot_Icons),
+                                  .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons),
+                                  .color = linear_from_srgba(rgba_from_u32((U32)color)));
+                color_idx += 1;
+              }
+            }
+          }
+        }
+        hs_scope_close(hs_scope);
+      }
       result.eval_fstrs = fstrs;
     }break;
   }
@@ -1975,7 +2007,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
-    size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+    size = e_range_size_from_eval(eval);
   }
   Rng1U64 range = r1u64(base_offset, base_offset+size);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
@@ -2249,7 +2281,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
-    size = KB(16);
+    size = e_range_size_from_eval(eval);
   }
   Rng1U64 range = r1u64(base_offset, base_offset+size);
   Arch arch = rd_arch_from_eval(eval);
@@ -2429,7 +2461,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
   if(size == 0)
   {
-    size = e_type_byte_size_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+    size = e_range_size_from_eval(eval);
   }
   Rng1U64 view_range = r1u64(base_offset, base_offset+size);
   if(eval.space.kind == 0)
