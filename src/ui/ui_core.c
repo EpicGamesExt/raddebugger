@@ -435,6 +435,8 @@ ui_state_alloc(void)
   ui->box_table = push_array(arena, UI_BoxHashSlot, ui->box_table_size);
   ui->anim_slots_count = 4096;
   ui->anim_slots = push_array(arena, UI_AnimSlot, ui->anim_slots_count);
+  ui->theme_pattern_cache_slots_count = 1024;
+  ui->theme_pattern_cache_slots = push_array(arena, UI_ThemePatternCacheSlot, ui->theme_pattern_cache_slots_count);
   UI_InitStackNils(ui);
   return ui;
 }
@@ -809,8 +811,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
     ui_state->tags_cache_slots_count = 512;
     ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
-    ui_state->theme_pattern_cache_slots_count = 512;
-    ui_state->theme_pattern_cache_slots = push_array(ui_build_arena(), UI_ThemePatternCacheSlot, ui_state->theme_pattern_cache_slots_count);
   }
   
   //- rjf: prune unused animation nodes
@@ -826,6 +826,27 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
         DLLRemove_NPZ(&ui_nil_anim_node, slot->first, slot->last, n, slot_next, slot_prev);;
         DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, n, lru_next, lru_prev);
         SLLStackPush_N(ui_state->free_anim_node, n, slot_next);
+      }
+      else
+      {
+        break;
+      }
+    }
+  }
+  
+  //- rjf: prune unused theme pattern cache nodes
+  ProfScope("ui prune unused theme pattern cache")
+  {
+    for(UI_ThemePatternCacheNode *n = ui_state->lru_theme_pattern_cache_node, *next = 0; n != 0; n = next)
+    {
+      next = n->lru_next;
+      if(n->last_build_index_accessed+2 < ui_state->build_index)
+      {
+        U64 slot_idx = n->key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+        UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
+        DLLRemove_NP(slot->first, slot->last, n, slot_next, slot_prev);
+        DLLRemove_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, n, lru_next, lru_prev);
+        SLLStackPush_N(ui_state->theme_pattern_cache_node_free, n, slot_next);
       }
       else
       {
@@ -1366,6 +1387,19 @@ ui_end_build(void)
     }
     F32 fast_rate = ui_state->default_animation_rate;
     F32 slow_rate = 1 - pow_f32(2, (-30.f * ui_state->animation_dt));
+    for(U64 slot_idx = 0; slot_idx < ui_state->theme_pattern_cache_slots_count; slot_idx += 1)
+    {
+      for(UI_ThemePatternCacheNode *n = ui_state->theme_pattern_cache_slots[slot_idx].first;
+          n != 0;
+          n = n->slot_next)
+      {
+        for EachIndex(idx, 4)
+        {
+          n->current_rgba.v[idx] += (n->target_rgba.v[idx] - n->current_rgba.v[idx]) * slow_rate;
+          ui_state->is_animating = (ui_state->is_animating || abs_f32(n->target_rgba.v[idx] - n->current_rgba.v[idx]) > 0.001f);
+        }
+      }
+    }
     ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? fast_rate : 1);
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
@@ -2239,7 +2273,7 @@ ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
     UI_ThemePatternCacheNode *node = 0;
     for(UI_ThemePatternCacheNode *n = slot->first;
         n != 0;
-        n = n->next)
+        n = n->slot_next)
     {
       if(ui_key_match(n->key, final_key))
       {
@@ -2247,8 +2281,8 @@ ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
       }
     }
     
-    //- rjf: no node? create
-    if(node == 0)
+    //- rjf: no node, or this node is stale? create and/or update
+    if(node == 0 || node->last_build_index_accessed < ui_state->build_index)
     {
       // rjf: map tags_key (without name) -> full list of tags
       String8Array tags = {0};
@@ -2310,16 +2344,47 @@ ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
       }
       
       // rjf: store in (key, name) -> (pattern) cache
-      node = push_array(ui_build_arena(), UI_ThemePatternCacheNode, 1);
-      SLLQueuePush(slot->first, slot->last, node);
-      node->key = final_key;
-      node->pattern = pattern;
+      B32 node_is_new = 0;
+      if(node == 0)
+      {
+        node_is_new = 1;
+        node = ui_state->theme_pattern_cache_node_free;
+        if(node != 0)
+        {
+          SLLStackPop_N(ui_state->theme_pattern_cache_node_free, slot_next);
+        }
+        else
+        {
+          node = push_array(ui_state->arena, UI_ThemePatternCacheNode, 1);
+        }
+        DLLPushBack_NP(slot->first, slot->last, node, slot_next, slot_prev);
+        DLLPushBack_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
+        node->key = final_key;
+      }
+      
+      // rjf: update node's target color
+      if(pattern != 0)
+      {
+        node->target_rgba = pattern->linear;
+        if(node_is_new)
+        {
+          node->current_rgba = node->target_rgba;
+        }
+      }
+    }
+    
+    //- rjf: mark this node as most-recently-used
+    if(node != 0 && node->last_build_index_accessed < ui_state->build_index)
+    {
+      node->last_build_index_accessed = ui_state->build_index;
+      DLLRemove_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
+      DLLPushBack_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
     }
     
     //- rjf: grab resultant color
-    if(node != 0 && node->pattern != 0)
+    if(node != 0)
     {
-      result = node->pattern->linear;
+      result = node->current_rgba;
     }
   }
   return result;

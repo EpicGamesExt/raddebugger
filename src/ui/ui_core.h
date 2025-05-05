@@ -620,14 +620,19 @@ struct UI_TagsKeyStackNode
   UI_Key key;
 };
 
-//- rjf: cache for mapping 64-bit key * string -> theme pattern
+//- rjf: cache for mapping 64-bit key -> theme pattern
 
 typedef struct UI_ThemePatternCacheNode UI_ThemePatternCacheNode;
 struct UI_ThemePatternCacheNode
 {
-  UI_ThemePatternCacheNode *next;
+  UI_ThemePatternCacheNode *slot_next;
+  UI_ThemePatternCacheNode *slot_prev;
+  UI_ThemePatternCacheNode *lru_next;
+  UI_ThemePatternCacheNode *lru_prev;
+  U64 last_build_index_accessed;
   UI_Key key;
-  UI_ThemePattern *pattern;
+  Vec4F32 target_rgba;
+  Vec4F32 current_rgba;
 };
 
 typedef struct UI_ThemePatternCacheSlot UI_ThemePatternCacheSlot;
@@ -683,8 +688,13 @@ struct UI_State
   UI_TagsKeyStackNode *tags_key_stack_free;
   U64 tags_cache_slots_count;
   UI_TagsCacheSlot *tags_cache_slots;
+  
+  //- rjf: theme pattern cache
   U64 theme_pattern_cache_slots_count;
   UI_ThemePatternCacheSlot *theme_pattern_cache_slots;
+  UI_ThemePatternCacheNode *theme_pattern_cache_node_free;
+  UI_ThemePatternCacheNode *lru_theme_pattern_cache_node;
+  UI_ThemePatternCacheNode *mru_theme_pattern_cache_node;
   
   //- rjf: build phase output
   UI_Box *root;
