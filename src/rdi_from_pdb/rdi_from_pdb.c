@@ -3397,7 +3397,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // from regular type info.
   //
   RDIM_Type **itype_type_ptrs = 0;
-  RDIM_TypeChunkList all_types = {0};
+  RDIM_TypeChunkList all_types = rdim_init_type_chunk_list(arena, top_level_info.arch);
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
   if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
@@ -3408,7 +3408,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     //
     {
       RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
-
       RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
       RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
       RDI_TypeKind int_type        = rdim_int_type_from_data_model(data_model);
@@ -3430,7 +3429,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       }
       table[] =
       {
-        { ""                     , RDI_TypeKind_NULL       , CV_BasicType_NOTYPE     , 0, 0, 0 },
         { "void"                 , RDI_TypeKind_Void       , CV_BasicType_VOID       , 1, 1, 1 },
         { "HRESULT"              , RDI_TypeKind_Handle     , CV_BasicType_HRESULT    , 0, 1, 1 },
         { "signed char"          , RDI_TypeKind_Char8      , CV_BasicType_CHAR       , 1, 1, 1 },
@@ -3474,24 +3472,17 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         { "__pointer"            , ptr_type                , CV_BasicType_PTR        , 0, 0, 0 }
       };
 
+      // special case for null type
+      itype_type_ptrs[CV_BasicType_NOTYPE] = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_NULL);
+
       for(U64 i = 0; i < ArrayCount(table); i += 1)
       {
-        U64 builtin_size;
-        if(table[i].kind_rdi == RDI_TypeKind_Void || table[i].kind_rdi == RDI_TypeKind_Handle)
-        {
-          builtin_size = arch_addr_size;
-        }
-        else
-        {
-          builtin_size = rdi_size_from_basic_type_kind(table[i].kind_rdi);
-        }
+        RDIM_Type *builtin_alias   = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
+        builtin_alias->kind        = RDI_TypeKind_Alias;
+        builtin_alias->name        = str8_cstring(table[i].name);
+        builtin_alias->direct_type = rdim_builtin_type_from_kind(all_types, table[i].kind_rdi);
 
-        RDIM_Type *builtin = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-        builtin->kind      = table[i].kind_rdi;
-        builtin->name      = str8_cstring(table[i].name);
-        builtin->byte_size = builtin_size;
-
-        itype_type_ptrs[table[i].kind_cv] = builtin;
+        itype_type_ptrs[table[i].kind_cv] = builtin_alias;
 
         if(table[i].make_pointer_near)
         {
@@ -3499,7 +3490,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           RDIM_Type *ptr_near    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_near->kind         = RDI_TypeKind_Ptr;
           ptr_near->byte_size    = 2;
-          ptr_near->direct_type  = builtin;
+          ptr_near->direct_type  = builtin_alias;
 
           itype_type_ptrs[near_ptr_itype] = ptr_near;
         }
@@ -3509,7 +3500,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           RDIM_Type *ptr_32    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_32->kind         = RDI_TypeKind_Ptr;
           ptr_32->byte_size    = 4;
-          ptr_32->direct_type  = builtin;
+          ptr_32->direct_type  = builtin_alias;
 
           itype_type_ptrs[ptr_32_itype] = ptr_32;
         }
@@ -3519,7 +3510,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           RDIM_Type *ptr_64    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
           ptr_64->kind         = RDI_TypeKind_Ptr;
           ptr_64->byte_size    = 8;
-          ptr_64->direct_type  = builtin;
+          ptr_64->direct_type  = builtin_alias;
 
           itype_type_ptrs[ptr_64_itype] = ptr_64;
         }

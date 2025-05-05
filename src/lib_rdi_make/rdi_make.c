@@ -1305,7 +1305,7 @@ rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
   RDI_U64 type_idx = 0;
   if (type_kind != RDI_TypeKind_NULL) {
     type_idx = (type_kind - RDI_TypeKind_FirstBuiltIn) + 1;
-    }
+  }
   RDIM_Type *builtin  = &list.first->v[type_idx];
   return builtin;
 }
@@ -1315,17 +1315,12 @@ rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
 {
   RDIM_TypeChunkList list = {0};
 
-  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
-
-  RDIM_Type *null_type = rdim_type_chunk_list_push(arena, &list, type_cap);
+  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 1;
 
   for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
   {
-    RDIM_String8 name = {0};
-    name.str = rdi_string_from_type_kind(type_kind, &name.size);
-
     RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
-    type->name      = name;
+    type->name.str  = rdi_string_from_type_kind(type_kind, &type->name.size);
     type->kind      = type_kind;
     type->byte_size = rdi_size_from_basic_type_kind(type_kind);
   }
