@@ -9049,6 +9049,7 @@ rd_window_frame(void)
     F32 rounded_corner_amount = rd_setting_f32_from_name(str8_lit("rounded_corner_amount"));
     F32 border_softness = 1.f;
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
+    B32 force_opaque_floating_backgrounds = rd_setting_b32_from_name(str8_lit("opaque_backgrounds"));
     B32 do_drop_shadows = 
       rd_setting_b32_from_name(str8_lit("drop_shadows"));
     Vec4F32 base_background_color = ui_color_from_name(str8_lit("background"));
@@ -9168,6 +9169,10 @@ rd_window_frame(void)
       
       // rjf: compute background color
       Vec4F32 box_background_color = box->background_color;
+      if(force_opaque_floating_backgrounds && box->flags & UI_BoxFlag_Floating && box->flags & UI_BoxFlag_DrawDropShadow)
+      {
+        box_background_color.w = 1.f;
+      }
       
       // rjf: draw background
       if(box->flags & UI_BoxFlag_DrawBackground)
