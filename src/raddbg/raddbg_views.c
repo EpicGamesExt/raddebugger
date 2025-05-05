@@ -1198,9 +1198,27 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         for MD_EachNode(cmd, cmds_root->first)
         {
           B32 is_file_only = md_node_has_tag(cmd, str8_lit("file"), 0);
+          B32 is_cmd_line_only = md_node_has_tag(cmd, str8_lit("cmd_line"), 0);
           if(is_file_only && e_eval_from_string(rd_expr_from_cfg(evalled_cfg)).space.kind != E_SpaceKind_File)
           {
             continue;
+          }
+          if(is_cmd_line_only)
+          {
+            B32 is_cmd_line = 0;
+            RD_Cfg *cmd_line = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+            for(RD_Cfg *p = evalled_cfg->parent; p != &rd_nil_cfg; p = p->parent)
+            {
+              if(p == cmd_line)
+              {
+                is_cmd_line = 1;
+                break;
+              }
+            }
+            if(!is_cmd_line)
+            {
+              continue;
+            }
           }
           String8 cmd_name = cmd->string;
           RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);

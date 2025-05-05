@@ -14654,6 +14654,13 @@ rd_frame(void)
               }
             }
           }break;
+          case RD_CmdKind_SaveToProject:
+          {
+            RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
+            rd_cfg_unhook(cfg->parent, cfg);
+            RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+            rd_cfg_insert_child(project, project->last, cfg);
+          }break;
           
           //- rjf: breakpoints
           case RD_CmdKind_AddBreakpoint:
