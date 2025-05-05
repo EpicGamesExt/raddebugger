@@ -5760,6 +5760,13 @@ rd_window_frame(void)
   ui_select_state(ws->ui);
   
   //////////////////////////////
+  //- rjf: @window_frame_part fill panel/view interaction registers
+  //
+  rd_regs()->panel = panel_tree.focused->cfg->id;
+  rd_regs()->tab   = panel_tree.focused->selected_tab->id;
+  rd_regs()->view = panel_tree.focused->selected_tab->id;
+  
+  //////////////////////////////
   //- rjf: @window_frame_part compute window's theme
   //
   {
@@ -6023,13 +6030,6 @@ rd_window_frame(void)
     }
     scratch_end(scratch);
   }
-  
-  //////////////////////////////
-  //- rjf: @window_frame_part fill panel/view interaction registers
-  //
-  rd_regs()->panel = panel_tree.focused->cfg->id;
-  rd_regs()->tab   = panel_tree.focused->selected_tab->id;
-  rd_regs()->view = panel_tree.focused->selected_tab->id;
   
   //////////////////////////////
   //- rjf: @window_frame_part build UI
