@@ -197,23 +197,10 @@
 // [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
 // [ ] finish theme editing, build themes - replace code colors map with new theme stuff
 //
+// [ ] evaluate `foo.bar` symbol names???
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
-// [ ] odin's demo is busted - need to revert PDB conversion type index changes.
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
-//
-//- readme improvements
-//  [ ] I was a little confused about what a profile file was. I understood
-//      what the user file was, but the profile file sounded like it should
-//      perhaps be per-project, yet it sounded like it was meant to be somewhat
-//      global? I don't have any feedback here because it probably will make
-//      sense once I use the debugger more, but I just thought I'd make a note
-//      to say that I was confused about it after reading the manual, so
-//      perhaps you could elaborate a little more on it in there.
-//  [ ] It wasn't clear to me how you save a user or project file. I can see
-//      how to load them, but not how you save them. Obviously I can just copy
-//      the files myself in the shell, but it seemed weird that there was no
-//      "save" option in the menus.
 //
 //- no immediate action but check before release:
 // [ ] user switching
@@ -508,6 +495,19 @@
 // [x] unattached process evaluation - need a string to evaluate so I can generate
 // the evals
 // [x] save-to-project (command line targets)
+// [x] odin's demo is busted - need to revert PDB conversion type index changes.
+//- readme improvements
+//  [x] I was a little confused about what a profile file was. I understood
+//      what the user file was, but the profile file sounded like it should
+//      perhaps be per-project, yet it sounded like it was meant to be somewhat
+//      global? I don't have any feedback here because it probably will make
+//      sense once I use the debugger more, but I just thought I'd make a note
+//      to say that I was confused about it after reading the manual, so
+//      perhaps you could elaborate a little more on it in there.
+//  [x] It wasn't clear to me how you save a user or project file. I can see
+//      how to load them, but not how you save them. Obviously I can just copy
+//      the files myself in the shell, but it seemed weird that there was no
+//      "save" option in the menus.
 
 ////////////////////////////////
 //~ rjf: Build Options

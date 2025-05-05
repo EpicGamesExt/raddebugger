@@ -7251,10 +7251,14 @@ rd_window_frame(void)
                   String8 cmds[] =
                   {
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NewUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenRecentProject].string,
-                    rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_SaveUser].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_SaveProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_UserSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string,
                     rd_cmd_kind_info_table[RD_CmdKind_Exit].string,
@@ -7262,10 +7266,14 @@ rd_window_frame(void)
                   U32 codepoints[] =
                   {
                     'o',
+                    'n',
+                    'w',
+                    'j',
                     'u',
                     'p',
                     'r',
-                    'n',
+                    's',
+                    'a',
                     'e',
                     't',
                     'x',
@@ -12576,6 +12584,74 @@ rd_frame(void)
               {
                 os_window_set_title(ws->os, window_title);
               }
+            }
+          }break;
+          case RD_CmdKind_NewUser:
+          case RD_CmdKind_NewProject:
+          {
+            String8 new_path = rd_regs()->file_path;
+            B32 file_will_be_overwritten = (os_properties_from_file_path(new_path).created != 0);
+            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("new_config_overwrite_confirm"));
+            if(file_will_be_overwritten && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
+            {
+              rd_state->popup_key = key;
+              rd_state->popup_active = 1;
+              arena_clear(rd_state->popup_arena);
+              MemoryZeroStruct(&rd_state->popup_cmds);
+              rd_state->popup_title = push_str8f(rd_state->popup_arena, "Are you sure you want to save to this path?");
+              rd_state->popup_desc = push_str8f(rd_state->popup_arena, "The existing file at '%S' will be overwritten.", new_path);
+              RD_Regs *regs = rd_regs_copy(rd_frame_arena(), rd_regs());
+              regs->force_confirm = 1;
+              rd_cmd_list_push_new(rd_state->popup_arena, &rd_state->popup_cmds, rd_cmd_kind_info_table[kind].string, regs);
+            }
+            else switch(kind)
+            {
+              default:{}break;
+              case RD_CmdKind_NewUser:
+              {
+                os_delete_file_at_path(new_path);
+                rd_cmd(RD_CmdKind_OpenUser, .file_path = new_path);
+              }break;
+              case RD_CmdKind_NewProject:
+              {
+                os_delete_file_at_path(new_path);
+                rd_cmd(RD_CmdKind_OpenProject, .file_path = new_path);
+              }break;
+            }
+          }break;
+          case RD_CmdKind_SaveUser:
+          case RD_CmdKind_SaveProject:
+          {
+            String8 new_path = rd_regs()->file_path;
+            B32 file_will_be_overwritten = (os_properties_from_file_path(new_path).created != 0);
+            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("save_config_overwrite_confirm"));
+            if(file_will_be_overwritten && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
+            {
+              rd_state->popup_key = key;
+              rd_state->popup_active = 1;
+              arena_clear(rd_state->popup_arena);
+              MemoryZeroStruct(&rd_state->popup_cmds);
+              rd_state->popup_title = push_str8f(rd_state->popup_arena, "Are you sure you want to save to this path?");
+              rd_state->popup_desc = push_str8f(rd_state->popup_arena, "The existing file at '%S' will be overwritten.", new_path);
+              RD_Regs *regs = rd_regs_copy(rd_frame_arena(), rd_regs());
+              regs->force_confirm = 1;
+              rd_cmd_list_push_new(rd_state->popup_arena, &rd_state->popup_cmds, rd_cmd_kind_info_table[kind].string, regs);
+            }
+            else switch(kind)
+            {
+              default:{}break;
+              case RD_CmdKind_SaveUser:
+              {
+                arena_clear(rd_state->user_path_arena);
+                rd_state->user_path = push_str8_copy(rd_state->user_path_arena, new_path);
+                rd_cmd(RD_CmdKind_WriteUserData);
+              }break;
+              case RD_CmdKind_SaveProject:
+              {
+                arena_clear(rd_state->project_path_arena);
+                rd_state->project_path = push_str8_copy(rd_state->project_path_arena, new_path);
+                rd_cmd(RD_CmdKind_WriteProjectData);
+              }break;
             }
           }break;
           
