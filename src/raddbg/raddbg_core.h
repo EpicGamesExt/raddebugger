@@ -483,6 +483,7 @@ struct RD_WindowState
   U64 autocomp_last_frame_index;
   Arena *autocomp_arena;
   RD_Regs *autocomp_regs;
+  RD_AutocompCursorInfo autocomp_cursor_info;
   
   // rjf: error state
   U8 error_buffer[512];
@@ -959,10 +960,8 @@ internal void rd_set_hover_eval(Vec2F32 pos, String8 string);
 ////////////////////////////////
 //~ rjf: Autocompletion Lister
 
-internal String8 rd_autocomp_primary_list_expr_from_dst_eval(Arena *arena, E_Eval dst_eval);
-internal RD_AutocompCursorInfo rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 cursor_off);
-internal void rd_set_autocomp_regs_(RD_Regs *regs);
-#define rd_set_autocomp_regs(...) rd_set_autocomp_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
+internal void rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs);
+#define rd_set_autocomp_regs(dst_eval, ...) rd_set_autocomp_regs_((dst_eval), &(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config

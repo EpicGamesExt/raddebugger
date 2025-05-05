@@ -1244,7 +1244,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
           {
             rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "enabled"),
                                         .flags = RD_WatchCellFlag_Background,
-                                        .px = floor_f32(ui_top_font_size()*5.f));
+                                        .px = floor_f32(ui_top_font_size()*5.5f));
           }
           else if(cmd_kind != RD_CmdKind_Null)
           {
@@ -1272,7 +1272,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
          entity->kind == CTRL_EntityKind_Thread)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, e_eval_wrapf(row->eval, "active"),
-                                    .px = floor_f32(ui_top_font_size()*5.f));
+                                    .px = floor_f32(ui_top_font_size()*5.5f));
       }
       if(entity->kind == CTRL_EntityKind_Thread)
       {

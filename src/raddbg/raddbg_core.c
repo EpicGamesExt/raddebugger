@@ -3585,12 +3585,14 @@ rd_view_ui(Rng2F32 rect)
                     if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
                     {
                       take_autocomplete = 1;
-                      RD_AutocompCursorInfo autocomp_cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, string, edit_state->cursor.column-1);
-                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info.replaced_range.min+1, autocomp_cursor_info.replaced_range.max+1), autocomplete_hint_string);
+                      RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
+                      RD_WindowState *ws = rd_window_state_from_cfg(window);
+                      RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
+                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_hint_string);
                       new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
                       MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
                       edit_state->input_size = new_string.size;
-                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info.replaced_range.min+autocomplete_hint_string.size);
+                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_hint_string.size);
                       string = str8(edit_state->input_buffer, edit_state->input_size);
                       op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
                     }
@@ -4964,15 +4966,7 @@ rd_view_ui(Rng2F32 rect)
                              txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                            String8 list_expr = rd_autocomp_primary_list_expr_from_dst_eval(scratch.arena, cell->eval);
-                            RD_AutocompCursorInfo cursor_info = rd_autocomp_cursor_info_from_input_string_off(scratch.arena, input, cell_edit_state->cursor.column-1);
-                            if(cursor_info.list_expr.size != 0)
-                            {
-                              list_expr = cursor_info.list_expr;
-                            }
-                            rd_set_autocomp_regs(.ui_key = line_edit_key,
-                                                 .string = cursor_info.filter,
-                                                 .expr = list_expr);
+                            rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input);
                           }
                         }
                       }
@@ -6668,7 +6662,7 @@ rd_window_frame(void)
     RD_Font(RD_FontSlot_Code)
     {
       //- rjf: add autocompletion view task
-      if(rd_setting_b32_from_name(str8_lit("autocompletion_lister")) && ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index)
+      if(ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index)
       {
         // rjf: build view
         RD_Cfg *root = rd_immediate_cfg_from_keyf("autocomp_view_%I64x", window->id);
@@ -6678,7 +6672,7 @@ rd_window_frame(void)
         RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
         rd_cfg_new_replace(input, ws->autocomp_regs->string);
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        rd_cfg_new_replace(expr, ws->autocomp_regs->expr);
+        rd_cfg_new_replace(expr, ws->autocomp_cursor_info.list_expr);
         
         // rjf: determine container size
         EV_BlockTree predicted_block_tree = {0};
@@ -9621,123 +9615,142 @@ rd_set_hover_eval(Vec2F32 pos, String8 string)
 ////////////////////////////////
 //~ rjf: Autocompletion Lister
 
-internal String8
-rd_autocomp_primary_list_expr_from_dst_eval(Arena *arena, E_Eval dst_eval)
-{
-  String8 result = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
-  {
-    E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
-    if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg && str8_match(e_string_from_id(dst_eval.space.u64s[1]), str8_lit("theme"), 0))
-    {
-      result = str8_lit("query:themes");
-    }
-#if 0
-    else if(e_type_kind_from_key(maybe_enum_type) == E_TypeKind_Enum)
-    {
-      result = e_type_string_from_key(arena, maybe_enum_type);
-    }
-#endif
-  }
-  return result;
-}
-
-internal RD_AutocompCursorInfo
-rd_autocomp_cursor_info_from_input_string_off(Arena *arena, String8 input, U64 cursor_off)
-{
-  RD_AutocompCursorInfo result = {0};
-  {
-    result.filter = input;
-    result.replaced_range = r1u64(0, input.size);
-  }
-  Temp scratch = scratch_begin(&arena, 1);
-  E_Parse parse = e_parse_from_string(input);
-  
-  //- rjf: cursor offset -> cursor containing node
-  E_Expr *cursor_expr = &e_expr_nil;
-  E_Expr *cursor_expr_parent = &e_expr_nil;
-  {
-    typedef struct ExprWalkTask ExprWalkTask;
-    struct ExprWalkTask
-    {
-      ExprWalkTask *next;
-      E_Expr *parent;
-      E_Expr *expr;
-    };
-    ExprWalkTask start_task = {0, &e_expr_nil, parse.expr};
-    ExprWalkTask *first_task = &start_task;
-    ExprWalkTask *last_task = first_task;
-    for(E_Expr *chain = parse.expr->next; chain != &e_expr_nil; chain = chain->next)
-    {
-      ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
-      SLLQueuePush(first_task, last_task, task);
-      task->parent = &e_expr_nil;
-      task->expr = chain;
-    }
-    for(ExprWalkTask *t = first_task; t != 0; t = t->next)
-    {
-      E_Expr *e = t->expr;
-      if(contains_1u64(e->range, cursor_off) || cursor_off == e->range.max)
-      {
-        cursor_expr_parent = t->parent;
-        cursor_expr = e;
-        break;
-      }
-      for(E_Expr *child = e->first; child != &e_expr_nil; child = child->next)
-      {
-        ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
-        SLLQueuePush(first_task, last_task, task);
-        task->parent = e;
-        task->expr = child;
-      }
-    }
-  }
-  
-  //- rjf: cursor is on right-hand-side of dot? -> show members of left-hand-side
-  B32 did_special_cursor_case = 0;
-  if(!did_special_cursor_case)
-  {
-    E_Expr *dot_expr = &e_expr_nil;
-    if(cursor_expr->kind == E_ExprKind_MemberAccess && cursor_off == cursor_expr->range.max)
-    {
-      dot_expr = cursor_expr;
-    }
-    else if(cursor_expr_parent->kind == E_ExprKind_MemberAccess && cursor_expr == cursor_expr_parent->first->next)
-    {
-      dot_expr = cursor_expr_parent;
-    }
-    if(dot_expr != &e_expr_nil)
-    {
-      did_special_cursor_case = 1;
-      E_Eval lhs_eval = e_eval_from_expr(dot_expr->first);
-      E_Eval type_of_lhs_eval = e_eval_wrapf(lhs_eval, "typeof($)");
-      result.list_expr = e_full_expr_string_from_key(arena, type_of_lhs_eval.key);
-      result.filter = cursor_expr->string;
-      result.replaced_range = union_1u64(dot_expr->range, cursor_expr->range);
-    }
-  }
-  
-  //- rjf: cursor is on a leaf-identifier? -> replace just that identifier, keep the original list expression
-  if(!did_special_cursor_case && cursor_expr->kind == E_ExprKind_LeafIdentifier)
-  {
-    did_special_cursor_case = 1;
-    result.filter = str8_prefix(cursor_expr->string, cursor_off - cursor_expr->range.min);
-    result.replaced_range = cursor_expr->range;
-  }
-  
-  scratch_end(scratch);
-  return result;
-}
-
 internal void
-rd_set_autocomp_regs_(RD_Regs *regs)
+rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
 {
   RD_Cfg *window_cfg = rd_cfg_from_id(rd_regs()->window);
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
   if(ws->autocomp_last_frame_index < rd_state->frame_index)
   {
-    ws->autocomp_last_frame_index = rd_state->frame_index;
-    arena_clear(ws->autocomp_arena);
-    ws->autocomp_regs = rd_regs_copy(ws->autocomp_arena, regs);
+    //- rjf: calculate information about the cursor:
+    // * what list should we generate?
+    // * what string in the input should we replace?
+    // etc.
+    B32 is_allowed = 0;
+    RD_AutocompCursorInfo cursor_info = {0};
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: calculate most general list expression, given the dst_eval space
+      B32 force_allow = 0;
+      B32 expr_based_replace = 1;
+      String8 list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
+      {
+        E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
+        if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg && str8_match(e_string_from_id(dst_eval.space.u64s[1]), str8_lit("theme"), 0))
+        {
+          list_expr = str8_lit("query:themes");
+          expr_based_replace = 0;
+          force_allow = 1;
+        }
+#if 0
+        else if(e_type_kind_from_key(maybe_enum_type) == E_TypeKind_Enum)
+        {
+          list_expr = e_type_string_from_key(arena, maybe_enum_type);
+        }
+#endif
+      }
+      
+      // rjf: determine if autocompletion lister is allowed
+      is_allowed = (force_allow || rd_setting_b32_from_name(str8_lit("autocompletion_lister")));
+      
+      // rjf: tighten list_expr, and filter / replaced-range, if needed
+      String8 filter = regs->string;
+      Rng1U64 replaced_range = r1u64(0, filter.size);
+      if(expr_based_replace)
+      {
+        U64 cursor_off = (U64)(regs->cursor.column-1);
+        E_Parse parse = e_parse_from_string(regs->string);
+        
+        //- rjf: cursor offset -> cursor containing node
+        E_Expr *cursor_expr = &e_expr_nil;
+        E_Expr *cursor_expr_parent = &e_expr_nil;
+        {
+          typedef struct ExprWalkTask ExprWalkTask;
+          struct ExprWalkTask
+          {
+            ExprWalkTask *next;
+            E_Expr *parent;
+            E_Expr *expr;
+          };
+          ExprWalkTask start_task = {0, &e_expr_nil, parse.expr};
+          ExprWalkTask *first_task = &start_task;
+          ExprWalkTask *last_task = first_task;
+          for(E_Expr *chain = parse.expr->next; chain != &e_expr_nil; chain = chain->next)
+          {
+            ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->parent = &e_expr_nil;
+            task->expr = chain;
+          }
+          for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+          {
+            E_Expr *e = t->expr;
+            if(contains_1u64(e->range, cursor_off) || cursor_off == e->range.max)
+            {
+              cursor_expr_parent = t->parent;
+              cursor_expr = e;
+              break;
+            }
+            for(E_Expr *child = e->first; child != &e_expr_nil; child = child->next)
+            {
+              ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+              SLLQueuePush(first_task, last_task, task);
+              task->parent = e;
+              task->expr = child;
+            }
+          }
+        }
+        
+        //- rjf: cursor is on right-hand-side of dot? -> show members of left-hand-side
+        B32 did_special_cursor_case = 0;
+        if(!did_special_cursor_case)
+        {
+          E_Expr *dot_expr = &e_expr_nil;
+          if(cursor_expr->kind == E_ExprKind_MemberAccess && cursor_off == cursor_expr->range.max)
+          {
+            dot_expr = cursor_expr;
+          }
+          else if(cursor_expr_parent->kind == E_ExprKind_MemberAccess && cursor_expr == cursor_expr_parent->first->next)
+          {
+            dot_expr = cursor_expr_parent;
+          }
+          if(dot_expr != &e_expr_nil)
+          {
+            did_special_cursor_case = 1;
+            E_Eval lhs_eval = e_eval_from_expr(dot_expr->first);
+            E_Eval type_of_lhs_eval = e_eval_wrapf(lhs_eval, "typeof($)");
+            list_expr = e_full_expr_string_from_key(scratch.arena, type_of_lhs_eval.key);
+            filter = cursor_expr->string;
+            replaced_range = union_1u64(dot_expr->range, cursor_expr->range);
+          }
+        }
+        
+        //- rjf: cursor is on a leaf-identifier? -> replace just that identifier, keep the original list expression
+        if(!did_special_cursor_case && cursor_expr->kind == E_ExprKind_LeafIdentifier)
+        {
+          did_special_cursor_case = 1;
+          filter = str8_prefix(cursor_expr->string, cursor_off - cursor_expr->range.min);
+          replaced_range = cursor_expr->range;
+        }
+      }
+      
+      // rjf: fill bundle
+      cursor_info.list_expr = push_str8_copy(ws->autocomp_arena, list_expr);
+      cursor_info.filter = push_str8_copy(ws->autocomp_arena, filter);
+      cursor_info.replaced_range = replaced_range;
+      
+      scratch_end(scratch);
+    }
+    
+    //- rjf: commit autocompletion info
+    if(is_allowed)
+    {
+      ws->autocomp_last_frame_index = rd_state->frame_index;
+      arena_clear(ws->autocomp_arena);
+      ws->autocomp_regs = rd_regs_copy(ws->autocomp_arena, regs);
+      ws->autocomp_cursor_info = cursor_info;
+    }
   }
 }
 
@@ -15181,7 +15194,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Char;
             evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15192,7 +15205,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Char;
             evt.delta_2s32 = v2s32(+0, +1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15574,7 +15587,7 @@ rd_frame(void)
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
           
-          //- rjf: secondary navigation
+          //- rjf: directionless navigation
           case RD_CmdKind_MoveNext:
           {
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);

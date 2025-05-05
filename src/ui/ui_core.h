@@ -49,14 +49,14 @@ UI_MouseButtonKind;
 typedef U32 UI_PermissionFlags;
 enum
 {
-  UI_PermissionFlag_ClicksLeft       = (1<<0),
-  UI_PermissionFlag_ClicksMiddle     = (1<<1),
-  UI_PermissionFlag_ClicksRight      = (1<<2),
-  UI_PermissionFlag_ScrollX          = (1<<3),
-  UI_PermissionFlag_ScrollY          = (1<<4),
-  UI_PermissionFlag_KeyboardPrimary  = (1<<5),
-  UI_PermissionFlag_KeyboardSecondary= (1<<6),
-  UI_PermissionFlag_Text             = (1<<7),
+  UI_PermissionFlag_ClicksLeft        = (1<<0),
+  UI_PermissionFlag_ClicksMiddle      = (1<<1),
+  UI_PermissionFlag_ClicksRight       = (1<<2),
+  UI_PermissionFlag_ScrollX           = (1<<3),
+  UI_PermissionFlag_ScrollY           = (1<<4),
+  UI_PermissionFlag_KeyboardPrimary   = (1<<5),
+  UI_PermissionFlag_KeyboardSecondary = (1<<6),
+  UI_PermissionFlag_Text              = (1<<7),
   
   //- rjf bundles
   UI_PermissionFlag_Keyboard = (UI_PermissionFlag_KeyboardPrimary|UI_PermissionFlag_KeyboardSecondary),
