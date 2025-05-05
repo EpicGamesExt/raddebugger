@@ -3415,6 +3415,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //////////////////////////////
   //- rjf: build edit-button, if line edit is embedded, and has no string
   //
+  B32 edit_started = 0;
   if(!is_focus_active && !is_focus_active_disabled && build_lhs_name_desc && build_line_edit && value_name_fstrs.total_size == 0)
   {
     UI_TagF(".")
@@ -3427,7 +3428,6 @@ rd_cell(RD_CellParams *params, String8 string)
         UI_Padding(ui_pct(1, 0))
         UI_PrefHeight(ui_em(2.f, 1.f))
         UI_CornerRadius(ui_top_font_size()*0.5f)
-        UI_HoverCursor(OS_Cursor_HandPoint)
         RD_Font(RD_FontSlot_Icons)
         UI_TextAlignment(UI_TextAlign_Center)
       {
@@ -3440,6 +3440,10 @@ rd_cell(RD_CellParams *params, String8 string)
                                                            UI_BoxFlag_Clickable,
                                                            "%S##edit", rd_icon_kind_text_table[RD_IconKind_Pencil]);
         UI_Signal sig = ui_signal_from_box(edit_start_box);
+        if(ui_pressed(sig))
+        {
+          edit_started = 1;
+        }
       }
       ui_spacer(ui_em(1.f, 1.f));
     }
@@ -3717,6 +3721,14 @@ rd_cell(RD_CellParams *params, String8 string)
       }
     }
     scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: click-driven "start editing"
+  //
+  if(edit_started)
+  {
+    sig.f |= UI_SignalFlag_DoubleClicked;
   }
   
   //////////////////////////////

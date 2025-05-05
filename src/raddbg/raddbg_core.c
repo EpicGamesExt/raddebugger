@@ -5057,12 +5057,16 @@ rd_view_ui(Rng2F32 rect)
                             ui_kill_action();
                           }
                           
-                          // rjf: this watch window is a lister? -> move cursor & accept
+                          // rjf: this watch window is a lister? -> move cursor & edit or accept
                           if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg ||
                              rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             rd_cmd(RD_CmdKind_Accept);
+                            if(cell_info.flags & RD_WatchCellFlag_CanEdit)
+                            {
+                              rd_cmd(RD_CmdKind_Edit);
+                            }
                           }
                           
                           // rjf: has a command name? -> push command
@@ -5117,6 +5121,7 @@ rd_view_ui(Rng2F32 rect)
                           else if(!(sig.f & UI_SignalFlag_KeyboardPressed) && cell_info.flags & RD_WatchCellFlag_CanEdit)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
+                            rd_cmd(RD_CmdKind_Accept);
                             rd_cmd(RD_CmdKind_Edit);
                           }
                           
