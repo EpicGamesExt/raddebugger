@@ -249,6 +249,7 @@ struct P2R_UDTConvertIn
 typedef struct P2R_SymbolStreamConvertIn P2R_SymbolStreamConvertIn;
 struct P2R_SymbolStreamConvertIn
 {
+  B32 parsing_global_stream;
   RDI_Arch arch;
   COFF_SectionHeaderArray coff_sections;
   PDB_TpiHashParsed *tpi_hash;
@@ -271,6 +272,7 @@ struct P2R_SymbolStreamConvertOut
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
   RDIM_InlineSiteChunkList inline_sites;
+  RDIM_TypeChunkList typedefs;
 };
 
 ////////////////////////////////

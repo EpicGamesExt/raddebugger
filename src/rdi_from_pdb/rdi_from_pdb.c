@@ -2088,6 +2088,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
   RDIM_SymbolChunkList sym_thread_variables = {0};
   RDIM_ScopeChunkList sym_scopes = {0};
   RDIM_InlineSiteChunkList sym_inline_sites = {0};
+  RDIM_TypeChunkList typedefs = {0};
   
   //////////////////////////
   //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -2308,6 +2309,20 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             symbol->offset           = voff;
             symbol->container_symbol = container_symbol;
             symbol->container_type   = container_type;
+          }
+        }break;
+
+        case CV_SymKind_UDT:
+        {
+          if(in->parsing_global_stream && top_scope_node == 0)
+          {
+            CV_SymUDT *udt = (CV_SymUDT *)sym_header_struct_base;
+            String8 name = str8_cstring_capped(udt+1, sym_data_opl);
+
+            RDIM_Type *type   = rdim_type_chunk_list_push(arena, &typedefs, 4096);
+            type->kind        = RDI_TypeKind_Alias;
+            type->name        = name;
+            type->direct_type = p2r_type_ptr_from_itype(udt->itype);
           }
         }break;
         
@@ -2919,6 +2934,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
     out->thread_variables = sym_thread_variables;
     out->scopes           = sym_scopes;
     out->inline_sites     = sym_inline_sites;
+    out->typedefs         = typedefs;
   }
   
 #undef p2r_type_ptr_from_itype
@@ -3990,10 +4006,11 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         tasks_inputs[idx].link_name_map                = link_name_map;
         if(idx < global_stream_subdivision_tasks_count)
         {
-          tasks_inputs[idx].sym             = sym;
-          tasks_inputs[idx].sym_ranges_first= idx*global_stream_syms_per_task;
-          tasks_inputs[idx].sym_ranges_opl  = tasks_inputs[idx].sym_ranges_first + global_stream_syms_per_task;
-          tasks_inputs[idx].sym_ranges_opl  = ClampTop(tasks_inputs[idx].sym_ranges_opl, sym->sym_ranges.count);
+          tasks_inputs[idx].parsing_global_stream = 1;
+          tasks_inputs[idx].sym                   = sym;
+          tasks_inputs[idx].sym_ranges_first      = idx*global_stream_syms_per_task;
+          tasks_inputs[idx].sym_ranges_opl        = tasks_inputs[idx].sym_ranges_first + global_stream_syms_per_task;
+          tasks_inputs[idx].sym_ranges_opl        = ClampTop(tasks_inputs[idx].sym_ranges_opl, sym->sym_ranges.count);
         }
         else
         {
@@ -4019,6 +4036,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &out->thread_variables);
         rdim_scope_chunk_list_concat_in_place(&all_scopes,            &out->scopes);
         rdim_inline_site_chunk_list_concat_in_place(&all_inline_sites,&out->inline_sites);
+        rdim_type_chunk_list_concat_in_place(&all_types, &out->typedefs);
       }
     }
   }
