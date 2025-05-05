@@ -1225,14 +1225,16 @@ e_range_size_from_eval(E_Eval eval)
   U64 result = 256;
   E_TypeKey type_unwrapped = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
   E_TypeKind type_unwrapped_kind = e_type_kind_from_key(type_unwrapped);
-  if(e_type_kind_is_pointer_or_ref(type_unwrapped_kind) ||
-     type_unwrapped_kind == E_TypeKind_Function)
+  if(type_unwrapped_kind == E_TypeKind_Array ||
+     type_unwrapped_kind == E_TypeKind_Struct ||
+     type_unwrapped_kind == E_TypeKind_Union ||
+     type_unwrapped_kind == E_TypeKind_Class)
   {
-    result = KB(16);
+    result = e_type_byte_size_from_key(type_unwrapped);
   }
   else
   {
-    result = e_type_byte_size_from_key(type_unwrapped);
+    result = KB(16);
   }
   return result;
 }
