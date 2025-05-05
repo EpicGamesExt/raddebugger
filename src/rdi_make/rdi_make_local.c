@@ -266,7 +266,7 @@ ASYNC_WORK_DEF(rdim_build_bake_name_map_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BuildBakeNameMapIn *in = (RDIM_BuildBakeNameMapIn *)input;
   RDIM_BakeNameMap *name_map = 0;
-  ProfScope("build name map %i", in->k) name_map = rdim_bake_name_map_from_kind_params(arena, in->k, in->type_indices, in->params);
+  ProfScope("build name map %i", in->k) name_map = rdim_bake_name_map_from_kind_params(arena, in->k, in->params);
   ProfEnd();
   return name_map;
 }
@@ -312,7 +312,7 @@ ASYNC_WORK_DEF(rdim_bake_udts_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeUDTsIn *in = (RDIM_BakeUDTsIn *)input;
   RDIM_UDTBakeResult *out = push_array(arena, RDIM_UDTBakeResult, 1);
-  ProfScope("bake udts") *out = rdim_bake_udts(arena, in->strings, in->type_indices, in->udts);
+  ProfScope("bake udts") *out = rdim_bake_udts(arena, in->strings, in->udts);
   ProfEnd();
   return out;
 }
@@ -323,7 +323,7 @@ ASYNC_WORK_DEF(rdim_bake_global_variables_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeGlobalVariablesIn *in = (RDIM_BakeGlobalVariablesIn *)input;
   RDIM_GlobalVariableBakeResult *out = push_array(arena, RDIM_GlobalVariableBakeResult, 1);
-  ProfScope("bake global variables") *out = rdim_bake_global_variables(arena, in->strings, in->type_indices, in->global_variables);
+  ProfScope("bake global variables") *out = rdim_bake_global_variables(arena, in->strings, in->global_variables);
   ProfEnd();
   return out;
 }
@@ -345,7 +345,7 @@ ASYNC_WORK_DEF(rdim_bake_thread_variables_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeThreadVariablesIn *in = (RDIM_BakeThreadVariablesIn *)input;
   RDIM_ThreadVariableBakeResult *out = push_array(arena, RDIM_ThreadVariableBakeResult, 1);
-  ProfScope("bake thread variables") *out = rdim_bake_thread_variables(arena, in->strings, in->type_indices, in->thread_variables);
+  ProfScope("bake thread variables") *out = rdim_bake_thread_variables(arena, in->strings, in->thread_variables);
   ProfEnd();
   return out;
 }
@@ -356,7 +356,7 @@ ASYNC_WORK_DEF(rdim_bake_procedures_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeProceduresIn *in = (RDIM_BakeProceduresIn *)input;
   RDIM_ProcedureBakeResult *out = push_array(arena, RDIM_ProcedureBakeResult, 1);
-  ProfScope("bake procedures") *out = rdim_bake_procedures(arena, in->strings, in->type_indices, in->location_blocks, in->location_data_blobs, in->procedures);
+  ProfScope("bake procedures") *out = rdim_bake_procedures(arena, in->strings, in->location_blocks, in->location_data_blobs, in->procedures);
   ProfEnd();
   return out;
 }
@@ -367,7 +367,7 @@ ASYNC_WORK_DEF(rdim_bake_scopes_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeScopesIn *in = (RDIM_BakeScopesIn *)input;
   RDIM_ScopeBakeResult *out = push_array(arena, RDIM_ScopeBakeResult, 1);
-  ProfScope("bake scopes") *out = rdim_bake_scopes(arena, in->strings, in->type_indices, in->location_blocks, in->location_data_blobs, in->scopes);
+  ProfScope("bake scopes") *out = rdim_bake_scopes(arena, in->strings, in->location_blocks, in->location_data_blobs, in->scopes);
   ProfEnd();
   return out;
 }
@@ -389,7 +389,7 @@ ASYNC_WORK_DEF(rdim_bake_inline_sites_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeInlineSitesIn *in = (RDIM_BakeInlineSitesIn *)input;
   RDIM_InlineSiteBakeResult *out = push_array(arena, RDIM_InlineSiteBakeResult, 1);
-  ProfScope("bake inline sites") *out = rdim_bake_inline_sites(arena, in->strings, in->type_indices, in->inline_sites);
+  ProfScope("bake inline sites") *out = rdim_bake_inline_sites(arena, in->strings, in->inline_sites);
   ProfEnd();
   return out;
 }
@@ -424,7 +424,7 @@ ASYNC_WORK_DEF(rdim_bake_type_nodes_work)
   Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
   RDIM_BakeTypeNodesIn *in = (RDIM_BakeTypeNodesIn *)input;
   RDIM_TypeNodeBakeResult *out = push_array(arena, RDIM_TypeNodeBakeResult, 1);
-  ProfScope("bake type nodes") *out = rdim_bake_types(arena, in->strings, in->idx_runs, in->type_indices, in->types);
+  ProfScope("bake type nodes") *out = rdim_bake_types(arena, in->strings, in->idx_runs, in->types);
   ProfEnd();
   return out;
 }
@@ -652,16 +652,6 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   RDIM_BakeResults out = {0};
 
   rdim_local_state = state;
-
-  ////////////////////////////////
-  // resolve incomplete types
-
-  rdim_local_resolve_incomplete_types(&in_params->types, &in_params->udts);
-
-  ////////////////////////////////
-  // compute type indices
-
-  RDI_U64 *type_indices = rdim_make_type_indices(scratch.arena, &in_params->types);
   
   //////////////////////////////
   //- rjf: kick off line tables baking
@@ -892,7 +882,6 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
       k = (RDI_NameMapKind)(k+1))
   {
     build_bake_name_map_in[k].k = k;
-    build_bake_name_map_in[k].type_indices = type_indices;
     build_bake_name_map_in[k].params = in_params;
     build_bake_name_map_task[k] = async_task_launch(scratch.arena, rdim_build_bake_name_map_work, .input = &build_bake_name_map_in[k]);
   }
@@ -1000,13 +989,13 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   ASYNC_Task *bake_unit_vmap_task = async_task_launch(scratch.arena, rdim_bake_unit_vmap_work, .input = &bake_unit_vmap_in);
   RDIM_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, &in_params->src_files};
   ASYNC_Task *bake_src_files_task = async_task_launch(scratch.arena, rdim_bake_src_files_work, .input = &bake_src_files_in);
-  RDIM_BakeUDTsIn bake_udts_in = {&bake_strings, &in_params->udts, type_indices};
+  RDIM_BakeUDTsIn bake_udts_in = {&bake_strings, &in_params->udts};
   ASYNC_Task *bake_udts_task = async_task_launch(scratch.arena, rdim_bake_udts_work, .input = &bake_udts_in);
   RDIM_BakeGlobalVMapIn bake_global_vmap_in = {&in_params->global_variables};
   ASYNC_Task *bake_global_vmap_task = async_task_launch(scratch.arena, rdim_bake_global_vmap_work, .input = &bake_global_vmap_in);
   RDIM_BakeScopeVMapIn bake_scope_vmap_in = {&in_params->scopes};
   ASYNC_Task *bake_scope_vmap_task = async_task_launch(scratch.arena, rdim_bake_scope_vmap_work, .input = &bake_scope_vmap_in);
-  RDIM_BakeInlineSitesIn bake_inline_sites_in = {&bake_strings, &in_params->inline_sites, type_indices};
+  RDIM_BakeInlineSitesIn bake_inline_sites_in = {&bake_strings, &in_params->inline_sites};
   ASYNC_Task *bake_inline_sites_task = async_task_launch(scratch.arena, rdim_bake_inline_sites_work, .input = &bake_inline_sites_in);
   RDIM_BakeFilePathsIn bake_file_paths_in = {&bake_strings, path_tree};
   ASYNC_Task *bake_file_paths_task = async_task_launch(scratch.arena, rdim_bake_file_paths_work, .input = &bake_file_paths_in);
@@ -1020,20 +1009,20 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   rdim_location_block_chunk_list_push_array(state->work_thread_arenas[0], &location_blocks, 1);
 
   // TODO: export location instead of VOFF
-  RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables, type_indices};
+  RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables};
   ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, rdim_bake_thread_variables_work, .input = &bake_thread_variables_in);
   ProfScope("thread variables") out.thread_variables = *async_task_join_struct(bake_thread_variables_task, RDIM_ThreadVariableBakeResult);
 
   // TODO: export location instead of VOFF
-  RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables, type_indices};
+  RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables};
   ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, rdim_bake_global_variables_work, .input = &bake_global_variables_in);
   ProfScope("global variables") out.global_variables = *async_task_join_struct(bake_global_variables_task, RDIM_GlobalVariableBakeResult);
 
-  RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, type_indices, &location_blocks, &location_data_blobs};
+  RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, rdim_bake_scopes_work, .input = &bake_scopes_in);
   ProfScope("scopes") out.scopes = *async_task_join_struct(bake_scopes_task, RDIM_ScopeBakeResult);
 
-  RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, type_indices, &location_blocks, &location_data_blobs};
+  RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, rdim_bake_procedures_work, .input = &bake_procedures_in);
   ProfScope("procedures") out.procedures = *async_task_join_struct(bake_procedures_task, RDIM_ProcedureBakeResult);
 
@@ -1057,7 +1046,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   RDIM_BakeIdxRunMap *idx_runs = 0;
   ProfScope("build interned idx run map")
   {
-    idx_runs = rdim_bake_idx_run_map_from_params(state->work_thread_arenas[0], name_maps, type_indices, in_params);
+    idx_runs = rdim_bake_idx_run_map_from_params(state->work_thread_arenas[0], name_maps, in_params);
   }
   
   //////////////////////////////
@@ -1070,7 +1059,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   //////////////////////////////
   //- rjf: kick off pass 3 tasks
   //
-  RDIM_BakeTypeNodesIn bake_type_nodes_in = {&bake_strings, idx_runs, &in_params->types, type_indices};
+  RDIM_BakeTypeNodesIn bake_type_nodes_in = {&bake_strings, idx_runs, &in_params->types};
   ASYNC_Task *bake_type_nodes_task = async_task_launch(scratch.arena, rdim_bake_type_nodes_work, .input = &bake_type_nodes_in);
   ASYNC_Task *bake_name_maps_tasks[RDI_NameMapKind_COUNT] = {0};
   {

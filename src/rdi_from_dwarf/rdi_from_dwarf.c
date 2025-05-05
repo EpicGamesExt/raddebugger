@@ -1837,9 +1837,73 @@ d2r_convert(Arena *arena, D2R_User2Convert *in)
   return bake_params;
 }
 
+RDI_PROC void
+rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx)
+{
+  RDI_U64 type_pos = rdim_idx_from_type(type);
+
+  if(type->kind == RDI_TypeKind_NULL)
+  {
+    type_indices[type_pos] = 0;
+    return;
+  }
+
+  if(type_indices[type_pos] == 0)
+  {
+    if(type->param_types)
+    {
+      for(RDI_U64 param_idx = 0; param_idx < type->count; param_idx += 1)
+      {
+        rdim_assign_type_index(type->param_types[param_idx], type_indices, curr_type_idx);
+      }
+    }
+
+    if(type->direct_type)
+    {
+      rdim_assign_type_index(type->direct_type, type_indices, curr_type_idx);
+    }
+
+    type_indices[type_pos] = *curr_type_idx;
+    *curr_type_idx += 1;
+  }
+}
+
+RDI_PROC RDI_U64 *
+rdim_make_type_indices(RDIM_Arena *arena, RDIM_TypeChunkList *types)
+{
+  ProfBeginFunction();
+
+  RDI_U64 *type_indices       = rdim_push_array(arena, RDI_U64, types->total_count + 1);
+  RDI_U64  type_indices_count = 1;
+
+  for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
+  {
+    for(RDI_U64 i = 0; i < chunk->count; i += 1)
+    {
+      rdim_assign_type_index(&chunk->v[i], type_indices, &type_indices_count);
+    }
+  }
+
+  ProfEnd();
+  return type_indices;
+}
+
 internal RDIM_BakeResults
 d2r_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
 {
+  ////////////////////////////////
+  // resolve incomplete types
+
+  rdim_local_resolve_incomplete_types(&in_params->types, &in_params->udts);
+
+  ////////////////////////////////
+  // compute type indices
+
+  RDI_U64 *type_indices = rdim_make_type_indices(scratch.arena, &in_params->types);
+
+  // using type indices create a correct type array layout
+  NotImplemented;
+
   return rdim_bake(state, in_params);
 }
 

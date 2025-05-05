@@ -173,7 +173,6 @@ typedef struct RDIM_BuildBakeNameMapIn RDIM_BuildBakeNameMapIn;
 struct RDIM_BuildBakeNameMapIn
 {
   RDI_NameMapKind k;
-  RDI_U64 *type_indices;
   RDIM_BakeParams *params;
 };
 
@@ -230,7 +229,6 @@ struct RDIM_BakeUDTsIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_UDTChunkList *udts;
-  RDI_U64 *type_indices;
 };
 
 typedef struct RDIM_BakeGlobalVariablesIn RDIM_BakeGlobalVariablesIn;
@@ -238,7 +236,6 @@ struct RDIM_BakeGlobalVariablesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_SymbolChunkList *global_variables;
-  RDI_U64 *type_indices;
 };
 
 typedef struct RDIM_BakeGlobalVMapIn RDIM_BakeGlobalVMapIn;
@@ -252,7 +249,6 @@ struct RDIM_BakeThreadVariablesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_SymbolChunkList *thread_variables;
-  RDI_U64 *type_indices;
 };
 
 typedef struct RDIM_BakeProceduresIn RDIM_BakeProceduresIn;
@@ -260,7 +256,6 @@ struct RDIM_BakeProceduresIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_SymbolChunkList *procedures;
-  RDI_U64 *type_indices;
   RDIM_String8List *location_blocks;
   RDIM_String8List *location_data_blobs;
 };
@@ -270,7 +265,6 @@ struct RDIM_BakeScopesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_ScopeChunkList *scopes;
-  RDI_U64 *type_indices;
   RDIM_String8List *location_blocks;
   RDIM_String8List *location_data_blobs;
 };
@@ -286,7 +280,6 @@ struct RDIM_BakeInlineSitesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_InlineSiteChunkList *inline_sites;
-  RDI_U64 *type_indices;
 };
 
 typedef struct RDIM_BakeFilePathsIn RDIM_BakeFilePathsIn;
@@ -308,7 +301,6 @@ struct RDIM_BakeTypeNodesIn
   RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
   RDIM_TypeChunkList *types;
-  RDI_U64 *type_indices;
 };
 
 typedef struct RDIM_BakeNameMapIn RDIM_BakeNameMapIn;

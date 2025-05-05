@@ -439,6 +439,153 @@ rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r
 }
 
 ////////////////////////////////
+//~ Data Model
+
+RDI_PROC RDI_TypeKind
+rdim_short_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S16;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S16;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_S16;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S16;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U16;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U16;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_U16;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U16;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_int_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_S32;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_U32;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S64;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S64;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+  case RDIM_DataModel_Null  : break;
+  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+  default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+////////////////////////////////
 //~ rjf: [Building] Binary Section List Building
 
 RDI_PROC RDIM_BinarySection *
@@ -702,14 +849,6 @@ rdim_idx_from_type(RDIM_Type *type)
   {
     idx = type->chunk->base_idx + (type - type->chunk->v) + 1;
   }
-  return idx;
-}
-
-RDI_PROC RDI_U64
-rdim_final_idx_from_type(RDI_U64 *type_indices, RDIM_Type *type)
-{
-  RDI_U64 pos = rdim_idx_from_type(type);
-  RDI_U64 idx = type_indices[pos];
   return idx;
 }
 
@@ -1069,9 +1208,10 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
     }
     else
     {
-      left_dst->last_op = right_destroyed->last_op;
-      left_dst->op_count += right_destroyed->op_count;
-      left_dst->encoded_size += right_destroyed->encoded_size;
+      left_dst->last_op->next  = right_destroyed->first_op;
+      left_dst->last_op        = right_destroyed->last_op;
+      left_dst->op_count      += right_destroyed->op_count;
+      left_dst->encoded_size  += right_destroyed->encoded_size;
     }
     rdim_memzero_struct(right_destroyed);
   }
@@ -1159,45 +1299,44 @@ rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
 
 ////////////////////////////////
 
-RDI_PROC void
-rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx)
+RDI_PROC RDIM_Type *
+rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
 {
-  RDI_U64 type_pos = rdim_idx_from_type(type);
-  if(type_indices[type_pos] == 0)
-  {
-    if(type->param_types)
-    {
-      for(RDI_U64 param_idx = 0; param_idx < type->count; param_idx += 1)
-      {
-        rdim_assign_type_index(type->param_types[param_idx], type_indices, curr_type_idx);
-      }
+  RDI_U64 type_idx = 0;
+  if (type_kind != RDI_TypeKind_NULL) {
+    type_idx = (type_kind - RDI_TypeKind_FirstBuiltIn) + 1;
     }
-
-    if(type->direct_type)
-    {
-      rdim_assign_type_index(type->direct_type, type_indices, curr_type_idx);
-    }
-
-    type_indices[type_pos] = *curr_type_idx;
-    *curr_type_idx += 1;
-  }
+  RDIM_Type *builtin  = &list.first->v[type_idx];
+  return builtin;
 }
 
-RDI_PROC RDI_U64 *
-rdim_make_type_indices(RDIM_Arena *arena, RDIM_TypeChunkList *types)
+RDI_PROC RDIM_TypeChunkList
+rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
 {
-  RDI_U64 *type_indices       = rdim_push_array(arena, RDI_U64, types->total_count + 1);
-  RDI_U64  type_indices_count = 1;
+  RDIM_TypeChunkList list = {0};
 
-  for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
+  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
+
+  RDIM_Type *null_type = rdim_type_chunk_list_push(arena, &list, type_cap);
+
+  for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
   {
-    for(RDI_U64 i = 0; i < chunk->count; i += 1)
-    {
-      rdim_assign_type_index(&chunk->v[i], type_indices, &type_indices_count);
-    }
+    RDIM_String8 name = {0};
+    name.str = rdi_string_from_type_kind(type_kind, &name.size);
+
+    RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
+    type->name      = name;
+    type->kind      = type_kind;
+    type->byte_size = rdi_size_from_basic_type_kind(type_kind);
   }
 
-  return type_indices;
+  RDIM_Type *void_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Void);
+  void_type->byte_size = rdi_addr_size_from_arch(arch);
+
+  RDIM_Type *handle_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Handle);
+  handle_type->byte_size = rdi_addr_size_from_arch(arch);
+
+  return list;
 }
 
 ////////////////////////////////
@@ -2139,7 +2278,7 @@ rdim_bake_string_map_loose_push_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTopo
 //- rjf: bake name map building
 
 RDI_PROC RDIM_BakeNameMap *
-rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI_U64 *type_indices, RDIM_BakeParams *params)
+rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params)
 {
   RDIM_BakeNameMap *map = rdim_push_array(arena, RDIM_BakeNameMap, 1);
   switch(kind)
@@ -2192,7 +2331,8 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
       {
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
-          RDI_U32 type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, &n->v[idx]); // TODO(rjf): @u64_to_u32
+          RDI_U32 type_idx = (RDI_U32)rdim_idx_from_type(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          if(type_idx == 0) {continue;}
           rdim_bake_name_map_push(arena, map, n->v[idx].name, type_idx);
         }
       }
@@ -2231,7 +2371,7 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
 //- rjf: idx run map building
 
 RDI_PROC RDIM_BakeIdxRunMap *
-rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDI_U64 *type_indices, RDIM_BakeParams *params)
+rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDIM_BakeParams *params)
 {
   //- rjf: set up map
   RDIM_BakeIdxRunMap *idx_runs = rdim_push_array(arena, RDIM_BakeIdxRunMap, 1);
@@ -2251,7 +2391,7 @@ rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps
         RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
         for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
         {
-          param_idx_run[idx] = (RDI_U32)rdim_final_idx_from_type(type_indices, type->param_types[idx]); // TODO(rjf): @u64_to_u32
+          param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(type->param_types[idx]); // TODO(rjf): @u64_to_u32
         }
         rdim_bake_idx_run_map_insert(arena, idx_runs, param_idx_run, param_idx_run_count);
       }
@@ -3027,7 +3167,7 @@ rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
 }
 
 RDI_PROC RDIM_TypeNodeBakeResult
-rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDI_U64 *type_indices, RDIM_TypeChunkList *src)
+rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_TypeChunkList *src)
 {
   RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, src->total_count+1);
   for(RDIM_TypeChunkNode *n = src->first; n != 0; n = n->next)
@@ -3035,7 +3175,7 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
     for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
     {
       RDIM_Type    *src     = &n->v[chunk_idx];
-      U64           dst_idx = rdim_final_idx_from_type(type_indices, src);
+      U64           dst_idx = rdim_idx_from_type(src);
       RDI_TypeNode *dst     = &type_nodes[dst_idx];
       
       //- rjf: fill shared type node info
@@ -3056,14 +3196,14 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
         {
           direct_byte_size = src->direct_type->byte_size;
         }
-        dst->constructed.direct_type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, src->direct_type);
+        dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
         dst->constructed.count           = src->byte_size / direct_byte_size;
       }
       
       //- rjf: fill constructed type node info
       else if(RDI_TypeKind_FirstConstructed <= dst->kind && dst->kind <= RDI_TypeKind_LastConstructed)
       {
-        dst->constructed.direct_type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, src->direct_type); // TODO(rjf): @u64_to_u32
+        dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
         dst->constructed.count = src->count;
         if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
         {
@@ -3071,7 +3211,7 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
           RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
           for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
           {
-            param_idx_run[idx] = (RDI_U32)rdim_final_idx_from_type(type_indices, src->param_types[idx]); // TODO(rjf): @u64_to_u32
+            param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(src->param_types[idx]); // TODO(rjf): @u64_to_u32
           }
           dst->constructed.param_idx_run_first = rdim_bake_idx_from_idx_run(idx_runs, param_idx_run, param_idx_run_count);
         }
@@ -3086,13 +3226,13 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
       {
         dst->user_defined.name_string_idx = rdim_bake_idx_from_string(strings, src->name);
         dst->user_defined.udt_idx         = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
-        dst->user_defined.direct_type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, src->direct_type); // TODO(rjf): @u64_to_u32
+        dst->user_defined.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
       }
       
       //- rjf: fill bitfield info
       else if(dst->kind == RDI_TypeKind_Bitfield)
       {
-        dst->bitfield.direct_type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, src->direct_type); // TODO(rjf): @u64_to_u32
+        dst->bitfield.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
         dst->bitfield.off  = src->off;
         dst->bitfield.size = src->count;
       }
@@ -3105,7 +3245,7 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
 }
 
 RDI_PROC RDIM_UDTBakeResult
-rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_UDTChunkList *src)
+rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_UDTChunkList *src)
 {
   //- rjf: build tables
   RDI_UDT *       udts         = push_array(arena, RDI_UDT,        src->total_count+1);
@@ -3123,7 +3263,7 @@ rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *typ
         RDI_UDT *dst_udt = &udts[dst_udt_idx];
         
         //- rjf: fill basics
-        dst_udt->self_type_idx = (RDI_U32)rdim_final_idx_from_type(type_indices, src_udt->self_type); // TODO(rjf): @u64_to_u32
+        dst_udt->self_type_idx = (RDI_U32)rdim_idx_from_type(src_udt->self_type); // TODO(rjf): @u64_to_u32
         dst_udt->file_idx = (RDI_U32)rdim_idx_from_src_file(src_udt->src_file); // TODO(rjf): @u64_to_u32
         dst_udt->line = src_udt->line;
         dst_udt->col  = src_udt->col;
@@ -3140,7 +3280,7 @@ rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *typ
             RDI_Member *dst_member = &members[dst_member_idx];
             dst_member->kind            = src_member->kind;
             dst_member->name_string_idx = rdim_bake_idx_from_string(strings, src_member->name);
-            dst_member->type_idx        = (RDI_U32)rdim_final_idx_from_type(type_indices, src_member->type); // TODO(rjf): @u64_to_u32
+            dst_member->type_idx        = (RDI_U32)rdim_idx_from_type(src_member->type); // TODO(rjf): @u64_to_u32
             dst_member->off             = src_member->off;
           }
         }
@@ -3178,7 +3318,7 @@ rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *typ
 }
 
 RDI_PROC RDIM_GlobalVariableBakeResult
-rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_SymbolChunkList *src)
+rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
 {
   RDI_GlobalVariable *global_variables = push_array(arena, RDI_GlobalVariable, src->total_count+1);
   RDI_U32 dst_idx = 1;
@@ -3190,7 +3330,7 @@ rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
       RDI_GlobalVariable *dst = &global_variables[dst_idx];
       dst->name_string_idx = rdim_bake_idx_from_string(strings, src->name);
       dst->voff            = src->offset;
-      dst->type_idx        = (RDI_U32)rdim_final_idx_from_type(type_indices, src->type); // TODO(rjf): @u64_to_u32
+      dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
       if(src->is_extern)
       {
         dst->link_flags |= RDI_LinkFlag_External;
@@ -3291,7 +3431,7 @@ rdim_bake_global_vmap(RDIM_Arena *arena, RDIM_SymbolChunkList *src)
 }
 
 RDI_PROC RDIM_ThreadVariableBakeResult
-rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_SymbolChunkList *src)
+rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
 {
   RDI_ThreadVariable *thread_variables = push_array(arena, RDI_ThreadVariable, src->total_count+1);
   RDI_U32 dst_idx = 1;
@@ -3303,7 +3443,7 @@ rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
       RDI_ThreadVariable *dst = &thread_variables[dst_idx];
       dst->name_string_idx = rdim_bake_idx_from_string(strings, src->name);
       dst->tls_off         = (RDI_U32)src->offset; // TODO(rjf): @u64_to_u32
-      dst->type_idx        = (RDI_U32)rdim_final_idx_from_type(type_indices, src->type);
+      dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type);
       if(src->is_extern)
       {
         dst->link_flags |= RDI_LinkFlag_External;
@@ -3327,7 +3467,7 @@ rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
 }
 
 RDI_PROC U64
-rdim_bake_location(Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
+rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
 {
   U64 location_data_off = location_data_blobs->total_size;
 
@@ -3420,7 +3560,6 @@ rdim_bake_locset(RDIM_Arena       *arena,
 RDI_PROC RDIM_ProcedureBakeResult
 rdim_bake_procedures(RDIM_Arena              *arena,
                      RDIM_BakeStringMapTight *strings,
-                     RDI_U64                 *type_indices,
                      RDIM_String8List        *location_blocks,
                      RDIM_String8List        *location_data_blobs,
                      RDIM_SymbolChunkList    *src)
@@ -3453,7 +3592,7 @@ rdim_bake_procedures(RDIM_Arena              *arena,
         dst->link_flags |= RDI_LinkFlag_ProcScoped;
         dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
       }
-      dst->type_idx                  = (RDI_U32)rdim_final_idx_from_type(type_indices, src->type); // TODO(rjf): @u64_to_u32
+      dst->type_idx                  = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
       dst->root_scope_idx            = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
       dst->frame_base_location_first = frame_base_location_first;
       dst->frame_base_location_opl   = frame_base_location_opl;
@@ -3468,7 +3607,6 @@ rdim_bake_procedures(RDIM_Arena              *arena,
 RDI_PROC RDIM_ScopeBakeResult
 rdim_bake_scopes(RDIM_Arena              *arena,
                  RDIM_BakeStringMapTight *strings,
-                 RDI_U64                 *type_indices,
                  RDIM_String8List        *location_blocks,
                  RDIM_String8List        *location_data_blobs,
                  RDIM_ScopeChunkList     *src)
@@ -3521,7 +3659,7 @@ rdim_bake_scopes(RDIM_Arena              *arena,
           RDI_Local *dst_local       = &locals[dst_local_idx];
           dst_local->kind            = src_local->kind;
           dst_local->name_string_idx = rdim_bake_idx_from_string(strings, src_local->name);
-          dst_local->type_idx        = (RDI_U32)rdim_final_idx_from_type(type_indices, src_local->type); // TODO(rjf): @u64_to_u32
+          dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
           dst_local->location_first  = location_block_idx_first;
           dst_local->location_opl    = location_block_idx_opl;
         }
@@ -3606,7 +3744,7 @@ rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src)
 }
 
 RDI_PROC RDIM_InlineSiteBakeResult
-rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_InlineSiteChunkList *src)
+rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_InlineSiteChunkList *src)
 {
   RDIM_InlineSiteBakeResult result = {0};
   {
@@ -3620,8 +3758,8 @@ rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_
         RDI_InlineSite *dst = &result.inline_sites[dst_idx];
         RDIM_InlineSite *src = &n->v[chunk_idx];
         dst->name_string_idx   = rdim_bake_idx_from_string(strings, src->name);
-        dst->type_idx          = (RDI_U32)rdim_final_idx_from_type(type_indices, src->type); // TODO(rjf): @u64_to_u32
-        dst->owner_type_idx    = (RDI_U32)rdim_final_idx_from_type(type_indices, src->owner); // TODO(rjf): @u64_to_u32
+        dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+        dst->owner_type_idx    = (RDI_U32)rdim_idx_from_type(src->owner); // TODO(rjf): @u64_to_u32
         dst->line_table_idx    = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
       }
     }

@@ -595,6 +595,17 @@ struct RDIM_UnitChunkList
 ////////////////////////////////
 //~ rjf: Type System Node Types
 
+typedef RDI_U32 RDIM_DataModel;
+enum RDIM_DataModelEnum
+{
+  RDIM_DataModel_Null,
+  RDIM_DataModel_ILP32,
+  RDIM_DataModel_LLP64,
+  RDIM_DataModel_LP64,
+  RDIM_DataModel_ILP64,
+  RDIM_DataModel_SILP64
+};
+
 typedef struct RDIM_Type RDIM_Type;
 struct RDIM_Type
 {
@@ -605,6 +616,7 @@ struct RDIM_Type
   RDI_U32 off;
   RDI_U32 count;
   RDIM_String8 name;
+  RDIM_String8 link_name;
   RDIM_Type *direct_type;
   RDIM_Type **param_types;
   struct RDIM_UDT *udt;
@@ -1349,6 +1361,19 @@ RDI_PROC RDIM_SortKey *rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys
 RDI_PROC void rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r);
 
 ////////////////////////////////
+//~ Data Model
+
+RDI_PROC RDI_TypeKind rdim_short_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_int_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model);
+
+////////////////////////////////
 //~ rjf: [Building] Binary Section Info Building
 
 RDI_PROC RDIM_BinarySection *rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list);
@@ -1381,7 +1406,6 @@ RDI_PROC void rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM
 
 RDI_PROC RDIM_Type *rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_type(RDIM_Type *type);
-RDI_PROC RDI_U64 rdim_final_idx_from_type(RDI_U64 *type_indices, RDIM_Type *type);
 RDI_PROC void rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList *to_push);
 RDI_PROC RDIM_UDT *rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_udt(RDIM_UDT *udt);
@@ -1438,12 +1462,6 @@ RDI_PROC RDI_U32 rdim_count_from_location_block_chunk_list(RDIM_String8List *lis
 
 RDI_PROC RDIM_TypeChunkList rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch);
 RDI_PROC RDIM_Type *        rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind);
-
-////////////////////////////////
-// Type Index
-
-RDI_PROC void      rdim_assign_type_index(RDIM_Type *type, U64 *type_indices, U64 *curr_type_idx);
-RDI_PROC RDI_U64 * rdim_make_type_indices(RDIM_Arena *arena, RDIM_TypeChunkList *types);
 
 ////////////////////////////////
 //~ rjf: [Baking Helpers] Baked VMap Building
@@ -1515,10 +1533,10 @@ RDI_PROC void rdim_bake_string_map_loose_push_symbols(RDIM_Arena *arena, RDIM_Ba
 RDI_PROC void rdim_bake_string_map_loose_push_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_ScopeChunkList *list);
 
 //- rjf: bake name map building
-RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI_U64 *type_indices, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
 
 //- rjf: bake idx run map building
-RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDI_U64 *type_indices, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDIM_BakeParams *params);
 
 //- rjf: bake path tree building
 RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
@@ -1539,15 +1557,15 @@ RDI_PROC RDIM_UnitBakeResult            rdim_bake_units(RDIM_Arena *arena, RDIM_
 RDI_PROC RDIM_UnitVMapBakeResult        rdim_bake_unit_vmap(RDIM_Arena *arena, RDIM_UnitChunkList *units);
 RDI_PROC RDIM_SrcFileBakeResult         rdim_bake_src_files(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_SrcFileChunkList *src);
 RDI_PROC RDIM_LineTableBakeResult       rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src);
-RDI_PROC RDIM_TypeNodeBakeResult        rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDI_U64 *type_indices, RDIM_TypeChunkList *src);
-RDI_PROC RDIM_UDTBakeResult             rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_UDTChunkList *src);
-RDI_PROC RDIM_GlobalVariableBakeResult  rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_TypeNodeBakeResult        rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_TypeChunkList *src);
+RDI_PROC RDIM_UDTBakeResult             rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_UDTChunkList *src);
+RDI_PROC RDIM_GlobalVariableBakeResult  rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
 RDI_PROC RDIM_GlobalVMapBakeResult      rdim_bake_global_vmap(RDIM_Arena *arena, RDIM_SymbolChunkList *src);
-RDI_PROC RDIM_ThreadVariableBakeResult  rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_SymbolChunkList *src);
-RDI_PROC RDIM_ProcedureBakeResult       rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_String8List *location_blocks, RDIM_String8List *location_data_blobs, RDIM_SymbolChunkList *src);
-RDI_PROC RDIM_ScopeBakeResult           rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_String8List *location_blocks, RDIM_String8List *location_data_blobs, RDIM_ScopeChunkList *src);
+RDI_PROC RDIM_ThreadVariableBakeResult  rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_ProcedureBakeResult       rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_String8List *location_blocks, RDIM_String8List *location_data_blobs, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_ScopeBakeResult           rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_String8List *location_blocks, RDIM_String8List *location_data_blobs, RDIM_ScopeChunkList *src);
 RDI_PROC RDIM_ScopeVMapBakeResult       rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src);
-RDI_PROC RDIM_InlineSiteBakeResult      rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDI_U64 *type_indices, RDIM_InlineSiteChunkList *src);
+RDI_PROC RDIM_InlineSiteBakeResult      rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_InlineSiteChunkList *src);
 RDI_PROC RDIM_TopLevelNameMapBakeResult rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
 RDI_PROC RDIM_FilePathBakeResult        rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
 RDI_PROC RDIM_StringBakeResult          rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);
