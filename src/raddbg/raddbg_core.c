@@ -11848,7 +11848,7 @@ rd_frame(void)
 #endif
       
       //- rjf: choose set of lenses
-      // TODO(rjf): generate via metaprogram
+      // TODO(rjf): @lenses generate via metaprogram
       struct
       {
         String8 name;
@@ -11960,34 +11960,38 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: construct default immediate-mode configs based on loaded modules
     //
-    if(rd_state->use_default_stl_type_views)
     {
       local_persist read_only struct
       {
+        B32 stl;
+        B32 ue;
         String8 pattern;
         String8 expr;
       }
       type_views[] =
       {
-        { str8_lit_comp("std::vector<?>"), str8_lit_comp("slice(_Mypair._Myval2)") },
-        { str8_lit_comp("std::unique_ptr<?>"), str8_lit_comp("_Mypair._Myval2") },
-        { str8_lit_comp("std::basic_string<?>"), str8_lit_comp("_Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : array(_Mypair._Myval2._Bx._Ptr, _Mypair._Myval2._Mysize)") },
-        { str8_lit_comp("std::basic_string_view<?>"), str8_lit_comp("array(_Mydata, _Mysize)") }
+        { 1, 0, str8_lit_comp("std::vector<?>"), str8_lit_comp("slice(_Mypair._Myval2)") },
+        { 1, 0, str8_lit_comp("std::unique_ptr<?>"), str8_lit_comp("_Mypair._Myval2") },
+        { 1, 0, str8_lit_comp("std::basic_string<?>"), str8_lit_comp("_Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : array(_Mypair._Myval2._Bx._Ptr, _Mypair._Myval2._Mysize)") },
+        { 1, 0, str8_lit_comp("std::basic_string_view<?>"), str8_lit_comp("array(_Mydata, _Mysize)") },
       };
-      for EachElement(idx, type_views)
+      if(rd_state->use_default_stl_type_views)
       {
-        RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("default_stl_type_vis_%I64x", idx);
-        RD_Cfg *type_view = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("type_view"));
-        RD_Cfg *type = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("type"));
-        RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("expr"));
-        rd_cfg_new_replace(type, type_views[idx].pattern);
-        rd_cfg_new_replace(expr, type_views[idx].expr);
-        rd_cfg_list_push(scratch.arena, &immediate_type_views, type_view);
+        for EachElement(idx, type_views)
+        {
+          if((type_views[idx].stl && rd_state->use_default_stl_type_views) ||
+             (type_views[idx].ue  && rd_state->use_default_ue_type_views))
+          {
+            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("default_stl_type_vis_%I64x", idx);
+            RD_Cfg *type_view = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("type_view"));
+            RD_Cfg *type = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("type"));
+            RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("expr"));
+            rd_cfg_new_replace(type, type_views[idx].pattern);
+            rd_cfg_new_replace(expr, type_views[idx].expr);
+            rd_cfg_list_push(scratch.arena, &immediate_type_views, type_view);
+          }
+        }
       }
-    }
-    if(rd_state->use_default_ue_type_views)
-    {
-      // TODO(rjf)
     }
     
     ////////////////////////////

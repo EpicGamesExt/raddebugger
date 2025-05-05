@@ -14,26 +14,26 @@
 ////////////////////////////////
 //~ rjf: Fixed Tab Tables
 
-@table(name   display_name    name_lower     is_query      icon)
+@table(name   display_name    name_lower     is_query      icon     description)
 RD_WatchTabFastPathTable:
 {
-  {Watch           "Watch"             watches           0                 Binoculars            }
-  {Locals          "Locals"            locals            1                 Binoculars            }
-  {Registers       "Registers"         registers         1                 Binoculars            }
-  {Globals         "Globals"           globals           1                 Binoculars            }
-  {ThreadLocals    "Thread Locals"     thread_locals     1                 Binoculars            }
-  {Types           "Types"             types             1                 Binoculars            }
-  {Procedures      "Procedures"        procedures        1                 Binoculars            }
-  {CallStack       "Call Stack"        call_stack        1                 Thread                }
-  {Targets         "Targets"           targets           1                 Target                }
-  {Breakpoints     "Breakpoints"       breakpoints       1                 CircleFilled          }
-  {WatchPins       "Watch Pins"        watch_pins        1                 Pin                   }
-  {Threads         "Threads"           threads           1                 Threads               }
-  {Processes       "Processes"         processes         1                 Scheduler             }
-  {Machines        "Machines"          machines          1                 Machine               }
-  {Modules         "Modules"           modules           1                 Module                }
-  {FilePathMaps    "File Path Map"     file_path_maps    1                 FileOutline           }
-  {TypeViews       "Type Views"        type_views        1                 Binoculars            }
+  {Watch           "Watch"             watches           0                 Binoculars            "An editable table interface for entering one or many expressions to evaluate, and visualizing and exploring their values."}
+  {Locals          "Locals"            locals            1                 Binoculars            "Like the Watch tab, but not editable, and displays the set of local variables found at the selected thread's current location."}
+  {Registers       "Registers"         registers         1                 Binoculars            "Like the Watch tab, but not editable, and displays the set of registers for the selected thread."}
+  {Globals         "Globals"           globals           1                 Binoculars            "Like the Watch tab, but not editable, and displays all global variables from all loaded modules."}
+  {ThreadLocals    "Thread Locals"     thread_locals     1                 Binoculars            "Like the Watch tab, but not editable, and displays all thread-local variables from all loaded modules."}
+  {Types           "Types"             types             1                 Binoculars            "Like the Watch tab, but not editable, and displays all types from all loaded modules."}
+  {Procedures      "Procedures"        procedures        1                 Binoculars            "Like the Watch tab, but not editable, and displays all procedures from all loaded modules."}
+  {CallStack       "Call Stack"        call_stack        1                 Thread                "Displays the currently selected thread's call stack, and allows selecting a frame in the call stack, which will unwind the selected thread's registers and evaluate expressions within that frame's context."}
+  {Targets         "Targets"           targets           1                 Target                "Displays, and allows editing of, the list of all targets."}
+  {Breakpoints     "Breakpoints"       breakpoints       1                 CircleFilled          "Displays, and allows editing of, the list of all breakpoints."}
+  {WatchPins       "Watch Pins"        watch_pins        1                 Pin                   "Displays, and allows editing of, the list of all watch pins."}
+  {Threads         "Threads"           threads           1                 Threads               "Displays the list of all threads in all processes to which the debugger is attached."}
+  {Processes       "Processes"         processes         1                 Scheduler             "Displays the list of all processes to which the debugger is attached."}
+  {Machines        "Machines"          machines          1                 Machine               "Displays the list of all machines to which the debugger is connected."}
+  {Modules         "Modules"           modules           1                 Module                "Displays the list of all modules in all processes to which the debugger is attached."}
+  {FilePathMaps    "File Path Map"     file_path_maps    1                 FileOutline           "Displays, and allows editing of, the list of all file path maps. This allows remapping source code paths referenced by debug information to other paths on your local machine."}
+  {TypeViews       "Type Views"        type_views        1                 Binoculars            "Displays, and allows editing of, the list of all type views, which allow automatically adjusting the visualizations for evaluations of a certain type."}
 }
 
 @table(name   display_name    name_lower     view     query     icon)
@@ -2013,13 +2013,13 @@ RD_CodeColorTable:
 raddbg_readme:
 {
   @title "The RAD Debugger (ALPHA)";
-  @p "The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It currently only supports local-machine Windows x64 debugging with PDBs, with plans to expand and port in the future.";
+  @p "The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It currently only supports local-machine Windows x64 debugging with PDBs, but we're actively working on support and ports for other toolchains and platforms.";
   
   @subtitle "Getting Started";
-  @p "To launch the RAD Debugger with your executable and command line arguments, run `raddbg` from the command line like so:";
+  @p "**Launching the debugger with your program information:** To launch the RAD Debugger with your executable and command line arguments, run `raddbg` from the command line like so:";
   @p "```raddbg my_program.exe --foo --bar --baz```";
-  @p "For more information, see the 'Command-Line Usage' section.";
-  @p "Default keyboard shortcuts for common debugger controls include:";
+  @p "For more information, see the **Command-Line Usage** section.";
+  @p "**Basic commands and keybindings:** Default keyboard shortcuts for common debugger controls include:";
   @unordered_list
   {
     @p "**Ctrl + O**: Open Source Code File";
@@ -2038,63 +2038,75 @@ raddbg_readme:
     @p "**Ctrl + Tab**: Focus Next Tab";
     @p "**Ctrl + Shift + Tab**: Focus Previous Tab";
     @p "**Ctrl + W**: Close Tab";
-    @p "**F1**: Open Command Palette";
+    @p "**F1**: Open Palette (lists commands, keybindings, settings, threads, processes, modules, types, and many other things)";
   }
-  @p "For more information, see the 'Commands' section.";
-  @p "View rules can be used to visualize expressions differently in the watch window. Here are some examples:";
+  @p "For more information, see the **Commands** section.";
+  
+  @p "**Configuration files (users and projects):** The RAD Debugger stores configuration in two files. One is the 'user file', the other is the 'project file'. Both files are the same format and can store the same kinds of data, but the user file is preferred by the debugger for more likely user-related data (windows, keybindings, theme), and the project file is preferred by the debugger for more likely project-related data (executable debugging targets, breakpoints, recent source files). Project files are more likely to be what you'd check into source control, whereas a user file is more likely to have your personal debugger settings (which will apply identically regardless of which project file is opened).";
+  
+  @p "The debugger autosaves user and project files. You do not need to manually save them. To switch which path you are using for either, you can use the `Open User` (Ctrl + Alt + Shift + O, by default), or `Open Project` (Ctrl + Alt + O, by default) commands respectively. If a file does not exist at the path you enter for either, then a new one will be created, and the debugger will begin autosaving to it. If the initial paths to these files are not specified on the command line (via `--user` or `--project`), then the debugger uses default paths for them. The user file path, by default, will be `%appdata%/raddbg/default.raddbg_user`. The project file path will be whatever project path was last loaded for the user, or if no such path exists, `%appdata%/raddbg/default.raddbg_project`. If you suspect that your configuration files are corrupted or causing the debugger to behave poorly, it might help to delete your `%appdata%/raddbg` folder (although it'd also help if you [sent it to us in a bug report](https://github.com/EpicGamesExt/raddebugger/issues), so that we can investigate why they were corrupted to begin with!).";
+  @p "For more information, see the `**User & Project Files** section.";
+  
+  @p "**Watch tabs and visualizers:** 'Watch' tabs in the RAD Debugger allow entering expressions, which can reference variables in your program, and visualize what their value is when your program is stopped at a particular time. These expressions roughly follow C expression syntax, but there are a number of extensions which can be used to visualize expressions in a more useful way. Here are some examples:";
   @unordered_list
   {
-    @p "`array:16`: Visualize a pointer as pointing to a 16-element array.";
-    @p "`array:(count*2)`: Visualize a pointer as pointing to a `count*2`-element array.";
-    // @p "`list:next`: Visualize a linked list flatly, where each node has a `next` pointer, which points to the next node in the list.";
-    @p "`hex`: Visualize numeric literals as base-16 (hexadecimal).";
-    @p "`dec`: Visualize numeric literals as base-10 (decimal).";
-    @p "`oct`: Visualize numeric literals as base-8 (octal).";
-    @p "`bin`: Visualize numeric literals as base-2 (binary).";
-    @p "`omit:(foo bar baz)`: Prohibits members named `foo`, `bar`, and `baz` from being displayed.";
-    @p "`only:(foo bar baz)`: Only allows members named `foo`, `bar`, and `baz` to be displayed.";
-    @p "`slice`: Attempts to interpret a structure evaluation as encoding a slice, with a base pointer and an integer delimiting the number of elements to which the pointer points.";
+    @p "`array(pointer, 64)`: Visualizes `pointer` as pointing to a 256-element array.";
+    @p "`pointer, 64`: Visualizes `pointer` as pointing to a 256-element array.";
+    @p "`pointer, count`: Visualizes `pointer` as pointing to a `count`-element array.";
+    @p "`slice(some_slice_struct)`: Interprets a structure type as containing a base pointer and a count (either through an integer, or an 'end pointer'), and visualizes the base pointer, pointing to that many elements.";
+    @p "`only(some_struct, a, b, c)`: Displays the value of `some_struct`, but only showing members `a`, `b`, and `c`.";
+    @p "`omit(some_struct, a, b, c)`: Displays the value of `some_struct`, but only showing members other than `a`, `b`, and `c`.";
+    @p "`hex(my_int)`: Visualizes the value of `my_int` in base-16 (hexadecimal) form.";
+    @p "`dec(my_int)`: Visualizes the value of `my_int` in base-10 (decimal) form.";
+    @p "`bin(my_int)`: Visualizes the value of `my_int` in base-2 (binary) form.";
+    @p "`oct(my_int)`: Visualizes the value of `my_int` in base-8 (octal) form.";
+    @p "`my_int, x`: Visualizes the value of `my_int` in base-16 (hexadecimal) form.";
+    @p "`my_int, d`: Visualizes the value of `my_int` in base-10 (decimal) form.";
+    @p "`my_int, b`: Visualizes the value of `my_int` in base-2 (binary) form.";
+    @p "`my_int, o`: Visualizes the value of `my_int` in base-8 (octal) form.";
+    @p "`digits(bin(my_int), 32)`: Visualizes the value of `my_int` in base-2 (binary) form, showing at minimum 32 bits.";
+    @p "`my_int.bin().digits(32)`: Visualizes the value of `my_int` in base-2 (binary) form, showing at minimum 32 bits.";
+    @p "`bitmap(base_pointer, width, height, fmt=rgba8)`: Visualizes the data starting at `base_pointer` as a bitmap, with width `width` and height `height`, with format `rgba8`.";
   }
-  @p "Multiple view rules can be specified on one line, so they can be combined like so:";
-  @p "```array:16, hex, only: {x, y, z}```";
-  @p "For more information, see the 'View Rules' section.";
+  @p "For more information, see the **Views** section.";
   
   @subtitle "Command-Line Usage";
-  @p "When run normally, either by launching through a file explorer or running from a command line without arguments, `raddbg` will open a new instance of the debugger, and await further operations. But it also supports a number of command line options for a number of other purposes. These options are specified with a `-` or `--` prefix, followed by the name of the option, and if the option requires a parameter, followed by a `:` or `=`, followed by the parameter's content. A list of the possible options follows:";
+  @p "When run normally, either by launching through a file explorer or running from a command line without arguments, `raddbg` will open a new instance of the debugger, and await further operations. But it also supports a number of command line options for a number of other purposes. These options are specified with a `-` or `--` prefix, followed by the name of the option, and if the option requires an argument value, followed by a `:` or `=`, followed by the argument value. A list of the possible options follows:";
   @unordered_list
   {
     @p "`--help` Displays a help menu which documents the possible command line options.";
-    @p "`--user:<path>` Use to specify the location of a user file which should be used. User files are used to store settings for users, including window and panel setups, path mapping, and visual settings. If this file does not exist, it will be created as necessary. This file will be autosaved as user-related changes are made. For more information on user files, read the 'User & Profile Files' section.";
-    @p "`--project:<path>` Use to specify the location of a project file which should be used. Project files are used to store settings for users and projects. If this file does not exist, it will be created as necessary. This file will be autosaved as project-related changes are made. For more information on project files, read the 'User & Project Files' section.";
+    @p "`--user:<path>` Use to specify the location of a user file which should be used. User files are used by default to store user-related settings, including window and panel setups, path mapping, and visual settings. If this file does not exist, it will be created as necessary. This file will be autosaved as user-related changes are made. For more information on user files, see the **User & Project Files** section.";
+    @p "`--project:<path>` Use to specify the location of a project file which should be used. Project files are used by default to store project-related settings. If this file does not exist, it will be created as necessary. This file will be autosaved as project-related changes are made. For more information on project files, read the 'User & Project Files' section.";
     @p "`--auto_step` This will step into all active targets after the debugger initially starts.";
     @p "`--auto_run` This will run all active targets after the debugger initially starts.";
-    @p "`--quit_after_success` (or `-q`) This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions..";
-    @p "`--ipc` This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger. For more information on commands, read the 'Commands' section. For more information on driving another debugger instance with this argument, read the 'Driving Another Debugger Instance' section."
+    @p "`--quit_after_success` (or `-q`) This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions.";
+    @p "`--ipc` This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger. For more information on the set of available commands, see the **Commands** section. For more information on driving another debugger instance with this argument, see the **Driving Another Debugger Instance** section.";
   }
-  @p "On the command line, non-options (meaning any command line arguments *not* prefixed with a `-` or `--`) can also be specified. with normal usage, they are interpreted as the command line for a target (see the 'Targets' section). When driving another debugger instance (using the `--ipc` argument), this additional command line text is used to encode a debugger command.";
+  @p "On the command line, non-options (meaning any command line arguments *not* prefixed with a `-` or `--`) can also be specified. With normal usage, they are interpreted as the command line for a target (see the **Targets** section). When driving another debugger instance (using the `--ipc` argument), this additional command line text is used to encode a debugger command.";
   @p "The debugger will stop parsing `-` and `--` prefixes as arguments after seeing a standalone `--`, *or* after seeing the first non-option argument, when reading the command line left-to-right. Some examples of command line usage and their interpretations are below:";
   @unordered_list
   {
-    @p "`raddbg --foo --bar --a:b --c=d test.exe` All options are used to configure `raddbg`. `test.exe` is interpreted as a target executable. `b` is interpreted as the parameter for the `a` option. `d` is interpreted as the parameter for the `c` option.";
-    @p "`raddbg test.exe --foo --bar` `test.exe` is interpreted as a target executable. `--foo --bar` is interpreted as arguments for `test.exe`, and thus are *not* used to configure `raddbg`.";
-    @p "`raddbg -- test.exe` `test.exe` is interpreted as a target executable.";
-    @p "`raddbg --ipc find_code_location \"c:/foo/bar/baz.c:123:1\"` `--ipc` configures `raddbg` to drive another instance of `raddbg`. The remainder of the text is interpreted as a command.";
-    @p "`raddbg \"C:/path with spaces/test.exe\" --foo --bar` A target is formed from the `test.exe` path, and `--foo --bar` are interpreted as arguments to the `test.exe` target.";
+    @p "`raddbg --foo --bar --a:b --c=d test.exe`: All options are used to configure `raddbg`. `test.exe` is interpreted as a target executable. `b` is interpreted as the parameter for the `a` option. `d` is interpreted as the parameter for the `c` option.";
+    @p "`raddbg test.exe --foo --bar`: `test.exe`is interpreted as a target executable. `--foo --bar` is interpreted as arguments for `test.exe`, and thus are *not* used to configure `raddbg`.";
+    @p "`raddbg -- test.exe`: `test.exe` is interpreted as a target executable.";
+    @p "`raddbg --ipc find_code_location \"C:/foo/bar/baz.c:123:1\"`: `--ipc` configures `raddbg` to drive another instance of `raddbg`. The remainder of the text is interpreted as a command.";
+    @p "`raddbg \"C:/path with spaces/test.exe\" --foo --bar`: A target is formed from the `test.exe` path, and `--foo --bar` are interpreted as arguments to the `test.exe` target.";
   }
   
   @subtitle "Windows, Panels, & Tabs";
-  @p "Each opened *window* in the debugger frontend is subdivided into *panels*. Panels subdivide regions of their window without overlapping. Each panel can contain multiple *tabs*, and can have one tab selected at any time. Tabs can be dragged and dropped between panels. Each tab is used to view one of the many supported debugger interfaces, including source code, disassembly, memory, or watches. When a tab is selected, that interface will fill the tab's containing panel's region of the containing window.";
+  @p "Each opened debugger window is subdivided into panels. Panels subdivide regions of their window without overlapping. Each panel can contain multiple tabs, and can have one tab selected at any time. Tabs can be dragged and dropped between panels. Each tab is used to view one of the many supported debugger interfaces, including source code, disassembly, memory, or watch tables. When a tab is selected, that interface will fill the tab's containing panel's region of the containing window.";
   @p "There are no 'special' windows, panels, or tabs; the debugger is written such that the number of windows, each window's panel organization, and the placement and arrangement of tabs can all be organized in a large variety of ways.";
   @p "A list of debugger interfaces, which can occupy tabs, are below:";
   @unordered_list
   {
-    @expand(RD_ViewRuleTable a) @p "$(a.show_in_docs -> '`'..a.display_name..'` '..a.description)";
+    @expand(RD_WatchTabFastPathTable a) @p "**$(a.display_name)**: $(a.description)";
   }
+  @p "You can open one of these tabs in any panel by clicking the `+` icon next to that panel's tabs, or by executing the `Open Tab` command (bound to Ctrl + T) by default.";
   
   @subtitle "Commands";
-  @p "The debugger is operated with *commands*. Commands may be manually executed in the debugger UI through the `Commands` menu, which you can open with the `Run Command` keybinding, which is F1 by default). Operations in the debugger UI are implemented with commands, so if it's ever unclear how to accomplish some operation through the UI, a useful fallback is searching for and running the command through the command menu.";
+  @p "The debugger, including implicitly with its UI, is operated almost entirely through 'commands'. Commands may be manually executed in the debugger UI within the palette (which you can open with F1 by default), or within the commands list which is opened when you execute the 'Run Command' command. Operations in the debugger UI are implemented with commands, so if it's ever unclear how to accomplish some operation through the UI, a useful fallback is searching for and running the command through the palette.";
   @p "Commands are also how a debugger instance launched with `--ipc` may communicate with a primary debugger instance.";
-  @p "A list of commands, how they're referred to textually (for the purposes of `--ipc` debugger instances), and their descriptions are below:";
+  @p "A list of commands, how they're referred to textually (for the purposes of `--ipc` debugger instances), and their descriptions, are below:";
   @unordered_list
   {
     @expand(D_CmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
@@ -2102,26 +2114,47 @@ raddbg_readme:
   }
   
   @subtitle "Targets";
-  @p "A *target* is one executable and configuration for launching that executable, including command line arguments and working directory (the directory from which the executable is launched). Each target may also have a custom label (replaces the executable path when visualizing the target), and the name of a custom entry point function (when the default entry points - `main`, `WinMain`, etc. - are not desired when stepping into the program upon launch). The debugger can have several targets at once. Each target can also be enabled or disabled. Some operations work on all enabled targets - for instance, the `Run` or `Kill All` commands (standardly bound as F5 or Shift + F5). Enabling and disabling targets allows one to filter which targets are currently being worked with.";
+  @p "A *target* is one executable and configuration for launching that executable, including command line arguments and working directory (the directory from which the executable is launched). Each target may also have a custom label (prioritized over the executable name when visualizing the target, and also allows evaluation of the target in a Watch tab), and the name of a custom entry point function (when the default entry points - `main`, `WinMain`, etc. - are not desired when stepping into the program upon launch). The debugger can have several targets at once. Each target can also be enabled or disabled. Some operations work on all enabled targets - for instance, the `Run` or `Kill All` commands (standardly bound as F5 or Shift + F5). Enabling and disabling targets allows one to filter which targets are currently being worked with.";
   @p "To add a target, you can run the `Add Target` command. A target is also created automatically from command line arguments - the rules for how this happens can be found in the `Command-Line Usage` section.";
   @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Project`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
   
-  @subtitle "View Rules";
-  @p "*View rules* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
+  @subtitle "Views";
+  @p "*Views* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
   @p "Evaluations may be visualized in a variety of ways. A 64-bit unsigned integer may be visualized as a textual representation of the value with a radix of 10. A 32-bit floating-point value may be visualized as a textual representation of the value. An array of 32-bit floating-point values can be visualized as a list of textual representations of those values.";
-  @p "But all of these cases may be visualized in a number of other ways, as well. A 64-bit unsigned integer may be more usefully represented with a radix of 16, 8, or 2. An array of 32-bit floating-point values may encode the R, G, B, and A components of a color, or vertex positions for 3D geometry, or samples for a waveform. An array of bytes may encode raw pixel data for an image, or image data in a compressed format. A struct may have several members which are not useful to look at all the time. A struct may form the head of a linked list, and a flat linked list representation may be more preferable than the traditional watch view representation, which adds an additional layer of hierarchical nesting with the expansion of each 'next' pointer in a linked list. When designing the debugger, we felt that the traditional memory view and watch view representations of data in a debugged-process were not sufficient. View rules were added to the traditional watch view structure to allow per-row specification of extra visualization parameters.";
-  @p "View rules are specified with the name of a view rule, and depending on the view rule, a `:`, followed by parameters for the view rule. These parameters may be whitespace delimited, but importantly, multiple view rules may be specified per-row in a watch view. To explicitly separate the parameters of one view rule from the name of another - for instance, in a case like `array:16 bin`, where `bin` will not be interpreted as a view rule, but as a parameter of `array` - then commas and semicolons may be used to separate the two view rules (`array:16, bin`), or parentheses/braces/brackets may also be used to explicitly delimit the view rule parameters (`array:(16) bin`).";
-  @p "A list of currently-supported view rules are below:";
+  @p "But all of these cases may be visualized in a number of other ways, as well. A 64-bit unsigned integer may be more usefully represented with a radix of 16, 8, or 2. An array of 32-bit floating-point values may encode the R, G, B, and A components of a color, or vertex positions for 3D geometry, or samples for a waveform. An array of bytes may encode raw pixel data for an image, or image data in a compressed format. A struct may have several members which are not useful to look at all the time. A struct may form the head of a linked list, and a flat linked list representation may be more preferable than the traditional watch view representation, which adds an additional layer of hierarchical nesting with the expansion of each 'next' pointer in a linked list. When designing the debugger, we felt that the traditional memory view and watch view representations of data in a debugged-process were not sufficient. Views were added to the traditional watch table structure to allow per-expression specification of extra visualization parameters.";
+  @p "Views look just like function calls. They start with the name of the view, a `(`, then a list of expressions which form the arguments for the view (optionally delimited by `,`s), followed by a `)`. The meaning of these arguments can sometimes be inferred through their order; for example, in the case of `bitmap(ptr, 512, 256)`, the `bitmap` view uses the `ptr` as the primary expression to interpret as bitmap data, then assumes the widely-used pattern of width, then height, to interpret the following arguments as the dimensions of the bitmap. In other cases, arguments must be specifically named. For instance, the `fmt` argument in `bitmap(ptr, 512, 256, fmt=bgra8)` is required to override the `bitmap` view's default assumption of RGBA8 bitmap data.";
+  @p "A list of currently-supported views are below:";
   @unordered_list
   {
-    @expand(D_ViewRuleTable a) @p "$(a.docs == 'x' -> '`'..a.string..'` ('..a.display_name..') '..a.description)";
+    // TODO(rjf): @lenses generate via metaprogram
+    @p "`raw(expr)`: Ignores all views used in `expr`, including those automatically applied by type views.";
+    @p "`bin(expr)`: Visualizes all numeric values evaluated in `expr` as base-2 (binary).";
+    @p "`oct(expr)`: Visualizes all numeric values evaluated in `expr` as base-8 (octal).";
+    @p "`dec(expr)`: Visualizes all numeric values evaluated in `expr` as base-10 (decimal).";
+    @p "`hex(expr)`: Visualizes all numeric values evaluated in `expr` as base-16 (hexadecimal).";
+    @p "`digits(expr, num)`: Visualizes at least `num` digits in all numeric values evaluated in `expr`.";
+    @p "`no_string(expr)`: Disables textual string visualization with pointer evaluations in `expr`.";
+    @p "`no_char(expr)`: Disables character visualization with character or integer evaluations in `expr`.";
+    @p "`no_addr(expr)`: Disables explicit address visualization with pointer evaluations in `expr`.";
+    @p "`sequence(expr)`: Interprets `expr` as an integer, encoding how many sub-expressions `expr` should expand to produce. This can be used in combination with the `table` view to easily generate tables, indexing amongst many arrays.";
+    @p "`only(expr, ...)`: Interpreting all post-`expr` arguments as member names, only expands to show those members of `expr`.";
+    @p "`omit(expr, ...)`: Interpreting all post-`expr` arguments as member names, expands to show all members of `expr`, except those with matching names.";
+    @p "`range1(expr, min, max)`: Expresses that `expr` is a bounded numeric value between `min` and `max`. Interpreted by the debugger to build slider UI for an evaluation.";
+    @p "`array(expr, count)`: Expresses that `expr` points to `count` values, rather than 1, or the fixed size implied by a static array. When expanded, displays only that many values.";
+    @p "`slice(expr)`: Expresses that `expr` evaluates to a structure type which bundles a base pointer and a count (encoding how many elements to which the base pointer points). This count can be expressed either as an integer, or as an 'end pointer'. When expanded, displays that many elements following that base pointer.";
+    @p "`table(expr, ...)`: Expresses that `expr` should be expanded normally, but interprets all post-`expr` arguments as expressions which should be used to form cells for rows which are generated by this expression's expansions. This replaces the normal cells which are generated for an expansion in a Watch table.";
+    @p "`text(expr, [lang = ...])`: Generates a text visualizer, interpreting `expr` as (being or pointing to) text.";
+    @p "`disasm(expr, [size = ...]`: Generates a disassembly visualizer, interpreting `expr` as (being or pointing to) machine code.";
+    @p "`memory(expr, [size = ...])`: Generates a memory visualizer, interpreting `expr` as (being or pointing to) raw bytes.";
+    @p "`bitmap(expr, width, height, [fmt = ...])`: Generates a bitmap visualizer, interpreting `expr` as (being or pointing to) raw bitmap data, with `width` and `height` as dimensions.";
+    @p "`color(expr)`: Generates a color picker, interpreting `expr` as a color value.";
   }
   
   @subtitle "Breakpoints";
-  @p "Breakpoints interrupt execution of attached processes. They may be placed on specific code addresses, lines of source code, on specific symbol names. In the latter two cases, the higher level locations are resolved to code addresses. If there is no code associated with a line of source code, then the resolution path chooses to use the next closest line of source code in the same file. A symbol name breakpoint will only work if the symbol name is found within loaded debug info.";
+  @p "Breakpoints interrupt execution of attached processes. They may be placed on arbitrary addresses (e.g. by placing a breakpoint on an instruction within a disassembly view, or with an arbitrary expression, like the name of a function), or on lines of source code. In the latter case, the source code location is resolved to code addresses. If there is no code associated with a line of source code, then the resolution path chooses to use the next closest line of source code in the same file.";
   @p "Breakpoints may have stop conditions attached to them. When a breakpoint is hit by a thread, before it stops execution, the stop condition is evaluated, and if it evaluates to a nonzero value, only then is execution stopped.";
   @p "Each breakpoint has a hit count. Every time a breakpoint causes execution to stop, this counter is increased.";
-  @p "Processor breakpoints are not currently supported, but planned to be in the future.";
+  @p "Address breakpoints can also point to data, rather than code. This will cause execution to stop if some data is read from, written to, or executed. In this case, the debugger configures the hardware to use the available hardware data breakpoints feature. To enable this path, in the breakpoint's editor, express the number of bytes following the address that should be checked for writes/reads/executions (can be 1, 2, 4, or 8), and select whether or not you want to break on reads, writes, or executions.";
   
   @subtitle "User & Project Files";
   @p "Applicable state controlling the debugger's appearance, behavior, targets, breakpoints, and other configurations is saved and reloaded across runs of the debugger through both *user files* and *project files*. These files are auto-saved. These files are written in a textual format which can be hand-edited as necessary, but they're also continuously re-read and re-written by the debugger. By default, the debugger uses `%appdata%/raddbg/default.raddbg_user` for its user file path, and `%appdata%/raddbg/default.raddbg_project` for its project file path. These paths can be overridden on the command line (see the 'Command-Line Usage' section).";
