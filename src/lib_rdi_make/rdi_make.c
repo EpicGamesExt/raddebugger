@@ -1302,12 +1302,7 @@ rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
 RDI_PROC RDIM_Type *
 rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
 {
-  RDI_U64 type_idx = 0;
-  if (type_kind != RDI_TypeKind_NULL) {
-    type_idx = (type_kind - RDI_TypeKind_FirstBuiltIn) + 1;
-  }
-  RDIM_Type *builtin  = &list.first->v[type_idx];
-  return builtin;
+  return &list.first->v[type_kind];
 }
 
 RDI_PROC RDIM_TypeChunkList
@@ -1315,7 +1310,10 @@ rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
 {
   RDIM_TypeChunkList list = {0};
 
-  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 1;
+  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
+
+  // RDI_TypeKind_NULL
+  rdim_type_chunk_list_push(arena, &list, type_cap);
 
   for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
   {

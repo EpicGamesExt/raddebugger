@@ -3404,14 +3404,12 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
 
     //////////////////////////
-    //- build basic types
+    //- basic type aliases
     //
     {
       RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
       RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
       RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
-      RDI_TypeKind int_type        = rdim_int_type_from_data_model(data_model);
-      RDI_TypeKind uint_type       = rdim_unsigned_int_type_from_data_model(data_model);
       RDI_TypeKind long_type       = rdim_long_type_from_data_model(data_model);
       RDI_TypeKind ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
       RDI_TypeKind long_long_type  = rdim_long_long_type_from_data_model(data_model);
@@ -3423,57 +3421,54 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         char *       name;
         RDI_TypeKind kind_rdi;
         CV_LeafKind  kind_cv;
-        B32          make_pointer_near;
-        B32          make_pointer_32;
-        B32          make_pointer_64;
       }
       table[] =
       {
-        { "void"                 , RDI_TypeKind_Void       , CV_BasicType_VOID       , 1, 1, 1 },
-        { "HRESULT"              , RDI_TypeKind_Handle     , CV_BasicType_HRESULT    , 0, 1, 1 },
-        { "signed char"          , RDI_TypeKind_Char8      , CV_BasicType_CHAR       , 1, 1, 1 },
-        { "short"                , short_type              , CV_BasicType_SHORT      , 1, 1, 1 },
-        { "long"                 , long_type               , CV_BasicType_LONG       , 1, 1, 1 },
-        { "long long"            , long_long_type          , CV_BasicType_QUAD       , 1, 1, 1 },
-        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_OCT        , 1, 1, 1 }, // Clang type
-        { "unsigned char"        , RDI_TypeKind_UChar8     , CV_BasicType_UCHAR      , 1, 1, 1 },
-        { "unsigned short"       , ushort_type             , CV_BasicType_USHORT     , 1, 1, 1 },
-        { "unsigned long"        , ulong_type              , CV_BasicType_ULONG      , 1, 1, 1 },
-        { "unsigned long long"   , ulong_long_type         , CV_BasicType_UQUAD      , 1, 1, 1 },
-        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UOCT       , 1, 1, 1 }, // Clang type
-        { "bool"                 , RDI_TypeKind_S8         , CV_BasicType_BOOL8      , 1, 1, 1 },
-        { "__bool16"             , RDI_TypeKind_S16        , CV_BasicType_BOOL16     , 1, 1, 1 }, // not real C type
-        { "__bool32"             , RDI_TypeKind_S32        , CV_BasicType_BOOL32     , 1, 1, 1 }, // not real C type
-        { "float"                , RDI_TypeKind_F32        , CV_BasicType_FLOAT32    , 1, 1, 1 },
-        { "double"               , RDI_TypeKind_F64        , CV_BasicType_FLOAT64    , 1, 1, 1 },
-        { "long double"          , RDI_TypeKind_F80        , CV_BasicType_FLOAT80    , 1, 1, 1 },
-        { "__float128"           , RDI_TypeKind_F128       , CV_BasicType_FLOAT128   , 1, 1, 1 }, // Clang type
-        { "__float48"            , RDI_TypeKind_F48        , CV_BasicType_FLOAT48    , 1, 1, 1 }, // not real C type
-        { "__float32pp"          , RDI_TypeKind_F32PP      , CV_BasicType_FLOAT32PP  , 1, 1, 1 }, // not real C type
-        { "_Complex float"       , RDI_TypeKind_ComplexF32 , CV_BasicType_COMPLEX32  , 0, 0, 0 },
-        { "_Complex double"      , RDI_TypeKind_ComplexF64 , CV_BasicType_COMPLEX64  , 0, 0, 0 },
-        { "_Complex long double" , RDI_TypeKind_ComplexF80 , CV_BasicType_COMPLEX80  , 0, 0, 0 },
-        { "_Complex __float128"  , RDI_TypeKind_ComplexF128, CV_BasicType_COMPLEX128 , 0, 0, 0 },
-        { "__int8"               , RDI_TypeKind_S8         , CV_BasicType_INT8       , 1, 1, 1 },
-        { "__uint8"              , RDI_TypeKind_U8         , CV_BasicType_UINT8      , 1, 1, 1 },
-        { "__int16"              , RDI_TypeKind_S16        , CV_BasicType_INT16      , 1, 1, 1 },
-        { "__uint16"             , RDI_TypeKind_U16        , CV_BasicType_UINT16     , 1, 1, 1 },
-        { "int"                  , int_type                , CV_BasicType_INT32      , 1, 1, 1 },
-        { "unsigned int"         , uint_type               , CV_BasicType_UINT32     , 1, 1, 1 },
-        { "__int64"              , RDI_TypeKind_S64        , CV_BasicType_INT64      , 1, 1, 1 },
-        { "__uint64"             , RDI_TypeKind_U64        , CV_BasicType_UINT64     , 1, 1, 1 },
-        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_INT128     , 1, 1, 1 },
-        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UINT128    , 1, 1, 1 },
-        { "char"                 , RDI_TypeKind_Char8      , CV_BasicType_RCHAR      , 1, 1, 1 }, // always ASCII
-        { "wchar_t"              , RDI_TypeKind_UChar16    , CV_BasicType_WCHAR      , 1, 1, 1 }, // on windows always UTF-16
-        { "char8_t"              , RDI_TypeKind_Char8      , CV_BasicType_CHAR8      , 1, 1, 1 }, // always UTF-8
-        { "char16_t"             , RDI_TypeKind_Char16     , CV_BasicType_CHAR16     , 1, 1, 1 }, // always UTF-16
-        { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     , 1, 1, 1 }, // always UTF-32
-        { "__pointer"            , ptr_type                , CV_BasicType_PTR        , 0, 0, 0 }
+        { "signed char"          , RDI_TypeKind_Char8      , CV_BasicType_CHAR       },
+        { "short"                , short_type              , CV_BasicType_SHORT      },
+        { "long"                 , long_type               , CV_BasicType_LONG       },
+        { "long long"            , long_long_type          , CV_BasicType_QUAD       },
+        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_OCT        }, // Clang type
+        { "unsigned char"        , RDI_TypeKind_UChar8     , CV_BasicType_UCHAR      },
+        { "unsigned short"       , ushort_type             , CV_BasicType_USHORT     },
+        { "unsigned long"        , ulong_type              , CV_BasicType_ULONG      },
+        { "unsigned long long"   , ulong_long_type         , CV_BasicType_UQUAD      },
+        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UOCT       }, // Clang type
+        { "bool"                 , RDI_TypeKind_S8         , CV_BasicType_BOOL8      },
+        { "__bool16"             , RDI_TypeKind_S16        , CV_BasicType_BOOL16     }, // not real C type
+        { "__bool32"             , RDI_TypeKind_S32        , CV_BasicType_BOOL32     }, // not real C type
+        { "float"                , RDI_TypeKind_F32        , CV_BasicType_FLOAT32    },
+        { "double"               , RDI_TypeKind_F64        , CV_BasicType_FLOAT64    },
+        { "long double"          , RDI_TypeKind_F80        , CV_BasicType_FLOAT80    },
+        { "__float128"           , RDI_TypeKind_F128       , CV_BasicType_FLOAT128   }, // Clang type
+        { "__float48"            , RDI_TypeKind_F48        , CV_BasicType_FLOAT48    }, // not real C type
+        { "__float32pp"          , RDI_TypeKind_F32PP      , CV_BasicType_FLOAT32PP  }, // not real C type
+        { "__float16"            , RDI_TypeKind_F16        , CV_BasicType_FLOAT16    },
+        { "_Complex float"       , RDI_TypeKind_ComplexF32 , CV_BasicType_COMPLEX32  },
+        { "_Complex double"      , RDI_TypeKind_ComplexF64 , CV_BasicType_COMPLEX64  },
+        { "_Complex long double" , RDI_TypeKind_ComplexF80 , CV_BasicType_COMPLEX80  },
+        { "_Complex __float128"  , RDI_TypeKind_ComplexF128, CV_BasicType_COMPLEX128 },
+        { "__int8"               , RDI_TypeKind_S8         , CV_BasicType_INT8       },
+        { "__uint8"              , RDI_TypeKind_U8         , CV_BasicType_UINT8      },
+        { "__int16"              , RDI_TypeKind_S16        , CV_BasicType_INT16      },
+        { "__uint16"             , RDI_TypeKind_U16        , CV_BasicType_UINT16     },
+        { "int32"                , RDI_TypeKind_S32        , CV_BasicType_INT32      },
+        { "uint32"               , RDI_TypeKind_U32        , CV_BasicType_UINT32     },
+        { "__int64"              , RDI_TypeKind_S64        , CV_BasicType_INT64      },
+        { "__uint64"             , RDI_TypeKind_U64        , CV_BasicType_UINT64     },
+        { "__int128"             , RDI_TypeKind_S128       , CV_BasicType_INT128     },
+        { "__uint128"            , RDI_TypeKind_U128       , CV_BasicType_UINT128    },
+        { "char"                 , RDI_TypeKind_Char8      , CV_BasicType_RCHAR      }, // always ASCII
+        { "wchar_t"              , RDI_TypeKind_UChar16    , CV_BasicType_WCHAR      }, // on windows always UTF-16
+        { "char8_t"              , RDI_TypeKind_Char8      , CV_BasicType_CHAR8      }, // always UTF-8
+        { "char16_t"             , RDI_TypeKind_Char16     , CV_BasicType_CHAR16     }, // always UTF-16
+        { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     }, // always UTF-32
+        { "__pointer"            , ptr_type                , CV_BasicType_PTR        }
       };
 
-      // special case for null type
-      itype_type_ptrs[CV_BasicType_NOTYPE] = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_NULL);
+      itype_type_ptrs[CV_BasicType_NOTYPE]  = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_NULL);
+      itype_type_ptrs[CV_BasicType_HRESULT] = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_HResult);
+      itype_type_ptrs[CV_BasicType_VOID]    = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_Void);
 
       for(U64 i = 0; i < ArrayCount(table); i += 1)
       {
@@ -3481,49 +3476,18 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         builtin_alias->kind        = RDI_TypeKind_Alias;
         builtin_alias->name        = str8_cstring(table[i].name);
         builtin_alias->direct_type = rdim_builtin_type_from_kind(all_types, table[i].kind_rdi);
-
         itype_type_ptrs[table[i].kind_cv] = builtin_alias;
-
-        if(table[i].make_pointer_near)
-        {
-          CV_TypeIndex near_ptr_itype = table[i].kind_cv | 0x100;
-          RDIM_Type *ptr_near    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_near->kind         = RDI_TypeKind_Ptr;
-          ptr_near->byte_size    = 2;
-          ptr_near->direct_type  = builtin_alias;
-
-          itype_type_ptrs[near_ptr_itype] = ptr_near;
-        }
-        if(table[i].make_pointer_32)
-        {
-          CV_TypeIndex ptr_32_itype = table[i].kind_cv | 0x400;
-          RDIM_Type *ptr_32    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_32->kind         = RDI_TypeKind_Ptr;
-          ptr_32->byte_size    = 4;
-          ptr_32->direct_type  = builtin_alias;
-
-          itype_type_ptrs[ptr_32_itype] = ptr_32;
-        }
-        if(table[i].make_pointer_64)
-        {
-          CV_TypeIndex ptr_64_itype = table[i].kind_cv | 0x600;
-          RDIM_Type *ptr_64    = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
-          ptr_64->kind         = RDI_TypeKind_Ptr;
-          ptr_64->byte_size    = 8;
-          ptr_64->direct_type  = builtin_alias;
-
-          itype_type_ptrs[ptr_64_itype] = ptr_64;
-        }
       }
     }
     
-    for(CV_TypeId root_itype = tpi->itype_first; root_itype < itype_opl; root_itype += 1)
+    for(CV_TypeId root_itype = 0; root_itype < itype_opl; root_itype += 1)
     {
       for(P2R_TypeIdChain *itype_chain = itype_chains[root_itype];
           itype_chain != 0;
           itype_chain = itype_chain->next)
       {
         CV_TypeId itype = (root_itype != itype_chain->itype && itype_chain->itype < itype_opl && itype_fwd_map[itype_chain->itype]) ? itype_fwd_map[itype_chain->itype] : itype_chain->itype;
+        B32 itype_is_basic = (itype < tpi->itype_first);
         
         //////////////////////////
         //- rjf: skip forward-reference itypes - all future resolutions will
@@ -3542,10 +3506,51 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         {
           continue;
         }
+
+        //////////////////////////
+        //- rjf: build basic type
+        //
+        if(itype_is_basic)
+        {
+          RDIM_Type *dst_type = 0;
+          
+          // rjf: unpack itype
+          CV_BasicPointerKind cv_basic_ptr_kind  = CV_BasicPointerKindFromTypeId(itype);
+          CV_BasicType        cv_basic_type_code = CV_BasicTypeFromTypeId(itype);
+          
+          // rjf: get basic type slot, fill if unfilled
+          RDIM_Type *basic_type = itype_type_ptrs[cv_basic_type_code];
+          if(basic_type == 0)
+          {
+            RDI_TypeKind type_kind = p2r_rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
+            U32 byte_size = rdi_size_from_basic_type_kind(type_kind);
+            basic_type = dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+            if(byte_size == 0xffffffff)
+            {
+              byte_size = arch_addr_size;
+            }
+            basic_type->kind      = type_kind;
+            basic_type->name      = cv_type_name_from_basic_type(cv_basic_type_code);
+            basic_type->byte_size = byte_size;
+          }
+          
+          // rjf: nonzero ptr kind -> form ptr type to basic tpye
+          if(cv_basic_ptr_kind != 0)
+          {
+            dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+            dst_type->kind        = RDI_TypeKind_Ptr;
+            dst_type->byte_size   = arch_addr_size;
+            dst_type->direct_type = basic_type;
+          }
+          
+          // rjf: fill this itype's slot with the finished type
+          itype_type_ptrs[itype] = dst_type;
+        }
         
         //////////////////////////
         //- rjf: build non-basic type
         //
+        if(!itype_is_basic && itype >= itype_first)
         {
           RDIM_Type *dst_type = 0;
           CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[itype-itype_first];
