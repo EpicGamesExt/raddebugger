@@ -1180,6 +1180,10 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       {
         extra_flags &= ~RD_WatchCellFlag_Expr;
       }
+      if(row->eval.msgs.max_kind != E_MsgKind_Null)
+      {
+        extra_flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval;
+      }
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .flags = extra_flags|RD_WatchCellFlag_Button|RD_WatchCellFlag_Indented, .pct = 1.f);
     }
     
@@ -1712,8 +1716,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
             expr_string = cell->eval.string;
             
             // rjf: try to form a simpler expression string out of the expression tree itself, *if* this
-            // is not an editable expression
-            if(!(block_type->flags & E_TypeFlag_EditableChildren))
+            // is not an editable expression, and if this evaluation was successful
+            if(!(block_type->flags & E_TypeFlag_EditableChildren) && cell->eval.msgs.max_kind == E_MsgKind_Null)
             {
               // rjf: first, locate a notable expression - we special-case things like member accesses
               // or array indices, so we should grab those if possible
