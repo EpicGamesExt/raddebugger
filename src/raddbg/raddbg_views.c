@@ -1416,9 +1416,28 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     ////////////////////////////
+    //- rjf: @watch_row_build_cells error rows
+    //
+    else if(row->eval.irtree.mode == E_Mode_Null && row->eval.msgs.max_kind > E_MsgKind_Null)
+    {
+      info.cell_style_key = str8_lit("expr_and_error");
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
+      RD_Cfg *style = rd_cfg_child_from_string(view, info.cell_style_key);
+      RD_Cfg *w_cfg = style->first;
+      F32 next_pct = 0;
+#define take_pct() (next_pct = (F32)f64_from_str8(w_cfg->string), w_cfg = w_cfg->next, next_pct)
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
+                                  .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented,
+                                  .default_pct = 0.60f,
+                                  .pct = take_pct());
+      rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval, .default_pct = 0.40f, .pct = take_pct());
+#undef take_pct
+    }
+    
+    ////////////////////////////
     //- rjf: @watch_row_build_cells root-level type rows
     //
-    else if(row->eval.irtree.mode == E_Mode_Null && (e_type_key_match(row->block->eval.irtree.type_key, e_type_key_zero()) || row->block->eval.irtree.mode != E_Mode_Null))
+    else if(row->eval.irtree.mode == E_Mode_Null && (row->block->eval.irtree.mode != E_Mode_Null || row->block->parent == &ev_nil_block))
     {
       info.cell_style_key = str8_lit("root_type");
       RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);

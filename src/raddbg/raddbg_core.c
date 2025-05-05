@@ -4966,7 +4966,7 @@ rd_view_ui(Rng2F32 rect)
                              txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                            rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input);
+                            rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input, .cursor = cell_edit_state->cursor);
                           }
                         }
                       }
@@ -6670,7 +6670,7 @@ rd_window_frame(void)
         rd_cfg_child_from_string_or_alloc(view, str8_lit("autocomplete"));
         RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
         RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));
-        rd_cfg_new_replace(input, ws->autocomp_regs->string);
+        rd_cfg_new_replace(input, ws->autocomp_cursor_info.filter);
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
         rd_cfg_new_replace(expr, ws->autocomp_cursor_info.list_expr);
         
@@ -7136,7 +7136,7 @@ rd_window_frame(void)
         }
         if(has_autocomplete_hint && has_accept_operation)
         {
-          autocomp_floating_view_task->signal.box->transparency = 1;
+          autocomp_floating_view_task->signal.box->fixed_position = v2f32(10000, 10000);
         }
       }
       
@@ -15238,7 +15238,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Char;
             evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15249,7 +15249,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Char;
             evt.delta_2s32 = v2s32(+0, +1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15282,7 +15282,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Word;
             evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15293,7 +15293,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
-            evt.flags      = UI_EventFlag_ExplicitDirectional;
+            evt.flags      = UI_EventFlag_ExplicitDirectional|UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Word;
             evt.delta_2s32 = v2s32(+0, +1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15304,6 +15304,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Page;
             evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15314,6 +15315,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Page;
             evt.delta_2s32 = v2s32(+0, +1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15324,6 +15326,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Whole;
             evt.delta_2s32 = v2s32(+0, -1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15334,6 +15337,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Navigate;
+            evt.flags      = UI_EventFlag_Secondary;
             evt.delta_unit = UI_EventDeltaUnit_Whole;
             evt.delta_2s32 = v2s32(+0, +1);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);

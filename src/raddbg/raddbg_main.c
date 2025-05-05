@@ -196,6 +196,7 @@
 // [ ] "pop out" (hitting enter on visualizers should open them as tabs)
 // [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
 // [ ] finish theme editing, build themes - replace code colors map with new theme stuff
+//
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
 // [ ] odin's demo is busted - need to revert PDB conversion type index changes.
