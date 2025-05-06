@@ -92,7 +92,6 @@ typedef enum UI_EventKind
   UI_EventKind_Edit,
   UI_EventKind_MouseMove,
   UI_EventKind_Scroll,
-  UI_EventKind_AutocompleteHint,
   UI_EventKind_FileDrop,
   UI_EventKind_COUNT
 }
@@ -680,6 +679,7 @@ struct UI_State
   
   //- rjf: build state machine state
   B32 is_in_open_ctx_menu;
+  String8 autocomplete_string;
   B32 tooltip_can_overflow_window;
   UI_Key tooltip_anchor_key;
   String8Array current_gen_tags;
@@ -847,6 +847,11 @@ internal B32 ui_key_press(OS_Modifiers mods, OS_Key key);
 internal B32 ui_key_release(OS_Modifiers mods, OS_Key key);
 internal B32 ui_text(U32 character);
 internal B32 ui_slot_press(UI_EventActionSlot slot);
+
+//- rjf: autocomplete info
+internal void ui_set_autocomplete_string(String8 string);
+internal String8 ui_autocomplete_string(void);
+internal String8 ui_autocomplete(void);
 
 //- rjf: drag data
 internal Vec2F32           ui_drag_start_mouse(void);

@@ -201,6 +201,7 @@
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
+// [ ] do not apply filters past one block layer
 
 ////////////////////////////////
 //~ rjf: post-0.9.16 TODO notes

@@ -3221,13 +3221,7 @@ rd_cell(RD_CellParams *params, String8 string)
   String8 autocomplete_hint_string = {0};
   if(is_focus_active)
   {
-    for(UI_Event *evt = 0; ui_next_event(&evt);)
-    {
-      if(evt->kind == UI_EventKind_AutocompleteHint)
-      {
-        autocomplete_hint_string = evt->string;
-      }
-    }
+    autocomplete_hint_string = ui_autocomplete_string();
   }
   
   //////////////////////////////

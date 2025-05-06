@@ -2973,17 +2973,7 @@ rd_view_ui(Rng2F32 rect)
         //////////////////////////////
         //- rjf: determine autocompletion string
         //
-        String8 autocomplete_hint_string = {0};
-        {
-          for(UI_Event *evt = 0; ui_next_event(&evt);)
-          {
-            if(evt->kind == UI_EventKind_AutocompleteHint)
-            {
-              autocomplete_hint_string = evt->string;
-              break;
-            }
-          }
-        }
+        String8 autocomplete_hint_string = ui_autocomplete_string();
         
         //////////////////////////////
         //- rjf: process commands
@@ -3016,7 +3006,6 @@ rd_view_ui(Rng2F32 rect)
           B32 state_dirty = 1;
           B32 snap_to_cursor = 0;
           B32 cursor_dirty__tbl = 0;
-          B32 take_autocomplete = 0;
           for(UI_Event *event = 0;;)
           {
             //////////////////////////
@@ -3584,15 +3573,15 @@ rd_view_ui(Rng2F32 rect)
                     // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
                     if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
                     {
-                      take_autocomplete = 1;
+                      String8 autocomplete_string = ui_autocomplete();
                       RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
                       RD_WindowState *ws = rd_window_state_from_cfg(window);
                       RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
-                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_hint_string);
+                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_string);
                       new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
                       MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
                       edit_state->input_size = new_string.size;
-                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_hint_string.size);
+                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_string.size);
                       string = str8(edit_state->input_buffer, edit_state->input_size);
                       op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
                     }
@@ -4026,17 +4015,6 @@ rd_view_ui(Rng2F32 rect)
               ui_eat_event(evt);
             }
           }
-          if(take_autocomplete)
-          {
-            for(UI_Event *evt = 0; ui_next_event(&evt);)
-            {
-              if(evt->kind == UI_EventKind_AutocompleteHint)
-              {
-                ui_eat_event(evt);
-                break;
-              }
-            }
-          }
         }
         
         //////////////////////////////
@@ -4055,12 +4033,7 @@ rd_view_ui(Rng2F32 rect)
             String8 string = dr_string_from_fstrs(ui_build_arena(), &cell_info.eval_fstrs);
             if(string.size != 0)
             {
-              UI_Event evt = zero_struct;
-              {
-                evt.kind = UI_EventKind_AutocompleteHint;
-                evt.string = string;
-              }
-              ui_event_list_push(ui_build_arena(), ui_state->events, &evt);
+              ui_set_autocomplete_string(string);
             }
           }
         }
@@ -5115,7 +5088,10 @@ rd_view_ui(Rng2F32 rect)
                           else if(!(sig.f & UI_SignalFlag_KeyboardPressed) && cell_info.flags & RD_WatchCellFlag_CanEdit)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
-                            rd_cmd(RD_CmdKind_Accept);
+                            if(!row_is_expandable)
+                            {
+                              rd_cmd(RD_CmdKind_Accept);
+                            }
                             rd_cmd(RD_CmdKind_Edit);
                           }
                           
@@ -7121,17 +7097,14 @@ rd_window_frame(void)
       //- rjf: autocompletion view early-closing rules
       if(autocomp_floating_view_task)
       {
-        B32 has_autocomplete_hint = 0;
+        B32 has_autocomplete_hint = ui_autocomplete_string().size != 0;
         B32 has_accept_operation = 0;
         for(UI_Event *evt = 0; ui_next_event(&evt);)
         {
-          if(evt->kind == UI_EventKind_AutocompleteHint)
-          {
-            has_autocomplete_hint = 1;
-          }
           if(evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Accept)
           {
             has_accept_operation = 1;
+            break;
           }
         }
         if(has_autocomplete_hint && has_accept_operation)

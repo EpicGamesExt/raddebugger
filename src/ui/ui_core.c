@@ -678,6 +678,28 @@ ui_slot_press(UI_EventActionSlot slot)
   return result;
 }
 
+//- rjf: autocomplete info
+
+internal void
+ui_set_autocomplete_string(String8 string)
+{
+  ui_state->autocomplete_string = push_str8_copy(ui_build_arena(), string);
+}
+
+internal String8
+ui_autocomplete_string(void)
+{
+  return ui_state->autocomplete_string;
+}
+
+internal String8
+ui_autocomplete(void)
+{
+  String8 result = ui_state->autocomplete_string;
+  MemoryZeroStruct(&ui_state->autocomplete_string);
+  return result;
+}
+
 //- rjf: drag data
 
 internal Vec2F32
