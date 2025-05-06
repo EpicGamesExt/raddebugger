@@ -6624,6 +6624,7 @@ rd_window_frame(void)
       Rng2F32 rect;
       B32 is_focused;
       B32 is_anchored;
+      B32 force_inside_window;
       B32 only_secondary_navigation;
       B32 reset_open;
       UI_Signal signal; // NOTE(rjf): output, from build
@@ -6955,6 +6956,7 @@ rd_window_frame(void)
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
           t->reset_open    = reset_open;
+          t->force_inside_window = 1;
         }
       }
     }
@@ -6978,6 +6980,17 @@ rd_window_frame(void)
         B32 is_anchored   = t->is_anchored;
         B32 only_secondary_navigation = t->only_secondary_navigation;
         F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate, .reset = t->reset_open, .initial = 0.f);
+        
+        // rjf: force rect inside window if needed
+        if(t->force_inside_window)
+        {
+          Rng2F32 window_rect = os_client_rect_from_window(ws->os);
+          Vec2F32 max_delta = sub_2f32(rect.p1, window_rect.p1);
+          Vec2F32 min_delta = sub_2f32(window_rect.p0, rect.p0);
+          Vec2F32 total_delta = v2f32(Max(min_delta.x, 0) - Max(max_delta.x, 0),
+                                      Max(min_delta.y, 0) - Max(max_delta.y, 0));
+          rect = shift_2f32(rect, total_delta);
+        }
         
         // rjf: push view regs
         rd_push_regs();
