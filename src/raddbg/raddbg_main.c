@@ -213,7 +213,6 @@
 ////////////////////////////////
 //~ rjf: 0.9.16 TODO notes
 //
-// [ ] fix operator precedence in (u64)&foo - merge prefix-unary parsing with atom parsing loop
 // [ ] autocompletion lister
 // [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
 //     (actually, just kill the tabs on load if they refer to transient things)
@@ -530,6 +529,7 @@
 // [x] do not apply filters past one block layer
 // [x] "pop out" (hitting enter on visualizers should open them as tabs)
 // [x] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
+// [x] fix operator precedence in (u64)&foo - merge prefix-unary parsing with atom parsing loop
 
 ////////////////////////////////
 //~ rjf: Build Options

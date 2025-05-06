@@ -971,7 +971,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: fill if row's expression is editable
     //
-    if(block_type->flags & E_TypeFlag_EditableChildren || row->eval.expr == &e_expr_nil)
+    if(block_type->flags & E_TypeFlag_EditableChildren || (e_key_match(row->eval.key, e_key_zero()) && row->eval.expr == &e_expr_nil))
     {
       info.expr_is_editable = 1;
     }
