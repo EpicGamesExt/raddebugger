@@ -213,7 +213,6 @@
 ////////////////////////////////
 //~ rjf: 0.9.16 TODO notes
 //
-// [ ] evaluate `foo.bar` symbol names???
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
 
@@ -307,6 +306,7 @@
 // [ ] audio waveform views
 //
 //- eval improvements
+// [ ] evaluate `foo.bar` symbol names without escape hatch?
 // [ ] serializing eval view maps (?)
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi

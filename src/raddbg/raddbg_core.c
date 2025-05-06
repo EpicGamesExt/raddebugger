@@ -1851,49 +1851,45 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         {
           read_data = cfg->first->string;
         }
-        else if(str8_match(child_type_name, str8_lit("bool"), 0))
+        else
         {
           String8 value_string = cfg->first->string;
           if(value_string.size == 0)
           {
             value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
           }
-          String8 value_string_casted = push_str8f(scratch.arena, "(bool)(%S)", value_string);
-          B32 value = !!e_value_from_string(value_string_casted).u64;
-          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
-        }
-        else if(str8_match(child_type_name, str8_lit("u64"), 0))
-        {
-          String8 value_string = cfg->first->string;
-          if(value_string.size == 0)
+          if(value_string.size == 0 && !md_node_is_nil(md_tag_from_string(child_schema, str8_lit("override"), 0)))
           {
-            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+            for(RD_Cfg *parent = root_cfg->parent; parent != &rd_nil_cfg; parent = parent->parent)
+            {
+              RD_Cfg *parent_child_w_key = rd_cfg_child_from_string(parent, child_key);
+              if(parent_child_w_key != &rd_nil_cfg)
+              {
+                value_string = parent_child_w_key->first->string;
+                break;
+              }
+            }
           }
-          String8 value_string_casted = push_str8f(scratch.arena, "(uint64)(%S)", value_string);
-          U64 value = e_value_from_string(value_string_casted).u64;
-          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
-        }
-        else if(str8_match(child_type_name, str8_lit("u32"), 0))
-        {
-          String8 value_string = cfg->first->string;
-          if(value_string.size == 0)
+          if(str8_match(child_type_name, str8_lit("bool"), 0))
           {
-            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+            B32 value = !!e_value_from_stringf("(bool)(%S)", value_string).u64;
+            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
           }
-          String8 value_string_casted = push_str8f(scratch.arena, "(uint32)(%S)", value_string);
-          U64 value = e_value_from_string(value_string_casted).u64;
-          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
-        }
-        else if(str8_match(child_type_name, str8_lit("f32"), 0))
-        {
-          String8 value_string = cfg->first->string;
-          if(value_string.size == 0)
+          else if(str8_match(child_type_name, str8_lit("u64"), 0))
           {
-            value_string = md_tag_from_string(child_schema, str8_lit("default"), 0)->first->string;
+            U64 value = e_value_from_stringf("(uint64)(%S)", value_string).u64;
+            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
           }
-          String8 value_string_casted = push_str8f(scratch.arena, "(float32)(%S)", value_string);
-          F32 value = e_value_from_string(value_string_casted).f32;
-          read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+          else if(str8_match(child_type_name, str8_lit("u32"), 0))
+          {
+            U64 value = e_value_from_stringf("(uint32)(%S)", value_string).u64;
+            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+          }
+          else if(str8_match(child_type_name, str8_lit("f32"), 0))
+          {
+            F32 value = e_value_from_stringf("(float32)(%S)", value_string).f32;
+            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+          }
         }
       }
       
@@ -4867,7 +4863,7 @@ rd_view_ui(Rng2F32 rect)
                             }
                             
                             // rjf: apply expander (or substitute space)
-                            if(!ewv->text_editing || !cell_selected)
+                            if(!ewv->text_editing || !cell_selected || row_depth > 0)
                             {
                               if(row_is_expandable && cell == row_info->cells.first)
                               {

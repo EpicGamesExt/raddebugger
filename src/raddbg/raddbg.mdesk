@@ -434,7 +434,7 @@ RD_VocabTable:
       @row_commands(@file copy_tab_full_path, @file show_file_in_explorer, duplicate_tab, close_tab)
       x:
     {
-      @default(11) @display_name('Tab Font Size') @description("Controls the tab's font size.")
+      @override @display_name('Tab Font Size') @description("Controls the tab's font size.")
         'font_size': @range[6, 72] u64,
     }
     ```
@@ -446,7 +446,7 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @default(3.f) @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
+      @override @display_name('Tab Row Height') @description("Controls the tab's row height, in multiples of the font size.")
         'row_height': @range[1.75f, 5.f] f32,
       'label': code_string,
       @description("The root expression which is evaluated to produce the watch window.")
