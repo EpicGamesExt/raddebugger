@@ -12626,6 +12626,31 @@ rd_frame(void)
               }
             }
             
+            //- rjf: eliminate all project-filtered tab focuses
+            if(file_is_okay && kind == RD_CmdKind_OpenProject)
+            {
+              RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
+              for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
+              {
+                RD_PanelTree panels = rd_panel_tree_from_cfg(scratch.arena, n->v);
+                for(RD_PanelNode *panel = panels.root; panel != &rd_nil_panel_node; panel = rd_panel_node_rec__depth_first_pre(panels.root, panel).next)
+                {
+                  if(rd_cfg_is_project_filtered(panel->selected_tab))
+                  {
+                    for(RD_CfgNode *tab_n = panel->tabs.first; tab_n != 0; tab_n = tab_n->next)
+                    {
+                      RD_Cfg *tab = tab_n->v;
+                      if(!rd_cfg_is_project_filtered(tab))
+                      {
+                        rd_cmd(RD_CmdKind_FocusTab, .tab = tab->id);
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
             //- rjf: if we've just loaded the user, and we do not have a project path,
             // then we should try to look at the user's data for recent projects and
             // load one of those, *or* just the default.
