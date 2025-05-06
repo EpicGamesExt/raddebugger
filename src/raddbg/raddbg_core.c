@@ -12414,13 +12414,6 @@ rd_frame(void)
               U64 first_space = str8_find_needle(file_version, 0, str8_lit(" "), 0);
               file_version = str8_prefix(file_version, first_space);
               file_version = str8_skip_chop_whitespace(file_version);
-              String8 current_version = str8_lit(BUILD_VERSION_STRING_LITERAL);
-              if(!str8_match(file_version, current_version, 0))
-              {
-                String8 msg = push_str8f(scratch.arena, "You are trying to run a new development version of RADDBG (%S) with old configuration files. This would overwrite your old configuration files, since the code to appropriately handle old configuration files hasn't been written yet. Out of caution, the program will now exit. If you want to use this new version anyway, delete or rename your configuration file at %S, so that the new development version can begin safely saving to it.", current_version, file_path);
-                os_graphical_message(1, str8_lit("Unsupported Configuration File Version"), msg);
-                os_abort(1);
-              }
             }
             
             //- rjf: bad file -> alert user
@@ -12439,7 +12432,16 @@ rd_frame(void)
             RD_CfgList file_cfg_list = {0};
             if(file_is_okay)
             {
-              file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_path, file_data);
+              String8 current_version = str8_lit(BUILD_VERSION_STRING_LITERAL);
+              if(!str8_match(file_version, current_version, 0))
+              {
+                RD_CfgList (*legacy_parse_function)(Arena *arena, String8 file_path, String8 data) = rd_cfg_tree_list_from_string__pre_0_9_16;
+                file_cfg_list = legacy_parse_function(scratch.arena, file_path, file_data);
+              }
+              else
+              {
+                file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_path, file_data);
+              }
             }
             
             //- rjf: store path
