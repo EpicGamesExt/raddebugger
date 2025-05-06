@@ -499,6 +499,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
       U64 split_relative_idx;
       B32 default_expanded;
       B32 force_expanded;
+      S32 depth;
     };
     BlockTreeBuildTask start_task = {0, tree.root, tree.root->eval, tree.root->eval.expr->next, 1, 0};
     BlockTreeBuildTask *first_task = &start_task;
@@ -543,9 +544,12 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
         continue;
       }
       
+      // rjf: get filter for this task
+      String8 task_filter = t->depth == 0 ? filter : str8_zero();
+      
       // rjf: get top-level lookup/expansion info
-      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, eval, filter);
-      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, filter, eval.expr);
+      E_TypeExpandInfo type_expand_info = type_expand_rule->info(arena, eval, task_filter);
+      EV_ExpandInfo viz_expand_info = viz_expand_rule->info(arena, view, task_filter, eval.expr);
       
       // rjf: determine expansion info
       U64 expansion_row_count = type_expand_info.expr_count;
@@ -573,6 +577,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
         expansion_block->key                      = key;
         expansion_block->split_relative_idx       = t->split_relative_idx;
         expansion_block->eval                     = eval;
+        expansion_block->filter                   = task_filter;
         expansion_block->type_expand_info         = type_expand_info;
         expansion_block->type_expand_rule         = type_expand_rule;
         expansion_block->viz_expand_info          = viz_expand_info;
@@ -659,7 +664,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
         {
           Rng1U64 child_range = r1u64(split_relative_idx, split_relative_idx+1);
           E_Eval child_eval = {0};
-          type_expand_rule->range(arena, type_expand_info.user_data, eval, filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
+          type_expand_rule->range(arena, type_expand_info.user_data, eval, task_filter, r1u64(split_relative_idx, split_relative_idx+1), &child_eval);
           EV_Key child_key = child_keys[idx];
           BlockTreeBuildTask *task = push_array(scratch.arena, BlockTreeBuildTask, 1);
           SLLQueuePush(first_task, last_task, task);
@@ -669,6 +674,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
           task->child_id           = child_key.child_id;
           task->split_relative_idx = split_relative_idx;
           task->default_expanded   = viz_expand_info.rows_default_expanded;
+          task->depth              = t->depth+1;
         }
       }
       
@@ -685,6 +691,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
         task->split_relative_idx = 0;
         task->default_expanded   = t->default_expanded;
         task->force_expanded     = 1;
+        task->depth              = t->depth;
       }
     }
     scratch_end(scratch);
@@ -907,7 +914,7 @@ ev_num_from_vnum(EV_BlockRangeList *block_ranges, U64 vnum)
 //~ rjf: Row Building
 
 internal EV_WindowedRowList
-ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 vnum_range)
+ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, EV_BlockRangeList *block_ranges, Rng1U64 vnum_range)
 {
   EV_WindowedRowList rows = {0};
   {
@@ -918,6 +925,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
       Rng1U64 block_relative_range = n->v.range;
       U64 block_num_visual_rows = dim_1u64(block_relative_range);
       Rng1U64 block_global_range = r1u64(base_vnum, base_vnum + block_num_visual_rows);
+      String8 block_filter = n->v.block->filter;
       
       // rjf: get skip/chop of global range
       U64 num_skipped = 0;
@@ -974,7 +982,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         }
         else
         {
-          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval, filter, block_relative_range__windowed, range_evals);
+          n->v.block->type_expand_rule->range(arena, n->v.block->type_expand_info.user_data, n->v.block->eval, block_filter, block_relative_range__windowed, range_evals);
         }
         
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
@@ -1017,10 +1025,10 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
 }
 
 internal EV_Row *
-ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num)
+ev_row_from_num(Arena *arena, EV_View *view, EV_BlockRangeList *block_ranges, U64 num)
 {
   U64 vidx = ev_vnum_from_num(block_ranges, num);
-  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, r1u64(vidx, vidx+1));
+  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, block_ranges, r1u64(vidx, vidx+1));
   EV_Row *result = 0;
   if(rows.first != 0)
   {
@@ -1036,10 +1044,10 @@ ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *
 }
 
 internal EV_WindowedRowList
-ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range)
+ev_rows_from_num_range(Arena *arena, EV_View *view, EV_BlockRangeList *block_ranges, Rng1U64 num_range)
 {
   Rng1U64 vnum_range = r1u64(ev_vnum_from_num(block_ranges, num_range.min), ev_vnum_from_num(block_ranges, num_range.max)+1);
-  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, vnum_range);
+  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, block_ranges, vnum_range);
   return rows;
 }
 

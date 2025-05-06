@@ -872,7 +872,7 @@ rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
   RD_WatchPt pt = zero_struct;
   {
     Temp scratch = scratch_begin(0, 0);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), block_ranges, (U64)tbl.y);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), block_ranges, (U64)tbl.y);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     {
       S64 x = 0;
@@ -899,7 +899,7 @@ rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt)
   {
     Temp scratch = scratch_begin(0, 0);
     U64 num = ev_num_from_key(block_ranges, pt.key);
-    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), block_ranges, num);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), block_ranges, num);
     RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
     tbl.x = 0;
     {

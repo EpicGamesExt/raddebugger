@@ -215,15 +215,14 @@
 //
 // [ ] fix operator precedence in (u64)&foo - merge prefix-unary parsing with atom parsing loop
 // [ ] autocompletion lister
-// [ ] "pop out" (hitting enter on visualizers should open them as tabs)
 // [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
+//     (actually, just kill the tabs on load if they refer to transient things)
 // [ ] finish theme editing, build themes - replace code colors map with new theme stuff
 //
 // [ ] evaluate `foo.bar` symbol names???
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
-// [ ] do not apply filters past one block layer
 
 ////////////////////////////////
 //~ rjf: post-0.9.16 TODO notes
@@ -529,6 +528,8 @@
 //      "save" option in the menus.
 // [x] user switching
 // [x] project switching
+// [x] do not apply filters past one block layer
+// [x] "pop out" (hitting enter on visualizers should open them as tabs)
 
 ////////////////////////////////
 //~ rjf: Build Options

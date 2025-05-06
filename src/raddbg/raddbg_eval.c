@@ -1154,7 +1154,29 @@ E_TYPE_ACCESS_FUNCTION_DEF(watches)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(watches)
 {
-  RD_WatchesAccel *accel = (RD_WatchesAccel *)eval.irtree.user_data;
+  RD_WatchesAccel *ext = (RD_WatchesAccel *)eval.irtree.user_data;
+  RD_WatchesAccel *accel = push_array(arena, RD_WatchesAccel, 1);
+  {
+    RD_CfgArray cfgs__filtered = ext->cfgs;
+    if(filter.size != 0)
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      RD_CfgList cfgs_list__filtered = {0};
+      for EachIndex(idx, ext->cfgs.count)
+      {
+        RD_Cfg *watch = ext->cfgs.v[idx];
+        String8 string = watch->first->string;
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, string);
+        if(matches.count == matches.needle_part_count)
+        {
+          rd_cfg_list_push(scratch.arena, &cfgs_list__filtered, watch);
+        }
+      }
+      cfgs__filtered = rd_cfg_array_from_list(arena, &cfgs_list__filtered);
+      scratch_end(scratch);
+    }
+    accel->cfgs = cfgs__filtered;
+  }
   E_TypeExpandInfo result = {accel, accel->cfgs.count + 1};
   return result;
 }

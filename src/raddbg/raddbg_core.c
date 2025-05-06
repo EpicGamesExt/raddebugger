@@ -3111,7 +3111,7 @@ rd_view_ui(Rng2F32 rect)
               // rjf: compute legal coordinate range, given selection-defining row
               Rng1S64 cursor_x_range = {0};
               {
-                EV_Row *row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, mark_tbl.y);
+                EV_Row *row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, mark_tbl.y);
                 RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
                 cursor_x_range = r1s64(0, (S64)row_info.cells.count-1);
               }
@@ -3206,13 +3206,13 @@ rd_view_ui(Rng2F32 rect)
                 EV_Row *row = 0;
                 if(selection_tbl.min.y == 0 && selection_tbl.max.y == 0)
                 {
-                  row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, 1);
+                  row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, 1);
                 }
                 
                 // rjf: if we do have a selection, compute that row
                 else
                 {
-                  row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, selection_tbl.min.y);
+                  row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, selection_tbl.min.y);
                 }
                 
                 // rjf: use row to complete query
@@ -3417,7 +3417,7 @@ rd_view_ui(Rng2F32 rect)
               ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
               ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
               ewv->text_edit_state_slots = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState*, ewv->text_edit_state_slots_count);
-              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
               EV_WindowedRowNode *row_node = rows.first;
               B32 any_edits_started = 0;
               for(S64 y = selection_tbl.min.y; row_node != 0 && y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
@@ -3471,7 +3471,7 @@ rd_view_ui(Rng2F32 rect)
                (selection_tbl.min.y != 0 || selection_tbl.max.y != 0) &&
                (selection_tbl.max.y - selection_tbl.min.y > 0))
             {
-              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
               EV_WindowedRowNode *row_node = rows.first;
               if(row_node != 0)
               {
@@ -3546,7 +3546,7 @@ rd_view_ui(Rng2F32 rect)
                   evt->delta_2s32.y == 0))
               {
                 taken = 1;
-                EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+                EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
                 EV_WindowedRowNode *row_node = rows.first;
                 for(S64 y = selection_tbl.min.y; row_node != 0 && y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
                 {
@@ -3678,7 +3678,7 @@ rd_view_ui(Rng2F32 rect)
             {
               taken = 1;
               String8List strs = {0};
-              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
               EV_WindowedRowNode *row_node = rows.first;
               for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
               {
@@ -3731,7 +3731,7 @@ rd_view_ui(Rng2F32 rect)
               RD_CfgList cfgs_to_remove = {0};
               RD_WatchPt next_cursor_pt = {0};
               B32 next_cursor_set = 0;
-              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
               EV_WindowedRowNode *row_node = rows.first;
               for(S64 y = selection_tbl.min.y; row_node != 0 && y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
               {
@@ -4024,7 +4024,7 @@ rd_view_ui(Rng2F32 rect)
            rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
         {
           U64 row_num = ev_num_from_key(&block_ranges, ewv->cursor.key);
-          EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_query_input(), &block_ranges, row_num);
+          EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), &block_ranges, row_num);
           RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
           RD_WatchCell *cell = row_info.cells.first;
           if(cell != 0)
@@ -4083,7 +4083,7 @@ rd_view_ui(Rng2F32 rect)
               //
               EV_WindowedRowList rows = {0};
               {
-                rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min+1, visible_row_rng.max+2));
+                rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, &block_ranges, r1u64(visible_row_rng.min+1, visible_row_rng.max+2));
               }
               
               ////////////////////////
@@ -4335,7 +4335,7 @@ rd_view_ui(Rng2F32 rect)
                   {
                     EV_Key prev_row_key = ev_key_make(ev_hash_from_key(drag_block->key), ev_block_id_from_num(drag_block, best_prev_row_block_num));
                     U64 prev_row_num = ev_num_from_key(&block_ranges, prev_row_key);
-                    EV_Row *prev_row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, prev_row_num);
+                    EV_Row *prev_row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, prev_row_num);
                     RD_WatchRowInfo prev_row_info = rd_watch_row_info_from_row(scratch.arena, prev_row);
                     drag_parent_cfg = rd_cfg_from_eval_space(drag_block->eval.space);
                     drag_prev_cfg = prev_row_info.group_cfg_child;
