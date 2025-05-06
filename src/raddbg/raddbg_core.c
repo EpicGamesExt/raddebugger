@@ -1846,6 +1846,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         String8 child_type_name = child_schema->first->string;
         if(str8_match(child_type_name, str8_lit("path"), 0) ||
            str8_match(child_type_name, str8_lit("code_string"), 0) ||
+           str8_match(child_type_name, str8_lit("expr_string"), 0) ||
            str8_match(child_type_name, str8_lit("string"), 0))
         {
           read_data = cfg->first->string;
@@ -9736,18 +9737,31 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       String8 list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
       {
         E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
-        if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg && str8_match(e_string_from_id(dst_eval.space.u64s[1]), str8_lit("theme"), 0))
+        if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
         {
-          list_expr = str8_lit("query:themes");
-          expr_based_replace = 0;
-          force_allow = 1;
+          RD_Cfg *parent = rd_cfg_from_eval_space(dst_eval.space);
+          String8 child_key = e_string_from_id(dst_eval.space.u64s[1]);
+          MD_NodePtrList schemas = rd_schemas_from_name(parent->string);
+          MD_Node *child_schema = &md_nil_node;
+          for(MD_NodePtrNode *n = schemas.first; n != 0 && md_node_is_nil(child_schema); n = n->next)
+          {
+            child_schema = md_child_from_string(n->v, child_key, 0);
+          }
+          if(str8_match(child_key, str8_lit("theme"), 0))
+          {
+            list_expr = str8_lit("query:themes");
+            expr_based_replace = 0;
+            force_allow = 1;
+          }
+          else if(!str8_match(child_schema->first->string, str8_lit("expr_string"), 0))
+          {
+            MemoryZeroStruct(&list_expr);
+          }
         }
-#if 0
         else if(e_type_kind_from_key(maybe_enum_type) == E_TypeKind_Enum)
         {
-          list_expr = e_type_string_from_key(arena, maybe_enum_type);
+          list_expr = e_type_string_from_key(scratch.arena, maybe_enum_type);
         }
-#endif
       }
       
       // rjf: determine if autocompletion lister is allowed

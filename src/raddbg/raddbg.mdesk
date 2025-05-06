@@ -448,7 +448,7 @@ RD_VocabTable:
         'row_height': @range[1.75f, 5.f] f32,
       'label': code_string,
       @description("The root expression which is evaluated to produce the watch window.")
-        'expression': code_string,
+        'expression': expr_string,
       @no_expand 'watches': query,
     }
     ```
@@ -459,7 +459,7 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @description("An expression to describe data which should be viewed as text or code.")
-        'expression': code_string,
+        'expression': expr_string,
       @description("The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.")
         'lang': code_string,
       @default(1) @description("Controls whether or not line numbers are shown.")
@@ -475,10 +475,10 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @description("An expression to describe the base address or offset of the disassembly.")
-        'expression': code_string,
+        'expression': expr_string,
       'arch':        code_string,
       'syntax':      code_string,
-      'size':        code_string,
+      'size':        expr_string,
       @default(1) @description("Controls whether or not addresses are shown in the disassembly text.")
         'show_addresses':    bool,
       @default(0) @description("Controls whether or not code bytes are shown in the disassembly text.")
@@ -498,11 +498,11 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @display_name("Base Address") @description("An expression to describe the base address or offset of the memory view.")
-        'expression': code_string,
+        'expression': expr_string,
       @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")
-        'size': code_string,
+        'size': expr_string,
       @display_name("Cursor Address") @description("The address of the cursor.")
-        'cursor': code_string,
+        'cursor': expr_string,
       @display_name("Cursor Size") @description("The size, in bytes, of the cursor.")
         'cursor_size': @range[1, 16] u64,
       @default(16) @description("The number of columns to build before building new rows.")
@@ -516,7 +516,7 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @display_name("Base Pointer") @description("An expression to describe the base address or offset of the bitmap data.")
-        'expression': code_string,
+        'expression': expr_string,
       @order(0) 'w': u64,
       @order(1) 'h': u64,
       @display_name("Bitmap Format") @description("The pixel format that the bitmap data should be interpreted as being within.")
@@ -530,7 +530,7 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @display_name("Value") @description("An expression to describe the value or location of the color.")
-        'expression': code_string,
+        'expression': expr_string,
     }
     ```
   }
@@ -540,10 +540,10 @@ RD_VocabTable:
       @inherit(tab) x:
     {
       @display_name("Expression") @description("An expression to describe the base address of the index buffer.")
-        'expression': code_string,
-      'count': code_string,
-      'vtx': code_string,
-      'vtx_size': code_string,
+        'expression': expr_string,
+      'count': expr_string,
+      'vtx': expr_string,
+      'vtx_size': expr_string,
       'yaw': @range[0, 1] f32,
       'pitch': @range[-0.5, 0] f32,
       'zoom': @range[0, 100] f32,
@@ -573,7 +573,7 @@ RD_VocabTable:
       'executable':         path,
       'arguments':          string,
       'working_directory':  path,
-      'entry_point':        code_string,
+      'entry_point':        expr_string,
       'stdout_path':        path,
       'stderr_path':        path,
       'stdin_path':         path,
@@ -593,9 +593,9 @@ RD_VocabTable:
       x:
     {
       'label':            code_string,
-      'condition':        code_string,
+      'condition':        expr_string,
       'source_location':  string,
-      'address_location': code_string,
+      'address_location': expr_string,
       'hit_count':        u64,
       'address_range_size': @or(0, 1, 2, 4, 8) u64,
       'break_on_write':   bool,
@@ -614,9 +614,9 @@ RD_VocabTable:
       @collection_commands(add_watch_pin, toggle_watch_pin)
       x:
     {
-      'expression':       code_string,
+      'expression':       expr_string,
       'source_location':  string,
-      'address_location': code_string,
+      'address_location': expr_string,
     }
     ```,
   }
@@ -630,7 +630,7 @@ RD_VocabTable:
   //- rjf: type views
   {
     type_view,
-    ```@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':code_string, 'expr':code_string}```,
+    ```@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}```,
   }
   
   //- rjf: recent projects
