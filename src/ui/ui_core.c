@@ -1423,13 +1423,13 @@ ui_end_build(void)
         }
       }
     }
-    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? fast_rate : 1);
+    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * ui_state->animation_info.menu_animation_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
     }
-    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? fast_rate : 1);
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * ui_state->animation_info.tooltip_animation_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
     if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
     {
@@ -1452,10 +1452,10 @@ ui_end_build(void)
         B32 is_focus_active_disabled = !!(box->flags & UI_BoxFlag_FocusActiveDisabled);
         
         // rjf: determine rates
-        F32 hot_rate      = (ui_state->animation_info.flags & UI_AnimationInfoFlag_HotAnimations ? fast_rate : 1);
-        F32 active_rate   = (ui_state->animation_info.flags & UI_AnimationInfoFlag_ActiveAnimations ? fast_rate : 1);
-        F32 disabled_rate = (ui_state->animation_info.flags & UI_AnimationInfoFlag_HotAnimations ? slow_rate : 1);
-        F32 focus_rate    = (ui_state->animation_info.flags & UI_AnimationInfoFlag_FocusAnimations ? fast_rate : 1);
+        F32 hot_rate      = ui_state->animation_info.hot_animation_rate;
+        F32 active_rate   = ui_state->animation_info.active_animation_rate;
+        F32 disabled_rate = slow_rate;
+        F32 focus_rate    = ui_state->animation_info.focus_animation_rate;
         
         // rjf: determine animating status
         B32 box_is_animating = 0;
@@ -1520,8 +1520,8 @@ ui_end_build(void)
         
         // rjf: animate view offset
         {
-          box->view_off.x += fast_rate * (box->view_off_target.x - box->view_off.x);
-          box->view_off.y += fast_rate * (box->view_off_target.y - box->view_off.y);
+          box->view_off.x += ui_state->animation_info.scroll_animation_rate * (box->view_off_target.x - box->view_off.x);
+          box->view_off.y += ui_state->animation_info.scroll_animation_rate * (box->view_off_target.y - box->view_off.y);
           if(abs_f32(box->view_off.x - box->view_off_target.x) < 2)
           {
             box->view_off.x = box->view_off_target.x;

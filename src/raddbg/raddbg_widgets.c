@@ -1229,8 +1229,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     ui_color_from_name(str8_lit("line_info_3")),
   };
   F32 line_num_padding_px = ui_top_font_size()*1.f;
-  F32 entity_alive_t_rate = (1 - pow_f32(2, (-30.f * rd_state->frame_dt)));
-  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
+  F32 entity_alive_t_rate = rd_state->entity_alive_animation_rate;
+  F32 entity_hover_t_rate = rd_state->rich_hover_animation_rate;
   B32 do_thread_lines = rd_setting_b32_from_name(str8_lit("thread_lines"));
   B32 do_thread_glow = rd_setting_b32_from_name(str8_lit("thread_glow"));
   B32 do_bp_lines = rd_setting_b32_from_name(str8_lit("breakpoint_lines"));
@@ -3464,7 +3464,7 @@ rd_cell(RD_CellParams *params, String8 string)
   if(build_toggle_switch) UI_Parent(box)
   {
     B32 is_toggled = !!params->toggled_out[0];
-    F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled);
+    F32 toggle_t = ui_anim(ui_key_from_stringf(key, "toggled"), (F32)is_toggled, .initial = (F32)is_toggled, .rate = rd_state->menu_animation_rate);
     F32 height_px = ceil_f32(ui_top_font_size() * 1.75f);
     F32 padding_px = ceil_f32((ui_top_px_height() - height_px) / 2.f);
     UI_PrefWidth(ui_children_sum(1.f))

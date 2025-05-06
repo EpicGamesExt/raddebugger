@@ -213,10 +213,6 @@
 ////////////////////////////////
 //~ rjf: 0.9.16 TODO notes
 //
-// [ ] autocompletion lister
-// [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
-//     (actually, just kill the tabs on load if they refer to transient things)
-//
 // [ ] evaluate `foo.bar` symbol names???
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
@@ -246,6 +242,8 @@
 // [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
 //
 //- ui improvements
+// [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
+//     (actually, just kill the tabs on load if they refer to transient things)
 // [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 // [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
 // [ ] tooltip coverage pass (row commands, etc.)
@@ -530,6 +528,7 @@
 // [x] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
 // [x] fix operator precedence in (u64)&foo - merge prefix-unary parsing with atom parsing loop
 // [x] finish theme editing, build themes - replace code colors map with new theme stuff
+// [x] autocompletion lister
 
 ////////////////////////////////
 //~ rjf: Build Options

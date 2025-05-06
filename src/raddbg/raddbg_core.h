@@ -558,6 +558,15 @@ struct RD_State
   B32 use_default_stl_type_views;
   B32 use_default_ue_type_views;
   
+  // rjf: animation rates
+  F32 catchall_animation_rate;
+  F32 menu_animation_rate;
+  F32 menu_animation_rate__slow;
+  F32 entity_alive_animation_rate;
+  F32 rich_hover_animation_rate;
+  F32 scrolling_animation_rate;
+  F32 tooltip_animation_rate;
+  
   // rjf: serialized config debug string keys
   U128 user_cfg_string_key;
   U128 project_cfg_string_key;

@@ -238,22 +238,15 @@ struct UI_Theme
 ////////////////////////////////
 //~ rjf: Animation Info
 
-typedef U32 UI_AnimationInfoFlags;
-enum
-{
-  UI_AnimationInfoFlag_HotAnimations          = (1<<0),
-  UI_AnimationInfoFlag_ActiveAnimations       = (1<<1),
-  UI_AnimationInfoFlag_FocusAnimations        = (1<<2),
-  UI_AnimationInfoFlag_TooltipAnimations      = (1<<3),
-  UI_AnimationInfoFlag_ContextMenuAnimations  = (1<<4),
-  UI_AnimationInfoFlag_ScrollingAnimations    = (1<<5),
-  UI_AnimationInfoFlag_All = 0xffffffff,
-};
-
 typedef struct UI_AnimationInfo UI_AnimationInfo;
 struct UI_AnimationInfo
 {
-  UI_AnimationInfoFlags flags;
+  F32 hot_animation_rate;
+  F32 active_animation_rate;
+  F32 focus_animation_rate;
+  F32 tooltip_animation_rate;
+  F32 menu_animation_rate;
+  F32 scroll_animation_rate;
 };
 
 ////////////////////////////////

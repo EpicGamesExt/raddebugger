@@ -2560,7 +2560,11 @@ rd_view_ui(Rng2F32 rect)
   RD_Cfg *cmd_root = rd_cfg_child_from_string(query_root, str8_lit("cmd"));
   String8 current_input = input_root->first->string;
   B32 search_row_is_open = (vs->query_is_selected);
-  F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!search_row_is_open, .initial = (F32)!!search_row_is_open, .epsilon = 0.01f);
+  F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view),
+                                  (F32)!!search_row_is_open,
+                                  .initial = (F32)!!search_row_is_open,
+                                  .epsilon = 0.01f,
+                                  .rate    = rd_state->menu_animation_rate);
   if(search_row_open_t > 0.001f)
   {
     String8 cmd_name = cmd_root->first->string;
@@ -6116,12 +6120,12 @@ rd_window_frame(void)
       // rjf: build animation info
       UI_AnimationInfo animation_info = {0};
       {
-        if(rd_setting_b32_from_name(str8_lit("hover_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_HotAnimations;}
-        if(rd_setting_b32_from_name(str8_lit("press_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_ActiveAnimations;}
-        if(rd_setting_b32_from_name(str8_lit("focus_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_FocusAnimations;}
-        if(rd_setting_b32_from_name(str8_lit("tooltip_animations")))     {animation_info.flags |= UI_AnimationInfoFlag_TooltipAnimations;}
-        if(rd_setting_b32_from_name(str8_lit("menu_animations")))        {animation_info.flags |= UI_AnimationInfoFlag_ContextMenuAnimations;}
-        if(rd_setting_b32_from_name(str8_lit("scrolling_animations")))   {animation_info.flags |= UI_AnimationInfoFlag_ScrollingAnimations;}
+        animation_info.hot_animation_rate      = rd_state->catchall_animation_rate;
+        animation_info.active_animation_rate   = rd_state->catchall_animation_rate;
+        animation_info.focus_animation_rate    = 1.f;
+        animation_info.tooltip_animation_rate  = rd_state->tooltip_animation_rate;
+        animation_info.menu_animation_rate     = rd_state->menu_animation_rate;
+        animation_info.scroll_animation_rate   = rd_state->scrolling_animation_rate;
       }
       
       // rjf: begin & push initial stack values
@@ -7000,7 +7004,11 @@ rd_window_frame(void)
           F32 query_height_px = max_query_height_px;
           if(size_query_by_expr_eval)
           {
-            F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view), (F32)!!vs->query_is_selected, .initial = (F32)!!vs->query_is_selected, .epsilon = 0.01f);
+            F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view),
+                                            (F32)!!vs->query_is_selected,
+                                            .initial = (F32)!!vs->query_is_selected,
+                                            .epsilon = 0.01f,
+                                            .rate    = rd_state->menu_animation_rate);
             query_height_px = row_height_px * (predicted_block_tree.total_row_count - !root_is_explicit) + ui_top_px_height()*search_row_open_t;
             query_height_px = Min(query_height_px, max_query_height_px);
           }
@@ -7045,8 +7053,8 @@ rd_window_frame(void)
       UI_TagF("floating")
       UI_Focus(ui_any_ctx_menu_is_open() || ws->menu_bar_focused ? UI_FocusKind_Off : UI_FocusKind_Null)
     {
-      F32 fast_open_rate = 1 - pow_f32(2, (-70.f * ui_state->animation_dt));
-      F32 slow_open_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
+      F32 fast_open_rate = rd_state->menu_animation_rate;
+      F32 slow_open_rate = rd_state->menu_animation_rate__slow;
       for(FloatingViewTask *t = first_floating_view_task; t != 0; t = t->next)
       {
         // rjf: unpack
@@ -7055,7 +7063,10 @@ rd_window_frame(void)
         B32 is_focused    = t->is_focused;
         B32 is_anchored   = t->is_anchored;
         B32 only_secondary_navigation = t->only_secondary_navigation;
-        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f, .rate = is_anchored ? fast_open_rate : slow_open_rate, .reset = t->reset_open, .initial = 0.f);
+        F32 open_t        = ui_anim(ui_key_from_stringf(ui_key_zero(), "floating_view_open_%p", view), 1.f,
+                                    .rate = is_anchored ? fast_open_rate : slow_open_rate,
+                                    .reset = t->reset_open,
+                                    .initial = 0.f);
         
         // rjf: force rect inside window if needed
         if(t->force_inside_window)
@@ -8003,7 +8014,7 @@ rd_window_frame(void)
               // rjf: build
               UI_Box *site_box = &ui_nil_box;
               {
-                F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+                F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f, .rate = rd_state->menu_animation_rate);
                 UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
@@ -8047,10 +8058,10 @@ rd_window_frame(void)
                 Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
                 Rng2F32 future_split_rect =
                 {
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
-                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
                 };
                 UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
                 {
@@ -8094,7 +8105,7 @@ rd_window_frame(void)
             // rjf: build
             UI_Box *site_box = &ui_nil_box;
             {
-              F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+              F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f, .rate = rd_state->menu_animation_rate);
               UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
               {
                 site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
@@ -8138,10 +8149,10 @@ rd_window_frame(void)
               Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
               Rng2F32 future_split_rect =
               {
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
               };
               UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
               {
@@ -8266,10 +8277,10 @@ rd_window_frame(void)
                                            target_rect_px.x1/content_rect_dim.x,
                                            target_rect_px.y1/content_rect_dim.y);
           B32 reset = (window_is_resizing || ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
-          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0, .reset = reset);
-          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0, .reset = reset);
-          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1, .reset = reset);
-          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1, .reset = reset);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0, .reset = reset, .rate = rd_state->menu_animation_rate);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0, .reset = reset, .rate = rd_state->menu_animation_rate);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1, .reset = reset, .rate = rd_state->menu_animation_rate);
+          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1, .reset = reset, .rate = rd_state->menu_animation_rate);
         }
       }
       ws->window_layout_reset = 0;
@@ -8306,10 +8317,10 @@ rd_window_frame(void)
                                            target_rect_px.y0 / content_rect_dim.y,
                                            target_rect_px.x1 / content_rect_dim.x,
                                            target_rect_px.y1 / content_rect_dim.y);
-          Rng2F32 panel_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0),
-                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0),
-                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1),
-                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1));
+          Rng2F32 panel_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", panel->cfg), target_rect_pct.x0, .initial = target_rect_pct.x0, .rate = rd_state->menu_animation_rate),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", panel->cfg), target_rect_pct.y0, .initial = target_rect_pct.y0, .rate = rd_state->menu_animation_rate),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", panel->cfg), target_rect_pct.x1, .initial = target_rect_pct.x1, .rate = rd_state->menu_animation_rate),
+                                          ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", panel->cfg), target_rect_pct.y1, .initial = target_rect_pct.y1, .rate = rd_state->menu_animation_rate));
           Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
                                       panel_rect_pct.y0*content_rect_dim.y,
                                       panel_rect_pct.x1*content_rect_dim.x,
@@ -8412,7 +8423,7 @@ rd_window_frame(void)
                 }
                 UI_Box *site_box = &ui_nil_box;
                 {
-                  F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+                  F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f, .rate = rd_state->menu_animation_rate);
                   UI_Rect(rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
                   {
                     site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
@@ -8498,10 +8509,10 @@ rd_window_frame(void)
                   Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
                   Rng2F32 future_split_rect =
                   {
-                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
-                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
-                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
-                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
                   };
                   UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
                   {
@@ -8713,7 +8724,7 @@ rd_window_frame(void)
                 t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
                 F32 tab_width_target = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
                 tab_width_target = Min(max_tab_width_px, tab_width_target);
-                t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0));
+                t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
                 SLLQueuePush(first_tab_task, last_tab_task, t);
                 tab_task_count += 1;
               }
@@ -10919,8 +10930,8 @@ rd_frame(void)
         F32 scroll_x_diff = (-vs->scroll_pos.x.off);
         F32 scroll_y_diff = (-vs->scroll_pos.y.off);
         F32 loading_t_diff = (vs->loading_t_target - vs->loading_t);
-        vs->scroll_pos.x.off += scroll_x_diff*fast_rate;
-        vs->scroll_pos.y.off += scroll_y_diff*fast_rate;
+        vs->scroll_pos.x.off += scroll_x_diff*rd_state->scrolling_animation_rate;
+        vs->scroll_pos.y.off += scroll_y_diff*rd_state->scrolling_animation_rate;
         vs->loading_t += loading_t_diff * slow_rate;
         if(abs_f32(loading_t_diff) > 0.01f ||
            abs_f32(scroll_x_diff) > 0.01f ||
@@ -12924,10 +12935,10 @@ rd_frame(void)
                                                         target_prev_rect_px.y0/stub_content_rect_dim.y,
                                                         target_prev_rect_px.x1/stub_content_rect_dim.x,
                                                         target_prev_rect_px.y1/stub_content_rect_dim.y);
-                  Rng2F32 prev_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->prev->cfg), target_prev_rect_pct.x0, .initial = target_prev_rect_pct.x0),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->prev->cfg), target_prev_rect_pct.y0, .initial = target_prev_rect_pct.y0),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->prev->cfg), target_prev_rect_pct.x1, .initial = target_prev_rect_pct.x1),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->prev->cfg), target_prev_rect_pct.y1, .initial = target_prev_rect_pct.y1));
+                  Rng2F32 prev_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->prev->cfg), target_prev_rect_pct.x0, .initial = target_prev_rect_pct.x0, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->prev->cfg), target_prev_rect_pct.y0, .initial = target_prev_rect_pct.y0, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->prev->cfg), target_prev_rect_pct.x1, .initial = target_prev_rect_pct.x1, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->prev->cfg), target_prev_rect_pct.y1, .initial = target_prev_rect_pct.y1, .rate = rd_state->menu_animation_rate));
                   new_rect_pct = prev_rect_pct;
                   new_rect_pct.p0.v[split_axis] = new_rect_pct.p1.v[split_axis];
                 }
@@ -12938,17 +12949,17 @@ rd_frame(void)
                                                         target_next_rect_px.y0/stub_content_rect_dim.y,
                                                         target_next_rect_px.x1/stub_content_rect_dim.x,
                                                         target_next_rect_px.y1/stub_content_rect_dim.y);
-                  Rng2F32 next_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->next->cfg), target_next_rect_pct.x0, .initial = target_next_rect_pct.x0),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->next->cfg), target_next_rect_pct.y0, .initial = target_next_rect_pct.y0),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->next->cfg), target_next_rect_pct.x1, .initial = target_next_rect_pct.x1),
-                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->next->cfg), target_next_rect_pct.y1, .initial = target_next_rect_pct.y1));
+                  Rng2F32 next_rect_pct = r2f32p(ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->next->cfg), target_next_rect_pct.x0, .initial = target_next_rect_pct.x0, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->next->cfg), target_next_rect_pct.y0, .initial = target_next_rect_pct.y0, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->next->cfg), target_next_rect_pct.x1, .initial = target_next_rect_pct.x1, .rate = rd_state->menu_animation_rate),
+                                                 ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->next->cfg), target_next_rect_pct.y1, .initial = target_next_rect_pct.y1, .rate = rd_state->menu_animation_rate));
                   new_rect_pct = next_rect_pct;
                   new_rect_pct.p1.v[split_axis] = new_rect_pct.p0.v[split_axis];
                 }
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->cfg), new_rect_pct.x0, .initial = new_rect_pct.x0, .reset = 1);
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->cfg), new_rect_pct.x1, .initial = new_rect_pct.x1, .reset = 1);
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->cfg), new_rect_pct.y0, .initial = new_rect_pct.y0, .reset = 1);
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->cfg), new_rect_pct.y1, .initial = new_rect_pct.y1, .reset = 1);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x0", new_panel->cfg), new_rect_pct.x0, .initial = new_rect_pct.x0, .reset = 1, .rate = rd_state->menu_animation_rate);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_x1", new_panel->cfg), new_rect_pct.x1, .initial = new_rect_pct.x1, .reset = 1, .rate = rd_state->menu_animation_rate);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y0", new_panel->cfg), new_rect_pct.y0, .initial = new_rect_pct.y0, .reset = 1, .rate = rd_state->menu_animation_rate);
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_%p_y1", new_panel->cfg), new_rect_pct.y1, .initial = new_rect_pct.y1, .reset = 1, .rate = rd_state->menu_animation_rate);
               }
             }
             
@@ -16123,19 +16134,6 @@ rd_frame(void)
     rd_cmd(RD_CmdKind_FindThread, .thread = find_thread_retry);
   }
   
-  //////////////////////////////
-  //- rjf: animate confirmation
-  //
-  {
-    F32 rate = rd_setting_b32_from_name(str8_lit("menu_animations")) ? 1 - pow_f32(2, (-30.f * rd_state->frame_dt)) : 1.f;
-    B32 popup_open = rd_state->popup_active;
-    rd_state->popup_t += rate * ((F32)!!popup_open-rd_state->popup_t);
-    if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)
-    {
-      rd_request_frame();
-    }
-  }
-  
   ////////////////////////////
   //- rjf: rotate command slots, bump command gen counter
   //
@@ -16247,6 +16245,36 @@ rd_frame(void)
     DI_KeyList keys_list = d_push_active_dbgi_key_list(scratch.arena);
     DI_KeyArray keys = di_key_array_from_list(scratch.arena, &keys_list);
     di_match_store_begin(rd_state->match_store, keys);
+  }
+  
+  //////////////////////////////
+  //- rjf: compute animation rates, given config
+  //
+  {
+    F32 master_animations_f    = (F32)!!rd_setting_b32_from_name(str8_lit("animations"));
+    F32 scrolling_animations_f = (F32)!!rd_setting_b32_from_name(str8_lit("scrolling_animations"));
+    F32 tooltip_animations_f   = (F32)!!rd_setting_b32_from_name(str8_lit("tooltip_animations"));
+    F32 menu_animations_f      = (F32)!!rd_setting_b32_from_name(str8_lit("menu_animations"));
+    rd_state->catchall_animation_rate     = 1 - master_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+    rd_state->menu_animation_rate         = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-70.f * rd_state->frame_dt));
+    rd_state->menu_animation_rate__slow   = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
+    rd_state->entity_alive_animation_rate = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-30.f * rd_state->frame_dt));
+    rd_state->rich_hover_animation_rate   = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
+    rd_state->scrolling_animation_rate    = 1 - master_animations_f*scrolling_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+    rd_state->tooltip_animation_rate      = 1 - master_animations_f*tooltip_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+  }
+  
+  //////////////////////////////
+  //- rjf: animate confirmation
+  //
+  {
+    F32 rate = rd_setting_b32_from_name(str8_lit("menu_animations")) ? 1 - pow_f32(2, (-30.f * rd_state->frame_dt)) : 1.f;
+    B32 popup_open = rd_state->popup_active;
+    rd_state->popup_t += rate * ((F32)!!popup_open-rd_state->popup_t);
+    if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)
+    {
+      rd_request_frame();
+    }
   }
   
   //////////////////////////////

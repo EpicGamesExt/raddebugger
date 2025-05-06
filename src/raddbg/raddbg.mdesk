@@ -223,12 +223,14 @@ RD_VocabTable:
       @expand_commands(edit_user_theme) x:
     {
       //- rjf: animations
-      @default(1)  'hover_animations':     bool,
-      @default(1)  'press_animations':     bool,
-      @default(0)  'focus_animations':     bool,
-      @default(1)  'tooltip_animations':   bool,
-      @default(1)  'menu_animations':      bool,
-      @default(1)  'scrolling_animations': bool,
+      @display_name('Animations') @description("Enables animations.")
+        @default(1) 'animations': bool,
+      @display_name('Scrolling Animations') @description("Enables scrolling animations.")
+        @expand_if("$.animations") @default(1) 'scrolling_animations': bool,
+      @display_name('Tooltip Animations') @description("Enables tooltip animations.")
+        @expand_if("$.animations") @default(1) 'tooltip_animations': bool,
+      @display_name('Menu Animations') @description("Enables menu animations.")
+        @expand_if("$.animations") @default(1) 'menu_animations': bool,
       
       //- rjf: fonts
       @display_name('UI Font') @description("The name of, or path to, the font used when displaying non-code UI elements.")
