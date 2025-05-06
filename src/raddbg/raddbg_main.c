@@ -201,10 +201,6 @@
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
 // [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
-//
-//- no immediate action but check before release:
-// [ ] user switching
-// [ ] project switching
 
 ////////////////////////////////
 //~ rjf: post-0.9.16 TODO notes
@@ -508,6 +504,8 @@
 //      how to load them, but not how you save them. Obviously I can just copy
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
+// [x] user switching
+// [x] project switching
 
 ////////////////////////////////
 //~ rjf: Build Options
