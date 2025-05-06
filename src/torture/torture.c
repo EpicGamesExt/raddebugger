@@ -1089,11 +1089,11 @@ t_common_block(void)
   T_Result result = T_Result_Fail;
 
   String8 a_obj_name = str8_lit("a.obj");
+  U8 a_data[6] = {0};
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_common(obj_writer, str8_lit("A"), 3);
-    U8 data[6] = { 0 };
-    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(data));
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(a_data));
     coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, symbol, COFF_Reloc_X64_Addr32);
     String8 a_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -1103,10 +1103,10 @@ t_common_block(void)
   }
 
   String8 b_obj_name = str8_lit("b.obj");
+  U8 b_data[9] = { 0 };
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    U8 data[9] = { 0 };
-    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(data));
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(b_data));
     COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_common(obj_writer, str8_lit("B"), 6);
     coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, symbol, COFF_Reloc_X64_Addr64);
     String8 b_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
@@ -1137,8 +1137,31 @@ t_common_block(void)
 
   String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
   PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
   String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+
+  COFF_SectionHeader *data_sect = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+  if (data_sect == 0) {
+    goto exit;
+  }
+
+  // test common block sort, if absent vsize is 0x1D
+  if (data_sect->vsize != 0x1B) {
+    goto exit;
+  }
+
+  String8  data   = str8_substr(exe, rng_1u64(data_sect->foff, data_sect->foff + data_sect->fsize));
+  U32     *a_addr = (U32 *)data.str;
+  U64     *b_addr = (U64 *)(data.str + sizeof(a_data));
+  if ((*a_addr) - (pe.image_base + data_sect->voff) != 0x18) {
+      goto exit;
+  }
+  if ((*b_addr) - (pe.image_base + data_sect->voff) != 0x10) {
+    goto exit;
+  }
+  
+  result = T_Result_Pass;
+
 
 exit:;
   scratch_end(scratch);
