@@ -5071,7 +5071,10 @@ rd_view_ui(Rng2F32 rect)
                                   rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
-                            rd_cmd(RD_CmdKind_Accept);
+                            // TODO(rjf): @hack - we really want navigations to be event-like, but we need
+                            // to insert a dumb no-op here so that the "rugpull" cursor move can take effect
+                            // before the edit command we are queueing up...
+                            rd_cmd(RD_CmdKind_Edit);
                             if(cell_info.flags & RD_WatchCellFlag_CanEdit)
                             {
                               rd_cmd(RD_CmdKind_Edit);
@@ -5132,7 +5135,8 @@ rd_view_ui(Rng2F32 rect)
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             if(!rd_watch_pt_match(ewv->cursor, cell_pt))
                             {
-                              rd_cmd(RD_CmdKind_Accept);
+                              // TODO(rjf): see above @hack
+                              rd_cmd(RD_CmdKind_Edit);
                             }
                             rd_cmd(RD_CmdKind_Edit);
                           }
