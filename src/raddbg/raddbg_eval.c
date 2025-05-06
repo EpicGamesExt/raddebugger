@@ -1592,6 +1592,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   RD_DebugInfoTableLookupAccel *accel = (RD_DebugInfoTableLookupAccel *)user_data;
   U64 needed_row_count = dim_1u64(idx_range);
   for EachIndex(idx, needed_row_count)
@@ -1609,8 +1610,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
     E_Module *module = &e_base_ctx->modules[item->dbgi_idx];
     
-    // rjf: build item's evaluation
-    E_Eval item_eval = e_eval_nil;
+    // rjf: get item's string
+    String8 item_string = {0};
     {
       U64 element_idx = item->idx;
       switch(accel->section)
@@ -1629,21 +1630,21 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_base_ctx->modules));
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &symbol_name.size);
-          item_eval = e_eval_from_string(symbol_name);
+          item_string = symbol_name;
         }break;
         case RDI_SectionKind_GlobalVariables:
         {
           RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &symbol_name.size);
-          item_eval = e_eval_from_string(symbol_name);
+          item_string = symbol_name;
         }break;
         case RDI_SectionKind_ThreadVariables:
         {
           RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &symbol_name.size);
-          item_eval = e_eval_from_string(symbol_name);
+          item_string = symbol_name;
         }break;
         case RDI_SectionKind_UDTs:
         {
@@ -1651,14 +1652,29 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
           String8 name = {0};
           name.str = rdi_string_from_idx(module->rdi, type_node->user_defined.name_string_idx, &name.size);
-          item_eval = e_eval_from_string(name);
+          item_string = name;
         }break;
       }
     }
     
+    // rjf: build a valid expression string given item string
+    String8 item_expr = item_string;
+    {
+      E_TokenArray tokens = e_token_array_from_text(scratch.arena, item_expr);
+      if(tokens.count != 1)
+      {
+        item_expr = push_str8f(scratch.arena, "`%S`", item_string);
+      }
+    }
+    
+    // rjf: item's eval
+    E_Eval item_eval = e_eval_from_string(item_expr);
+    
     // rjf: fill
     evals_out[idx] = item_eval;
+    temp_end(scratch);
   }
+  scratch_end(scratch);
 }
 
 E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(debug_info_table)
