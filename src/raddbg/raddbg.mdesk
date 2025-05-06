@@ -1798,8 +1798,75 @@ RD_ThemePresetTable:
     ```
   }
   
-  //- rjf: todo
-  { SolarizedLight   solarized_light  "Solarized (Light)" }
+  //- rjf: solarized light
+  { SolarizedLight   solarized_light  "Solarized (Light)",
+    ```theme:
+    {
+      theme_color:{tags: background, value: 0xfdf6e3ff}
+      theme_color:{tags: "alt background", value: 0xeee8d5ff}
+      theme_color:{tags: "pop background", value: 0x29a19890}
+      theme_color:{tags: "fresh background", value: 0xf7d38dff}
+      theme_color:{tags: "match background", value: 0xdcddddff}
+      theme_color:{tags: border, value: 0xd1ccbdff}
+      theme_color:{tags: "weak text", value: 0x93a1a1ff}
+      theme_color:{tags: text, value: 0x657b83ff}
+      theme_color:{tags: "good text", value: 0x32a852ff}
+      theme_color:{tags: "neutral text", value: 0x3a90bbff}
+      theme_color:{tags: "bad text", value: 0xcf5242ff}
+      theme_color:{tags: hover, value: 0xca4b16ff}
+      theme_color:{tags: "focus overlay", value: 0xca4b1454}
+      theme_color:{tags: "focus border", value: 0xca4b16ff}
+      theme_color:{tags: cursor, value: 0xca4b16ff}
+      theme_color:{tags: selection, value: 0x8594a264}
+      theme_color:{tags: "inactive background", value: 0x14}
+      theme_color:{tags: drop_shadow, value: 0x3a}
+      theme_color:{tags: "good_pop background", value: 0xd1e99aff}
+      theme_color:{tags: "good_pop border", value: 0xd1e99aff}
+      theme_color:{tags: "bad_pop background", value: 0xd26c6cff}
+      theme_color:{tags: "bad_pop border", value: 0xd26c6cff}
+      theme_color:{tags: "bad_pop weak text", value: 0xffffffff}
+      theme_color:{tags: "bad_pop text", value: 0xffffffff}
+      theme_color:{tags: code_default, value: 0x839496ff}
+      theme_color:{tags: code_symbol, value: 0xb3880eff}
+      theme_color:{tags: code_type, value: 0xb3880eff}
+      theme_color:{tags: code_local, value: 0x657b83ff}
+      theme_color:{tags: code_register, value: 0x947298ff}
+      theme_color:{tags: code_keyword, value: 0x849804ff}
+      theme_color:{tags: code_delimiter_or_operator, value: 0x839496ff}
+      theme_color:{tags: code_numeric, value: 0x2aa198ff}
+      theme_color:{tags: code_numeric_alt_digit_group, value: 0x19766bff}
+      theme_color:{tags: code_string, value: 0x2aa198ff}
+      theme_color:{tags: code_meta, value: 0xca4b16ff}
+      theme_color:{tags: code_comment, value: 0x586e75ff}
+      theme_color:{tags: line_info_0, value: 0xeee1dbff}
+      theme_color:{tags: line_info_1, value: 0xe5d5b1ff}
+      theme_color:{tags: line_info_2, value: 0xd9e8b6ff}
+      theme_color:{tags: line_info_3, value: 0xf5d5ccff}
+      theme_color:{tags: thread_0, value: 0xffa100ff}
+      theme_color:{tags: thread_1, value: 0x6edd00ff}
+      theme_color:{tags: thread_unwound, value: 0x708f9eff}
+      theme_color:{tags: thread_error, value: 0xff5231ff}
+      theme_color:{tags: breakpoint, value: 0xff411dff}
+      theme_color:{tags: "floating background", value: 0xfdf6e3b1}
+      theme_color:{tags: "floating background alt", value: 0x22}
+      theme_color:{tags: "floating background fresh", value: 0xf7d38dff}
+      theme_color:{tags: "scroll_bar background", value: 0xeee6d0ff}
+      theme_color:{tags: "scroll_bar floating background", value: 0xd5ccb5ff}
+      theme_color:{tags: "implicit background", value: 0x00000000}
+      theme_color:{tags: "implicit border", value: 0x00000000}
+      theme_color:{tags: "hollow background", value: 0x00000000}
+      theme_color:{tags: "hollow border", value: 0xffffff1f}
+      theme_color:{tags: "tab background", value: 0xfdf6e3ff}
+      theme_color:{tags: "tab inactive background", value: 0xe0d6bbff}
+      theme_color:{tags: "tab auto background", value: 0xf5cfe1ff}
+      theme_color:{tags: "tab auto border", value: 0xa2a6dfff}
+      theme_color:{tags: "tab auto inactive background", value: 0xc8a5b5ff}
+      theme_color:{tags: "tab auto inactive border", value: 0x595fbcff}
+      theme_color:{tags: "drop_site background", value: 0x29a19890}
+      theme_color:{tags: "drop_site border", value: 0x81ddd690}
+    }
+    ```
+  }
   
   //- rjf: handmade hero theme
   { HandmadeHero     handmade_hero    "Handmade Hero",
@@ -2119,7 +2186,69 @@ RD_ThemePresetTable:
   }
   
   //- rjf: todo
-  { FarManager       far_manager      "Far Manager"       }
+  { FarManager       far_manager      "Far Manager",
+    ```theme:
+    {
+      theme_color:{tags: background, value: 0x000080ff}
+      theme_color:{tags: "pop background", value: 0x8080ff}
+      theme_color:{tags: "fresh background", value: 0x31393dff}
+      theme_color:{tags: "match background", value: 0x31393dff}
+      theme_color:{tags: border, value: 0x8080ff}
+      theme_color:{tags: text, value: 0xffffffff}
+      theme_color:{tags: "weak text", value: 0xffffffff}
+      theme_color:{tags: "good text", value: 0x00ff00ff}
+      theme_color:{tags: "neutral text", value: 0x00ffffff}
+      theme_color:{tags: "bad text", value: 0xff0000ff}
+      theme_color:{tags: hover, value: 0xffffffff}
+      theme_color:{tags: "focus overlay", value: 0xffff0012}
+      theme_color:{tags: "focus border", value: 0xffff00ff}
+      theme_color:{tags: cursor, value: 0xffff00ff}
+      theme_color:{tags: selection, value: 0xffff0018}
+      theme_color:{tags: "inactive background", value: 0x0000002f}
+      theme_color:{tags: drop_shadow, value: 0x0000007f}
+      theme_color:{tags: "good_pop background", value: 0x6c17ff}
+      theme_color:{tags: "good_pop border", value: 0x6c17ff}
+      theme_color:{tags: "bad_pop background", value: 0xff0000ff}
+      theme_color:{tags: code_default, value: 0xffffffff}
+      theme_color:{tags: code_symbol, value: 0xffffff}
+      theme_color:{tags: code_type, value: 0x00ff00ff}
+      theme_color:{tags: code_local, value: 0x00ffffff}
+      theme_color:{tags: code_register, value: 0xff00ffff}
+      theme_color:{tags: code_keyword, value: 0xffffffff}
+      theme_color:{tags: code_delimiter_or_operator, value: 0xffffffff}
+      theme_color:{tags: code_numeric, value: 0xffff00ff}
+      theme_color:{tags: code_numeric_alt_digit_group, value: 0xffff00ff}
+      theme_color:{tags: code_string, value: 0xffff00ff}
+      theme_color:{tags: code_meta, value: 0xff0000ff}
+      theme_color:{tags: code_comment, value: 0x008080ff}
+      theme_color:{tags: line_info_0, value: 0x8080ff}
+      theme_color:{tags: line_info_1, value: 0x800080ff}
+      theme_color:{tags: line_info_2, value: 0x800000ff}
+      theme_color:{tags: line_info_3, value: 0x08000ff}
+      theme_color:{tags: thread_0, value: 0xffff00ff}
+      theme_color:{tags: thread_1, value: 0x00ff00ff}
+      theme_color:{tags: thread_unwound, value: 0x00ffffff}
+      theme_color:{tags: thread_error, value: 0xff0000ff}
+      theme_color:{tags: breakpoint, value: 0xff0000ff}
+      theme_color:{tags: "menu_bar background", value: 0x008080ff}
+      theme_color:{tags: "menu_bar border", value: 0x8080ff}
+      theme_color:{tags: "scroll_bar background", value: 0x008080ff}
+      theme_color:{tags: "implicit background", value: 0x00000000}
+      theme_color:{tags: "implicit border", value: 0x00000000}
+      theme_color:{tags: "hollow background", value: 0x00000000}
+      theme_color:{tags: "hollow border", value: 0xffffff1f}
+      theme_color:{tags: "tab background", value: 0x8080ff}
+      theme_color:{tags: "tab border", value: 0x8080ff}
+      theme_color:{tags: "tab inactive background", value:0}
+      theme_color:{tags: "tab auto background", value: 0x800000ff}
+      theme_color:{tags: "tab auto border", value: 0x8080ff}
+      theme_color:{tags: "tab auto inactive background", value: 0x300000ff}
+      theme_color:{tags: "tab auto inactive border", value: 0x8080ff}
+      theme_color:{tags: "drop_site background", value: 0x80ff}
+      theme_color:{tags: "drop_site border", value: 0xffffff}
+    }
+    ```
+  }
 }
 
 @table(name lower_name)
