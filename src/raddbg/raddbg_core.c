@@ -4393,10 +4393,16 @@ rd_view_ui(Rng2F32 rect)
               //
               ProfScope("build table")
               {
+                F32 row_y_px = rect.y0;
                 U64 local_row_idx = 0;
                 U64 global_row_idx = rows.count_before_semantic;
                 RD_WatchRowInfo last_row_info = {0};
-                for(EV_WindowedRowNode *row_node = rows.first; row_node != 0; row_node = row_node->next, global_row_idx += 1, local_row_idx += 1)
+                for(EV_WindowedRowNode *row_node = rows.first;
+                    row_node != 0;
+                    (row_y_px += row_height_px * (row_node->row.visual_size),
+                     row_node = row_node->next,
+                     global_row_idx += 1,
+                     local_row_idx += 1))
                 {
                   ////////////////////////
                   //- rjf: unpack row info
@@ -4691,6 +4697,7 @@ rd_view_ui(Rng2F32 rect)
                       ////////////
                       //- rjf: build cell contents
                       //
+                      RD_Cfg *cell_view = &rd_nil_cfg;
                       UI_Signal sig = {0};
                       ProfScope("build cell contents")
                         UI_Parent(cell_box)
@@ -4704,17 +4711,18 @@ rd_view_ui(Rng2F32 rect)
                         if(cell->kind == RD_WatchCellKind_ViewUI && cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                         {
                           RD_Cfg *root = rd_immediate_cfg_from_keyf("view%I64x_%I64x", rd_regs()->view, row_hash);
-                          RD_Cfg *view = rd_view_from_eval(root, cell->eval);
-                          Rng2F32 cell_rect = r2f32p(cell_x_px, 0, next_cell_x_px, row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
+                          cell_view = rd_view_from_eval(root, cell->eval);
+                          Rng2F32 cell_rect = r2f32p(cell_x_px, row_y_px, next_cell_x_px, row_y_px + row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
                           ui_set_next_fixed_y(-1.f * (row_node->visual_size_skipped) * row_height_px);
                           ui_set_next_fixed_height((row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped) * row_height_px);
                           UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_FloatingY, "###val_%I64x", row_hash);
                           UI_Parent(box)
-                            RD_RegsScope(.view = view->id, .file_path = rd_file_path_from_eval(scratch.arena, cell->eval))
+                            RD_RegsScope(.view = cell_view->id, .file_path = rd_file_path_from_eval(scratch.arena, cell->eval))
                             UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
                             UI_Flags(0)
                           {
                             // rjf: 'pull out' button
+                            UI_Signal pull_out_sig = {0};
                             UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(floor_f32(ui_top_font_size()*1.5f),
                                                                        floor_f32(ui_top_font_size()*1.5f),
                                                                        floor_f32(ui_top_font_size()*1.5f + ui_top_font_size()*3.f),
@@ -4733,11 +4741,16 @@ rd_view_ui(Rng2F32 rect)
                                                                       UI_BoxFlag_DrawHotEffects,
                                                                       "%S###pull_out",
                                                                       rd_icon_kind_text_table[RD_IconKind_Window]);
-                              UI_Signal sig = ui_signal_from_box(box);
-                              if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
-                              {
-                                rd_drag_begin(RD_RegSlot_View);
-                              }
+                              pull_out_sig = ui_signal_from_box(box);
+                            }
+                            if(ui_hovering(pull_out_sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+                            {
+                              ui_state->tooltip_anchor_key = pull_out_sig.box->key;
+                              ui_labelf("Pull Out As New Tab");
+                            }
+                            if(ui_dragging(pull_out_sig) && !contains_2f32(pull_out_sig.box->rect, ui_mouse()))
+                            {
+                              rd_drag_begin(RD_RegSlot_View);
                             }
                             
                             // rjf: loading animation container
@@ -4756,7 +4769,7 @@ rd_view_ui(Rng2F32 rect)
                             // rjf: loading fill
                             UI_Parent(loading_overlay_container)
                             {
-                              RD_ViewState *vs = rd_view_state_from_cfg(view);
+                              RD_ViewState *vs = rd_view_state_from_cfg(cell_view);
                               rd_loading_overlay(cell_rect, vs->loading_t, vs->loading_progress_v, vs->loading_progress_v_target);
                             }
                           }
@@ -5024,9 +5037,33 @@ rd_view_ui(Rng2F32 rect)
                             ui_kill_action();
                           }
                           
+                          // rjf: cell w/ a visualizer hook? ->
+                          // if keyboard: open in tab, if within tab
+                          // if double-click: focus this visualizer (via edit)
+                          if(cell->kind == RD_WatchCellKind_ViewUI &&
+                             cell_info.view_ui_rule != &rd_nil_view_ui_rule &&
+                             cell_view != &rd_nil_cfg)
+                          {
+                            if(!view_is_floating && sig.f & UI_SignalFlag_KeyboardPressed)
+                            {
+                              rd_cfg_unhook(cell_view->parent, cell_view);
+                              rd_cfg_insert_child(view->parent, view, cell_view);
+                              rd_cmd(RD_CmdKind_FocusTab, .tab = cell_view->id);
+                            }
+                            else if(sig.f & UI_SignalFlag_DoubleClicked)
+                            {
+                              ewv->next_cursor = ewv->next_mark = cell_pt;
+                              if(!rd_watch_pt_match(ewv->cursor, cell_pt) && ewv->text_editing)
+                              {
+                                rd_cmd(RD_CmdKind_Accept);
+                              }
+                              rd_cmd(RD_CmdKind_Edit);
+                            }
+                          }
+                          
                           // rjf: this watch window is a lister? -> move cursor & edit or accept
-                          if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg ||
-                             rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
+                          else if(rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg ||
+                                  rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             rd_cmd(RD_CmdKind_Accept);
@@ -5088,7 +5125,7 @@ rd_view_ui(Rng2F32 rect)
                           else if(!(sig.f & UI_SignalFlag_KeyboardPressed) && cell_info.flags & RD_WatchCellFlag_CanEdit)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
-                            if(!row_is_expandable)
+                            if(!rd_watch_pt_match(ewv->cursor, cell_pt))
                             {
                               rd_cmd(RD_CmdKind_Accept);
                             }
@@ -5272,10 +5309,48 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(expr_string);
+      
+      // rjf: 'pull out' button, if floating
+      if(view_is_floating)
+      {
+        UI_Signal pull_out_sig = {0};
+        UI_TagF(".") UI_TagF("tab") UI_Rect(r2f32p(floor_f32(ui_top_font_size()*1.5f),
+                                                   floor_f32(ui_top_font_size()*1.5f),
+                                                   floor_f32(ui_top_font_size()*1.5f + ui_top_font_size()*3.f),
+                                                   floor_f32(ui_top_font_size()*1.5f + ui_top_font_size()*3.f)))
+          UI_CornerRadius(floor_f32(ui_top_font_size()*1.5f))
+          UI_TextAlignment(UI_TextAlign_Center)
+          RD_Font(RD_FontSlot_Icons)
+          UI_FontSize(floor_f32(ui_top_font_size()*0.9f))
+        {
+          UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                  UI_BoxFlag_Floating|
+                                                  UI_BoxFlag_DrawText|
+                                                  UI_BoxFlag_DrawBorder|
+                                                  UI_BoxFlag_DrawBackground|
+                                                  UI_BoxFlag_DrawActiveEffects|
+                                                  UI_BoxFlag_DrawHotEffects,
+                                                  "%S###pull_out",
+                                                  rd_icon_kind_text_table[RD_IconKind_Window]);
+          pull_out_sig = ui_signal_from_box(box);
+        }
+        if(ui_dragging(pull_out_sig) && !contains_2f32(pull_out_sig.box->rect, ui_mouse()))
+        {
+          rd_drag_begin(RD_RegSlot_View);
+        }
+        if(ui_hovering(pull_out_sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+        {
+          ui_state->tooltip_anchor_key = pull_out_sig.box->key;
+          ui_labelf("Pull Out As New Tab");
+        }
+      }
+      
+      // rjf: build ui via hook
       E_ParentKey(expr_eval.key)
       {
         view_ui_rule->ui(expr_eval, rect);
       }
+      
       scratch_end(scratch);
     }
   }
