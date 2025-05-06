@@ -26,6 +26,7 @@
 //   pattern, to specify placeholders for various parts of a type name. For
 //   example, the pattern `DynamicArray<?>` would match `DynamicArray<int>`,
 //   `DynamicArray<float>`, and so on. `?(?)` would match all function types.
+//   (#118, #345)
 // - **Usage of the source expression within type views.** Type views have been
 //   upgraded to support a larger number of possibilities. Instead of mapping
 //   to a set of views which are applied to some other expression, type views
@@ -103,6 +104,7 @@
 //   dropped. This can be used to create new top-level rows in a `Watch` tab,
 //   or to drag evaluations between `Watch` tabs, or to drag evaluations to
 //   source or disassembly views and pin the evaluation to some location there.
+//   (#137, #388)
 // - **Settings expressions.** Debugger settings have been upgraded to be
 //   stored as expressions, rather than being locked to a specific value.
 //   These expressions are evaluated, like any other expression, and their
@@ -122,7 +124,7 @@
 //   the value as well.
 // - **Merging of `Watch` UI with hover evaluation.** The hover evaluation
 //   feature has been majorly upgraded to support all features normally
-//   available in `Watch` tabs.
+//   available in `Watch` tabs. (#342)
 // - Added **transient tabs**, which are colored differently than normal tabs.
 //   These tabs are automatically opened by the debugger when snapping to
 //   source code which is not already opened. They are automatically replaced
@@ -143,7 +145,7 @@
 //   pins (the right-click context menu and the dedicated tabs) have been
 //   merged. Both interfaces support exactly the same features in exactly the
 //   same way. The same interface is also accessible through the palette.
-// - Added the ability to add a list of environment strings to targets.
+// - Added the ability to add a list of environment strings to targets. (#73)
 // - The debugger releases are now packaged with a `raddbg_markup.h`
 //   single-header library which contains a number of source code markup tools
 //   which can be used in your programs. Some of these features are for direct
@@ -186,6 +188,26 @@
 // - Fixed a debugger regression which was incorrectly using thread name events
 //   when those events were sent to name a suspended thread by a different
 //   thread. (#430)
+// - Added support for Tab and Shift + Tab style navigation in Watch tables,
+//   using the `Move Next` and `Move Previous` commands. (#93)
+// - The debugger now correctly serializes window sizes when fullscreened.
+//   (#130)
+// - Added an option to disable the Alt key Windows-style menu-bar focusing
+//   behavior. (#382)
+// - Added an option to quickly duplicate configuration entities (targets,
+//   breakpoints, etc.). (#451)
+// - Fixed a crash relating to truncated string hover tooltips when font sizes
+//   were changed. (#416)
+// - Fixed the debugger's lack of robustness to selecting non-config files as
+//   config files. (#432, #409)
+// - Fixed crashes caused by quick changes in the set of loaded modules while
+//   debug information table tabs (`Procedures`, `Globals`, `Types`) were open.
+//   (#467, #459, #458, #440, #436, #415, #412)
+// - Fixed a crash where the debugger would crash when toggling fullscreen, if
+//   launched in fullscreen mode. (#454, #413)
+// - Adjusted breakpoint placement to automatically deduplicate identical
+//   breakpoints, if placed at the same location, with no extra information
+//   attached (condition or label). (#407)
 // - Made several visual improvements.
 
 ////////////////////////////////
