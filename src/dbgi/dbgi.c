@@ -704,12 +704,11 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
       B32 params_stale = 1;
       B32 query_stale = 1;
       B32 results_stale = 1;
-      if(params_hash == node->buckets[node->bucket_read_gen%ArrayCount(node->buckets)].params_hash &&
-         node->bucket_read_gen != 0)
+      if(node->bucket_read_gen != 0)
       {
         di_scope_touch_search_node__stripe_mutex_r_guarded(scope, node);
         items = node->items;
-        params_stale = 0;
+        params_stale = (params_hash != node->buckets[node->bucket_read_gen%ArrayCount(node->buckets)].params_hash);
         query_stale = !str8_match(query, node->buckets[node->bucket_read_gen%ArrayCount(node->buckets)].query, 0);
         results_stale = (node->bucket_read_gen < node->bucket_write_gen);
       }
@@ -718,8 +717,8 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
         *stale_out = (params_stale || query_stale || results_stale);
       }
       
-      // rjf: if query stale -> request again
-      if(query_stale && node->bucket_read_gen <= node->bucket_write_gen && node->bucket_write_gen < node->bucket_read_gen + ArrayCount(node->buckets)-1)
+      // rjf: if query or params stale -> request again
+      if((query_stale || params_stale) && node->bucket_read_gen <= node->bucket_write_gen && node->bucket_write_gen < node->bucket_read_gen + ArrayCount(node->buckets)-1)
       {
         node->bucket_write_gen += 1;
         if(node->bucket_write_gen >= node->bucket_items_gen + ArrayCount(node->buckets))

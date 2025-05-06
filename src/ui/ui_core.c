@@ -833,6 +833,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
     ui_state->tags_cache_slots_count = 512;
     ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
+    ui_state->autocomplete_string = str8_zero();
   }
   
   //- rjf: prune unused animation nodes
