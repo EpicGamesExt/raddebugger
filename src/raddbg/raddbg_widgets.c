@@ -851,14 +851,14 @@ rd_cmd_binding_buttons(String8 name, String8 filter, B32 add_new)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        if(!rd_state->bind_change_active && ui_clicked(sig))
+        if(!adding_new_binding && ui_clicked(sig))
         {
           arena_clear(rd_state->bind_change_arena);
           rd_state->bind_change_active = 1;
           rd_state->bind_change_cmd_name = push_str8_copy(rd_state->bind_change_arena, name);
           rd_state->bind_change_binding_id = 0;
         }
-        else if(rd_state->bind_change_active && ui_clicked(sig))
+        else if(adding_new_binding && ui_clicked(sig))
         {
           rd_state->bind_change_active = 0;
         }

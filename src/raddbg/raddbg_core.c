@@ -7549,36 +7549,6 @@ rd_window_frame(void)
                   }
                 }
               }
-              
-              ui_spacer(ui_em(0.75f, 1));
-              
-              // rjf: conversion task visualization
-              UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill UI_TagF("pop")
-              {
-                Temp scratch = scratch_begin(0, 0);
-                RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
-                for(RD_CfgNode *n = tasks.first; n != 0; n = n->next)
-                {
-                  RD_Cfg *task = n->v;
-                  F32 task_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "task_anim_%I64u", task->id), 1.f);
-                  if(task_t > 0.5f)
-                  {
-                    String8 rdi_path = task->first->string;
-                    String8 rdi_name = str8_skip_last_slash(rdi_path);
-                    String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
-                    UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
-                    UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
-                    os_window_push_custom_title_bar_client_area(ws->os, box->rect);
-                    UI_Signal sig = ui_signal_from_box(box);
-                    if(ui_hovering(sig)) UI_Tooltip
-                    {
-                      ui_label(rdi_path);
-                    }
-                    ui_box_equip_display_string(box, task_text);
-                  }
-                }
-                scratch_end(scratch);
-              }
             }
           }
         }
@@ -7768,10 +7738,31 @@ rd_window_frame(void)
     //
     ProfScope("build bottom bar")
     {
+      //- rjf: unpack status info
       B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
       CTRL_Event stop_event = d_ctrl_last_stop_event();
       String8 tag = str8_lit("pop");
-      if(!is_running)
+      RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
+      RD_CfgList long_running_tasks = {0};
+      F32 alive_t_rate = 1 - pow_f32(2, (-5.f * rd_state->frame_dt));
+      for(RD_CfgNode *n = tasks.first; n != 0; n = n->next)
+      {
+        RD_Cfg *task = n->v;
+        F32 task_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "task_anim_%I64u", task->id), 1.f, .rate = alive_t_rate);
+        if(task_t > 0.5f)
+        {
+          rd_cfg_list_push(scratch.arena, &long_running_tasks, task);
+        }
+      }
+      if(rd_state->bind_change_active)
+      {
+        tag = str8_lit("pop");
+      }
+      else if(ws->error_t >= 0.01f && ws->error_string_size != 0)
+      {
+        tag = str8_lit("bad_pop");
+      }
+      else if(!is_running)
       {
         switch(stop_event.cause)
         {
@@ -7789,11 +7780,65 @@ rd_window_frame(void)
           }break;
         }
       }
+      
+      //- rjf: compute fstrs for status explanation
+      DR_FStrList status_fstrs = {0};
+      {
+        if(rd_state->bind_change_active)
+        {
+          RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(rd_state->bind_change_cmd_name);
+          String8 display_name = rd_display_from_code_name(info->string);
+          String8 string = push_str8f(scratch.arena, "Currently rebinding \"%S\"", display_name);
+          DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, string);
+        }
+        else if(ws->error_t >= 0.01f && ws->error_string_size != 0)
+        {
+          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
+          ws->error_t -= rd_state->frame_dt/8.f;
+          rd_request_frame();
+          ui_set_next_pref_width(ui_children_sum(1));
+          UI_CornerRadius(4)
+            UI_Row
+            UI_PrefWidth(ui_text_dim(10, 1))
+            UI_TextAlignment(UI_TextAlign_Center)
+          {
+            DR_FStrList error_fstrs = rd_fstrs_from_rich_string(scratch.arena, error_string);
+            DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+            dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, rd_icon_kind_text_table[RD_IconKind_WarningBig],
+                              .font = rd_font_from_slot(RD_FontSlot_Icons),
+                              .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons));
+            dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, str8_lit("  "));
+            dr_fstrs_concat_in_place(&status_fstrs, &error_fstrs);
+          }
+        }
+        else if(is_running)
+        {
+          DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
+          dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, rd_icon_kind_text_table[RD_IconKind_Play],
+                            .font = rd_font_from_slot(RD_FontSlot_Icons),
+                            .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons));
+          dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, str8_lit("  Running..."));
+          if(long_running_tasks.count != 0)
+          {
+            String8 string = push_str8f(scratch.arena, "  Loading %I64u debug information file%s...", long_running_tasks.count, long_running_tasks.count == 1 ? "" : "s");
+            dr_fstrs_push_new(scratch.arena, &status_fstrs, &params, string);
+          }
+        }
+        else
+        {
+          status_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
+        }
+      }
+      
+      //- rjf: build bottom bar
       UI_Flags(UI_BoxFlag_DrawBackground) UI_CornerRadius(0)
         UI_Tag(tag)
         UI_Pane(bottom_bar_rect, str8_lit("###bottom_bar")) UI_WidthFill UI_Row
         UI_Flags(0)
       {
+        Temp scratch = scratch_begin(0, 0);
+        
         // rjf: developer frame-time indicator
         if(DEV_updating_indicator)
         {
@@ -7804,57 +7849,24 @@ rd_window_frame(void)
           ui_spacer(ui_em(1.5f*(1-animation_t), 1.f));
         }
         
-        // rjf: status
+        // rjf: build status
         {
           ui_spacer(ui_em(1.f, 1.f));
-          if(is_running)
-          {
-            ui_label(str8_lit("Running"));
-          }
-          else
-          {
-            Temp scratch = scratch_begin(0, 0);
-            DR_FStrList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
-            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-            ui_box_equip_display_fstrs(box, &explanation_fstrs);
-            scratch_end(scratch);
-          }
+          UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+          ui_box_equip_display_fstrs(box, &status_fstrs);
         }
         
         ui_spacer(ui_pct(1, 0));
         
-        // rjf: bind change visualization
-        if(rd_state->bind_change_active)
-        {
-          RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(rd_state->bind_change_cmd_name);
-          String8 display_name = rd_display_from_code_name(info->string);
+        // rjf: version
+        UI_FontSize(ui_top_font_size()*0.85f)
           UI_PrefWidth(ui_text_dim(10, 1))
-            UI_Flags(UI_BoxFlag_DrawBackground)
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_CornerRadius(4)
-            UI_TagF("pop")
-            ui_labelf("Currently rebinding \"%S\" hotkey", display_name);
+          UI_TextAlignment(UI_TextAlign_Center)
+        {
+          ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
         }
         
-        // rjf: error visualization
-        else if(ws->error_t >= 0.01f)
-        {
-          ws->error_t -= rd_state->frame_dt/8.f;
-          rd_request_frame();
-          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
-          if(error_string.size != 0)
-          {
-            ui_set_next_pref_width(ui_children_sum(1));
-            UI_CornerRadius(4)
-              UI_Row
-              UI_PrefWidth(ui_text_dim(10, 1))
-              UI_TextAlignment(UI_TextAlign_Center)
-            {
-              RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
-              rd_label(error_string);
-            }
-          }
-        }
+        scratch_end(scratch);
       }
     }
     
@@ -9541,6 +9553,15 @@ rd_window_frame(void)
       dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.025f), 0, 0, 0);
     }
     
+    //- rjf: draw border/overlay color to signify rebinding
+    if(rd_state->bind_change_active) UI_TagF("pop")
+    {
+      Vec4F32 color = ui_color_from_name(str8_lit("background"));
+      Rng2F32 rect = os_client_rect_from_window(ws->os);
+      dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
+      dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.025f), 0, 0, 0);
+    }
+    
     scratch_end(scratch);
   }
   
@@ -9941,7 +9962,10 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
   DR_FStrParams params = {ui_top_font(), ui_top_text_raster_flags(), ui_color_from_name(str8_lit("text")), ui_top_font_size()};
   switch(event->cause)
   {
-    default:{}break;
+    default:
+    {
+      dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("Not running"));
+    }break;
     
     //- rjf: finished operation; if active thread, completed thread, otherwise we're just stopped
     case CTRL_EventCause_Finished:
