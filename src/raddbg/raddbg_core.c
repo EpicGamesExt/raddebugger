@@ -4860,6 +4860,12 @@ rd_view_ui(Rng2F32 rect)
                               MemoryZeroStruct(&cell_params.description);
                             }
                             
+                            // rjf: extra edit button for meta-cfg strings
+                            if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+                            {
+                              cell_params.flags |= RD_CellFlag_EmptyEditButton;
+                            }
+                            
                             // rjf: apply expander (or substitute space)
                             if(!ewv->text_editing || !cell_selected)
                             {
@@ -5071,13 +5077,19 @@ rd_view_ui(Rng2F32 rect)
                                   rd_cfg_child_from_string(view, str8_lit("autocomplete")) != &rd_nil_cfg)
                           {
                             ewv->next_cursor = ewv->next_mark = cell_pt;
-                            // TODO(rjf): @hack - we really want navigations to be event-like, but we need
-                            // to insert a dumb no-op here so that the "rugpull" cursor move can take effect
-                            // before the edit command we are queueing up...
-                            rd_cmd(RD_CmdKind_Edit);
                             if(cell_info.flags & RD_WatchCellFlag_CanEdit)
                             {
+                              // TODO(rjf): @hack - we really want navigations to be event-like, but we need
+                              // to insert a dumb no-op here so that the "rugpull" cursor move can take effect
+                              // before the edit command we are queueing up...
                               rd_cmd(RD_CmdKind_Edit);
+                              rd_cmd(RD_CmdKind_Edit);
+                            }
+                            else
+                            {
+                              rd_cmd(RD_CmdKind_Edit);
+                              ewv->next_cursor = ewv->next_mark = cell_pt;
+                              rd_cmd(RD_CmdKind_Accept);
                             }
                           }
                           
@@ -14054,6 +14066,12 @@ rd_frame(void)
             if(name.size != 0)
             {
               B32 name_resolved = 0;
+              
+              // rjf: strip `s
+              if(name.size >= 2 && name.str[0] == '`' && name.str[name.size-1] == '`')
+              {
+                name = str8_skip(str8_chop(name, 1), 1);
+              }
               
               // rjf: try to resolve name as a symbol
               U64 voff = 0;

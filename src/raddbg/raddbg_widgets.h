@@ -24,18 +24,21 @@ enum
   //- rjf: bindings extension
   RD_CellFlag_Bindings            = (1<<5),
   
+  //- rjf: extra button extensions
+  RD_CellFlag_EmptyEditButton     = (1<<6),
+  
   //- rjf: behavior
-  RD_CellFlag_DisableEdit         = (1<<6),
-  RD_CellFlag_KeyboardClickable   = (1<<7),
-  RD_CellFlag_SingleClickActivate = (1<<8),
+  RD_CellFlag_DisableEdit         = (1<<7),
+  RD_CellFlag_KeyboardClickable   = (1<<8),
+  RD_CellFlag_SingleClickActivate = (1<<9),
   
   //- rjf: contents description
-  RD_CellFlag_CodeContents        = (1<<9),
+  RD_CellFlag_CodeContents        = (1<<10),
   
   //- rjf: appearance
-  RD_CellFlag_Border              = (1<<10),
-  RD_CellFlag_NoBackground        = (1<<11),
-  RD_CellFlag_Button              = (1<<12),
+  RD_CellFlag_Border              = (1<<11),
+  RD_CellFlag_NoBackground        = (1<<12),
+  RD_CellFlag_Button              = (1<<13),
 };
 
 typedef struct RD_CellParams RD_CellParams;

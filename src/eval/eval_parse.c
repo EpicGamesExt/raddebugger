@@ -1031,8 +1031,13 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           String8 token_string = str8_substr(text, token.range);
           if(token.kind == E_TokenKind_Identifier)
           {
+            String8 identifier_string = token_string;
+            if(identifier_string.size >= 2 && identifier_string.str[0] == '`' && identifier_string.str[identifier_string.size-1] == '`')
+            {
+              identifier_string = str8_skip(str8_chop(identifier_string, 1), 1);
+            }
             atom = e_push_expr(arena, E_ExprKind_LeafIdentifier, token.range);
-            atom->string = token_string;
+            atom->string = identifier_string;
             it += 1;
             got_new_atom = 1;
           }

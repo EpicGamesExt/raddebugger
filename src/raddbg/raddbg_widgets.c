@@ -3413,7 +3413,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //- rjf: build edit-button, if line edit is embedded, and has no string
   //
   B32 edit_started = 0;
-  if(!is_focus_active && !is_focus_active_disabled && build_lhs_name_desc && build_line_edit && value_name_fstrs.total_size == 0)
+  if(params->flags & RD_CellFlag_EmptyEditButton && !is_focus_active && !is_focus_active_disabled && build_lhs_name_desc && build_line_edit && value_name_fstrs.total_size == 0)
   {
     UI_TagF(".")
       UI_TagF("weak")
