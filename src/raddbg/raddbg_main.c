@@ -973,7 +973,7 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            rd_cmd(RD_CmdKind_LaunchAndRun);
+            rd_cmd(RD_CmdKind_Run);
           }
           
           //- rjf: auto step
