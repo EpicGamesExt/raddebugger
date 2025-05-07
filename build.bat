@@ -123,6 +123,7 @@ if "%strip_lib_debug%"=="1"            set didbuild=1 && %compile% ..\src\strip_
 if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
 if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\mule_module.cpp                               %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
+if "%torture%"=="1"                    set didbuild=1 && %compile% ..\src\torture\torture.c                                  %compile_link% %out%torture.exe || exit /b1
 if "%mule_peb_trample%"=="1" (
   set didbuild=1
   if exist mule_peb_trample.exe move mule_peb_trample.exe mule_peb_trample_old_%random%.exe
