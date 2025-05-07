@@ -262,8 +262,9 @@ t_coff_section_header_array_from_name(Arena *arena, String8 string_table, COFF_S
 
 typedef enum
 {
-  T_MsvcLinkExitCode_UnresolvedExternals         = 1120,
-  T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable = 1235,
+  T_MsvcLinkExitCode_UnresolvedExternals                  = 1120,
+  T_MsvcLinkExitCode_CorruptOrInvalidSymbolTable          = 1235,
+  T_MsvcLinkExitCode_SectionsFoundWithDifferentAttributes = 4078,
 } T_MsvcLinkExitCode;
 
 internal COFF_ObjSection *
@@ -1050,10 +1051,12 @@ t_invalid_bss(void)
 
   T_Result result = T_Result_Fail;
 
+  COFF_SectionFlags bss_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead;
   String8 bss_obj_name = str8_lit("bss.obj");
+  String8 bss_data = str8_lit("Hello, World");
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    coff_obj_writer_push_section(obj_writer, str8_lit(".bss"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead, str8_lit("Hello, World"));
+    coff_obj_writer_push_section(obj_writer, str8_lit(".bss"), bss_flags, bss_data);
     String8 bss_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(bss_obj_name, bss_obj)) {
@@ -1075,6 +1078,31 @@ t_invalid_bss(void)
   }
 
   int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe bss.obj entry.obj");
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  COFF_SectionHeader *bss_sect = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".bss"));
+  if (bss_sect == 0) {
+    goto exit;
+  }
+  if (bss_sect->vsize != 0xC) {
+    goto exit;
+  }
+  if (bss_sect->flags != bss_flags) {
+    goto exit;
+  }
+  String8 data = str8_substr(exe, rng_1u64(bss_sect->foff, bss_sect->foff + bss_sect->vsize));
+  if (!str8_match(data, bss_data, 0)) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
 
 exit:;
   scratch_end(scratch);
