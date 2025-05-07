@@ -9823,10 +9823,6 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
             MemoryZeroStruct(&list_expr);
           }
         }
-        else if(e_type_kind_from_key(maybe_enum_type) == E_TypeKind_Enum)
-        {
-          list_expr = e_type_string_from_key(scratch.arena, maybe_enum_type);
-        }
       }
       
       // rjf: determine if autocompletion lister is allowed

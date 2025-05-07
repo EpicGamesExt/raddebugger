@@ -2202,7 +2202,16 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = type->enum_vals[member_idx].name;
-        evals_out[idx] = e_eval_wrapf(eval, "$.%S", member_name);
+        String8 sufficient_suffix = member_name;
+        if(str8_match(sufficient_suffix, type->name, StringMatchFlag_RightSideSloppy))
+        {
+          sufficient_suffix = str8_skip(sufficient_suffix, type->name.size);
+          if(str8_match(sufficient_suffix, str8_lit("_"), StringMatchFlag_RightSideSloppy))
+          {
+            sufficient_suffix = str8_skip(sufficient_suffix, 1);
+          }
+        }
+        evals_out[idx] = e_eval_wrapf(eval, "$.%S", sufficient_suffix);
       }
     }
     

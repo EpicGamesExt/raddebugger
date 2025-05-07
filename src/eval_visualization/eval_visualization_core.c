@@ -1416,44 +1416,6 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
     case E_TypeKind_LRef:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
     case E_TypeKind_RRef:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
     case E_TypeKind_Function:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
-    
-#if 0
-    case E_TypeKind_Enum:
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(type_key);
-      String8 constant_name = {0};
-      for(U64 val_idx = 0; val_idx < type->count; val_idx += 1)
-      {
-        if(eval.value.u64 == type->enum_vals[val_idx].val)
-        {
-          constant_name = type->enum_vals[val_idx].name;
-          break;
-        }
-      }
-      String8 numeric_value_string = str8_from_u64(scratch.arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
-      if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
-      {
-        if(constant_name.size != 0)
-        {
-          result = push_str8f(arena, "%S (%S)", numeric_value_string, constant_name);
-        }
-        else
-        {
-          result = push_str8_copy(arena, numeric_value_string);
-        }
-      }
-      else if(constant_name.size != 0)
-      {
-        result = push_str8_copy(arena, constant_name);
-      }
-      else
-      {
-        result = push_str8_copy(arena, numeric_value_string);
-      }
-      scratch_end(scratch);
-    }break;
-#endif
   }
   return result;
 }
