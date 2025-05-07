@@ -80,17 +80,16 @@ typedef struct COFF_ObjSectionNode
 
 typedef struct COFF_ObjWriter
 {
-  Arena           *arena;
-  COFF_TimeStamp   time_stamp;
-  COFF_MachineType machine;
-
-  U64                 symbol_count;
-  COFF_ObjSymbolNode *symbol_first;
-  COFF_ObjSymbolNode *symbol_last;
-
+  Arena               *arena;
+  COFF_TimeStamp       time_stamp;
+  COFF_MachineType     machine;
+  U64                  symbol_count;
+  COFF_ObjSymbolNode  *symbol_first;
+  COFF_ObjSymbolNode  *symbol_last;
   U64                  sect_count;
   COFF_ObjSectionNode *sect_first;
   COFF_ObjSectionNode *sect_last;
+  COFF_ObjSection     *drectve_sect;
 } COFF_ObjWriter;
 
 ////////////////////////////////
