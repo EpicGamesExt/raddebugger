@@ -121,6 +121,18 @@ coff_file_header_info_from_data(String8 raw_coff)
   return info;
 }
 
+internal COFF_SectionHeader **
+coff_section_table_from_data(Arena *arena, String8 data, Rng1U64 section_table_range)
+{
+  U64                  section_count = dim_1u64(section_table_range) / sizeof(COFF_SectionHeader);
+  COFF_SectionHeader **section_table = push_array_no_zero(arena, COFF_SectionHeader *, section_count+1);
+  section_table[0] = push_array(arena, COFF_SectionHeader, 1);
+  for (U64 i = 0; i < section_count; ++i) {
+    section_table[i+1] = str8_deserial_get_raw_ptr(data, section_table_range.min + i*sizeof(COFF_SectionHeader), sizeof(COFF_SectionHeader));
+  }
+  return section_table;
+}
+
 internal COFF_ParsedSymbol
 coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
 {
@@ -131,6 +143,7 @@ coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32)
   result.type              = sym32->type;
   result.storage_class     = sym32->storage_class;
   result.aux_symbol_count  = sym32->aux_symbol_count;
+  result.raw_symbol        = sym32;
   return result;
 }
 
@@ -150,6 +163,7 @@ coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
   result.type             = sym16->type;
   result.storage_class    = sym16->storage_class;
   result.aux_symbol_count = sym16->aux_symbol_count;
+  result.raw_symbol       = sym16;
   return result;
 }
 
@@ -251,6 +265,43 @@ coff_interp_symbol(U32 section_number, U32 value, COFF_SymStorageClass storage_c
     return COFF_SymbolValueInterp_Weak;
   }
   return COFF_SymbolValueInterp_Regular;
+}
+
+internal void
+coff_parse_secdef(COFF_ParsedSymbol symbol, B32 is_big_obj, COFF_ComdatSelectType *selection_out, U32 *number_out, U32 *length_out, U32 *check_sum_out)
+{
+  Assert(coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class) == COFF_SymbolValueInterp_Regular);
+  Assert(symbol.aux_symbol_count > 0);
+
+  if (is_big_obj) {
+    COFF_SymbolSecDef *sd = (COFF_SymbolSecDef *)((COFF_Symbol32 *)symbol.raw_symbol + 1);
+    if (selection_out) *selection_out = sd->selection;
+    if (length_out)    *length_out    = sd->length;
+    if (check_sum_out) *check_sum_out = sd->check_sum;
+    if (number_out)    *number_out    = sd->number_lo | ((U32)sd->number_hi << 16);
+  } else {
+    COFF_SymbolSecDef *sd = (COFF_SymbolSecDef *)((COFF_Symbol16 *)symbol.raw_symbol + 1);
+    if (selection_out) *selection_out = sd->selection;
+    if (length_out)    *length_out    = sd->length;
+    if (check_sum_out) *check_sum_out = sd->check_sum;
+    if (number_out)    *number_out    = sd->number_lo;
+  }
+}
+
+internal COFF_SymbolWeakExt *
+coff_parse_weak_tag(COFF_ParsedSymbol symbol, B32 is_big_obj)
+{
+  Assert(coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class) == COFF_SymbolValueInterp_Weak);
+  Assert(symbol.aux_symbol_count > 0);
+
+  void *tag;
+  if (is_big_obj) {
+    tag = (COFF_SymbolWeakExt *)((COFF_Symbol32 *)symbol.raw_symbol + 1);
+  } else {
+    tag = (COFF_SymbolWeakExt *)((COFF_Symbol16 *)symbol.raw_symbol + 1);
+  }
+
+  return tag;
 }
 
 internal COFF_RelocNode *
