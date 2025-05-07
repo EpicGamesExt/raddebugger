@@ -9787,6 +9787,8 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
   if(ws->autocomp_last_frame_index < rd_state->frame_index)
   {
+    arena_clear(ws->autocomp_arena);
+    
     //- rjf: calculate information about the cursor:
     // * what list should we generate?
     // * what string in the input should we replace?
@@ -9921,7 +9923,6 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
     if(is_allowed)
     {
       ws->autocomp_last_frame_index = rd_state->frame_index;
-      arena_clear(ws->autocomp_arena);
       ws->autocomp_regs = rd_regs_copy(ws->autocomp_arena, regs);
       ws->autocomp_cursor_info = cursor_info;
     }
