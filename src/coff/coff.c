@@ -79,14 +79,7 @@ coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_o
   for (U64 i = 0; i < full_name.size; ++i) {
     if (full_name.str[i] == '$') {
       *name_out    = str8(full_name.str, i);
-      *postfix_out = str8(full_name.str + i + 1, full_name.size - i - 1);
-      
-      // TLS sections don't have a postfix but we still have to sort them based
-      // on dollar sign so they are sloted between CRT's _tls_start and _tls_end sections.
-      if (str8_match_lit(".tls", *name_out, 0) && postfix_out->size == 0) {
-        *postfix_out = str8_lit("$");
-      }
-      
+      *postfix_out = str8(full_name.str + i, full_name.size - i);
       break;
     }
   }
