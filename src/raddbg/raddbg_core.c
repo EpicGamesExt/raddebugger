@@ -15001,6 +15001,14 @@ rd_frame(void)
           {
             rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero(), .do_lister = 1);
           }break;
+          case RD_CmdKind_ClearBreakpoints:
+          {
+            RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+            for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+            {
+              rd_cfg_release(n->v);
+            }
+          }break;
           
           //- rjf: watch pins
           case RD_CmdKind_AddWatchPin:
