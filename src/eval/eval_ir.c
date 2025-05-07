@@ -301,6 +301,20 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
   {
     result = e_irtree_mem_read_type(arena, tree, type_key);
   }
+  if(e_type_kind_from_key(type_key) == E_TypeKind_Bitfield)
+  {
+    E_Type *type = e_type_from_key(type_key);
+    if(type->byte_size <= sizeof(U64))
+    {
+      U64 valid_bits_mask = 0;
+      for(U64 idx = 0; idx < type->count; idx += 1)
+      {
+        valid_bits_mask |= (1ull<<idx);
+      }
+      result = e_irtree_binary_op_u(arena, RDI_EvalOp_RShift, result, e_irtree_const_u(arena, type->off));
+      result = e_irtree_binary_op_u(arena, RDI_EvalOp_BitAnd, result, e_irtree_const_u(arena, valid_bits_mask));
+    }
+  }
   return result;
 }
 
@@ -1002,6 +1016,22 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+        
+        // rjf: resolve complex types to simple arithmetic tyeps
+        if(l_type_kind == E_TypeKind_Bitfield)
+        {
+          l_tree.root = e_irtree_resolve_to_value(arena, l_tree.mode, l_tree.root, l_tree.type_key);
+          l_type = e_type_key_unwrap(e_type_key_direct(l_tree.type_key), E_TypeUnwrapFlag_AllDecorative);
+          l_type_kind = e_type_kind_from_key(r_type);
+          l_tree.mode = E_Mode_Value;
+        }
+        if(r_type_kind == E_TypeKind_Bitfield)
+        {
+          r_tree.root = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_tree.type_key);
+          r_type = e_type_key_unwrap(e_type_key_direct(r_tree.type_key), E_TypeUnwrapFlag_AllDecorative);
+          r_type_kind = e_type_kind_from_key(r_type);
+          r_tree.mode = E_Mode_Value;
+        }
         if(l_type.kind == E_TypeKeyKind_Reg)
         {
           l_type_kind = E_TypeKind_U64;
@@ -1012,6 +1042,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
           r_type_kind = E_TypeKind_U64;
           r_type = e_type_key_basic(r_type_kind);
         }
+        
+        // rjf: unpack info about resolved types
         B32 l_is_pointer      = (l_type_kind == E_TypeKind_Ptr);
         B32 l_is_decay        = (l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Offset);
         B32 l_is_pointer_like = (l_is_pointer || l_is_decay);
@@ -1355,7 +1387,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         // calls - for example, bin(2).digits(4)
         else if(lhs->kind == E_ExprKind_MemberAccess && lhs->first->next != &e_expr_nil)
         {
-          E_Expr *callee = lhs->first->next;
+          E_Expr *callee = e_expr_ref(arena, lhs->first->next);
           E_Expr *first_arg = e_expr_ref(arena, lhs->first);
           E_Expr *call = e_push_expr(arena, E_ExprKind_Call, r1u64(0, 0));
           e_expr_push_child(call, callee);

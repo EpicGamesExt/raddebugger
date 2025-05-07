@@ -196,6 +196,25 @@ union Matrix4x4F32
 };
 raddbg_type_view(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
 
+union PackedF16
+{
+  uint16_t v;
+  struct
+  {
+    uint16_t mantissa : 10;
+    uint16_t exponent : 5;
+    uint16_t sign : 1;
+  };
+};
+raddbg_type_view(PackedF16,
+                 exponent == 0 ? (0.00006103515625f*mantissa/1024.f) :
+                 (exponent == 31 && mantissa == 0 && sign == 1) ? "-infinity" :
+                 (exponent == 31 && mantissa == 0 && sign == 1) ? "+infinity" :
+                 (exponent == 31) ? "NaN" :
+                 (exponent < 15) ? (1.f/(1<<(15 - exponent)) * (sign * -2 + 1.f) * (1.f + mantissa/1024.f)) :
+                 (exponent > 15) ? ((1<<(exponent-15)) * (sign * -2 + 1.f) * (1.f + mantissa/1024.f)) :
+                 ((sign * -2 + 1) * 1.f + mantissa/1024.f));
+
 enum Kind
 {
   Kind_None,
@@ -1822,6 +1841,21 @@ fancy_viz_eval_tests(void)
   raddbg_pin(text(long_string));
   raddbg_pin(text(code_string, lang=c));
   raddbg_pin(disasm(fancy_viz_eval_tests));
+  
+  //- rjf: half-floats
+  PackedF16 f16s[] =
+  {
+    {0x0001}, // ~0.000000059604645
+    {0x03ff}, // ~0.000060975552
+    {0x0400}, // ~0.00006103515625
+    {0x3555}, // ~0.33325195
+    {0x3bff}, // ~0.99951172
+    {0x3c00}, // 1
+    {0x3c01}, // 1.00097656
+    {0x7bff}, // 65504,
+    {0x7c00}, // +inf
+    {0xfc00}, // -inf
+  };
   
   //- rjf: table index lookups
   struct
