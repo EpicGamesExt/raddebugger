@@ -119,6 +119,7 @@
 #include "lnk_io.h"
 #include "lnk_cmd_line.h"
 #include "lnk_input.h"
+#include "lnk_image_section_flags.h"
 #include "lnk_import_table.h"
 #include "lnk_export_table.h"
 #include "lnk_config.h"
@@ -1818,7 +1819,7 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
 }
 
 internal String8List
-lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sects, U64 expected_image_header_size)
+lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sects, U64 expected_image_header_size)
 {
   ProfBeginFunction();
 
@@ -2700,21 +2701,6 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         }
       }
 
-      // report unresolved symbols
-      {
-        for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
-          LNK_Obj *obj = objs[obj_idx];
-          COFF_ParsedSymbol symbol;
-          for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-            symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-            COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-            if (interp == COFF_SymbolValueInterp_Undefined || interp == COFF_SymbolValueInterp_Weak) {
-              lnk_error_obj(LNK_Error_UnresolvedSymbol, obj, "unresolved symbol %S", symbol.name);
-            }
-          }
-        }
-      }
-
       ProfEnd();
     }
 
@@ -2789,7 +2775,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   LNK_SectionArray sects;
   {
     sects = lnk_section_array_from_list(scratch.arena, sectab->list);
-    String8List image_header_data = lnk_build_win32_image_header(scratch.arena, symtab, config, sects, AlignPow2(expected_image_header_size, config->file_align));
+    String8List image_header_data = lnk_build_win32_header(scratch.arena, symtab, config, sects, AlignPow2(expected_image_header_size, config->file_align));
       
     LNK_Section             *image_header_sect     = lnk_section_table_push(sectab, str8_lit(".rad_linker_image_header_section"), 0);
     LNK_SectionContribChunk *image_header_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &image_header_sect->contribs, 1);
@@ -3254,7 +3240,7 @@ THREAD_POOL_TASK_FUNC(lnk_weak_symbol_finder)
 internal LNK_SymbolFinderResult
 lnk_run_symbol_finder(TP_Context      *tp,
                       TP_Arena        *arena,
-                      PathStyle        path_style,
+                      LNK_Config      *config,
                       LNK_SymbolTable *symtab,
                       LNK_SymbolList   lookup_list,
                       TP_TaskFunc     *task_func)
@@ -3264,7 +3250,7 @@ lnk_run_symbol_finder(TP_Context      *tp,
   
   ProfBegin("Setup Task");
   LNK_SymbolFinder task  = {0};
-  task.path_style        = path_style;
+  task.path_style        = config->path_style;
   task.symtab            = symtab;
   task.lookup_node_arr   = lnk_symbol_node_array_from_list(scratch.arena, lookup_list);
   task.result_arr        = push_array(scratch.arena, LNK_SymbolFinderResult, tp->worker_count);
@@ -4018,7 +4004,7 @@ lnk_run(int argc, char **argv)
         ProfEnd();
       } break;
       case State_PushDllHelperUndefSymbol: {
-        ProfBegin("Puhs Dll Helper Undef Symbol");
+        ProfBegin("Push Dll Helper Undef Symbol");
         
         String8 delay_helper_name = str8_zero();
         switch (config->machine) {
@@ -4044,8 +4030,9 @@ lnk_run(int argc, char **argv)
       } break;
       case State_LookupUndef: {
         ProfBegin("Lookup Undefined Symbols");
+
         // search archives
-        LNK_SymbolFinderResult result = lnk_run_symbol_finder(tp, tp_arena, config->path_style, symtab, lookup_undef_list, lnk_undef_symbol_finder); // TODO: put these on temp arena
+        LNK_SymbolFinderResult result = lnk_run_symbol_finder(tp, tp_arena, config, symtab, lookup_undef_list, lnk_undef_symbol_finder); // TODO: put these on temp arena
         
         // new inputs found
         input_obj_list    = result.input_obj_list;
@@ -4056,12 +4043,14 @@ lnk_run(int argc, char **argv)
         
         // reset input
         MemoryZeroStruct(&lookup_undef_list);
+
         ProfEnd();
       } break;
       case State_LookupWeak: {
         ProfBegin("Lookup Weak Symbols");
+
         // search archives
-        LNK_SymbolFinderResult result = lnk_run_symbol_finder(tp, tp_arena, config->path_style, symtab, lookup_weak_list, lnk_weak_symbol_finder); // TODO: put these on temp arena
+        LNK_SymbolFinderResult result = lnk_run_symbol_finder(tp, tp_arena, config, symtab, lookup_weak_list, lnk_weak_symbol_finder); // TODO: put these on temp arena
         
         // schedule new inputs
         input_obj_list    = result.input_obj_list;
@@ -4072,6 +4061,7 @@ lnk_run(int argc, char **argv)
         
         // reset input
         MemoryZeroStruct(&lookup_weak_list);
+
         ProfEnd();
       } break;
       case State_LookupEntryPoint: {
