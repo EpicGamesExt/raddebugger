@@ -15828,7 +15828,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Edit;
-            evt.flags      = UI_EventFlag_Delete;
+            evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
             evt.delta_unit = UI_EventDeltaUnit_Char;
             evt.delta_2s32 = v2s32(+1, +0);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15839,7 +15839,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Edit;
-            evt.flags      = UI_EventFlag_Delete;
+            evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
             evt.delta_unit = UI_EventDeltaUnit_Word;
             evt.delta_2s32 = v2s32(+1, +0);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
@@ -15861,7 +15861,7 @@ rd_frame(void)
             RD_WindowState *ws = rd_window_state_from_cfg(window);
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Edit;
-            evt.flags      = UI_EventFlag_Delete;
+            evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
             evt.delta_unit = UI_EventDeltaUnit_Word;
             evt.delta_2s32 = v2s32(-1, +0);
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
