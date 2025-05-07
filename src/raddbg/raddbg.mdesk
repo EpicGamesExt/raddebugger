@@ -466,7 +466,7 @@ RD_VocabTable:
         'lang': code_string,
       @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers':bool,
-      @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
+      @no_revert @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
         'auto': bool,
     }
     ```
@@ -581,7 +581,7 @@ RD_VocabTable:
       'stdin_path':         path,
       'environment':        query,
       'debug_subprocesses': bool,
-      @no_expand @default(0) 'enabled': bool,
+      @no_revert @no_expand @default(0) 'enabled': bool,
     }
     ```,
   }
@@ -603,7 +603,7 @@ RD_VocabTable:
       'break_on_write':   bool,
       'break_on_read':    bool,
       'break_on_execute': bool,
-      @no_expand @default(1) 'enabled': bool,
+      @no_revert @no_expand @default(1) 'enabled': bool,
     }
     ```,
   }

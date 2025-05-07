@@ -3341,15 +3341,17 @@ return old_value;
 internal void
 ui__push_tags_key_from_appended_string(String8 string)
 {
+  B32 is_new_root = str8_match(str8_lit("."), string, 0);
+  
   // rjf: generate new key, by combining hash of this new string with the top
   // of the tags key stack
   UI_Key seed_key = {0};
-  if(ui_state->tags_key_stack_top != 0)
+  if(!is_new_root && ui_state->tags_key_stack_top != 0)
   {
     seed_key = ui_state->tags_key_stack_top->key;
   }
   UI_Key key = seed_key;
-  if(!str8_match(str8_lit("."), string, 0) && string.size > 0)
+  if(!is_new_root && string.size > 0)
   {
     key = ui_key_from_string(seed_key, string);
   }
@@ -3370,23 +3372,23 @@ ui__push_tags_key_from_appended_string(String8 string)
   }
   
   // rjf: store in tags cache
-  U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
-  UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
-  UI_TagsCacheNode *node = 0;
-  for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)
+  if(!is_new_root)
   {
-    if(ui_key_match(n->key, key))
+    U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
+    UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
+    UI_TagsCacheNode *node = 0;
+    for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)
     {
-      node = n;
-      break;
+      if(ui_key_match(n->key, key))
+      {
+        node = n;
+        break;
+      }
     }
-  }
-  if(node == 0)
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8List tags = {0};
-    if(!str8_match(string, str8_lit("."), 0))
+    if(node == 0)
     {
+      Temp scratch = scratch_begin(0, 0);
+      String8List tags = {0};
       if(string.size != 0)
       {
         str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), string));
@@ -3402,12 +3404,12 @@ ui__push_tags_key_from_appended_string(String8 string)
           str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), n->v));
         }
       }
+      node = push_array(ui_build_arena(), UI_TagsCacheNode, 1);
+      SLLQueuePush(slot->first, slot->last, node);
+      node->key = key;
+      node->tags = str8_array_from_list(ui_build_arena(), &tags);
+      scratch_end(scratch);
     }
-    node = push_array(ui_build_arena(), UI_TagsCacheNode, 1);
-    SLLQueuePush(slot->first, slot->last, node);
-    node->key = key;
-    node->tags = str8_array_from_list(ui_build_arena(), &tags);
-    scratch_end(scratch);
   }
 }
 

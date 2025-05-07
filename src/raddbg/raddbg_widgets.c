@@ -3329,40 +3329,6 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
-  //- rjf: build reset-to-default, if line edit is embedded & it is marked
-  //
-#if 0
-  if(!is_focus_active && !is_focus_active_disabled)
-  {
-    UI_TagF(".")
-      UI_TagF("weak")
-      UI_TagF("implicit")
-      UI_Parent(box)
-      UI_PrefWidth(ui_em(2.f, 1.f))
-    {
-      UI_Column
-        UI_Padding(ui_pct(1, 0))
-        UI_PrefHeight(ui_em(2.f, 1.f))
-        UI_CornerRadius(ui_top_font_size()*0.5f)
-        UI_HoverCursor(OS_Cursor_HandPoint)
-        RD_Font(RD_FontSlot_Icons)
-        UI_TextAlignment(UI_TextAlign_Center)
-      {
-        UI_Box *edit_start_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                           UI_BoxFlag_DrawHotEffects|
-                                                           UI_BoxFlag_DrawBorder|
-                                                           UI_BoxFlag_DrawBackground|
-                                                           UI_BoxFlag_DisableFocusOverlay|
-                                                           UI_BoxFlag_DisableFocusBorder|
-                                                           UI_BoxFlag_Clickable,
-                                                           "%S##undo", rd_icon_kind_text_table[RD_IconKind_Undo]);
-        UI_Signal sig = ui_signal_from_box(edit_start_box);
-      }
-    }
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: build line edit container box
   //
   UI_Box *edit_box = &ui_nil_box;
@@ -3373,8 +3339,14 @@ rd_cell(RD_CellParams *params, String8 string)
     UI_Size edit_box_size = ui_pct(1, 0);
     if(build_lhs_name_desc)
     {
-      F32 px_size = is_editing ? (floor_f32(dim_2f32(box->rect).x*0.5f)) : floor_f32(dr_dim_from_fstrs(&value_name_fstrs).x + ui_top_font_size()*1.5f);
-      edit_box_size = ui_px(px_size, 1.f);
+      if(is_editing)
+      {
+        edit_box_size = ui_px(floor_f32(dim_2f32(box->rect).x*0.5f), 1.f);
+      }
+      else
+      {
+        edit_box_size = ui_children_sum(1);
+      }
     }
     UI_PrefWidth(edit_box_size)
     {
@@ -3455,6 +3427,46 @@ rd_cell(RD_CellParams *params, String8 string)
     UI_Parent(edit_box) UI_PrefWidth(ui_children_sum(0))
     {
       scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build revert-button
+  //
+  if(params->flags & RD_CellFlag_RevertButton && !is_focus_active && !is_focus_active_disabled)
+  {
+    UI_Parent(edit_box)
+      UI_PrefWidth(ui_em(2.f, 1.f))
+    {
+      UI_TagF(".")
+        UI_TagF("weak")
+        UI_TagF("implicit")
+        UI_Column
+        UI_Padding(ui_pct(1, 0))
+        UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_CornerRadius(ui_top_font_size()*0.5f)
+        RD_Font(RD_FontSlot_Icons)
+        UI_TextAlignment(UI_TextAlign_Center)
+      {
+        UI_Box *revert_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                       UI_BoxFlag_DrawHotEffects|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DisableFocusOverlay|
+                                                       UI_BoxFlag_DisableFocusBorder|
+                                                       UI_BoxFlag_Clickable,
+                                                       "%S##revert", rd_icon_kind_text_table[RD_IconKind_Undo]);
+        UI_Signal sig = ui_signal_from_box(revert_box);
+        if(ui_pressed(sig) && params->revert_out)
+        {
+          params->revert_out[0] = 1;
+        }
+      }
+      // TODO(rjf): @hack
+      if(build_toggle_switch || build_slider)
+      {
+        ui_spacer(ui_em(1.f, 1.f));
+      }
     }
   }
   

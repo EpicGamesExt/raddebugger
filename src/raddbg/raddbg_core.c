@@ -1868,6 +1868,11 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
                 value_string = parent_child_w_key->first->string;
                 break;
               }
+              value_string = rd_default_setting_from_names(parent->string, child_key);
+              if(value_string.size != 0)
+              {
+                break;
+              }
             }
           }
           if(str8_match(child_type_name, str8_lit("bool"), 0))
@@ -4699,6 +4704,7 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: build cell contents
                       //
                       RD_Cfg *cell_view = &rd_nil_cfg;
+                      B32 revert_cell = 0;
                       UI_Signal sig = {0};
                       ProfScope("build cell contents")
                         UI_Parent(cell_box)
@@ -4860,6 +4866,34 @@ rd_view_ui(Rng2F32 rect)
                             if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg)
                             {
                               cell_params.flags |= RD_CellFlag_EmptyEditButton;
+                            }
+                            
+                            // rjf: extra revert button for non-default meta-cfgs
+                            if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
+                               !(cell->flags & RD_WatchCellFlag_NoEval))
+                            {
+                              RD_Cfg *cfg = rd_cfg_from_eval_space(cell->eval.space);
+                              String8 child_key = e_string_from_id(cell->eval.space.u64s[1]);
+                              RD_Cfg *child_cfg = rd_cfg_child_from_string(cfg, child_key);
+                              if(child_cfg != &rd_nil_cfg)
+                              {
+                                MD_NodePtrList schemas = rd_schemas_from_name(cfg->string);
+                                if(schemas.count != 0)
+                                {
+                                  MD_Node *child_schema = &md_nil_node;
+                                  for(MD_NodePtrNode *n = schemas.first; md_node_is_nil(child_schema) && n != 0; n = n->next)
+                                  {
+                                    child_schema = md_child_from_string(n->v, child_key, 0);
+                                  }
+                                  if((md_node_has_tag(child_schema, str8_lit("override"), 0) ||
+                                      md_node_has_tag(child_schema, str8_lit("default"), 0)) &&
+                                     !md_node_has_tag(child_schema, str8_lit("no_revert"), 0))
+                                  {
+                                    cell_params.flags |= RD_CellFlag_RevertButton;
+                                    cell_params.revert_out = &revert_cell;
+                                  }
+                                }
+                              }
                             }
                             
                             // rjf: apply expander (or substitute space)
@@ -5031,6 +5065,14 @@ rd_view_ui(Rng2F32 rect)
                         {
                           ewv->next_cursor = ewv->next_mark = cell_pt;
                           pressed = 1;
+                        }
+                        
+                        // rjf: reversion
+                        if(revert_cell && cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+                        {
+                          RD_Cfg *cfg = rd_cfg_from_eval_space(cell->eval.space);
+                          String8 child_key = e_string_from_id(cell->eval.space.u64s[1]);
+                          rd_cfg_release(rd_cfg_child_from_string(cfg, child_key));
                         }
                         
                         // rjf: activation (double-click normally, or single-clicks with special buttons)
