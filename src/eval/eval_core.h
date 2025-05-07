@@ -426,6 +426,21 @@ struct E_EnumVal
   U64 val;
 };
 
+typedef struct E_EnumValNode E_EnumValNode;
+struct E_EnumValNode
+{
+  E_EnumValNode *next;
+  E_EnumVal v;
+};
+
+typedef struct E_EnumValList E_EnumValList;
+struct E_EnumValList
+{
+  E_EnumValNode *first;
+  E_EnumValNode *last;
+  U64 count;
+};
+
 typedef struct E_EnumValArray E_EnumValArray;
 struct E_EnumValArray
 {
@@ -794,6 +809,55 @@ struct E_MemberCacheSlot
   E_MemberCacheNode *last;
 };
 
+//- rjf: enum val lookup cache types
+
+typedef struct E_EnumValHashNode E_EnumValHashNode;
+struct E_EnumValHashNode
+{
+  E_EnumValHashNode *next;
+  U64 val_idx;
+};
+
+typedef struct E_EnumValHashSlot E_EnumValHashSlot;
+struct E_EnumValHashSlot
+{
+  E_EnumValHashNode *first;
+  E_EnumValHashNode *last;
+};
+
+typedef struct E_EnumValFilterNode E_EnumValFilterNode;
+struct E_EnumValFilterNode
+{
+  E_EnumValFilterNode *next;
+  String8 filter;
+  E_EnumValArray vals_filtered;
+};
+
+typedef struct E_EnumValFilterSlot E_EnumValFilterSlot;
+struct E_EnumValFilterSlot
+{
+  E_EnumValFilterNode *first;
+  E_EnumValFilterNode *last;
+};
+
+typedef struct E_EnumValCacheNode E_EnumValCacheNode;
+struct E_EnumValCacheNode
+{
+  E_EnumValCacheNode *next;
+  E_TypeKey key;
+  U64 val_hash_slots_count;
+  E_EnumValHashSlot *val_hash_slots;
+  U64 val_filter_slots_count;
+  E_EnumValFilterSlot *val_filter_slots;
+};
+
+typedef struct E_EnumValCacheSlot E_EnumValCacheSlot;
+struct E_EnumValCacheSlot
+{
+  E_EnumValCacheNode *first;
+  E_EnumValCacheNode *last;
+};
+
 //- rjf: used expression map
 
 typedef struct E_UsedExprNode E_UsedExprNode;
@@ -965,6 +1029,10 @@ struct E_Cache
   //- rjf: [types] member cache table
   U64 member_cache_slots_count;
   E_MemberCacheSlot *member_cache_slots;
+  
+  //- rjf: [types] enum val cache table
+  U64 enum_val_cache_slots_count;
+  E_EnumValCacheSlot *enum_val_cache_slots;
   
   //- rjf: [types] unpacked type cache
   U64 type_cache_slots_count;

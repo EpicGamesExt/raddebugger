@@ -57,6 +57,13 @@ internal void e_member_list_push(Arena *arena, E_MemberList *list, E_Member *mem
 internal E_MemberArray e_member_array_from_list(Arena *arena, E_MemberList *list);
 
 ////////////////////////////////
+//~ rjf: Enum Value Functions
+
+internal void e_enum_val_list_push(Arena *arena, E_EnumValList *list, E_EnumVal *enum_val);
+#define e_enum_val_list_push_new(arena, list, ...) e_enum_val_list_push((arena), (list), &(E_EnumVal){.val = 0, __VA_ARGS__})
+internal E_EnumValArray e_enum_val_array_from_list(Arena *arena, E_EnumValList *list);
+
+////////////////////////////////
 //~ rjf: Type Operation Functions
 
 //- rjf: basic key constructors
@@ -113,10 +120,18 @@ internal E_TypeKey e_default_expansion_type_from_key(E_TypeKey key);
 //~ rjf: Cache Lookups
 
 internal E_Type *e_type_from_key(E_TypeKey key);
+
+//- rjf: member lookups
 internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
 internal E_MemberArray e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
 internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);
+
+//- rjf: enum val lookups
+internal E_EnumValCacheNode *e_enum_val_cache_node_from_type_key(E_TypeKey key);
+internal E_EnumValArray e_type_enum_vals_from_key_filter__cached(E_TypeKey key, String8 filter);
+internal E_EnumValArray e_type_enum_vals_from_key__cached(E_TypeKey key);
+internal E_EnumVal e_type_enum_val_from_key_name__cached(E_TypeKey key, String8 name);
 
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) Default Hooks

@@ -223,6 +223,34 @@ e_member_array_from_list(Arena *arena, E_MemberList *list)
 }
 
 ////////////////////////////////
+//~ rjf: Enum Value Functions
+
+internal void
+e_enum_val_list_push(Arena *arena, E_EnumValList *list, E_EnumVal *enum_val)
+{
+  E_EnumValNode *n = push_array(arena, E_EnumValNode, 1);
+  MemoryCopyStruct(&n->v, enum_val);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal E_EnumValArray
+e_enum_val_array_from_list(Arena *arena, E_EnumValList *list)
+{
+  E_EnumValArray array = {0};
+  array.count = list->count;
+  array.v = push_array(arena, E_EnumVal, array.count);
+  {
+    U64 idx = 0;
+    for(E_EnumValNode *n = list->first; n != 0; n = n->next, idx += 1)
+    {
+      MemoryCopyStruct(&array.v[idx], &n->v);
+    }
+  }
+  return array;
+}
+
+////////////////////////////////
 //~ rjf: Type Operation Functions
 
 //- rjf: key constructors
@@ -1992,6 +2020,8 @@ e_type_from_key(E_TypeKey key)
   return type;
 }
 
+//- rjf: member lookups
+
 internal E_MemberCacheNode *
 e_member_cache_node_from_type_key(E_TypeKey key)
 {
@@ -2111,6 +2141,141 @@ e_type_member_from_key_name__cached(E_TypeKey key, String8 name)
   return result;
 }
 
+//- rjf: enum val lookups
+
+internal E_EnumValCacheNode *
+e_enum_val_cache_node_from_type_key(E_TypeKey key)
+{
+  U64 hash = e_hash_from_string(5381, str8_struct(&key));
+  U64 slot_idx = hash%e_cache->enum_val_cache_slots_count;
+  E_EnumValCacheSlot *slot = &e_cache->enum_val_cache_slots[slot_idx];
+  E_EnumValCacheNode *node = 0;
+  for(E_EnumValCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(e_type_key_match(n->key, key))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(e_cache->arena, E_EnumValCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->key = key;
+    E_Type *type = e_type_from_key(key);
+    if(type->kind == E_TypeKind_Enum)
+    {
+      node->val_hash_slots_count = type->count;
+      node->val_hash_slots = push_array(e_cache->arena, E_EnumValHashSlot, node->val_hash_slots_count);
+      node->val_filter_slots_count = 16;
+      node->val_filter_slots = push_array(e_cache->arena, E_EnumValFilterSlot, node->val_filter_slots_count);
+      for EachIndex(idx, type->count)
+      {
+        U64 hash = e_hash_from_string(5381, type->enum_vals[idx].name);
+        U64 slot_idx = hash%node->val_hash_slots_count;
+        E_EnumValHashNode *n = push_array(e_cache->arena, E_EnumValHashNode, 1);
+        SLLQueuePush(node->val_hash_slots[slot_idx].first, node->val_hash_slots[slot_idx].last, n);
+        n->val_idx = idx;
+      }
+    }
+  }
+  return node;
+}
+
+internal E_EnumValArray
+e_type_enum_vals_from_key_filter__cached(E_TypeKey key, String8 filter)
+{
+  E_EnumValArray enum_vals = {0};
+  E_EnumValCacheNode *node = e_enum_val_cache_node_from_type_key(key);
+  if(node != 0)
+  {
+    if(filter.size == 0)
+    {
+      E_Type *type = e_type_from_key(key);
+      if(type->kind == E_TypeKind_Enum)
+      {
+        enum_vals.v = type->enum_vals;
+        enum_vals.count = type->count;
+      }
+    }
+    else
+    {
+      U64 hash = e_hash_from_string(5381, filter);
+      U64 slot_idx = hash%node->val_filter_slots_count;
+      E_EnumValFilterSlot *slot = &node->val_filter_slots[slot_idx];
+      E_EnumValFilterNode *filter_node = 0;
+      for(E_EnumValFilterNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->filter, filter, 0))
+        {
+          filter_node = n;
+          break;
+        }
+      }
+      if(filter_node == 0)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        filter_node = push_array(e_cache->arena, E_EnumValFilterNode, 1);
+        filter_node->filter = push_str8_copy(e_cache->arena, filter);
+        E_Type *type = e_type_from_key(key);
+        E_EnumValList enum_val_list__filtered = {0};
+        if(type->kind == E_TypeKind_Enum)
+        {
+          for EachIndex(idx, type->count)
+          {
+            E_EnumVal *enum_val = &type->enum_vals[idx];
+            FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, enum_val->name);
+            if(matches.count == matches.needle_part_count)
+            {
+              e_enum_val_list_push(scratch.arena, &enum_val_list__filtered, enum_val);
+            }
+          }
+        }
+        filter_node->vals_filtered = e_enum_val_array_from_list(e_cache->arena, &enum_val_list__filtered);
+        scratch_end(scratch);
+      }
+      enum_vals = filter_node->vals_filtered;
+    }
+  }
+  return enum_vals;
+}
+
+internal E_EnumValArray
+e_type_enum_vals_from_key__cached(E_TypeKey key)
+{
+  E_EnumValArray enum_vals = e_type_enum_vals_from_key_filter__cached(key, str8_zero());
+  return enum_vals;
+}
+
+internal E_EnumVal
+e_type_enum_val_from_key_name__cached(E_TypeKey key, String8 name)
+{
+  E_EnumVal result = {0};
+  E_EnumValCacheNode *node = e_enum_val_cache_node_from_type_key(key);
+  if(node != 0 && node->val_hash_slots_count != 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_Type *type = e_type_from_key(key);
+    String8 name_qualified_0 = push_str8f(scratch.arena, "%S%S", type->name, name);
+    String8 name_qualified_1 = push_str8f(scratch.arena, "%S_%S", type->name, name);
+    U64 hash = e_hash_from_string(5381, name);
+    U64 slot_idx = hash%node->val_hash_slots_count;
+    for(E_EnumValHashNode *n = node->val_hash_slots[slot_idx].first; n != 0; n = n->next)
+    {
+      if(str8_match(type->enum_vals[n->val_idx].name, name, 0) ||
+         str8_match(type->enum_vals[n->val_idx].name, name_qualified_0, 0) ||
+         str8_match(type->enum_vals[n->val_idx].name, name_qualified_1, 0))
+      {
+        result = type->enum_vals[n->val_idx];
+        break;
+      }
+    }
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) Default Hooks
 
@@ -2156,8 +2321,8 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
       E_TypeKind enum_type_kind = e_type_kind_from_key(expand_type_key);
       if(enum_type_kind == E_TypeKind_Enum)
       {
-        E_Type *enum_type = e_type_from_key(expand_type_key);
-        result.expr_count = enum_type->count;
+        E_EnumValArray enum_vals = e_type_enum_vals_from_key_filter__cached(expand_type_key, filter);
+        result.expr_count = enum_vals.count;
         did_expansion = 1;
       }
     }
@@ -2195,13 +2360,14 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
     else if(expand_type_kind == E_TypeKind_Enum)
     {
       E_Type *type = e_type_from_key(expand_type_key);
-      Rng1U64 legal_idx_range = r1u64(0, type->count);
+      E_EnumValArray enum_vals = e_type_enum_vals_from_key_filter__cached(expand_type_key, filter);
+      Rng1U64 legal_idx_range = r1u64(0, enum_vals.count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
-        U64 member_idx = idx + read_range.min;
-        String8 member_name = type->enum_vals[member_idx].name;
+        U64 val_idx = idx + read_range.min;
+        String8 member_name = enum_vals.v[val_idx].name;
         String8 sufficient_suffix = member_name;
         if(str8_match(sufficient_suffix, type->name, StringMatchFlag_RightSideSloppy))
         {
