@@ -89,7 +89,7 @@ ev_expansion_type_from_key(E_TypeKey type_key)
     // so, choose the current eval
     if(kind == E_TypeKind_Lens)
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       if(type->expand.info != 0 ||
          ev_expand_rule_from_string(type->name) != &ev_nil_expand_rule)
       {
@@ -167,7 +167,7 @@ ev_type_key_is_editable(E_TypeKey type_key)
       }break;
       case E_TypeKind_Array:
       {
-        E_Type *type = e_type_from_key__cached(t);
+        E_Type *type = e_type_from_key(t);
         if(type->flags & E_TypeFlag_IsNotText)
         {
           result = 0;
@@ -448,7 +448,7 @@ ev_expand_rule_from_type_key(E_TypeKey type_key)
     E_TypeKind kind = e_type_kind_from_key(k);
     for(;kind == E_TypeKind_Lens; k = e_type_key_direct(e_type_key_unwrap(k, E_TypeUnwrapFlag_Meta)), kind = e_type_kind_from_key(k))
     {
-      E_Type *type = e_type_from_key__cached(k);
+      E_Type *type = e_type_from_key(k);
       EV_ExpandRule *candidate = ev_expand_rule_from_string(type->name);
       if(candidate != &ev_nil_expand_rule)
       {
@@ -1420,7 +1420,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
     case E_TypeKind_Enum:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key__cached(type_key);
+      E_Type *type = e_type_from_key(type_key);
       String8 constant_name = {0};
       for(U64 val_idx = 0; val_idx < type->count; val_idx += 1)
       {
@@ -1560,7 +1560,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       {
         if(it->top_task->redirect_to_sets_and_structs)
         {
-          E_Type *type = e_type_from_key__cached(type_key);
+          E_Type *type = e_type_from_key(type_key);
           if(type->flags & E_TypeFlag_ArrayLikeExpansion)
           {
             expansion_opener_symbol = str8_lit("[");
@@ -1568,7 +1568,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           }
           goto arrays_and_sets_and_structs;
         }
-        E_Type *type = e_type_from_key__cached(type_key);
+        E_Type *type = e_type_from_key(type_key);
         E_TypeKind element_type_kind = e_type_kind_from_key(e_type_key_unwrap(type->direct_type_key, E_TypeUnwrapFlag_All));
         B32 lens_applied = 1;
         EV_StringParams lens_params = *params;
@@ -1690,7 +1690,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             default:{}break;
             case 0:
             {
-              E_Type *type = e_type_from_key__cached(type_key);
+              E_Type *type = e_type_from_key(type_key);
               *out_string = push_str8f(arena, "%S (", type->name);
               need_pop = 0;
               need_new_task = 1;
@@ -1706,7 +1706,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         }
         else
         {
-          E_Type *type = e_type_from_key__cached(type_key);
+          E_Type *type = e_type_from_key(type_key);
           *out_string = type->name;
         }
       }break;
@@ -1756,8 +1756,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         {
           ptr_data = it->top_task->user_data = push_array(arena, EV_StringPtrData, 1);
           ptr_data->value_eval = e_value_eval_from_eval(eval);
-          ptr_data->type = e_type_from_key__cached(type_key);
-          ptr_data->direct_type = e_type_from_key__cached(e_type_key_unwrap(type_key, E_TypeUnwrapFlag_All));
+          ptr_data->type = e_type_from_key(type_key);
+          ptr_data->direct_type = e_type_from_key(e_type_key_unwrap(type_key, E_TypeUnwrapFlag_All));
           ptr_data->ptee_has_content = (ptr_data->value_eval.value.u64 != 0 && ptr_data->direct_type->kind != E_TypeKind_Null && ptr_data->direct_type->kind != E_TypeKind_Void);
           ptr_data->ptee_has_string  = ((E_TypeKind_Char8 <= ptr_data->direct_type->kind && ptr_data->direct_type->kind <= E_TypeKind_UChar32) ||
                                         ptr_data->direct_type->kind == E_TypeKind_S8 ||
@@ -2081,7 +2081,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
         if(expand_data == 0)
         {
           expand_data = it->top_task->user_data = push_array(arena, EV_ExpandedTypeData, 1);
-          expand_data->type = e_type_from_key__cached(type_key);
+          expand_data->type = e_type_from_key(type_key);
         }
         switch(task_idx)
         {

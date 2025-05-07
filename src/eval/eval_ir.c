@@ -397,7 +397,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
         }
         if(match.kind == E_MemberKind_Null)
         {
-          E_Type *type = e_type_from_key__cached(check_type_key);
+          E_Type *type = e_type_from_key(check_type_key);
           if(type->enum_vals != 0)
           {
             String8 lookup_string = exprr->string;
@@ -637,7 +637,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             E_TypeKind kind = e_type_kind_from_key(k);
             for(;kind == E_TypeKind_Lens;)
             {
-              E_Type *lens_type = e_type_from_key__cached(k);
+              E_Type *lens_type = e_type_from_key(k);
               if((lens_type->flags & E_TypeFlag_InheritedByMembers && expr->kind == E_ExprKind_MemberAccess) ||
                  (lens_type->flags & E_TypeFlag_InheritedByElements && expr->kind == E_ExprKind_ArrayIndex))
               {
@@ -649,11 +649,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
           }
           
           // rjf: pick access hook based on type
-          E_Type *lhs_type = e_type_from_key__cached(lhs_irtree_try->type_key);
+          E_Type *lhs_type = e_type_from_key(lhs_irtree_try->type_key);
           E_TypeAccessFunctionType *lhs_access = lhs_type->access;
           for(E_Type *lens_type = lhs_type;
               lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
-              lens_type = e_type_from_key__cached(lens_type->direct_type_key))
+              lens_type = e_type_from_key(lens_type->direct_type_key))
           {
             if(lens_type->access != 0)
             {
@@ -1292,7 +1292,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, parent, disallow_autohooks, 1, lhs);
         e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         E_TypeKey lhs_type_key = lhs_irtree.type_key;
-        E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+        E_Type *lhs_type = e_type_from_key(lhs_type_key);
         
         // rjf: calling a type? -> treat as a cast of that type
         if(lhs_irtree.mode == E_Mode_Null && lhs_type != &e_type_nil && lhs_type->kind != E_TypeKind_Lens && lhs_type->kind != E_TypeKind_LensSpec)
@@ -2130,7 +2130,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
           {
             E_Expr *lens_spec_expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, str8_lit("array"));
             E_TypeKey lens_spec_type_key = lens_spec_expr->type_key;
-            E_Type *lens_spec_type = e_type_from_key__cached(lens_spec_type_key);
+            E_Type *lens_spec_type = e_type_from_key(lens_spec_type_key);
             result.type_key = e_type_key_cons(.kind       = E_TypeKind_Lens,
                                               .flags      = lens_spec_type->flags,
                                               .count      = 1,
@@ -2147,10 +2147,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
     
     //- rjf: if the evaluated type has a hook for an extra layer of ir extension,
     // call into it
-    E_Type *type = e_type_from_key__cached(result.type_key);
+    E_Type *type = e_type_from_key(result.type_key);
     {
       E_TypeIRExtFunctionType *irext = type->irext;
-      for(E_Type *t = type; t->kind == E_TypeKind_Lens || t->kind == E_TypeKind_Set; t = e_type_from_key__cached(t->direct_type_key))
+      for(E_Type *t = type; t->kind == E_TypeKind_Lens || t->kind == E_TypeKind_Set; t = e_type_from_key(t->direct_type_key))
       {
         if(t->irext != 0)
         {
@@ -2182,7 +2182,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         if(ptee_kind == E_TypeKind_Struct || 
            ptee_kind == E_TypeKind_Class)
         {
-          E_Type *ptee_type = e_type_from_key__cached(ptee_key);
+          E_Type *ptee_type = e_type_from_key(ptee_key);
           B32 has_vtable = 0;
           for(U64 idx = 0; idx < ptee_type->count; idx += 1)
           {
@@ -2282,10 +2282,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
   //
   if(inherited_lenses.count != 0)
   {
-    E_Type *result_type = e_type_from_key__cached(result.type_key);
+    E_Type *result_type = e_type_from_key(result.type_key);
     for(E_TypeKeyNode *n = inherited_lenses.first; n != 0; n = n->next)
     {
-      E_Type *src_type = e_type_from_key__cached(n->v);
+      E_Type *src_type = e_type_from_key(n->v);
       E_TypeKey dst_type_key = e_type_key_cons(.kind   = src_type->kind,
                                                .flags  = src_type->flags,
                                                .name   = src_type->name,

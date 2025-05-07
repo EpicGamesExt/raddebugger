@@ -941,13 +941,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: unpack row's evaluation, key, & block info
     //
-    E_Type *row_type = e_type_from_key__cached(row->eval.irtree.type_key);
+    E_Type *row_type = e_type_from_key(row->eval.irtree.type_key);
     EV_Key key = row->key;
     EV_Block *block = row->block;
     E_Eval block_eval = e_eval_from_key(row->block->eval.key);
     E_TypeKey block_type_key = e_type_key_unwrap(block_eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
-    E_Type *block_type = e_type_from_key__cached(block_type_key);
+    E_Type *block_type = e_type_from_key(block_type_key);
     RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(row->eval.space);
     CTRL_Entity *evalled_entity = (row->eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ? rd_ctrl_entity_from_eval_space(row->eval.space) : &ctrl_entity_nil);
     
@@ -1086,7 +1086,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
       else if(maybe_table_type->kind == E_TypeKind_Lens)
       {
-        maybe_table_type = e_type_from_key__cached(maybe_table_type->direct_type_key);
+        maybe_table_type = e_type_from_key(maybe_table_type->direct_type_key);
         continue;
       }
       else
@@ -1125,7 +1125,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.space.kind == E_SpaceKind_FileSystem)
     {
-      E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
+      E_Type *type = e_type_from_key(row->eval.irtree.type_key);
       if(type->kind == E_TypeKind_Set)
       {
         String8 file_path = e_string_from_id(row->eval.value.u64);
@@ -1325,7 +1325,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //
     else if(row->eval.space.kind == RD_EvalSpaceKind_MetaCmd)
     {
-      E_Type *type = e_type_from_key__cached(row->eval.irtree.type_key);
+      E_Type *type = e_type_from_key(row->eval.irtree.type_key);
       if(type->kind == E_TypeKind_Set)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
@@ -1539,8 +1539,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //////////////////////////////
   //- rjf: unpack evaluation
   //
-  E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
-  E_Type *cell_type = e_type_from_key__cached(cell->eval.irtree.type_key);
+  E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
+  E_Type *cell_type = e_type_from_key(cell->eval.irtree.type_key);
   MD_NodePtrList cell_schemas = rd_schemas_from_name(cell_type->name);
   if(cell->eval.space.u64s[1] == 0 && cell_schemas.count != 0)
   {
@@ -1554,7 +1554,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   result.file_path = rd_file_path_from_eval(arena, cell->eval);
   for(E_Type *type = cell_type;
       type->kind == E_TypeKind_Lens;
-      type = e_type_from_key__cached(type->direct_type_key))
+      type = e_type_from_key(type->direct_type_key))
   {
     RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(type->name);
     if(view_ui_rule != &rd_nil_view_ui_rule)
@@ -1569,7 +1569,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   //
   for(E_Type *type = cell_type;
       type->kind != E_TypeKind_Null;
-      type = e_type_from_key__cached(type->direct_type_key))
+      type = e_type_from_key(type->direct_type_key))
   {
     if(type->kind == E_TypeKind_MetaDescription)
     {
@@ -1696,9 +1696,9 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           // rjf: if this cell has a meta-display-name, then use that
           if(expr_string.size == 0)
           {
-            for(E_Type *t = e_type_from_key__cached(cell->eval.irtree.type_key);
+            for(E_Type *t = e_type_from_key(cell->eval.irtree.type_key);
                 t != &e_type_nil;
-                t = e_type_from_key__cached(t->direct_type_key))
+                t = e_type_from_key(t->direct_type_key))
             {
               if(t->kind == E_TypeKind_MetaDisplayName)
               {
@@ -1837,7 +1837,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           // rjf: determine if code
           B32 is_code = 1;
           {
-            E_Type *type = e_type_from_key__cached(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_Meta));
+            E_Type *type = e_type_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_Meta));
             if(type->flags & (E_TypeFlag_IsPlainText|E_TypeFlag_IsPathText))
             {
               is_code = 0;
@@ -3744,7 +3744,7 @@ rd_eval_color_from_eval(E_Eval eval)
     LeafTask *last_task = first_task;
     for(LeafTask *t = first_task; t != 0 && num_components_left > 0; t = t->next)
     {
-      E_Type *type = e_type_from_key__cached(e_type_key_unwrap(t->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+      E_Type *type = e_type_from_key(e_type_key_unwrap(t->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
       switch(type->kind)
       {
         default:{}break;
@@ -3779,8 +3779,8 @@ rd_eval_color_from_eval(E_Eval eval)
   // (the lens implicitly tells us the format)
   RD_EvalColor result = {0};
   {
-    E_Type *lens_type = e_type_from_key__cached(eval.irtree.type_key);
-    for(E_Type *t = lens_type; t->kind == E_TypeKind_Lens; t = e_type_from_key__cached(t->direct_type_key))
+    E_Type *lens_type = e_type_from_key(eval.irtree.type_key);
+    for(E_Type *t = lens_type; t->kind == E_TypeKind_Lens; t = e_type_from_key(t->direct_type_key))
     {
       if(str8_match(t->name, str8_lit("color"), 0))
       {
@@ -3940,7 +3940,7 @@ RD_VIEW_UI_FUNCTION_DEF(color)
       if(ui_dragging(h_sig) || ui_dragging(sv_sig) || ui_dragging(a_sig))
       {
         // TODO(rjf): hard-coding U32 committing for now
-        E_Type *type = e_type_from_key__cached(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
+        E_Type *type = e_type_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative));
         if(type->kind == E_TypeKind_U32 ||
            type->kind == E_TypeKind_S32 ||
            type->kind == E_TypeKind_U64 ||

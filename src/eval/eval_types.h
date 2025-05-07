@@ -89,7 +89,7 @@ internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
 internal U64 e_hash_from_type(E_Type *type);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
-internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
+internal E_Type *e_push_type_from_key(Arena *arena, E_TypeKey key);
 internal int e_type_qsort_compare_members_offset(E_Member *a, E_Member *b);
 internal E_MemberArray e_type_data_members_from_key(Arena *arena, E_TypeKey key);
 internal E_TypeExpandRule *e_expand_rule_from_type_key(E_TypeKey key);
@@ -112,7 +112,7 @@ internal E_TypeKey e_default_expansion_type_from_key(E_TypeKey key);
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal E_Type *e_type_from_key__cached(E_TypeKey key);
+internal E_Type *e_type_from_key(E_TypeKey key);
 internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
 internal E_MemberArray e_type_data_members_from_key_filter__cached(E_TypeKey key, String8 filter);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);

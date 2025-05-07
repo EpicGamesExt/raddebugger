@@ -26,7 +26,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(commands)
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8List cmd_names = {0};
-    E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+    E_Type *type = e_type_from_key(eval.irtree.type_key);
     for EachNonZeroEnumVal(RD_CmdKind, k)
     {
       RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
@@ -269,7 +269,7 @@ E_TYPE_IREXT_FUNCTION_DEF(schema)
     String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
     E_Interpretation interpret = e_interpret(bytecode);
     E_TypeKey type_key = irtree->type_key;
-    E_Type *type = e_type_from_key__cached(type_key);
+    E_Type *type = e_type_from_key(type_key);
     ext->cfg = rd_cfg_from_eval_space(interpret.space);
     ext->entity = rd_ctrl_entity_from_eval_space(interpret.space);
     ext->schemas = rd_schemas_from_name(type->name);
@@ -687,7 +687,7 @@ E_TYPE_IREXT_FUNCTION_DEF(cfgs_slice)
     
     //- rjf: determine which key we'll be gathering
     E_TypeKey type_key = irtree->type_key;
-    E_Type *type = e_type_from_key__cached(type_key);
+    E_Type *type = e_type_from_key(type_key);
     String8 cfg_name = rd_singular_from_code_name_plural(type->name);
     
     //- rjf: gather cfgs
@@ -1423,7 +1423,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
       }break;
       case E_ExprKind_ArrayIndex:
       {
-        E_Type *type = e_type_from_key__cached(lhs_irtree->type_key);
+        E_Type *type = e_type_from_key(lhs_irtree->type_key);
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(rd_singular_from_code_name_plural(type->name));
         E_Value rhs_value = e_value_from_expr(expr->first->next);
         U64 rhs_idx = rhs_value.u64;
@@ -1461,7 +1461,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
     
     //- rjf: determine which type of child we're gathering
     E_TypeKey lhs_type_key = eval.irtree.type_key;
-    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+    E_Type *lhs_type = e_type_from_key(lhs_type_key);
     String8 name = rd_singular_from_code_name_plural(lhs_type->name);
     CTRL_EntityKind entity_kind = ctrl_entity_kind_from_string(name);
     
@@ -1548,7 +1548,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
   RDI_SectionKind section = RDI_SectionKind_NULL;
   {
     E_TypeKey lhs_type_key = eval.irtree.type_key;
-    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
+    E_Type *lhs_type = e_type_from_key(lhs_type_key);
     if(0){}
     else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
     else if(str8_match(lhs_type->name, str8_lit("globals"), 0))          {section = RDI_SectionKind_GlobalVariables;}

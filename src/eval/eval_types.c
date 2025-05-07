@@ -645,7 +645,7 @@ e_type_byte_size_from_key(E_TypeKey key)
 }
 
 internal E_Type *
-e_type_from_key(Arena *arena, E_TypeKey key)
+e_push_type_from_key(Arena *arena, E_TypeKey key)
 {
   ProfBeginFunction();
   E_Type *type = &e_type_nil;
@@ -1251,7 +1251,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   E_MemberList members_list = {0};
   B32 members_need_offset_sort = 0;
   {
-    E_Type *root_type = e_type_from_key__cached(key);
+    E_Type *root_type = e_type_from_key(key);
     typedef struct Task Task;
     struct Task
     {
@@ -1290,7 +1290,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
             t->inheritance_chain = e_type_key_list_copy(scratch.arena, &task->inheritance_chain);
             e_type_key_list_push(scratch.arena, &t->inheritance_chain, type->members[member_idx].type_key);
             t->type_key = type->members[member_idx].type_key;
-            t->type = e_type_from_key__cached(type->members[member_idx].type_key);
+            t->type = e_type_from_key(type->members[member_idx].type_key);
             SLLQueuePush(first_task, last_task, t);
             members_need_offset_sort = 1;
           }
@@ -1390,14 +1390,14 @@ e_expand_rule_from_type_key(E_TypeKey key)
 {
   E_TypeExpandRule *rule = &e_type_expand_rule__default;
   {
-    E_Type *type = e_type_from_key__cached(e_type_key_unwrap(key, E_TypeUnwrapFlag_Meta));
+    E_Type *type = e_type_from_key(e_type_key_unwrap(key, E_TypeUnwrapFlag_Meta));
     if(type->expand.info != 0)
     {
       rule = &type->expand;
     }
     for(E_Type *lens_type = type;
         lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
-        lens_type = e_type_from_key__cached(e_type_key_unwrap(lens_type->direct_type_key, E_TypeUnwrapFlag_Meta)))
+        lens_type = e_type_from_key(e_type_key_unwrap(lens_type->direct_type_key, E_TypeUnwrapFlag_Meta)))
     {
       if(lens_type->expand.info != 0)
       {
@@ -1421,7 +1421,7 @@ e_type_key_direct(E_TypeKey key)
     case E_TypeKeyKind_Ext:
     case E_TypeKeyKind_Cons:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       result = type->direct_type_key;
     }break;
   }
@@ -1438,7 +1438,7 @@ e_type_key_owner(E_TypeKey key)
     case E_TypeKeyKind_Ext:
     case E_TypeKeyKind_Cons:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       result = type->owner_type_key;
     }break;
   }
@@ -1554,8 +1554,8 @@ e_type_match(E_TypeKey l, E_TypeKey r)
         
         case E_TypeKind_Array:
         {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
+          E_Type *lt = e_type_from_key(l);
+          E_Type *rt = e_type_from_key(r);
           if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
           {
             result = 1;
@@ -1564,8 +1564,8 @@ e_type_match(E_TypeKey l, E_TypeKey r)
         
         case E_TypeKind_Function:
         {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
+          E_Type *lt = e_type_from_key(l);
+          E_Type *rt = e_type_from_key(r);
           if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
           {
             B32 params_match = 1;
@@ -1586,8 +1586,8 @@ e_type_match(E_TypeKey l, E_TypeKey r)
         
         case E_TypeKind_Method:
         {
-          E_Type *lt = e_type_from_key__cached(l);
-          E_Type *rt = e_type_from_key__cached(r);
+          E_Type *lt = e_type_from_key(l);
+          E_Type *rt = e_type_from_key(r);
           if(lt->count == rt->count &&
              e_type_match(lt->direct_type_key, rt->direct_type_key) &&
              e_type_match(lt->owner_type_key, rt->owner_type_key))
@@ -1625,20 +1625,20 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
   {
     default:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       str8_list_pushf(arena, out, "%S ", type->name);
     }break;
     
     case E_TypeKind_Bitfield:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       e_type_lhs_string_from_key(arena, type->direct_type_key, out, prec, skip_return);
       str8_list_pushf(arena, out, ": %I64u", type->count);
     }break;
     
     case E_TypeKind_Modifier:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       E_TypeKey direct = type->direct_type_key;
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       if(type->flags & E_TypeFlag_Const)
@@ -1662,7 +1662,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_Class:
     case E_TypeKind_Alias:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       str8_list_pushf(arena, out, "%S ", type->name);
     }break;
     
@@ -1672,7 +1672,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_IncompleteClass:  keyword = str8_lit("class"); goto fwd_udt;
     fwd_udt:;
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       str8_list_push(arena, out, keyword);
       str8_list_push(arena, out, str8_lit(" "));
       str8_list_pushf(arena, out, "%S ", type->name);
@@ -1703,7 +1703,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Lens:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       str8_list_pushf(arena, out, "%S(", type->name);
       E_TypeKey direct = e_type_key_direct(key);
       String8 direct_string = e_type_string_from_key(arena, direct);
@@ -1722,7 +1722,7 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       E_TypeKey direct = e_type_key_direct(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("*"));
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       if(type->count != 1)
       {
         str8_list_pushf(arena, out, ".%I64u", type->count);
@@ -1745,10 +1745,10 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_MemberPtr:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       E_TypeKey direct = type->direct_type_key;
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
-      E_Type *container = e_type_from_key__cached(type->owner_type_key);
+      E_Type *container = e_type_from_key(type->owner_type_key);
       if(container->kind != E_TypeKind_Null)
       {
         str8_list_push(arena, out, push_str8_copy(arena, container->name));
@@ -1796,7 +1796,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Array:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       if(prec == 1)
       {
         str8_list_push(arena, out, str8_lit(")"));
@@ -1811,7 +1811,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Function:
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       if(prec == 1)
       {
         str8_list_push(arena, out, str8_lit(")"));
@@ -1884,7 +1884,7 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
     //
     if(e_type_kind_is_pointer_or_ref(kind))
     {
-      E_Type *type = e_type_from_key__cached(key);
+      E_Type *type = e_type_from_key(key);
       if(!e_type_key_match(e_type_key_basic(E_TypeKind_Void), type->direct_type_key))
       {
         if(type->count == 1 && hit_1ptr)
@@ -1965,7 +1965,7 @@ e_default_expansion_type_from_key(E_TypeKey root_key)
 //~ rjf: Cache Lookups
 
 internal E_Type *
-e_type_from_key__cached(E_TypeKey key)
+e_type_from_key(E_TypeKey key)
 {
   E_Type *type = &e_type_nil;
   {
@@ -1984,7 +1984,7 @@ e_type_from_key__cached(E_TypeKey key)
     {
       node = push_array(e_cache->arena, E_TypeCacheNode, 1);
       node->key = key;
-      node->type = e_type_from_key(e_cache->arena, key);
+      node->type = e_push_type_from_key(e_cache->arena, key);
       SLLQueuePush(e_cache->type_cache_slots[slot_idx].first, e_cache->type_cache_slots[slot_idx].last, node);
     }
     type = node->type;
@@ -2144,7 +2144,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
       if(array_type_kind == E_TypeKind_Array ||
          array_type_kind == E_TypeKind_Ptr)
       {
-        E_Type *array_type = e_type_from_key__cached(expand_type_key);
+        E_Type *array_type = e_type_from_key(expand_type_key);
         result.expr_count = array_type->count;
         did_expansion = 1;
       }
@@ -2156,7 +2156,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
       E_TypeKind enum_type_kind = e_type_kind_from_key(expand_type_key);
       if(enum_type_kind == E_TypeKind_Enum)
       {
-        E_Type *enum_type = e_type_from_key__cached(expand_type_key);
+        E_Type *enum_type = e_type_from_key(expand_type_key);
         result.expr_count = enum_type->count;
         did_expansion = 1;
       }
@@ -2194,7 +2194,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
     //- rjf: enum case -> the lookup-range will return a range of enum constants
     else if(expand_type_kind == E_TypeKind_Enum)
     {
-      E_Type *type = e_type_from_key__cached(expand_type_key);
+      E_Type *type = e_type_from_key(expand_type_key);
       Rng1U64 legal_idx_range = r1u64(0, type->count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
@@ -2236,14 +2236,14 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(only)
 {
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
   E_TypeExpandInfo info = {0, type->count};
   return info;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
 {
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
   U64 out_idx = 0;
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
@@ -2260,7 +2260,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(omit)
 {
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
   String8Array allowed_children_array = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -2345,7 +2345,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(sequence)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
 {
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
   U64 count = 1;
   if(type->args != 0 && type->count > 0) E_ParentKey(eval.key)
   {

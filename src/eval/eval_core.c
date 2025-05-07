@@ -1001,8 +1001,7 @@ e_value_eval_from_eval(E_Eval eval)
         // rjf: mask&shift, for bitfields
         if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
         {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *type = e_type_from_key__cached(type_key);
+          E_Type *type = e_type_from_key(type_key);
           U64 valid_bits_mask = 0;
           for(U64 idx = 0; idx < type->count; idx += 1)
           {
@@ -1011,7 +1010,6 @@ e_value_eval_from_eval(E_Eval eval)
           eval.value.u64 = eval.value.u64 >> type->off;
           eval.value.u64 = eval.value.u64 & valid_bits_mask;
           eval.irtree.type_key = type->direct_type_key;
-          scratch_end(scratch);
         }
         
         // rjf: manually sign-extend
@@ -1222,19 +1220,44 @@ e_base_offset_from_eval(E_Eval eval)
 internal U64
 e_range_size_from_eval(E_Eval eval)
 {
-  U64 result = 256;
-  E_TypeKey type_unwrapped = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
-  E_TypeKind type_unwrapped_kind = e_type_kind_from_key(type_unwrapped);
-  if(type_unwrapped_kind == E_TypeKind_Array ||
-     type_unwrapped_kind == E_TypeKind_Struct ||
-     type_unwrapped_kind == E_TypeKind_Union ||
-     type_unwrapped_kind == E_TypeKind_Class)
+  U64 result = KB(16);
   {
-    result = e_type_byte_size_from_key(type_unwrapped);
-  }
-  else
-  {
-    result = KB(16);
+    E_TypeKey type_core = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+    E_TypeKind type_core_kind = e_type_kind_from_key(type_core);
+    B32 got_size = 0;
+    
+    // rjf: try getting size from expansions
+    if(!got_size)
+    {
+      E_TypeKey maybe_lens_type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
+      E_TypeKind maybe_lens_type_kind = e_type_kind_from_key(maybe_lens_type_key);
+      if(maybe_lens_type_kind == E_TypeKind_Lens)
+      {
+        E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(maybe_lens_type_key);
+        if(expand_rule->info != 0)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          U64 element_size = e_type_byte_size_from_key(e_type_key_unwrap(type_core, E_TypeUnwrapFlag_All));
+          E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, eval, str8_zero());
+          result = expand_info.expr_count * element_size;
+          got_size = 1;
+          scratch_end(scratch);
+        }
+      }
+    }
+    
+    // rjf: try getting size from intrinsic type (e.g. arrays/etc.)
+    if(!got_size)
+    {
+      if(type_core_kind == E_TypeKind_Array ||
+         type_core_kind == E_TypeKind_Struct ||
+         type_core_kind == E_TypeKind_Union ||
+         type_core_kind == E_TypeKind_Class)
+      {
+        result = e_type_byte_size_from_key(type_core);
+        got_size = 1;
+      }
+    }
   }
   return result;
 }
@@ -1314,7 +1337,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
         type_key = e_type_key_direct(type_key),
         indent += 1)
     {
-      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      E_Type *type = e_push_type_from_key(scratch.arena, type_key);
       str8_list_pushf(scratch.arena, &strings, "%.*s%S\n", (int)indent*4, indent_spaces, e_type_kind_basic_string_table[type->kind]);
     }
   }

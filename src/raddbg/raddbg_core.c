@@ -2388,7 +2388,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
 {
   Temp scratch = scratch_begin(0, 0);
   E_TypeKey type_key = eval.irtree.type_key;
-  E_Type *type = e_type_from_key__cached(type_key);
+  E_Type *type = e_type_from_key(type_key);
   String8 schema_name = str8_lit("watch");
   B32 type_is_visualizer = 0;
   if(type->kind == E_TypeKind_Lens)
@@ -3262,7 +3262,7 @@ rd_view_ui(Rng2F32 rect)
                     case E_SpaceKind_File:
                     case E_SpaceKind_FileSystem:
                     {
-                      E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+                      E_Type *type = e_type_from_key(eval.irtree.type_key);
                       String8 file = rd_file_path_from_eval(scratch.arena, eval);
                       if(str8_match(type->name, str8_lit("folder"), 0))
                       {
@@ -3954,7 +3954,7 @@ rd_view_ui(Rng2F32 rect)
                   E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
                   if(block_type_kind == E_TypeKind_Set)
                   {
-                    E_Type *block_type = e_type_from_key__cached(block_type_key);
+                    E_Type *block_type = e_type_from_key(block_type_key);
                     group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
                     if(group_cfg_name.size == 0)
                     {
@@ -4303,7 +4303,7 @@ rd_view_ui(Rng2F32 rect)
                       EV_Row *row = &row_node->row;
                       F32 row_height = row_height_px*row->visual_size;
                       RD_WatchRowInfo *row_info = &row_infos[local_row_idx];
-                      E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
+                      E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
                       
                       // rjf: determine if this row's block is good for the current drag/drop
                       B32 block_is_good_for_drop = 0;
@@ -4608,7 +4608,7 @@ rd_view_ui(Rng2F32 rect)
                       B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
                       RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, row_info, cell, ui_top_font(), ui_top_font_size(), visual_row_string_max_size_px);
                       E_TypeKey cell_type_key = cell->eval.irtree.type_key;
-                      E_Type *cell_type = e_type_from_key__cached(cell_type_key);
+                      E_Type *cell_type = e_type_from_key(cell_type_key);
                       E_Eval cell_value_eval = e_value_eval_from_eval(cell->eval);
                       B32 cell_toggled = (cell_value_eval.value.u64 != 0);
                       B32 next_cell_toggled = cell_toggled;
@@ -4836,7 +4836,7 @@ rd_view_ui(Rng2F32 rect)
                           RD_CellParams cell_params = {0};
                           ProfScope("form cell build parameters")
                           {
-                            E_Type *block_type = e_type_from_key__cached(row->block->eval.irtree.type_key);
+                            E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
                             B32 cells_are_editable = !!(block_type->flags & E_TypeFlag_EditableChildren);
                             
                             // rjf: set up base parameters
@@ -5568,7 +5568,7 @@ rd_arch_from_eval(E_Eval eval)
   }
   
   // rjf: try arch arguments
-  E_Type *type = e_type_from_key__cached(eval.irtree.type_key);
+  E_Type *type = e_type_from_key(eval.irtree.type_key);
   if(type->kind == E_TypeKind_Lens)
   {
     for EachIndex(idx, type->count)
