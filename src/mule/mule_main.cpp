@@ -217,6 +217,7 @@ raddbg_type_view(PackedF16,
 
 enum Kind
 {
+  Kind_Negative = -1,
   Kind_None,
   Kind_First,
   Kind_Second,

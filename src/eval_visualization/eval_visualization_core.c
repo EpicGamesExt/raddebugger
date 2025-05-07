@@ -1417,6 +1417,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
     case E_TypeKind_RRef:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
     case E_TypeKind_Function:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
     
+#if 0
     case E_TypeKind_Enum:
     {
       Temp scratch = scratch_begin(&arena, 1);
@@ -1452,6 +1453,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
       }
       scratch_end(scratch);
     }break;
+#endif
   }
   return result;
 }
@@ -1551,6 +1553,58 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
       {
         E_Eval value_eval = e_value_eval_from_eval(eval);
         *out_string = ev_string_from_simple_typed_eval(arena, params, value_eval);
+      }break;
+      
+      //////////////////////////
+      //- rjf: enums
+      //
+      case E_TypeKind_Enum:
+      {
+        switch(task_idx)
+        {
+          default:{}break;
+          case 0:
+          {
+            E_Type *type = e_type_from_key(type_key);
+            E_Eval value_eval = e_value_eval_from_eval(eval);
+            String8 constant_name = {0};
+            for(U64 val_idx = 0; val_idx < type->count; val_idx += 1)
+            {
+              if(value_eval.value.u64 == type->enum_vals[val_idx].val)
+              {
+                constant_name = type->enum_vals[val_idx].name;
+                break;
+              }
+            }
+            String8 sufficient_suffix = constant_name;
+            if(str8_match(sufficient_suffix, type->name, StringMatchFlag_RightSideSloppy))
+            {
+              sufficient_suffix = str8_skip(sufficient_suffix, type->name.size);
+              if(str8_match(sufficient_suffix, str8_lit("_"), StringMatchFlag_RightSideSloppy))
+              {
+                sufficient_suffix = str8_skip(sufficient_suffix, 1);
+              }
+            }
+            *out_string = push_str8f(arena, "%S.%S", type->name, sufficient_suffix);
+            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+            {
+              need_pop = 0;
+            }
+          }break;
+          case 1:
+          {
+            *out_string = str8_lit(" (");
+            need_pop = 0;
+            need_new_task = 1;
+            new_task.params = *params;
+            new_task.eval = e_value_eval_from_eval(eval);
+            new_task.eval.irtree.type_key = e_type_key_direct(eval.irtree.type_key);
+          }break;
+          case 2:
+          {
+            *out_string = str8_lit(")");
+          }break;
+        }
       }break;
       
       //////////////////////////
