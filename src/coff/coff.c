@@ -179,18 +179,17 @@ coff_apply_size_from_reloc(COFF_MachineType machine, COFF_RelocType x)
   return 0;
 }
 
-internal void
-coff_apply_reloc_x64(String8        data,
-                     COFF_Reloc_X64 type,
-                     U64            apply_off,
-                     U64            reloc_virtual_offset,
-                     U32            symbol_section_number,
-                     U32            symbol_section_offset,
-                     U32            symbol_virtual_offset,
-                     U64            symbol_address)
+internal COFF_RelocValue
+coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
+                          U64            reloc_virtual_offset,
+                          U32            symbol_section_number,
+                          U32            symbol_section_offset,
+                          U32            symbol_virtual_offset,
+                          U64            symbol_address)
 {
   U64 reloc_value_size = 0;
   S64 reloc_value      = 0;
+
   switch (type) {
   case COFF_Reloc_X64_Abs: {} break;
   case COFF_Reloc_X64_Addr64: {
@@ -199,7 +198,7 @@ coff_apply_reloc_x64(String8        data,
   } break;
   case COFF_Reloc_X64_Addr32: {
     reloc_value_size = 4;
-    reloc_value      = safe_cast_u32(symbol_address);
+    reloc_value      = symbol_address;
   } break;
   case COFF_Reloc_X64_Addr32Nb: {
     reloc_value_size = 4;
@@ -254,17 +253,11 @@ coff_apply_reloc_x64(String8        data,
   } break;
   }
 
-  // read addend
-  Assert(apply_off + reloc_value_size <= data.size);
-  U64 raw_addend = 0;
-  str8_deserial_read(data, apply_off, &raw_addend, reloc_value_size, reloc_value_size);
+  COFF_RelocValue result = {0};
+  result.size            = reloc_value_size;
+  result.value           = reloc_value;
 
-  // compute new reloc value
-  S64 addend       = extend_sign64(raw_addend, reloc_value_size);
-  U64 reloc_result = reloc_value + addend;
-  
-  // commit new reloc value
-  MemoryCopy(data.str + apply_off, &reloc_result, reloc_value_size);
+  return result;
 }
 
 internal String8
