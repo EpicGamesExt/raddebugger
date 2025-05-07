@@ -12689,7 +12689,11 @@ rd_frame(void)
             //- rjf: if config did not define any keybindings for the user, then we need to build a sensible default
             if(file_is_okay && kind == RD_CmdKind_OpenUser)
             {
-              rd_cmd(RD_CmdKind_ResetToDefaultBindings);
+              RD_CfgList all_keybindings = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("keybindings"));
+              if(all_keybindings.count == 0)
+              {
+                rd_cmd(RD_CmdKind_ResetToDefaultBindings);
+              }
             }
             
             //- rjf: record recently-opened projects in the user
