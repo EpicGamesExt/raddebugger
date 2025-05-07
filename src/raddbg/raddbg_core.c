@@ -12974,6 +12974,14 @@ rd_frame(void)
                 rd_cfg_equip_string(new_parent, str8_lit("panels"));
                 RD_Cfg *window_cfg = rd_window_from_cfg(split_panel);
                 rd_cfg_insert_child(window_cfg, window_cfg->last, new_parent);
+                if(split_axis == Axis2_X)
+                {
+                  rd_cfg_child_from_string_or_alloc(window_cfg, str8_lit("split_x"));
+                }
+                else
+                {
+                  rd_cfg_release(rd_cfg_child_from_string(window_cfg, str8_lit("split_x")));
+                }
               }
               RD_Cfg *min = split_panel;
               RD_Cfg *max = new_sibling;
@@ -13339,6 +13347,14 @@ rd_frame(void)
                 // rjf: re-hook our kept child into the overall tree
                 if(grandparent == &rd_nil_panel_node)
                 {
+                  if(keep_child->split_axis == Axis2_X)
+                  {
+                    rd_cfg_child_from_string_or_alloc(window, str8_lit("split_x"));
+                  }
+                  else
+                  {
+                    rd_cfg_release(rd_cfg_child_from_string(window, str8_lit("split_x")));
+                  }
                   rd_cfg_equip_string(keep_child->cfg, str8_lit("panels"));
                   rd_cfg_insert_child(window, window->last, keep_child->cfg);
                 }
