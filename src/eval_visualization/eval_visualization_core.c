@@ -1585,10 +1585,21 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                 sufficient_suffix = str8_skip(sufficient_suffix, 1);
               }
             }
-            *out_string = push_str8f(arena, "%S.%S", type->name, sufficient_suffix);
-            if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+            if(sufficient_suffix.size != 0)
             {
-              need_pop = 0;
+              *out_string = push_str8f(arena, "%S.%S", type->name, sufficient_suffix);
+              if(params->flags & EV_StringFlag_ReadOnlyDisplayRules)
+              {
+                need_pop = 0;
+              }
+            }
+            else
+            {
+              need_pop = 1;
+              need_new_task = 1;
+              new_task.params = *params;
+              new_task.eval = e_value_eval_from_eval(eval);
+              new_task.eval.irtree.type_key = e_type_key_direct(eval.irtree.type_key);
             }
           }break;
           case 1:
