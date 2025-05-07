@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #pragma once
@@ -122,9 +122,9 @@ typedef union
 
 typedef struct
 {
-  LNK_Obj      **obj_arr;
-  LNK_ChunkList *sect_list_arr;
-  CV_DebugS     *debug_s_arr;
+  LNK_Obj    **obj_arr;
+  String8List *sect_list_arr;
+  CV_DebugS   *debug_s_arr;
 } LNK_ParseDebugSTaskData;
 
 typedef struct
@@ -313,10 +313,10 @@ typedef struct
 typedef struct
 {
   LNK_Obj                    *obj_arr;
-  LNK_Section               **sect_id_map;
   PDB_DbiModule             **mod_arr;
   PDB_DbiSectionContribList  *sc_list;
   String8                     image_data;
+  Rng1U64Array                image_section_file_ranges;
 } LNK_PushDbiSecContribTaskData;
 
 typedef struct
@@ -334,7 +334,6 @@ typedef struct
 
 typedef struct
 {
-  LNK_Section                 **sect_id_map;
   LNK_SymbolHashTrieChunkList  *chunk_lists;
   CV_SymbolList                *pub_list_arr;
 
@@ -454,7 +453,6 @@ typedef struct
 typedef struct
 {
   LNK_SectionArray          image_sects;
-  LNK_Section             **sect_id_map;
   LNK_Obj                  *obj_arr;
   CV_DebugS                *debug_s_arr;
   CV_DebugT                 ipi;
@@ -496,8 +494,8 @@ typedef struct
 ////////////////////////////////
 // CodeView
 
-internal CV_DebugS *       lnk_parse_debug_s_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, LNK_ChunkList *sect_list_arr);
-internal CV_DebugT *       lnk_parse_debug_t_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, LNK_ChunkList *debug_t_list_arr);
+internal CV_DebugS *       lnk_parse_debug_s_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *sect_list_arr);
+internal CV_DebugT *       lnk_parse_debug_t_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *debug_t_list_arr);
 internal CV_SymbolList *   lnk_cv_symbol_list_arr_from_debug_s_arr(TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr);
 internal LNK_PchInfo *     lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols);
 
@@ -557,7 +555,6 @@ internal String8List lnk_build_rad_debug_info(TP_Context               *tp,
                                               String8                   image_name,
                                               String8                   image_data,
                                               LNK_SectionArray          image_sects,
-                                              LNK_Section             **sect_id_map,
                                               U64                       obj_count,
                                               LNK_Obj                  *obj_arr,
                                               CV_DebugS                *debug_s_arr,
@@ -574,25 +571,13 @@ internal LNK_ProcessedCodeViewC13Data lnk_process_c13_data(TP_Context *tp, TP_Ar
 internal U64 *                        lnk_hash_cv_symbol_ptr_arr(TP_Context *tp, Arena *arena, CV_SymbolPtrArray arr);
 internal CV_SymbolPtrArray            lnk_dedup_gsi_symbols(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 obj_count, CV_SymbolList *symbol_list_arr);
 
-internal void lnk_build_pdb_public_symbols(TP_Context            *tp,
-                                           TP_Arena              *arena,
-                                           LNK_SymbolTable       *symtab,
-                                           LNK_Section          **sect_id_map,
-                                           PDB_PsiContext        *psi);
+internal void lnk_build_pdb_public_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, PDB_PsiContext *psi);
 
 internal String8List lnk_build_pdb(TP_Context               *tp,
                                    TP_Arena                 *tp_arena,
                                    String8                   image_data,
-                                   Guid                      guid,
-                                   COFF_MachineType          machine,
-                                   COFF_TimeStamp            time_stamp,
-                                   U32                       age,
-                                   U64                       page_size,
-                                   String8                   pdb_name,
-                                   String8List               lib_dir_list,
-                                   String8List               natvis_list,
+                                   LNK_Config               *config,
                                    LNK_SymbolTable          *symtab,
-                                   LNK_Section             **sect_id_map,
                                    U64                       obj_count,
                                    LNK_Obj                  *obj_arr,
                                    CV_DebugS                *debug_s_arr,

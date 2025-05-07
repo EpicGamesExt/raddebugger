@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_LibNode *
@@ -208,31 +208,6 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, S
   return arr;
 }
 
-#if 0
-internal LNK_LibNode *
-lnk_lib_list_push(Arena *arena, LNK_LibList *list, String8 data, String8 path)
-{
-  ProfBeginFunction();
-  
-  TP_Arena pool_arena = {0};
-  pool_arena.count    = 1;
-  pool_arena.v        = &arena;
-  
-  String8Array data_arr = {0};
-  data_arr.count        = 1;
-  data_arr.v            = &data;
-  
-  String8Array path_arr = {0};
-  path_arr.count        = 1;
-  path_arr.v            = &path;
-  
-  LNK_LibNodeArray node_arr = lnk_lib_list_push_parallel(&pool_arena, list, data_arr, path_arr);
-
-  ProfEnd();
-  return node_arr.v;
-}
-#endif
-
 ////////////////////////////////
 
 internal LNK_LibWriter *
@@ -265,14 +240,31 @@ lnk_lib_writer_push_obj(LNK_LibWriter *writer, LNK_Obj *obj)
   lnk_lib_member_list_push(writer->arena, &writer->member_list, member);
   
   // push external symbols
-  for (LNK_SymbolNode *node = obj->symbol_list.first; node != 0; node = node->next) {
-    LNK_Symbol *symbol = node->data;
-    B32 is_extern = symbol->type == LNK_Symbol_DefinedExtern;
-    if (is_extern) {
-      LNK_LibSymbol lib_symbol = {0};
-      lib_symbol.name       = symbol->name;
-      lib_symbol.member_idx = member_idx;
-      lnk_lib_symbol_list_push(writer->arena, &writer->symbol_list, lib_symbol);
+  {
+    COFF_FileHeaderInfo coff_info = coff_file_header_info_from_data(obj->data);
+    String8 string_table = str8_substr(obj->data, coff_info.string_table_range);
+    String8 symbol_table = str8_substr(obj->data, coff_info.symbol_table_range);
+
+    COFF_ParsedSymbol symbol;
+    for (U64 symbol_idx = 0; symbol_idx < coff_info.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+      void *symbol_ptr;
+      if (coff_info.is_big_obj) {
+        symbol_ptr = &((COFF_Symbol32 *)symbol_table.str)[symbol_idx];
+        symbol     = coff_parse_symbol32(string_table, symbol_ptr);
+      } else {
+        symbol_ptr = &((COFF_Symbol16 *)symbol_table.str)[symbol_idx];
+        symbol     = coff_parse_symbol16(string_table, symbol_ptr);
+      }
+
+      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+      if (interp == COFF_SymbolValueInterp_Regular) {
+        if (symbol.storage_class == COFF_SymStorageClass_External) {
+          LNK_LibSymbol lib_symbol = {0};
+          lib_symbol.name          = symbol.name;
+          lib_symbol.member_idx    = member_idx;
+          lnk_lib_symbol_list_push(writer->arena, &writer->symbol_list, lib_symbol);
+        }
+      }
     }
   }
 
@@ -590,20 +582,45 @@ lnk_build_import_lib(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, 
     input->lib_path     = lib_name;
   }
 
-  LNK_InputObj     **inputs   = lnk_array_from_input_obj_list(scratch.arena, input_obj_list);
-  LNK_SectionTable  *sectab   = lnk_section_table_alloc(0,0,0);
-  LNK_ObjList        obj_list = {0};
-  lnk_obj_list_push_parallel(tp, arena, &obj_list, sectab, 0, machine, input_obj_list.count, inputs);
+  LNK_InputObj **inputs   = lnk_array_from_input_obj_list(scratch.arena, input_obj_list);
+  LNK_ObjList    obj_list = {0};
+  lnk_obj_list_push_parallel(tp, arena, &obj_list, machine, input_obj_list.count, inputs);
   
   LNK_LibBuild import_lib = lnk_build_lib(scratch.arena, machine, time_stamp, dll_name, obj_list, exptab);
   B32 emit_second_member = 1;
   String8List coff_archive_data = lnk_coff_archive_from_lib_build(arena->v[0], &import_lib, emit_second_member, COFF_TimeStamp_Max, 0);
   
   // cleanup memory
-  lnk_section_table_release(&sectab);
   scratch_end(scratch);
 
   ProfEnd();
   return coff_archive_data;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_push_lib_symbols_task)
+{
+  LNK_SymbolPusher *task   = raw_task;
+  LNK_SymbolTable  *symtab = task->symtab;
+  LNK_Lib          *lib    = &task->u.libs.v[task_id].data;
+
+  String8Node *name_node = lib->symbol_name_list.first;
+  for (U64 symbol_idx = 0; symbol_idx < lib->symbol_count; ++symbol_idx, name_node = name_node->next) {
+    LNK_Symbol *symbol = lnk_make_lib_symbol(arena, name_node->string, lib, lib->member_off_arr[symbol_idx]);
+
+    U64 hash = lnk_symbol_hash(symbol->name);
+    lnk_symbol_table_push_(symtab, arena, worker_id, LNK_SymbolScope_Lib, hash, symbol);
+  }
+}
+
+internal void
+lnk_input_lib_symbols(TP_Context *tp, LNK_SymbolTable *symtab, LNK_LibNodeArray libs)
+{
+  ProfBeginFunction();
+  LNK_SymbolPusher task = {0};
+  task.symtab           = symtab;
+  task.u.libs           = libs;
+  tp_for_parallel(tp, symtab->arena, libs.count, lnk_push_lib_symbols_task, &task);
+  ProfEnd();
 }
 

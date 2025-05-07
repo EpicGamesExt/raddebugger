@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
@@ -396,7 +396,11 @@ lnk_get_base_addr(LNK_Config *config)
     if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
       base_addr = coff_default_dll_base_from_machine(config->machine);
     } else if (config->file_characteristics & PE_ImageFileCharacteristic_EXE) {
-      base_addr = coff_default_exe_base_from_machine(config->machine);
+      if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && config->machine == COFF_MachineType_X64) {
+        base_addr = coff_default_exe_base_from_machine(COFF_MachineType_X86);
+      } else {
+        base_addr = coff_default_exe_base_from_machine(config->machine);
+      }
     } else {
       lnk_error(LNK_Error_Cmdl, "image type is not specified.");
     }
@@ -2001,6 +2005,11 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     if (config->opt_lbr == LNK_SwitchState_Null) {
       config->opt_lbr = LNK_SwitchState_Yes;
     }
+  }
+
+  // warn about unused large address aware flag
+  if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL)) {
+    lnk_error(LNK_Warning_NoLargeAddressAwarenessForDll, "/LARGEADDRESSAWARE:NO has no effect when specified together with /DLL");
   }
   
   // error check base address flags

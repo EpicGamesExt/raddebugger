@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #pragma once
@@ -7,7 +7,7 @@ typedef struct LNK_Export
 {
   struct LNK_Export  *next;
   String8             name;
-  LNK_Symbol         *symbol;
+  struct LNK_Symbol  *symbol;
   U32                 id;
   U16                 ordinal;
   COFF_ImportType     type;
