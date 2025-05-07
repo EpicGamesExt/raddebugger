@@ -1353,7 +1353,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
         // left-hand-side of the dot operator as the first argument. this is a fast path
         // which prevents paren nesting in simple cases, to easily chain multiple
         // calls - for example, bin(2).digits(4)
-        else if(lhs->kind == E_ExprKind_MemberAccess)
+        else if(lhs->kind == E_ExprKind_MemberAccess && lhs->first->next != &e_expr_nil)
         {
           E_Expr *callee = lhs->first->next;
           E_Expr *first_arg = e_expr_ref(arena, lhs->first);

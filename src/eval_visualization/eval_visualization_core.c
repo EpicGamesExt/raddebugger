@@ -557,6 +557,7 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
       {
         expansion_row_count = viz_expand_info.row_count;
       }
+      expansion_row_count = Min(0x0fffffffffffffffull, expansion_row_count);
       
       // rjf: determine if this expansion supports child expansions
       B32 allow_child_expansions = 1;
