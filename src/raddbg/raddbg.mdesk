@@ -234,9 +234,9 @@ RD_VocabTable:
       
       //- rjf: fonts
       @display_name('UI Font') @description("The name of, or path to, the font used when displaying non-code UI elements.")
-        'main_font': string,
+        @default('') 'main_font': string,
       @display_name('Code Font') @description("The name of, or path to, the font used when displaying code.")
-        'code_font': string,
+        @default('') 'code_font': string,
       
       //- rjf: theme
       @default("Default (Dark)") @display_name('User Theme')

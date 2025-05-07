@@ -982,6 +982,7 @@ internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind k
 internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
 
 //- rjf: fonts
+internal F32 rd_font_size(void);
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);
 internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
 

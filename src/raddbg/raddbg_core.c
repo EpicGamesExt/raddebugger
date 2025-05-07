@@ -2664,7 +2664,7 @@ rd_view_ui(Rng2F32 rect)
   //- rjf: fill view container
   //
   UI_Parent(view_container)
-    UI_FontSize(rd_setting_f32_from_name(str8_lit("font_size")))
+    UI_FontSize(rd_font_size())
     UI_PrefHeight(ui_px(floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("row_height"))), 1.f))
   {
     ////////////////////////////
@@ -6014,7 +6014,7 @@ rd_window_frame(void)
   //
   if(rd_state->first_window_state == ws && rd_state->last_window_state == ws && ws->frames_alive == 0)
   {
-    F32 font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+    F32 font_size = rd_font_size();
     RD_FontSlot english_font_slots[] = {RD_FontSlot_Main, RD_FontSlot_Code};
     RD_FontSlot icon_font_slot = RD_FontSlot_Icons;
     for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
@@ -6153,7 +6153,7 @@ rd_window_frame(void)
     {
       // rjf: get top-level font size info
       F32 top_level_font_size = 0;
-      RD_RegsScope(.view = 0, .tab = 0) top_level_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+      RD_RegsScope(.view = 0, .tab = 0) top_level_font_size = rd_font_size();
       
       // rjf: build icon info
       UI_IconInfo icon_info = {0};
@@ -10074,6 +10074,14 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
 
 //- rjf: fonts/sizes
 
+internal F32
+rd_font_size(void)
+{
+  F32 size = rd_setting_f32_from_name(str8_lit("font_size"));
+  size = Clamp(6.f, size, 72.f);
+  return size;
+}
+
 internal FNT_Tag
 rd_font_from_slot(RD_FontSlot slot)
 {
@@ -12873,9 +12881,9 @@ rd_frame(void)
           if(cfg != &rd_nil_cfg)
           {
             fnt_reset();
-            F32 current_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+            F32 current_font_size = rd_font_size();
             F32 new_font_size = current_font_size+1;
-            new_font_size = ClampBot(1, new_font_size);
+            new_font_size = Clamp(6.f, new_font_size, 72.f);
             RD_Cfg *font_size_cfg = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("font_size"));
             rd_cfg_new_replacef(font_size_cfg, "%I64u", (U64)new_font_size);
           }break;
@@ -12885,9 +12893,9 @@ rd_frame(void)
           if(cfg != &rd_nil_cfg)
           {
             fnt_reset();
-            F32 current_font_size = rd_setting_f32_from_name(str8_lit("font_size"));
+            F32 current_font_size = rd_font_size();
             F32 new_font_size = current_font_size-1;
-            new_font_size = ClampBot(1, new_font_size);
+            new_font_size = Clamp(6.f, new_font_size, 72.f);
             RD_Cfg *font_size_cfg = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("font_size"));
             rd_cfg_new_replacef(font_size_cfg, "%I64u", (U64)new_font_size);
           }break;
