@@ -446,13 +446,13 @@ rdim_short_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S16;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S16;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S16;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -462,13 +462,13 @@ rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U16;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U16;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U16;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -478,13 +478,13 @@ rdim_int_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S32;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S32;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -494,13 +494,13 @@ rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U32;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U32;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -510,13 +510,13 @@ rdim_long_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -526,13 +526,13 @@ rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -542,13 +542,13 @@ rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -558,13 +558,13 @@ rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -574,13 +574,13 @@ rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
-  case RDIM_DataModel_Null  : break;
-  case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
-  case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
-  case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
-  case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
-  default: InvalidPath;
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
   }
   return RDI_TypeKind_NULL;
 }
@@ -1309,12 +1309,12 @@ RDI_PROC RDIM_TypeChunkList
 rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
 {
   RDIM_TypeChunkList list = {0};
-
+  
   RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
-
+  
   // RDI_TypeKind_NULL
   rdim_type_chunk_list_push(arena, &list, type_cap);
-
+  
   for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
   {
     RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
@@ -1322,13 +1322,13 @@ rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
     type->kind      = type_kind;
     type->byte_size = rdi_size_from_basic_type_kind(type_kind);
   }
-
+  
   RDIM_Type *void_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Void);
   void_type->byte_size = rdi_addr_size_from_arch(arch);
-
+  
   RDIM_Type *handle_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Handle);
   handle_type->byte_size = rdi_addr_size_from_arch(arch);
-
+  
   return list;
 }
 
@@ -1921,6 +1921,25 @@ rdim_bake_path_node_from_string(RDIM_BakePathTree *tree, RDIM_String8 string)
       }
     }
     
+    // rjf: .. -> go up
+    if(sub_dir.RDIM_String8_SizeMember == 2 &&
+       sub_dir.RDIM_String8_BaseMember[0] == '.' &&
+       sub_dir.RDIM_String8_BaseMember[1] == '.')
+    {
+      sub_dir_node = node->parent;
+      if(sub_dir_node == 0)
+      {
+        sub_dir_node = &tree->root;
+      }
+    }
+    
+    // rjf: . -> stay here
+    else if(sub_dir.RDIM_String8_SizeMember == 1 &&
+            sub_dir.RDIM_String8_BaseMember[0] == '.')
+    {
+      sub_dir_node = node;
+    }
+    
     // rjf: descend to child
     node = sub_dir_node;
   }
@@ -1975,8 +1994,27 @@ rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_Stri
       }
     }
     
+    // rjf: .. -> go up
+    if(sub_dir.RDIM_String8_SizeMember == 2 &&
+       sub_dir.RDIM_String8_BaseMember[0] == '.' &&
+       sub_dir.RDIM_String8_BaseMember[1] == '.')
+    {
+      sub_dir_node = node->parent;
+      if(sub_dir_node == 0)
+      {
+        sub_dir_node = &tree->root;
+      }
+    }
+    
+    // rjf: . -> stay here
+    else if(sub_dir.RDIM_String8_SizeMember == 1 &&
+            sub_dir.RDIM_String8_BaseMember[0] == '.')
+    {
+      sub_dir_node = node;
+    }
+    
     // rjf: no child -> make one
-    if(sub_dir_node == 0)
+    else if(sub_dir_node == 0)
     {
       sub_dir_node = rdim_push_array(arena, RDIM_BakePathNode, 1);
       RDIM_SLLQueuePush_N(tree->first, tree->last, sub_dir_node, next_order);
@@ -3463,7 +3501,7 @@ RDI_PROC U64
 rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
 {
   U64 location_data_off = location_data_blobs->total_size;
-
+  
   // rjf: nil location
   if(src_location == 0)
   {
@@ -3523,7 +3561,7 @@ rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDI
       rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, rdim_str8_struct(&loc)));
     }break;
   }
-
+  
   return location_data_off;
 }
 
@@ -3537,7 +3575,7 @@ rdim_bake_locset(RDIM_Arena       *arena,
   if(locset.location_case_count > 0)
   {
     locset_idx = rdim_count_from_location_block_chunk_list(location_blocks);
-
+    
     RDI_LocationBlock *dst_arr = rdim_location_block_chunk_list_push_array(arena, location_blocks, locset.location_case_count);
     RDI_LocationBlock *dst     = dst_arr;
     for(RDIM_LocationCase *src = locset.first_location_case; src != 0; src = src->next, ++dst)
@@ -3565,10 +3603,10 @@ rdim_bake_procedures(RDIM_Arena              *arena,
     {
       RDIM_Symbol   *src = &n->v[chunk_idx];
       RDI_Procedure *dst = &procedures[dst_idx];
-
+      
       RDI_U32 frame_base_location_first = rdim_bake_locset(arena, location_blocks, location_data_blobs, src->frame_base);
       RDI_U32 frame_base_location_opl   = frame_base_location_first + src->frame_base.location_case_count;
-
+      
       dst->name_string_idx      = rdim_bake_idx_from_string(strings, src->name);
       dst->link_name_string_idx = rdim_bake_idx_from_string(strings, src->link_name);
       if(src->is_extern)
@@ -3612,7 +3650,7 @@ rdim_bake_scopes(RDIM_Arena              *arena,
   RDI_Scope *scopes      = rdim_push_array(arena, RDI_Scope, src->total_count+1);
   RDI_U64   *scope_voffs = rdim_push_array(arena, RDI_U64,   src->scope_voff_count+1);
   RDI_Local *locals      = rdim_push_array(arena, RDI_Local, src->local_count+1);
-
+  
   RDIM_ProfScope("build all scopes, scope voffs, locals, and location blocks")
   {
     RDI_U64 dst_scope_idx      = 1;
