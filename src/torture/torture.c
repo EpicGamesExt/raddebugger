@@ -27,6 +27,7 @@
 
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
+#include "linker/lnk_error.h"
 
 ////////////////////////////////
 
@@ -571,8 +572,14 @@ t_abs_vs_common(void)
   if (linker_exit_code == 0) {
     // TODO: validate that linker issues multiply defined symbol error
     int common_vs_abs = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe common.obj abs.obj entry.obj");
-    if (common_vs_abs != 0) {
-      result = T_Result_Pass;
+    if (t_ident_linker() == T_Linker_RAD) {
+      if (common_vs_abs == LNK_Error_MultiplyDefinedSymbol) {
+        result = T_Result_Pass;
+      }
+    } else {
+      if (common_vs_abs != 0) {
+        result = T_Result_Pass;
+      }
     }
   }
 
@@ -1434,6 +1441,9 @@ entry_point(CmdLine *cmdline)
       }
     }
 
+    U64 pass_count  = 0;
+    U64 fail_count  = 0;
+    U64 crash_count = 0;
     for (U64 i = 0; i < target_indices_count; i += 1) {
       U64 target_idx = target_indices[i];
 
@@ -1452,12 +1462,20 @@ entry_point(CmdLine *cmdline)
 
       if (result == T_Result_Pass) {
         fprintf(stdout, "\x1b[32m" "%.*s" "\x1b[0m" "\n", str8_varg(msg));
+        pass_count += 1;
       } else if (result == T_Result_Fail) {
         fprintf(stdout, "\x1b[31m" "%.*s" "\x1b[0m" "\n", str8_varg(msg));
+        fail_count += 1;
       } else if (result == T_Result_Crash) {
         fprintf(stdout, "\x1b[33m" "%.*s" "\x1b[0m" "\n", str8_varg(msg));
+        crash_count += 1;
       }
     }
+
+    fprintf(stdout, "--- Report ---------------------------------------------------------------------\n");
+    fprintf(stdout, "  Passed:  %llu\n", pass_count);
+    fprintf(stdout, "  Failed:  %llu\n", fail_count);
+    fprintf(stdout, "  Crashed: %llu\n", crash_count);
   }
 
   scratch_end(scratch);
