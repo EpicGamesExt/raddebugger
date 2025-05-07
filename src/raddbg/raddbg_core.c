@@ -12536,6 +12536,29 @@ rd_frame(void)
             rd_state->popup_key = ui_key_zero();
           }break;
           
+          //- rjf: keybindings
+          case RD_CmdKind_ResetToDefaultBindings:
+          {
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_CfgList all_keybindings = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("keybindings"));
+            for(RD_CfgNode *n = all_keybindings.first; n != 0; n = n->next)
+            {
+              rd_cfg_release(n->v);
+            }
+            RD_Cfg *keybindings = rd_cfg_new(user, str8_lit("keybindings"));
+            for EachElement(idx, rd_default_binding_table)
+            {
+              String8 name = rd_default_binding_table[idx].string;
+              RD_Binding binding = rd_default_binding_table[idx].binding;
+              RD_Cfg *binding_root = rd_cfg_new(keybindings, str8_zero());
+              rd_cfg_new(binding_root, name);
+              rd_cfg_new(binding_root, os_g_key_cfg_string_table[binding.key]);
+              if(binding.modifiers & OS_Modifier_Ctrl)  {rd_cfg_newf(binding_root, "ctrl");}
+              if(binding.modifiers & OS_Modifier_Shift) {rd_cfg_newf(binding_root, "shift");}
+              if(binding.modifiers & OS_Modifier_Alt)   {rd_cfg_newf(binding_root, "alt");}
+            }
+          }break;
+          
           //- rjf: config path saving/loading/applying
           case RD_CmdKind_OpenRecentProject:
           {
@@ -12666,22 +12689,7 @@ rd_frame(void)
             //- rjf: if config did not define any keybindings for the user, then we need to build a sensible default
             if(file_is_okay && kind == RD_CmdKind_OpenUser)
             {
-              RD_CfgList all_keybindings = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("keybindings"));
-              if(all_keybindings.count == 0)
-              {
-                RD_Cfg *keybindings = rd_cfg_new(file_root, str8_lit("keybindings"));
-                for EachElement(idx, rd_default_binding_table)
-                {
-                  String8 name = rd_default_binding_table[idx].string;
-                  RD_Binding binding = rd_default_binding_table[idx].binding;
-                  RD_Cfg *binding_root = rd_cfg_new(keybindings, str8_zero());
-                  rd_cfg_new(binding_root, name);
-                  rd_cfg_new(binding_root, os_g_key_cfg_string_table[binding.key]);
-                  if(binding.modifiers & OS_Modifier_Ctrl)  {rd_cfg_newf(binding_root, "ctrl");}
-                  if(binding.modifiers & OS_Modifier_Shift) {rd_cfg_newf(binding_root, "shift");}
-                  if(binding.modifiers & OS_Modifier_Alt)   {rd_cfg_newf(binding_root, "alt");}
-                }
-              }
+              rd_cmd(RD_CmdKind_ResetToDefaultBindings);
             }
             
             //- rjf: record recently-opened projects in the user

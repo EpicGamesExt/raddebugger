@@ -211,12 +211,6 @@
 // - Made several visual improvements.
 
 ////////////////////////////////
-//~ rjf: 0.9.16 TODO notes
-//
-// [ ] maybe add extra caching layer to process memory querying? we pay a pretty
-//     heavy cost even to just read 8 bytes...
-
-////////////////////////////////
 //~ rjf: post-0.9.16 TODO notes
 //
 //- watch improvements
@@ -306,6 +300,8 @@
 // [ ] audio waveform views
 //
 //- eval improvements
+// [ ] maybe add extra caching layer to process memory querying? we pay a pretty
+//     heavy cost even to just read 8 bytes...
 // [ ] evaluate `foo.bar` symbol names without escape hatch?
 // [ ] serializing eval view maps (?)
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
