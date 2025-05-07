@@ -1386,7 +1386,7 @@ rd_setting_b32_from_name(String8 name)
   if(value.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 expr = push_str8f(scratch.arena, "(bool)(%S)", value);
+    String8 expr = push_str8f(scratch.arena, "raw((bool)(%S))", value);
     E_Eval eval = e_eval_from_string(expr);
     result = !!e_value_eval_from_eval(eval).value.u64;
     scratch_end(scratch);
@@ -1402,7 +1402,7 @@ rd_setting_u64_from_name(String8 name)
   if(value.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 expr = push_str8f(scratch.arena, "(uint64)(%S)", value);
+    String8 expr = push_str8f(scratch.arena, "raw((uint64)(%S))", value);
     E_Eval eval = e_eval_from_string(expr);
     result = e_value_eval_from_eval(eval).value.u64;
     scratch_end(scratch);
@@ -1418,7 +1418,7 @@ rd_setting_f32_from_name(String8 name)
   if(value.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 expr = push_str8f(scratch.arena, "(float32)(%S)", value);
+    String8 expr = push_str8f(scratch.arena, "raw((float32)(%S))", value);
     E_Eval eval = e_eval_from_string(expr);
     result = e_value_eval_from_eval(eval).value.f32;
     scratch_end(scratch);
@@ -5515,7 +5515,7 @@ internal B32
 rd_view_setting_b32_from_name(String8 name)
 {
   String8 string = rd_view_setting_from_name(name);
-  B32 result = !!e_value_from_stringf("(bool)(%S)", string).u64;
+  B32 result = !!e_value_from_stringf("raw((bool)(%S))", string).u64;
   return result;
 }
 
@@ -5523,7 +5523,7 @@ internal U64
 rd_view_setting_u64_from_name(String8 name)
 {
   String8 string = rd_view_setting_from_name(name);
-  U64 result = e_value_from_stringf("(uint64)(%S)", string).u64;
+  U64 result = e_value_from_stringf("raw((uint64)(%S))", string).u64;
   return result;
 }
 
@@ -5531,7 +5531,7 @@ internal F32
 rd_view_setting_f32_from_name(String8 name)
 {
   String8 string = rd_view_setting_from_name(name);
-  F32 result = e_value_from_stringf("(float32)(%S)", string).f32;
+  F32 result = e_value_from_stringf("raw((float32)(%S))", string).f32;
   return result;
 }
 
@@ -5974,7 +5974,7 @@ rd_window_frame(void)
           MD_Node *value_child = md_child_from_string(n, str8_lit("value"), 0);
           U8 split_char = ' ';
           String8List tags = str8_split(scratch.arena, tags_child->first->string, &split_char, 1, 0);
-          U32 color_u32 = e_value_from_string(value_child->first->string).u32;
+          U32 color_u32 = e_value_from_stringf("raw(%S)", value_child->first->string).u32;
           Vec4F32 color_linear = linear_from_srgba(rgba_from_u32(color_u32));
           ThemePatternNode *node = push_array(scratch.arena, ThemePatternNode, 1);
           node->pattern.tags = str8_array_from_list(rd_frame_arena(), &tags);

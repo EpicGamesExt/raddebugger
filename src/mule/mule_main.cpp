@@ -1823,6 +1823,33 @@ fancy_viz_eval_tests(void)
   raddbg_pin(text(code_string, lang=c));
   raddbg_pin(disasm(fancy_viz_eval_tests));
   
+  //- rjf: table index lookups
+  struct
+  {
+    char *name;
+    int x;
+    int y;
+    int z;
+  }
+  nodes[] =
+  {
+    {"---",     1,  7,  3},
+    {"---",     5,  4,  2},
+    {"second", 12, 41, 22},
+    {"---",     8,  9,  1},
+    {"---",     1,  1,  1},
+    {"first",  50, 50, 50},
+    {"fourth",  7,  7,  7},
+    {"---",     7, 12,  1},
+    {"third",  27, 43, 41},
+    {"---",     2, 17, 50},
+  };
+  int node_indices[] =
+  {
+    5, 2, 8, 6
+  };
+  raddbg_pin(table(node_indices, nodes[$]));
+  
   //- rjf: bitmaps
   unsigned int background_color = 0x00000000;
   unsigned int main_color       = 0xff2424ff;
