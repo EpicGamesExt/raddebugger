@@ -90,16 +90,27 @@ You should see the following output:
 ```
 [debug mode]
 [msvc compile]
+[default mode, assuming `raddbg` build]
 metagen_main.c
-searching C:\devel\raddebugger/src... 309 files found
-parsing metadesk... 15 metadesk files parsed
-gathering tables... 96 tables found
+searching C:\devel\raddebugger/src... 447 files found
+parsing metadesk... 14 metadesk files parsed
+gathering tables... 93 tables found
 generating layer code...
 raddbg_main.c
 ```
 
 If everything worked correctly, there will be a `build` folder in the root
 level of the codebase, and it will contain a freshly-built `raddbg.exe`.
+
+This `raddbg.exe` will have been built in **debug mode**, which is not built
+with optimizations, and may perform worse. To produce a
+**release mode executable**, run `build.bat` with a `release` argument:
+
+```
+build release
+```
+
+This build will take significantly longer.
 
 ## Short-To-Medium-Term Roadmap
 
