@@ -271,12 +271,12 @@ hash_table_search_string_u64(HashTable *ht, String8 key, U64 *value_out)
 }
 
 internal B32
-hash_table_search_string_raw(HashTable *ht, String8 key, void **value_out)
+hash_table_search_string_raw(HashTable *ht, String8 key, void *value_out)
 {
   KeyValuePair *result = hash_table_search_string(ht, key);
   if (result) {
     if (value_out) {
-      *value_out = result->value_raw;
+      (*(void **)value_out) = result->value_raw;
     }
     return 1;
   }
@@ -300,7 +300,7 @@ key_value_pair_is_before_u64(void *a, void *b)
 internal int
 key_value_pair_is_before_string_sensitive(void *a, void *b)
 {
-  return str8_compar_case_sensitive(((KeyValuePair*)a)->key_string, ((KeyValuePair*)b)->key_string) < 0;
+  return str8_compar_case_sensitive(&((KeyValuePair*)a)->key_string, &((KeyValuePair*)b)->key_string) < 0;
 }
 
 internal U32 *
@@ -415,3 +415,4 @@ remove_duplicates_str8_list(Arena *arena, String8List list)
   scratch_end(scratch);
   return result;
 }
+
