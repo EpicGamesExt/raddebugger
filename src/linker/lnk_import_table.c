@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_ImportTable *
@@ -55,7 +55,7 @@ internal LNK_ImportFunc *
 lnk_import_table_search_func(LNK_ImportDLL *dll, String8 name)
 {
   LNK_ImportFunc *func = 0;
-  hash_table_search_string_raw(dll->func_ht, name, &func);
+  hash_table_search_string_raw(dll->func_ht, name, (void **)&func);
   return func;
 }
 
@@ -288,7 +288,7 @@ lnk_import_table_push_func_delayed(LNK_ImportTable *imptab, LNK_ImportDLL *dll, 
     switch (dll->machine) {
     case COFF_MachineType_X64: {
       String8     iat_symbol_name = push_str8f(symtab->arena->v[0], "__imp_%S", header->func_name);
-      LNK_Symbol *iat_symbol      = lnk_make_undefined_symbol(symtab->arena->v[0], iat_symbol_name, LNK_SymbolScopeFlag_Main);
+      LNK_Symbol *iat_symbol      = lnk_make_undefined_symbol(symtab->arena->v[0], iat_symbol_name, LNK_SymbolScope_Main);
       
       // emit jmp thunk chunk
       jmp_thunk_chunk  = lnk_emit_indirect_jump_thunk_x64(code_sect, code_table_chunk, iat_symbol);

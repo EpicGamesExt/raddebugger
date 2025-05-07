@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #pragma once
@@ -32,13 +32,13 @@ typedef enum
   LNK_Error_IO,
   LNK_Error_LargeAddrAwareRequired,
   LNK_Error_InvalidPath,
+  LNK_Error_MultiplyDefinedSymbol,
   LNK_Error_StopLast,
   
   LNK_Error_First,
   LNK_Error_AlreadyDefinedSymbol,
   LNK_Error_AlternateNameConflict,
   LNK_Error_CvPrecomp,
-  LNK_Error_MultiplyDefinedSymbol,
   LNK_Error_Natvis,
   LNK_Error_TooManyFiles,
   LNK_Error_UndefinedSymbol,
@@ -48,6 +48,8 @@ typedef enum
   LNK_Error_CvIllSymbolData,
   LNK_Error_IllegalAlternateNameRedifine,
   LNK_Error_InvalidTypeIndex,
+  LNK_Error_UndefinedIsWeak,
+  LNK_Error_WeakCycle,
   LNK_Error_Last,
   
   LNK_Warning_First,
@@ -81,6 +83,7 @@ typedef enum
   LNK_Warning_UnknownSwitch,
   LNK_Warning_TLSAlign,
   LNK_Warning_DirectiveSectionWithRelocs,
+  LNK_Warning_NoLargeAddressAwarenessForDll,
   LNK_Warning_Last,
   
   LNK_Error_Count

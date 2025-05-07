@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 int
@@ -61,19 +61,16 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
   LNK_Export *exp = 0;
   
   // get export symbol
-  LNK_Symbol *symbol = lnk_symbol_table_search(symtab, LNK_SymbolScopeFlag_Main, exp_parse->name);
+  LNK_Symbol *symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, exp_parse->name);
   if (symbol == 0) {
     lnk_error(LNK_Warning_IllExport, "symbol \"%S\" for export doesn't exist", exp_parse->name);
     goto exit;
   }
-  symbol = lnk_resolve_symbol(symtab, symbol);
-  if (!LNK_Symbol_IsDefined(symbol->type)) {
+  if (symbol->type != LNK_Symbol_Defined) {
     lnk_error(LNK_Warning_IllExport, "unable to resolve symbol \"%S\" for export", exp_parse->name);
     goto exit;
   }
-  LNK_DefinedSymbol *def = &symbol->u.defined;
 
-  
   // NOTE: It is possible to export a global variable as CODE
   // with following snippet:
   //    int global_bar = 0;
@@ -85,13 +82,15 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
   COFF_ImportType type = coff_import_header_type_from_string(exp_parse->type);
   switch (type) {
   case COFF_ImportHeader_Code: {
-    B32 is_export_data = !(def->flags & (LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk));
+    COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+    B32 is_export_data = !COFF_SymbolType_IsFunc(defn.type);
     if (is_export_data) {
       lnk_error(LNK_Error_IllExport, "export \"%S\" is DATA but has specifier CODE", exp_parse->name);
     }
   } break;
   case COFF_ImportHeader_Data: {
-    B32 is_export_code = !!(def->flags & (LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk));
+    COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+    B32 is_export_code = COFF_SymbolType_IsFunc(defn.type);
     if (is_export_code) {
       lnk_error(LNK_Error_IllExport, "export \"%S\" is CODE but has specifier DATA", exp_parse->name);
     }
@@ -105,7 +104,6 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
     }
   } break;
   }
-
 
   // error check multiple def
   exp = lnk_export_table_search(exptab, exp_parse->alias);
