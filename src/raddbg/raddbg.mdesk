@@ -1152,7 +1152,6 @@ RD_DefaultBindingTable:
   
   //- rjf: files
   { "open"                        O         ctrl     0         0          }
-  { "reload_active"               R         ctrl     shift     0          }
   { "switch"                      I         ctrl     0         0          }
   { "switch_to_partner_file"      O         0        0         alt        }
   

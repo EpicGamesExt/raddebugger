@@ -720,7 +720,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[235] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[115] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[114] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -763,7 +763,6 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[115] =
 {str8_lit_comp("tab_bar_bottom"), {OS_Key_Down, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
 {str8_lit_comp("open_tab"), {OS_Key_T, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("open"), {OS_Key_O, 0 |OS_Modifier_Ctrl  }},
-{str8_lit_comp("reload_active"), {OS_Key_R, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("switch"), {OS_Key_I, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("switch_to_partner_file"), {OS_Key_O, 0   |OS_Modifier_Alt}},
 {str8_lit_comp("open_user"), {OS_Key_N, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
