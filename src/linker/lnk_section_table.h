@@ -60,7 +60,6 @@ typedef struct LNK_SectionDefinition
 
 typedef struct LNK_Section
 {
-  Arena             *arena;
   U64                id;
   String8            name;
   COFF_SectionFlags  flags;

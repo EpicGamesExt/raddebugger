@@ -132,9 +132,8 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
 
   LNK_SectionNode *sect_node = push_array(sectab->arena, LNK_SectionNode, 1);
   LNK_Section     *sect      = &sect_node->data;
-  sect->arena        = arena_alloc();
   sect->id           = sectab->id_max++;
-  sect->name         = push_str8_copy(sect->arena, name);
+  sect->name         = push_str8_copy(sectab->arena, name);
   sect->flags        = flags;
   sect->has_layout   = 1;
 
