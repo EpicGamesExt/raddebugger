@@ -679,6 +679,42 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32
             break;
           }
         }
+        
+        // rjf: invalid generation, chain of member accesses all stemming from
+        // a single leaf identifier -> try to join as single string & resolve it
+        // that way
+        if(result.root == &e_irnode_nil)
+        {
+          B32 is_ident_chain = 1;
+          for(E_Expr *l = lhs; l != &e_expr_nil; l = l->first)
+          {
+            if(l->kind != E_ExprKind_MemberAccess && l->kind != E_ExprKind_LeafIdentifier)
+            {
+              is_ident_chain = 0;
+              break;
+            }
+          }
+          if(is_ident_chain)
+          {
+            String8List parts = {0};
+            str8_list_push_front(scratch.arena, &parts, lhs->next->string);
+            for(E_Expr *l = lhs; l != &e_expr_nil; l = l->first)
+            {
+              if(l->kind == E_ExprKind_LeafIdentifier)
+              {
+                str8_list_push_front(scratch.arena, &parts, l->string);
+              }
+              else if(l->kind == E_ExprKind_MemberAccess)
+              {
+                str8_list_push_front(scratch.arena, &parts, l->first->next->string);
+              }
+            }
+            String8 full_qualified_name = str8_list_join(scratch.arena, &parts, &(StringJoin){.sep = str8_lit(".")});
+            E_Expr *leaf_expr_name = e_push_expr(scratch.arena, E_ExprKind_LeafIdentifier, r1u64(0, 0));
+            leaf_expr_name->string = full_qualified_name;
+            result = e_push_irtree_and_type_from_expr(arena, root_parent, disallow_autohooks, disallow_autohooks, leaf_expr_name);
+          }
+        }
       }break;
       
       //- rjf: dereference
