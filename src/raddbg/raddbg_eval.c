@@ -327,7 +327,8 @@ E_TYPE_ACCESS_FUNCTION_DEF(schema)
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsCodeText);
       }
-      else if(str8_match(child_schema->first->string, str8_lit("path"), 0))
+      else if(str8_match(child_schema->first->string, str8_lit("path"), 0) ||
+              str8_match(child_schema->first->string, str8_lit("path_pt"), 0))
       {
         child_type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), child->first->string.size, E_TypeFlag_IsPathText);
       }

@@ -639,10 +639,17 @@ rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string)
       {
         String8 src_n_string = src_n->string;
         String8 src_n_string__raw = raw_from_escaped_str8(scratch.arena, src_n_string);
-        if(str8_match(schema->first->string, str8_lit("path"), 0) &&
-           !md_node_has_tag(schema->first, str8_lit("absolute"), 0))
+        if(!md_node_has_tag(schema->first, str8_lit("absolute"), 0))
         {
-          src_n_string__raw = path_absolute_dst_from_relative_dst_src(scratch.arena, src_n_string__raw, root_path);
+          if(str8_match(schema->first->string, str8_lit("path"), 0))
+          {
+            src_n_string__raw = path_absolute_dst_from_relative_dst_src(scratch.arena, src_n_string__raw, root_path);
+          }
+          else if(str8_match(schema->first->string, str8_lit("path_pt"), 0))
+          {
+            String8TxtPtPair parts = str8_txt_pt_pair_from_string(src_n_string__raw);
+            src_n_string__raw = push_str8f(scratch.arena, "%S:%I64d:%I64d", path_absolute_dst_from_relative_dst_src(scratch.arena, parts.string, root_path), parts.pt.line, parts.pt.column);
+          }
         }
         dst_n_string = src_n_string__raw;
       }
@@ -722,12 +729,21 @@ rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg)
           }
           
           // rjf: paths -> relativize
-          if(str8_match(c_schema->first->string, str8_lit("path"), 0) &&
-             !md_node_has_tag(c_schema->first, str8_lit("absolute"), 0))
+          if(!md_node_has_tag(c_schema->first, str8_lit("absolute"), 0))
           {
-            String8 path_absolute = c->string;
-            String8 path_relative = path_relative_dst_from_absolute_dst_src(arena, path_absolute, root_path);
-            c_serialized_string = path_relative;
+            if(str8_match(c_schema->first->string, str8_lit("path"), 0))
+            {
+              String8 path_absolute = c->string;
+              String8 path_relative = path_relative_dst_from_absolute_dst_src(arena, path_absolute, root_path);
+              c_serialized_string = path_relative;
+            }
+            else if(str8_match(c_schema->first->string, str8_lit("path_pt"), 0))
+            {
+              String8 value = c->string;
+              String8TxtPtPair parts = str8_txt_pt_pair_from_string(value);
+              String8 path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, parts.string, root_path);
+              c_serialized_string = push_str8f(arena, "%S:%I64d:%I64d", path_relative, parts.pt.line, parts.pt.column);
+            }
           }
           
           // rjf: all strings -> escape
@@ -1845,6 +1861,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }
         String8 child_type_name = child_schema->first->string;
         if(str8_match(child_type_name, str8_lit("path"), 0) ||
+           str8_match(child_type_name, str8_lit("path_pt"), 0) ||
            str8_match(child_type_name, str8_lit("code_string"), 0) ||
            str8_match(child_type_name, str8_lit("expr_string"), 0) ||
            str8_match(child_type_name, str8_lit("string"), 0))

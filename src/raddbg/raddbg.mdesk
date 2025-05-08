@@ -596,7 +596,7 @@ RD_VocabTable:
     {
       'label':            code_string,
       'condition':        expr_string,
-      'source_location':  string,
+      'source_location':  path_pt,
       'address_location': expr_string,
       'hit_count':        u64,
       'address_range_size': @or(0, 1, 2, 4, 8) u64,
@@ -617,7 +617,7 @@ RD_VocabTable:
       x:
     {
       'expression':       expr_string,
-      'source_location':  string,
+      'source_location':  path_pt,
       'address_location': expr_string,
     }
     ```,
