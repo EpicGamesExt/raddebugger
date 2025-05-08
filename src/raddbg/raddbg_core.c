@@ -6764,6 +6764,84 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: @window_ui_part build autocompletion callee info helper
+    //
+    F32 autocomp_callee_helper_height_px = 0;
+    if(rd_setting_b32_from_name(str8_lit("view_call_argument_helper")) &&
+       ws->autocomp_regs != 0 && ws->autocomp_last_frame_index+1 >= rd_state->frame_index &&
+       ws->autocomp_cursor_info.callee_expr.size != 0)
+    {
+      E_Eval eval = e_eval_from_string(ws->autocomp_cursor_info.callee_expr);
+      E_Type *type = e_type_from_key(eval.irtree.type_key);
+      if(type->kind == E_TypeKind_LensSpec) UI_TagF("floating")
+      {
+        F32 open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "autocomp_callee_helper_t"), 1.f, .rate = rd_state->menu_animation_rate);
+        
+        //- rjf: build top-level lens calling helper fancy strings
+        DR_FStrList fstrs = {0};
+        {
+          Vec4F32 color_delimiter = ui_color_from_name(str8_lit("code_delimiter_or_operator"));
+          Vec4F32 color_arg = ui_color_from_name(str8_lit("code_local"));
+          MD_NodePtrList schemas = rd_schemas_from_name(type->name);
+          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Code), rd_raster_flags_from_slot(RD_FontSlot_Code), ui_color_from_name(str8_lit("code_default")), ui_top_font_size()};
+          dr_fstrs_push_new(scratch.arena, &fstrs, &params, type->name);
+          dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("), .color = color_delimiter);
+          for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
+          {
+            MD_Node *schema = n->v;
+            B32 first = 1;
+            for MD_EachNode(child, schema->first)
+            {
+              if(!md_node_has_tag(child, str8_lit("no_callee_helper"), 0))
+              {
+                if(!first)
+                {
+                  dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "), .color = color_delimiter);
+                }
+                first = 0;
+                dr_fstrs_push_new(scratch.arena, &fstrs, &params, child->string, .color = color_arg);
+              }
+            }
+          }
+          dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(")"), .color = color_delimiter);
+        }
+        
+        //- rjf: determine callee helper rect
+        Rng2F32 callee_helper_rect = {0};
+        {
+          F32 width_px = dr_dim_from_fstrs(&fstrs).x;
+          UI_Box *anchor_box = ui_box_from_key(ws->autocomp_regs->ui_key);
+          callee_helper_rect.x0 = anchor_box->rect.x0;
+          callee_helper_rect.x1 = anchor_box->rect.x0 + width_px + ui_top_font_size()*2.5f;
+          callee_helper_rect.y0 = anchor_box->rect.y1;
+          callee_helper_rect.y1 = callee_helper_rect.y0 + ui_top_font_size()*4.f;
+        }
+        autocomp_callee_helper_height_px = dim_2f32(callee_helper_rect).y;
+        autocomp_callee_helper_height_px *= open_t;
+        
+        //- rjf: build top-level callee helper box
+        UI_Box *callee_helper = &ui_nil_box;
+        UI_Rect(callee_helper_rect)
+          UI_Squish(0.1f-0.1f*open_t)
+          UI_Transparency(1.f-open_t)
+          UI_CornerRadius(ui_top_font_size()*0.25f)
+        {
+          callee_helper = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow|
+                                                    UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_SquishAnchored|UI_BoxFlag_Clickable,
+                                                    "top_level_window_callee_helper");
+          ui_signal_from_box(callee_helper);
+        }
+        
+        //- rjf: fill helper
+        UI_Parent(callee_helper) UI_WidthFill UI_HeightFill UI_Padding(ui_em(1.f, 1.f))
+        {
+          UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+          ui_box_equip_display_fstrs(label, &fstrs);
+        }
+      }
+    }
+    
+    ////////////////////////////
     //- rjf: @window_ui_part gather all tasks to build floating views
     //
     typedef struct FloatingViewTask FloatingViewTask;
@@ -6823,7 +6901,7 @@ rd_window_frame(void)
         {
           UI_Box *anchor_box = ui_box_from_key(ws->autocomp_regs->ui_key);
           rect.x0 = anchor_box->rect.x0;
-          rect.y0 = anchor_box->rect.y1;
+          rect.y0 = anchor_box->rect.y1 + autocomp_callee_helper_height_px;
           rect.x1 = rect.x0 + width_px;
           rect.y1 = rect.y0 + height_px;
         }
@@ -7178,7 +7256,9 @@ rd_window_frame(void)
         {
           // rjf: build top-level container box
           UI_Box *container = &ui_nil_box;
-          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y) UI_Squish(0.1f-0.1f*open_t) UI_Transparency(1.f-open_t)
+          UI_Rect(rect) UI_ChildLayoutAxis(Axis2_Y)
+            UI_Squish(0.1f-0.1f*open_t)
+            UI_Transparency(1.f-open_t)
             UI_CornerRadius(ui_top_font_size()*0.25f)
           {
             container = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
@@ -9848,6 +9928,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       is_allowed = (force_allow || rd_setting_b32_from_name(str8_lit("autocompletion_lister")));
       
       // rjf: tighten list_expr, and filter / replaced-range, if needed
+      String8 callee_expr = {0};
       String8 filter = regs->string;
       Rng1U64 replaced_range = r1u64(0, filter.size);
       if(expr_based_replace)
@@ -9895,6 +9976,18 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
           }
         }
         
+        //- rjf: cursor is within a call? -> generate an expression for the callee
+        if(cursor_expr_parent->kind == E_ExprKind_Call)
+        {
+          E_Key callee_key = e_key_from_expr(cursor_expr_parent->first);
+          callee_expr = e_full_expr_string_from_key(scratch.arena, callee_key);
+        }
+        else if(cursor_expr->kind == E_ExprKind_Call)
+        {
+          E_Key callee_key = e_key_from_expr(cursor_expr->first);
+          callee_expr = e_full_expr_string_from_key(scratch.arena, callee_key);
+        }
+        
         //- rjf: cursor is on right-hand-side of dot? -> show members of left-hand-side
         B32 did_special_cursor_case = 0;
         if(!did_special_cursor_case)
@@ -9930,6 +10023,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       
       // rjf: fill bundle
       cursor_info.list_expr = push_str8_copy(ws->autocomp_arena, list_expr);
+      cursor_info.callee_expr = push_str8_copy(ws->autocomp_arena, callee_expr);
       cursor_info.filter = push_str8_copy(ws->autocomp_arena, filter);
       cursor_info.replaced_range = replaced_range;
       

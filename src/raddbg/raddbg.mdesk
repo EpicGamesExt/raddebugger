@@ -248,6 +248,8 @@ RD_VocabTable:
       //- rjf: autocompletion
       @display_name('Autocompletion Lister') @description("Enables the autocompletion lister while typing expressions.") @default(1)
         'autocompletion_lister': bool,
+      @display_name('View Call Argument Helper') @description("Enables the view call argument helper, which shows view arguments and documentation, while typing expressions.") @default(1)
+        'view_call_argument_helper': bool,
       
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
@@ -434,7 +436,7 @@ RD_VocabTable:
       @row_commands(@file copy_tab_full_path, @file show_file_in_explorer, duplicate_tab, close_tab)
       x:
     {
-      @override @display_name('Tab Font Size') @description("Controls the tab's font size.")
+      @override @display_name('Tab Font Size') @description("Controls the tab's font size.") @no_callee_helper
         'font_size': @range[6, 72] u64,
     }
     ```
@@ -466,7 +468,7 @@ RD_VocabTable:
         'lang': code_string,
       @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers':bool,
-      @no_revert @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
+      @no_callee_helper @no_revert @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
         'auto': bool,
     }
     ```
@@ -481,15 +483,15 @@ RD_VocabTable:
       'arch':        code_string,
       'syntax':      code_string,
       'size':        expr_string,
-      @default(1) @description("Controls whether or not addresses are shown in the disassembly text.")
+      @no_callee_helper @default(1) @description("Controls whether or not addresses are shown in the disassembly text.")
         'show_addresses':    bool,
-      @default(0) @description("Controls whether or not code bytes are shown in the disassembly text.")
+      @no_callee_helper @default(0) @description("Controls whether or not code bytes are shown in the disassembly text.")
         'show_code_bytes':   bool,
-      @default(1) @description("Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.")
+      @no_callee_helper @default(1) @description("Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.")
         'show_source_lines': bool,
-      @default(1) @description("Controls whether or not disassembly text is decorated with symbol names.")
+      @no_callee_helper @default(1) @description("Controls whether or not disassembly text is decorated with symbol names.")
         'show_symbol_names': bool,
-      @default(1) @description("Controls whether or not line numbers are shown.")
+      @no_callee_helper @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers': bool,
     }
     ```

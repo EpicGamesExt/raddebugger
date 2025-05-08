@@ -1356,9 +1356,11 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
           {
             e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Unclosed `(`.");
+            call_expr->range.max = text.size;
           }
           else
           {
+            call_expr->range = union_1u64(call_expr->range, close_paren_maybe.range);
             it += 1;
           }
         }
