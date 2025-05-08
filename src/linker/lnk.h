@@ -192,6 +192,10 @@ internal String8List lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LN
 internal String8List lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sect_arr, U64 expected_image_header_size);
 internal String8     lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list);
 
+// --- Import Lib --------------------------------------------------------------
+
+internal String8List lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportTable *exptab);
+
 // --- Logger ------------------------------------------------------------------
 
 internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *sectab);
