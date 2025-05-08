@@ -10679,6 +10679,17 @@ rd_init(CmdLine *cmdln)
     String8 user_path = cmd_line_string(cmdln, str8_lit("user"));
     String8 project_path = cmd_line_string(cmdln, str8_lit("project"));
     {
+      String8 initial_path = push_str8f(scratch.arena, "%S/", os_get_process_info()->initial_path);
+      if(user_path.size != 0)
+      {
+        user_path = path_absolute_dst_from_relative_dst_src(scratch.arena, user_path, initial_path);
+      }
+      if(project_path.size != 0)
+      {
+        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_path, initial_path);
+      }
+    }
+    {
       String8 user_program_data_path = os_get_process_info()->user_program_data_path;
       String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
       os_make_directory(user_data_folder);
