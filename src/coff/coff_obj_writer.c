@@ -194,7 +194,7 @@ internal void
 coff_obj_writer_push_directive(COFF_ObjWriter *obj_writer, String8 directive)
 {
   if (obj_writer->drectve_sect == 0) {
-    local_persist const U8 bom_sig[]  = { 0xEF, 0xBB, 0xBF };
+    local_persist const U8 bom_sig[]  = { ' ', ' ', ' ' };
     obj_writer->drectve_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".drectve"), COFF_SectionFlag_LnkInfo|COFF_SectionFlag_LnkRemove|COFF_SectionFlag_Align1Bytes, str8_array_fixed(bom_sig));
   }
   String8List *data = &obj_writer->drectve_sect->data;
