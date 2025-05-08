@@ -184,9 +184,21 @@ t_make_file_path(Arena *arena, String8 name)
 internal B32
 t_write_file(String8 name, String8 data)
 {
+  String8Node temp_node = {0};
+  temp_node.string = data;
+
+  String8List temp_list = {0};
+  str8_list_push_node(&temp_list, &temp_node);
+
+  return t_write_file_list(name, temp_list);
+}
+
+internal B32
+t_write_file_list(String8 name, String8List data)
+{
   Temp scratch = scratch_begin(0,0);
   String8 path = t_make_file_path(scratch.arena, name);
-  B32 is_written = os_write_data_to_file_path(path, data);
+  B32 is_written = os_write_data_list_to_file_path(path, data);
   scratch_end(scratch);
   return is_written;
 }
@@ -1281,6 +1293,91 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_simple_lib_test(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 test_payload = str8_lit("The quick brown fox jumps over the lazy dog");
+  String8 test_obj = {0};
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_Unknown);
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8(test_payload.str, test_payload.size+1));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("test"), 0, data_sect);
+    test_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 test_lib_name = str8_lit("test.lib");
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib_writer, str8_lit("test.obj"), test_obj);
+    String8List test_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    coff_lib_writer_release(&lib_writer);
+    if (!t_write_file_list(test_lib_name, test_lib)) {
+      goto exit;
+    }
+  }
+
+  U8 entry_text[] = {
+    0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,
+    0xC3
+  };
+  String8 entry_obj_name = str8_lit("entry.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
+    COFF_ObjSymbol *test_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("test"));
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 3, test_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 7, text_sect);
+    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(entry_obj_name, entry_obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe entry.obj test.lib");
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  COFF_SectionHeader *text_sect = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  COFF_SectionHeader *data_sect = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+
+  String8 text_data = str8_substr(exe, rng_1u64(text_sect->foff, text_sect->foff + text_sect->fsize));
+  String8 data_data = str8_substr(exe, rng_1u64(data_sect->foff, data_sect->foff + data_sect->fsize));
+
+  // was test payload linked?
+  String8 data_string = str8_cstring_capped(data_data.str, data_data.str + data_data.size);
+  if (!str8_match(data_string, test_payload, 0)) {
+    goto exit;
+  }
+
+  // do we have enough bytes to read text?
+  if (text_data.size < sizeof(entry_text)) {
+    goto exit;
+  }
+
+  // linker must pull in test.obj and patch relocation for "test" symbol
+  U32 *data_addr32nb = (U32 *)(text_data.str+3);
+  if (*data_addr32nb != data_sect->voff) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
+
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -1309,6 +1406,7 @@ entry_point(CmdLine *cmdline)
     { "invalid_bss",        t_invalid_bss       },
     { "common_block",       t_common_block      },
     //{ "base_relocs",        t_base_relocs       },
+    { "simple_lib_test",    t_simple_lib_test   },
   };
 
   //
