@@ -1365,7 +1365,7 @@ t_simple_lib_test(void)
     goto exit;
   }
 
-  // linker must pull in test.obj and patch relocation for "test" symbol
+  // linker must pull-in test.obj and patch relocation for "test" symbol
   U32 *data_addr32nb = (U32 *)(text_data.str+3);
   if (*data_addr32nb != data_sect->voff) {
     goto exit;
@@ -1373,6 +1373,95 @@ t_simple_lib_test(void)
 
   result = T_Result_Pass;
 
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_import_export(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+
+  String8 export_obj_name    = str8_lit("export.obj");
+  String8 export_obj_payload = str8_lit("test");
+  U8      export_text[]      = { 0xC3 };
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, export_obj_payload);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("foo"), 0, data_sect);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("ord"), 0, data_sect);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("ord2"), 0, data_sect);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("ord3"), 0, data_sect);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("ord4"), 0, data_sect);
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:foo=foo"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:bar=foo"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:baz=baz.qwe"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:baf=baz.#1"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord,@5"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord2,@6,DATA"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord3,@7,NONAME"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord4,@8,NONAME,DATA"));
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(export_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("_DllMainCRTStartup"), 0, text_sect);
+    String8 export_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(export_obj_name, export_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 import_obj_name = str8_lit("import.obj");
+  U8 import_payload[1024] = {0};
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(import_payload));
+    COFF_ObjSymbol *foo_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_foo"));
+    COFF_ObjSymbol *bar_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_bar"));
+    COFF_ObjSymbol *baz_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_baz"));
+    COFF_ObjSymbol *baf_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_baf"));
+    COFF_ObjSymbol *ord_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord"));
+    COFF_ObjSymbol *ord2_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord2"));
+    COFF_ObjSymbol *ord3_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord3"));
+    COFF_ObjSymbol *ord4_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord4"));
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0*4, foo_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 1*4, bar_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 2*4, baz_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 3*4, baf_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 4*4, ord_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 5*4, ord2_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 6*4, ord3_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 7*4, ord4_symbol, COFF_Reloc_X64_Addr32Nb);
+    String8 import_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(import_obj_name, import_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 entry_obj_name = str8_lit("entry.obj");
+  U8 entry_text[] = { 0xC3 };
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(entry_obj_name, entry_obj)) {
+      goto exit;
+    }
+  }
+
+  int lib_link_exit_code = t_invoke_linkerf("/dll /out:export.dll export.obj");
+  if (lib_link_exit_code != 0) {
+    goto exit;
+  }
+
+  int import_link_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe export.lib import.obj entry.obj");
+  
 exit:;
   scratch_end(scratch);
   return result;
@@ -1407,6 +1496,7 @@ entry_point(CmdLine *cmdline)
     { "common_block",       t_common_block      },
     //{ "base_relocs",        t_base_relocs       },
     { "simple_lib_test",    t_simple_lib_test   },
+    { "import_export",      t_import_export     },
   };
 
   //
