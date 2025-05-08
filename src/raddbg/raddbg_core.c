@@ -7158,7 +7158,12 @@ rd_window_frame(void)
           {
             String8 pre_insertion  = str8_prefix(query_expr, input_insertion_pos);
             String8 post_insertion = str8_skip(query_expr, input_insertion_pos + 6);
-            query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, str8(vs->query_buffer, vs->query_string_size), post_insertion);
+            String8 input_text = str8(vs->query_buffer, vs->query_string_size);
+            String8 input_text__escaped = escaped_from_raw_str8(scratch.arena, input_text);
+            // TODO(rjf): @hack need to escape because this is putting the user's input
+            // into a containing "folder:"..."" in all cases. but this is kinda shady
+            // and should be replaced long-term with something more solid...
+            query_expr = push_str8f(scratch.arena, "%S%S%S", pre_insertion, input_text__escaped, post_insertion);
           }
         }
         
