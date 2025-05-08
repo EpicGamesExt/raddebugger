@@ -521,8 +521,8 @@ RD_VocabTable:
     {
       @display_name("Base Pointer") @description("An expression to describe the base address or offset of the bitmap data.")
         'expression': expr_string,
-      @order(0) 'w': u64,
-      @order(1) 'h': u64,
+      @description("An expression describing the width of the bitmap, in pixels.") @order(0) 'w': u64,
+      @description("An expression describing the height of the bitmap, in pixels.") @order(1) 'h': u64,
       @display_name("Bitmap Format") @description("The pixel format that the bitmap data should be interpreted as being within.")
         'fmt': code_string,
     }

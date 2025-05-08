@@ -6782,52 +6782,17 @@ rd_window_frame(void)
       {
         F32 open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "autocomp_callee_helper_t"), 1.f, .rate = rd_state->menu_animation_rate);
         
-        //- rjf: build top-level lens calling helper fancy strings
-        DR_FStrList fstrs = {0};
-        MD_Node *active_child_schema = &md_nil_node;
-        {
-          Vec4F32 color_delimiter = ui_color_from_name(str8_lit("code_delimiter_or_operator"));
-          Vec4F32 color_arg = ui_color_from_name(str8_lit("code_local"));
-          MD_NodePtrList schemas = rd_schemas_from_name(type->name);
-          DR_FStrParams params = {rd_font_from_slot(RD_FontSlot_Code), rd_raster_flags_from_slot(RD_FontSlot_Code), ui_color_from_name(str8_lit("code_default")), ui_top_font_size()};
-          dr_fstrs_push_new(scratch.arena, &fstrs, &params, type->name);
-          dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit("("), .color = color_delimiter);
-          for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
-          {
-            MD_Node *schema = n->v;
-            B32 first = 1;
-            U64 arg_idx = 0;
-            for MD_EachNode(child, schema->first)
-            {
-              if(!md_node_has_tag(child, str8_lit("no_callee_helper"), 0))
-              {
-                if(!first)
-                {
-                  dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(", "), .color = color_delimiter);
-                }
-                first = 0;
-                dr_fstrs_push_new(scratch.arena, &fstrs, &params, child->string, .color = color_arg,
-                                  .underline_thickness = (ws->autocomp_cursor_info.callee_arg_idx == arg_idx ? 2.f : 0.f));
-                if(ws->autocomp_cursor_info.callee_arg_idx == arg_idx)
-                {
-                  active_child_schema = child;
-                }
-                arg_idx += 1;
-              }
-            }
-          }
-          dr_fstrs_push_new(scratch.arena, &fstrs, &params, str8_lit(")"), .color = color_delimiter);
-        }
-        
-        //- rjf: determine callee helper rect
+        //- rjf: determine rects/sizes
+        F32 row_height_px = ui_top_font_size()*2.f;
+        F32 padding_px = ui_top_font_size()*1.f;
         Vec2F32 callee_helper_pos = {0};
         {
           UI_Box *anchor_box = ui_box_from_key(ws->autocomp_regs->ui_key);
           callee_helper_pos.x = anchor_box->rect.x0;
           callee_helper_pos.y = anchor_box->rect.y1;
         }
-        autocomp_callee_helper_height_px = ui_top_font_size()*8.f;
-        autocomp_callee_helper_height_px *= open_t;
+        F32 height_px_target = row_height_px*1.f + padding_px*2.f;
+        autocomp_callee_helper_height_px = height_px_target * open_t;
         
         //- rjf: build top-level callee helper box
         UI_Box *callee_helper = &ui_nil_box;
@@ -6836,41 +6801,82 @@ rd_window_frame(void)
           UI_Transparency(1.f-open_t)
           UI_CornerRadius(ui_top_font_size()*0.25f)
           UI_PrefWidth(ui_children_sum(1))
-          UI_PrefHeight(ui_px(autocomp_callee_helper_height_px, 1.f))
+          UI_PrefHeight(ui_px(height_px_target, 1.f))
         {
           callee_helper = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow|
                                                     UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_SquishAnchored|UI_BoxFlag_Clickable,
                                                     "top_level_window_callee_helper");
-          ui_signal_from_box(callee_helper);
         }
         
         //- rjf: fill helper
         UI_Parent(callee_helper)
-          UI_Padding(ui_em(1.f, 1.f))
+          UI_Padding(ui_px(padding_px, 1.f))
           UI_PrefWidth(ui_children_sum(1))
           UI_HeightFill
           UI_Column
-          UI_Padding(ui_em(1.f, 1.f))
+          UI_PrefHeight(ui_px(row_height_px, 1.f))
+          UI_Padding(ui_px(padding_px, 1.f))
         {
-          // rjf: main call label
-          UI_PrefWidth(ui_text_dim(10, 1))
+          // rjf: main name / args text
+          UI_Row UI_TextPadding(0) UI_PrefWidth(ui_text_dim(0, 1)) RD_Font(RD_FontSlot_Code)
           {
-            UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-            ui_box_equip_display_fstrs(label, &fstrs);
-          }
-          
-          // rjf: active child schema info
-          if(active_child_schema != &md_nil_node)
-          {
-            String8 display_name = md_tag_from_string(active_child_schema, str8_lit("display_name"), 0)->first->string;
-            String8 desc = md_tag_from_string(active_child_schema, str8_lit("description"), 0)->first->string;
-            if(display_name.size != 0 && desc.size != 0) UI_TagF("weak") UI_PrefWidth(ui_text_dim(10, 1))
+            Vec4F32 code_default = ui_color_from_name(str8_lit("code_default"));
+            String8 opener = push_str8f(scratch.arena, "%S(", type->name);
+            rd_code_label(1, 0, code_default, opener);
+            MD_NodePtrList schemas = rd_schemas_from_name(type->name);
+            B32 first = 1;
+            UI_TagF(".") for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
             {
-              ui_label(display_name);
-              ui_label(desc);
+              for MD_EachNode(child, n->v->first)
+              {
+                if(md_node_has_tag(child, str8_lit("no_callee_helper"), 0))
+                {
+                  continue;
+                }
+                if(!first)
+                {
+                  rd_code_label(1, 0, code_default, str8_lit(", "));
+                }
+                first = 0;
+                UI_Key arg_key = ui_key_from_stringf(ui_active_seed_key(), "###arg_%p", child);
+                DR_FStrList arg_fstrs = rd_fstrs_from_code_string(scratch.arena, 1.f, 0, code_default, child->string);
+                if(child == ws->autocomp_cursor_info.arg_schema)
+                {
+                  ui_set_next_flags(UI_BoxFlag_DrawSideBottom);
+                  ui_set_next_tag(str8_lit("good_pop"));
+                }
+                UI_Box *arg_box = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects, arg_key);
+                ui_box_equip_display_fstrs(arg_box, &arg_fstrs);
+                UI_Signal arg_sig = ui_signal_from_box(arg_box);
+                if(ui_hovering(arg_sig))
+                {
+                  String8 display_name = md_tag_from_string(child, str8_lit("display_name"), 0)->first->string;
+                  String8 desc = md_tag_from_string(child, str8_lit("description"), 0)->first->string;
+                  if(desc.size != 0)
+                    UI_Tooltip RD_Font(RD_FontSlot_Main)
+                  {
+                    ui_state->tooltip_anchor_key = arg_box->key;
+                    UI_Row
+                    {
+                      RD_Font(RD_FontSlot_Code) ui_label(child->string);
+                      if(display_name.size != 0)
+                      {
+                        ui_spacer(ui_em(0.5f, 1.f));
+                        UI_TagF("weak") ui_label(display_name);
+                      }
+                    }
+                    UI_TagF("weak") ui_label(desc);
+                  }
+                }
+              }
             }
+            rd_code_label(1, 0, code_default, str8_lit(")"));
           }
         }
+        
+        //- rjf: fall-through interactions with helper
+        UI_Signal sig = ui_signal_from_box(callee_helper);
+        (void)sig;
       }
     }
     
@@ -9964,7 +9970,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       String8 filter = regs->string;
       Rng1U64 replaced_range = r1u64(0, filter.size);
       String8 callee_expr = {0};
-      U64 callee_arg_idx = 0;
+      U64 cursor_arg_idx = 0;
       if(expr_based_replace)
       {
         U64 cursor_off = (U64)(regs->cursor.column-1);
@@ -10013,14 +10019,15 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
           }
         }
         
-        //- rjf: cursor is within a call? -> generate an expression for the callee
+        //- rjf: cursor is within a call? -> generate an expression for the callee, determine
+        // which argument the cursor is on
         if(cursor_expr_parent->kind == E_ExprKind_Call)
         {
           E_Key callee_key = e_key_from_expr(cursor_expr_parent->first);
           callee_expr = e_full_expr_string_from_key(scratch.arena, callee_key);
           for(E_Expr *arg = cursor_expr->prev; arg != cursor_expr_parent->first && arg != &e_expr_nil; arg = arg->prev)
           {
-            callee_arg_idx += 1;
+            cursor_arg_idx += 1;
           }
         }
         else if(cursor_expr->kind == E_ExprKind_Call)
@@ -10029,7 +10036,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
           callee_expr = e_full_expr_string_from_key(scratch.arena, callee_key);
           for(E_Expr *arg = cursor_expr->first->next; arg != &e_expr_nil; arg = arg->next)
           {
-            callee_arg_idx += 1;
+            cursor_arg_idx += 1;
           }
         }
         
@@ -10066,12 +10073,42 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
         }
       }
       
+      // rjf: try to map the cursor, within a call, to some schema
+      MD_Node *arg_schema = &md_nil_node;
+      if(callee_expr.size != 0)
+      {
+        E_Eval callee_eval = e_eval_from_string(callee_expr);
+        E_Type *callee_type = e_type_from_key(callee_eval.irtree.type_key);
+        if(callee_type->kind == E_TypeKind_LensSpec)
+        {
+          U64 arg_idx = 0;
+          MD_NodePtrList schemas = rd_schemas_from_name(callee_type->name);
+          for(MD_NodePtrNode *n = schemas.first; n != 0; n = n->next)
+          {
+            MD_Node *schema = n->v;
+            for MD_EachNode(child, schema->first)
+            {
+              if(!md_node_has_tag(child, str8_lit("no_callee_helper"), 0))
+              {
+                if(cursor_arg_idx == arg_idx)
+                {
+                  arg_schema = child;
+                  goto end_schema_search;
+                }
+                arg_idx += 1;
+              }
+            }
+          }
+          end_schema_search:;
+        }
+      }
+      
       // rjf: fill bundle
       cursor_info.list_expr = push_str8_copy(ws->autocomp_arena, list_expr);
       cursor_info.filter = push_str8_copy(ws->autocomp_arena, filter);
       cursor_info.replaced_range = replaced_range;
       cursor_info.callee_expr = push_str8_copy(ws->autocomp_arena, callee_expr);
-      cursor_info.callee_arg_idx = callee_arg_idx;
+      cursor_info.arg_schema = arg_schema;
       
       scratch_end(scratch);
     }

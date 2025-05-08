@@ -173,7 +173,7 @@ struct RD_AutocompCursorInfo
   String8 filter;
   Rng1U64 replaced_range;
   String8 callee_expr;
-  U64 callee_arg_idx;
+  MD_Node *arg_schema;
 };
 
 ////////////////////////////////
