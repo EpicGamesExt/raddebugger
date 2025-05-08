@@ -33,6 +33,7 @@ typedef enum
   LNK_Error_LargeAddrAwareRequired,
   LNK_Error_InvalidPath,
   LNK_Error_MultiplyDefinedSymbol,
+  LNK_Error_SectRefsDiscardedMemory,
   LNK_Error_StopLast,
   
   LNK_Error_First,
