@@ -9,21 +9,33 @@
 
 ////////////////////////////////
 
+#include "third_party/xxHash/xxhash.c"
+#include "third_party/xxHash/xxhash.h"
+#include "third_party/radsort/radsort.h"
+
+////////////////////////////////
+
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "path/path.h"
 #include "coff/coff.h"
 #include "coff/coff_enum.h"
 #include "coff/coff_parse.h"
 #include "coff/coff_obj_writer.h"
+#include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
+#include "linker/hash_table.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "path/path.c"
 #include "coff/coff.c"
 #include "coff/coff_enum.c"
 #include "coff/coff_parse.c"
 #include "coff/coff_obj_writer.c"
+#include "coff/coff_lib_writer.c"
 #include "pe/pe.c"
+#include "linker/hash_table.c"
 
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"

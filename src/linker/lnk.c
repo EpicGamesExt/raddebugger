@@ -39,6 +39,7 @@
 #include "coff/coff_enum.h"
 #include "coff/coff_parse.h"
 #include "coff/coff_obj_writer.h"
+#include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
@@ -56,6 +57,7 @@
 #include "coff/coff_enum.c"
 #include "coff/coff_parse.c"
 #include "coff/coff_obj_writer.c"
+#include "coff/coff_lib_writer.c"
 #include "pe/pe.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_enum.c"
@@ -3077,6 +3079,43 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   return image_data;
 }
 
+internal String8List
+lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportTable *exptab)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  dll_name = str8_skip_last_slash(dll_name);
+
+  // These objects appear in first three members of any lib that linker produces with /dll.
+  // Objects are used by MSVC linker to build import table.
+  String8 import_entry_obj           = lnk_build_import_entry_obj(scratch.arena, dll_name, time_stamp, machine);
+  String8 null_import_descriptor_obj = lnk_build_null_import_descriptor_obj(scratch.arena, time_stamp, machine);
+  String8 null_thunk_data_obj        = lnk_build_null_thunk_data_obj(scratch.arena, dll_name, time_stamp, machine);
+
+  COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+  coff_lib_writer_push_obj(lib_writer, dll_name, import_entry_obj);
+  coff_lib_writer_push_obj(lib_writer, dll_name, null_import_descriptor_obj);
+  coff_lib_writer_push_obj(lib_writer, dll_name, null_thunk_data_obj);
+
+  KeyValuePair *raw_export_arr = key_value_pairs_from_hash_table(scratch.arena, exptab->name_export_ht);
+  for (U64 i = 0; i < exptab->name_export_ht->count; ++i) {
+    LNK_Export *exp = raw_export_arr[i].value_raw;
+    if (exp->name.size) {
+      coff_lib_writer_push_export_by_name(lib_writer, machine, time_stamp, dll_name, exp->type, exp->name, safe_cast_u16(exp->id));
+    } else {
+      coff_lib_writer_push_export_by_ordinal(lib_writer, machine, time_stamp, dll_name, exp->type, exp->ordinal);
+    }
+  }
+
+  String8List lib = coff_lib_writer_serialize(arena, lib_writer, COFF_TimeStamp_Max, 0, /* emit second member: */ 1);
+  coff_lib_writer_release(&lib_writer);
+  
+  scratch_end(scratch);
+  ProfEnd();
+  return lib;
+}
+
 ////////////////////////////////
 
 internal
@@ -4304,7 +4343,7 @@ lnk_run(int argc, char **argv)
       case State_BuildImpLib: {
         ProfBegin("Build Imp Lib");
         lnk_timer_begin(LNK_Timer_Lib);
-        String8List lib_list = lnk_build_import_lib(tp, tp_arena, config->machine, config->time_stamp, config->imp_lib_name, config->image_name, exptab);
+        String8List lib_list = lnk_build_import_lib(tp_arena->v[0], config->machine, config->time_stamp, config->image_name, exptab);
         lnk_write_data_list_to_file_path(config->imp_lib_name, str8_zero(), lib_list);
         lnk_timer_end(LNK_Timer_Lib);
         ProfEnd();
