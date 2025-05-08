@@ -240,9 +240,26 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  
   LNK_Section **src_dst = push_array(scratch.arena, LNK_Section *, sectab->id_max);
   for (LNK_MergeDirectiveNode *merge_node = merge_list.first; merge_node != 0; merge_node = merge_node->next) {
     LNK_MergeDirective *merge = &merge_node->data;
+
+    // guard against illegal merges
+    {
+      local_persist String8 illegal_merge_sections[] = {
+        str8_lit_comp(".rsrc"),
+        str8_lit_comp(".reloc"),
+      };
+      for (U64 i = 0; i < ArrayCount(illegal_merge_sections); i += 1) {
+        if (str8_match(merge->src, illegal_merge_sections[i], 0)) {
+          lnk_error(LNK_Error_IllegalSectionMerge, "illegal to merge %S with %S", illegal_merge_sections[i], merge->dst);
+        }
+        if (str8_match(merge->dst, illegal_merge_sections[i], 0)) {
+          lnk_error(LNK_Error_IllegalSectionMerge, "illegal to merge %S with %S", merge->src, illegal_merge_sections[i]);
+        }
+      }
+    }
     
     // are we trying to merge section that was already merged?
     LNK_Section *merge_sect = 0;

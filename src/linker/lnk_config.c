@@ -1306,6 +1306,20 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     }
   } break;
 
+  case LNK_CmdSwitch_Merge: {
+    if (value_strings.node_count == 1) {
+      LNK_MergeDirective merge = {0};;
+      if (lnk_parse_merge_directive(push_str8_copy(arena, value_strings.first->string), &merge)) {
+        lnk_merge_directive_list_push(arena, &config->merge_list, merge);
+      } else {
+        lnk_error_cmd_switch(LNK_Warning_InvalidMergeDirectiveFormat, obj_path, lib_path, cmd_switch, "invalid merge directive format expected \"/MERGE:FROM=TO\" but got \"%S\"",
+                             value_strings.first->string);
+      }
+    } else {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters %d", value_strings.node_count);
+    }
+  } break;
+
   case LNK_CmdSwitch_Natvis: {
     // warn about invalid natvis extension
     for (String8Node *node = value_strings.first; node != 0; node = node->next) {

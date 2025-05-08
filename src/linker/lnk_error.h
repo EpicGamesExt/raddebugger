@@ -34,6 +34,7 @@ typedef enum
   LNK_Error_InvalidPath,
   LNK_Error_MultiplyDefinedSymbol,
   LNK_Error_SectRefsDiscardedMemory,
+  LNK_Error_IllegalSectionMerge,
   LNK_Error_StopLast,
   
   LNK_Error_First,
@@ -54,6 +55,7 @@ typedef enum
   LNK_Error_Last,
   
   LNK_Warning_First,
+  LNK_Warning_InvalidMergeDirectiveFormat,
   LNK_Warning_AmbiguousMerge,
   LNK_Warning_AtypicalStartIndex,
   LNK_Warning_Cmdl,

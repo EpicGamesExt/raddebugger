@@ -1333,7 +1333,36 @@ t_base_relocs(void)
   }
 
   String8 out_name = str8_lit("a.exe");
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /dynamicbase /largeaddressaware:no /out:%S %S %S", entry_name, out_name, main_obj_name, func_obj_name);
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /dynamicbase /largeaddressaware:no /out:a.exe main.obj func.obj");
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  // it is illegal to merge .reloc with other sections
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /dynamicbase /largeaddressaware:no /out:a.exe /merge:.reloc=.rdata main.obj func.obj");
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_IllegalSectionMerge) {
+      goto exit;
+    }
+  } else {
+    if (linker_exit_code == 0) {
+      goto exit;
+    }
+  }
+
+  // the other way around is illegal too
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /dynamicbase /largeaddressaware:no /out:a.exe /merge:.rdata=.reloc main.obj func.obj");
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_IllegalSectionMerge) {
+      goto exit;
+    }
+  } else {
+    if (linker_exit_code == 0) {
+      goto exit;
+    }
+  }
+
+  result = T_Result_Pass;
   
 exit:;
   scratch_end(scratch);
@@ -1602,7 +1631,7 @@ entry_point(CmdLine *cmdline)
     { "flag_conf",           t_flag_conf           },
     { "invalid_bss",         t_invalid_bss         },
     { "common_block",        t_common_block        },
-    //{ "base_relocs",        t_base_relocs       },
+    { "base_relocs",         t_base_relocs         },
     { "simple_lib_test",     t_simple_lib_test     },
     { "import_export",       t_import_export       },
   };
