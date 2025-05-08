@@ -205,7 +205,7 @@ E_OpInfo e_expr_kind_op_info_table[49] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp("."), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("*"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("&"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
-{ E_OpKind_Null, 1, str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp(""), str8_lit_comp("") },
+{ E_OpKind_Null, 1, str8_lit_comp("cast("), str8_lit_comp(")"), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("sizeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("typeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("bswap "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },

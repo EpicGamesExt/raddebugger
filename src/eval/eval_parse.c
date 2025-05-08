@@ -873,7 +873,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         String8 token_string = str8_substr(text, token.range);
         S64 prefix_unary_precedence = 0;
         E_ExprKind prefix_unary_kind = 0;
-        Rng1U64 range = {0};
+        E_Expr *prefix_unary_cast_expr = &e_expr_nil;
         
         // rjf: try op table
         for EachNonZeroEnumVal(E_ExprKind, k)
@@ -887,6 +887,23 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           }
         }
         
+        // rjf: if we found a symbolic prefix unary operator, but we are
+        // looking for a casted expression, then we need to abort this
+        // path. C-style casts are only legal in very simple and unambiguous
+        // cases, e.g. (x)123, but they cannot be made legal in more
+        // complex cases like (x) * y, because this is fundamentally ambiguous
+        // (the meaning / tree shape / etc. is entirely different depending on
+        // the type / mode of `x`).
+        //
+        // because of things like hover-evaluation we do actually want to
+        // support basic C-style casts. but past a certain point of complexity,
+        // we will simply require usage of the explicit `cast` operator.
+        //
+        if(prefix_unary_precedence != 0 && atom_is_maybe_cast)
+        {
+          break;
+        }
+        
         // rjf: try 'unsigned' marker
         if(str8_match(token_string, str8_lit("unsigned"), 0))
         {
@@ -894,13 +911,46 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
           prefix_unary_precedence = 2;
         }
         
+        // rjf: try explicit cast
+        if(str8_match(token_string, str8_lit("cast"), 0))
+        {
+          // rjf: consume cast & open paren
+          E_Token open_paren_maybe = e_token_at_it(it+1, &tokens);
+          String8 open_paren_maybe_string = str8_substr(text, open_paren_maybe.range);
+          if(!str8_match(open_paren_maybe_string, str8_lit("("), 0))
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Expected `(` following `cast`.");
+            goto end_cast_parse;
+          }
+          it += 2;
+          
+          // rjf: parse type expression
+          E_Parse type_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+          e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
+          it = type_parse.last_token;
+          
+          // rjf: expect )
+          E_Token close_paren_maybe = e_token_at_it(it, &tokens);
+          String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
+          if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Missing `)`.");
+          }
+          
+          // rjf: fill prefix unary info
+          prefix_unary_kind = E_ExprKind_Cast;
+          prefix_unary_precedence = 2;
+          prefix_unary_cast_expr = type_parse.expr;
+          end_cast_parse:;
+        }
+        
         // rjf: push prefix unary if we got one
         if(prefix_unary_precedence != 0)
         {
-          range = token.range;
           PrefixUnaryTask *prefix_unary_task = push_array(scratch.arena, PrefixUnaryTask, 1);
           prefix_unary_task->kind = prefix_unary_kind;
-          prefix_unary_task->range = range;
+          prefix_unary_task->range = token.range;
+          prefix_unary_task->cast_type_expr = prefix_unary_cast_expr;
           SLLQueuePush(first_prefix_unary, last_prefix_unary, prefix_unary_task);
           it += 1;
         }
