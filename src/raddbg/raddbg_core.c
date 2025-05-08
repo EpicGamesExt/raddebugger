@@ -3256,7 +3256,7 @@ rd_view_ui(Rng2F32 rect)
                     default:
                     {
                       U64 vaddr = eval.value.u64;
-                      CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+                      CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
                       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
                       DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
                       U64 voff = ctrl_voff_from_vaddr(module, vaddr);
