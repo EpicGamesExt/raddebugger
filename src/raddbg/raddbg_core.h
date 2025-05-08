@@ -170,9 +170,10 @@ typedef struct RD_AutocompCursorInfo RD_AutocompCursorInfo;
 struct RD_AutocompCursorInfo
 {
   String8 list_expr;
-  String8 callee_expr;
   String8 filter;
   Rng1U64 replaced_range;
+  String8 callee_expr;
+  U64 callee_arg_idx;
 };
 
 ////////////////////////////////
