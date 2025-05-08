@@ -1661,8 +1661,19 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     // rjf: build a valid expression string given item string
     String8 item_expr = item_string;
     {
-      E_TokenArray tokens = e_token_array_from_text(scratch.arena, item_expr);
-      if(tokens.count != 1)
+      B32 string_can_be_evalled = 1;
+      E_TokenArray tokens = e_token_array_from_text(scratch.arena, item_string);
+      for EachIndex(idx, tokens.count)
+      {
+        String8 token_string = str8_substr(item_string, tokens.v[idx].range);
+        if(tokens.v[idx].kind != E_TokenKind_Identifier &&
+           !str8_match(token_string, str8_lit("."), 0))
+        {
+          string_can_be_evalled = 0;
+          break;
+        }
+      }
+      if(!string_can_be_evalled)
       {
         item_expr = push_str8f(scratch.arena, "`%S`", item_string);
       }
