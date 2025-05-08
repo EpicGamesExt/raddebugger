@@ -412,29 +412,19 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
         if(match.kind == E_MemberKind_Null)
         {
           E_Type *type = e_type_from_key(check_type_key);
-          if(type->enum_vals != 0)
+          String8 lookup_string = exprr->string;
+          String8 lookup_string_append_1 = push_str8f(scratch.arena, "%S_%S", type->name, lookup_string);
+          String8 lookup_string_append_2 = push_str8f(scratch.arena, "%S%S", type->name, lookup_string);
+          E_EnumVal enum_val = {0};
+          if(enum_val.name.size == 0) { enum_val = e_type_enum_val_from_key_name__cached(check_type_key, lookup_string); }
+          if(enum_val.name.size == 0) { enum_val = e_type_enum_val_from_key_name__cached(check_type_key, lookup_string_append_1); }
+          if(enum_val.name.size == 0) { enum_val = e_type_enum_val_from_key_name__cached(check_type_key, lookup_string_append_2); }
+          if(enum_val.name.size != 0)
           {
-            String8 lookup_string = exprr->string;
-            String8 lookup_string_append_1 = push_str8f(scratch.arena, "%S_%S", type->name, lookup_string);
-            String8 lookup_string_append_2 = push_str8f(scratch.arena, "%S%S", type->name, lookup_string);
-            E_EnumVal *enum_val_match = 0;
-            for EachIndex(idx, type->count)
-            {
-              if(str8_match(type->enum_vals[idx].name, lookup_string, 0) ||
-                 str8_match(type->enum_vals[idx].name, lookup_string_append_1, 0) ||
-                 str8_match(type->enum_vals[idx].name, lookup_string_append_2, 0))
-              {
-                enum_val_match = &type->enum_vals[idx];
-                break;
-              }
-            }
-            if(enum_val_match != 0)
-            {
-              r_found = 1;
-              r_type = check_type_key;
-              r_value = enum_val_match->val;
-              r_is_constant_value = 1;
-            }
+            r_found = 1;
+            r_type = check_type_key;
+            r_value = enum_val.val;
+            r_is_constant_value = 1;
           }
         }
         scratch_end(scratch);
