@@ -2631,6 +2631,7 @@ rd_view_ui(Rng2F32 rect)
           ui_label(rd_display_from_code_name(cmd_name));
         ui_spacer(ui_em(0.5f, 1.f));
       }
+      UI_Key line_edit_key = {0};
       RD_CellParams params = {0};
       {
         params.flags |= !!(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput) * RD_CellFlag_CodeContents;
@@ -2641,15 +2642,19 @@ rd_view_ui(Rng2F32 rect)
         params.edit_string_size_out = &vs->query_string_size;
         params.edit_buffer_size     = sizeof(vs->query_buffer);
         params.pre_edit_value       = current_input;
+        params.line_edit_key_out    = &line_edit_key;
       }
       UI_Transparency(1-search_row_open_t)
       {
         UI_Signal sig = rd_cellf(&params, "###search");
-        // TODO(rjf)
 #if 0
+        // TODO(rjf)
         if(ui_is_focus_active())
         {
-          rd_set_autocomp_regs(.ui_key = sig.box->key, .string = str8(vs->query_buffer, vs->query_string_size), .cursor = vs->query_cursor);
+          rd_set_autocomp_regs(e_eval_nil,
+                               .ui_key = line_edit_key,
+                               .string = str8(vs->query_buffer, vs->query_string_size), 
+                               .cursor = vs->query_cursor);
         }
 #endif
         if(ui_pressed(sig))
@@ -15160,6 +15165,10 @@ rd_frame(void)
           case RD_CmdKind_AddAddressBreakpoint:
           {
             rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero(), .do_lister = 1);
+          }break;
+          case RD_CmdKind_AddFunctionBreakpoint:
+          {
+            rd_cmd(RD_CmdKind_AddBreakpoint, .file_path = str8_zero(), .expr = rd_regs()->string);
           }break;
           case RD_CmdKind_ClearBreakpoints:
           {

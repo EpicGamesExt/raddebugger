@@ -60,7 +60,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[342] =
+RD_VocabInfo rd_vocab_info_table[343] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -346,9 +346,10 @@ RD_VocabInfo rd_vocab_info_table[342] =
 {str8_lit_comp("duplicate_cfg"), str8_lit_comp(""), str8_lit_comp("Duplicate"), str8_lit_comp(""), RD_IconKind_Duplicate},
 {str8_lit_comp("relocate_cfg"), str8_lit_comp(""), str8_lit_comp("Relocate"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("save_cfg_to_project"), str8_lit_comp(""), str8_lit_comp("Save To Project"), str8_lit_comp(""), RD_IconKind_Briefcase},
-{str8_lit_comp("add_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
+{str8_lit_comp("add_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Line Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("add_address_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Address Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
-{str8_lit_comp("toggle_breakpoint"), str8_lit_comp(""), str8_lit_comp("Toggle Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
+{str8_lit_comp("add_function_breakpoint"), str8_lit_comp(""), str8_lit_comp("Add Function Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
+{str8_lit_comp("toggle_breakpoint"), str8_lit_comp(""), str8_lit_comp("Toggle Line Breakpoint"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("enable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Enable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("disable_breakpoint"), str8_lit_comp(""), str8_lit_comp("Disable Breakpoint"), str8_lit_comp(""), RD_IconKind_CheckHollow},
 {str8_lit_comp("clear_breakpoints"), str8_lit_comp(""), str8_lit_comp("Clear Breakpoints"), str8_lit_comp(""), RD_IconKind_Trash},
@@ -422,7 +423,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[24] =
 {str8_lit_comp("geo3d"), str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Expression\") @description(\"An expression to describe the base address of the index buffer.\")\n  'expression': expr_string,\n  'count': expr_string,\n  'vtx': expr_string,\n  'vtx_size': expr_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("getting_started"), str8_lit_comp("@inherit(tab) x:\n{\n}\n")},
 {str8_lit_comp("target"), str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        expr_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'environment':        query,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, clear_breakpoints)\nx:\n{\n  'label':            code_string,\n  'condition':        expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint, clear_breakpoints)\nx:\n{\n  'label':            code_string,\n  'condition':        expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @absolute path, 'dest': @absolute path}")},
 {str8_lit_comp("type_view"), str8_lit_comp("@collection_commands(add_type_view) @row_commands(remove_cfg) x:{'type':expr_string, 'expr':expr_string}")},
@@ -481,7 +482,7 @@ Rng1U64 rd_reg_slot_range_table[43] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[235] =
+RD_CmdKindInfo rd_cmd_kind_info_table[236] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -662,6 +663,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[235] =
 { str8_lit_comp("save_cfg_to_project"), str8_lit_comp("Saves the config tree to the project."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("add_breakpoint"), str8_lit_comp("Places a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("add_address_breakpoint"), str8_lit_comp("Places a breakpoint on the specified address."), str8_lit_comp(""), str8_lit_comp("$breakpoints,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Expr, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
+{ str8_lit_comp("add_function_breakpoint"), str8_lit_comp("Places a breakpoint on the first address of the specified function."), str8_lit_comp(""), str8_lit_comp("$breakpoints,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp("query:procedures"), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("toggle_breakpoint"), str8_lit_comp("Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("$text_pt,"), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*1)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("enable_breakpoint"), str8_lit_comp("Enables a breakpoint."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:breakpoints"), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("disable_breakpoint"), str8_lit_comp("Disables a breakpoint."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:breakpoints"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -720,7 +722,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[235] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[114] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[115] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -831,6 +833,7 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[114] =
 {str8_lit_comp("toggle_watch_pin"), {OS_Key_F9, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("toggle_breakpoint"), {OS_Key_F9, 0   }},
 {str8_lit_comp("add_address_breakpoint"), {OS_Key_F9, 0  |OS_Modifier_Shift }},
+{str8_lit_comp("add_function_breakpoint"), {OS_Key_F9, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("attach"), {OS_Key_F6, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("open_palette"), {OS_Key_F1, 0   }},
 {str8_lit_comp("open_palette"), {OS_Key_P, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},

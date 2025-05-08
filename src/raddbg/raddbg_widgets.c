@@ -3695,7 +3695,14 @@ rd_cell(RD_CellParams *params, String8 string)
       String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if((evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Text) || evt->delta_2s32.y != 0)
+      B32 is_autocompletion_completion = (autocomplete_hint_string.size != 0 &&
+                                          evt->kind == UI_EventKind_Press &&
+                                          evt->slot == UI_EventActionSlot_Accept);
+      if(!is_autocompletion_completion &&
+         ((evt->kind != UI_EventKind_Edit &&
+           evt->kind != UI_EventKind_Navigate &&
+           evt->kind != UI_EventKind_Text) ||
+          evt->delta_2s32.y != 0))
       {
         continue;
       }
@@ -3740,7 +3747,10 @@ rd_cell(RD_CellParams *params, String8 string)
       
       // rjf: consume event
       {
-        ui_eat_event(evt);
+        if(!is_autocompletion_completion)
+        {
+          ui_eat_event(evt);
+        }
         changes_made = 1;
       }
     }
