@@ -67,34 +67,6 @@ lnk_section_contrib_chunk_list_concat_in_place(LNK_SectionContribChunkList *list
   }
 }
 
-internal void
-lnk_section_list_remove(LNK_SectionList *list, LNK_SectionNode *node)
-{
-  if (list->count > 0) {
-    if (list->first == node) {
-      list->first = list->first->next;
-      list->count -= 1;
-      
-      if (list->last == node) {
-        list->last = 0;
-      }
-    } else {
-      for (LNK_SectionNode *curr = list->first, *prev = 0; curr != 0; prev = curr, curr = curr->next) {
-        if (curr == node) {
-          prev->next = curr->next;
-          list->count -= 1;
-          
-          if (list->last == curr) {
-            list->last = prev;
-          }
-          
-          break;
-        }
-      }
-    }
-  }
-}
-
 internal LNK_SectionArray
 lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
 {
@@ -106,6 +78,17 @@ lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
     result.count += 1;
   }
   return result;
+}
+
+internal LNK_SectionContrib *
+lnk_get_first_section_contrib(LNK_Section *sect)
+{
+  if (sect->contribs.chunk_count > 0) {
+    if (sect->contribs.first->count > 0) {
+      return &sect->contribs.first->v[0];
+    }
+  }
+  return 0;
 }
 
 internal LNK_SectionTable *
@@ -154,7 +137,7 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
   sect->name         = push_str8_copy(sect->arena, name);
   sect->flags        = flags;
   sect->has_layout   = 1;
-  
+
   LNK_SectionList *sect_list = &sectab->list;
   SLLQueuePush(sect_list->first, sect_list->last, sect_node);
   sect_list->count += 1;
@@ -172,18 +155,43 @@ lnk_section_table_remove(LNK_SectionTable *sectab, String8 name)
   ProfBeginFunction();
   
   // find node
-  LNK_SectionNode *sect_n;
-  for (sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-    if (str8_match(sect_n->data.name, name, 0)) {
+  LNK_SectionNode *node;
+  for (node = sectab->list.first; node != 0; node = node->next) {
+    if (str8_match(node->data.name, name, 0)) {
       break;
     }
   }
 
   // remove node
-  lnk_section_list_remove(&sectab->list, sect_n);
+  {
+    LNK_SectionList *list = &sectab->list;
+    if (list->count > 0) {
+      if (list->first == node) {
+        list->first = list->first->next;
+        list->count -= 1;
+
+        if (list->last == node) {
+          list->last = 0;
+        }
+      } else {
+        for (LNK_SectionNode *curr = list->first, *prev = 0; curr != 0; prev = curr, curr = curr->next) {
+          if (curr == node) {
+            prev->next = curr->next;
+            list->count -= 1;
+
+            if (list->last == curr) {
+              list->last = prev;
+            }
+
+            break;
+          }
+        }
+      }
+    }
+  }
 
   // push to free list
-  SLLQueuePush(sectab->free_list.first, sectab->free_list.last, sect_n);
+  SLLQueuePush(sectab->free_list.first, sectab->free_list.last, node);
   sectab->free_list.count += 1;
 
   ProfEnd();

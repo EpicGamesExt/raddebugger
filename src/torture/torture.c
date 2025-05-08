@@ -891,14 +891,14 @@ t_undef_reloc_section(void)
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
 
-    U8 data[] = { 0, 0, 0, 0 };
-    COFF_ObjSection *data_section = t_push_data_section(obj_writer, str8_array_fixed(data));
-    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_section(obj_writer, str8_lit(".reloc"), LNK_RELOC_SECTION_FLAGS);
-    coff_obj_writer_section_push_reloc(obj_writer, data_section, 0, foo, COFF_Reloc_X64_Addr32Nb);
-
     U8 text[] = { 0xC3 };
     COFF_ObjSection *text_section = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), LNK_TEXT_SECTION_FLAGS, str8_array_fixed(text));
-    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_section);
+    COFF_ObjSymbol *my_entry_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_section);
+
+    U8 data[8] = { 0 };
+    COFF_ObjSection *data_section = t_push_data_section(obj_writer, str8_array_fixed(data));
+    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_section(obj_writer, str8_lit(".reloc"), LNK_RELOC_SECTION_FLAGS);
+    coff_obj_writer_section_push_reloc(obj_writer, data_section, 0, foo, COFF_Reloc_X64_Addr64);
 
     main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
 
@@ -912,7 +912,11 @@ t_undef_reloc_section(void)
   t_write_file(str8_lit("sec_defn.obj"), sec_defn_obj);
 
   int linker_exit_code = t_invoke_linker(str8_lit("/subsystem:console /entry:my_entry /out:a.exe main.obj sec_defn.obj"));
-  if (linker_exit_code == 0) {
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_SectRefsDiscardedMemory) {
+      goto exit;
+    }
+  } else if (linker_exit_code == 0) {
     goto exit;
   }
 
@@ -1428,7 +1432,6 @@ t_import_export(void)
 
   T_Result result = T_Result_Fail;
 
-
   String8 export_obj_name    = str8_lit("export.obj");
   String8 export_obj_payload = str8_lit("test");
   U8      export_text[]      = { 0xC3 };
@@ -1600,8 +1603,8 @@ entry_point(CmdLine *cmdline)
     { "invalid_bss",         t_invalid_bss         },
     { "common_block",        t_common_block        },
     //{ "base_relocs",        t_base_relocs       },
-    { "simple_lib_test",    t_simple_lib_test   },
-    { "import_export",      t_import_export     },
+    { "simple_lib_test",     t_simple_lib_test     },
+    { "import_export",       t_import_export       },
   };
 
   //

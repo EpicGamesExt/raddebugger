@@ -347,8 +347,14 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
     case COFF_SymbolValueInterp_Undefined: {
       LNK_Symbol *s = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
       if (s == 0) {
-        LNK_Symbol *undef = lnk_make_undefined_symbol(arena, symbol.name, obj);
-        lnk_symbol_list_push(arena, &task->undef_lists[worker_id], undef);
+        if (symbol.storage_class == COFF_SymStorageClass_External) {
+          LNK_Symbol *undef = lnk_make_undefined_symbol(arena, symbol.name, obj);
+          lnk_symbol_list_push(arena, &task->undef_lists[worker_id], undef);
+        } else if (symbol.storage_class == COFF_SymStorageClass_Section) {
+          // lookup is performed during image patching step
+        } else {
+          Assert(!"unexpected storage class on undefined symbol");
+        }
       }
     } break;
     case COFF_SymbolValueInterp_Debug: {

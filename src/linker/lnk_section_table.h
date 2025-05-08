@@ -68,6 +68,7 @@ typedef struct LNK_Section
   B32                is_merged;
 
   LNK_SectionContribChunkList contribs;
+  LNK_SectionContrib *first_contrib_chunk;
 
   U64 voff;
   U64 vsize;
@@ -113,7 +114,6 @@ internal U16 lnk_default_align_from_machine(COFF_MachineType machine);
 
 ////////////////////////////////
 
-internal void             lnk_section_list_remove(LNK_SectionList *list, LNK_SectionNode *node);
 internal LNK_SectionArray lnk_section_array_from_list(Arena *arena, LNK_SectionList list);
 
 ////////////////////////////////
