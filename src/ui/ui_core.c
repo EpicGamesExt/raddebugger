@@ -177,8 +177,35 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
     default:{}break;
     case UI_EventDeltaUnit_Char:
     {
-      // TODO(rjf): this should account for multi-byte characters in UTF-8... for now, just assume ASCII and
-      // no-op
+      if (delta.x > 0)
+      {
+        UnicodeDecode decode = utf8_decode(string.str + cursor.column - 1, string.size);
+        delta.x = decode.inc;
+      }
+      else
+      {
+        //Backwards check/count for UTF-8 multi byte sequence
+        U32 numSeqBytes = 0;
+        for (S64 idx = cursor.column - 2; idx >= 0; idx -= 1)
+        {
+          B32 isSeqByte = ExtractBit(string.str[idx], 7) == 1 && ExtractBit(string.str[idx], 6) == 0;
+          numSeqBytes += isSeqByte;
+          if (!isSeqByte)
+          {
+            if (numSeqBytes > 0)
+            {
+              U32 initialByte = ~(string.str[idx]) << 24;
+              U64 numLeadingBits = clz32(initialByte);
+              B32 isMultiByteSeq = numLeadingBits == numSeqBytes + 1;
+              if (isMultiByteSeq)
+              {
+                delta.x = -(numSeqBytes + 1);
+              }
+            }
+            break;
+          }
+        }
+      }
     }break;
     case UI_EventDeltaUnit_Word:
     {
