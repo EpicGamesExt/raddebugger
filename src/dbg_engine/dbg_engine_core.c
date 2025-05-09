@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#undef MARKUP_LAYER_COLOR
-#define MARKUP_LAYER_COLOR 0.70f, 0.50f, 0.25f
+#undef LAYER_COLOR
+#define LAYER_COLOR 0x4d9ae3ff
 
 ////////////////////////////////
 //~ rjf: Generated Code

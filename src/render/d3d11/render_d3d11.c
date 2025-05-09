@@ -1,9 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#undef MARKUP_LAYER_COLOR
-#define MARKUP_LAYER_COLOR 0.80f, 0.60f, 0.20f
-
 ////////////////////////////////
 //~ rjf: Input Layout Element Tables
 
