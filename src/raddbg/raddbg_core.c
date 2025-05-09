@@ -2660,6 +2660,7 @@ rd_view_ui(Rng2F32 rect)
         if(ui_pressed(sig))
         {
           vs->query_is_open = 1;
+          vs->contents_are_focused = 0;
           rd_cmd(RD_CmdKind_FocusPanel);
         }
       }
@@ -5390,6 +5391,16 @@ rd_view_ui(Rng2F32 rect)
       Temp scratch = scratch_begin(0, 0);
       RD_ViewUIRule *view_ui_rule = rd_view_ui_rule_from_string(view_name);
       E_Eval expr_eval = e_eval_from_string(expr_string);
+      
+      // rjf: peek presses, steal focus from query bar
+      for(UI_Event *evt = 0; ui_next_event(&evt);)
+      {
+        if(evt->kind == UI_EventKind_Press && contains_2f32(rect, evt->pos))
+        {
+          vs->contents_are_focused = 1;
+          break;
+        }
+      }
       
       // rjf: 'pull out' button, if floating
       if(view_is_floating)
@@ -14992,6 +15003,7 @@ rd_frame(void)
               {
                 vs->query_is_open = 1;
               }
+              vs->contents_are_focused = 0;
             }
           }break;
           case RD_CmdKind_CompleteQuery:
