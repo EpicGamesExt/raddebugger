@@ -1407,6 +1407,7 @@ os_make_guid(void)
 #include <shlwapi.h>
 
 internal B32 win32_g_is_quiet = 0;
+internal B32 win32_g_gen_dump = 0;
 
 internal HRESULT WINAPI
 win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PTR data)
@@ -1442,6 +1443,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
   
   // load dbghelp dynamically just in case if it is missing
+  BOOL (WINAPI *dbg_MiniDumpWriteDump)(HANDLE hProcess, DWORD ProcessId, HANDLE hFile, MINIDUMP_TYPE DumpType, PMINIDUMP_EXCEPTION_INFORMATION ExceptionParam, PMINIDUMP_USER_STREAM_INFORMATION UserStreamParam, PMINIDUMP_CALLBACK_INFORMATION CallbackParam);
   HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
   if(dbghelp)
   {
@@ -1465,6 +1467,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
     *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
     *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
     *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
+    *(FARPROC*)&dbg_MiniDumpWriteDump        = GetProcAddress(dbghelp, "MiniDumpWriteDump");
     
     if(dbg_SymSetOptions && dbg_SymInitializeW && dbg_StackWalk64 && dbg_SymFunctionTableAccess64 && dbg_SymGetModuleBase64 && dbg_SymFromAddrW && dbg_SymGetLineFromAddrW64 && dbg_SymGetModuleInfoW64)
     {
@@ -1594,10 +1597,13 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
   
+  B32 generate_crash_dump = win32_g_gen_dump;
 #if BUILD_CONSOLE_INTERFACE
   fwprintf(stderr, L"\n--- Fatal Exception ---\n");
   fwprintf(stderr, L"%s\n\n", buffer);
 #else
+  int selected_button = 0;
+  TASKDIALOG_BUTTON generate_dump = {1, L"Generate Crash Dump File"};
   TASKDIALOGCONFIG dialog = {0};
   dialog.cbSize = sizeof(dialog);
   dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
@@ -1606,8 +1612,24 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   dialog.pszWindowTitle = L"Fatal Exception";
   dialog.pszContent = buffer;
   dialog.pfCallback = &win32_dialog_callback;
-  TaskDialogIndirect(&dialog, 0, 0, 0);
+  dialog.cButtons = 1;
+  dialog.pButtons = &generate_dump;
+  TaskDialogIndirect(&dialog, &selected_button, 0, 0);
+  generate_crash_dump = (selected_button == generate_dump.nButtonID);
 #endif
+  
+  if(dbg_MiniDumpWriteDump && generate_crash_dump)
+  {
+    WCHAR desktop_path[512] = {0};
+    SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, desktop_path);
+    WCHAR dump_file_path[512] = {0};
+    wnsprintfW(dump_file_path, ArrayCount(dump_file_path), L"%s\\raddbg_crash_dump.dmp", desktop_path);
+    SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
+    HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), os_get_process_info()->pid, file, MiniDumpNormal, 0, 0, 0);
+    CloseHandle(file);
+    (void)dump_successful;
+  }
   
   ExitProcess(1);
 }
@@ -1694,6 +1716,11 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
       arena_default_flags        = ArenaFlag_LargePages;
       arena_default_reserve_size = Max(MB(64), os_w32_state.system_info.large_page_size);
       arena_default_commit_size  = arena_default_reserve_size;
+    }
+    if(str8_match(arg8, str8_lit("--gen_crash_dump"), StringMatchFlag_CaseInsensitive) ||
+       str8_match(arg8, str8_lit("-gen_crash_dump"), StringMatchFlag_CaseInsensitive))
+    {
+      win32_g_gen_dump = 1;
     }
     argv[i] = (char *)arg8.str;
   }
