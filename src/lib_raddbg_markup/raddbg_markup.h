@@ -51,8 +51,8 @@
 # define raddbg_watch(fmt, ...)                       ((void)0)
 # define raddbg_pin(expr, ...)
 # define raddbg_log(fmt, ...)                         ((void)0)
-# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__}
-# define raddbg_type_view(type, ...)                  struct raddbg_gen_data_id(){int __unused__}
+# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__;}
+# define raddbg_type_view(type, ...)                  struct raddbg_gen_data_id(){int __unused__;}
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
 #endif

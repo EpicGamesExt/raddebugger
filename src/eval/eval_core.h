@@ -884,12 +884,6 @@ struct E_UsedExprMap
 
 //- rjf: type key -> auto hook expression list cache
 
-typedef struct E_TypeAutoHookMatch E_TypeAutoHookMatch;
-struct E_TypeAutoHookMatch
-{
-  String8 expr;
-};
-
 typedef struct E_TypeAutoHookCacheNode E_TypeAutoHookCacheNode;
 struct E_TypeAutoHookCacheNode
 {

@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 #include <memory>
+#if !_WIN32
+# define RADDBG_MARKUP_STUBS
+#endif
 #define RADDBG_MARKUP_IMPLEMENTATION
 #include "lib_raddbg_markup/raddbg_markup.h"
 

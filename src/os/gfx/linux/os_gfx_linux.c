@@ -137,7 +137,7 @@ os_window_close(OS_Handle handle)
 }
 
 internal void
-os_window_set_title(OS_Handle window, String8 title)
+os_window_set_title(OS_Handle handle, String8 title)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}
   // TODO(rjf)
@@ -191,13 +191,14 @@ os_window_set_maximized(OS_Handle handle, B32 maximized)
 }
 
 internal B32
-os_window_is_minimized(OS_Handle window)
+os_window_is_minimized(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return 0;}
+  return 0;
 }
 
 internal void
-os_window_set_minimized(OS_Handle window, B32 minimized)
+os_window_set_minimized(OS_Handle handle, B32 minimized)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}
 }
@@ -324,10 +325,10 @@ os_get_events(Arena *arena, B32 wait)
       case KeyRelease:
       {
         // rjf: determine flags
-        OS_Modifiers flags = 0;
-        if(evt.xkey.state & ShiftMask)   { flags |= OS_Modifier_Shift; }
-        if(evt.xkey.state & ControlMask) { flags |= OS_Modifier_Ctrl; }
-        if(evt.xkey.state & Mod1Mask)    { flags |= OS_Modifier_Alt; }
+        OS_Modifiers modifiers = 0;
+        if(evt.xkey.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
+        if(evt.xkey.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
+        if(evt.xkey.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
         
         // rjf: map keycode -> keysym
         U32 keysym = XLookupKeysym(&evt.xkey, 0);
@@ -386,7 +387,7 @@ os_get_events(Arena *arena, B32 wait)
         OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
         OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == KeyPress ? OS_EventKind_Press : OS_EventKind_Release);
         e->window.u64[0] = (U64)window;
-        e->flags = flags;
+        e->modifiers = modifiers;
         e->key = key;
       }break;
       
@@ -395,10 +396,10 @@ os_get_events(Arena *arena, B32 wait)
       case ButtonRelease:
       {
         // rjf: determine flags
-        OS_Modifiers flags = 0;
-        if(evt.xbutton.state & ShiftMask)   { flags |= OS_Modifier_Shift; }
-        if(evt.xbutton.state & ControlMask) { flags |= OS_Modifier_Ctrl; }
-        if(evt.xbutton.state & Mod1Mask)    { flags |= OS_Modifier_Alt; }
+        OS_Modifiers modifiers = 0;
+        if(evt.xbutton.state & ShiftMask)   { modifiers |= OS_Modifier_Shift; }
+        if(evt.xbutton.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
+        if(evt.xbutton.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
         
         // rjf: map button -> OS_Key
         OS_Key key = OS_Key_Null;
@@ -414,7 +415,7 @@ os_get_events(Arena *arena, B32 wait)
         OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
         OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == ButtonPress ? OS_EventKind_Press : OS_EventKind_Release);
         e->window.u64[0] = (U64)window;
-        e->flags = flags;
+        e->modifiers = modifiers;
         e->key = key;
       }break;
       

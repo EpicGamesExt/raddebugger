@@ -19,28 +19,10 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "rdi_make/rdi_make_local.h"
-#include "coff/coff.h"
-#include "codeview/codeview.h"
-#include "codeview/codeview_stringize.h"
-#include "msf/msf.h"
-#include "msf/msf_parse.h"
-#include "pdb/pdb.h"
-#include "pdb/pdb_parse.h"
-#include "pdb/pdb_stringize.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "rdi_make/rdi_make_local.c"
-#include "coff/coff.c"
-#include "codeview/codeview.c"
-#include "codeview/codeview_stringize.c"
-#include "msf/msf.c"
-#include "msf/msf_parse.c"
-#include "pdb/pdb.c"
-#include "pdb/pdb_parse.c"
-#include "pdb/pdb_stringize.c"
 
 ////////////////////////////////
 //~ rjf: Entry Points
@@ -57,12 +39,12 @@ frame(void)
     {
       String8 string = push_str8f(scratch.arena, "%S (%S)\n", os_string_from_event_kind(ev->kind), os_g_key_display_string_table[ev->key]);
       printf("%.*s", str8_varg(string));
-      OutputDebugStringA((char *)string.str);
+      raddbg_log((char *)string.str);
       fflush(stdout);
     }
     if(ev->kind == OS_EventKind_Press && ev->key == OS_Key_X)
     {
-      *(int *)0 = 0;
+      *(volatile int *)0 = 0;
     }
   }
   for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
@@ -80,7 +62,7 @@ frame(void)
 internal void
 entry_point(CmdLine *cmdline)
 {
-  OS_Handle window = os_window_open(v2f32(1280, 720), 0, str8_lit("Window"));
+  OS_Handle window = os_window_open(r2f32p(0, 0, 1280, 720), OS_WindowFlag_UseDefaultPosition, str8_lit("Window"));
   os_window_first_paint(window);
   for(;!update(););
 }
