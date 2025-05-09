@@ -21,11 +21,13 @@ struct RD_CodeViewState
   B32 initialized;
   S64 preferred_column;
   B32 drifted_for_search;
+  U128 last_hash;
   
   // rjf: per-frame command info
   S64 goto_line_num;
   B32 center_cursor;
   B32 contain_cursor;
+  B32 force_contain_only;
   B32 watch_expr_at_mouse;
   Arena *find_text_arena;
   String8 find_text_fwd;

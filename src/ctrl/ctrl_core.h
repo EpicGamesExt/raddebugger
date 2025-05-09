@@ -103,6 +103,7 @@ struct CTRL_Entity
   CTRL_EntityKind kind;
   Arch arch;
   B32 is_frozen;
+  B32 is_soloed;
   U32 rgba;
   CTRL_Handle handle;
   U64 id;

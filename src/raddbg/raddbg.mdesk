@@ -468,6 +468,8 @@ RD_VocabTable:
         'lang': code_string,
       @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers':bool,
+      @no_callee_helper @default(0) @display_name('Scroll To Bottom On Change') @description("Scrolls to the bottom if the text is changed.")
+        'scroll_to_bottom_on_change':bool,
       @no_callee_helper @no_revert @default(0) @display_name('Transient') @description("Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.")
         'auto': bool,
     }

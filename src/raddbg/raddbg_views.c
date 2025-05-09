@@ -573,7 +573,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     cv->goto_line_num = 0;
     line_num = Clamp(1, line_num, text_info->lines_count);
     rd_regs()->cursor = rd_regs()->mark = txt_pt(line_num, 1);
-    cv->center_cursor = !cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
+    cv->center_cursor = !cv->force_contain_only && (!cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num));
   }
   
   //////////////////////////////
@@ -807,6 +807,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //- rjf: store state
   //
   rd_store_view_scroll_pos(scroll_pos);
+  cv->force_contain_only = 0;
   
   scratch_end(scratch);
   ProfEnd();
@@ -2070,6 +2071,17 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   B32 file_is_missing = (rd_regs()->file_path.size != 0 && os_properties_from_file_path(rd_regs()->file_path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   ProfEnd();
+  
+  //////////////////////////////
+  //- rjf: update last hash - scroll-to-bottom if needed
+  //
+  if(rd_setting_b32_from_name(str8_lit("scroll_to_bottom_on_change")) && !u128_match(hash, cv->last_hash) && !u128_match(cv->last_hash, u128_zero()))
+  {
+    cv->goto_line_num = info.lines_count;
+    cv->contain_cursor = 1;
+    cv->force_contain_only = 1;
+  }
+  cv->last_hash = hash;
   
   //////////////////////////////
   //- rjf: build missing file interface
