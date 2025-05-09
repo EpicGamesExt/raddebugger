@@ -827,7 +827,7 @@ internal UI_State *ui_get_selected_state(void);
 internal Arena *           ui_build_arena(void);
 internal OS_Handle         ui_window(void);
 internal Vec2F32           ui_mouse(void);
-internal FNT_Tag             ui_icon_font(void);
+internal FNT_Tag           ui_icon_font(void);
 internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
 internal F32               ui_dt(void);
 

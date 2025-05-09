@@ -3492,6 +3492,7 @@ rd_cell(RD_CellParams *params, String8 string)
         UI_PrefHeight(ui_px(height_px, 1.f))
         UI_CornerRadius(floor_f32(height_px/2.f - 1.f))
         UI_TagF(is_toggled ? "good_pop" : "")
+        UI_GroupKey(ui_key_from_stringf(ui_key_zero(), "toggle_switch_group_key"))
       {
         UI_Box *switch_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "toggle_switch");
         UI_Parent(switch_box)
@@ -3512,15 +3513,43 @@ rd_cell(RD_CellParams *params, String8 string)
               UI_PrefHeight(ui_px(toggler_size_px, 1.f))
               UI_CornerRadius(floor_f32(toggler_size_px/2.f - 1.f))
             {
-              UI_Box *toggler = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
+              ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
             }
           }
           ui_spacer(ui_pct(1.f-toggle_t, 0));
         }
         UI_Signal switch_sig = ui_signal_from_box(switch_box);
-        if(ui_pressed(switch_sig))
+        if(ui_dragging(switch_sig))
         {
-          params->toggled_out[0] ^= 1;
+          // rjf: press -> toggle, & gather this key
+          if(ui_pressed(switch_sig))
+          {
+            ui_store_drag_struct(&switch_box->key);
+            params->toggled_out[0] ^= 1;
+          }
+          
+          // rjf: dragging -> check if key is in batch of touched keys. if so, do nothing, otherwise, toggle.
+          // always store this new key if not in batch
+          String8 all_keys_data = ui_get_drag_data(sizeof(UI_Key));
+          UI_Key *keys = (UI_Key *)all_keys_data.str;
+          U64 keys_count = all_keys_data.size / sizeof(UI_Key);
+          B32 key_is_touched = 0;
+          for EachIndex(idx, keys_count)
+          {
+            if(ui_key_match(keys[idx], switch_box->key))
+            {
+              key_is_touched = 1;
+              break;
+            }
+          }
+          if(!key_is_touched)
+          {
+            params->toggled_out[0] ^= 1;
+            UI_Key *new_keys = push_array(scratch.arena, UI_Key, keys_count+1);
+            MemoryCopy(new_keys, keys, sizeof(UI_Key)*keys_count);
+            new_keys[keys_count] = switch_box->key;
+            ui_store_drag_data(str8((U8 *)new_keys, sizeof(UI_Key) * (keys_count+1)));
+          }
         }
       }
       if(ui_top_text_alignment() == UI_TextAlign_Center)
