@@ -722,7 +722,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[236] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, {0}, RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs|RD_CmdKindFlag_ListInTab},
 };
 
-struct {String8 string; RD_Binding binding;} rd_default_binding_table[115] =
+struct {String8 string; RD_Binding binding;} rd_default_binding_table[116] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -775,6 +775,7 @@ struct {String8 string; RD_Binding binding;} rd_default_binding_table[115] =
 {str8_lit_comp("save_project"), {OS_Key_S, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
 {str8_lit_comp("edit"), {OS_Key_F2, 0   }},
 {str8_lit_comp("accept"), {OS_Key_Return, 0   }},
+{str8_lit_comp("accept"), {OS_Key_Space, 0   }},
 {str8_lit_comp("cancel"), {OS_Key_Esc, 0   }},
 {str8_lit_comp("move_left"), {OS_Key_Left, 0   }},
 {str8_lit_comp("move_right"), {OS_Key_Right, 0   }},

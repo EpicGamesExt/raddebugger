@@ -161,7 +161,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   {
     RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
     RD_ViewState *vs = rd_view_state_from_cfg(view);
-    if(!vs->query_is_selected)
+    if(!vs->query_is_open)
     {
       RD_Cfg *query = rd_cfg_child_from_string_or_alloc(view, str8_lit("query"));
       RD_Cfg *input = rd_cfg_child_from_string_or_alloc(query, str8_lit("input"));

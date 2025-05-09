@@ -156,6 +156,7 @@ os_codepoint_from_modifiers_and_key(OS_Modifiers modifiers, OS_Key key)
     {'X', OS_Key_X, OS_Modifier_Shift},
     {'Y', OS_Key_Y, OS_Modifier_Shift},
     {'Z', OS_Key_Z, OS_Modifier_Shift},
+    {' ', OS_Key_Space, 0},
   };
   
   // rjf: check numeric

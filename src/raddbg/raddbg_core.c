@@ -2577,7 +2577,7 @@ rd_view_ui(Rng2F32 rect)
   RD_Cfg *input_root = rd_cfg_child_from_string(query_root, str8_lit("input"));
   RD_Cfg *cmd_root = rd_cfg_child_from_string(query_root, str8_lit("cmd"));
   String8 current_input = input_root->first->string;
-  B32 search_row_is_open = (vs->query_is_selected);
+  B32 search_row_is_open = (vs->query_is_open);
   F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view),
                                   (F32)!!search_row_is_open,
                                   .initial = (F32)!!search_row_is_open,
@@ -2615,7 +2615,7 @@ rd_view_ui(Rng2F32 rect)
     }
     
     //- rjf: build contents
-    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_selected && !vs->contents_are_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+    UI_Parent(search_row) UI_WidthFill UI_HeightFill UI_Focus(vs->query_is_open && !vs->contents_are_focused ? UI_FocusKind_On : UI_FocusKind_Off)
       RD_Font(cmd_kind_info->query.flags & RD_QueryFlag_CodeInput ? RD_FontSlot_Code : RD_FontSlot_Main)
     {
       if(cmd_name.size != 0)
@@ -2659,7 +2659,7 @@ rd_view_ui(Rng2F32 rect)
 #endif
         if(ui_pressed(sig))
         {
-          vs->query_is_selected = 1;
+          vs->query_is_open = 1;
           rd_cmd(RD_CmdKind_FocusPanel);
         }
       }
@@ -3015,7 +3015,7 @@ rd_view_ui(Rng2F32 rect)
             case RD_CmdKind_Search:
             case RD_CmdKind_SearchBackwards:
             {
-              vs->query_is_selected = 0;
+              vs->query_is_open = 0;
             }break;
           }
         }
@@ -5439,11 +5439,11 @@ rd_view_ui(Rng2F32 rect)
   ////////////////////////////
   //- rjf: catchall completion controls
   //
-  if(vs->query_is_selected) UI_Focus(UI_FocusKind_On)
+  if(vs->query_is_open) UI_Focus(UI_FocusKind_On)
   {
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
-      vs->query_is_selected = 0;
+      vs->query_is_open = 0;
       vs->query_string_size = 0;
     }
     if(ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
@@ -7198,8 +7198,8 @@ rd_window_frame(void)
           if(size_query_by_expr_eval)
           {
             F32 search_row_open_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "search_row_open_%p", view),
-                                            (F32)!!vs->query_is_selected,
-                                            .initial = (F32)!!vs->query_is_selected,
+                                            (F32)!!vs->query_is_open,
+                                            .initial = (F32)!!vs->query_is_open,
                                             .epsilon = 0.01f,
                                             .rate    = rd_state->menu_animation_rate);
             query_height_px = row_height_px * (predicted_block_tree.total_row_count - !root_is_explicit) + ui_top_px_height()*search_row_open_t;
@@ -7443,8 +7443,8 @@ rd_window_frame(void)
         
         // rjf: close queries
         if(query_floating_view_task->pressed_outside ||
-           (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_selected) ||
-           (cmd_name.size != 0 && !vs->query_is_selected) ||
+           (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_open) ||
+           (cmd_name.size != 0 && !vs->query_is_open) ||
            ui_slot_press(UI_EventActionSlot_Cancel))
         {
           rd_cmd(RD_CmdKind_CancelQuery);
@@ -14957,7 +14957,7 @@ rd_frame(void)
               RD_ViewState *vs = rd_view_state_from_cfg(view);
               if(cmd_name.size != 0)
               {
-                if(!vs->query_is_selected && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+                if(!vs->query_is_open && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
                 {
                   vs->query_cursor = txt_pt(1, 1+input->first->string.size);
                   vs->query_mark = txt_pt(1, 1);
@@ -14969,16 +14969,16 @@ rd_frame(void)
                 }
                 if(!str8_match(current_query_cmd_name, cmd_name, 0))
                 {
-                  vs->query_is_selected = 1;
+                  vs->query_is_open = 1;
                 }
                 else
                 {
-                  vs->query_is_selected ^= 1;
+                  vs->query_is_open ^= 1;
                 }
               }
               if(rd_regs()->do_lister)
               {
-                vs->query_is_selected = 1;
+                vs->query_is_open = 1;
               }
             }
           }break;
@@ -15013,7 +15013,7 @@ rd_frame(void)
             else if(!(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput))
             {
               RD_ViewState *vs = rd_view_state_from_cfg(view);
-              vs->query_is_selected = 0;
+              vs->query_is_open = 0;
               vs->query_string_size = 0;
             }
           }break;
