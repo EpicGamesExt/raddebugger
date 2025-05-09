@@ -732,6 +732,7 @@ RD_RegTable:
   // rjf: general parameters
   {U32               pid              PID           }
   {B32               force_confirm    ForceConfirm  }
+  {B32               force_focus      ForceFocus    }
   {B32               prefer_disasm    PreferDisasm  }
   {B32               no_rich_tooltip  NoRichTooltip }
   {B32               do_implicit_root DoImplicitRoot}

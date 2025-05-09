@@ -13923,7 +13923,7 @@ rd_frame(void)
             RD_Cfg *recent_file = rd_cfg_from_id(rd_regs()->cfg);
             RD_Cfg *path_root = rd_cfg_child_from_string(recent_file, str8_lit("path"));
             String8 path = path_root->first->string;
-            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
@@ -14842,6 +14842,10 @@ rd_frame(void)
                                                                .view = dst_tab->id,
                                                                .tab = dst_tab->id)
               {
+                if(rd_regs()->force_focus)
+                {
+                  rd_cmd(RD_CmdKind_FocusPanel);
+                }
                 rd_cmd(RD_CmdKind_FocusTab);
                 if(point.line != 0)
                 {

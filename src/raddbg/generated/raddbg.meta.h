@@ -41,6 +41,7 @@ RD_RegSlot_OffPx,
 RD_RegSlot_RegSlot,
 RD_RegSlot_PID,
 RD_RegSlot_ForceConfirm,
+RD_RegSlot_ForceFocus,
 RD_RegSlot_PreferDisasm,
 RD_RegSlot_NoRichTooltip,
 RD_RegSlot_DoImplicitRoot,
@@ -463,6 +464,7 @@ Vec2F32 off_px;
 RD_RegSlot reg_slot;
 U32 pid;
 B32 force_confirm;
+B32 force_focus;
 B32 prefer_disasm;
 B32 no_rich_tooltip;
 B32 do_implicit_root;
@@ -556,6 +558,7 @@ Z(getting_started)\
 .reg_slot = rd_regs()->reg_slot,\
 .pid = rd_regs()->pid,\
 .force_confirm = rd_regs()->force_confirm,\
+.force_focus = rd_regs()->force_focus,\
 .prefer_disasm = rd_regs()->prefer_disasm,\
 .no_rich_tooltip = rd_regs()->no_rich_tooltip,\
 .do_implicit_root = rd_regs()->do_implicit_root,\
@@ -572,7 +575,7 @@ extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
 extern RD_VocabInfo rd_vocab_info_table[343];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
-extern Rng1U64 rd_reg_slot_range_table[43];
+extern Rng1U64 rd_reg_slot_range_table[44];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];
