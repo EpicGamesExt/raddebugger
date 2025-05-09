@@ -12825,8 +12825,8 @@ rd_frame(void)
             RD_CfgList file_cfg_list = {0};
             if(file_is_okay)
             {
-              String8 current_version = str8_lit(BUILD_VERSION_STRING_LITERAL);
-              if(!str8_match(file_version, current_version, 0))
+              U64 file_version_code = version_from_str8(file_version);
+              if(file_version_code < Version(0, 9, 16))
               {
                 RD_CfgList (*legacy_parse_function)(Arena *arena, String8 file_path, String8 data) = rd_cfg_tree_list_from_string__pre_0_9_16;
                 file_cfg_list = legacy_parse_function(scratch.arena, file_path, file_data);

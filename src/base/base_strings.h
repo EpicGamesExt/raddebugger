@@ -294,6 +294,12 @@ internal String8Array str8_array_reserve(Arena *arena, U64 count);
 internal String8Array str8_array_copy(Arena *arena, String8Array array);
 
 ////////////////////////////////
+//~ rjf: String Version Helpers
+
+internal U64 version_from_str8(String8 string);
+internal String8 str8_from_version(Arena *arena, U64 version);
+
+////////////////////////////////
 //~ rjf: String Path Helpers
 
 internal String8 str8_chop_last_slash(String8 string);

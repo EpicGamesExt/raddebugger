@@ -1188,6 +1188,41 @@ str8_array_copy(Arena *arena, String8Array array)
 }
 
 ////////////////////////////////
+//~ rjf: String Version Helpers
+
+internal U64
+version_from_str8(String8 string)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  U64 version_major = 0;
+  U64 version_minor = 0;
+  U64 version_patch = 0;
+  String8List version_parts = str8_split(scratch.arena, string, (U8 *)".", 1, 0);
+  if(version_parts.first &&
+     version_parts.first->next &&
+     version_parts.first->next->next)
+  {
+    try_u64_from_str8_c_rules(version_parts.first->string, &version_major);
+    try_u64_from_str8_c_rules(version_parts.first->next->string, &version_minor);
+    try_u64_from_str8_c_rules(version_parts.first->next->next->string, &version_patch);
+    result = Version(version_major, version_minor, version_patch);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+str8_from_version(Arena *arena, U64 version)
+{
+  U64 version_major = MajorFromVersion(version);
+  U64 version_minor = MinorFromVersion(version);
+  U64 version_patch = PatchFromVersion(version);
+  String8 result = push_str8f(arena, "%I64d.%I64d.%I64d", version_major, version_minor, version_patch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: String Path Helpers
 
 internal String8

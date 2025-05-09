@@ -66,6 +66,14 @@
 #endif
 
 ////////////////////////////////
+//~ rjf: Versions
+
+#define Version(major, minor, patch) (U64)((((U64)(major) & 0xffff) << 32) | ((((U64)(minor) & 0xffff) << 16)) | ((((U64)(patch) & 0xffff) << 0)))
+#define MajorFromVersion(version) (((version) & 0xffff00000000ull) >> 32)
+#define MinorFromVersion(version) (((version) & 0x0000ffff0000ull) >> 16)
+#define PatchFromVersion(version) (((version) & 0x00000000ffffull) >> 0)
+
+////////////////////////////////
 //~ rjf: Units
 
 #define KB(n)  (((U64)(n)) << 10)
