@@ -6903,7 +6903,8 @@ rd_window_frame(void)
       Rng2F32 rect;
       B32 is_focused;
       B32 is_anchored;
-      B32 force_inside_window;
+      B32 force_inside_window_x;
+      B32 force_inside_window_y;
       B32 only_secondary_navigation;
       B32 reset_open;
       UI_Signal signal; // NOTE(rjf): output, from build
@@ -7081,6 +7082,7 @@ rd_window_frame(void)
             t->rect          = rect;
             t->is_focused    = ws->hover_eval_focused;
             t->is_anchored   = 1;
+            t->force_inside_window_x = 1;
           }
         }
         
@@ -7244,7 +7246,8 @@ rd_window_frame(void)
           t->is_focused    = 1;
           t->is_anchored   = query_is_anchored;
           t->reset_open    = reset_open;
-          t->force_inside_window = 1;
+          t->force_inside_window_x = 1;
+          t->force_inside_window_y = 1;
         }
       }
     }
@@ -7273,14 +7276,19 @@ rd_window_frame(void)
                                     .initial = 0.f);
         
         // rjf: force rect inside window if needed
-        if(t->force_inside_window)
+        if(t->force_inside_window_x || t->force_inside_window_y)
         {
+          B32 axis_mask[] = {t->force_inside_window_x, t->force_inside_window_y};
           Rng2F32 window_rect = os_client_rect_from_window(ws->os);
-          Vec2F32 max_delta = sub_2f32(rect.p1, window_rect.p1);
-          Vec2F32 min_delta = sub_2f32(window_rect.p0, rect.p0);
-          Vec2F32 total_delta = v2f32(Max(min_delta.x, 0) - Max(max_delta.x, 0),
-                                      Max(min_delta.y, 0) - Max(max_delta.y, 0));
-          rect = shift_2f32(rect, total_delta);
+          for EachEnumVal(Axis2, axis)
+          {
+            if(!axis_mask[axis]) { continue; }
+            F32 max_delta = rect.p1.v[axis] - window_rect.p1.v[axis];
+            F32 min_delta = window_rect.p0.v[axis] - rect.p0.v[axis];
+            F32 total_delta = Max(min_delta, 0) - Max(max_delta, 0);
+            rect.p0.v[axis] += total_delta;
+            rect.p1.v[axis] += total_delta;
+          }
         }
         
         // rjf: push view regs

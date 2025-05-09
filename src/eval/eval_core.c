@@ -461,7 +461,7 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
     E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
     node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
     node->type_pattern_parts = pattern_parts;
-    node->expr = e_parse_from_string(params->tag_expr_string).expr;
+    node->expr_string = push_str8_copy(arena, params->tag_expr_string);
     if(!e_type_key_match(e_type_key_zero(), type_key))
     {
       U64 hash = e_hash_from_string(5381, node->type_string);
@@ -1054,7 +1054,8 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
       {
         if(str8_match(n->type_string, type_string, 0))
         {
-          e_expr_list_push(arena, &exprs, n->expr);
+          E_Expr *expr = e_parse_from_string(n->expr_string).expr;
+          e_expr_list_push(arena, &exprs, expr);
         }
       }
     }
@@ -1089,7 +1090,8 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
         }
         if(fits_this_type_string)
         {
-          e_expr_list_push(arena, &exprs, auto_hook_node->expr);
+          E_Expr *expr = e_parse_from_string(auto_hook_node->expr_string).expr;
+          e_expr_list_push(arena, &exprs, expr);
         }
       }
     }

@@ -669,7 +669,7 @@ struct E_AutoHookNode
   E_AutoHookNode *pattern_order_next;
   String8 type_string;
   String8List type_pattern_parts;
-  E_Expr *expr;
+  String8 expr_string;
 };
 
 typedef struct E_AutoHookSlot E_AutoHookSlot;
@@ -883,6 +883,12 @@ struct E_UsedExprMap
 };
 
 //- rjf: type key -> auto hook expression list cache
+
+typedef struct E_TypeAutoHookMatch E_TypeAutoHookMatch;
+struct E_TypeAutoHookMatch
+{
+  String8 expr;
+};
 
 typedef struct E_TypeAutoHookCacheNode E_TypeAutoHookCacheNode;
 struct E_TypeAutoHookCacheNode
