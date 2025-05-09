@@ -489,7 +489,15 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       
       case WM_SYSCHAR:
       {
-        result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        WORD vk_code = LOWORD(wParam);
+        if(vk_code == VK_SPACE)
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+        else
+        {
+          result = 0;
+        }
       }break;
       
       case WM_CHAR:
