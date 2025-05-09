@@ -10890,8 +10890,13 @@ rd_init(CmdLine *cmdln)
     }
     {
       String8 user_program_data_path = os_get_process_info()->user_program_data_path;
-      String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
+      String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg", user_program_data_path);
       os_make_directory(user_data_folder);
+      if(user_path.size == 0)
+      {
+        String8 last_user_path = push_str8f(scratch.arena, "%S/last_user", user_data_folder);
+        user_path = os_data_from_file_path(scratch.arena, last_user_path);
+      }
       if(user_path.size == 0)
       {
         user_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
@@ -12901,6 +12906,13 @@ rd_frame(void)
               {
                 rd_cmd(RD_CmdKind_ResetToDefaultBindings);
               }
+            }
+            
+            //- rjf: record last-opened user in config directory
+            if(file_is_okay && kind == RD_CmdKind_OpenUser)
+            {
+              String8 last_user_path = push_str8f(scratch.arena, "%S/raddbg/last_user", os_get_process_info()->user_program_data_path);
+              os_write_data_to_file_path(last_user_path, file_path);
             }
             
             //- rjf: record recently-opened projects in the user
