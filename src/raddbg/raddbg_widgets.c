@@ -3519,17 +3519,21 @@ rd_cell(RD_CellParams *params, String8 string)
           ui_spacer(ui_pct(1.f-toggle_t, 0));
         }
         UI_Signal switch_sig = ui_signal_from_box(switch_box);
-        if(ui_dragging(switch_sig))
+        
+        // rjf: press -> toggle, & gather this key
+        if(ui_pressed(switch_sig))
         {
-          // rjf: press -> toggle, & gather this key
-          if(ui_pressed(switch_sig))
+          if(ui_dragging(switch_sig))
           {
             ui_store_drag_struct(&switch_box->key);
-            params->toggled_out[0] ^= 1;
           }
-          
-          // rjf: dragging -> check if key is in batch of touched keys. if so, do nothing, otherwise, toggle.
-          // always store this new key if not in batch
+          params->toggled_out[0] ^= 1;
+        }
+        
+        // rjf: dragging -> check if key is in batch of touched keys. if so, do nothing, otherwise, toggle.
+        // always store this new key if not in batch
+        if(ui_dragging(switch_sig))
+        {
           String8 all_keys_data = ui_get_drag_data(sizeof(UI_Key));
           UI_Key *keys = (UI_Key *)all_keys_data.str;
           U64 keys_count = all_keys_data.size / sizeof(UI_Key);
