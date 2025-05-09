@@ -122,7 +122,10 @@ e_push_irnode(Arena *arena, RDI_EvalOp op)
 internal void
 e_irnode_push_child(E_IRNode *parent, E_IRNode *child)
 {
-  SLLQueuePush_NZ(&e_irnode_nil, parent->first, parent->last, child, next);
+  if(parent != &e_irnode_nil && child != &e_irnode_nil)
+  {
+    SLLQueuePush_NZ(&e_irnode_nil, parent->first, parent->last, child, next);
+  }
 }
 
 //- rjf: ir subtree building helpers
