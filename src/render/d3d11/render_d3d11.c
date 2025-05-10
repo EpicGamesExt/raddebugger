@@ -1119,29 +1119,14 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(texture_handle);
             
             // rjf: get texture sample map matrix, based on format
-            Vec4F32 texture_sample_channel_map[] =
-            {
-              {1, 0, 0, 0},
-              {0, 1, 0, 0},
-              {0, 0, 1, 0},
-              {0, 0, 0, 1},
-            };
-            switch(texture->format)
-            {
-              default: break;
-              case R_Tex2DFormat_R8:
-              {
-                MemoryZeroArray(texture_sample_channel_map);
-                texture_sample_channel_map[0] = v4f32(1, 1, 1, 1);
-              }break;
-            }
+            Mat4x4F32 texture_sample_channel_map = r_sample_channel_map_from_tex2dformat(texture->format);
             
             // rjf: upload uniforms
             R_D3D11_Uniforms_Rect uniforms = {0};
             {
               uniforms.viewport_size             = v2f32(resolution.x, resolution.y);
               uniforms.opacity                   = 1-group_params->transparency;
-              MemoryCopyArray(uniforms.texture_sample_channel_map, texture_sample_channel_map);
+              uniforms.texture_sample_channel_map = texture_sample_channel_map;
               uniforms.texture_t2d_size          = v2f32(texture->size.x, texture->size.y);
               uniforms.xform[0] = v4f32(group_params->xform.v[0][0], group_params->xform.v[1][0], group_params->xform.v[2][0], 0);
               uniforms.xform[1] = v4f32(group_params->xform.v[0][1], group_params->xform.v[1][1], group_params->xform.v[2][1], 0);

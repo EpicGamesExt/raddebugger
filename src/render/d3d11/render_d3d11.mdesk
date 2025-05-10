@@ -277,8 +277,7 @@ vs_main(CPU2Vertex c2v)
     corner_radii_px.w,
     corner_radii_px.z,
   };
-  float2 cornercoords__pct = float2(
-                                    (c2v.vertex_id >> 1) ? 1.f : 0.f,
+  float2 cornercoords__pct = float2((c2v.vertex_id >> 1) ? 1.f : 0.f,
                                     (c2v.vertex_id & 1)  ? 0.f : 1.f);
   
   float2 vertex_position__pct = vertex_positions__scrn[c2v.vertex_id] / viewport_size;

@@ -386,6 +386,21 @@ derotate_4x4f32(Mat4x4F32 mat)
   return mat;
 }
 
+internal Mat4x4F32
+transpose_4x4f32(Mat4x4F32 mat)
+{
+  Mat4x4F32 result =
+  {
+    {
+      mat.v[0][0], mat.v[1][0], mat.v[2][0], mat.v[3][0],
+      mat.v[0][1], mat.v[1][1], mat.v[2][1], mat.v[3][1],
+      mat.v[0][2], mat.v[1][2], mat.v[2][2], mat.v[3][2],
+      mat.v[0][3], mat.v[1][3], mat.v[2][3], mat.v[3][3],
+    }
+  };
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Range Ops
 
