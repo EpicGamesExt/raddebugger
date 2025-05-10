@@ -574,7 +574,7 @@ dr_truncated_fancy_run_list(Vec2F32 p, DR_FRunList *list, F32 max_x, FNT_Run tra
       if(!r_handle_match(texture, r_handle_zero()))
       {
         dr_img(dst, src, texture, fr->color, 0, 0, 0);
-        //dr_rect(dst, v4f32(0, 1, 0, 0.5f), 0, 1.f, 0.f);
+        // dr_rect(dst, v4f32(0, 1, 0, 0.5f), 0, 1.f, 0.f);
       }
       advance += piece->advance;
       pixel_range.min = Min(pre_advance, pixel_range.min);

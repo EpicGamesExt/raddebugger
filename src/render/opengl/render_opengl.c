@@ -468,7 +468,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
       {
         R_PassParams_Blur *params = pass->params_blur;
         GLuint shader = r_ogl_state->shaders[R_OGL_ShaderKind_Blur];
-        glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
+        // TODO(rjf): glBindVertexArrayScope(r_ogl_state->all_purpose_vao) glUseProgramScope(shader)
         {
           // TODO(rjf)
         }
