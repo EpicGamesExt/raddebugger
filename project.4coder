@@ -55,12 +55,12 @@ commands =
   // .f1 = { .win = "raddbg_stable --ipc kill_all && build no_meta tester", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: [ryan_scratch]
-  .f1 = { .win = "raddbg_stable --ipc kill_all && wsl ./build.sh ryan_scratch", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f1 = { .win = "raddbg_stable --ipc kill_all && wsl ./build.sh raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: running target
   // .f3 = { .win = "raddbg_stable --ipc run", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   // .f3 = { .win = "C:/devel/raddebugger/build/raddbg.exe --capture --user:C:/devel/raddebugger/build/local_dev.raddbg_user --project:C:/devel/raddebugger/build/local_dev.raddbg_project", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
-  .f3 = { .win = "wsl_launch /mnt/c/devel/raddebugger/build/ryan_scratch", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f3 = { .win = "wsl_launch /mnt/c/devel/raddebugger/build/raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: local target builds
   .build_raddbg                = { .win = "build raddbg",                .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },

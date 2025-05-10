@@ -3928,7 +3928,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + sec_array_off, vaddr_range.min + sec_array_off + sec_count*sizeof(COFF_SectionHeader)), sec);
         for EachIndex(idx, sec_count)
         {
-          String8 section_name = str8_cstring(sec[idx].name);
+          String8 section_name = str8_cstring((char *)sec[idx].name);
           if(str8_match(section_name, str8_lit(".raddbg"), 0))
           {
             raddbg_section_voff_range.min = sec[idx].voff;

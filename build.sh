@@ -63,7 +63,7 @@ fi
 
 # --- Build Everything (@build_targets) ---------------------------------------
 cd build
-if [ -v raddbg ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $link_os_gfx $out raddbg; fi
+if [ -v raddbg ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $link_os_gfx $link_render $out raddbg; fi
 if [ -v radlink ];               then didbuild=1 && $compile ../src/linker/lnk.c                                            $compile_link $out radlink; fi
 if [ -v rdi_from_pdb ];          then didbuild=1 && $compile ../src/rdi_from_pdb/rdi_from_pdb_main.c                        $compile_link $out rdi_from_pdb; fi
 if [ -v rdi_from_dwarf ];        then didbuild=1 && $compile ../src/rdi_from_dwarf/rdi_from_dwarf.c                         $compile_link $out rdi_from_dwarf; fi

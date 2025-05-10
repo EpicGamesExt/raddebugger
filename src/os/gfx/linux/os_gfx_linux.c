@@ -277,7 +277,7 @@ os_client_rect_from_window(OS_Handle handle)
   OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
   XWindowAttributes atts = {0};
   Status s = XGetWindowAttributes(os_lnx_gfx_state->display, w->window, &atts);
-  Rng2F32 result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
+  Rng2F32 result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
   return result;
 }
 

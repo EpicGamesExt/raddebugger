@@ -14,11 +14,17 @@
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "render/render_inc.h"
+#include "font_provider/font_provider_inc.h"
+#include "font_cache/font_cache.h"
+#include "draw/draw.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "render/render_inc.c"
+#include "font_provider/font_provider_inc.c"
+#include "font_cache/font_cache.c"
+#include "draw/draw.c"
 
 ////////////////////////////////
 //~ rjf: Globals

@@ -2243,13 +2243,13 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
       // new value string as textual data
       if(!got_commit_data &&
          ((type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array) &&
-          direct_type_kind == E_TypeKind_Char8 ||
-          direct_type_kind == E_TypeKind_Char16 ||
-          direct_type_kind == E_TypeKind_Char32 ||
-          direct_type_kind == E_TypeKind_UChar8 ||
-          direct_type_kind == E_TypeKind_UChar16 ||
-          direct_type_kind == E_TypeKind_UChar32 ||
-          e_type_kind_is_integer(direct_type_kind)))
+          (direct_type_kind == E_TypeKind_Char8 ||
+           direct_type_kind == E_TypeKind_Char16 ||
+           direct_type_kind == E_TypeKind_Char32 ||
+           direct_type_kind == E_TypeKind_UChar8 ||
+           direct_type_kind == E_TypeKind_UChar16 ||
+           direct_type_kind == E_TypeKind_UChar32 ||
+           e_type_kind_is_integer(direct_type_kind))))
       {
         got_commit_data = 1;
         B32 is_quoted = 0;
