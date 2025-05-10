@@ -73,9 +73,10 @@ frame(void)
     group.batches = r_batch_list_make(sizeof(R_Rect2DInst));
     group.params.xform = mat_3x3f32(1.f);
     group.params.clip = os_client_rect_from_window(window_os);
+    Vec2F32 mouse = os_mouse_from_window(window_os);
     R_Rect2DInst *inst = r_batch_list_push_inst(scratch.arena, &group.batches, 256);
     MemoryZeroStruct(inst);
-    inst->dst = r2f32p(30, 30, 100 ,100);
+    inst->dst = r2f32p(mouse.x+30, mouse.y+30, mouse.x+100, mouse.y+100);
     inst->src = r2f32p(0, 0, 1, 1);
     inst->colors[Corner_00] = inst->colors[Corner_01] = inst->colors[Corner_10] = inst->colors[Corner_11] = v4f32(1, 0, 0, 1);
     inst->corner_radii[Corner_00] = inst->corner_radii[Corner_01] = inst->corner_radii[Corner_10] = inst->corner_radii[Corner_11] = 8.f;
