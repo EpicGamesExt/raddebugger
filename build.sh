@@ -15,7 +15,7 @@ if [ -v gcc ];       then compiler="${CC:-gcc}"; echo "[gcc compile]"; fi
 auto_compile_flags=''
 
 # --- Get Current Git Commit Id -----------------------------------------------
-git_hash=$(git rev-parse HEAD)
+git_hash=$(git describe --always --dirty)
 git_hash_full=$(git rev-parse HEAD)
 
 # --- Compile/Link Line Definitions -------------------------------------------
