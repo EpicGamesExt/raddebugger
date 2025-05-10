@@ -9,6 +9,8 @@
 
 #if OS_WINDOWS
 # include "render/opengl/win32/render_opengl_win32.h"
+#elif OS_LINUX
+# include "render/opengl/linux/render_opengl_linux.h"
 #else
 # error OS portion of OpenGL rendering backend not defined.
 #endif

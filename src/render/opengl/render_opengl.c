@@ -6,6 +6,8 @@
 
 #if OS_WINDOWS
 # include "render/opengl/win32/render_opengl_win32.c"
+#elif OS_LINUX
+# include "render/opengl/linux/render_opengl_linux.c"
 #else
 # error OS portion of OpenGL rendering backend not defined.
 #endif
@@ -67,6 +69,7 @@ internal void
 r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
   raddbg_log("[OpenGL] %.*s\n", (int)length, message);
+  fprintf(stderr, "[OpenGL] %.*s\n", (int)length, message);
 }
 
 ////////////////////////////////
@@ -103,7 +106,7 @@ r_init(CmdLine *cmdln)
     {
       stages[idx].out = glCreateShader(stages[idx].type);
       GLint src_size = stages[idx].src->size;
-      glShaderSource(stages[idx].out, 1, &stages[idx].src->str, &src_size);
+      glShaderSource(stages[idx].out, 1, (char **)&stages[idx].src->str, &src_size);
       glCompileShader(stages[idx].out);
       GLint info_log_length = 0;
       GLint status = 0;
@@ -113,7 +116,7 @@ r_init(CmdLine *cmdln)
       {
         stages[idx].errors.str = push_array(r_ogl_state->arena, U8, info_log_length+1);
         stages[idx].errors.size = info_log_length;
-        glGetShaderInfoLog(stages[idx].out, info_log_length, 0, stages[idx].errors.str);
+        glGetShaderInfoLog(stages[idx].out, info_log_length, 0, (char *)stages[idx].errors.str);
       }
       raddbg_pin(text(stages[idx].errors.str));
     }
@@ -129,14 +132,14 @@ r_init(CmdLine *cmdln)
     R_OGL_AttributeArray inputs = r_ogl_shader_kind_input_attributes_table[k];
     for EachIndex(idx, inputs.count)
     {
-      glBindAttribLocation(program, inputs.v[idx].index, inputs.v[idx].name.str);
+      glBindAttribLocation(program, inputs.v[idx].index, (char *)inputs.v[idx].name.str);
     }
     
     // rjf: bind outputs
     R_OGL_AttributeArray outputs = r_ogl_shader_kind_output_attributes_table[k];
     for EachIndex(idx, outputs.count)
     {
-      glBindFragDataLocation(program, outputs.v[idx].index, outputs.v[idx].name.str);
+      glBindFragDataLocation(program, outputs.v[idx].index, (char *)outputs.v[idx].name.str);
     }
     
     // rjf: link / validate / store
@@ -158,8 +161,15 @@ r_init(CmdLine *cmdln)
   glEnable(GL_FRAMEBUFFER_SRGB);
   
   //- rjf: set up debug callback
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(r_ogl_debug_message_callback, 0);
+  B32 debug_mode = cmd_line_has_flag(cmdln, str8_lit("opengl_debug"));
+#if BUILD_DEBUG
+  debug_mode = 1;
+#endif
+  if(debug_mode)
+  {
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(r_ogl_debug_message_callback, 0);
+  }
 }
 
 //- rjf: window setup/teardown

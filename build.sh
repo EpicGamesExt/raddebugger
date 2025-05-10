@@ -33,6 +33,7 @@ gcc_out="-o"
 # --- Per-Build Settings ------------------------------------------------------
 link_dll="-fPIC"
 link_os_gfx="-lX11 -lXext"
+link_render="-lGL"
 
 # --- Choose Compile/Link Lines -----------------------------------------------
 if [ -v gcc ];     then compile_debug="$gcc_debug"; fi
@@ -68,7 +69,7 @@ if [ -v rdi_from_pdb ];          then didbuild=1 && $compile ../src/rdi_from_pdb
 if [ -v rdi_from_dwarf ];        then didbuild=1 && $compile ../src/rdi_from_dwarf/rdi_from_dwarf.c                         $compile_link $out rdi_from_dwarf; fi
 if [ -v rdi_dump ];              then didbuild=1 && $compile ../src/rdi_dump/rdi_dump_main.c                                $compile_link $out rdi_dump; fi
 if [ -v rdi_breakpad_from_pdb ]; then didbuild=1 && $compile ../src/rdi_breakpad_from_pdb/rdi_breakpad_from_pdb_main.c      $compile_link $out rdi_breakpad_from_pdb; fi
-if [ -v ryan_scratch ];          then didbuild=1 && $compile ../src/scratch/ryan_scratch.c                                  $compile_link $link_os_gfx $out ryan_scratch; fi
+if [ -v ryan_scratch ];          then didbuild=1 && $compile ../src/scratch/ryan_scratch.c                                  $compile_link $link_os_gfx $link_render $out ryan_scratch; fi
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
