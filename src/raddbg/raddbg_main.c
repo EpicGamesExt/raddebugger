@@ -528,8 +528,11 @@ entry_point(CmdLine *cmd_line)
         ipc_s2m_ring_mutex = os_mutex_alloc();
         ipc_s2m_ring_cv = os_condition_variable_alloc();
         IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
-        MemoryZeroStruct(ipc_info);
-        os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
+        if(ipc_shared_memory_base != 0)
+        {
+          MemoryZeroStruct(ipc_info);
+          os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
+        }
         scratch_end(scratch);
       }
       

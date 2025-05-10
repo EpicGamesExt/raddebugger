@@ -1071,7 +1071,7 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
   OS_Handle result = {0};
   if (name.size > 0) {
     // TODO: we need to allocate shared memory to store sem_t
-    NotImplemented;
+    // NotImplemented;
   } else {
     sem_t *s = mmap(0, sizeof(*s), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     AssertAlways(s != MAP_FAILED);

@@ -12900,6 +12900,10 @@ rd_frame(void)
                 Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
                 F32 monitor_dpi      = os_dpi_from_monitor(monitor);
                 Vec2F32 window_dim   = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
+                if(window_dim.x == 0 || window_dim.y == 0)
+                {
+                  window_dim = v2f32(1280, 720);
+                }
                 RD_Cfg *new_window = rd_cfg_new(file_root, str8_lit("window"));
                 RD_Cfg *size = rd_cfg_new(new_window, str8_lit("size"));
                 rd_cfg_newf(size, "%f", window_dim.x);
