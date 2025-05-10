@@ -33,7 +33,7 @@ gcc_out="-o"
 # --- Per-Build Settings ------------------------------------------------------
 link_dll="-fPIC"
 link_os_gfx="-lX11 -lXext"
-link_render="-lGL"
+link_render="-lGL -lEGL"
 
 # --- Choose Compile/Link Lines -----------------------------------------------
 if [ -v gcc ];     then compile_debug="$gcc_debug"; fi

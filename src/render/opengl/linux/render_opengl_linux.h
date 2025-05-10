@@ -4,22 +4,28 @@
 #ifndef RENDER_OPENGL_LINUX_H
 #define RENDER_OPENGL_LINUX_H
 
-#define glTexImage3D glTexImage3D__static
-#define glTexSubImage3D glTexSubImage3D__static
-#define glActiveTexture glActiveTexture__static
-#include <GL/gl.h>
-#include <GL/glx.h>
-#undef glTexImage3D
-#undef glTexSubImage3D
-#undef glActiveTexture
+////////////////////////////////
+//~ rjf: Backend Constants
 
-#define GLX_CONTEXT_MAJOR_VERSION_ARB          0x2091
-#define GLX_CONTEXT_MINOR_VERSION_ARB          0x2092
-#define GLX_CONTEXT_FLAGS_ARB                  0x2094
-#define GLX_CONTEXT_DEBUG_BIT_ARB              0x00000001
-#define GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB 0x00000002
-typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
+#define R_OPENGL_LINUX_BACKEND_GLX 0
+#define R_OPENGL_LINUX_BACKEND_EGL 1
 
-global GLXContext r_ogl_lnx_ctx = 0;
+////////////////////////////////
+//~ rjf: Decide On Backend
+
+#if !defined(R_OPENGL_LINUX_BACKEND)
+# define R_OPENGL_LINUX_BACKEND R_OPENGL_LINUX_BACKEND_GLX
+#endif
+
+////////////////////////////////
+//~ rjf: Backend Includes
+
+#if R_OPENGL_LINUX_BACKEND == R_OPENGL_LINUX_BACKEND_GLX
+# include "glx/render_opengl_linux_glx.h"
+#elif R_OPENGL_LINUX_BACKEND == R_OPENGL_LINUX_BACKEND_EGL
+# include "egl/render_opengl_linux_egl.h"
+#else
+# error Linux OpenGL backend not specified.
+#endif
 
 #endif // RENDER_OPENGL_LINUX_H

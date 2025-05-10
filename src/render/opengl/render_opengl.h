@@ -5,41 +5,6 @@
 #define RENDER_OPENGL_H
 
 ////////////////////////////////
-//~ rjf: OS Backend Includes
-
-#if OS_WINDOWS
-# include "render/opengl/win32/render_opengl_win32.h"
-#elif OS_LINUX
-# include "render/opengl/linux/render_opengl_linux.h"
-#else
-# error OS portion of OpenGL rendering backend not defined.
-#endif
-
-////////////////////////////////
-//~ rjf: Shader Metadata Types
-
-typedef struct R_OGL_Attribute R_OGL_Attribute;
-struct R_OGL_Attribute
-{
-  U64 index;
-  String8 name;
-  GLenum type;
-  U64 count;
-};
-
-typedef struct R_OGL_AttributeArray R_OGL_AttributeArray;
-struct R_OGL_AttributeArray
-{
-  R_OGL_Attribute *v;
-  U64 count;
-};
-
-////////////////////////////////
-//~ rjf: Generated Code
-
-#include "render/opengl/generated/render_opengl.meta.h"
-
-////////////////////////////////
 //~ rjf: Defines
 
 typedef char GLchar;
@@ -106,6 +71,41 @@ typedef ptrdiff_t GLintptr;
 #define GL_TEXTURE31                      0x84DF
 
 #define GL_DEBUG_OUTPUT                   0x92E0
+
+////////////////////////////////
+//~ rjf: OS Backend Includes
+
+#if OS_WINDOWS
+# include "render/opengl/win32/render_opengl_win32.h"
+#elif OS_LINUX
+# include "render/opengl/linux/render_opengl_linux.h"
+#else
+# error OS portion of OpenGL rendering backend not defined.
+#endif
+
+////////////////////////////////
+//~ rjf: Shader Metadata Types
+
+typedef struct R_OGL_Attribute R_OGL_Attribute;
+struct R_OGL_Attribute
+{
+  U64 index;
+  String8 name;
+  GLenum type;
+  U64 count;
+};
+
+typedef struct R_OGL_AttributeArray R_OGL_AttributeArray;
+struct R_OGL_AttributeArray
+{
+  R_OGL_Attribute *v;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "render/opengl/generated/render_opengl.meta.h"
 
 ////////////////////////////////
 //~ rjf: OpenGL Procedure List
