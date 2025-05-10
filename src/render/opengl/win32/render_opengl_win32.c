@@ -78,7 +78,7 @@ r_ogl_os_init(CmdLine *cmdline)
   HGLRC real_ctx = 0;
   if(pf)
   {
-    B32 debug_mode = cmd_line_has_flag(cmdln, str8_lit("opengl_debug"));
+    B32 debug_mode = cmd_line_has_flag(cmdline, str8_lit("opengl_debug"));
 #if BUILD_DEBUG
     debug_mode = 1;
 #endif

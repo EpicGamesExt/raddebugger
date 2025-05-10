@@ -79,7 +79,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_ctx = glXCreateContextAttribsARB(os_lnx_gfx_state->display, framebuffer_config, 0, 1, context_options);
   }
   
-  glXMakeCurrent(os_lnx_gfx_state->display, None, r_ogl_lnx_ctx);
+  glXMakeCurrent(os_lnx_gfx_state->display, RootWindow(os_lnx_gfx_state->display, visual_info->screen), r_ogl_lnx_ctx);
 }
 
 internal R_Handle
