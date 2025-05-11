@@ -287,7 +287,7 @@ fp_init(void)
                                                            enhanced_contrast,
                                                            0.f,
                                                            DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                           DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL_SYMMETRIC,
+                                                           DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
                                                            DWRITE_GRID_FIT_MODE_DISABLED,
                                                            (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params_smooth_unhinted);
     }
