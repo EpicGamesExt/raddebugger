@@ -367,8 +367,10 @@ os_get_events(Arena *arena, B32 wait)
         if(evt.xkey.state & ControlMask) { modifiers |= OS_Modifier_Ctrl; }
         if(evt.xkey.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
         
-        // rjf: map keycode -> keysym
-        U32 keysym = XLookupKeysym(&evt.xkey, 0);
+        // rjf: map keycode -> keysym & codepoint
+        KeySym keysym = 0;
+        U8 text[256] = {0};
+        U64 text_size = XLookupString(&evt.xkey, (char *)text, sizeof(text), &keysym, 0);
         
         // rjf: map keysym -> OS_Key
         OS_Key key = OS_Key_Null;
@@ -381,6 +383,19 @@ os_get_events(Arena *arena, B32 wait)
             else if('0' <= keysym && keysym <= '9')      { key = OS_Key_0 + (keysym-'0'); }
           }break;
           case XK_Escape:{key = OS_Key_Esc;};break;
+          case XK_BackSpace:{key = OS_Key_Backspace;}break;
+          case XK_Delete:{key = OS_Key_Delete;}break;
+          case XK_Return:{key = OS_Key_Return;}break;
+          case XK_Pause:{key = OS_Key_Pause;}break;
+          case XK_Tab:{key = OS_Key_Tab;}break;
+          case XK_Left:{key = OS_Key_Left;}break;
+          case XK_Right:{key = OS_Key_Right;}break;
+          case XK_Up:{key = OS_Key_Up;}break;
+          case XK_Down:{key = OS_Key_Down;}break;
+          case XK_Home:{key = OS_Key_Home;}break;
+          case XK_End:{key = OS_Key_End;}break;
+          case XK_Page_Up:{key = OS_Key_PageUp;}break;
+          case XK_Page_Down:{key = OS_Key_PageDown;}break;
           case '-':{key = OS_Key_Minus;}break;
           case '=':{key = OS_Key_Equal;}break;
           case '[':{key = OS_Key_LeftBracket;}break;
@@ -421,12 +436,34 @@ os_get_events(Arena *arena, B32 wait)
           case ' ':{key = OS_Key_Space;}break;
         }
         
-        // rjf: push event
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
-        OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == KeyPress ? OS_EventKind_Press : OS_EventKind_Release);
-        e->window.u64[0] = (U64)window;
-        e->modifiers = modifiers;
-        e->key = key;
+        // rjf: push text event
+        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
+        if(evt.type == KeyPress && text_size != 0)
+        {
+          for(U64 off = 0; off < text_size;)
+          {
+            UnicodeDecode decode = utf8_decode(text+off, text_size-off);
+            if(decode.codepoint != 0 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
+            {
+              OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_Text);
+              e->window.u64[0] = (U64)window;
+              e->character = decode.codepoint;
+            }
+            if(decode.inc == 0)
+            {
+              break;
+            }
+            off += decode.inc;
+          }
+        }
+        
+        // rjf: push key event
+        {
+          OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == KeyPress ? OS_EventKind_Press : OS_EventKind_Release);
+          e->window.u64[0] = (U64)window;
+          e->modifiers = modifiers;
+          e->key = key;
+        }
       }break;
       
       //- rjf: mouse button presses/releases
@@ -450,7 +487,7 @@ os_get_events(Arena *arena, B32 wait)
         }
         
         // rjf: push event
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xclient.window);
+        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xbutton.window);
         OS_Event *e = os_event_list_push_new(arena, &evts, evt.type == ButtonPress ? OS_EventKind_Press : OS_EventKind_Release);
         e->window.u64[0] = (U64)window;
         e->modifiers = modifiers;
@@ -470,9 +507,13 @@ os_get_events(Arena *arena, B32 wait)
       
       //- rjf: window focus/unfocus
       case FocusIn:
+      {
+      }break;
       case FocusOut:
       {
-        
+        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xfocus.window);
+        OS_Event *e = os_event_list_push_new(arena, &evts, OS_EventKind_WindowLoseFocus);
+        e->window.u64[0] = (U64)window;
       }break;
       
       //- rjf: client messages
