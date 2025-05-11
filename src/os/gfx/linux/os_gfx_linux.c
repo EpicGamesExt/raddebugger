@@ -391,6 +391,7 @@ os_get_events(Arena *arena, B32 wait)
           case ',':{key = OS_Key_Comma;}break;
           case '/':{key = OS_Key_Slash;}break;
           case '\\':{key = OS_Key_BackSlash;}break;
+          case '\t':{key = OS_Key_Tab;}break;
           case 'a':case 'A':{key = OS_Key_A;}break;
           case 'b':case 'B':{key = OS_Key_B;}break;
           case 'c':case 'C':{key = OS_Key_C;}break;
@@ -454,6 +455,7 @@ os_get_events(Arena *arena, B32 wait)
         e->window.u64[0] = (U64)window;
         e->modifiers = modifiers;
         e->key = key;
+        e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
       }break;
       
       //- rjf: mouse motion
