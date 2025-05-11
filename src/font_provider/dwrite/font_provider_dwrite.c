@@ -525,14 +525,13 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   }
   
   //- rjf: draw glyph run
-  Vec2F32 draw_p = {0, (F32)atlas_dim.y - 1};
+  Vec2F32 draw_p = {0, (F32)atlas_dim.y};
   if(font.face != 0)
   {
     F32 descent = round_f32((96.f/72.f)*size * font_metrics.descent / design_units_per_em);
     F32 line_gap = round_f32((96.f/72.f)*size * font_metrics.lineGap / design_units_per_em);
     draw_p.y -= descent;
     draw_p.y -= line_gap;
-    draw_p.y += 1;
   }
   DWRITE_GLYPH_RUN glyph_run = {0};
   if(font.face != 0)

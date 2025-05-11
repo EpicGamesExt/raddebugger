@@ -68,11 +68,11 @@ fp_metrics_from_font(FP_Handle handle)
   FP_Metrics result = {0};
   if(font.face != 0)
   {
-    result.design_units_per_em = (F32)font.face->units_per_EM;
+    result.design_units_per_em = (F32)(font.face->units_per_EM * 72.f/96.f);
     result.ascent              = (F32)font.face->ascender;
     result.descent             = (F32)font.face->descender;
     result.line_gap            = (F32)(font.face->height - font.face->ascender + font.face->descender);
-    result.capital_height      = (F32)(font.face->ascender + font.face->descender);
+    result.capital_height      = (F32)(font.face->ascender);
   }
   return result;
 }
@@ -89,7 +89,7 @@ fp_raster(Arena *arena, FP_Handle handle, F32 size, FP_RasterFlags flags, String
     
     //- rjf: unpack font
     FT_Face face = font.face;
-    FT_Set_Pixel_Sizes(face, 0, (FT_UInt)size);
+    FT_Set_Pixel_Sizes(face, 0, (FT_UInt)((96.f/72.f) * size));
     S64 ascent  = face->size->metrics.ascender >> 6;
     S64 descent = abs_s64(face->size->metrics.descender >> 6);
     S64 height  = face->size->metrics.height >> 6;

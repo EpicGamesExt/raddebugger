@@ -569,7 +569,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 {
   B32 good = 0;
   OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
-  for(;;)
+  for(;lnx_iter->dir != 0;)
   {
     // rjf: get next entry
     lnx_iter->dp = readdir(lnx_iter->dir);
