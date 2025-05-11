@@ -113,6 +113,7 @@ struct R_OGL_AttributeArray
 #define R_OGL_ProcedureXList \
 X(glGenBuffers, void, (GLsizei n, GLuint *buffers))\
 X(glBindBuffer, void, (GLenum target, GLuint buffer))\
+X(glDeleteBuffers, void, (GLsizei n, GLuint *buffers))\
 X(glGenVertexArrays, void, (GLsizei n, GLuint *arrays))\
 X(glBindVertexArray, void, (GLuint array))\
 X(glCreateProgram, GLuint, (void))\
@@ -179,6 +180,13 @@ struct R_OGL_Tex2D
   Vec2S32 size;
 };
 
+typedef struct R_OGL_FlushBuffer R_OGL_FlushBuffer;
+struct R_OGL_FlushBuffer
+{
+  R_OGL_FlushBuffer *next;
+  GLuint id;
+};
+
 typedef struct R_OGL_State R_OGL_State;
 struct R_OGL_State
 {
@@ -186,8 +194,11 @@ struct R_OGL_State
   R_OGL_Tex2D *free_tex2d;
   GLuint shaders[R_OGL_ShaderKind_COUNT];
   GLuint all_purpose_vao;
-  GLuint scratch_buffer_2mb;
+  GLuint scratch_buffer_64kb;
   GLuint white_texture;
+  Arena *buffer_flush_arena;
+  R_OGL_FlushBuffer *first_buffer_to_flush;
+  R_OGL_FlushBuffer *last_buffer_to_flush;
 };
 
 ////////////////////////////////
@@ -201,6 +212,7 @@ global R_OGL_State *r_ogl_state = 0;
 internal R_Handle r_ogl_handle_from_tex2d(R_OGL_Tex2D *t);
 internal R_OGL_Tex2D *r_ogl_tex2d_from_handle(R_Handle h);
 internal R_OGL_FormatInfo r_ogl_format_info_from_tex2dformat(R_Tex2DFormat fmt);
+internal GLuint r_ogl_instance_buffer_from_size(U64 size);
 internal void r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam);
 
 #define glUseProgramScope(...) DeferLoop(glUseProgram(__VA_ARGS__), glUseProgram(0))

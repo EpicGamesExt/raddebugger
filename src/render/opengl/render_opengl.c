@@ -65,6 +65,29 @@ r_ogl_format_info_from_tex2dformat(R_Tex2DFormat fmt)
   return result;
 }
 
+internal GLuint
+r_ogl_instance_buffer_from_size(U64 size)
+{
+  GLuint buffer = r_ogl_state->scratch_buffer_64kb;
+  if(size > KB(64))
+  {
+    // rjf: build buffer
+    U64 flushed_buffer_size = size;
+    flushed_buffer_size += MB(1)-1;
+    flushed_buffer_size -= flushed_buffer_size%MB(1);
+    glGenBuffers(1, &buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glBufferData(GL_ARRAY_BUFFER, flushed_buffer_size, 0, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
+    // rjf: push buffer to flush list
+    R_OGL_FlushBuffer *n = push_array(r_ogl_state->buffer_flush_arena, R_OGL_FlushBuffer, 1);
+    n->id = buffer;
+    SLLQueuePush(r_ogl_state->first_buffer_to_flush, r_ogl_state->last_buffer_to_flush, n);
+  }
+  return buffer;
+}
+
 internal void
 r_ogl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
@@ -150,15 +173,18 @@ r_init(CmdLine *cmdln)
   
   //- rjf: set up built-in resources
   glGenVertexArrays(1, &r_ogl_state->all_purpose_vao);
-  glGenBuffers(1, &r_ogl_state->scratch_buffer_2mb);
-  glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->scratch_buffer_2mb);
-  glBufferData(GL_ARRAY_BUFFER, MB(2), 0, GL_DYNAMIC_DRAW);
+  glGenBuffers(1, &r_ogl_state->scratch_buffer_64kb);
+  glBindBuffer(GL_ARRAY_BUFFER, r_ogl_state->scratch_buffer_64kb);
+  glBufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glGenTextures(1, &r_ogl_state->white_texture);
   glBindTexture(GL_TEXTURE_2D, r_ogl_state->white_texture);
   U32 white_pixel = 0xffffffff;
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &white_pixel);
   glEnable(GL_FRAMEBUFFER_SRGB);
+  
+  //- rjf: set up buffer flush state
+  r_ogl_state->buffer_flush_arena = arena_alloc();
   
   //- rjf: set up debug callback
   B32 debug_mode = cmd_line_has_flag(cmdln, str8_lit("opengl_debug"));
@@ -334,6 +360,12 @@ r_window_begin_frame(OS_Handle os, R_Handle r)
 r_hook void
 r_window_end_frame(OS_Handle os, R_Handle r)
 {
+  for(R_OGL_FlushBuffer *flush_buffer = r_ogl_state->first_buffer_to_flush; flush_buffer != 0; flush_buffer = flush_buffer->next)
+  {
+    glDeleteBuffers(1, &flush_buffer->id);
+  }
+  arena_clear(r_ogl_state->buffer_flush_arena);
+  r_ogl_state->first_buffer_to_flush = r_ogl_state->last_buffer_to_flush = 0;
   r_ogl_os_window_swap(os, r);
 }
 
@@ -382,7 +414,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             }
             
             //- rjf: get & fill buffer
-            GLuint buffer = r_ogl_state->scratch_buffer_2mb; // TODO(rjf): r_ogl_instance_buffer_from_size(batches->byte_count);
+            GLuint buffer = r_ogl_instance_buffer_from_size(batches->byte_count);
             {
               glBindBuffer(GL_ARRAY_BUFFER, buffer);
               U64 off = 0;
