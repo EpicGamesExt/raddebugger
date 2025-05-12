@@ -206,9 +206,9 @@ t_write_file_list(String8 name, String8List data)
 internal String8
 t_read_file(Arena *arena, String8 name)
 {
-  Temp scratch = scratch_begin(0,0);
+  Temp scratch = scratch_begin(&arena,1);
   String8 path = t_make_file_path(scratch.arena, name);
-  String8 data = os_data_from_file_path(scratch.arena, path);
+  String8 data = os_data_from_file_path(arena, path);
   scratch_end(scratch);
   return data;
 }
@@ -1460,8 +1460,69 @@ t_import_export(void)
     goto exit;
   }
 
+  {
+    String8             dll           = t_read_file(scratch.arena, str8_lit("export.dll"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, dll);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(dll, pe.section_table_range).str;
+    String8             string_table  = str8_substr(dll, pe.string_table_range);
+
+    PE_ParsedExportTable export_table = pe_exports_from_data(scratch.arena, pe.section_count, section_table, dll, pe.data_dir_franges[PE_DataDirectoryIndex_EXPORT], pe.data_dir_vranges[PE_DataDirectoryIndex_EXPORT]);
+
+    if (export_table.export_count != 8) {
+      goto exit;
+    }
+
+    {
+      String8 expected_symbols[] = {
+        str8_lit_comp("foo"),
+        str8_lit_comp("bar"),
+        str8_lit_comp("baz"),
+        str8_lit_comp("baf"),
+        str8_lit_comp("ord"),
+        str8_lit_comp("ord2")
+      };
+      U64 match_count = 0;
+      for (U64 i = 0; i < export_table.export_count; i += 1) {
+        for (U64 k = 0; k < ArrayCount(expected_symbols); k += 1) {
+          if (str8_match(export_table.exports[i].name, expected_symbols[k], 0)) {
+            match_count += 1;
+          }
+        }
+      }
+      if (match_count != ArrayCount(expected_symbols)) {
+        goto exit;
+      }
+    }
+
+    {
+      String8 expected_forwarders[] = {
+        str8_lit_comp("baz.qwe"),
+        str8_lit_comp("baz.#1"),
+      };
+      U64 match_count = 0;
+      for (U64 i = 0; i < export_table.export_count; i += 1) {
+        for (U64 k = 0; k < ArrayCount(expected_forwarders); k += 1) {
+          if (str8_match(export_table.exports[i].forwarder, expected_forwarders[k], 0)) {
+            match_count += 1;
+          }
+        }
+      }
+      if (match_count != ArrayCount(expected_forwarders)) {
+        goto exit;
+      }
+    }
+  }
+
   int import_link_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe export.lib import.obj entry.obj");
-  
+
+  if (import_link_exit_code != 0) {
+    goto exit;
+  }
+
+  // TODO: check import table
+
+  result = T_Result_Pass;
+
 exit:;
   scratch_end(scratch);
   return result;
