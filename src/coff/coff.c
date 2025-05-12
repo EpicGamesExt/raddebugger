@@ -371,7 +371,7 @@ coff_make_import_header_by_ordinal(Arena             *arena,
   U8 *buffer      = push_array_no_zero(arena, U8, buffer_size);
   
   // copy header
-  MemoryCopyStruct(buffer, &header);
+  MemoryCopy(buffer, &header, sizeof(header));
   
   // no function name write zero
   U8 *func_name = buffer + sizeof(header);
