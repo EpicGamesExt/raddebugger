@@ -1952,6 +1952,12 @@ fancy_viz_eval_tests(void)
   Bitmap foo = {(unsigned char *)&pixels[0], 18, 18};
   raddbg_pin(foo);
   
+  //- rjf: name collisions with debugger rules
+  Function_Few_Params_Type *raw = 0;
+  char *text = "some_important_text_here\n";
+  Bitmap bitmap = foo;
+  int x3 = 0;
+  
   //- rjf: 3D geometry
   float vertex_data[] = // pos.x, pos.y, pos.z, nor.x, nor.y, nor.z, tex.u, tex.v, col.r, col.g, col.b, ...
   {
@@ -2143,7 +2149,7 @@ fancy_viz_eval_tests(void)
   float *vtx = vertex_data;
   int vtx_size = sizeof vertex_data;
   raddbg_pin(geo3d(index_data, count = count, vtx = vtx, vtx_size = vtx_size));
-  int x3 = 0;
+  int x4 = 0;
 }
 
 ////////////////////////////////

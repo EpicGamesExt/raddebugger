@@ -849,7 +849,7 @@ e_irtree_from_bundle(E_CacheBundle *bundle)
     bundle->flags |= E_CacheBundleFlag_IRTree;
     E_IRTreeAndType parent = e_irtree_from_key(bundle->parent_key);
     E_Parse parse = e_parse_from_bundle(bundle);
-    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, 0, 0, parse.expr);
+    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, &e_default_identifier_resolution_rule, 0, 0, parse.expr);
     E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->irtree.msgs);
     e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }
@@ -1243,8 +1243,12 @@ e_range_size_from_eval(E_Eval eval)
           Temp scratch = scratch_begin(0, 0);
           U64 element_size = e_type_byte_size_from_key(e_type_key_unwrap(type_core, E_TypeUnwrapFlag_All));
           E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, eval, str8_zero());
-          result = expand_info.expr_count * element_size;
-          got_size = 1;
+          U64 new_result_maybe = expand_info.expr_count * element_size;
+          if(new_result_maybe != 0)
+          {
+            result = new_result_maybe;
+            got_size = 1;
+          }
           scratch_end(scratch);
         }
       }
@@ -1332,7 +1336,7 @@ e_debug_log_from_expr_string(Arena *arena, String8 string)
   }
   
   //- rjf: type
-  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, 0, 0, parse.expr);
+  E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, &e_default_identifier_resolution_rule, 0, 0, parse.expr);
   {
     str8_list_pushf(scratch.arena, &strings, "    type:\n");
     S32 indent = 2;

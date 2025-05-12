@@ -5,6 +5,33 @@
 #define EVAL_IR_H
 
 ////////////////////////////////
+//~ rjf: Identifier Resolution Rule Types
+
+typedef enum E_IdentifierResolutionPath
+{
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+  E_IdentifierResolutionPath_Macros,
+}
+E_IdentifierResolutionPath;
+
+typedef struct E_IdentifierResolutionRule E_IdentifierResolutionRule;
+struct E_IdentifierResolutionRule
+{
+  E_IdentifierResolutionPath *paths;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: IR State
 
 typedef struct E_IRCacheNode E_IRCacheNode;
@@ -50,6 +77,51 @@ struct E_IRState
 };
 
 ////////////////////////////////
+//~ rjf: Globals
+
+E_IdentifierResolutionPath e_default_identifier_resolution_paths[] =
+{
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+  E_IdentifierResolutionPath_Macros,
+};
+E_IdentifierResolutionRule e_default_identifier_resolution_rule =
+{
+  e_default_identifier_resolution_paths,
+  ArrayCount(e_default_identifier_resolution_paths),
+};
+
+E_IdentifierResolutionPath e_callable_identifier_resolution_paths[] =
+{
+  E_IdentifierResolutionPath_Macros,
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+};
+E_IdentifierResolutionRule e_callable_identifier_resolution_rule =
+{
+  e_callable_identifier_resolution_paths,
+  ArrayCount(e_callable_identifier_resolution_paths),
+};
+
+////////////////////////////////
 //~ rjf: IR-ization Functions
 
 //- rjf: op list functions
@@ -88,7 +160,7 @@ internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
 E_TYPE_ACCESS_FUNCTION_DEF(default);
-internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr);
+internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_IdentifierResolutionRule *identifier_resolution_rule, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr);
 
 //- rjf: irtree -> linear ops/bytecode
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
