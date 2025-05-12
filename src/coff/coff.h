@@ -602,7 +602,8 @@ internal String8 coff_read_symbol_name(String8 string_table, COFF_SymbolName *na
 internal U64 coff_apply_size_from_reloc_x64(COFF_Reloc_X64 x);
 internal U64 coff_apply_size_from_reloc_x86(COFF_Reloc_X86 x);
 
-internal COFF_RelocValue coff_pick_reloc_valuex64(COFF_Reloc_X64 type, U64 reloc_virtual_offset, U32 symbol_section_number, U32 symbol_section_offset, U32 symbol_virtual_offset, U64 symbol_address);
+internal COFF_RelocValue coff_pick_reloc_value_x64(COFF_Reloc_X64 type, U64 reloc_virtual_offset, U32 symbol_section_number, U32 symbol_section_offset, U32 symbol_virtual_offset, U64 symbol_address);
+internal COFF_RelocType coff_virt_off_reloc_from_machine(COFF_MachineType machine);
 
 ////////////////////////////////
 // Import
