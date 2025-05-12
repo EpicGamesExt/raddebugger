@@ -1008,6 +1008,7 @@ struct PE_BinInfo
   Rng1U64              string_table_range;
   Rng1U64              data_dir_range;
   Rng1U64             *data_dir_franges;
+  Rng1U64             *data_dir_vranges;
   U32                  data_dir_count;
   PE_TLSHeader64       tls_header;
 };
