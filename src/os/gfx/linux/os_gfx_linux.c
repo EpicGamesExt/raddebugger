@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Prototypes (which seem to sometimes be missing)
+
+int XLookupString(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, XComposeStatus *status_in_out);
+
+////////////////////////////////
 //~ rjf: Helpers
 
 internal OS_LNX_Window *
