@@ -170,7 +170,9 @@ coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_Sect
   sect->name            = name;
   sect->flags           = flags;
 
-  str8_list_push(obj_writer->arena, &sect->data, data);
+  if (data.size) {
+    str8_list_push(obj_writer->arena, &sect->data, data);
+  }
 
   return sect;
 }
