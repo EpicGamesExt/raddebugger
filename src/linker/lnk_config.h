@@ -238,21 +238,6 @@ typedef struct LNK_AltNameList
   String8List to_list;
 } LNK_AltNameList;
 
-typedef struct LNK_ExportParse
-{
-  String8                 name;
-  String8                 alias;
-  String8                 type;
-  struct LNK_ExportParse *next;
-} LNK_ExportParse;
-
-typedef struct LNK_ExportParseList
-{
-  U64              count;
-  LNK_ExportParse *first;
-  LNK_ExportParse *last;
-} LNK_ExportParseList;
-
 typedef struct LNK_MergeDirective
 {
   String8 src;
@@ -573,10 +558,9 @@ internal void      lnk_alt_name_list_concat_in_place(LNK_AltNameList *list, LNK_
 internal B32       lnk_parse_alt_name_directive     (Arena *arena, String8 input, LNK_AltNameList *list_out);
 internal String8 * lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameList *list_out);
 
-internal LNK_ExportParse * lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List value_list, String8 obj_path, String8 lib_path);
-
 internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data);
-internal B32                      lnk_parse_merge_directive(String8 string, LNK_MergeDirective *out);
+
+internal B32 lnk_parse_merge_directive(String8 string, LNK_MergeDirective *parse_out);
 
 ////////////////////////////////
 
