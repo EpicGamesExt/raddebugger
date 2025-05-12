@@ -495,6 +495,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   U64                  file_section_align = 0;
   Rng1U64              data_dir_range     = {0};
   Rng1U64             *data_dir_franges   = 0;
+  Rng1U64             *data_dir_vranges   = 0;
   if(valid && optional_size > 0)
   {
     // rjf: read magic number
@@ -566,6 +567,22 @@ pe_bin_info_from_data(Arena *arena, String8 data)
       }
     }
 
+    // export virtual directory ranges
+    data_dir_vranges = push_array(arena, Rng1U64, data_dir_count);
+    for(U32 dir_idx = 0; dir_idx < data_dir_count; dir_idx += 1)
+    {
+      U64              dir_offset = optional_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*dir_idx;
+      PE_DataDirectory dir        = {0};
+      if(str8_deserial_read_struct(data, dir_offset, &dir) == sizeof(dir))
+      {
+        data_dir_vranges[dir_idx] = r1u64(dir.virt_off, dir.virt_off+dir.virt_size);
+      }
+      else
+      {
+        Assert(!"unable to read data directory");
+      }
+    }
+
     // export directory range
     data_dir_range = rng_1u64(optional_range.min + reported_data_dir_offset, optional_range.min + reported_data_dir_offset + data_dir_count * sizeof(PE_DataDirectory));
   }
@@ -625,6 +642,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.string_table_range  = rng_1u64(string_table_off, data.size);
     info.data_dir_range      = data_dir_range;
     info.data_dir_franges    = data_dir_franges;
+    info.data_dir_vranges    = data_dir_vranges;
     info.data_dir_count      = data_dir_count;
     info.tls_header          = tls_header;
   }
