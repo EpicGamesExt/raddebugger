@@ -3989,7 +3989,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       FileProperties props = os_properties_from_file_path(candidate_path);
       if(props.modified != 0 && props.size != 0)
       {
-        initial_debug_info_path = push_str8_copy(arena, candidate_path);
+        initial_debug_info_path = push_str8_copy(arena, path_normalized_from_string(scratch.arena, candidate_path));
         break;
       }
     }

@@ -193,7 +193,7 @@ r_init(CmdLine *cmdln)
 #endif
   if(debug_mode)
   {
-    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(r_ogl_debug_message_callback, 0);
   }
 }

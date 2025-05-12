@@ -38,6 +38,7 @@ struct OS_W32_Window
   OS_W32_Window *next;
   OS_W32_Window *prev;
   HWND hwnd;
+  HDC hdc;
   WINDOWPLACEMENT last_window_placement;
   F32 dpi;
   B32 first_paint_done;

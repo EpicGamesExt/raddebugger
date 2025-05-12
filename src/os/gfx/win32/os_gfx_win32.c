@@ -95,6 +95,7 @@ os_w32_window_release(OS_W32_Window *window)
   {
     arena_release(window->paint_arena);
   }
+  ReleaseDC(window->hwnd, window->hdc);
   DestroyWindow(window->hwnd);
   DLLRemove(os_w32_gfx_state->first_window, os_w32_gfx_state->last_window, window);
   SLLStackPush(os_w32_gfx_state->free_window, window);
@@ -1056,6 +1057,7 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   OS_W32_Window *window = os_w32_window_alloc();
   {
     window->hwnd = hwnd;
+    window->hdc = GetDC(hwnd);
     if(w32_GetDpiForWindow_func != 0)
     {
       window->dpi = (F32)w32_GetDpiForWindow_func(hwnd);

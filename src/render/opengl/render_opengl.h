@@ -71,6 +71,7 @@ typedef ptrdiff_t GLintptr;
 #define GL_TEXTURE31                      0x84DF
 
 #define GL_DEBUG_OUTPUT                   0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS       0x8242
 
 ////////////////////////////////
 //~ rjf: OS Backend Includes

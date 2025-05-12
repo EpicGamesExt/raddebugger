@@ -642,14 +642,10 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
             String8 file_path = lines->file_name;
             String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
             {
-              for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
-              {
-                if(file_path_normalized.str[idx] == '\\')
-                {
-                  file_path_normalized.str[idx] = '/';
-                }
-              }
-              file_path_normalized = path_normalized_from_string(scratch.arena, file_path_normalized);
+              PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
+              String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
+              str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
+              file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
             }
             
             // rjf: normalized file path -> source file node

@@ -51,10 +51,6 @@ r_ogl_os_init(CmdLine *cmdln)
   GLXFBConfig framebuffer_config = framebuffer_configs[0];
   XFree(framebuffer_configs);
   
-  //- rjf: get visual info; create color map
-  XVisualInfo *visual_info = glXGetVisualFromFBConfig(os_lnx_gfx_state->display, framebuffer_config);
-  Colormap cmap = XCreateColormap(os_lnx_gfx_state->display, RootWindow(os_lnx_gfx_state->display, visual_info->screen), visual_info->visual, AllocNone);
-  
   //- rjf: construct set-window-attributes
   XSetWindowAttributes set_window_attributes = {0};
   set_window_attributes.background_pixmap = None;
@@ -79,7 +75,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_ctx = glXCreateContextAttribsARB(os_lnx_gfx_state->display, framebuffer_config, 0, 1, context_options);
   }
   
-  glXMakeCurrent(os_lnx_gfx_state->display, RootWindow(os_lnx_gfx_state->display, visual_info->screen), r_ogl_lnx_ctx);
+  glXMakeCurrent(os_lnx_gfx_state->display, 0, r_ogl_lnx_ctx);
 }
 
 internal R_Handle

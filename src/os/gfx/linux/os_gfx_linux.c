@@ -2,11 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Prototypes (which seem to sometimes be missing)
-
-int XLookupString(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, XComposeStatus *status_in_out);
-
-////////////////////////////////
 //~ rjf: Helpers
 
 internal OS_LNX_Window *
@@ -40,6 +35,9 @@ os_gfx_init(void)
   os_lnx_gfx_state->wm_delete_window_atom        = XInternAtom(os_lnx_gfx_state->display, "WM_DELETE_WINDOW", 0);
   os_lnx_gfx_state->wm_sync_request_atom         = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST", 0);
   os_lnx_gfx_state->wm_sync_request_counter_atom = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
+  
+  //- rjf: open im
+  os_lnx_gfx_state->xim = XOpenIM(os_lnx_gfx_state->display, 0, 0, 0);
   
   //- rjf: fill out gfx info
   os_lnx_gfx_state->gfx_info.double_click_time = 0.5f;
@@ -148,6 +146,13 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
     w->counter_xid = XSyncCreateCounter(os_lnx_gfx_state->display, initial_value);
   }
   XChangeProperty(os_lnx_gfx_state->display, w->window, os_lnx_gfx_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (U8 *)&w->counter_xid, 1);
+  
+  //- rjf: create xic
+  w->xic = XCreateIC(os_lnx_gfx_state->xim,
+                     XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
+                     XNClientWindow, w->window,
+                     XNFocusWindow, w->window,
+                     NULL);
   
   //- rjf: attach name
   Temp scratch = scratch_begin(0, 0);
@@ -399,9 +404,10 @@ os_get_events(Arena *arena, B32 wait)
         if(evt.xkey.state & Mod1Mask)    { modifiers |= OS_Modifier_Alt; }
         
         // rjf: map keycode -> keysym & codepoint
+        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
         KeySym keysym = 0;
         U8 text[256] = {0};
-        U64 text_size = XLookupString(&evt.xkey, (char *)text, sizeof(text), &keysym, 0);
+        U64 text_size = Xutf8LookupString(window->xic, &evt.xkey, (char *)text, sizeof(text), &keysym, 0);
         
         // rjf: map keysym -> OS_Key
         B32 is_right_sided = 0;
@@ -475,7 +481,6 @@ os_get_events(Arena *arena, B32 wait)
         }
         
         // rjf: push text event
-        OS_LNX_Window *window = os_lnx_window_from_x11window(evt.xkey.window);
         if(evt.type == KeyPress && text_size != 0)
         {
           for(U64 off = 0; off < text_size;)

@@ -468,11 +468,11 @@ entry_point(CmdLine *cmd_line)
             // rjf: unpack full executable path
             if(args.first->string.size != 0)
             {
-              String8 current_path = os_get_current_path(scratch.arena);
               String8 exe_name = args.first->string;
               PathStyle style = path_style_from_str8(exe_name);
               if(style == PathStyle_Relative)
               {
+                String8 current_path = os_get_current_path(scratch.arena);
                 exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
                 exe_name = path_normalized_from_string(scratch.arena, exe_name);
               }

@@ -52,7 +52,9 @@ r_ogl_os_init(CmdLine *cmdln)
     os_abort(1);
   }
   
-  //- rjf: set up EGL config
+  //- rjf: get all EGL configs
+  EGLConfig configs[256] = {0};
+  EGLint configs_count = 0;
   {
     EGLint options[] =
     {
@@ -69,12 +71,37 @@ r_ogl_os_init(CmdLine *cmdln)
       
       EGL_NONE,
     };
-    EGLint config_count = 0;
-    if(!eglChooseConfig(r_ogl_lnx_state->display, options, &r_ogl_lnx_state->config, 1, &config_count) || config_count != 1)
+    if(!eglChooseConfig(r_ogl_lnx_state->display, options, configs, ArrayCount(configs), &configs_count) || configs_count == 0)
     {
       os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
       os_abort(1);
     }
+  }
+  
+  //- rjf: actually choose the egl config
+  {
+    Window dummy_window = XCreateWindow(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), 0, 0, 100, 100, 0, CopyFromParent, InputOutput, CopyFromParent, 0, 0);
+    EGLint options[] =
+    {
+      EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
+      EGL_NONE,
+    };
+    for(U32 idx = 0; idx < configs_count; idx += 1)
+    {
+      EGLSurface *dummy_surface = eglCreateWindowSurface(r_ogl_lnx_state->display, configs[idx], dummy_window, options);
+      if(dummy_surface != EGL_NO_SURFACE)
+      {
+        r_ogl_lnx_state->config = configs[idx];
+        eglDestroySurface(r_ogl_lnx_state->display, dummy_surface);
+        break;
+      }
+    }
+    if(r_ogl_lnx_state->config == 0)
+    {
+      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable EGL configuration."));
+      os_abort(1);
+    }
+    XDestroyWindow(os_lnx_gfx_state->display, dummy_window);
   }
   
   //- rjf: construct context
@@ -118,8 +145,7 @@ r_ogl_os_window_equip(OS_Handle window)
   {
     EGLint options[] =
     {
-      EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_LINEAR,
-      EGL_RENDER_BUFFER, EGL_BACK_BUFFER,
+      EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
       EGL_NONE,
     };
     w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, window_os->window, options);

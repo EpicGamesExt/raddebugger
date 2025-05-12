@@ -1489,8 +1489,7 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
   String8 result = file_path;
   if(file_path.size != 0)
   {
-    String8 file_path__normalized = path_normalized_from_string(scratch.arena, file_path);
-    String8List file_path_parts = str8_split_path(scratch.arena, file_path__normalized);
+    String8List file_path_parts = str8_split_path(scratch.arena, file_path);
     RD_CfgList maps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("file_path_map"));
     String8 best_map_dst = {0};
     U64 best_map_match_length = max_U64;
@@ -1498,8 +1497,7 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
     for(RD_CfgNode *n = maps.first; n != 0; n = n->next)
     {
       String8 map_src = rd_cfg_child_from_string(n->v, str8_lit("source"))->first->string;
-      String8 map_src__normalized = path_normalized_from_string(scratch.arena, map_src);
-      String8List map_src_parts = str8_split_path(scratch.arena, map_src__normalized);
+      String8List map_src_parts = str8_split_path(scratch.arena, map_src);
       B32 matches = 1;
       U64 match_length = 0;
       String8Node *file_path_part_n = file_path_parts.first;
@@ -1523,18 +1521,13 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
     }
     if(best_map_dst.size != 0)
     {
-      String8 best_map_dst__normalized = path_normalized_from_string(scratch.arena, best_map_dst);
-      String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst__normalized);
+      String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst);
       for(String8Node *n = best_map_remaining_suffix_first; n != 0; n = n->next)
       {
         str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
       }
       StringJoin join = {.sep = str8_lit("/")};
       result = str8_list_join(arena, &best_map_dst_parts, &join);
-    }
-    else
-    {
-      result = path_normalized_from_string(arena, result);
     }
   }
   scratch_end(scratch);
@@ -9263,7 +9256,7 @@ rd_window_frame(void)
                 for(String8Node *n = evt->paths.first; n != 0; n = n->next)
                 {
                   Temp scratch = scratch_begin(0, 0);
-                  String8 path = path_normalized_from_string(scratch.arena, n->string);
+                  String8 path = n->string;
                   if(str8_match(str8_skip_last_dot(path), str8_lit("exe"), StringMatchFlag_CaseInsensitive))
                   {
                     str8_list_push(ws->drop_completion_arena, &ws->drop_completion_paths, push_str8_copy(ws->drop_completion_arena, path));
@@ -10897,14 +10890,13 @@ rd_init(CmdLine *cmdln)
     String8 user_path = cmd_line_string(cmdln, str8_lit("user"));
     String8 project_path = cmd_line_string(cmdln, str8_lit("project"));
     {
-      String8 initial_path = push_str8f(scratch.arena, "%S/", os_get_process_info()->initial_path);
       if(user_path.size != 0)
       {
-        user_path = path_absolute_dst_from_relative_dst_src(scratch.arena, user_path, initial_path);
+        user_path = path_absolute_dst_from_relative_dst_src(scratch.arena, user_path, os_get_process_info()->initial_path);
       }
       if(project_path.size != 0)
       {
-        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_path, initial_path);
+        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_path, os_get_process_info()->initial_path);
       }
     }
     {
@@ -12857,7 +12849,7 @@ rd_frame(void)
               }
               else
               {
-                file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_path, file_data);
+                file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, str8_chop_last_slash(file_path), file_data);
               }
             }
             
@@ -12956,7 +12948,7 @@ rd_frame(void)
               {
                 recent_project = rd_cfg_new(user, str8_lit("recent_project"));
                 RD_Cfg *path_root = rd_cfg_new(recent_project, str8_lit("path"));
-                rd_cfg_new(path_root, path_normalized_from_string(scratch.arena, file_path));
+                rd_cfg_new(path_root, path_absolute_dst_from_relative_dst_src(scratch.arena, file_path, str8_chop_last_slash(rd_state->user_path)));
               }
               rd_cfg_unhook(user, recent_project);
               rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
@@ -13102,7 +13094,7 @@ rd_frame(void)
             str8_list_pushf(scratch.arena, &strings, "// raddbg %s %S file\n\n", BUILD_VERSION_STRING_LITERAL, bucket_name);
             for(RD_Cfg *child = tree_root->first; child != &rd_nil_cfg; child = child->next)
             {
-              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, child));
+              str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, str8_chop_last_slash(dst_path), child));
             }
             String8 data = str8_list_join(scratch.arena, &strings, 0);
             B32 temp_write_good = os_write_data_to_file_path(temp_path, data);
@@ -13496,10 +13488,8 @@ rd_frame(void)
             //- rjf: unpack
             String8 src_path = rd_regs()->string;
             String8 dst_path = rd_regs()->file_path;
-            String8 src_path__normalized = path_normalized_from_string(scratch.arena, src_path);
-            String8 dst_path__normalized = path_normalized_from_string(scratch.arena, dst_path);
-            String8List src_path_parts = str8_split_path(scratch.arena, src_path__normalized);
-            String8List dst_path_parts = str8_split_path(scratch.arena, dst_path__normalized);
+            String8List src_path_parts = str8_split_path(scratch.arena, src_path);
+            String8List dst_path_parts = str8_split_path(scratch.arena, dst_path);
             
             //- rjf: reverse path parts
             String8List src_path_parts__reversed = {0};
@@ -13918,7 +13908,7 @@ rd_frame(void)
           //- rjf: files
           case RD_CmdKind_Open:
           {
-            String8 path = rd_regs()->file_path;
+            String8 path = path_absolute_dst_from_relative_dst_src(scratch.arena, rd_regs()->file_path, os_get_current_path(scratch.arena));
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
             {
@@ -13940,10 +13930,9 @@ rd_frame(void)
           case RD_CmdKind_SwitchToPartnerFile:
           {
             String8 file_path      = rd_regs()->file_path;
-            String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
-            String8 file_folder    = str8_chop_last_slash(file_full_path);
-            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
-            String8 file_ext       = str8_skip_last_dot(file_full_path);
+            String8 file_folder    = str8_chop_last_slash(file_path);
+            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_path));
+            String8 file_ext       = str8_skip_last_dot(file_path);
             String8 partner_ext_candidates[] =
             {
               str8_lit_comp("h"),
@@ -13972,7 +13961,7 @@ rd_frame(void)
           case RD_CmdKind_RecordFileInProject:
           if(rd_regs()->file_path.size != 0)
           {
-            String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
+            String8 path = rd_regs()->file_path;
             RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
             RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_file"));
             RD_Cfg *recent_file = &rd_nil_cfg;
@@ -14001,7 +13990,7 @@ rd_frame(void)
           case RD_CmdKind_ShowFileInExplorer:
           if(rd_regs()->file_path.size != 0)
           {
-            String8 full_path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
+            String8 full_path = rd_regs()->file_path;
             os_show_in_filesystem_ui(full_path);
           }break;
           
@@ -14976,11 +14965,7 @@ rd_frame(void)
                   {
                     current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
                   }
-                  else
-                  {
-                    current_path_string = path_normalized_from_string(scratch.arena, current_path_string);
-                  }
-                  initial_input = path_normalized_from_string(scratch.arena, current_path_string);
+                  initial_input = current_path_string;
                   initial_input = push_str8f(scratch.arena, "%S/", initial_input);
                 }
                 else if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
@@ -15383,7 +15368,7 @@ rd_frame(void)
                 String8List strings = {0};
                 for(RD_CfgNode *n = colors.first; n != 0; n = n->next)
                 {
-                  str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, dst_path, n->v));
+                  str8_list_push(scratch.arena, &strings, rd_string_from_cfg_tree(scratch.arena, str8_chop_last_slash(dst_path), n->v));
                 }
                 String8 data = str8_list_join(scratch.arena, &strings, 0);
                 if(os_write_data_to_file_path(dst_path, data))

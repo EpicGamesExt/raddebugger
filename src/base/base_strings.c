@@ -1226,40 +1226,51 @@ str8_from_version(Arena *arena, U64 version)
 //~ rjf: String Path Helpers
 
 internal String8
-str8_chop_last_slash(String8 string){
-  if (string.size > 0){
+str8_chop_last_slash(String8 string)
+{
+  if(string.size > 0)
+  {
     U8 *ptr = string.str + string.size - 1;
-    for (;ptr >= string.str; ptr -= 1){
-      if (*ptr == '/' || *ptr == '\\'){
+    for(;ptr >= string.str; ptr -= 1)
+    {
+      if(*ptr == '/' || *ptr == '\\')
+      {
         break;
       }
     }
-    if (ptr >= string.str){
+    if(ptr >= string.str)
+    {
       string.size = (U64)(ptr - string.str);
     }
-    else{
+    else
+    {
       string.size = 0;
     }
   }
-  return(string);
+  return string;
 }
 
 internal String8
-str8_skip_last_slash(String8 string){
-  if (string.size > 0){
+str8_skip_last_slash(String8 string)
+{
+  if(string.size > 0)
+  {
     U8 *ptr = string.str + string.size - 1;
-    for (;ptr >= string.str; ptr -= 1){
-      if (*ptr == '/' || *ptr == '\\'){
+    for(;ptr >= string.str; ptr -= 1)
+    {
+      if(*ptr == '/' || *ptr == '\\')
+      {
         break;
       }
     }
-    if (ptr >= string.str){
+    if(ptr >= string.str)
+    {
       ptr += 1;
       string.size = (U64)(string.str + string.size - ptr);
       string.str = ptr;
     }
   }
-  return(string);
+  return string;
 }
 
 internal String8
@@ -1267,80 +1278,94 @@ str8_chop_last_dot(String8 string)
 {
   String8 result = string;
   U64 p = string.size;
-  for (;p > 0;){
+  for(;p > 0;)
+  {
     p -= 1;
-    if (string.str[p] == '.'){
+    if(string.str[p] == '.')
+    {
       result = str8_prefix(string, p);
       break;
     }
   }
-  return(result);
+  return result;
 }
 
 internal String8
-str8_skip_last_dot(String8 string){
+str8_skip_last_dot(String8 string)
+{
   String8 result = string;
   U64 p = string.size;
-  for (;p > 0;){
+  for(;p > 0;)
+  {
     p -= 1;
-    if (string.str[p] == '.'){
+    if(string.str[p] == '.')
+    {
       result = str8_skip(string, p + 1);
       break;
     }
   }
-  return(result);
+  return result;
 }
 
 internal PathStyle
-path_style_from_str8(String8 string){
+path_style_from_str8(String8 string)
+{
   PathStyle result = PathStyle_Relative;
-  if (string.size >= 1 && string.str[0] == '/'){
+  if(string.size >= 1 && string.str[0] == '/')
+  {
     result = PathStyle_UnixAbsolute;
   }
-  else if (string.size >= 2 &&
-           char_is_alpha(string.str[0]) &&
-           string.str[1] == ':'){
-    if (string.size == 2 ||
-        char_is_slash(string.str[2])){
+  else if(string.size >= 2 &&
+          char_is_alpha(string.str[0]) &&
+          string.str[1] == ':')
+  {
+    if(string.size == 2 || char_is_slash(string.str[2]))
+    {
       result = PathStyle_WindowsAbsolute;
     }
   }
-  return(result);
+  return result;
 }
 
 internal String8List
-str8_split_path(Arena *arena, String8 string){
+str8_split_path(Arena *arena, String8 string)
+{
   String8List result = str8_split(arena, string, (U8*)"/\\", 2, 0);
-  return(result);
+  return result;
 }
 
 internal void
-str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
+str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style)
+{
   Temp scratch = scratch_begin(0, 0);
-  
   String8MetaNode *stack = 0;
   String8MetaNode *free_meta_node = 0;
   String8Node *first = path->first;
-  
   MemoryZeroStruct(path);
-  for (String8Node *node = first, *next = 0;
-       node != 0;
-       node = next){
+  for(String8Node *node = first, *next = 0;
+      node != 0;
+      node = next)
+  {
     // save next now
     next = node->next;
     
     // cases:
-    if (node == first && style == PathStyle_WindowsAbsolute){
+    if(node == first && style == PathStyle_WindowsAbsolute)
+    {
       goto save_without_stack;
     }
-    if (node->string.size == 1 && node->string.str[0] == '.'){
+    if(node->string.size == 1 && node->string.str[0] == '.')
+    {
       goto do_nothing;
     }
-    if (node->string.size == 2 && node->string.str[0] == '.' && node->string.str[1] == '.'){
-      if (stack != 0){
+    if(node->string.size == 2 && node->string.str[0] == '.' && node->string.str[1] == '.')
+    {
+      if(stack != 0)
+      {
         goto eliminate_stack_top;
       }
-      else{
+      else
+      {
         goto save_without_stack;
       }
     }
@@ -1351,24 +1376,23 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
     save_with_stack:
     {
       str8_list_push_node(path, node);
-      
       String8MetaNode *stack_node = free_meta_node;
-      if (stack_node != 0){
+      if(stack_node != 0)
+      {
         SLLStackPop(free_meta_node);
       }
-      else{
+      else
+      {
         stack_node = push_array_no_zero(scratch.arena, String8MetaNode, 1);
       }
       SLLStackPush(stack, stack_node);
       stack_node->node = node;
-      
       continue;
     }
     
     save_without_stack:
     {
       str8_list_push_node(path, node);
-      
       continue;
     }
     
@@ -1376,13 +1400,13 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
     {
       path->node_count -= 1;
       path->total_size -= stack->node->string.size;
-      
       SLLStackPop(stack);
-      
-      if (stack == 0){
+      if(stack == 0)
+      {
         path->last = path->first;
       }
-      else{
+      else
+      {
         path->last = stack->node;
       }
       continue;

@@ -2461,7 +2461,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
       U64 cursor_vaddr = (1 <= rd_regs()->cursor.line && rd_regs()->cursor.line <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[rd_regs()->cursor.line-1].code_off) : 0;
       if(dasm_module != &ctrl_entity_nil)
       {
-        ui_labelf("%S", path_normalized_from_string(scratch.arena, dasm_module->string));
+        ui_labelf("%S", dasm_module->string);
         ui_spacer(ui_em(1.5f, 1));
       }
       ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, rd_regs()->cursor.line, rd_regs()->cursor.column);

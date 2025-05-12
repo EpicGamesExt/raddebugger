@@ -98,8 +98,6 @@ r_ogl_os_init(CmdLine *cmdline)
   wglDeleteContext(bootstrap_ctx);
   wglMakeCurrent(dc, real_ctx);
   wglSwapIntervalEXT(1);
-  ReleaseDC(bootstrap_hwnd, dc);
-  DestroyWindow(bootstrap_hwnd);
 }
 
 internal R_Handle
@@ -108,7 +106,7 @@ r_ogl_os_window_equip(OS_Handle window)
   //- rjf: unpack window
   OS_W32_Window *w = os_w32_window_from_handle(window);
   HWND hwnd = w->hwnd;
-  HDC hdc = GetDC(hwnd);
+  HDC hdc = w->hdc;
   
   //- rjf: select in ctx
   wglMakeCurrent(hdc, r_ogl_w32_hglrc);
@@ -152,7 +150,6 @@ r_ogl_os_window_equip(OS_Handle window)
   SetPixelFormat(hdc, pixel_format, &pfd);
   
   //- rjf: release hdc
-  ReleaseDC(hwnd, hdc);
   R_Handle result = {0};
   return result;
 }
@@ -169,9 +166,8 @@ r_ogl_os_select_window(OS_Handle os, R_Handle r)
   if(w != 0)
   {
     HWND hwnd = w->hwnd;
-    HDC hdc = GetDC(hwnd);
+    HDC hdc = w->hdc;
     wglMakeCurrent(hdc, r_ogl_w32_hglrc);
-    ReleaseDC(hwnd, hdc);
   }
 }
 
@@ -181,8 +177,7 @@ r_ogl_os_window_swap(OS_Handle os, R_Handle r)
   OS_W32_Window *w = os_w32_window_from_handle(os);
   if(w != 0)
   {
-    HDC dc = GetDC(w->hwnd);
+    HDC dc = w->hdc;
     SwapBuffers(dc);
-    ReleaseDC(w->hwnd, dc);
   }
 }

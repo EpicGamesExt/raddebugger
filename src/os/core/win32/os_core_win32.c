@@ -712,7 +712,7 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
   }
   else
   {
-    w32_iter->handle = FindFirstFileW((WCHAR*)path16.str, &w32_iter->find_data);
+    w32_iter->handle = FindFirstFileExW((WCHAR*)path16.str, FindExInfoBasic, &w32_iter->find_data, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH);
   }
   scratch_end(scratch);
   return iter;

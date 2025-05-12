@@ -96,7 +96,7 @@ typedef enum PathStyle
 #elif OS_LINUX
   PathStyle_SystemAbsolute = PathStyle_UnixAbsolute
 #else
-# error "absolute path style is undefined for this OS"
+# error Absolute path style is undefined for this OS.
 #endif
 }
 PathStyle;
@@ -301,6 +301,20 @@ internal String8 str8_from_version(Arena *arena, U64 version);
 
 ////////////////////////////////
 //~ rjf: String Path Helpers
+
+global read_only struct
+{
+  String8   string;
+  PathStyle path_style;
+}
+g_path_style_map[] =
+{
+  { str8_lit_comp(""),         PathStyle_Null            },
+  { str8_lit_comp("relative"), PathStyle_Relative        },
+  { str8_lit_comp("windows"),  PathStyle_WindowsAbsolute },
+  { str8_lit_comp("unix"),     PathStyle_UnixAbsolute    },
+  { str8_lit_comp("system"),   PathStyle_SystemAbsolute  },
+};
 
 internal String8 str8_chop_last_slash(String8 string);
 internal String8 str8_skip_last_slash(String8 string);
