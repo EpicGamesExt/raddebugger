@@ -3,42 +3,44 @@
 
 #pragma once
 
-typedef struct LNK_Export
+typedef struct LNK_ExportParse
 {
-  struct LNK_Export  *next;
-  String8             name;
-  struct LNK_Symbol  *symbol;
-  U32                 id;
-  U16                 ordinal;
-  COFF_ImportType     type;
-  B32                 is_private;
-} LNK_Export;
+  String8         obj_path;
+  String8         lib_path;
+  String8         name;
+  String8         alias;
+  COFF_ImportType type;
+  U16             ordinal;
+  U16             hint;
+  B32             is_ordinal_assigned;
+  B32             is_noname_present;
+  B32             is_private;
+  B32             is_forwarder;
+} LNK_ExportParse;
 
-typedef struct LNK_ExportList
+typedef struct LNK_ExportParseNode
 {
-  U64         count;
-  LNK_Export *first;
-  LNK_Export *last;
-} LNK_ExportList;
+  LNK_ExportParse             data;
+  struct LNK_ExportParseNode *next;
+} LNK_ExportParseNode;
 
-typedef struct LNK_ExportArray
+typedef struct LNK_ExportParseList
 {
-  U64         count;
-  LNK_Export *v;
-} LNK_ExportArray;
+  U64                  count;
+  LNK_ExportParseNode *first;
+  LNK_ExportParseNode *last;
+} LNK_ExportParseList;
 
-typedef struct LNK_ExportTable
+typedef struct LNK_ExportParsePtrArray
 {
-  Arena         *arena;
-  HashTable     *name_export_ht;
-  HashTable     *noname_export_ht;
-  U64            voff_size;
-  U64            max_ordinal;
-  B8            *is_ordinal_used;
-} LNK_ExportTable;
+  U64               count;
+  LNK_ExportParse **v;
+} LNK_ExportParsePtrArray;
 
-internal LNK_ExportTable * lnk_export_table_alloc(void);
-internal void              lnk_export_table_release(LNK_ExportTable **exptab_ptr);
-internal LNK_Export *      lnk_export_table_search(LNK_ExportTable *exptab, String8 name);
-internal LNK_InputObjList  lnk_export_table_serialize(Arena *arena, LNK_ExportTable *exptab, String8 image_name, COFF_MachineType machine);
+////////////////////////////////
+
+internal B32 lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_path, String8 lib_path, LNK_ExportParse *export_out);
+internal B32 lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, LNK_ExportParse *parse_out);
+internal LNK_ExportParsePtrArray lnk_array_from_export_list(Arena *arena, LNK_ExportParseList list);
+internal LNK_ExportParseNode * lnk_export_parse_list_push(Arena *arena, LNK_ExportParseList *list, LNK_ExportParse data);
 

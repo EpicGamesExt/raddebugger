@@ -38,7 +38,8 @@ typedef struct LNK_SectionContribChunk
   struct LNK_SectionContribChunk *next;
   U64                             count;
   U64                             cap;
-  LNK_SectionContrib             *v;
+  LNK_SectionContrib            **v;
+  LNK_SectionContrib             *v2;
 } LNK_SectionContribChunk;
 
 typedef struct LNK_SectionContribChunkList

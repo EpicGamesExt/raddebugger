@@ -187,14 +187,14 @@ internal void             lnk_queue_lib_member_input(Arena *arena, PathStyle pat
 
 // --- Win32 Image -------------------------------------------------------------
 
-internal String8List lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, U64 objs_count, LNK_Obj **objs, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
+internal String8List lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
 internal String8List lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
 internal String8List lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sect_arr, U64 expected_image_header_size);
-internal String8     lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list);
+internal String8     lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, LNK_ObjList obj_list);
 
 // --- Import Lib --------------------------------------------------------------
 
-internal String8List lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportTable *exptab);
+internal String8List lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportParseList export_list);
 
 // --- Logger ------------------------------------------------------------------
 

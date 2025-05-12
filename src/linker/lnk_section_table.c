@@ -35,7 +35,7 @@ internal LNK_SectionContrib *
 lnk_section_contrib_chunk_push(LNK_SectionContribChunk *chunk, U64 count)
 {
   Assert(chunk->count + count <= chunk->cap);
-  LNK_SectionContrib *result = &chunk->v[chunk->count];
+  LNK_SectionContrib *result = chunk->v[chunk->count];
   chunk->count += count;
   return result;
 }
@@ -46,7 +46,9 @@ lnk_section_contrib_chunk_list_push_chunk(Arena *arena, LNK_SectionContribChunkL
   LNK_SectionContribChunk *chunk = push_array(arena, LNK_SectionContribChunk, 1);
   chunk->count = 0;
   chunk->cap   = cap;
-  chunk->v     = push_array(arena, LNK_SectionContrib, cap);
+  chunk->v     = push_array(arena, LNK_SectionContrib *, cap);
+  chunk->v2 = push_array(arena, LNK_SectionContrib, cap);
+  for (U64 i = 0; i < cap; i += 1) { chunk->v[i] = &chunk->v2[i]; }
   SLLQueuePush(list->first, list->last, chunk);
   list->chunk_count += 1;
   return chunk;
@@ -317,7 +319,7 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
   U64 cursor = 0;
   for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
     for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
-      LNK_SectionContrib *sc = &sc_chunk->v[sc_idx];
+      LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
 
       cursor = AlignPow2(cursor, sc->align);
 

@@ -801,72 +801,13 @@ lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameLis
   return 0;
 }
 
-internal void
-lnk_export_parse_list_concat_in_place(LNK_ExportParseList *list, LNK_ExportParseList *to_concat)
-{
-  SLLConcatInPlace(list, to_concat);
-}
-
-internal LNK_ExportParse *
-lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List value_list, String8 obj_path, String8 lib_path)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  LNK_ExportParse *parse = 0;
-
-  // parse directive
-  String8 name  = str8_zero();
-  String8 alias = str8_zero();
-  String8 type  = coff_string_from_import_header_type(COFF_ImportHeader_Code);
-  if (value_list.node_count > 0) {
-    String8List dir_split = str8_split_by_string_chars(scratch.arena, value_list.first->string, str8_lit("="), 0);
-    B32 is_export_valid = value_list.node_count <= 2 && value_list.node_count > 0;
-    if (is_export_valid) {
-      if (dir_split.node_count > 0) {
-        name = dir_split.last->string;
-      }
-      if (dir_split.node_count == 2) {
-        alias = dir_split.first->string;
-      }
-      if (value_list.node_count == 2) {
-        type = value_list.last->string;
-      }
-    }
-  }
-  
-  // prase error check
-  if (name.size == 0) {
-    String8 dir = str8_list_join(scratch.arena, &value_list, 0);
-    lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "invalid export directive \"%S\"", dir);
-    goto exit;
-  }
-  
-  parse        = push_array_no_zero(arena, LNK_ExportParse, 1);
-  parse->next  = 0;
-  parse->name  = name;
-  parse->alias = alias;
-  parse->type  = type;
-  
-  SLLQueuePush(list->first, list->last, parse);
-  ++list->count;
-  
-exit:;
-
-  scratch_end(scratch);
-  ProfEnd();
-  return parse;
-}
-
 internal LNK_MergeDirectiveNode *
 lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data)
 {
   LNK_MergeDirectiveNode *node = push_array_no_zero(arena, LNK_MergeDirectiveNode, 1);
-  node->data                   = data;
-  node->next                   = 0;
-  
+  node->data = data;
   SLLQueuePush(list->first, list->last, node);
-  ++list->count;
-  
+  list->count += 1;
   return node;
 }
 
@@ -1121,8 +1062,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Export: {
-    String8List value_strings_copy = str8_list_copy(arena, &value_strings);
-    lnk_parse_export_directive(arena, &config->export_symbol_list, value_strings_copy, obj_path, lib_path);
+    LNK_ExportParse export_parse = {0};
+    if (lnk_parse_export_directive_ex(arena, value_strings, obj_path, lib_path, &export_parse)) {
+      lnk_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
+    }
   } break;
 
   case LNK_CmdSwitch_FastFail: {

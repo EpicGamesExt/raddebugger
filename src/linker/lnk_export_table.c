@@ -1,303 +1,406 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-int
-lnk_export_name_compar(const void *a_, const void *b_)
+internal String8
+lnk_name_from_export_parse(LNK_ExportParse *exp)
 {
-  const LNK_Export *a = (const LNK_Export *)a_;
-  const LNK_Export *b = (const LNK_Export *)b_;
-  return str8_compar_case_sensitive(&a->name, &b->name);
+  String8 name;
+  if (exp->is_forwarder) {
+    name = exp->alias;
+  } else if (exp->alias.size) {
+    name = exp->alias;
+  } else {
+    name = exp->name;
+  }
+  return name;
 }
 
-int
-lnk_export_ordinal_compar(const void *a_, const void *b_)
-{
-  const LNK_Export *a = (const LNK_Export *)a_;
-  const LNK_Export *b = (const LNK_Export *)b_;
-  int cmp = u16_compar(&a->ordinal, &b->ordinal);
-  return cmp;
-}
-
-internal LNK_ExportTable *
-lnk_export_table_alloc(void)
+internal B32
+lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_path, String8 lib_path, LNK_ExportParse *export_out)
 {
   ProfBeginFunction();
-  Arena *arena = arena_alloc();
+  Temp scratch = scratch_begin(&arena, 1);
+  B32 is_parsed = 0;
 
-  LNK_ExportTable *exptab  = push_array(arena, LNK_ExportTable, 1);
-  exptab->arena            = arena;
-  exptab->voff_size        = sizeof(U32);
-  exptab->max_ordinal      = max_U16;
-  exptab->is_ordinal_used  = push_array(arena, B8, exptab->max_ordinal);
-  exptab->name_export_ht   = hash_table_init(arena, 0x10000);
-  exptab->noname_export_ht = hash_table_init(arena, 0x100);
+  // parse "alias=name"
+  String8     name  = {0};
+  String8     alias = {0};
+  String8List flags = {0};
+  {
+    String8List alias_name_split = str8_split_by_string_chars(scratch.arena, directive.first->string, str8_lit("="), 0);
+    if (alias_name_split.node_count == 2) {
+      alias = alias_name_split.first->string;
+      name  = alias_name_split.last->string;
+    } else if (alias_name_split.node_count == 1) {
+      name = alias_name_split.first->string;
+    } else {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
 
+    flags = directive;
+    str8_list_pop_front(&flags);
+  }
+
+  // discard alias to itself
+  if (str8_match(name, alias, 0)) {
+    alias = str8_zero();
+  }
+
+  // does directive have ordinal?
+  U16 ordinal16       = 0;
+  String8 ordinal     = {0};
+  String8 noname_flag = {0};
+  if (str8_match(str8_prefix(str8_list_first(&flags), 1), str8_lit("@"), 0)) {
+    // parse ordinal
+    ordinal = str8_skip(str8_list_pop_front(&flags)->string, 1);
+    if (str8_is_integer(ordinal, 10)) {
+      U64 ordinal64 = u64_from_str8(ordinal, 10);
+      if (ordinal64 <= max_U16) {
+        ordinal16 = (U16)ordinal64;
+      } else {
+        String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+        lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "ordinal value must fit into 16-bit integer, \"/EXPORT:%S\"", d);
+        goto exit;
+      }
+    } else {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
+
+    // detect NONAME flag
+    if (str8_match(str8_list_first(&flags), str8_lit("NONAME"), StringMatchFlag_CaseInsensitive)) {
+      noname_flag = str8_list_pop_front(&flags)->string;
+    }
+  }
+
+  // detect PRIVATE flag
+  String8 private_flag = {0};
+  if (str8_match(str8_list_first(&flags), str8_lit("PRIVATE"), StringMatchFlag_CaseInsensitive)) {
+    private_flag = str8_list_pop_front(&flags)->string;
+  }
+
+  // parse export type
+  COFF_ImportType type = COFF_ImportHeader_Code;
+  if (flags.node_count) {
+    type = coff_import_header_type_from_string(str8_list_pop_front(&flags)->string);
+    if (type == COFF_ImportType_Invalid) {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
+  }
+
+  // are there leftover nodes?
+  if (flags.node_count != 0) {
+    String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+    lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+    goto exit;
+  }
+
+  // fill out export
+  export_out->obj_path            = obj_path;
+  export_out->lib_path            = lib_path;
+  export_out->name                = push_str8_copy(arena, name);
+  export_out->alias               = push_str8_copy(arena, alias);
+  export_out->type                = type;
+  export_out->ordinal             = ordinal16;
+  export_out->is_ordinal_assigned = ordinal.size > 0;
+  export_out->is_noname_present   = noname_flag.size > 0;
+  export_out->is_private          = private_flag.size > 0;
+  export_out->is_forwarder        = str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
+
+  is_parsed = 1;
+  
+exit:;
+  scratch_end(scratch);
   ProfEnd();
-  return exptab;
+  return is_parsed;
+}
+
+internal B32
+lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, LNK_ExportParse *export_out)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List split_directive = str8_split_by_string_chars(scratch.arena, directive, str8_lit(","), 0);
+  B32 is_parsed = lnk_parse_export_directive_ex(arena, split_directive, obj_path, lib_path, export_out);
+  scratch_end(scratch);
+  return is_parsed;
+}
+
+internal LNK_ExportParsePtrArray
+lnk_array_from_export_list(Arena *arena, LNK_ExportParseList list)
+{
+  LNK_ExportParsePtrArray result = {0};
+  result.v = push_array_no_zero(arena, LNK_ExportParse *, list.count);
+  for (LNK_ExportParseNode *exp = list.first; exp != 0; exp = exp->next) {
+    result.v[result.count++] = &exp->data;
+  }
+  return result;
 }
 
 internal void
-lnk_export_table_release(LNK_ExportTable **exptab_ptr)
+lnk_export_parse_list_push_node(LNK_ExportParseList *list, LNK_ExportParseNode *node)
 {
-  ProfBeginFunction();
-  arena_release((*exptab_ptr)->arena);
-  *exptab_ptr = NULL;
-  ProfEnd();
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
 }
 
-internal LNK_Export *
-lnk_export_table_search(LNK_ExportTable *exptab, String8 name)
+internal LNK_ExportParseNode *
+lnk_export_parse_list_push(Arena *arena, LNK_ExportParseList *list, LNK_ExportParse data)
 {
-  KeyValuePair *kv = hash_table_search_string(exptab->name_export_ht, name);
-  if (kv) {
-    return kv->value_raw;
-  }
-  return 0;
+  LNK_ExportParseNode *node = push_array(arena, LNK_ExportParseNode, 1);
+  node->data = data;
+  lnk_export_parse_list_push_node(list, node);
+  return node;
 }
 
-internal LNK_Export *
-lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, LNK_ExportParse *exp_parse)
+internal void
+lnk_export_parse_list_concat_in_place(LNK_ExportParseList *list, LNK_ExportParseList *to_concat)
 {
-  LNK_Export *exp = 0;
-  
-  // get export symbol
-  LNK_Symbol *symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, exp_parse->name);
-  if (symbol == 0) {
-    lnk_error(LNK_Warning_IllExport, "symbol \"%S\" for export doesn't exist", exp_parse->name);
-    goto exit;
-  }
-  if (symbol->type != LNK_Symbol_Defined) {
-    lnk_error(LNK_Warning_IllExport, "unable to resolve symbol \"%S\" for export", exp_parse->name);
-    goto exit;
-  }
-
-  // NOTE: It is possible to export a global variable as CODE
-  // with following snippet:
-  //    int global_bar = 0;
-  //    #pragma comment(linker, "/export:global_bar")
-  // for some reason MSVC and LLD don't check symbol type and default
-  // to CODE instead of DATA. But if you try export global variable with:
-  //    #pragma comment(linker, "/export:global_bar,CODE")
-  // MSVC and LLD issue an error. For compatibility sake we do the same thing too.
-  COFF_ImportType type = coff_import_header_type_from_string(exp_parse->type);
-  switch (type) {
-  case COFF_ImportHeader_Code: {
-    COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-    B32 is_export_data = !COFF_SymbolType_IsFunc(defn.type);
-    if (is_export_data) {
-      lnk_error(LNK_Error_IllExport, "export \"%S\" is DATA but has specifier CODE", exp_parse->name);
-    }
-  } break;
-  case COFF_ImportHeader_Data: {
-    COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-    B32 is_export_code = COFF_SymbolType_IsFunc(defn.type);
-    if (is_export_code) {
-      lnk_error(LNK_Error_IllExport, "export \"%S\" is CODE but has specifier DATA", exp_parse->name);
-    }
-  } break;
-  case COFF_ImportHeader_Const: {
-    lnk_not_implemented("TODO: COFF_ImportHeader_Const");
-  } break;
-  default: {
-    if (exp_parse->type.size) {
-      lnk_error(LNK_Error_IllExport, "invalid type \"%S\" for export \"%S\"", exp_parse->type, exp_parse->name);
-    }
-  } break;
-  }
-
-  // error check multiple def
-  exp = lnk_export_table_search(exptab, exp_parse->alias);
-  if (exp) {
-    if (exp->type != type) {
-      lnk_error(LNK_Warning_IllExport, "trying to rexport symbol \"%S\"", exp_parse->alias);
-    }
-    goto exit;
-  }
-  exp = lnk_export_table_search(exptab, exp_parse->name);
-  if (exp) {
-    if (exp->type != type) {
-      lnk_error(LNK_Warning_IllExport, "multiple export definition for \"%S\"", exp_parse->name);
-    }
-    goto exit;
-  }
-  
-  
-  // find free ordinal
-  U16 ordinal;
-  for (ordinal = 0; ordinal < exptab->max_ordinal; ++ordinal) {
-    if (!exptab->is_ordinal_used[ordinal]) {
-      exptab->is_ordinal_used[ordinal] = 1;
-      break;
-    }
-  }
-  
-  // ordinal alloc error check
-  if (ordinal >= exptab->max_ordinal) {
-    lnk_error(LNK_Error_OutOfExportOrdinals, "reached export limit of %u, discarding export %S", exptab->max_ordinal, exp_parse->name);
-    goto exit;
-  }
-
-  
-  // fill out export
-  exp             = push_array_no_zero(exptab->arena, LNK_Export, 1);
-  exp->next       = 0;
-  exp->name       = push_str8_copy(exptab->arena, exp_parse->alias.size > 0 ? exp_parse->alias : exp_parse->name);
-  exp->symbol     = symbol;
-  exp->id         = exptab->name_export_ht->count;
-  exp->ordinal    = ordinal;
-  exp->type       = type;
-  exp->is_private = 0; // exports through directives are public
-
-  hash_table_push_string_raw(exptab->arena, exptab->name_export_ht, exp->name, exp);
-  
-  exit:;
-  return exp;
+  SLLConcatInPlace(list, to_concat);
 }
 
-internal LNK_ExportArray
-lnk_export_array_from_list(Arena *arena, LNK_ExportList list)
+internal int
+lnk_named_export_is_before(void *raw_a, void *raw_b)
 {
-  ProfBeginFunction();
-  LNK_ExportArray arr;
-  arr.count = 0;
-  arr.v = push_array_no_zero(arena, LNK_Export, list.count);
-  for (LNK_Export *exp = list.first; exp != NULL; exp = exp->next) {
-    arr.v[arr.count++] = *exp;
-  }
-  ProfEnd();
-  return arr;
+  LNK_ExportParse *a = *(LNK_ExportParse **)raw_a;
+  LNK_ExportParse *b = *(LNK_ExportParse **)raw_b;
+  int cmp = str8_compar_case_sensitive(&a->name, &b->name);
+  return cmp < 0;
 }
 
-internal LNK_InputObjList
-lnk_export_table_serialize(Arena *arena, LNK_ExportTable *exptab, String8 image_name, COFF_MachineType machine)
+internal int
+lnk_ordinal_export_is_before(void *raw_a, void *raw_b)
+{
+  LNK_ExportParse *a = raw_a;
+  LNK_ExportParse *b = raw_b;
+  return a->ordinal < b->ordinal;
+}
+
+internal String8
+lnk_make_edata_obj(Arena               *arena,
+                   LNK_SymbolTable     *symtab,
+                   String8              image_name,
+                   COFF_MachineType     machine,
+                   LNK_ExportParseList  export_list)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  // compute ordinal bounds
-  U64 ordinal_low;
-  for (ordinal_low = 0; ordinal_low < exptab->max_ordinal; ++ordinal_low) {
-    if (exptab->is_ordinal_used[ordinal_low]) {
-      break;
+  // compute max ordinal and used ordinal flag array
+  U64 ordinal_low = max_U64;
+  B8 *is_ordinal_used = push_array(arena, B8, max_U16);
+  for (LNK_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
+    LNK_ExportParse *exp = &exp_n->data;
+    if (exp->is_ordinal_assigned) {
+      ordinal_low = Min(ordinal_low, exp->ordinal);
+      is_ordinal_used[exp->ordinal] = 1;
     }
   }
-  U64 ordinal_high;
-  for (ordinal_high = exptab->max_ordinal - 1; ordinal_high > 0; --ordinal_high) {
-    if (exptab->is_ordinal_used[ordinal_high]) {
-      break;
+
+  LNK_ExportParsePtrArray named_exports     = {0};
+  LNK_ExportParsePtrArray noname_exports    = {0};
+  LNK_ExportParsePtrArray forwarder_exports = {0};
+  {
+    // group exports based on flags
+    LNK_ExportParseList named_exports_list     = {0};
+    LNK_ExportParseList noname_exports_list    = {0};
+    LNK_ExportParseList forwarder_exports_list = {0};
+    for (LNK_ExportParseNode *exp_n = export_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
+      exp_n_next = exp_n->next;
+      if (exp_n->data.is_forwarder) {
+        lnk_export_parse_list_push_node(&forwarder_exports_list, exp_n);
+      } else if (exp_n->data.is_noname_present) {
+        AssertAlways(exp_n->data.is_ordinal_assigned);
+        lnk_export_parse_list_push_node(&noname_exports_list, exp_n);
+      } else {
+        lnk_export_parse_list_push_node(&named_exports_list, exp_n);
+      }
+    }
+
+    // list -> array
+    named_exports     = lnk_array_from_export_list(scratch.arena, named_exports_list);
+    noname_exports    = lnk_array_from_export_list(scratch.arena, noname_exports_list);
+    forwarder_exports = lnk_array_from_export_list(scratch.arena, forwarder_exports_list);
+
+    // sort exports
+    radsort(named_exports.v, named_exports.count, lnk_named_export_is_before);
+    radsort(noname_exports.v, noname_exports.count, lnk_ordinal_export_is_before);
+    radsort(forwarder_exports.v, forwarder_exports.count, lnk_named_export_is_before);
+
+    MemoryZeroStruct(&export_list);
+    lnk_export_parse_list_concat_in_place(&export_list, &named_exports_list);
+    lnk_export_parse_list_concat_in_place(&export_list, &forwarder_exports_list);
+    lnk_export_parse_list_concat_in_place(&export_list, &noname_exports_list);
+  }
+
+  // assign omitted ordinals
+  {
+    U16 last_ordinal = ordinal_low;
+    for (U64 exp_idx = 0; exp_idx < named_exports.count; exp_idx += 1) {
+      LNK_ExportParse *exp = named_exports.v[exp_idx];
+      if (!exp->is_ordinal_assigned) {
+        for (; last_ordinal < max_U16 && is_ordinal_used[last_ordinal] != 0; last_ordinal += 1);
+        exp->ordinal            = last_ordinal;
+        exp->is_ordinal_assigned = 1;
+        is_ordinal_used[last_ordinal] = 1;
+      }
+    }
+    for (U64 exp_idx = 0; exp_idx < forwarder_exports.count; exp_idx += 1) {
+      LNK_ExportParse *exp = forwarder_exports.v[exp_idx];
+      if (!exp->is_ordinal_assigned) {
+        for (; last_ordinal < max_U16 && is_ordinal_used[last_ordinal] != 0; last_ordinal += 1);
+        exp->ordinal            = last_ordinal;
+        exp->is_ordinal_assigned = 1;
+        is_ordinal_used[last_ordinal] = 1;
+      }
+    }
+    for (U64 exp_idx = 0; exp_idx < noname_exports.count; exp_idx += 1) {
+      LNK_ExportParse *exp = noname_exports.v[exp_idx];
+      if (!exp->is_ordinal_assigned) {
+        exp->ordinal             = last_ordinal;
+        exp->is_ordinal_assigned = 1;
+        is_ordinal_used[last_ordinal] = 1;
+      }
     }
   }
-  
+
   COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, machine);
 
-  // fill out export table header
-  PE_ExportTableHeader *header       = push_array(obj_writer->arena, PE_ExportTableHeader, 1);
-  header->ordinal_base               = safe_cast_u16(ordinal_low + 1);
-  header->export_address_table_count = safe_cast_u32(exptab->name_export_ht->count + exptab->noname_export_ht->count);
-  header->name_pointer_table_count   = safe_cast_u32(exptab->name_export_ht->count);
-
-
-  // make iamge name c-string
-  String8 image_name_cstr = push_cstr(obj_writer->arena, image_name);
-
   // push sections
-  COFF_ObjSection *header_sect          = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$1"), LNK_EDATA_SECTION_FLAGS, str8_struct(header));
-  COFF_ObjSection *voff_table_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$2"), LNK_EDATA_SECTION_FLAGS, str8_zero());
-  COFF_ObjSection *name_voff_table_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$3"), LNK_EDATA_SECTION_FLAGS, str8_zero());
-  COFF_ObjSection *ordinal_table_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$4"), LNK_EDATA_SECTION_FLAGS, str8_zero());
-  COFF_ObjSection *string_buffer_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$5"), LNK_EDATA_SECTION_FLAGS, str8_zero());
-  COFF_ObjSection *image_name_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$6"), LNK_EDATA_SECTION_FLAGS, image_name_cstr);
+  COFF_ObjSection *voff_table_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$2"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_zero());
+  COFF_ObjSection *name_voff_table_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$3"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_zero());
+  COFF_ObjSection *ordinal_table_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$4"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_zero());
+  COFF_ObjSection *string_table_sect    = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$5"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, str8_zero());
+  COFF_ObjSection *image_name_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$6"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, push_cstr(obj_writer->arena, image_name));
 
-  // push symbols
-  COFF_ObjSymbol *image_name_symbol    = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_TABLE_NAME_VOFF"),          0, image_name_sect);
-  COFF_ObjSymbol *address_table_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_TABLE_ADDRESS_TABLE_VOFF"), 0, voff_table_sect);
-  COFF_ObjSymbol *name_table_symbol    = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_TABLE_NAME_POINTER_VOFF"),  0, name_voff_table_sect);
-  COFF_ObjSymbol *ordinal_table_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_TABLE_ORDINAL_TABLE_VOFF"), 0, ordinal_table_sect);
+  ProfBegin("Virtual Offset Table");
+  {
+    B8                      *is_ordinal_bound = push_array(scratch.arena, B8, max_U16);
+    LNK_ExportParsePtrArray *all_exports[]    = { &named_exports, &forwarder_exports, &noname_exports };
 
-  // patch export table header
-  switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64: {
-    coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, name_voff),                 image_name_symbol,    COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, export_address_table_voff), address_table_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, name_pointer_table_voff),   name_table_symbol,    COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, ordinal_table_voff),        ordinal_table_symbol, COFF_Reloc_X64_Addr32Nb);
-  } break;
-  default: { NotImplemented; } break;
-  }
-
-
-  B8 *is_ordinal_bound = push_array(scratch.arena, B8, exptab->max_ordinal);
-  HashTable *exp_ht_arr[] = { exptab->name_export_ht, exptab->noname_export_ht };
-
-  for (U64 ht_idx = 0; ht_idx < ArrayCount(exp_ht_arr); ht_idx += 1) {
-    HashTable *ht = exp_ht_arr[ht_idx];
-
-    KeyValuePair *kv_arr = key_value_pairs_from_hash_table(scratch.arena, exptab->name_export_ht);
-
-    // named exports must be lexically sorted
-    if (ht_idx == 0) {
-      sort_key_value_pairs_as_string_sensitive(kv_arr, exptab->name_export_ht->count);
-    }
-
-    for (U64 i = 0; i < ht->count; i += 1) {
-      LNK_Export *exp              = kv_arr[i].value_raw;
-
-      {
-        U64     export_name_offset = string_buffer_sect->data.total_size;
-        String8 export_name_cstr   = push_cstr(obj_writer->arena, exp->name);
-        str8_list_push(obj_writer->arena, &string_buffer_sect->data, export_name_cstr);
-
-        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "EXPORT.%S", exp->name);
-        COFF_ObjSymbol *export_name_symbol      = coff_obj_writer_push_symbol_static(obj_writer, export_name_symbol_name, export_name_offset, string_buffer_sect);
-
-        U64 export_name_voff_offset = name_voff_table_sect->data.total_size;
-        U64 export_name_voff_size   = sizeof(U32);
-        U8 *export_name_voff        = push_array(obj_writer->arena, U8, export_name_voff_size);
-        str8_list_push(obj_writer->arena, &name_voff_table_sect->data, str8_array(export_name_voff, export_name_voff_size));
-
-        switch (machine) {
-        case COFF_MachineType_Unknown: break;
-        case COFF_MachineType_X64: { coff_obj_writer_section_push_reloc(obj_writer, name_voff_table_sect, export_name_voff_offset, export_name_symbol, COFF_Reloc_X64_Addr32Nb); } break;
-        default: { NotImplemented; } break;
-        }
-      }
-
-      {
-        U16 *ordinal = push_array(obj_writer->arena, U16, 1);
-        *ordinal = exp->ordinal - ordinal_low;
-        str8_list_push(obj_writer->arena, &ordinal_table_sect->data, str8_struct(ordinal));
-
-        if ( ! is_ordinal_bound[exp->ordinal]) {
+    for (U64 arr_idx = 0; arr_idx < ArrayCount(all_exports); arr_idx += 1) {
+      for (U64 exp_idx = 0; exp_idx < all_exports[arr_idx]->count; exp_idx += 1) {
+        LNK_ExportParse *exp = all_exports[arr_idx]->v[exp_idx];
+        if (is_ordinal_bound[exp->ordinal] == 0) {
+          // alloc only one slot per ordinal, so it's possible to map ordinal to a virtual offset
           is_ordinal_bound[exp->ordinal] = 1;
 
+          // create slot for the ordinal virtual offset
           U64  voff_offset = voff_table_sect->data.total_size;
           U32 *voff        = push_array(obj_writer->arena, U32, 1);
           str8_list_push(obj_writer->arena, &voff_table_sect->data, str8_struct(voff));
 
-          COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, exp->name);
-          switch (machine) {
-          case COFF_MachineType_Unknown: break;
-          case COFF_MachineType_X64: { coff_obj_writer_section_push_reloc(obj_writer, voff_table_sect, voff_offset, symbol, COFF_Reloc_X64_Addr32Nb); } break;
-          default: { NotImplemented; } break;
+          COFF_ObjSymbol *exp_symbol;
+          if (exp->is_forwarder) {
+            U64     forwarder_name_offset = string_table_sect->data.total_size;
+            String8 forwarder_name_cstr   = push_cstr(obj_writer->arena, exp->name);
+            str8_list_push(obj_writer->arena, &string_table_sect->data, forwarder_name_cstr);
+            // symbol to the name string
+            exp_symbol = coff_obj_writer_push_symbol_static(obj_writer, exp->name, forwarder_name_offset, string_table_sect);
+          } else {
+            // function or global var symbol
+            exp_symbol = coff_obj_writer_push_symbol_undef(obj_writer, exp->name);
           }
+
+          U16 ordinal_nb = exp->ordinal - ordinal_low;
+          coff_obj_writer_section_push_reloc(obj_writer, voff_table_sect, ordinal_nb*sizeof(U32), exp_symbol, coff_virt_off_reloc_from_machine(machine));
         }
       }
     }
   }
+  ProfEnd();
 
+  ProfBegin("Named & Forwarder Exports");
+  {
+    LNK_ExportParsePtrArray *exports_with_names[] = { &named_exports, &forwarder_exports };
+
+    // assign hints
+    for (U64 arr_idx = 0, hint = 0; arr_idx < ArrayCount(exports_with_names); arr_idx += 1) {
+      for (U64 exp_idx = 0; exp_idx < exports_with_names[arr_idx]->count; exp_idx += 1, hint += 1) {
+        LNK_ExportParse *exp = exports_with_names[arr_idx]->v[exp_idx];
+        exp->hint = hint;
+      }
+    }
+
+    for (U64 arr_idx = 0; arr_idx < ArrayCount(exports_with_names); arr_idx += 1) {
+      LNK_ExportParsePtrArray *exports = exports_with_names[arr_idx];
+      for (U64 exp_idx = 0; exp_idx < exports->count; exp_idx += 1) {
+        LNK_ExportParse *exp = exports->v[exp_idx];
+
+        String8 name = lnk_name_from_export_parse(exp);
+
+        // store symbol name string
+        U64     export_name_offset = string_table_sect->data.total_size;
+        String8 export_name_cstr   = push_cstr(obj_writer->arena, name);
+        str8_list_push(obj_writer->arena, &string_table_sect->data, export_name_cstr);
+
+        // create symbol for the name string
+        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "RAD_NAME:%S", name);
+        COFF_ObjSymbol *export_name_symbol      = coff_obj_writer_push_symbol_extern(obj_writer, export_name_symbol_name, export_name_offset, string_table_sect);
+
+        // create slot for export virtual offset
+        U64 export_name_voff_offset = name_voff_table_sect->data.total_size;
+        U8 *export_name_voff        = push_array(obj_writer->arena, U8, sizeof(U32));
+        str8_list_push(obj_writer->arena, &name_voff_table_sect->data, str8_array(export_name_voff, sizeof(U32)));
+
+        // write string's virtual offset
+        coff_obj_writer_section_push_reloc(obj_writer, name_voff_table_sect, export_name_voff_offset, export_name_symbol, coff_virt_off_reloc_from_machine(machine));
+
+        // create and store export's ordinal
+        U16 *ordinal = push_array(obj_writer->arena, U16, 1);
+        *ordinal = exp->ordinal - ordinal_low;
+        str8_list_push(obj_writer->arena, &ordinal_table_sect->data, str8_struct(ordinal));
+      }
+    }
+  }
+  ProfEnd();
+
+  ProfBegin("NONAME Exports");
+  {
+    for (U64 exp_idx = 0; exp_idx < noname_exports.count; exp_idx += 1) {
+      // create and store export's ordinal
+      LNK_ExportParse *exp = noname_exports.v[exp_idx];
+      U16 *ordinal = push_array(obj_writer->arena, U16, 1);
+      *ordinal = exp->ordinal - ordinal_low;
+      str8_list_push(obj_writer->arena, &ordinal_table_sect->data, str8_struct(ordinal));
+    }
+  }
+  ProfEnd();
+
+  // fill out export table header
+  PE_ExportTableHeader *header       = push_array(obj_writer->arena, PE_ExportTableHeader, 1);
+  header->time_stamp                 = COFF_TimeStamp_Max;
+  header->ordinal_base               = safe_cast_u16(ordinal_low);
+  header->export_address_table_count = safe_cast_u32(voff_table_sect->data.node_count);
+  header->name_pointer_table_count   = safe_cast_u32(name_voff_table_sect->data.node_count);
+
+  // push header field's symbols
+  COFF_ObjSymbol *image_name_symbol    = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_HEADER_NAME_VOFF"),          0, image_name_sect);
+  COFF_ObjSymbol *address_table_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_HEADER_ADDRESS_TABLE_VOFF"), 0, voff_table_sect);
+  COFF_ObjSymbol *name_table_symbol    = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_HEADER_NAME_POINTER_VOFF"),  0, name_voff_table_sect);
+  COFF_ObjSymbol *ordinal_table_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_HEADER_ORDINAL_TABLE_VOFF"), 0, ordinal_table_sect);
+
+  // push export table header section
+  COFF_ObjSection *header_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".edata$1"), LNK_EDATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, str8_struct(header));
+  coff_obj_writer_push_symbol_static(obj_writer, str8_lit("EXPORT_TABLE_HEADER"), 0, header_sect);
+
+  // patch export table header
+  COFF_RelocType virt_off_reloc_type = coff_virt_off_reloc_from_machine(machine);
+  coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, name_voff),                 image_name_symbol,    virt_off_reloc_type);
+  coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, export_address_table_voff), address_table_symbol, virt_off_reloc_type);
+  coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, name_pointer_table_voff),   name_table_symbol,    virt_off_reloc_type);
+  coff_obj_writer_section_push_reloc(obj_writer, header_sect, OffsetOf(PE_ExportTableHeader, ordinal_table_voff),        ordinal_table_symbol, virt_off_reloc_type);
 
   String8 obj = coff_obj_writer_serialize(arena, obj_writer);
   coff_obj_writer_release(&obj_writer);
 
-  LNK_InputObjList result = {0};
-  LNK_InputObj *input = lnk_input_obj_list_push(arena, &result);
-  input->path         = str8_lit("* Exports *");
-  input->dedup_id     = input->path;
-  input->data         = obj;
+  os_write_data_to_file_path(str8_lit("foo.obj"), obj);
 
   scratch_end(scratch);
-  return result;
+  return obj;
 }
-
 
 
