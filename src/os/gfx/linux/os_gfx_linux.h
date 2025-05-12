@@ -15,6 +15,17 @@
 #include <X11/keysymdef.h>
 
 ////////////////////////////////
+//~ rjf: Prototypes (which seem to sometimes be missing)
+
+typedef struct _XComposeStatus
+{
+  XPointer compose_ptr;
+  int chars_matched;
+}
+XComposeStatus;
+int XLookupString(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, XComposeStatus *status_in_out);
+
+////////////////////////////////
 //~ rjf: Window State
 
 typedef struct OS_LNX_Window OS_LNX_Window;
