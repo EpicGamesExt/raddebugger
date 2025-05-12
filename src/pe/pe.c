@@ -1302,7 +1302,7 @@ pe_exports_from_data(Arena *arena, U64 section_count, COFF_SectionHeader *sectio
         {
           B32 is_forwarder = dir_virt_range.min <= export_voff && export_voff < dir_virt_range.max;
           if (is_forwarder) {
-            U64 fwd_name_off = coff_foff_from_voff(sections, section_count, name_voff);
+            U64 fwd_name_off = coff_foff_from_voff(sections, section_count, export_voff);
             str8_deserial_read_cstr(raw_data, fwd_name_off, &forwarder);
           }
         }
