@@ -16,8 +16,9 @@ typedef String8List LNK_InputLibList;
 
 typedef struct LNK_InputImport
 {
-  COFF_ParsedArchiveImportHeader       import_header;
   struct LNK_InputImport *next;
+  String8 coff_import;
+  U64     input_idx;
 } LNK_InputImport;
 
 typedef struct LNK_InputImportList
@@ -36,6 +37,7 @@ typedef struct LNK_InputObj
   String8              path;
   String8              data;
   String8              lib_path;
+  U64                  input_idx;
 } LNK_InputObj;
 
 typedef struct LNK_InputObjList

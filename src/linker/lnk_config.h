@@ -289,7 +289,8 @@ typedef struct LNK_Config
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;
   U64                         opt_iter_count;
-  LNK_ImportTableFlags        import_table_flags;
+  LNK_SwitchState             import_table_emit_biat;
+  LNK_SwitchState             import_table_emit_uiat;
   LNK_GuardFlags              guard_flags;
   LNK_DebugInfoGuidType       guid_type;
   Guid                        guid;

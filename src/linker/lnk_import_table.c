@@ -2,17 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_ImportTable *
-lnk_import_table_alloc(LNK_ImportTableFlags flags)
+lnk_import_table_alloc(void)
 {
-  ProfBeginFunction();
-
   Arena *arena = arena_alloc();
   LNK_ImportTable *imptab = push_array(arena, LNK_ImportTable, 1);
-  imptab->arena           = arena;
-  imptab->flags           = flags;
-  imptab->dll_ht          = hash_table_init(arena, LNK_IMPORT_DLL_HASH_TABLE_BUCKET_COUNT);
-
-  ProfEnd();
+  imptab->arena  = arena;
+  imptab->dll_ht = hash_table_init(arena, 512);
   return imptab;
 }
 
@@ -25,379 +20,35 @@ lnk_import_table_release(LNK_ImportTable **imptab_ptr)
   ProfEnd();
 }
 
-internal BucketNode *
-lnk_import_table_push_dll_node(LNK_ImportTable *imptab, LNK_ImportDLL *dll)
+internal LNK_ImportDLL *
+lnk_import_table_push_dll(LNK_ImportTable *imptab, String8 dll_name, COFF_MachineType machine)
 {
+  LNK_ImportDLL *dll = push_array(imptab->arena, LNK_ImportDLL, 1);
+
   // update list
   SLLQueuePush(imptab->first_dll, imptab->last_dll, dll);
 
   // update name -> dll hash table
-  return hash_table_push_path_raw(imptab->arena, imptab->dll_ht, dll->name, dll);
-}
+  hash_table_push_path_raw(imptab->arena, imptab->dll_ht, dll->name, dll);
 
-internal BucketNode *
-lnk_import_table_push_func_node(LNK_ImportTable *imptab, LNK_ImportDLL *dll, LNK_ImportFunc *func)
-{
-  // update list
-  SLLQueuePush(dll->first_func, dll->last_func, func);
-
-  // update name -> func hash table
-  return hash_table_push_string_raw(imptab->arena, dll->func_ht, func->name, func);
-}
-
-internal LNK_ImportDLL *
-lnk_import_table_search_dll(LNK_ImportTable *imptab, String8 name)
-{
-  return hash_table_search_path_raw(imptab->dll_ht, name);
-}
-
-internal LNK_ImportFunc *
-lnk_import_table_search_func(LNK_ImportDLL *dll, String8 name)
-{
-  LNK_ImportFunc *func = 0;
-  hash_table_search_string_raw(dll->func_ht, name, (void **)&func);
-  return func;
-}
-
-internal LNK_ImportDLL *
-lnk_import_table_push_dll_static(LNK_ImportTable *imptab, String8 dll_name, COFF_MachineType machine)
-{
-  ProfBeginFunction();
-
-  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, machine);
-
-  U64               import_size  = coff_word_size_from_machine(machine);
-  COFF_SectionFlags import_align = coff_section_flag_from_align_size(import_size);
-
-  PE_ImportEntry *impdesc       = push_array(obj_writer->arena, PE_ImportEntry, 1);
-  String8         dll_name_cstr = push_cstr(obj_writer->arena, dll_name);
-
-  COFF_ObjSection *dll_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$2"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_struct(impdesc));
-  COFF_ObjSection *ilt_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$4"), LNK_IDATA_SECTION_FLAGS|import_align,                  str8_zero());
-  COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$5"), LNK_IDATA_SECTION_FLAGS|import_align,                  str8_zero());
-  COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  str8_zero());
-  COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$7"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  dll_name_cstr);
-  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  LNK_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,   str8_zero());
-
-  COFF_ObjSymbol *ilt_symbol      = coff_obj_writer_push_symbol_static(obj_writer, ilt_sect->name,      0, ilt_sect);
-  COFF_ObjSymbol *iat_symbol      = coff_obj_writer_push_symbol_static(obj_writer, iat_sect->name,      0, iat_sect);
-  COFF_ObjSymbol *dll_name_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll_name_sect->name, 0, dll_name_sect);
-  
-  switch (machine) {
-  case COFF_MachineType_Unknown: {} break;
-  case COFF_MachineType_X64: {
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, lookup_table_voff),      ilt_symbol,      COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, name_voff),              dll_name_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, import_addr_table_voff), iat_symbol,      COFF_Reloc_X64_Addr32Nb);
-  } break;
-  default: { NotImplemented; } break;
-  }
-  
-  // push to list
-  LNK_ImportDLL *dll = push_array(imptab->arena, LNK_ImportDLL, 1);
-  dll->obj_writer    = obj_writer;
-  dll->name          = push_str8_copy(imptab->arena, dll_name);
-  dll->dll_sect      = dll_sect;
-  dll->int_sect      = int_sect;
-  dll->ilt_sect      = ilt_sect;
-  dll->iat_sect      = iat_sect;
-  dll->code_sect     = code_sect;
-  dll->func_ht       = hash_table_init(imptab->arena, LNK_IMPORT_FUNC_HASH_TABLE_BUCKET_COUNT);
-
-  lnk_import_table_push_dll_node(imptab, dll);
-  
-  ProfEnd();
   return dll;
 }
 
 internal LNK_ImportDLL *
-lnk_import_table_push_dll_delayed(LNK_ImportTable *imptab, String8 dll_name, COFF_MachineType machine)
+lnk_import_table_search_dll(LNK_ImportTable *imptab, String8 dll_name)
 {
-  ProfBeginFunction();
-
-  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, machine);
-
-  // import descriptor
-  PE_DelayedImportEntry *impdesc = push_array(obj_writer->arena, PE_DelayedImportEntry, 1);
-  impdesc->attributes            = 1;
-
-  // DLL name cstring
-  String8 dll_name_cstr = push_cstr(obj_writer->arena, dll_name);
-
-  // DLL handle
-  U64 handle_size = coff_word_size_from_machine(machine);
-  U8 *handle      = push_array(obj_writer->arena, U8, handle_size);
-
-  // import align
-  U64               import_size  = coff_word_size_from_machine(machine);
-  COFF_SectionFlags import_align = coff_section_flag_from_align_size(import_size);
-
-  COFF_ObjSection *dll_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$2"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_struct(impdesc));
-  COFF_ObjSection *ilt_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$4"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$5"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_zero());
-  COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$7"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
-  COFF_ObjSection *biat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$8"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *uiat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$9"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  LNK_TEXT_SECTION_FLAGS,                               str8_zero());
-  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$h"),  LNK_DATA_SECTION_FLAGS,                               str8_array(handle, handle_size));
-
-  COFF_ObjSymbol *dll_symbol      = coff_obj_writer_push_symbol_static(obj_writer, dll_sect->name,      0, dll_sect);
-  COFF_ObjSymbol *dll_name_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll_name_sect->name, 0, dll_name_sect);
-  COFF_ObjSymbol *handle_symbol   = coff_obj_writer_push_symbol_static(obj_writer, handle_sect->name,   0, handle_sect);
-  COFF_ObjSymbol *iat_symbol      = coff_obj_writer_push_symbol_static(obj_writer, iat_sect->name,      0, iat_sect);
-  COFF_ObjSymbol *ilt_symbol      = coff_obj_writer_push_symbol_static(obj_writer, ilt_sect->name,      0, ilt_sect);
-
-  switch (machine) {
-  case COFF_MachineType_Unknown: {} break;
-  case COFF_MachineType_X64: {
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, name_voff),          dll_name_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, module_handle_voff), handle_symbol,   COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, iat_voff),           iat_symbol,      COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, name_table_voff),    ilt_symbol,      COFF_Reloc_X64_Addr32Nb);
-  } break;
-  default: { NotImplemented; } break;
-  }
-
-  if (imptab->flags & LNK_ImportTableFlag_EmitBiat) {
-    COFF_ObjSymbol *biat_symbol = coff_obj_writer_push_symbol_static(obj_writer, biat_sect->name, 0, biat_sect);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, bound_table_voff), biat_symbol, COFF_Reloc_X64_Addr32Nb);
-  }
-  if (imptab->flags & LNK_ImportTableFlag_EmitUiat) {
-    COFF_ObjSymbol *uiat_symbol = coff_obj_writer_push_symbol_static(obj_writer, uiat_sect->name, 0, uiat_sect);
-    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, unload_table_voff), uiat_symbol, COFF_Reloc_X64_Addr32Nb);
-  }
-  
-  // emit tail merge
-  COFF_ObjSymbol *tail_merge_symbol = 0;
-  switch (machine) {
-  case COFF_MachineType_Unknown: {} break;
-  case COFF_MachineType_X64:     { tail_merge_symbol = lnk_emit_tail_merge_thunk_x64(obj_writer, code_sect, dll_name, dll_symbol); } break;
-  default:                       { NotImplemented; } break;
-  }
-  
-  // fill out result
-  LNK_ImportDLL *dll     = push_array(imptab->arena, LNK_ImportDLL, 1);
-  dll->dll_sect          = dll_sect;
-  dll->int_sect          = int_sect;
-  dll->iat_sect          = iat_sect;
-  dll->ilt_sect          = ilt_sect;
-  dll->biat_sect         = biat_sect;
-  dll->uiat_sect         = uiat_sect;
-  dll->code_sect         = code_sect;
-  dll->tail_merge_symbol = tail_merge_symbol;
-  dll->name              = push_str8_copy(imptab->arena, dll_name);
-  dll->func_ht           = hash_table_init(imptab->arena, LNK_IMPORT_FUNC_HASH_TABLE_BUCKET_COUNT);
-
-  lnk_import_table_push_dll_node(imptab, dll);
-  
-  ProfEnd();
+  LNK_ImportDLL *dll = 0;
+  hash_table_search_string_raw(imptab->dll_ht, dll_name, &dll);
   return dll;
 }
 
 internal LNK_ImportFunc *
-lnk_import_table_push_func_static(LNK_ImportTable *imptab, LNK_ImportDLL *dll, COFF_ParsedArchiveImportHeader *header)
+lnk_import_table_push_func(LNK_ImportTable *imptab, LNK_ImportDLL *dll, struct LNK_Symbol *symbol)
 {
-  ProfBeginFunction();
-
-  COFF_ObjWriter *obj_writer = dll->obj_writer;
-  
-  String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", header->func_name);
-  U64     iat_offset      = dll->iat_sect->data.total_size;
-  U64     ilt_offset      = dll->ilt_sect->data.total_size;
-  U64     int_offset      = dll->int_sect->data.total_size;
-
-  COFF_ObjSymbol *iat_symbol = 0;
-  switch (header->import_by) {
-  case COFF_ImportBy_Ordinal: {
-    String8 ordinal_data = coff_ordinal_data_from_hint(obj_writer->arena, header->machine, header->hint_or_ordinal);
-    str8_list_push(obj_writer->arena, &dll->ilt_sect->data, ordinal_data);
-    str8_list_push(obj_writer->arena, &dll->iat_sect->data, ordinal_data);
-
-    iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, dll->iat_sect);
-  } break;
-  case COFF_ImportBy_Name: {
-    // put together name look up entry
-    String8 int_data = coff_make_import_lookup(obj_writer->arena, header->hint_or_ordinal, header->func_name);
-    str8_list_push(obj_writer->arena, &dll->int_sect->data, int_data);
-
-    // create symbol for lookup entry
-    COFF_ObjSymbol *int_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll->int_sect->name, int_offset, dll->int_sect);
-
-    // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses
-    U64 import_size  = coff_word_size_from_machine(header->machine);
-    U8 *import_entry = push_array(obj_writer->arena, U8, import_size);
-    str8_list_push(obj_writer->arena, &dll->ilt_sect->data, str8_array(import_entry, import_size));
-    str8_list_push(obj_writer->arena, &dll->iat_sect->data, str8_array(import_entry, import_size));
-
-    iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, dll->iat_sect);
-    
-    // patch IAT and ILT
-    coff_obj_writer_section_push_reloc(obj_writer, dll->ilt_sect, ilt_offset, int_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, dll->iat_sect, iat_offset, int_symbol, COFF_Reloc_X64_Addr32Nb);
-  } break;
-  case COFF_ImportBy_Undecorate: {
-    NotImplemented;
-  } break;
-  case COFF_ImportBy_NameNoPrefix: {
-    NotImplemented;
-  } break;
-  }
-
-  // generate thunks
-  COFF_ObjSymbol *jmp_thunk_symbol = 0;
-  if (header->type == COFF_ImportHeader_Code) {
-    switch (header->machine) {
-    case COFF_MachineType_Unknown: {} break;
-    case COFF_MachineType_X64:     { jmp_thunk_symbol = lnk_emit_indirect_jump_thunk_x64(obj_writer, dll->code_sect, iat_symbol, header->func_name); } break;
-    default:                       { NotImplemented; } break;
-    }
-  }
-  
-  // fill out import
-  LNK_ImportFunc *func    = push_array(imptab->arena, LNK_ImportFunc, 1);
-  func->name              = push_str8_copy(imptab->arena, header->func_name);
-  func->thunk_symbol_name = push_str8_copy(imptab->arena, jmp_thunk_symbol->name);
-  func->iat_symbol_name   = iat_symbol_name;
-
+  LNK_ImportFunc *func = push_array(imptab->arena, LNK_ImportFunc, 1);
+  func->symbol = symbol;
   lnk_import_table_push_func_node(imptab, dll, func);
-  
-  ProfEnd();
   return func;
-}
-
-internal LNK_ImportFunc *
-lnk_import_table_push_func_delayed(LNK_ImportTable *imptab, LNK_ImportDLL *dll, COFF_ParsedArchiveImportHeader *header)
-{
-#if 0
-  ProfBeginFunction();
-  
-  COFF_ObjWriter *obj_writer = dll->obj_writer;
-  Assert(dll->machine == header->machine); // TODO: error handle
-
-  U64 import_size = coff_word_size_from_machine(dll->machine);
-  
-  LNK_Symbol *int_symbol = 0;
-  
-  // generate thunks
-  LNK_Symbol *jmp_thunk_symbol  = g_null_symbol_ptr;
-  LNK_Symbol *load_thunk_symbol = g_null_symbol_ptr;
-  LNK_Chunk  *jmp_thunk_chunk   = 0;
-  LNK_Chunk  *load_thunk_chunk  = 0;
-  if (header->type == COFF_ImportHeader_Code) {
-    switch (dll->machine) {
-    case COFF_MachineType_X64: {
-      String8     iat_symbol_name = push_str8f(symtab->arena->v[0], "__imp_%S", header->func_name);
-      LNK_Symbol *iat_symbol      = lnk_make_undefined_symbol(symtab->arena->v[0], iat_symbol_name, LNK_SymbolScope_Main);
-      
-      // emit jmp thunk chunk
-      jmp_thunk_chunk  = lnk_emit_indirect_jump_thunk_x64(code_sect, code_table_chunk, iat_symbol);
-      jmp_thunk_symbol = lnk_emit_jmp_thunk_symbol(symtab, jmp_thunk_chunk, header->func_name);
-      
-      // emit load thunk
-      load_thunk_chunk  = lnk_emit_load_thunk_x64(code_sect, code_table_chunk, iat_symbol, dll->tail_merge_symbol);
-      load_thunk_symbol = lnk_emit_load_thunk_symbol(symtab, load_thunk_chunk, header->func_name);
-    } break;
-    default: lnk_not_implemented("TODO: support for machine 0x%X", dll->machine); break;
-    }
-  }
-  
-  switch (header->import_by) {
-  case COFF_ImportBy_Ordinal: {
-    String8 ordinal_data = lnk_ordinal_data_from_hint(data_sect->arena, dll->machine, header->hint_or_ordinal);
-    Assert(ordinal_data.size == import_size);
-    ilt_chunk = lnk_section_push_chunk_data(data_sect, ilt_table_chunk, ordinal_data, sort_index);
-    iat_chunk = lnk_section_push_chunk_bss(data_sect, iat_table_chunk, import_size, sort_index);
-    lnk_section_push_reloc(data_sect, iat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-
-    lnk_section_associate_chunks(data_sect, iat_chunk, ilt_chunk);
-    if (imptab->flags & LNK_ImportTableFlag_EmitBiat) {
-      biat_chunk = lnk_section_push_chunk_bss(data_sect, biat_table_chunk, import_size, sort_index);
-      lnk_section_push_reloc(data_sect, biat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-      lnk_section_associate_chunks(data_sect, iat_chunk, biat_chunk);
-    }
-    if (imptab->flags & LNK_ImportTableFlag_EmitUiat) {
-      uiat_chunk = lnk_section_push_chunk_bss(data_sect, uiat_table_chunk, import_size, sort_index);
-      lnk_section_push_reloc(data_sect, uiat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-      lnk_section_associate_chunks(data_sect, iat_chunk, uiat_chunk);
-    }
-  } break;
-  case COFF_ImportBy_Name: {
-    // put together name look up entry
-    String8    int_data  = coff_make_import_lookup(data_sect->arena, header->hint_or_ordinal, header->func_name);
-    LNK_Chunk *int_chunk = lnk_section_push_chunk_data(data_sect, int_table_chunk, int_data, str8_zero());
-    
-    // create symbol for lookup chunk
-    String8 int_symbol_name = push_str8f(symtab->arena->v[0], "%S.%S.name.delayed", dll->name, header->func_name);
-    int_symbol = lnk_symbol_table_push_defined_chunk(symtab, int_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, int_chunk, 0, 0, 0);
-    
-    // dynamic linker patches this voff on DLL load event
-    ilt_chunk = lnk_section_push_chunk_bss(data_sect, ilt_table_chunk, import_size, sort_index);
-    lnk_chunk_set_debugf(data_sect->arena, ilt_chunk, "ILT entry (delayed) %S.%S", dll->name, header->func_name);
-    
-    // patch-in ILT with import voff
-    lnk_section_push_reloc(data_sect, ilt_chunk, LNK_Reloc_VIRT_OFF_32, 0, int_symbol);
-    
-    // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses.
-    iat_chunk = lnk_section_push_chunk_bss(data_sect, iat_table_chunk, import_size, sort_index);
-    lnk_chunk_set_debugf(data_sect->arena, iat_chunk, "IAT entre (delayed) %S.%S", dll->name, header->func_name);
-
-    // associate chunks
-    lnk_section_associate_chunks(data_sect, iat_chunk, ilt_chunk);
-    lnk_section_associate_chunks(data_sect, iat_chunk, int_chunk);
-    
-    // patch-in thunk address
-    lnk_section_push_reloc(data_sect, iat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-    
-    if (imptab->flags & LNK_ImportTableFlag_EmitBiat) {
-      biat_chunk = lnk_section_push_chunk_bss(data_sect, biat_table_chunk, import_size, sort_index);
-      lnk_chunk_set_debugf(data_sect->arena, biat_chunk, "%S.biat.%S (delayed)", dll->name, header->func_name);
-      
-      // patch-in thunk address
-      lnk_section_push_reloc(data_sect, biat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-    }
-    
-    if (imptab->flags & LNK_ImportTableFlag_EmitUiat) {
-      uiat_chunk = lnk_section_push_chunk_bss(data_sect, uiat_table_chunk, import_size, sort_index);
-      lnk_chunk_set_debugf(data_sect->arena, uiat_chunk, "%S.uiat.%S (delayed)", dll->name, header->func_name);
-      
-      // patch-in thunk address
-      lnk_section_push_reloc(data_sect, uiat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
-    }
-  } break;
-  case COFF_ImportBy_Undecorate: {
-    lnk_not_implemented("TODO: COFF_ImportBy_Undecorate");
-  } break;
-  case COFF_ImportBy_NameNoPrefix: {
-    lnk_not_implemented("TODO: COFF_ImportBy_NameNoPrefix");
-  } break;
-  }
-
-  if (jmp_thunk_chunk) {
-    lnk_section_associate_chunks(data_sect, iat_chunk, jmp_thunk_chunk);
-  }
-  if (load_thunk_chunk) {
-    lnk_section_associate_chunks(data_sect, iat_chunk, load_thunk_chunk);
-  }
-  
-  String8     iat_symbol_name = push_str8f(symtab->arena->v[0], "__imp_%S", header->func_name);
-  LNK_Symbol *iat_symbol      = lnk_symbol_table_push_defined_chunk(symtab, iat_symbol_name, LNK_DefinedSymbolVisibility_Extern, 0, iat_chunk, 0, 0, 0);
-  
-  String8     ilt_symbol_name = push_str8f(symtab->arena->v[0], "%S.%S.ilt.delayed", dll->name, header->func_name);
-  LNK_Symbol *ilt_symbol      = lnk_symbol_table_push_defined_chunk(symtab, ilt_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, ilt_chunk, 0, 0, 0);
-  
-  // fill out import
-  LNK_ImportFunc *func    = push_array(imptab->arena, LNK_ImportFunc, 1);
-  func->name              = push_str8_copy(imptab->arena, header->func_name);
-  func->thunk_symbol_name = push_str8_copy(imptab->arena, jmp_thunk_symbol->name);
-  func->iat_symbol_name   = push_str8_copy(imptab->arena, iat_symbol->name);
-
-  lnk_import_table_push_func_node(imptab, dll, func);
-  
-  ProfEnd();
-  return func;
-#endif
-  return 0;
 }
 
 internal COFF_ObjSymbol *
@@ -645,96 +296,343 @@ lnk_build_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_TimeStamp tim
   return obj;
 }
 
-internal LNK_InputObjList
-lnk_import_table_serialize(Arena *arena, LNK_ImportTable *imptab, String8 image_name, COFF_MachineType machine)
+internal void
+lnk_emit_dll_import_debug_symbols(COFF_ObjWriter *obj_writer, String8 dll_name)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  Temp scratch = scratch_begin(0,0);
 
-  // append .debug$S
-  for (LNK_ImportDLL *dll = imptab->first_dll; dll != 0; dll = dll->next) {
-    String8 debug_symbols = {0};
-    {
-      Temp temp = temp_begin(scratch.arena);
+  CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
 
-      CV_SymbolList symbol_list = { .signature = CV_Signature_C13 };
+  // S_OBJ
+  String8 obj_data = cv_make_obj_name(scratch.arena, dll_name, 0);
+  cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_OBJNAME, obj_data);
 
-      // S_OBJ
-      String8 obj_data = cv_make_obj_name(temp.arena, dll->name, 0);
-      cv_symbol_list_push_data(temp.arena, &symbol_list, CV_SymKind_OBJNAME, obj_data);
+  // S_COMPILE3
+  String8 comp3_data = lnk_make_linker_compile3(scratch.arena, obj_writer->machine);
+  cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
 
-      // S_COMPILE3
-      String8 comp3_data = lnk_make_linker_compile3(temp.arena, dll->obj_writer->machine);
-      cv_symbol_list_push_data(temp.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
+  // S_END
+  cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_END, str8_zero());
 
-      // S_END
-      cv_symbol_list_push_data(temp.arena, &symbol_list, CV_SymKind_END, str8_zero());
+  // TODO: add thunks
 
-      // TODO: add thunks
+  // serialize symbols
+  String8 debug_symbols = lnk_make_debug_s(obj_writer->arena, symbol_list);
 
-      // serialize symbols
-      debug_symbols = lnk_make_debug_s(dll->obj_writer->arena, symbol_list);
-
-      temp_end(temp);
-    }
-    coff_obj_writer_push_section(dll->obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS, debug_symbols);
-  }
-
-  LNK_InputObjList result = {0};
-
-  // serialize obj writers
-  for (LNK_ImportDLL *dll = imptab->first_dll; dll != 0; dll = dll->next) {
-    String8 obj = coff_obj_writer_serialize(arena, dll->obj_writer);
-
-    LNK_InputObj *input = lnk_input_obj_list_push(arena, &result);
-    input->data         = obj;
-    input->path         = push_str8f(arena, "Import:%S", dll->name);
-    input->dedup_id     = input->path;
-  }
-
-  // generate null terminator objs 
-  String8 null_import_entry_obj      = lnk_build_import_entry_obj(arena, image_name, COFF_TimeStamp_Max, machine);
-  String8 null_import_descriptor_obj = lnk_build_null_import_descriptor_obj(arena, COFF_TimeStamp_Max, machine);
-  String8 null_thunk_data_obj        = lnk_build_null_thunk_data_obj(arena, image_name, COFF_TimeStamp_Max, machine);
-
-  // pick null terminator obj paths
-  String8 null_import_path;
-  String8 null_import_descriptor_path;
-  String8 null_thunk_path;
-  if (imptab->flags & LNK_ImportTableFlag_Delayed) {
-    null_import_path            = str8_lit("DELAYED_NULL_IMPORT_ENTRY_OBJ");
-    null_import_descriptor_path = str8_lit("DELAYED_NULL_IMPORT_DESCRIPTOR_OBJ");
-    null_thunk_path             = str8_lit("DELAYED_NULL_THUNK_OBJ");
-  } else {
-    null_import_path            = str8_lit("NULL_IMPORT_ENTRY_OBJ");
-    null_import_descriptor_path = str8_lit("NULL_IMPORT_DESCRIPTOR_OBJ");
-    null_thunk_path             = str8_lit("NULL_THUNK_OBJ");
-  }
-
-  os_write_data_to_file_path(str8_lit("null_import_entry.obj"), null_import_entry_obj);
-  os_write_data_to_file_path(str8_lit("null_import_descriptor.obj"), null_import_descriptor_obj);
-  os_write_data_to_file_path(str8_lit("null_thunk.obj"), null_thunk_data_obj);
-
-  // append null terminators
-  {
-    LNK_InputObj *input = lnk_input_obj_list_push(arena, &result);
-    input->data         = null_import_entry_obj;
-    input->path         = null_import_path;
-    input->dedup_id     = input->path;
-  }
-  {
-    LNK_InputObj *input = lnk_input_obj_list_push(arena, &result);
-    input->data         = null_import_descriptor_obj;
-    input->path         = null_import_descriptor_path;
-    input->dedup_id     = input->path;
-  }
-  {
-    LNK_InputObj *input = lnk_input_obj_list_push(arena, &result);
-    input->data         = null_thunk_data_obj;
-    input->path         = null_thunk_path;
-    input->dedup_id     = input->path;
-  }
+  coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS, debug_symbols);
 
   scratch_end(scratch);
-  return result;
+}
+
+internal String8
+lnk_obj_from_import_dll_static(Arena *arena, COFF_MachineType machine, LNK_ImportDLL *dll)
+{
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, machine);
+
+  U64               import_size  = coff_word_size_from_machine(machine);
+  COFF_SectionFlags import_align = coff_section_flag_from_align_size(import_size);
+
+  PE_ImportEntry *impdesc       = push_array(obj_writer->arena, PE_ImportEntry, 1);
+  String8         dll_name_cstr = push_cstr(obj_writer->arena, dll->name);
+
+  COFF_ObjSection *dll_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$2"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_struct(impdesc));
+  COFF_ObjSection *ilt_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$4"), LNK_IDATA_SECTION_FLAGS|import_align,                  str8_zero());
+  COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$5"), LNK_IDATA_SECTION_FLAGS|import_align,                  str8_zero());
+  COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  str8_zero());
+  COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$7"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes,  dll_name_cstr);
+  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  LNK_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,   str8_zero());
+
+  COFF_ObjSymbol *ilt_symbol      = coff_obj_writer_push_symbol_static(obj_writer, ilt_sect->name,      0, ilt_sect);
+  COFF_ObjSymbol *iat_symbol      = coff_obj_writer_push_symbol_static(obj_writer, iat_sect->name,      0, iat_sect);
+  COFF_ObjSymbol *dll_name_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll_name_sect->name, 0, dll_name_sect);
+  
+  switch (machine) {
+  case COFF_MachineType_Unknown: {} break;
+  case COFF_MachineType_X64: {
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, lookup_table_voff),      ilt_symbol,      COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, name_voff),              dll_name_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_ImportEntry, import_addr_table_voff), iat_symbol,      COFF_Reloc_X64_Addr32Nb);
+  } break;
+  default: { NotImplemented; } break;
+  }
+
+  for (LNK_ImportFunc *func = dll->first_func; func != 0; func = func->next) {
+    LNK_Symbol                     *import_symbol = func->symbol;
+    COFF_ParsedArchiveImportHeader  import_header = coff_archive_import_from_data(import_symbol->u.coff_import);
+
+    String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", import_header.func_name);
+    U64     iat_offset      = iat_sect->data.total_size;
+    U64     ilt_offset      = ilt_sect->data.total_size;
+    U64     int_offset      = int_sect->data.total_size;
+
+    COFF_ObjSymbol *iat_symbol = 0;
+    switch (import_header.import_by) {
+    case COFF_ImportBy_Ordinal: {
+      String8 ordinal_data = coff_ordinal_data_from_hint(obj_writer->arena, import_header.machine, import_header.hint_or_ordinal);
+      str8_list_push(obj_writer->arena, &ilt_sect->data, ordinal_data);
+      str8_list_push(obj_writer->arena, &iat_sect->data, ordinal_data);
+
+      iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, iat_sect);
+    } break;
+    case COFF_ImportBy_Name: {
+      // put together name look up entry
+      String8 int_data = coff_make_import_lookup(obj_writer->arena, import_header.hint_or_ordinal, import_header.func_name);
+      str8_list_push(obj_writer->arena, &int_sect->data, int_data);
+
+      // create symbol for lookup entry
+      COFF_ObjSymbol *int_symbol = coff_obj_writer_push_symbol_static(obj_writer, int_sect->name, int_offset, int_sect);
+
+      // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses
+      U64 import_size  = coff_word_size_from_machine(import_header.machine);
+      U8 *import_entry = push_array(obj_writer->arena, U8, import_size);
+      str8_list_push(obj_writer->arena, &ilt_sect->data, str8_array(import_entry, import_size));
+      str8_list_push(obj_writer->arena, &iat_sect->data, str8_array(import_entry, import_size));
+
+      iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, iat_sect);
+
+      // patch IAT and ILT
+      coff_obj_writer_section_push_reloc(obj_writer, ilt_sect, ilt_offset, int_symbol, COFF_Reloc_X64_Addr32Nb);
+      coff_obj_writer_section_push_reloc(obj_writer, iat_sect, iat_offset, int_symbol, COFF_Reloc_X64_Addr32Nb);
+    } break;
+    case COFF_ImportBy_Undecorate: {
+      NotImplemented;
+    } break;
+    case COFF_ImportBy_NameNoPrefix: {
+      NotImplemented;
+    } break;
+    }
+
+    // emit thunks
+    COFF_ObjSymbol *jmp_thunk_symbol = 0;
+    if (import_header.type == COFF_ImportHeader_Code) {
+      switch (import_header.machine) {
+      case COFF_MachineType_Unknown: {} break;
+      case COFF_MachineType_X64:     { jmp_thunk_symbol = lnk_emit_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name); } break;
+      default:                       { NotImplemented; } break;
+      }
+    }
+  }
+
+  String8 dll_obj = coff_obj_writer_serialize(arena, obj_writer);
+  coff_obj_writer_release(&obj_writer);
+  return dll_obj;
+}
+
+internal String8
+lnk_obj_from_import_dll_delayed(Arena *arena, COFF_MachineType machine, LNK_ImportDLL *dll, B32 emit_biat, B32 emit_uiat)
+{
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, machine);
+
+  // import descriptor
+  PE_DelayedImportEntry *impdesc = push_array(obj_writer->arena, PE_DelayedImportEntry, 1);
+  impdesc->attributes            = 1;
+
+  // DLL name cstring
+  String8 dll_name_cstr = push_cstr(obj_writer->arena, dll->name);
+
+  // DLL handle
+  U64 handle_size = coff_word_size_from_machine(machine);
+  U8 *handle      = push_array(obj_writer->arena, U8, handle_size);
+
+  // import align
+  U64               import_size  = coff_word_size_from_machine(machine);
+  COFF_SectionFlags import_align = coff_section_flag_from_align_size(import_size);
+
+  COFF_ObjSection *dll_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$2"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_struct(impdesc));
+  COFF_ObjSection *ilt_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$4"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
+  COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$5"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
+  COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$6"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_zero());
+  COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$7"), LNK_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
+  COFF_ObjSection *biat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$8"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
+  COFF_ObjSection *uiat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$9"), LNK_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
+  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  LNK_TEXT_SECTION_FLAGS,                               str8_zero());
+  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$h"),  LNK_DATA_SECTION_FLAGS,                               str8_array(handle, handle_size));
+
+  COFF_ObjSymbol *dll_symbol      = coff_obj_writer_push_symbol_static(obj_writer, dll_sect->name,      0, dll_sect);
+  COFF_ObjSymbol *dll_name_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll_name_sect->name, 0, dll_name_sect);
+  COFF_ObjSymbol *handle_symbol   = coff_obj_writer_push_symbol_static(obj_writer, handle_sect->name,   0, handle_sect);
+  COFF_ObjSymbol *iat_symbol      = coff_obj_writer_push_symbol_static(obj_writer, iat_sect->name,      0, iat_sect);
+  COFF_ObjSymbol *ilt_symbol      = coff_obj_writer_push_symbol_static(obj_writer, ilt_sect->name,      0, ilt_sect);
+
+  switch (machine) {
+  case COFF_MachineType_Unknown: {} break;
+  case COFF_MachineType_X64: {
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, name_voff),          dll_name_symbol, COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, module_handle_voff), handle_symbol,   COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, iat_voff),           iat_symbol,      COFF_Reloc_X64_Addr32Nb);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, name_table_voff),    ilt_symbol,      COFF_Reloc_X64_Addr32Nb);
+  } break;
+  default: { NotImplemented; } break;
+  }
+
+  if (emit_biat) {
+    COFF_ObjSymbol *biat_symbol = coff_obj_writer_push_symbol_static(obj_writer, biat_sect->name, 0, biat_sect);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, bound_table_voff), biat_symbol, COFF_Reloc_X64_Addr32Nb);
+  }
+  if (emit_uiat) {
+    COFF_ObjSymbol *uiat_symbol = coff_obj_writer_push_symbol_static(obj_writer, uiat_sect->name, 0, uiat_sect);
+    coff_obj_writer_section_push_reloc(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, unload_table_voff), uiat_symbol, COFF_Reloc_X64_Addr32Nb);
+  }
+  
+  // emit tail merge
+  COFF_ObjSymbol *tail_merge_symbol = 0;
+  switch (machine) {
+  case COFF_MachineType_Unknown: {} break;
+  case COFF_MachineType_X64:     { tail_merge_symbol = lnk_emit_tail_merge_thunk_x64(obj_writer, code_sect, dll->name, dll_symbol); } break;
+  default:                       { NotImplemented; } break;
+  }
+
+  for (LNK_ImportFunc *func = dll->first_func; func != 0; func = func->next) {
+#if 0
+    LNK_Symbol                     *import_symbol = func->symbol;
+    COFF_ParsedArchiveImportHeader  import_header = coff_archive_import_from_data(import_symbol->u.coff_import);
+
+    // emit thunks
+    COFF_ObjSymbol *jmp_thunk_symbol  = 0;
+    COFF_ObjSymbol *load_thunk_symbol = 0;
+    if (import_header.type == COFF_ImportHeader_Code) {
+      switch (machine) {
+      case COFF_MachineType_X64: {
+        String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", header->func_name);
+        coff_obj_writer_push_symbol_undef(obj_writer, iat_symbol_name);
+
+        // emit jmp thunk
+        jmp_thunk_symbol = lnk_emit_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
+
+        // emit load thunk
+        load_thunk_chunk  = lnk_emit_load_thunk_x64(code_sect, code_table_chunk, iat_symbol, dll->tail_merge_symbol);
+      } break;
+      default: lnk_not_implemented("TODO: support for machine 0x%X", dll->machine); break;
+      }
+    }
+
+    U64 import_size = coff_word_size_from_machine(machine);
+
+    switch (header->import_by) {
+    case COFF_ImportBy_Ordinal: {
+      String8 ordinal_data = coff_ordinal_data_from_hint(obj_writer->arena, import_header.machine, import_header.hint_or_ordinal);
+      str8_list_push(obj_writer->arena, &ilt_sect->data, ordinal_data);
+      str8_list_push(obj_writer->arena, &iat_sect->data, ordinal_data);
+
+      iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, iat_sect);
+
+      if (emit_biat) {
+        biat_chunk = lnk_section_push_chunk_bss(data_sect, biat_table_chunk, import_size, sort_index);
+        lnk_section_push_reloc(data_sect, biat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
+        lnk_section_associate_chunks(data_sect, iat_chunk, biat_chunk);
+      }
+      if (emit_uiat) {
+        uiat_chunk = lnk_section_push_chunk_bss(data_sect, uiat_table_chunk, import_size, sort_index);
+        lnk_section_push_reloc(data_sect, uiat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
+        lnk_section_associate_chunks(data_sect, iat_chunk, uiat_chunk);
+      }
+    } break;
+    case COFF_ImportBy_Name: {
+      // put together name look up entry
+      String8    int_data  = coff_make_import_lookup(data_sect->arena, header->hint_or_ordinal, header->func_name);
+      LNK_Chunk *int_chunk = lnk_section_push_chunk_data(data_sect, int_table_chunk, int_data, str8_zero());
+
+      // create symbol for lookup chunk
+      String8 int_symbol_name = push_str8f(symtab->arena->v[0], "%S.%S.name.delayed", dll->name, header->func_name);
+      int_symbol = lnk_symbol_table_push_defined_chunk(symtab, int_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, int_chunk, 0, 0, 0);
+
+      // dynamic linker patches this voff on DLL load event
+      ilt_chunk = lnk_section_push_chunk_bss(data_sect, ilt_table_chunk, import_size, sort_index);
+      lnk_chunk_set_debugf(data_sect->arena, ilt_chunk, "ILT entry (delayed) %S.%S", dll->name, header->func_name);
+
+      // patch-in ILT with import voff
+      lnk_section_push_reloc(data_sect, ilt_chunk, LNK_Reloc_VIRT_OFF_32, 0, int_symbol);
+
+      // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses.
+      iat_chunk = lnk_section_push_chunk_bss(data_sect, iat_table_chunk, import_size, sort_index);
+      lnk_chunk_set_debugf(data_sect->arena, iat_chunk, "IAT entre (delayed) %S.%S", dll->name, header->func_name);
+
+      // associate chunks
+      lnk_section_associate_chunks(data_sect, iat_chunk, ilt_chunk);
+      lnk_section_associate_chunks(data_sect, iat_chunk, int_chunk);
+
+      // patch-in thunk address
+      lnk_section_push_reloc(data_sect, iat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
+
+      if (imptab->flags & LNK_ImportTableFlag_EmitBiat) {
+        biat_chunk = lnk_section_push_chunk_bss(data_sect, biat_table_chunk, import_size, sort_index);
+        lnk_chunk_set_debugf(data_sect->arena, biat_chunk, "%S.biat.%S (delayed)", dll->name, header->func_name);
+
+        // patch-in thunk address
+        lnk_section_push_reloc(data_sect, biat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
+      }
+
+      if (imptab->flags & LNK_ImportTableFlag_EmitUiat) {
+        uiat_chunk = lnk_section_push_chunk_bss(data_sect, uiat_table_chunk, import_size, sort_index);
+        lnk_chunk_set_debugf(data_sect->arena, uiat_chunk, "%S.uiat.%S (delayed)", dll->name, header->func_name);
+
+        // patch-in thunk address
+        lnk_section_push_reloc(data_sect, uiat_chunk, LNK_Reloc_ADDR_64, 0, load_thunk_symbol);
+      }
+    } break;
+    case COFF_ImportBy_Undecorate: {
+      lnk_not_implemented("TODO: COFF_ImportBy_Undecorate");
+    } break;
+    case COFF_ImportBy_NameNoPrefix: {
+      lnk_not_implemented("TODO: COFF_ImportBy_NameNoPrefix");
+    } break;
+    }
+
+    if (jmp_thunk_chunk) {
+      lnk_section_associate_chunks(data_sect, iat_chunk, jmp_thunk_chunk);
+    }
+    if (load_thunk_chunk) {
+      lnk_section_associate_chunks(data_sect, iat_chunk, load_thunk_chunk);
+    }
+
+    String8     iat_symbol_name = push_str8f(symtab->arena->v[0], "__imp_%S", header->func_name);
+    LNK_Symbol *iat_symbol      = lnk_symbol_table_push_defined_chunk(symtab, iat_symbol_name, LNK_DefinedSymbolVisibility_Extern, 0, iat_chunk, 0, 0, 0);
+
+    String8     ilt_symbol_name = push_str8f(symtab->arena->v[0], "%S.%S.ilt.delayed", dll->name, header->func_name);
+    LNK_Symbol *ilt_symbol      = lnk_symbol_table_push_defined_chunk(symtab, ilt_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, ilt_chunk, 0, 0, 0);
+#endif
+  }
+
+  return str8_zero();
+}
+
+internal String8Array
+lnk_make_import_dlls_static(Arena *arena, LNK_ImportTable *imptab, COFF_MachineType machine, String8 image_name)
+{
+  String8Array objs = {0};
+  if (imptab->dll_count) {
+    objs.v = push_array(arena, String8, imptab->dll_count + 3);
+
+    // make objs for each DLL
+    for (LNK_ImportDLL *dll = imptab->first_dll; dll != 0; dll = dll->next) {
+      objs.v[objs.count++] = lnk_obj_from_import_dll_static(arena, machine, dll);
+    }
+
+    // make null terminator objs 
+    objs.v[objs.count++] = lnk_build_import_entry_obj(arena, image_name, COFF_TimeStamp_Max, machine);
+    objs.v[objs.count++] = lnk_build_null_import_descriptor_obj(arena, COFF_TimeStamp_Max, machine);
+    objs.v[objs.count++] = lnk_build_null_thunk_data_obj(arena, image_name, COFF_TimeStamp_Max, machine);
+  }
+  return objs;
+}
+
+internal String8Array
+lnk_make_import_dlls_delayed(Arena *arena, LNK_ImportTable *imptab, COFF_MachineType machine, String8 image_name, B32 emit_biat, B32 emit_uiat)
+{
+  String8Array objs = {0};
+  if (imptab->dll_count) {
+    objs.v = push_array(arena, String8, imptab->dll_count + 3);
+
+    // make objs for each DLL
+    for (LNK_ImportDLL *dll = imptab->first_dll; dll != 0; dll = dll->next) {
+      objs.v[objs.count++] = lnk_obj_from_import_dll_delayed(arena, machine, dll, emit_biat, emit_uiat);
+    }
+
+    // make null terminator objs 
+    objs.v[objs.count++] = lnk_build_import_entry_obj(arena, image_name, COFF_TimeStamp_Max, machine);
+    objs.v[objs.count++] = lnk_build_null_import_descriptor_obj(arena, COFF_TimeStamp_Max, machine);
+    objs.v[objs.count++] = lnk_build_null_thunk_data_obj(arena, image_name, COFF_TimeStamp_Max, machine);
+  }
+  return objs;
 }
 

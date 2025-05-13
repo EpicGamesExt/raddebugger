@@ -85,7 +85,7 @@ lnk_get_first_section_contrib(LNK_Section *sect)
 {
   if (sect->contribs.chunk_count > 0) {
     if (sect->contribs.first->count > 0) {
-      return &sect->contribs.first->v[0];
+      return sect->contribs.first->v[0];
     }
   }
   return 0;
