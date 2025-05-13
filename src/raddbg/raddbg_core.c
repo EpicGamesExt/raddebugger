@@ -1486,7 +1486,6 @@ internal String8
 rd_mapped_from_file_path(Arena *arena, String8 file_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 result = file_path;
   if(file_path.size != 0)
   {
     String8List file_path_parts = str8_split_path(scratch.arena, file_path);
@@ -1527,9 +1526,10 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
         str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
       }
       StringJoin join = {.sep = str8_lit("/")};
-      result = str8_list_join(arena, &best_map_dst_parts, &join);
+      file_path = str8_list_join(scratch.arena, &best_map_dst_parts, &join);
     }
   }
+  String8 result = push_str8_copy(arena, file_path);
   scratch_end(scratch);
   return result;
 }
@@ -13473,6 +13473,10 @@ rd_frame(void)
           {
             // NOTE(rjf):
             //
+            // foo.c
+            // C:/test/bar/baz/foo.c
+            // -> override foo.c -> C:/test/bar/baz/foo.c
+            //
             // C:/foo/bar/baz.c
             // D:/foo/bar/baz.c
             // -> override C: -> D:
@@ -13509,7 +13513,9 @@ rd_frame(void)
             String8Node *first_diff_dst = dst_path_parts__reversed.first;
             for(;first_diff_src != 0 && first_diff_dst != 0;)
             {
-              if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive))
+              if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive) ||
+                 first_diff_src->next == 0 ||
+                 first_diff_dst->next == 0)
               {
                 break;
               }
@@ -14539,7 +14545,7 @@ rd_frame(void)
             U64 vaddr = 0;
             B32 require_disasm_snap = 0;
             {
-              file_path = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
+              file_path = rd_regs()->file_path;
               point     = rd_regs()->cursor;
               thread    = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
               process   = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
