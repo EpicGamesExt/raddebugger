@@ -60,9 +60,9 @@ internal void coff_lib_writer_symbol_array_sort(COFF_LibWriterSymbol *arr, U64 c
 internal COFF_LibWriter * coff_lib_writer_alloc(void);
 internal void coff_lib_writer_release(COFF_LibWriter **writer_ptr);
 internal void coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_data);
-internal void coff_lib_writer_push_export(COFF_LibWriter *writer, String8 raw_import_header);
-internal void coff_lib_writer_push_export_by_ordinal(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, U16 ordinal);
-internal void coff_lib_writer_push_export_by_name(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, String8 name, U16 hint);
+internal COFF_LibWriterSymbolNode * coff_lib_writer_push_export(COFF_LibWriter *writer, String8 raw_import_header);
+internal COFF_LibWriterSymbolNode * coff_lib_writer_push_export_by_ordinal(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, U16 ordinal);
+internal COFF_LibWriterSymbolNode * coff_lib_writer_push_export_by_name(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, String8 name, U16 hint);
 internal String8List coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeStamp time_stamp, U16 mode, B32 emit_second_member);
 
 #endif // COFF_LIB_WRITER_H
