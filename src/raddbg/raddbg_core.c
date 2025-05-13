@@ -2428,6 +2428,7 @@ rd_view_from_eval(RD_Cfg *parent, E_Eval eval)
   rd_cfg_child_from_string_or_alloc(view, str8_lit("selected"));
   {
     // rjf: get expression evaluation
+    // TODO(rjf): we need to account for UFCS style expressions here...
     E_Eval expr_eval = eval;
     if(eval.expr->kind == E_ExprKind_Call && type_is_visualizer)
     {

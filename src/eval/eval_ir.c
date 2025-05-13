@@ -903,9 +903,20 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, 1, 1, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         
+        // rjf: find the first non-autohook result
+        E_TypeKey type_key = r_tree.type_key;
+        for(E_IRTreeAndType *t = &r_tree; t != 0; t = t->prev)
+        {
+          type_key = t->type_key;
+          if(t->auto_hook == 0)
+          {
+            break;
+          }
+        }
+        
         // rjf: fill output
         result.root     = e_irtree_const_u(arena, 0);
-        result.type_key = r_tree.type_key;
+        result.type_key = type_key;
         result.mode     = E_Mode_Null;
       }break;
       
@@ -1573,6 +1584,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       case E_ExprKind_LeafIdentifier:
       {
         Temp scratch = scratch_begin(&arena, 1);
+        B32 is_auto_hook = 0;
         String8 qualifier = expr->qualifier;
         String8 string = expr->string;
         String8 string__redirected = string;
@@ -1617,6 +1629,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
               mapped_bytecode_mode = parent_irtree->mode;
               mapped_type_key = parent_irtree->type_key;
+              is_auto_hook = parent_irtree->auto_hook;
               disallow_autohooks = 1;
               E_MsgList msgs = e_msg_list_copy(arena, &parent_irtree->msgs);
               e_msg_list_concat_in_place(&result.msgs, &msgs);
@@ -2054,6 +2067,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access); 
         }
         
+        //- rjf: mark if auto hook
+        result.auto_hook = is_auto_hook;
+        
         //- rjf: error on failure-to-generate
         if(!generated && !str8_match(string, str8_lit("$"), 0))
         {
@@ -2338,6 +2354,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     {
       result.prev = push_array(arena, E_IRTreeAndType, 1);
       result.prev[0] = *parent;
+    }
+    
+    //- rjf: mark this result as an auto-hook, if we have an override
+    if(t->overridden)
+    {
+      result.auto_hook = 1;
     }
     
     //- rjf: find any auto hooks according to this generation's type

@@ -318,6 +318,7 @@ struct E_IRTreeAndType
   E_TypeKey type_key;
   void *user_data;
   E_Mode mode;
+  B32 auto_hook;
   E_MsgList msgs;
   E_IRTreeAndType *prev;
 };
