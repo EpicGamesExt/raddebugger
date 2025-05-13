@@ -14557,7 +14557,7 @@ rd_frame(void)
             U64 vaddr = 0;
             B32 require_disasm_snap = 0;
             {
-              file_path = rd_regs()->file_path;
+              file_path = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
               point     = rd_regs()->cursor;
               thread    = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
               process   = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);

@@ -616,13 +616,14 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
         }
       }
       
-      //- rjf: produce obj name
+      //- rjf: produce obj name/path
       String8 obj_name = pdb_unit->obj_name;
       if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
          str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
       {
         MemoryZeroStruct(&obj_name);
       }
+      String8 obj_folder_path = lower_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
       
       //- rjf: build this unit's line table, fill out primary line info (inline info added after)
       RDIM_LineTable *line_table = 0;
@@ -644,6 +645,13 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
             {
               PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
               String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
+              if(file_path_normalized_style == PathStyle_Relative)
+              {
+                String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
+                file_path_normalized_parts = obj_folder_path_parts;
+                file_path_normalized_style = path_style_from_str8(obj_folder_path);
+              }
               str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
               file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
             }
@@ -715,10 +723,23 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
     ProfScope("pass 3: parse all inlinee line tables")
       for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
+      //- rjf: unpack unit
+      PDB_CompUnit *pdb_unit = in->comp_units->units[comp_unit_idx];
       CV_SymParsed *unit_sym = in->comp_unit_syms[comp_unit_idx];
       CV_C13Parsed *unit_c13 = in->comp_unit_c13s[comp_unit_idx];
       CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
       CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
+      
+      //- rjf: produce obj name/path
+      String8 obj_name = pdb_unit->obj_name;
+      if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
+         str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
+      {
+        MemoryZeroStruct(&obj_name);
+      }
+      String8 obj_folder_path = lower_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
+      
+      //- rjf: parse inlinee line tables
       U64 base_voff = 0;
       for(CV_RecRange *rec_range = rec_ranges_first;
           rec_range < rec_ranges_opl;
@@ -839,12 +860,18 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   // rjf: file name -> normalized file path
                   String8 file_path            = seq_file_name;
                   String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
-                  for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
                   {
-                    if(file_path_normalized.str[idx] == '\\')
+                    PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
+                    String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
+                    if(file_path_normalized_style == PathStyle_Relative)
                     {
-                      file_path_normalized.str[idx] = '/';
+                      String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                      str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
+                      file_path_normalized_parts = obj_folder_path_parts;
+                      file_path_normalized_style = path_style_from_str8(obj_folder_path);
                     }
+                    str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
+                    file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
                   }
                   
                   // rjf: normalized file path -> source file node
