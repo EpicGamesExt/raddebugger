@@ -1425,7 +1425,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           {
             e_expr_push_child(call, e_expr_copy(arena, arg));
           }
-          if(str8_match(callee->string, str8_lit("raw"), 0))
+          if(str8_match(callee->ref->string, str8_lit("raw"), 0))
           {
             strip_lenses = 1;
             disallow_autohooks = 1;
