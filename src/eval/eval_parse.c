@@ -533,7 +533,7 @@ e_leaf_type_from_name(String8 name)
   {
 #define Case(str) (str8_match(name, str8_lit(str), 0))
     if(0){}
-    else if(Case("u8") || Case("uint8") || Case("uint8_t") || Case("U8"))
+    else if(Case("uint8") || Case("uint8_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U8);
@@ -543,7 +543,7 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_UChar8);
     }
-    else if(Case("u16") || Case("uint16") || Case("uint16_t") || Case("U16"))
+    else if(Case("uint16") || Case("uint16_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U16);
@@ -553,7 +553,7 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_UChar16);
     }
-    else if(Case("u32") || Case("uint32") || Case("uint32_t") || Case("U32") || Case("uint"))
+    else if(Case("uint32") || Case("uint32_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U32);
@@ -563,27 +563,27 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_UChar32);
     }
-    else if(Case("u64") || Case("uint64") || Case("uint64_t") || Case("U64") || Case("size_t"))
+    else if(Case("uint64") || Case("uint64_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U64);
     }
-    else if(Case("u128") || Case("uint128") || Case("uint128_t") || Case("U128"))
+    else if(Case("uint128") || Case("uint128_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U128);
     }
-    else if(Case("u256") || Case("uint256") || Case("uint256_t") || Case("U256"))
+    else if(Case("uint256") || Case("uint256_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U256);
     }
-    else if(Case("u512") || Case("uint512") || Case("uint512_t") || Case("U512"))
+    else if(Case("uint512") || Case("uint512_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_U512);
     }
-    else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t") || Case("S8"))
+    else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S8);
@@ -593,7 +593,7 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_Char8);
     }
-    else if(Case("s16") || Case("b16") || Case("B16") || Case("i16") ||  Case("int16") || Case("int16_t") || Case("S16"))
+    else if(Case("int16") || Case("int16_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S16);
@@ -603,7 +603,7 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_Char16);
     }
-    else if(Case("s32") || Case("b32") || Case("B32") || Case("i32") || Case("int32") || Case("int32_t") || Case("char32") || Case("S32") || Case("int"))
+    else if(Case("int32") || Case("int32_t") || Case("char32"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S32);
@@ -613,17 +613,17 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_Char32);
     }
-    else if(Case("s64") || Case("b64") || Case("B64") || Case("i64") || Case("int64") || Case("int64_t") || Case("S64") || Case("ssize_t"))
+    else if(Case("int64") || Case("int64_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S64);
     }
-    else if(Case("s256") || Case("i256") || Case("int256") || Case("int256_t") || Case("S256"))
+    else if(Case("int256") || Case("int256_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S256);
     }
-    else if(Case("s512") || Case("i512") || Case("int512") || Case("int512_t") || Case("S512"))
+    else if(Case("int512") || Case("int512_t"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_S512);
@@ -638,12 +638,12 @@ e_leaf_type_from_name(String8 name)
       found = 1;
       key = e_type_key_basic(E_TypeKind_Bool);
     }
-    else if(Case("float") || Case("float32") || Case("f32") || Case("F32") || Case("r32") || Case("R32"))
+    else if(Case("float") || Case("float32"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_F32);
     }
-    else if(Case("double") || Case("float64") || Case("f64") || Case("F64") || Case("r64") || Case("R64"))
+    else if(Case("double") || Case("float64"))
     {
       found = 1;
       key = e_type_key_basic(E_TypeKind_F64);
