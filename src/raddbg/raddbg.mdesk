@@ -2363,7 +2363,7 @@ raddbg_readme:
     @p "`pointer, 64`: Visualizes `pointer` as pointing to a 256-element array.";
     @p "`pointer, count`: Visualizes `pointer` as pointing to a `count`-element array.";
     @p "`slice(some_slice_struct)`: Interprets a structure type as containing a base pointer and a count (either through an integer, or an 'end pointer'), and visualizes the base pointer, pointing to that many elements.";
-    @p "`only(some_struct, a, b, c)`: Displays the value of `some_struct`, but only showing members `a`, `b`, and `c`.";
+    @p "`rows(some_struct, a, b, c)`: Displays the value of `some_struct`, but only showing members `a`, `b`, and `c`.";
     @p "`omit(some_struct, a, b, c)`: Displays the value of `some_struct`, but only showing members other than `a`, `b`, and `c`.";
     @p "`hex(my_int)`: Visualizes the value of `my_int` in base-16 (hexadecimal) form.";
     @p "`dec(my_int)`: Visualizes the value of `my_int` in base-10 (decimal) form.";
@@ -2446,7 +2446,7 @@ raddbg_readme:
     @p "`no_char(expr)`: Disables character visualization with character or integer evaluations in `expr`.";
     @p "`no_addr(expr)`: Disables explicit address visualization with pointer evaluations in `expr`.";
     @p "`sequence(expr)`: Interprets `expr` as an integer, encoding how many sub-expressions `expr` should expand to produce. This can be used in combination with the `table` view to easily generate tables, indexing amongst many arrays.";
-    @p "`only(expr, ...)`: Interpreting all post-`expr` arguments as member names, only expands to show those members of `expr`.";
+    @p "`rows(expr, ...)`: Interpreting all post-`expr` arguments as member names, only expands to show those members of `expr`.";
     @p "`omit(expr, ...)`: Interpreting all post-`expr` arguments as member names, expands to show all members of `expr`, except those with matching names.";
     @p "`range1(expr, min, max)`: Expresses that `expr` is a bounded numeric value between `min` and `max`. Interpreted by the debugger to build slider UI for an evaluation.";
     @p "`array(expr, count)`: Expresses that `expr` points to `count` values, rather than 1, or the fixed size implied by a static array. When expanded, displays only that many values.";

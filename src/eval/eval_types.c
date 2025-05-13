@@ -2407,16 +2407,16 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 }
 
 ////////////////////////////////
-//~ rjf: (Built-In Type Hooks) `only` lens
+//~ rjf: (Built-In Type Hooks) `rows` lens
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(only)
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(rows)
 {
   E_Type *type = e_type_from_key(eval.irtree.type_key);
   E_TypeExpandInfo info = {0, type->count};
   return info;
 }
 
-E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(rows)
 {
   E_Type *type = e_type_from_key(eval.irtree.type_key);
   U64 out_idx = 0;

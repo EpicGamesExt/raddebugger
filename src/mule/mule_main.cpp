@@ -190,7 +190,7 @@ union Vector_R2
   };
   float v[2];
 };
-raddbg_type_view(Vector_R2, only($, x, y));
+raddbg_type_view(Vector_R2, rows($, x, y));
 
 typedef union Matrix4x4F32 Matrix4x4F32;
 union Matrix4x4F32
@@ -310,9 +310,9 @@ struct Crazy_Union
   };
 };
 raddbg_type_view(Crazy_Union,
-                 kind == Kind.First ? only($, first_and_third, first) :
-                 kind == Kind.Second ? only($, second) :
-                 kind == Kind.Third ? only($, first_and_third, third) :
+                 kind == Kind.First ? rows($, first_and_third, first) :
+                 kind == Kind.Second ? rows($, second) :
+                 kind == Kind.Third ? rows($, first_and_third, third) :
                  kind == Kind.Fourth ? kind :
                  $);
 

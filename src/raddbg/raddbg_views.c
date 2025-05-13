@@ -1075,13 +1075,13 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     info.view_ui_rule = rd_view_ui_rule_from_string(row->block->viz_expand_rule->string);
     
     ////////////////////////////
-    //- rjf: find possible table type
+    //- rjf: find possible "columns" type
     //
     E_Type *maybe_table_type = block_type;
     for(;;)
     {
       if(maybe_table_type->kind == E_TypeKind_Lens &&
-         str8_match(maybe_table_type->name, str8_lit("table"), 0))
+         str8_match(maybe_table_type->name, str8_lit("columns"), 0))
       {
         break;
       }
@@ -1100,7 +1100,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     //- rjf: @watch_row_build_cells table rows
     //
     if(0){}
-    else if(block->parent != &ev_nil_block && maybe_table_type->kind == E_TypeKind_Lens && str8_match(maybe_table_type->name, str8_lit("table"), 0) && maybe_table_type->count >= 1)
+    else if(block->parent != &ev_nil_block && maybe_table_type->kind == E_TypeKind_Lens && str8_match(maybe_table_type->name, str8_lit("columns"), 0) && maybe_table_type->count >= 1)
     {
       U64 column_count = maybe_table_type->count;
       info.cell_style_key = push_str8f(arena, "table_%I64u_cols", column_count);

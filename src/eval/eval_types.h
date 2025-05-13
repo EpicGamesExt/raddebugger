@@ -142,10 +142,10 @@ E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
 E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
-//~ rjf: (Built-In Type Hooks) `only` lens
+//~ rjf: (Built-In Type Hooks) `rows` lens
 
-E_TYPE_EXPAND_INFO_FUNCTION_DEF(only);
-E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only);
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(rows);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(rows);
 
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `sequence` lens
