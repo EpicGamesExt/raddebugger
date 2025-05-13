@@ -204,8 +204,12 @@ internal B32
 os_window_is_focused(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return 0;}
-  // TODO(rjf)
-  return 0;
+  OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
+  Window focused_window = 0;
+  int revert_to = 0;
+  XGetInputFocus(os_lnx_gfx_state->display, &focused_window, &revert_to);
+  B32 result = (w->window == focused_window);
+  return result;
 }
 
 internal B32
