@@ -2502,7 +2502,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(omit)
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(sequence)
 {
-  E_TypeExpandInfo info = {0, eval.value.u64};
+  E_TypeExpandInfo info = {0, e_value_eval_from_eval(eval).value.u64};
   return info;
 }
 

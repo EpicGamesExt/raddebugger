@@ -197,7 +197,7 @@ union Matrix4x4F32
 {
   float elements[4][4];
 };
-raddbg_type_view(Matrix4x4F32, table($.elements, $[0], $[1], $[2], $[3]));
+raddbg_type_view(Matrix4x4F32, columns($.elements, $[0], $[1], $[2], $[3]));
 
 union PackedF16
 {
@@ -427,7 +427,7 @@ type_coverage_eval_tests(void)
     6
   };
   
-  raddbg_pin(table(sequence(6), fixed.pairs[$], memory_[$]));
+  raddbg_pin(columns(sequence(6), fixed.pairs[$], memory_[$]));
   raddbg_pin(basics);
   raddbg_pin(fixed);
   raddbg_pin(pointer);
@@ -1886,7 +1886,7 @@ fancy_viz_eval_tests(void)
   {
     5, 2, 8, 6
   };
-  raddbg_pin(table(node_indices, nodes[$]));
+  raddbg_pin(columns(node_indices, nodes[$]));
   
   //- rjf: bitmaps
   unsigned int background_color = 0x00000000;
