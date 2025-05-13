@@ -52,58 +52,6 @@ r_ogl_os_init(CmdLine *cmdln)
     os_abort(1);
   }
   
-  //- rjf: get all EGL configs
-  EGLConfig configs[256] = {0};
-  EGLint configs_count = 0;
-  {
-    EGLint options[] =
-    {
-      EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
-      EGL_CONFORMANT,        EGL_OPENGL_BIT,
-      EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
-      EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
-      
-      EGL_RED_SIZE,      8,
-      EGL_GREEN_SIZE,    8,
-      EGL_BLUE_SIZE,     8,
-      EGL_DEPTH_SIZE,   24,
-      EGL_STENCIL_SIZE,  8,
-      
-      EGL_NONE,
-    };
-    if(!eglChooseConfig(r_ogl_lnx_state->display, options, configs, ArrayCount(configs), &configs_count) || configs_count == 0)
-    {
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
-      os_abort(1);
-    }
-  }
-  
-  //- rjf: actually choose the egl config
-  {
-    Window dummy_window = XCreateWindow(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), 0, 0, 100, 100, 0, CopyFromParent, InputOutput, CopyFromParent, 0, 0);
-    EGLint options[] =
-    {
-      EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
-      EGL_NONE,
-    };
-    for(U32 idx = 0; idx < configs_count; idx += 1)
-    {
-      EGLSurface *dummy_surface = eglCreateWindowSurface(r_ogl_lnx_state->display, configs[idx], dummy_window, options);
-      if(dummy_surface != EGL_NO_SURFACE)
-      {
-        r_ogl_lnx_state->config = configs[idx];
-        eglDestroySurface(r_ogl_lnx_state->display, dummy_surface);
-        break;
-      }
-    }
-    if(r_ogl_lnx_state->config == 0)
-    {
-      os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable EGL configuration."));
-      os_abort(1);
-    }
-    XDestroyWindow(os_lnx_gfx_state->display, dummy_window);
-  }
-  
   //- rjf: construct context
   {
     B32 debug_mode = cmd_line_has_flag(cmdln, str8_lit("opengl_debug"));
@@ -118,7 +66,7 @@ r_ogl_os_init(CmdLine *cmdln)
       debug_mode ? EGL_CONTEXT_OPENGL_DEBUG : EGL_NONE, EGL_TRUE,
       EGL_NONE,
     };
-    r_ogl_lnx_state->context = eglCreateContext(r_ogl_lnx_state->display, r_ogl_lnx_state->config, EGL_NO_CONTEXT, options);
+    r_ogl_lnx_state->context = eglCreateContext(r_ogl_lnx_state->display, 0, EGL_NO_CONTEXT, options);
     if(r_ogl_lnx_state->context == EGL_NO_CONTEXT)
     {
       os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create OpenGL context with EGL."));
@@ -127,6 +75,7 @@ r_ogl_os_init(CmdLine *cmdln)
   }
   
   eglMakeCurrent(r_ogl_lnx_state->display, 0, 0, r_ogl_lnx_state->context);
+  glDrawBuffer(GL_BACK);
 }
 
 internal R_Handle
@@ -143,12 +92,66 @@ r_ogl_os_window_equip(OS_Handle window)
     w = push_array(r_ogl_lnx_state->arena, R_OGL_LNX_Window, 1);
   }
   {
-    EGLint options[] =
+    EGLint surface_options[] =
     {
       EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
       EGL_NONE,
     };
-    w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, window_os->window, options);
+    if(r_ogl_lnx_state->config == 0)
+    {
+      //- rjf: get all EGL configs
+      EGLConfig configs[256] = {0};
+      EGLint configs_count = 0;
+      {
+        EGLint options[] =
+        {
+          EGL_SURFACE_TYPE,      EGL_WINDOW_BIT,
+          EGL_CONFORMANT,        EGL_OPENGL_BIT,
+          EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
+          EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
+          
+          EGL_RED_SIZE,      8,
+          EGL_GREEN_SIZE,    8,
+          EGL_BLUE_SIZE,     8,
+          EGL_DEPTH_SIZE,   24,
+          EGL_STENCIL_SIZE,  8,
+          
+          EGL_NONE,
+        };
+        if(!eglChooseConfig(r_ogl_lnx_state->display, options, configs, ArrayCount(configs), &configs_count) || configs_count == 0)
+        {
+          os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
+          os_abort(1);
+        }
+      }
+      
+      //- rjf: actually choose the egl config
+      {
+        EGLint config_options[] =
+        {
+          EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
+          EGL_NONE,
+        };
+        for(U32 idx = 0; idx < configs_count; idx += 1)
+        {
+          w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, configs[idx], window_os->window, config_options);
+          if(w->surface != EGL_NO_SURFACE)
+          {
+            r_ogl_lnx_state->config = configs[idx];
+            break;
+          }
+        }
+        if(r_ogl_lnx_state->config == 0)
+        {
+          os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable EGL configuration."));
+          os_abort(1);
+        }
+      }
+    }
+    else
+    {
+      w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, window_os->window, surface_options);
+    }
     if(w->surface == EGL_NO_SURFACE)
     {
       os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create EGL surface."));
