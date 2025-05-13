@@ -2423,10 +2423,10 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(only)
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
     E_Expr *arg = type->args[idx];
-    if(arg->string.size != 0)
-    {
-      evals_out[out_idx] = e_eval_wrapf(eval, "$.%S", arg->string);
-    }
+    Temp scratch = scratch_begin(&arena, 1);
+    String8 string = e_string_from_expr(scratch.arena, arg, str8_zero());
+    evals_out[out_idx] = e_eval_wrap(eval, string);
+    scratch_end(scratch);
   }
 }
 
@@ -2522,7 +2522,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(array)
 {
   E_Type *type = e_type_from_key(eval.irtree.type_key);
   U64 count = 1;
-  if(type->args != 0 && type->count > 0) E_ParentKey(eval.key)
+  if(type->args != 0 && type->count > 0) E_ParentKey(eval.parent_key)
   {
     E_Key count_key = e_key_from_expr(type->args[0]);
     E_Value count_value = e_value_from_key(count_key);

@@ -715,7 +715,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             String8 full_qualified_name = str8_list_join(scratch.arena, &parts, &(StringJoin){.sep = str8_lit(".")});
             E_Expr *leaf_expr_name = e_push_expr(scratch.arena, E_ExprKind_LeafIdentifier, r1u64(0, 0));
             leaf_expr_name->string = full_qualified_name;
-            result = e_push_irtree_and_type_from_expr(arena, root_parent, &e_default_identifier_resolution_rule, disallow_autohooks, disallow_autohooks, leaf_expr_name);
+            result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, disallow_autohooks, leaf_expr_name);
           }
         }
       }break;
@@ -1627,7 +1627,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
               {
                 E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, prev, string);
-                E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, prev, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access);
+                E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, root_parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access);
                 if(access_irtree.root != &e_irnode_nil)
                 {
                   string_mapped = 1;
