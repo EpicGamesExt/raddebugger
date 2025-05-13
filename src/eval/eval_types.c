@@ -2409,24 +2409,38 @@ E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 ////////////////////////////////
 //~ rjf: (Built-In Type Hooks) `rows` lens
 
+typedef struct E_RowsAccel E_RowsAccel;
+struct E_RowsAccel
+{
+  E_Eval *root_evals;
+  Rng1U64 *root_evals_ranges;
+};
+
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(rows)
 {
   E_Type *type = e_type_from_key(eval.irtree.type_key);
-  E_TypeExpandInfo info = {0, type->count};
+  E_RowsAccel *accel = push_array(arena, E_RowsAccel, 1);
+  accel->root_evals = push_array(arena, E_Eval, type->count);
+  accel->root_evals_ranges = push_array(arena, Rng1U64, type->count);
+  E_ParentKey(eval.key)
+  {
+    for EachIndex(idx, type->count)
+    {
+      accel->root_evals[idx] = e_eval_from_expr(type->args[idx]);
+      accel->root_evals_ranges[idx] = r1u64(idx, idx+1);
+    }
+  }
+  E_TypeExpandInfo info = {accel, type->count};
   return info;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(rows)
 {
-  E_Type *type = e_type_from_key(eval.irtree.type_key);
+  E_RowsAccel *accel = (E_RowsAccel *)user_data;
   U64 out_idx = 0;
   for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, out_idx += 1)
   {
-    E_Expr *arg = type->args[idx];
-    Temp scratch = scratch_begin(&arena, 1);
-    String8 string = e_string_from_expr(scratch.arena, arg, str8_zero());
-    evals_out[out_idx] = e_eval_wrap(eval, string);
-    scratch_end(scratch);
+    evals_out[out_idx] = accel->root_evals[idx];
   }
 }
 

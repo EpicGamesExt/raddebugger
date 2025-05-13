@@ -1785,7 +1785,7 @@ struct Bitmap
   int width;
   int height;
 };
-raddbg_type_view(Bitmap, lens:bitmap(base, width, height));
+raddbg_type_view(Bitmap, bitmap(base, width, height));
 
 static unsigned int
 mule_bswap_u32(unsigned int x)
