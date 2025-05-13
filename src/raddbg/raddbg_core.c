@@ -13552,11 +13552,27 @@ rd_frame(void)
             
             //- rjf: store as file path map cfg
             RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-            RD_Cfg *map = rd_cfg_new(user, str8_lit("file_path_map"));
-            RD_Cfg *src = rd_cfg_new(map, str8_lit("source"));
-            RD_Cfg *dst = rd_cfg_new(map, str8_lit("dest"));
-            rd_cfg_new(src, map_src);
-            rd_cfg_new(dst, map_dst);
+            {
+              RD_CfgList cfgs = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("file_path_map"));
+              RD_Cfg *map = &rd_nil_cfg;
+              for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+              {
+                RD_Cfg *src = rd_cfg_child_from_string(n->v, str8_lit("source"));
+                if(path_match_normalized(src->first->string, map_src))
+                {
+                  map = n->v;
+                  break;
+                }
+              }
+              if(map == &rd_nil_cfg)
+              {
+                map = rd_cfg_new(user, str8_lit("file_path_map"));
+              }
+              RD_Cfg *src = rd_cfg_child_from_string_or_alloc(map, str8_lit("source"));
+              RD_Cfg *dst = rd_cfg_child_from_string_or_alloc(map, str8_lit("dest"));
+              rd_cfg_new_replace(src, map_src);
+              rd_cfg_new_replace(dst, map_dst);
+            }
           }break;
           
           //- rjf: panel removal
