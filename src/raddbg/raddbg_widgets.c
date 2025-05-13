@@ -1242,6 +1242,71 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: produce fancy strings for each line
+  //
+  DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
+  {
+    DR_FStrParams fstr_params =
+    {
+      params->font,
+      rd_raster_flags_from_slot(RD_FontSlot_Code),
+      rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault),
+      params->font_size,
+    };
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      String8 line_string = params->line_text[line_idx];
+      Rng1U64 line_range = params->line_ranges[line_idx];
+      TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
+      DR_FStrList fstrs = {0};
+      if(line_tokens->count == 0)
+      {
+        dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, line_string);
+      }
+      else
+      {
+        TXT_Token *line_tokens_first = line_tokens->v;
+        TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+        for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
+        {
+          // rjf: token -> token string
+          String8 token_string = {0};
+          {
+            Rng1U64 token_range = r1u64(0, line_string.size);
+            if(token->range.min > line_range.min)
+            {
+              token_range.min += token->range.min-line_range.min;
+            }
+            if(token->range.max < line_range.max)
+            {
+              token_range.max = token->range.max-line_range.min;
+            }
+            token_string = str8_substr(line_string, token_range);
+          }
+          
+          // rjf: token -> token color
+          RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
+          RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
+          if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
+          {
+            Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
+            F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
+            token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
+          }
+          
+          // rjf: push fancy string
+          dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, token_string, .color = token_color);
+        }
+      }
+      lines_fstrs[line_idx] = fstrs;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build top-level container
   //
   UI_Box *top_container_box = &ui_nil_box;
@@ -1885,8 +1950,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      String8 line_text = params->line_text[line_idx];
-      F32 line_text_dim = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
+      DR_FStrList line_fstrs = lines_fstrs[line_idx];
+      F32 line_text_dim = dr_dim_from_fstrs(&line_fstrs).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
       line_extras_off[line_idx] = Max(line_text_dim, params->font_size*30);
     }
   }
@@ -2445,7 +2510,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         String8 line_string = params->line_text[line_idx];
         Rng1U64 line_range = params->line_ranges[line_idx];
-        TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
+        DR_FStrList line_fstrs = lines_fstrs[line_idx];
         ui_set_next_text_padding(line_num_padding_px);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
         Vec4F32 line_bg_color = line_bg_colors[line_idx];
@@ -2458,67 +2523,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
         DR_Bucket *line_bucket = dr_bucket_make();
         dr_push_bucket(line_bucket);
-        
-        // rjf: string * tokens -> fancy string list
-        DR_FStrList line_fstrs = {0};
-        {
-          if(line_tokens->count == 0)
-          {
-            DR_FStrParams fstr_params =
-            {
-              params->font,
-              ui_top_text_raster_flags(),
-              rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault),
-              params->font_size,
-            };
-            dr_fstrs_push_new(scratch.arena, &line_fstrs, &fstr_params, line_string);
-          }
-          else
-          {
-            TXT_Token *line_tokens_first = line_tokens->v;
-            TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
-            for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
-            {
-              // rjf: token -> token string
-              String8 token_string = {0};
-              {
-                Rng1U64 token_range = r1u64(0, line_string.size);
-                if(token->range.min > line_range.min)
-                {
-                  token_range.min += token->range.min-line_range.min;
-                }
-                if(token->range.max < line_range.max)
-                {
-                  token_range.max = token->range.max-line_range.min;
-                }
-                token_string = str8_substr(line_string, token_range);
-              }
-              
-              // rjf: token -> token color
-              RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
-              RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
-              Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
-              if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
-              {
-                Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
-                F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
-                token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
-              }
-              
-              // rjf: push fancy string
-              DR_FStrParams fstr_params =
-              {
-                params->font,
-                ui_top_text_raster_flags(),
-                token_color,
-                params->font_size,
-              };
-              dr_fstrs_push_new(scratch.arena, &line_fstrs, &fstr_params, token_string);
-            }
-          }
-        }
-        
-        // rjf: equip fancy strings to line box
         ui_box_equip_display_fstrs(line_box, &line_fstrs);
         
         // rjf: extra rendering for strings that are currently being searched for

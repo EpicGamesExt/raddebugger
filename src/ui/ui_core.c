@@ -2584,21 +2584,27 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     {
       box->tags_key = ui_state->tags_key_stack_top->key;
     }
-    if(ui_state->background_color_stack.top != &ui_state->background_color_nil_stack_top)
+    if(box->flags & UI_BoxFlag_DrawBackground)
     {
-      box->background_color = ui_state->background_color_stack.top->v;
+      if(ui_state->background_color_stack.top != &ui_state->background_color_nil_stack_top)
+      {
+        box->background_color = ui_state->background_color_stack.top->v;
+      }
+      else
+      {
+        box->background_color = ui_color_from_name(str8_lit("background"));
+      }
     }
-    else
+    if(box->flags & UI_BoxFlag_DrawText)
     {
-      box->background_color = ui_color_from_name(str8_lit("background"));
-    }
-    if(ui_state->text_color_stack.top != &ui_state->text_color_nil_stack_top)
-    {
-      box->text_color = ui_state->text_color_stack.top->v;
-    }
-    else
-    {
-      box->text_color = ui_color_from_name(str8_lit("text"));
+      if(ui_state->text_color_stack.top != &ui_state->text_color_nil_stack_top)
+      {
+        box->text_color = ui_state->text_color_stack.top->v;
+      }
+      else
+      {
+        box->text_color = ui_color_from_name(str8_lit("text"));
+      }
     }
   }
   

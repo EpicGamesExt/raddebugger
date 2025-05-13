@@ -849,7 +849,10 @@ e_irtree_from_bundle(E_CacheBundle *bundle)
     bundle->flags |= E_CacheBundleFlag_IRTree;
     E_IRTreeAndType parent = e_irtree_from_key(bundle->parent_key);
     E_Parse parse = e_parse_from_bundle(bundle);
-    bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, &e_default_identifier_resolution_rule, 0, 0, parse.expr);
+    ProfScope("irtree generation for '%.*s'", str8_varg(bundle->string))
+    {
+      bundle->irtree = e_push_irtree_and_type_from_expr(e_cache->arena, &parent, &e_default_identifier_resolution_rule, 0, 0, parse.expr);
+    }
     E_MsgList msgs_copy = e_msg_list_copy(e_cache->arena, &bundle->irtree.msgs);
     e_msg_list_concat_in_place(&bundle->msgs, &msgs_copy);
   }

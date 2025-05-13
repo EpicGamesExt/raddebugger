@@ -352,7 +352,7 @@ fp_font_open(String8 path)
         DWORD data_size = sizeof(data);
         DWORD type = 0;
         status = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\\Fonts", 0, KEY_QUERY_VALUE, &reg_key);
-        status = RegEnumValueA(reg_key, 0, name, &name_size, 0, &type, data, &data_size);
+        status = RegEnumValueA(reg_key, 0, name, &name_size, 0, &type, (unsigned char *)data, &data_size);
         String8 user_fonts_path = str8_cstring(data);
         PathTask *task = push_array(scratch.arena, PathTask, 1);
         task->path = push_str8f(scratch.arena, "%s/%S", user_fonts_path, path);
