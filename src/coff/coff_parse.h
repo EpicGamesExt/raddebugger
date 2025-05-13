@@ -195,8 +195,8 @@ typedef struct COFF_ParsedArchiveImportHeader
 typedef struct COFF_ArchiveMember
 {
   COFF_ParsedArchiveMemberHeader header;
-  U64                      offset;
-  String8                  data;
+  U64                            offset;
+  String8                        data;
 } COFF_ArchiveMember;
 
 typedef struct COFF_ArchiveFirstMember

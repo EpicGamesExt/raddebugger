@@ -43,4 +43,4 @@ internal B32 lnk_parse_export_directive_ex(Arena *arena, String8List directive, 
 internal B32 lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, LNK_ExportParse *parse_out);
 internal LNK_ExportParsePtrArray lnk_array_from_export_list(Arena *arena, LNK_ExportParseList list);
 internal LNK_ExportParseNode * lnk_export_parse_list_push(Arena *arena, LNK_ExportParseList *list, LNK_ExportParse data);
-
+internal String8List lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportParseList export_list);

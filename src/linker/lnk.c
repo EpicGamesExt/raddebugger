@@ -960,21 +960,29 @@ lnk_push_linker_symbols(Arena *arena, LNK_Config *config)
 }
 
 internal void
-lnk_queue_lib_member_input(Arena *arena, PathStyle path_style, LNK_SymbolLib *symbol, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list)
+lnk_queue_lib_member_input(Arena               *arena,
+                           PathStyle            path_style,
+                           LNK_SymbolLib       *symbol,
+                           LNK_InputImportList *input_import_list,
+                           LNK_InputObjList    *input_obj_list)
 {
+  LNK_Lib *lib = symbol->lib;
+  U64 input_idx = Compose64Bit(lib->input_idx, symbol->member_offset);
+
   // parse member
-  COFF_ArchiveMember member_info = coff_archive_member_from_offset(symbol->lib->data, symbol->member_offset);
+  COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, symbol->member_offset);
   COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
   
   switch (member_type) {
   case COFF_DataType_Null: break;
   case COFF_DataType_Import: {
     LNK_InputImport *input = lnk_input_import_list_push(arena, input_import_list);
-    input->import_header = coff_archive_import_from_data(member_info.data);
+    input->coff_import = member_info.data;
+    input->input_idx   = input_idx;
   } break;
   case COFF_DataType_BigObj:
   case COFF_DataType_Obj: {
-    String8 obj_path = coff_parse_long_name(symbol->lib->long_names, member_info.header.name);
+    String8 obj_path = coff_parse_long_name(lib->long_names, member_info.header.name);
 
     // obj path in thin archive has slash appended which screws up 
     // file lookup on disk; it couble be there to enable paths to symbols
@@ -985,11 +993,11 @@ lnk_queue_lib_member_input(Arena *arena, PathStyle path_style, LNK_SymbolLib *sy
     }
 
     // obj path in thin archive is relative to directory with archive
-    B32 is_thin = symbol->lib->type == COFF_Archive_Thin;
+    B32 is_thin = lib->type == COFF_Archive_Thin;
     if (is_thin) {
       Temp scratch = scratch_begin(&arena, 1);
       String8List obj_path_list = {0};
-      str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(symbol->lib->path));
+      str8_list_push(scratch.arena, &obj_path_list, str8_chop_last_slash(lib->path));
       str8_list_push(scratch.arena, &obj_path_list, obj_path);
       obj_path = str8_path_list_join_by_style(arena, &obj_path_list, path_style);
       scratch_end(scratch);
@@ -997,10 +1005,11 @@ lnk_queue_lib_member_input(Arena *arena, PathStyle path_style, LNK_SymbolLib *sy
 
     LNK_InputObj *input = lnk_input_obj_list_push(arena, input_obj_list);
     input->is_thin      = is_thin;
-    input->dedup_id     = push_str8f(arena, "%S/%S", symbol->lib->path, obj_path);
+    input->dedup_id     = push_str8f(arena, "%S/%S", lib->path, obj_path);
     input->path         = obj_path;
     input->data         = member_info.data;
-    input->lib_path     = symbol->lib->path;
+    input->lib_path     = lib->path;
+    input->input_idx    = input_idx;
   } break;
   }
 }
@@ -2225,7 +2234,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
           COFF_SectionFlags  flags = sect_header->flags & ~COFF_SectionFlags_LnkFlags;
           LNK_Section       *sect  = lnk_section_table_search(sectab, sect_name, flags);
 
-          String8Node *data_n = push_array(sect->arena, String8Node, 1);
+          String8Node *data_n = push_array(sectab->arena, String8Node, 1);
           data_n->string      = sect_data;
 
           // fill out contrib
@@ -3147,47 +3156,6 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   return image_data;
 }
 
-internal String8List
-lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportParseList export_list)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-
-  dll_name = str8_skip_last_slash(dll_name);
-
-  // These objects appear in first three members of any lib that linker produces with /dll.
-  // Objects are used by MSVC linker to build import table.
-  String8 import_entry_obj           = lnk_build_import_entry_obj(scratch.arena, dll_name, time_stamp, machine);
-  String8 null_import_descriptor_obj = lnk_build_null_import_descriptor_obj(scratch.arena, time_stamp, machine);
-  String8 null_thunk_data_obj        = lnk_build_null_thunk_data_obj(scratch.arena, dll_name, time_stamp, machine);
-
-  COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
-
-  // push import table nulls
-  coff_lib_writer_push_obj(lib_writer, dll_name, import_entry_obj);
-  coff_lib_writer_push_obj(lib_writer, dll_name, null_import_descriptor_obj);
-  coff_lib_writer_push_obj(lib_writer, dll_name, null_thunk_data_obj);
-
-  // push exports
-  for (LNK_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
-    LNK_ExportParse *exp = &exp_n->data;
-    if (exp->is_noname_present) {
-      coff_lib_writer_push_export_by_ordinal(lib_writer, machine, time_stamp, dll_name, exp->type, exp->ordinal);
-    } else {
-      String8 name = lnk_name_from_export_parse(exp);
-      coff_lib_writer_push_export_by_name(lib_writer, machine, time_stamp, dll_name, exp->type, name, exp->hint);
-    }
-  }
-
-  // serialize lib
-  String8List lib = coff_lib_writer_serialize(arena, lib_writer, COFF_TimeStamp_Max, 0, /* emit second member: */ 1);
-  coff_lib_writer_release(&lib_writer);
-  
-  scratch_end(scratch);
-  ProfEnd();
-  return lib;
-}
-
 ////////////////////////////////
 
 internal
@@ -3591,8 +3559,8 @@ lnk_run(int argc, char **argv)
   // state
   LNK_SymbolTable      *symtab                           = lnk_symbol_table_init(tp_arena);
   LNK_SectionTable     *sectab                           = 0;
-  LNK_ImportTable      *imptab_static                    = lnk_import_table_alloc(0);
-  LNK_ImportTable      *imptab_delayed                   = lnk_import_table_alloc(config->import_table_flags);
+  LNK_ImportTable      *imptab_static                    = lnk_import_table_alloc();
+  LNK_ImportTable      *imptab_delayed                   = lnk_import_table_alloc();
   LNK_ObjList           obj_list                         = {0};
   LNK_LibList           lib_index[LNK_InputSource_Count] = {0};
   Arena                *ht_arena                         = arena_alloc();
@@ -3681,50 +3649,26 @@ lnk_run(int argc, char **argv)
       case State_InputImports: {
         ProfBegin("Input Imports");
         for (LNK_InputImport *input = input_import_list.first; input != 0; input = input->next) {
-          COFF_ParsedArchiveImportHeader *import_header = &input->import_header;
+          COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(input->coff_import);
           
-          if (import_header->machine != config->machine) {
+          if (import_header.machine != config->machine) {
             lnk_error(LNK_Error_IncompatibleMachine, "symbol pulls in an import with incompatible machine %S (expected %S)",
-                      coff_string_from_machine_type(input->import_header.machine),
+                      coff_string_from_machine_type(import_header.machine),
                       coff_string_from_machine_type(config->machine));
           }
 
-          KeyValuePair *is_delayed = hash_table_search_path(delay_load_dll_ht, import_header->dll_name);
+          LNK_Symbol *thunk_symbol = push_array(symtab->arena->v[0], LNK_Symbol, 1);
+          thunk_symbol->type          = LNK_Symbol_Import;
+          thunk_symbol->name          = import_header.func_name;
+          thunk_symbol->u.coff_import = input->coff_import;
 
-          LNK_ImportDLL  *dll;
-          LNK_ImportFunc *func;
-          if (is_delayed) {
-            dll = lnk_import_table_search_dll(imptab_delayed, import_header->dll_name);
-            if (!dll) {
-              dll = lnk_import_table_push_dll_delayed(imptab_delayed, import_header->dll_name, import_header->machine);
-            }
-            func = lnk_import_table_search_func(dll, import_header->func_name);
-            if (!func) {
-              func = lnk_import_table_push_func_delayed(imptab_delayed, dll, import_header);
-            }
-          } else {
-            dll = lnk_import_table_search_dll(imptab_static, import_header->dll_name);
-            if (!dll) {
-              dll = lnk_import_table_push_dll_static(imptab_static, import_header->dll_name, import_header->machine);
-            }
-            func = lnk_import_table_search_func(dll, import_header->func_name);
-            if (!func) {
-              func = lnk_import_table_push_func_static(imptab_static, dll, import_header);
-            }
-          }
+          LNK_Symbol *iat_symbol = push_array(symtab->arena->v[0], LNK_Symbol, 1);
+          iat_symbol->type          = LNK_Symbol_Import;
+          iat_symbol->name          = push_str8f(symtab->arena->v[0], "__imp_%S", import_header.func_name);
+          iat_symbol->u.coff_import = input->coff_import;
 
-          {
-            LNK_Symbol *thunk_symbol = push_array(symtab->arena->v[0], LNK_Symbol, 1);
-            thunk_symbol->name = func->thunk_symbol_name;
-            thunk_symbol->type = LNK_Symbol_Import;
-
-            LNK_Symbol *iat_symbol = push_array(symtab->arena->v[0], LNK_Symbol, 1);
-            iat_symbol->name = func->iat_symbol_name;
-            iat_symbol->type = LNK_Symbol_Import;
-
-            lnk_symbol_table_push(symtab, thunk_symbol);
-            lnk_symbol_table_push(symtab, iat_symbol);
-          }
+          lnk_symbol_table_push(symtab, thunk_symbol);
+          lnk_symbol_table_push(symtab, iat_symbol);
         }
         
         // reset input
@@ -4235,6 +4179,7 @@ lnk_run(int argc, char **argv)
         if (input_import_list.count) {
           ProfBegin("Build Import Table");
 
+          // warn about unused delayloads
           if (config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll) {
             if (imptab_delayed) {
               for (String8Node *node = config->delay_load_dll_list.first; node != 0; node = node->next) {
@@ -4246,11 +4191,25 @@ lnk_run(int argc, char **argv)
             }
           }
 
-          LNK_InputObjList static_imports  = lnk_import_table_serialize(scratch.arena, imptab_static,  str8_skip_last_slash(config->image_name), config->machine);
-          LNK_InputObjList delayed_imports = lnk_import_table_serialize(scratch.arena, imptab_delayed, str8_skip_last_slash(config->image_name), config->machine);
+          // make and input static imports
+          String8Array import_objs_static  = lnk_make_import_dlls_static(scratch.arena, imptab_static,  config->machine, str8_skip_last_slash(config->image_name));
+          for (U64 i = 0; i < import_objs_static.count; i += 1) {
+            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->path      = str8_lit("* Import Obj *");
+            input->input_idx = i;
+            input->data      = import_objs_static.v[i];
+          }
 
-          lnk_input_obj_list_concat_in_place(&input_obj_list, &static_imports);
-          lnk_input_obj_list_concat_in_place(&input_obj_list, &delayed_imports);
+          // make and input delayed imports
+          B32 emit_biat = config->import_table_emit_biat == LNK_SwitchState_Yes;
+          B32 emit_uiat = config->import_table_emit_uiat == LNK_SwitchState_Yes;
+          String8Array import_objs_delayed = lnk_make_import_dlls_delayed(scratch.arena, imptab_delayed, config->machine, str8_skip_last_slash(config->image_name), emit_biat, emit_uiat);
+          for (U64 i = 0; i < import_objs_delayed.count; i += 1) {
+            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->path      = str8_lit("* Import Obj *");
+            input->input_idx = import_objs_static.count + i;
+            input->data      = import_objs_delayed.v[i];
+          }
 
           ProfEnd();
         }

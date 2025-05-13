@@ -131,13 +131,9 @@ lnk_list_from_input_import_arr(LNK_InputImport **arr, U64 count)
 int
 lnk_input_import_is_before(void *raw_a, void *raw_b)
 {
-  LNK_InputImport **a = raw_a;
-  LNK_InputImport **b = raw_b;
-  int cmp = str8_compar_ignore_case(&(*a)->import_header.dll_name, &(*b)->import_header.dll_name);
-  if (cmp == 0) {
-    cmp = str8_compar_case_sensitive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
-  }
-  return cmp < 0;
+  LNK_InputImport *a = *(LNK_InputImport **)raw_a;
+  LNK_InputImport *b = *(LNK_InputImport **)raw_b;
+  return a->input_idx < b->input_idx;
 }
 
 int
@@ -145,10 +141,6 @@ lnk_input_import_compar(const void *raw_a, const void *raw_b)
 {
   LNK_InputImport * const *a = raw_a;
   LNK_InputImport * const *b = raw_b;
-  int cmp = str8_compar_ignore_case(&(*a)->import_header.dll_name, &(*b)->import_header.dll_name);
-  if (cmp == 0) {
-    cmp = str8_compar_case_sensitive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
-  }
-  return cmp;
+  return u64_compar(&(*a)->input_idx, &(*b)->input_idx);
 }
 

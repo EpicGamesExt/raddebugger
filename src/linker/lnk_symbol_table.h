@@ -38,6 +38,7 @@ typedef struct LNK_Symbol
   union {
     LNK_SymbolDefined   defined;
     LNK_SymbolLib       lib;
+    String8             coff_import;
     LNK_SymbolUndefined undef;
   } u;
 } LNK_Symbol;

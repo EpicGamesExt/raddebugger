@@ -403,4 +403,49 @@ lnk_make_edata_obj(Arena               *arena,
   return obj;
 }
 
+internal String8List
+lnk_build_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ExportParseList export_list)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  dll_name = str8_skip_last_slash(dll_name);
+
+  // These objects appear in first three members of any lib that linker produces with /dll.
+  // Objects are used by MSVC linker to build import table.
+  String8 import_entry_obj           = lnk_build_import_entry_obj(scratch.arena, dll_name, time_stamp, machine);
+  String8 null_import_descriptor_obj = lnk_build_null_import_descriptor_obj(scratch.arena, time_stamp, machine);
+  String8 null_thunk_data_obj        = lnk_build_null_thunk_data_obj(scratch.arena, dll_name, time_stamp, machine);
+
+  COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+
+  // push import table nulls
+  coff_lib_writer_push_obj(lib_writer, dll_name, import_entry_obj);
+  coff_lib_writer_push_obj(lib_writer, dll_name, null_import_descriptor_obj);
+  coff_lib_writer_push_obj(lib_writer, dll_name, null_thunk_data_obj);
+
+  // push exports
+  for (LNK_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
+    LNK_ExportParse *exp = &exp_n->data;
+    if (exp->is_noname_present) {
+      coff_lib_writer_push_export_by_ordinal(lib_writer, machine, time_stamp, dll_name, exp->type, exp->ordinal);
+    } else {
+      String8 name = lnk_name_from_export_parse(exp);
+      COFF_LibWriterSymbolNode *member_symbol = coff_lib_writer_push_export_by_name(lib_writer, machine, time_stamp, dll_name, exp->type, name, exp->hint);
+
+      COFF_LibWriterSymbol imp_symbol = {0};
+      imp_symbol.name       = push_str8f(lib_writer->arena, "__imp_%S", name);
+      imp_symbol.member_idx = member_symbol->data.member_idx;
+      coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
+    }
+  }
+
+  // serialize lib
+  String8List lib = coff_lib_writer_serialize(arena, lib_writer, COFF_TimeStamp_Max, 0, /* emit second member: */ 1);
+  coff_lib_writer_release(&lib_writer);
+  
+  scratch_end(scratch);
+  ProfEnd();
+  return lib;
+}
 

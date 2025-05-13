@@ -1019,9 +1019,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     } else {
       String8 value = value_strings.first->string;
       if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
-        config->flags |= LNK_ImportTableFlag_EmitUiat;
+        config->import_table_emit_uiat = 1;
       } else if (str8_match_lit("nobind", value, StringMatchFlag_CaseInsensitive)) {
-        config->flags &= ~LNK_ImportTableFlag_EmitBiat;
+        config->import_table_emit_biat = 0;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value);
       }
@@ -1519,7 +1519,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_DelayBind: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ImportTableFlag_EmitBiat);
+    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->import_table_emit_biat);
   } break;
 
   case LNK_CmdSwitch_Rad_DoMerge: {
@@ -1935,7 +1935,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   
   // don't emit bind table with /ALLOWBIND:NO
   if (config->dll_characteristics & PE_DllCharacteristic_NO_BIND) {
-    config->flags &= ~LNK_ImportTableFlag_EmitBiat;
+    config->import_table_emit_biat = LNK_SwitchState_No;
   }
   
   // set flags for /OPT
