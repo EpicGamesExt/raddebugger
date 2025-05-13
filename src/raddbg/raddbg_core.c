@@ -483,6 +483,7 @@ rd_cfg_equip_string(RD_Cfg *cfg, String8 string)
 {
   rd_name_release(cfg->string);
   cfg->string = rd_name_alloc(string);
+  rd_state->cfg_change_gen += 1;
 }
 
 internal void
@@ -1847,10 +1848,15 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       if(child_key.size != 0)
       {
         MD_NodePtrList schemas = rd_schemas_from_name(root_cfg->string);
+        MD_Node *expr_child_schema = &md_nil_node;
         MD_Node *child_schema = &md_nil_node;
         for(MD_NodePtrNode *n = schemas.first; n != 0 && child_schema == &md_nil_node; n = n->next)
         {
           child_schema = md_child_from_string(n->v, child_key, 0);
+          if(child_schema != &md_nil_node)
+          {
+            expr_child_schema = md_child_from_string(n->v, str8_lit("expression"), 0);
+          }
         }
         String8 child_type_name = child_schema->first->string;
         if(str8_match(child_type_name, str8_lit("path"), 0) ||
@@ -1885,25 +1891,33 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
               }
             }
           }
-          if(str8_match(child_type_name, str8_lit("bool"), 0))
+          E_Key parent_key = {0};
+          if(expr_child_schema != &md_nil_node && child_schema != expr_child_schema)
           {
-            B32 value = !!e_value_from_stringf("(bool)(%S)", value_string).u64;
-            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            parent_key = e_key_from_string(rd_cfg_child_from_string(root_cfg, expr_child_schema->string)->first->string);
           }
-          else if(str8_match(child_type_name, str8_lit("u64"), 0))
+          E_ParentKey(parent_key)
           {
-            U64 value = e_value_from_stringf("(uint64)(%S)", value_string).u64;
-            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
-          }
-          else if(str8_match(child_type_name, str8_lit("u32"), 0))
-          {
-            U64 value = e_value_from_stringf("(uint32)(%S)", value_string).u64;
-            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
-          }
-          else if(str8_match(child_type_name, str8_lit("f32"), 0))
-          {
-            F32 value = e_value_from_stringf("(float32)(%S)", value_string).f32;
-            read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            if(str8_match(child_type_name, str8_lit("bool"), 0))
+            {
+              B32 value = !!e_value_from_stringf("(bool)(%S)", value_string).u64;
+              read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            }
+            else if(str8_match(child_type_name, str8_lit("u64"), 0))
+            {
+              U64 value = e_value_from_stringf("(uint64)(%S)", value_string).u64;
+              read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            }
+            else if(str8_match(child_type_name, str8_lit("u32"), 0))
+            {
+              U64 value = e_value_from_stringf("(uint32)(%S)", value_string).u64;
+              read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            }
+            else if(str8_match(child_type_name, str8_lit("f32"), 0))
+            {
+              F32 value = e_value_from_stringf("(float32)(%S)", value_string).f32;
+              read_data = push_str8_copy(scratch.arena, str8_struct(&value));
+            }
           }
         }
       }
@@ -3677,6 +3691,7 @@ rd_view_ui(Rng2F32 rect)
                         {
                           B32 success = 0;
                           success = rd_commit_eval_value_string(cell->eval, new_string);
+                          state_dirty = 1;
                           if(!success)
                           {
                             log_user_error(str8_lit("Could not commit value successfully."));
@@ -7394,87 +7409,82 @@ rd_window_frame(void)
         {
           UI_TagF("inactive") UI_Transparency(1-open_t) UI_Rect(content_rect) ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_Floating, ui_key_zero());
         }
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: @window_ui_part do special handling of floating view interactions
-    //
-    {
-      //- rjf: autocompletion view early-closing rules
-      if(autocomp_floating_view_task)
-      {
-        B32 has_autocomplete_hint = ui_autocomplete_string().size != 0;
-        B32 has_accept_operation = 0;
-        for(UI_Event *evt = 0; ui_next_event(&evt);)
+        
+        //- rjf: autocompletion view early-closing rules
+        if(t == autocomp_floating_view_task)
         {
-          if(evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Accept)
+          B32 has_autocomplete_hint = ui_autocomplete_string().size != 0;
+          B32 has_accept_operation = 0;
+          for(UI_Event *evt = 0; ui_next_event(&evt);)
           {
-            has_accept_operation = 1;
-            break;
+            if(evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Accept)
+            {
+              has_accept_operation = 1;
+              break;
+            }
+          }
+          if(has_autocomplete_hint && has_accept_operation)
+          {
+            autocomp_floating_view_task->signal.box->fixed_position = v2f32(10000, 10000);
           }
         }
-        if(has_autocomplete_hint && has_accept_operation)
-        {
-          autocomp_floating_view_task->signal.box->fixed_position = v2f32(10000, 10000);
-        }
-      }
-      
-      //- rjf: hover eval focus rules
-      if(hover_eval_floating_view_task)
-      {
-        UI_Signal sig = hover_eval_floating_view_task->signal;
-        if(ui_pressed(sig) || hover_eval_floating_view_task->pressed)
-        {
-          ws->hover_eval_focused = 1;
-        }
-        if(ui_mouse_over(sig) || ws->hover_eval_focused)
-        {
-          ws->hover_eval_lastt_us = rd_state->time_in_us;
-        }
-        else if(ws->hover_eval_lastt_us+1000000 < rd_state->time_in_us)
-        {
-          rd_request_frame();
-        }
-        if(hover_eval_floating_view_task->pressed_outside || ui_slot_press(UI_EventActionSlot_Cancel))
-        {
-          ws->hover_eval_focused = 0;
-          MemoryZeroStruct(&ws->hover_eval_string);
-          arena_clear(ws->hover_eval_arena);
-          rd_request_frame();
-        }
-      }
-      
-      //- rjf: query interactions
-      if(query_floating_view_task)
-      {
-        RD_Cfg *view = query_floating_view_task->view;
-        RD_ViewState *vs = rd_view_state_from_cfg(query_floating_view_task->view);
-        String8 cmd_name = ws->query_regs->cmd_name;
-        RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
         
-        // rjf: close queries
-        if(query_floating_view_task->pressed_outside ||
-           (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_open) ||
-           (cmd_name.size != 0 && !vs->query_is_open) ||
-           ui_slot_press(UI_EventActionSlot_Cancel))
+        //- rjf: hover eval focus rules
+        if(t == hover_eval_floating_view_task)
         {
-          rd_cmd(RD_CmdKind_CancelQuery);
-        }
-        
-        // rjf: any queries which take a file path mutate the debugger's "current path"
-        if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
-        {
-          RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
-          RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
-          if(input != &rd_nil_cfg)
+          UI_Signal sig = hover_eval_floating_view_task->signal;
+          if(ui_pressed(sig) || hover_eval_floating_view_task->pressed)
           {
-            String8 path_chopped = str8_chop_last_slash(input->first->string);
-            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-            RD_Cfg *current_path = rd_cfg_child_from_string_or_alloc(user, str8_lit("current_path"));
-            if(!str8_match(current_path->first->string, path_chopped, 0))
+            ws->hover_eval_focused = 1;
+          }
+          if(ui_mouse_over(sig) || ws->hover_eval_focused)
+          {
+            ws->hover_eval_lastt_us = rd_state->time_in_us;
+          }
+          else if(ws->hover_eval_lastt_us+1000000 < rd_state->time_in_us)
+          {
+            rd_request_frame();
+          }
+          if(hover_eval_floating_view_task->pressed_outside || ui_slot_press(UI_EventActionSlot_Cancel))
+          {
+            ws->hover_eval_focused = 0;
+            MemoryZeroStruct(&ws->hover_eval_string);
+            arena_clear(ws->hover_eval_arena);
+            rd_request_frame();
+          }
+        }
+        
+        //- rjf: query interactions
+        if(t == query_floating_view_task)
+        {
+          RD_Cfg *view = query_floating_view_task->view;
+          RD_ViewState *vs = rd_view_state_from_cfg(query_floating_view_task->view);
+          String8 cmd_name = ws->query_regs->cmd_name;
+          RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
+          
+          // rjf: close queries
+          if(query_floating_view_task->pressed_outside ||
+             (rd_cfg_child_from_string(view, str8_lit("lister")) != &rd_nil_cfg && !vs->query_is_open) ||
+             (cmd_name.size != 0 && !vs->query_is_open) ||
+             ui_slot_press(UI_EventActionSlot_Cancel))
+          {
+            rd_cmd(RD_CmdKind_CancelQuery);
+          }
+          
+          // rjf: any queries which take a file path mutate the debugger's "current path"
+          if(cmd_kind_info->query.slot == RD_RegSlot_FilePath)
+          {
+            RD_Cfg *query = rd_cfg_child_from_string(view, str8_lit("query"));
+            RD_Cfg *input = rd_cfg_child_from_string(query, str8_lit("input"));
+            if(input != &rd_nil_cfg)
             {
-              rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+              String8 path_chopped = str8_chop_last_slash(input->first->string);
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_Cfg *current_path = rd_cfg_child_from_string_or_alloc(user, str8_lit("current_path"));
+              if(!str8_match(current_path->first->string, path_chopped, 0))
+              {
+                rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = path_chopped);
+              }
             }
           }
         }

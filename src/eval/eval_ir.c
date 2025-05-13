@@ -1602,11 +1602,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             if(qualifier.size == 0 && !string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
             {
               E_IRTreeAndType *parent_irtree = parent;
-              if(disallow_autohooks)
               {
-                for(E_IRTreeAndType *prev = parent_irtree->prev; prev != 0; prev = prev->prev)
+                for(E_IRTreeAndType *prev = parent_irtree; prev != 0; prev = prev->prev)
                 {
                   parent_irtree = prev;
+                  if(prev->root != &e_irnode_nil)
+                  {
+                    break;
+                  }
                 }
               }
               E_OpList oplist = e_oplist_from_irtree(arena, parent_irtree->root);
@@ -2331,10 +2334,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     }
     
     //- rjf: equip previous task's irtree
-    if(t->overridden != 0)
+    if(parent != 0)
     {
       result.prev = push_array(arena, E_IRTreeAndType, 1);
-      result.prev[0] = *t->overridden;
+      result.prev[0] = *parent;
     }
     
     //- rjf: find any auto hooks according to this generation's type
