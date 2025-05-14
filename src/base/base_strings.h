@@ -232,6 +232,7 @@ internal String8 push_str8_cat(Arena *arena, String8 s1, String8 s2);
 internal String8 push_str8_copy(Arena *arena, String8 s);
 internal String8 push_str8fv(Arena *arena, char *fmt, va_list args);
 internal String8 push_str8f(Arena *arena, char *fmt, ...);
+internal String8 push_cstr(Arena *arena, String8 str);
 
 ////////////////////////////////
 //~ rjf: String <=> Integer Conversions

@@ -522,6 +522,17 @@ push_str8f(Arena *arena, char *fmt, ...){
   return(result);
 }
 
+internal String8
+push_cstr(Arena *arena, String8 str)
+{
+  U64 buffer_size = str.size + 1;
+  U8 *buffer = push_array_no_zero(arena, U8, buffer_size);
+  MemoryCopy(buffer, str.str, str.size);
+  buffer[str.size] = 0;
+  String8 result = str8(buffer, buffer_size);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Integer Conversions
 

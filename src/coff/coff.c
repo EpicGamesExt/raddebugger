@@ -253,18 +253,6 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
   return result;
 }
 
-internal COFF_RelocType
-coff_virt_off_reloc_from_machine(COFF_MachineType machine)
-{
-  COFF_RelocType result = 0;
-  switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64: result = COFF_Reloc_X64_Addr32Nb; break;
-  default: { NotImplemented; } break;
-  }
-  return result;
-}
-
 internal String8
 coff_make_import_lookup(Arena *arena, U16 hint, String8 name)
 {

@@ -1,17 +1,6 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal String8
-push_cstr(Arena *arena, String8 str)
-{
-  U64 buffer_size = str.size + 1;
-  U8 *buffer = push_array_no_zero(arena, U8, buffer_size);
-  MemoryCopy(buffer, str.str, str.size);
-  buffer[str.size] = 0;
-  String8 result = str8(buffer, buffer_size);
-  return result;
-}
-
 internal U32 *
 push_u32(Arena *arena, U32 value)
 {
