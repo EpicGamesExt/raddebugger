@@ -11310,7 +11310,8 @@ rd_frame(void)
       {
         U64 candidate_frame_time_us = 1000000/(U64)candidate;
         S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
-        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff)
+        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff &&
+           frame_time_history_avg_us < candidate_frame_time_us + 1000)
         {
           best_target_hz = candidate;
           best_target_hz_frame_time_us_diff = frame_time_us_diff;

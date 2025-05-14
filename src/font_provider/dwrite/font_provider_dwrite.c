@@ -337,7 +337,10 @@ fp_font_open(String8 path)
   {
     String16 path16 = str16_from_8(scratch.arena, t->path);
     error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
-    error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+    if(font.file != 0)
+    {
+      error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+    }
     
     // rjf: failure trying just the normal path? -> generate new tasks that search in system folders
     if(t == first_task && font.file == 0)
