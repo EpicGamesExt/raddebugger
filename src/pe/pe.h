@@ -993,26 +993,62 @@ struct PE_HandlerScope
 typedef struct PE_BinInfo PE_BinInfo;
 struct PE_BinInfo
 {
+  Arch            arch;
   U64             image_base;
   U64             entry_point;
   B32             is_pe32;
   U64             virt_section_align;
   U64             file_section_align;
-  U64             section_array_off;
   U64             section_count;
-  U64             symbol_array_off;
   U64             symbol_count;
-  U64             string_table_off;
-  U64             dbg_path_off;
-  U64             dbg_path_size;
-  Guid            dbg_guid;
-  U32             dbg_age;
-  U32             dbg_time;
-  Arch            arch;
+  Rng1U64         section_table_range;
+  Rng1U64         symbol_table_range;
+  Rng1U64         string_table_range;
   Rng1U64        *data_dir_franges;
   U32             data_dir_count;
   PE_TLSHeader64  tls_header;
 };
+
+typedef struct PE_DebugInfo
+{
+  PE_DebugDirectory header;
+  union
+  {
+    union
+    {
+      U32 magic;
+      struct
+      {
+        PE_CvHeaderPDB20 header;
+        String8          path;
+      } pdb20;
+      struct
+      {
+        PE_CvHeaderPDB70 header;
+        String8          path;
+      } pdb70;
+      struct
+      {
+        PE_CvHeaderRDI header;
+        String8        path;
+      } rdi;
+    } codeview;
+    String8 raw_data;
+  } u;
+} PE_DebugInfo;
+
+typedef struct PE_DebugInfoNode
+{
+  struct PE_DebugInfoNode *next;
+  PE_DebugInfo             v;
+} PE_DebugInfoNode;
+
+typedef struct PE_DebugInfoList
+{
+  PE_DebugInfoNode *first;
+  PE_DebugInfoNode *last;
+  U64               count;
+} PE_DebugInfoList;
 
 ////////////////////////////////
 //~ rjf: Basic Enum Functions
@@ -1036,8 +1072,10 @@ internal String8 pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacte
 ////////////////////////////////
 //~ rjf: Parser Functions
 
+internal B32        pe_check_magic(String8 data);
 internal PE_BinInfo pe_bin_info_from_data(Arena *arena, String8 data);
 
+internal PE_DebugInfoList           pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir);
 internal PE_ParsedStaticImportTable pe_static_imports_from_data(Arena *arena, B32 is_pe32, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range);
 internal PE_ParsedDelayImportTable  pe_delay_imports_from_data(Arena *arena, B32 is_pe32, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range);
 internal PE_ParsedExportTable       pe_exports_from_data(Arena *arena, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range, Rng1U64 dir_virt_range);
@@ -1047,9 +1085,6 @@ internal PE_ParsedTLS               pe_tls_from_data(Arena *arena, COFF_MachineT
 //~ rjf: Helpers
 
 internal U64                   pe_pdata_off_from_voff__binary_search_x8664(String8 raw_data, U64 voff);
-internal void *                pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal U64                   pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal void *                pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);
 internal U64                   pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal PE_BaseRelocBlockList pe_base_reloc_block_list_from_data(Arena *arena, String8 raw_relocs);
 internal Rng1U64               pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr);

@@ -27,14 +27,14 @@ REGS_RegTableX64:
   {gsbase                         64   Normal}
   {rip                            64   Normal}
   {rflags                         64   Normal}
-  {dr0                            32   Normal}
-  {dr1                            32   Normal}
-  {dr2                            32   Normal}
-  {dr3                            32   Normal}
-  {dr4                            32   Normal}
-  {dr5                            32   Normal}
-  {dr6                            32   Normal}
-  {dr7                            32   Normal}
+  {dr0                            64   Normal}
+  {dr1                            64   Normal}
+  {dr2                            64   Normal}
+  {dr3                            64   Normal}
+  {dr4                            64   Normal}
+  {dr5                            64   Normal}
+  {dr6                            64   Normal}
+  {dr7                            64   Normal}
   {fpr0                           80   Normal}
   {fpr1                           80   Normal}
   {fpr2                           80   Normal}

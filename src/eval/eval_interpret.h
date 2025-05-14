@@ -5,19 +5,7 @@
 #define EVAL_INTERPRET_H
 
 ////////////////////////////////
-//~ rjf: Bytecode Interpretation Types
-
-typedef struct E_Interpretation E_Interpretation;
-struct E_Interpretation
-{
-  E_Value value;
-  E_InterpretationCode code;
-};
-
-////////////////////////////////
 //~ rjf: Interpretation Context
-
-typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
 
 typedef struct E_InterpretCtx E_InterpretCtx;
 struct E_InterpretCtx
@@ -42,12 +30,12 @@ thread_static E_InterpretCtx *e_interpret_ctx = 0;
 ////////////////////////////////
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
-internal E_InterpretCtx *e_selected_interpret_ctx(void);
-internal void e_select_interpret_ctx(E_InterpretCtx *ctx);
+internal void e_select_interpret_ctx(E_InterpretCtx *ctx, RDI_Parsed *primary_rdi, U64 ip_voff);
 
 ////////////////////////////////
 //~ rjf: Space Reading Helpers
 
+internal U64 e_space_gen(E_Space space);
 internal B32 e_space_read(E_Space space, void *out, Rng1U64 range);
 internal B32 e_space_write(E_Space space, void *in, Rng1U64 range);
 

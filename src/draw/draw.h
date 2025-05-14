@@ -7,54 +7,62 @@
 ////////////////////////////////
 //~ rjf: Fancy String Types
 
-typedef struct DR_FancyString DR_FancyString;
-struct DR_FancyString
+typedef struct DR_FStrParams DR_FStrParams;
+struct DR_FStrParams
 {
   FNT_Tag font;
-  String8 string;
+  FNT_RasterFlags raster_flags;
   Vec4F32 color;
   F32 size;
   F32 underline_thickness;
   F32 strikethrough_thickness;
 };
 
-typedef struct DR_FancyStringNode DR_FancyStringNode;
-struct DR_FancyStringNode
+typedef struct DR_FStr DR_FStr;
+struct DR_FStr
 {
-  DR_FancyStringNode *next;
-  DR_FancyString v;
+  String8 string;
+  DR_FStrParams params;
 };
 
-typedef struct DR_FancyStringList DR_FancyStringList;
-struct DR_FancyStringList
+typedef struct DR_FStrNode DR_FStrNode;
+struct DR_FStrNode
 {
-  DR_FancyStringNode *first;
-  DR_FancyStringNode *last;
+  DR_FStrNode *next;
+  DR_FStr v;
+};
+
+typedef struct DR_FStrList DR_FStrList;
+struct DR_FStrList
+{
+  DR_FStrNode *first;
+  DR_FStrNode *last;
   U64 node_count;
   U64 total_size;
 };
 
-typedef struct DR_FancyRun DR_FancyRun;
-struct DR_FancyRun
+typedef struct DR_FRun DR_FRun;
+struct DR_FRun
 {
   FNT_Run run;
   Vec4F32 color;
   F32 underline_thickness;
   F32 strikethrough_thickness;
+  B32 icon;
 };
 
-typedef struct DR_FancyRunNode DR_FancyRunNode;
-struct DR_FancyRunNode
+typedef struct DR_FRunNode DR_FRunNode;
+struct DR_FRunNode
 {
-  DR_FancyRunNode *next;
-  DR_FancyRun v;
+  DR_FRunNode *next;
+  DR_FRun v;
 };
 
-typedef struct DR_FancyRunList DR_FancyRunList;
-struct DR_FancyRunList
+typedef struct DR_FRunList DR_FRunList;
+struct DR_FRunList
 {
-  DR_FancyRunNode *first;
-  DR_FancyRunNode *last;
+  DR_FRunNode *first;
+  DR_FRunNode *last;
   U64 node_count;
   Vec2F32 dim;
 };
@@ -91,6 +99,7 @@ struct DR_ThreadCtx
 {
   Arena *arena;
   U64 arena_frame_start_pos;
+  FNT_Tag icon_font;
   DR_BucketSelectionNode *top_bucket;
   DR_BucketSelectionNode *free_bucket_selection;
 };
@@ -108,19 +117,22 @@ internal U64 dr_hash_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Fancy String Type Functions
 
-internal void dr_fancy_string_list_push(Arena *arena, DR_FancyStringList *list, DR_FancyString *str);
-#define dr_fancy_string_list_push_new(arena, list, font_, size_, color_, string_, ...) dr_fancy_string_list_push((arena), (list), &(DR_FancyString){.font = (font_), .string = (string_), .color = (color_), .size = (size_), __VA_ARGS__})
-internal void dr_fancy_string_list_concat_in_place(DR_FancyStringList *dst, DR_FancyStringList *to_push);
-internal String8 dr_string_from_fancy_string_list(Arena *arena, DR_FancyStringList *list);
-internal DR_FancyRunList dr_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, FNT_RasterFlags flags, DR_FancyStringList *strs);
-internal DR_FancyRunList dr_fancy_run_list_copy(Arena *arena, DR_FancyRunList *src);
+internal void dr_fstrs_push(Arena *arena, DR_FStrList *list, DR_FStr *str);
+internal void dr_fstrs_push_new_(Arena *arena, DR_FStrList *list, DR_FStrParams *params, DR_FStrParams *overrides, String8 string);
+#define dr_fstrs_push_new(arena, list, params, string, ...) dr_fstrs_push_new_((arena), (list), (params), &(DR_FStrParams){.size = 0, __VA_ARGS__}, (string))
+internal void dr_fstrs_concat_in_place(DR_FStrList *dst, DR_FStrList *to_push);
+internal DR_FStrList dr_fstrs_copy(Arena *arena, DR_FStrList *src);
+internal String8 dr_string_from_fstrs(Arena *arena, DR_FStrList *list);
+internal FuzzyMatchRangeList dr_fuzzy_match_find_from_fstrs(Arena *arena, DR_FStrList *fstrs, String8 needle);
+internal DR_FRunList dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs);
+internal Vec2F32 dr_dim_from_fstrs(DR_FStrList *fstrs);
 
 ////////////////////////////////
 //~ rjf: Top-Level API
 //
 // (Frame boundaries & bucket submission)
 
-internal void dr_begin_frame(void);
+internal void dr_begin_frame(FNT_Tag icon_font);
 internal void dr_submit_bucket(OS_Handle os_window, R_Handle r_window, DR_Bucket *bucket);
 
 ////////////////////////////////
@@ -184,8 +196,8 @@ internal void dr_sub_bucket(DR_Bucket *bucket);
 //~ rjf: Draw Call Helpers
 
 //- rjf: text
-internal void dr_truncated_fancy_run_list(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FNT_Run trailer_run);
-internal void dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color);
+internal void dr_truncated_fancy_run_list(Vec2F32 p, DR_FRunList *list, F32 max_x, FNT_Run trailer_run);
+internal void dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color);
 internal void dr_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run);
 internal void dr_text(FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string);
 

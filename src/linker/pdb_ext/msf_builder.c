@@ -798,7 +798,7 @@ msf_stream_alloc_(Arena *arena, MSF_StreamList *list)
 internal MSF_StreamNumber
 msf_stream_alloc_ex(MSF_Context *msf, MSF_UInt size)
 {
-  MSF_StreamNode *node = msf_stream_alloc_(msf->arena, &msf->st);
+  MSF_StreamNode *node = msf_stream_alloc_(msf->arena, &msf->sectab);
   MSF_Stream *stream = &node->data;
   msf_stream_resize_ex(msf, stream, size);
   return stream->sn;
@@ -854,7 +854,7 @@ msf_stream_free(MSF_Context *msf, MSF_StreamNumber sn)
   B32 is_free_ok = 0;
   MSF_StreamNode *stream_node = msf_find_stream_node(msf, sn);
   if (stream_node) {
-    msf_stream_list_remove(&msf->st, stream_node);
+    msf_stream_list_remove(&msf->sectab, stream_node);
     msf_stream_resize_ex(msf, &stream_node->data, 0);
     stream_node->data.size = MSF_DELETED_STREAM_STAMP;
     is_free_ok = 1;
@@ -1382,7 +1382,7 @@ internal MSF_StreamNode *
 msf_find_stream_node(MSF_Context *msf, MSF_StreamNumber sn)
 {
   MSF_StreamNode *node;
-  for (node = msf->st.first; node != 0; node = node->next) {
+  for (node = msf->sectab.first; node != 0; node = node->next) {
     if (node->data.sn == sn) {
       break;
     }
@@ -1645,7 +1645,7 @@ msf_open(String8 data, MSF_Context **msf_out)
     msf->header_page_list = header_page_list;
     msf->root_page_list   = root_page_list;
     msf->st_page_list     = st_page_list;
-    msf->st               = stream_list;
+    msf->sectab               = stream_list;
     
     *msf_out = msf;
     
@@ -1678,19 +1678,19 @@ msf_release(MSF_Context **msf_ptr)
 }
 
 internal String8List
-msf_build_stream_table_data(Arena *arena, MSF_StreamList *st, MSF_UInt page_size, MSF_UInt page_count)
+msf_build_stream_table_data(Arena *arena, MSF_StreamList *sectab, MSF_UInt page_size, MSF_UInt page_count)
 {
   ProfBeginFunction();
   
   MSF_UInt *stream_count_ptr = push_array(arena, MSF_UInt, 1);
-  *stream_count_ptr = st->count;
+  *stream_count_ptr = sectab->count;
 
-  MSF_UInt *stream_size_arr = push_array(arena, MSF_UInt, st->count);
+  MSF_UInt *stream_size_arr = push_array(arena, MSF_UInt, sectab->count);
   MSF_UInt stream_page_count = 0;
 
   MSF_PageNumber *stream_pages_arr = push_array(arena, MSF_PageNumber, page_count);
 
-  for (MSF_StreamNode *stream_node = st->first; stream_node != 0; stream_node = stream_node->next) {
+  for (MSF_StreamNode *stream_node = sectab->first; stream_node != 0; stream_node = stream_node->next) {
     MSF_Stream *stream = &stream_node->data;
     
     // is page list correct?
@@ -1747,7 +1747,7 @@ msf_build_stream_table(MSF_Context *msf, MSF_UInt *stream_table_size_out)
 
   MSF_Error error = MSF_Error_OK;
   
-  String8List st_data_list = msf_build_stream_table_data(scratch.arena, &msf->st, msf->page_size, msf->page_count);
+  String8List st_data_list = msf_build_stream_table_data(scratch.arena, &msf->sectab, msf->page_size, msf->page_count);
   
   MSF_UInt st_page_count = msf_count_pages(msf->page_size, st_data_list.total_size);
   msf_free_pages(msf, &msf->st_page_list); // TODO: page reuse

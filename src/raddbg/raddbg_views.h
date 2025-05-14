@@ -10,8 +10,8 @@
 typedef U32 RD_CodeViewBuildFlags;
 enum
 {
-  RD_CodeViewBuildFlag_Margins = (1<<0),
-  RD_CodeViewBuildFlag_All     = 0xffffffff,
+  RD_CodeViewBuildFlag_Margins     = (1<<0),
+  RD_CodeViewBuildFlag_All         = 0xffffffff,
 };
 
 typedef struct RD_CodeViewState RD_CodeViewState;
@@ -21,11 +21,13 @@ struct RD_CodeViewState
   B32 initialized;
   S64 preferred_column;
   B32 drifted_for_search;
+  U128 last_hash;
   
   // rjf: per-frame command info
   S64 goto_line_num;
   B32 center_cursor;
   B32 contain_cursor;
+  B32 force_contain_only;
   B32 watch_expr_at_mouse;
   Arena *find_text_arena;
   String8 find_text_fwd;
@@ -41,100 +43,97 @@ struct RD_CodeViewBuildResult
 ////////////////////////////////
 //~ rjf: Watch View Types
 
-typedef U32 RD_WatchViewFlags;
+typedef enum RD_WatchCellKind
+{
+  RD_WatchCellKind_Eval,           // an evaluation cell
+  RD_WatchCellKind_ViewUI,         // an arbitrary user interface, supplied by a hook
+  RD_WatchCellKind_CallStackFrame, // a slot for a yellow arrow, to show call stack frame selection
+}
+RD_WatchCellKind;
+
+typedef U32 RD_WatchCellFlags;
 enum
 {
-  RD_WatchViewFlag_NoHeader                   = (1<<0),
-  RD_WatchViewFlag_PrettyNameMembers          = (1<<1),
-  RD_WatchViewFlag_PrettyEntityRows           = (1<<2),
-  RD_WatchViewFlag_DisableCacheLines          = (1<<3),
+  RD_WatchCellFlag_Expr                    = (1<<0),
+  RD_WatchCellFlag_NoEval                  = (1<<1),
+  RD_WatchCellFlag_Button                  = (1<<2),
+  RD_WatchCellFlag_Background              = (1<<3),
+  RD_WatchCellFlag_ActivateWithSingleClick = (1<<4),
+  RD_WatchCellFlag_IsNonCode               = (1<<5),
+  RD_WatchCellFlag_CanEdit                 = (1<<6),
+  RD_WatchCellFlag_IsErrored               = (1<<7),
+  RD_WatchCellFlag_Indented                = (1<<8),
 };
 
-typedef enum RD_WatchViewColumnKind
+typedef struct RD_WatchCell RD_WatchCell;
+struct RD_WatchCell
 {
-  RD_WatchViewColumnKind_Expr,
-  RD_WatchViewColumnKind_Value,
-  RD_WatchViewColumnKind_Type,
-  RD_WatchViewColumnKind_ViewRule,
-  RD_WatchViewColumnKind_Member,
-  RD_WatchViewColumnKind_CallStackFrame,
-  RD_WatchViewColumnKind_CallStackFrameSelection,
-  RD_WatchViewColumnKind_Module,
-  RD_WatchViewColumnKind_COUNT
-}
-RD_WatchViewColumnKind;
-
-typedef struct RD_WatchViewColumnParams RD_WatchViewColumnParams;
-struct RD_WatchViewColumnParams
-{
-  String8 string;
-  String8 display_string;
-  String8 view_rule;
-  B32 is_non_code;
-  B32 dequote_string;
-  B32 rangify_braces;
-};
-
-typedef struct RD_WatchViewColumn RD_WatchViewColumn;
-struct RD_WatchViewColumn
-{
-  RD_WatchViewColumn *next;
-  RD_WatchViewColumn *prev;
-  RD_WatchViewColumnKind kind;
+  RD_WatchCell *next;
+  RD_WatchCellKind kind;
+  RD_WatchCellFlags flags;
+  U64 index;
+  E_Eval eval;
+  F32 default_pct;
   F32 pct;
-  U8 string_buffer[1024];
-  U64 string_size;
-  U8 display_string_buffer[1024];
-  U64 display_string_size;
-  U8 view_rule_buffer[1024];
-  U64 view_rule_size;
-  B32 is_non_code;
-  B32 dequote_string;
-  B32 rangify_braces;
+  F32 px;
 };
 
-typedef struct RD_WatchViewRowCtrl RD_WatchViewRowCtrl;
-struct RD_WatchViewRowCtrl
+typedef struct RD_WatchCellList RD_WatchCellList;
+struct RD_WatchCellList
 {
-  RD_EntityKind entity_kind;
-  CTRL_EntityKind ctrl_entity_kind;
-  RD_CmdKind kind;
+  RD_WatchCell *first;
+  RD_WatchCell *last;
+  U64 count;
 };
 
-typedef enum RD_WatchViewRowKind
+typedef struct RD_WatchRowInfo RD_WatchRowInfo;
+struct RD_WatchRowInfo
 {
-  RD_WatchViewRowKind_Normal,
-  RD_WatchViewRowKind_Header,
-  RD_WatchViewRowKind_Canvas,
-  RD_WatchViewRowKind_PrettyEntityControls,
-}
-RD_WatchViewRowKind;
-
-typedef struct RD_WatchViewPoint RD_WatchViewPoint;
-struct RD_WatchViewPoint
-{
-  S64 x;
-  EV_Key parent_key;
-  EV_Key key;
-};
-
-typedef struct RD_WatchViewRowInfo RD_WatchViewRowInfo;
-struct RD_WatchViewRowInfo
-{
-  RD_EntityKind collection_entity_kind;
-  RD_Entity *collection_entity;
-  CTRL_EntityKind collection_ctrl_entity_kind;
-  CTRL_Entity *collection_ctrl_entity;
+  CTRL_Entity *module;
+  B32 can_expand;
+  B32 expr_is_editable;
+  String8 group_cfg_name;
+  RD_Cfg *group_cfg_parent;
+  RD_Cfg *group_cfg_child;
+  CTRL_Entity *group_entity;
   CTRL_Entity *callstack_thread;
   U64 callstack_unwind_index;
   U64 callstack_inline_depth;
+  U64 callstack_vaddr;
+  String8 cell_style_key;
+  RD_WatchCellList cells;
+  RD_ViewUIRule *view_ui_rule;
+};
+
+typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
+struct RD_WatchRowCellInfo
+{
+  RD_WatchCellFlags flags;
+  RD_Cfg *cfg;
+  CTRL_Entity *entity;
+  String8 cmd_name;
+  String8 file_path;
+  DR_FStrList expr_fstrs;
+  DR_FStrList eval_fstrs;
+  String8 description;
+  String8 error_tooltip;
+  String8 inheritance_tooltip;
+  RD_ViewUIRule *view_ui_rule;
+};
+
+typedef struct RD_WatchPt RD_WatchPt;
+struct RD_WatchPt
+{
+  EV_Key parent_key;
+  EV_Key key;
+  U64 cell_id;
 };
 
 typedef struct RD_WatchViewTextEditState RD_WatchViewTextEditState;
 struct RD_WatchViewTextEditState
 {
   RD_WatchViewTextEditState *pt_hash_next;
-  RD_WatchViewPoint pt;
+  RD_WatchPt pt;
   TxtPt cursor;
   TxtPt mark;
   U8 input_buffer[1024];
@@ -148,18 +147,15 @@ struct RD_WatchViewState
 {
   B32 initialized;
   
-  // rjf: column state
-  Arena *column_arena;
-  RD_WatchViewColumn *first_column;
-  RD_WatchViewColumn *last_column;
-  RD_WatchViewColumn *free_column;
-  U64 column_count;
+  // rjf: filter history
+  Arena *filter_arena;
+  String8 last_filter;
   
   // rjf; table cursor state
-  RD_WatchViewPoint cursor;
-  RD_WatchViewPoint mark;
-  RD_WatchViewPoint next_cursor;
-  RD_WatchViewPoint next_mark;
+  RD_WatchPt cursor;
+  RD_WatchPt mark;
+  RD_WatchPt next_cursor;
+  RD_WatchPt next_mark;
   
   // rjf: text input state
   Arena *text_edit_arena;
@@ -178,34 +174,45 @@ internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewStat
 ////////////////////////////////
 //~ rjf: Watch View Functions
 
-//- rjf: index -> column
-internal RD_WatchViewColumn *rd_watch_view_column_from_x(RD_WatchViewState *wv, S64 index);
+//- rjf: cell list building
+internal U64 rd_id_from_watch_cell(RD_WatchCell *cell);
+internal RD_WatchCell *rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list);
+internal RD_WatchCell *rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params);
+#define rd_watch_cell_list_push_new(arena, list, kind_, eval_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), .eval = (eval_), __VA_ARGS__})
 
 //- rjf: watch view points <-> table coordinates
-internal B32 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b);
-internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl);
-internal Vec2S64 rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt);
+internal B32 rd_watch_pt_match(RD_WatchPt a, RD_WatchPt b);
+internal RD_WatchPt rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl);
+internal Vec2S64 rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt);
 
-//- rjf: row -> context info
-internal RD_WatchViewRowInfo rd_watch_view_row_info_from_row(EV_Row *row);
+//- rjf: row -> info
+internal RD_WatchRowInfo rd_watch_row_info_from_row(Arena *arena, EV_Row *row);
 
-//- rjf: watch view flags & row & row info -> row kind
-internal RD_WatchViewRowKind rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row, RD_WatchViewRowInfo *info);
-
-//- rjf: row/column -> exprs / strings
-internal E_Expr *rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, RD_WatchViewColumn *col);
-internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+//- rjf: row * cell -> info
+internal RD_WatchRowCellInfo rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_flags, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
-internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchViewPoint pt);
+internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt);
 
-//- rjf: watch view column state mutation
-internal RD_WatchViewColumn *rd_watch_view_column_alloc_(RD_WatchViewState *wv, RD_WatchViewColumnKind kind, F32 pct, RD_WatchViewColumnParams *params);
-#define rd_watch_view_column_alloc(wv, kind, pct, ...) rd_watch_view_column_alloc_((wv), (kind), (pct), &(RD_WatchViewColumnParams){.string = str8_zero(), __VA_ARGS__})
-internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewColumn *col);
+////////////////////////////////
+//~ rjf: View Hooks
 
-//- rjf: watch view main hooks
-internal void rd_watch_view_init(RD_WatchViewState *ewv);
-internal void rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 root_expr, String8 root_view_rule, B32 modifiable, U32 default_radix, Rng2F32 rect);
+// TODO(rjf): eliminate once we are predeclaring these with metacode
+
+RD_VIEW_UI_FUNCTION_DEF(null);
+
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(text);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(color);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d);
+
+RD_VIEW_UI_FUNCTION_DEF(text);
+RD_VIEW_UI_FUNCTION_DEF(disasm);
+RD_VIEW_UI_FUNCTION_DEF(memory);
+RD_VIEW_UI_FUNCTION_DEF(bitmap);
+RD_VIEW_UI_FUNCTION_DEF(color);
+RD_VIEW_UI_FUNCTION_DEF(geo3d);
 
 #endif // RADDBG_VIEWS_H

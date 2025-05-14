@@ -96,7 +96,7 @@ typedef enum PathStyle
 #elif OS_LINUX
   PathStyle_SystemAbsolute = PathStyle_UnixAbsolute
 #else
-# error "absolute path style is undefined for this OS"
+# error Absolute path style is undefined for this OS.
 #endif
 }
 PathStyle;
@@ -206,10 +206,13 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 ////////////////////////////////
 //~ rjf: String Matching
 
+#define str8_match_lit(a_lit, b, flags)   str8_match(str8_lit(a_lit), (b), (flags))
+#define str8_match_cstr(a_cstr, b, flags) str8_match(str8_cstring(a_cstr), (b), (flags))
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal B32 str8_ends_with(String8 string, String8 end, StringMatchFlags flags);
+#define str8_ends_with_lit(string, end_lit, flags) str8_ends_with((string), str8_lit(end_lit), (flags))
 
 ////////////////////////////////
 //~ rjf: String Slicing
@@ -220,6 +223,7 @@ internal String8 str8_skip(String8 str, U64 amt);
 internal String8 str8_postfix(String8 str, U64 size);
 internal String8 str8_chop(String8 str, U64 amt);
 internal String8 str8_skip_chop_whitespace(String8 string);
+internal String8 str8_skip_chop_slashes(String8 string);
 
 ////////////////////////////////
 //~ rjf: String Formatting & Copying
@@ -284,11 +288,33 @@ internal void         str8_list_from_flags(Arena *arena, String8List *list, U32 
 ////////////////////////////////
 //~ rjf; String Arrays
 
+internal String8Array str8_array_zero(void);
 internal String8Array str8_array_from_list(Arena *arena, String8List *list);
 internal String8Array str8_array_reserve(Arena *arena, U64 count);
+internal String8Array str8_array_copy(Arena *arena, String8Array array);
+
+////////////////////////////////
+//~ rjf: String Version Helpers
+
+internal U64 version_from_str8(String8 string);
+internal String8 str8_from_version(Arena *arena, U64 version);
 
 ////////////////////////////////
 //~ rjf: String Path Helpers
+
+global read_only struct
+{
+  String8   string;
+  PathStyle path_style;
+}
+g_path_style_map[] =
+{
+  { str8_lit_comp(""),         PathStyle_Null            },
+  { str8_lit_comp("relative"), PathStyle_Relative        },
+  { str8_lit_comp("windows"),  PathStyle_WindowsAbsolute },
+  { str8_lit_comp("unix"),     PathStyle_UnixAbsolute    },
+  { str8_lit_comp("system"),   PathStyle_SystemAbsolute  },
+};
 
 internal String8 str8_chop_last_slash(String8 string);
 internal String8 str8_skip_last_slash(String8 string);
@@ -404,8 +430,6 @@ internal void * str8_deserial_get_raw_ptr(String8 string, U64 off, U64 size);
 internal U64    str8_deserial_read_cstr(String8 string, U64 off, String8 *cstr_out);
 internal U64    str8_deserial_read_windows_utf16_string16(String8 string, U64 off, String16 *str_out);
 internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out);
-internal U64    str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out);
-internal U64    str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out);
 #define str8_deserial_read_array(string, off, ptr, count) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr))*(count), sizeof(*(ptr)))
 #define str8_deserial_read_struct(string, off, ptr)       str8_deserial_read_array(string, off, ptr, 1)
 

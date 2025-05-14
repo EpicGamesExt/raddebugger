@@ -195,6 +195,11 @@ struct R_PassList
 };
 
 ////////////////////////////////
+//~ rjf: Helpers
+
+internal Mat4x4F32 r_sample_channel_map_from_tex2dformat(R_Tex2DFormat fmt);
+
+////////////////////////////////
 //~ rjf: Handle Type Functions
 
 internal R_Handle r_handle_zero(void);

@@ -321,13 +321,13 @@ os_file_open(OS_AccessFlags flags, String8 path)
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
   SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
-  if(flags & OS_AccessFlag_Read)       {access_flags |= GENERIC_READ;}
-  if(flags & OS_AccessFlag_Write)      {access_flags |= GENERIC_WRITE;}
-  if(flags & OS_AccessFlag_Execute)    {access_flags |= GENERIC_EXECUTE;}
-  if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
-  if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
-  if(flags & OS_AccessFlag_Write)      {creation_disposition = CREATE_ALWAYS;}
-  if(flags & OS_AccessFlag_Append)     {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_AccessFlag_Read)        {access_flags |= GENERIC_READ;}
+  if(flags & OS_AccessFlag_Write)       {access_flags |= GENERIC_WRITE;}
+  if(flags & OS_AccessFlag_Execute)     {access_flags |= GENERIC_EXECUTE;}
+  if(flags & OS_AccessFlag_ShareRead)   {share_mode |= FILE_SHARE_READ;}
+  if(flags & OS_AccessFlag_ShareWrite)  {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
+  if(flags & OS_AccessFlag_Write)       {creation_disposition = CREATE_ALWAYS;}
+  if(flags & OS_AccessFlag_Append)      {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
   if(flags & OS_AccessFlag_Inherited)
   {
     security_attributes.bInheritHandle = 1;
@@ -470,6 +470,19 @@ os_id_from_file(OS_Handle file)
 }
 
 internal B32
+os_file_reserve_size(OS_Handle file, U64 size)
+{
+  HANDLE handle = (HANDLE)file.u64[0];
+  
+  FILE_ALLOCATION_INFO alloc_info    = {0};
+  alloc_info.AllocationSize.LowPart  = size & max_U32;
+  alloc_info.AllocationSize.HighPart = (size >> 32) & max_U32;
+  
+  BOOL is_reserved = SetFileInformationByHandle(handle, FileAllocationInfo, &alloc_info, sizeof(alloc_info));
+  return is_reserved;
+}
+
+internal B32
 os_delete_file_at_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -486,6 +499,17 @@ os_copy_file_path(String8 dst, String8 src)
   String16 dst16 = str16_from_8(scratch.arena, dst);
   String16 src16 = str16_from_8(scratch.arena, src);
   B32 result = CopyFileW((WCHAR*)src16.str, (WCHAR*)dst16.str, 0);
+  scratch_end(scratch);
+  return result;
+}
+
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 dst16 = str16_from_8(scratch.arena, dst);
+  String16 src16 = str16_from_8(scratch.arena, src);
+  B32 result = MoveFileW((WCHAR*)src16.str, (WCHAR*)dst16.str);
   scratch_end(scratch);
   return result;
 }
@@ -546,6 +570,28 @@ os_properties_from_file_path(String8 path)
     os_w32_dense_time_from_file_time(&props.created, &find_data.ftCreationTime);
     os_w32_dense_time_from_file_time(&props.modified, &find_data.ftLastWriteTime);
     props.flags = os_w32_file_property_flags_from_dwFileAttributes(find_data.dwFileAttributes);
+  }
+  else
+  {
+    Temp scratch = scratch_begin(0, 0);
+    WCHAR buffer[512] = {0};
+    DWORD length = GetLogicalDriveStringsW(sizeof(buffer), buffer);
+    U64 last_slash_pos = 0;
+    for(;last_slash_pos < path.size; last_slash_pos = str8_find_needle(path, last_slash_pos+1, str8_lit("/"), StringMatchFlag_SlashInsensitive));
+    String8 path_trimmed = str8_prefix(path, last_slash_pos);
+    for(U64 off = 0; off < (U64)length;)
+    {
+      String16 next_drive_string_16 = str16_cstring((U16 *)buffer+off);
+      off += next_drive_string_16.size+1;
+      String8 next_drive_string = str8_from_16(scratch.arena, next_drive_string_16);
+      next_drive_string = str8_chop_last_slash(next_drive_string);
+      if(str8_match(path_trimmed, next_drive_string, StringMatchFlag_CaseInsensitive))
+      {
+        props.flags |= FilePropertyFlag_IsFolder;
+        break;
+      }
+    }
+    scratch_end(scratch);
   }
   FindClose(handle);
   scratch_end(scratch);
@@ -666,7 +712,7 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
   }
   else
   {
-    w32_iter->handle = FindFirstFileW((WCHAR*)path16.str, &w32_iter->find_data);
+    w32_iter->handle = FindFirstFileExW((WCHAR*)path16.str, FindExInfoBasic, &w32_iter->find_data, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH);
   }
   scratch_end(scratch);
   return iter;
@@ -1361,6 +1407,7 @@ os_make_guid(void)
 #include <shlwapi.h>
 
 internal B32 win32_g_is_quiet = 0;
+internal B32 win32_g_gen_dump = 0;
 
 internal HRESULT WINAPI
 win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PTR data)
@@ -1396,6 +1443,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
   
   // load dbghelp dynamically just in case if it is missing
+  BOOL (WINAPI *dbg_MiniDumpWriteDump)(HANDLE hProcess, DWORD ProcessId, HANDLE hFile, MINIDUMP_TYPE DumpType, PMINIDUMP_EXCEPTION_INFORMATION ExceptionParam, PMINIDUMP_USER_STREAM_INFORMATION UserStreamParam, PMINIDUMP_CALLBACK_INFORMATION CallbackParam) = 0;
   HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
   if(dbghelp)
   {
@@ -1419,6 +1467,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
     *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
     *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
     *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
+    *(FARPROC*)&dbg_MiniDumpWriteDump        = GetProcAddress(dbghelp, "MiniDumpWriteDump");
     
     if(dbg_SymSetOptions && dbg_SymInitializeW && dbg_StackWalk64 && dbg_SymFunctionTableAccess64 && dbg_SymGetModuleBase64 && dbg_SymFromAddrW && dbg_SymGetLineFromAddrW64 && dbg_SymGetModuleInfoW64)
     {
@@ -1548,10 +1597,13 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
   
+  B32 generate_crash_dump = win32_g_gen_dump;
 #if BUILD_CONSOLE_INTERFACE
   fwprintf(stderr, L"\n--- Fatal Exception ---\n");
   fwprintf(stderr, L"%s\n\n", buffer);
 #else
+  int selected_button = 0;
+  TASKDIALOG_BUTTON generate_dump = {1, L"Generate Crash Dump File"};
   TASKDIALOGCONFIG dialog = {0};
   dialog.cbSize = sizeof(dialog);
   dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
@@ -1560,8 +1612,24 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   dialog.pszWindowTitle = L"Fatal Exception";
   dialog.pszContent = buffer;
   dialog.pfCallback = &win32_dialog_callback;
-  TaskDialogIndirect(&dialog, 0, 0, 0);
+  dialog.cButtons = 1;
+  dialog.pButtons = &generate_dump;
+  TaskDialogIndirect(&dialog, &selected_button, 0, 0);
+  generate_crash_dump = (selected_button == generate_dump.nButtonID);
 #endif
+  
+  if(dbg_MiniDumpWriteDump && generate_crash_dump)
+  {
+    WCHAR desktop_path[512] = {0};
+    SHGetFolderPathW(0, CSIDL_DESKTOP, 0, 0, desktop_path);
+    WCHAR dump_file_path[512] = {0};
+    wnsprintfW(dump_file_path, ArrayCount(dump_file_path), L"%s\\raddbg_crash_dump.dmp", desktop_path);
+    SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
+    HANDLE file = CreateFileW(dump_file_path, GENERIC_WRITE, 0, &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    BOOL dump_successful = dbg_MiniDumpWriteDump(GetCurrentProcess(), os_get_process_info()->pid, file, MiniDumpNormal, 0, 0, 0);
+    CloseHandle(file);
+    (void)dump_successful;
+  }
   
   ExitProcess(1);
 }
@@ -1648,6 +1716,11 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
       arena_default_flags        = ArenaFlag_LargePages;
       arena_default_reserve_size = Max(MB(64), os_w32_state.system_info.large_page_size);
       arena_default_commit_size  = arena_default_reserve_size;
+    }
+    if(str8_match(arg8, str8_lit("--gen_crash_dump"), StringMatchFlag_CaseInsensitive) ||
+       str8_match(arg8, str8_lit("-gen_crash_dump"), StringMatchFlag_CaseInsensitive))
+    {
+      win32_g_gen_dump = 1;
     }
     argv[i] = (char *)arg8.str;
   }

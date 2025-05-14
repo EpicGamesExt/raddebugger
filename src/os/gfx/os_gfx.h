@@ -21,7 +21,8 @@ struct OS_GfxInfo
 typedef U32 OS_WindowFlags;
 enum
 {
-  OS_WindowFlag_CustomBorder = (1<<0),
+  OS_WindowFlag_CustomBorder       = (1<<0),
+  OS_WindowFlag_UseDefaultPosition = (1<<1),
 };
 
 ////////////////////////////////
@@ -111,6 +112,7 @@ internal B32 frame(void);
 
 internal String8 os_string_from_event_kind(OS_EventKind kind);
 internal String8List os_string_list_from_modifiers(Arena *arena, OS_Modifiers flags);
+internal String8 os_string_from_modifiers_key(Arena *arena, OS_Modifiers modifiers, OS_Key key);
 internal U32 os_codepoint_from_modifiers_and_key(OS_Modifiers flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
 internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key);
@@ -139,8 +141,9 @@ internal String8 os_get_clipboard_text(Arena *arena);
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle      os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title);
+internal OS_Handle      os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title);
 internal void           os_window_close(OS_Handle window);
+internal void           os_window_set_title(OS_Handle window, String8 title);
 internal void           os_window_first_paint(OS_Handle window);
 internal void           os_window_focus(OS_Handle window);
 internal B32            os_window_is_focused(OS_Handle window);
@@ -168,6 +171,7 @@ internal OS_Handle      os_primary_monitor(void);
 internal OS_Handle      os_monitor_from_window(OS_Handle window);
 internal String8        os_name_from_monitor(Arena *arena, OS_Handle monitor);
 internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
+internal F32            os_dpi_from_monitor(OS_Handle monitor);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Events (Implemented Per-OS)

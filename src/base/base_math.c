@@ -386,6 +386,21 @@ derotate_4x4f32(Mat4x4F32 mat)
   return mat;
 }
 
+internal Mat4x4F32
+transpose_4x4f32(Mat4x4F32 mat)
+{
+  Mat4x4F32 result =
+  {
+    {
+      mat.v[0][0], mat.v[1][0], mat.v[2][0], mat.v[3][0],
+      mat.v[0][1], mat.v[1][1], mat.v[2][1], mat.v[3][1],
+      mat.v[0][2], mat.v[1][2], mat.v[2][2], mat.v[3][2],
+      mat.v[0][3], mat.v[1][3], mat.v[2][3], mat.v[3][3],
+    }
+  };
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Range Ops
 
@@ -480,7 +495,9 @@ internal Rng2F32 intersect_2f32(Rng2F32 a, Rng2F32 b)           {Rng2F32 c; c.p0
 internal Vec2F32 clamp_2f32(Rng2F32 r, Vec2F32 v)               {v.x = Clamp(r.min.x, v.x, r.max.x); v.y = Clamp(r.min.y, v.y, r.max.y); return v;}
 
 ////////////////////////////////
-//~ rjf: Miscellaneous Ops
+//~ rjf: Color Operations
+
+//- rjf: hsv <-> rgb
 
 internal Vec3F32
 hsv_from_rgb(Vec3F32 rgb)
@@ -567,15 +584,101 @@ rgba_from_hsva(Vec4F32 hsva)
   return rgba;
 }
 
-internal Vec4F32
-rgba_from_u32(U32 hex)
+//- rjf: srgb <-> linear
+
+internal Vec3F32
+linear_from_srgb(Vec3F32 srgb)
 {
-  Vec4F32 result = v4f32(((hex&0xff000000)>>24)/255.f,
-                         ((hex&0x00ff0000)>>16)/255.f,
-                         ((hex&0x0000ff00)>> 8)/255.f,
-                         ((hex&0x000000ff)>> 0)/255.f);
+  Vec3F32 result;
+  for EachElement(idx, srgb.v)
+  {
+    result.v[idx] = (srgb.v[idx] < 0.0404482362771082f ? srgb.v[idx] / 12.92f : pow_f32((srgb.v[idx] + 0.055f) / 1.055f, 2.4f));
+  }
   return result;
 }
+
+internal Vec3F32
+srgb_from_linear(Vec3F32 linear)
+{
+  Vec3F32 result;
+  for EachElement(idx, linear.v)
+  {
+    result.v[idx] = (0 <= linear.v[idx] && linear.v[idx] < 0.00313066844250063) ? linear.v[idx]*12.92f : 1.05f * pow_f32(linear.v[idx], 1.f/2.4f) - 0.055f;
+  }
+  return result;
+}
+
+internal Vec4F32
+linear_from_srgba(Vec4F32 srgba)
+{
+  Vec4F32 result;
+  result.xyz = linear_from_srgb(srgba.xyz);
+  result.w = srgba.w;
+  return result;
+}
+
+internal Vec4F32
+srgba_from_linear(Vec4F32 linear)
+{
+  Vec4F32 result;
+  result.xyz = srgb_from_linear(linear.xyz);
+  result.w = linear.w;
+  return result;
+}
+
+//- rjf: oklab <-> linear
+
+internal Vec3F32
+oklab_from_linear(Vec3F32 linear)
+{
+  F32 l = (0.4122214708f * linear.x + 0.5363325363f * linear.y + 0.0514459929f * linear.z);
+	F32 m = (0.2119034982f * linear.x + 0.6806995451f * linear.y + 0.1073969566f * linear.z);
+	F32 s = (0.0883024619f * linear.x + 0.2817188376f * linear.y + 0.6299787005f * linear.z);
+  F32 l_ = cbrt_f32(l);
+  F32 m_ = cbrt_f32(m);
+  F32 s_ = cbrt_f32(s);
+  Vec3F32 result;
+  result.x = 0.2104542553f*l_ + 0.7936177850f*m_ - 0.0040720468f*s_;
+  result.y = 1.9779984951f*l_ - 2.4285922050f*m_ + 0.4505937099f*s_;
+  result.z = 0.0259040371f*l_ + 0.7827717662f*m_ - 0.8086757660f*s_;
+  return result;
+}
+
+internal Vec3F32
+linear_from_oklab(Vec3F32 oklab)
+{
+  F32 l_ = oklab.x + 0.3963377774f * oklab.y + 0.2158037573f * oklab.z;
+  F32 m_ = oklab.x - 0.1055613458f * oklab.y - 0.0638541728f * oklab.z;
+  F32 s_ = oklab.x - 0.0894841775f * oklab.y - 1.2914855480f * oklab.z;
+  F32 l = l_*l_*l_;
+  F32 m = m_*m_*m_;
+  F32 s = s_*s_*s_;
+  Vec3F32 result;
+  result.x = +4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s;
+  result.y = -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s;
+  result.z = -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s;
+  return result;
+}
+
+internal Vec4F32
+oklab_from_lineara(Vec4F32 lineara)
+{
+  Vec4F32 result;
+  result.xyz = oklab_from_linear(lineara.xyz);
+  result.w = lineara.w;
+  return result;
+}
+
+internal Vec4F32
+lineara_from_oklab(Vec4F32 oklab)
+{
+  Vec4F32 result;
+  result.xyz = linear_from_oklab(oklab.xyz);
+  result.w = oklab.w;
+  return result;
+}
+
+//- rjf: rgba <-> u32
 
 internal U32
 u32_from_rgba(Vec4F32 rgba)
@@ -585,6 +688,16 @@ u32_from_rgba(Vec4F32 rgba)
   result |= ((U32)((U8)(rgba.y*255.f))) << 16;
   result |= ((U32)((U8)(rgba.z*255.f))) <<  8;
   result |= ((U32)((U8)(rgba.w*255.f))) <<  0;
+  return result;
+}
+
+internal Vec4F32
+rgba_from_u32(U32 hex)
+{
+  Vec4F32 result = v4f32(((hex&0xff000000)>>24)/255.f,
+                         ((hex&0x00ff0000)>>16)/255.f,
+                         ((hex&0x0000ff00)>> 8)/255.f,
+                         ((hex&0x000000ff)>> 0)/255.f);
   return result;
 }
 
@@ -634,6 +747,37 @@ rng1u64_array_from_list(Arena *arena, Rng1U64List *list)
   return arr;
 }
 
+internal U64
+rng_1u64_array_bsearch(Rng1U64Array arr, U64 value)
+{
+  if(arr.count > 0 && arr.v[0].min <= value && value < arr.v[arr.count-1].max)
+  {
+    U64 l = 0;
+    U64 r = arr.count - 1;
+    for(; l <= r; )
+    {
+      U64 m = l + (r - l) / 2;
+      if(contains_1u64(arr.v[m], value))
+      {
+        return m;
+      }
+      else if(arr.v[m].min < value)
+      {
+        l = m + 1;
+      }
+      else
+      {
+        r = m - 1;
+      }
+    }
+  }
+  else if(arr.count == 1 && contains_1u64(arr.v[0], value))
+  {
+    return 0;
+  }
+  return max_U64;
+}
+
 internal void
 rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng)
 {
@@ -657,3 +801,4 @@ rng1s64_array_from_list(Arena *arena, Rng1S64List *list)
   }
   return arr;
 }
+

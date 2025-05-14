@@ -1985,198 +1985,33 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
   struct SourceFile *file_last   = 0;
   U64                file_count  = 0;
 
-  CV_InlineRangeKind range_kind             = 0; (void)range_kind;
-  U32                code_length            = 0;
-  U32                code_offset            = 0;
-  U32                file_off               = inlinee_parsed->file_off;
-  S32                ln                     = (S32)inlinee_parsed->first_source_ln;
-  S32                cn                     = 1;
-  U64                code_offset_lo         = 0;
-  B32                code_offset_changed    = 0;
-  B32                code_offset_lo_changed = 0;
-  B32                code_length_changed    = 0;
-  B32                ln_changed             = 1;
-  B32                file_off_changed       = 0;
-
-  for (U64 cursor = 0, keep_running = 1; cursor < binary_annots.size && keep_running; ) {
-    U32 op = CV_InlineBinaryAnnotation_Null;
-    cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &op);
-
-    switch (op) {
-    case CV_InlineBinaryAnnotation_Null: {
-      keep_running = 0;
-      
-      // this is last run, append range with left over code bytes
-      code_length         = code_offset - code_offset_lo;
-      code_length_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_CodeOffset: {
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_offset);
-      code_offset_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase: {
-      AssertAlways(!"TODO: test case");
-      // U32 delta = 0;
-      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &delta);
-      // code_offset_base = code_offset;
-      // code_offset_end  = code_offset + delta;
-      // code_offset += delta;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeCodeOffset: {
-      U32 delta = 0;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &delta);
-
-      code_offset += delta;
-
-      if (!code_offset_lo_changed) {
-        code_offset_lo = code_offset;
-        code_offset_lo_changed = 1;
-      }
-      code_offset_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeCodeLength: {
-      code_length = 0;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_length);
-      code_length_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeFile: {
-      U32 old_file_off = file_off;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &file_off);
-      file_off_changed = old_file_off != file_off;
-      // Compiler isn't obligated to terminate code sequence before chaning files,
-      // so we have to always force emit code range on file change.
-      code_length_changed = file_off_changed;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeLineOffset: {
-      S32 delta = 0;
-      cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &delta);
-
-      ln += delta;
-      ln_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeLineEndDelta: {
-      AssertAlways(!"TODO: test case");
-      // S32 end_delta = 1;
-      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &end_delta);
-      // ln += end_delta;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeRangeKind: {
-      AssertAlways(!"TODO: test case");
-      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &range_kind);
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeColumnStart: {
-      AssertAlways(!"TODO: test case");
-      // S32 delta;
-      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &delta);
-      // cn += delta;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeColumnEndDelta: {
-      AssertAlways(!"TODO: test case");
-      // S32 end_delta;
-      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &end_delta);
-      // cn += end_delta;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset: {
-      U32 code_offset_and_line_offset = 0;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_offset_and_line_offset);
-
-      S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
-      U32 code_delta = (code_offset_and_line_offset & 0xf);
-
-      code_offset += code_delta;
-      ln          += line_delta;
-
-      if (!code_offset_lo_changed) {
-        code_offset_lo = code_offset;
-        code_offset_lo_changed = 1;
-      }
-
-      code_offset_changed = 1;
-      ln_changed          = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset: {
-      U32 offset_delta = 0;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_length);
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &offset_delta); 
-
-      code_offset += offset_delta;
-
-      if (!code_offset_lo_changed) {
-        code_offset_lo = code_offset;
-        code_offset_lo_changed = 1;
-      }
-
-      code_offset_changed = 1;
-      code_length_changed = 1;
-    }break;
-    case CV_InlineBinaryAnnotation_ChangeColumnEnd: {
-      AssertAlways(!"TODO: test case");
-      // U32 column_end = 0;
-      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &column_end);
-    }break;
+  CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_parsed->file_off, inlinee_parsed->first_source_ln, parent_voff);
+  for (;;) {
+    CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
+    if (step.flags == 0) {
+      break;
     }
-
-    U64 line_code_offset = code_offset;
-
-    if (code_length_changed) {
-      // compute upper bound of the range
-      U64 code_offset_hi = code_offset + code_length;
-
-      // can last code range be extended to cover current sequence too?
-      if (code_ranges.last != 0 && code_ranges.last->v.max == parent_voff + code_offset_lo) {
-        code_ranges.last->v.max = parent_voff + code_offset_hi;
-      } else {
-        // append range
-        rng1u64_list_push(arena, &code_ranges, rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi));
-
-        // update last code range in file
-        if (file_last) {
-          file_last->last_code_range = code_ranges.last->v;
-        }
-      }
-
-      // update low offset for next range
-      code_offset_lo = code_offset_hi;
-
-      // advance code offset
-      code_offset += code_length;
-
-      // reset state
-      code_offset_lo_changed = 0;
-      code_length_changed    = 0;
-      code_length            = 0;
+    if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange) {
+      rng1u64_list_push(arena, &code_ranges, step.range);
     }
-
-    if (file_off_changed || (file_first == 0)) {
-      // append file
+    if (step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange) {
+      if (code_ranges.last) {
+        code_ranges.last->v = step.range;
+      }
+    }
+    if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile) {
       struct SourceFile *file = push_array(scratch.arena, struct SourceFile, 1);
-      file->checksum_off = file_off;
+      file->checksum_off      = step.file_off;
       SLLQueuePush(file_first, file_last, file);
       ++file_count;
-
-      // update last code range in file
-      if (code_ranges.last) {
-        file->last_code_range = code_ranges.last->v;
-      }
-
-      // reset state
-      file_off_changed = 0;
     }
-
-    if (code_offset_changed && ln_changed) {
-      if (file_last->line_last == 0 || file_last->line_last->ln != (U64)ln) {
-        // append line
-        struct SourceLine *line = push_array(scratch.arena, struct SourceLine, 1);
-        line->voff = parent_voff + line_code_offset;
-        line->ln   = (U64)ln;
-        line->cn   = (U64)cn;
-        SLLQueuePush(file_last->line_first, file_last->line_last, line);
-        ++file_last->line_count;
-      }
-
-      // reset state
-      code_offset_changed = 0;
-      ln_changed          = 0;
+    if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine) {
+      struct SourceLine *line = push_array(scratch.arena, struct SourceLine, 1);
+      line->voff              = step.line_voff;
+      line->ln                = step.ln;
+      line->cn                = step.cn;
+      SLLQueuePush(file_last->line_first, file_last->line_last, line);
+      ++file_last->line_count;
     }
   }
 
@@ -2209,9 +2044,9 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
 
   // fill out result
   CV_InlineBinaryAnnotsParsed result = {0};
-  result.lines_count      = file_count;
-  result.lines            = lines;
-  result.code_ranges      = code_ranges;
+  result.lines_count                 = file_count;
+  result.lines                       = lines;
+  result.code_ranges                 = code_ranges;
 
   scratch_end(scratch);
   return result;

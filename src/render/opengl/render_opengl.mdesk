@@ -1,0 +1,292 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+////////////////////////////////
+//~ rjf: Shader Table
+
+@table(name   name_lower    input_atts                          output_atts)
+R_OGL_ShaderTable:
+{
+  {Rect        rect          r_ogl_rect_input_attributes         r_ogl_single_color_output_attributes}
+  {Blur        blur          0                                   r_ogl_single_color_output_attributes}
+}
+
+@enum R_OGL_ShaderKind:
+{
+  @expand(R_OGL_ShaderTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8) r_ogl_shader_kind_name_table:
+{
+  @expand(R_OGL_ShaderTable a) `str8_lit_comp("$(a.name_lower)")`,
+}
+
+@data(`String8 *`) r_ogl_shader_kind_vshad_src_table:
+{
+  @expand(R_OGL_ShaderTable a) `&r_ogl_$(a.name_lower)_vshad_src`,
+}
+
+@data(`String8 *`) r_ogl_shader_kind_pshad_src_table:
+{
+  @expand(R_OGL_ShaderTable a) `&r_ogl_$(a.name_lower)_pshad_src`,
+}
+
+@data(R_OGL_AttributeArray) r_ogl_shader_kind_input_attributes_table:
+{
+  @expand(R_OGL_ShaderTable a) `{ $(a.input_atts), $(a.input_atts != 0 -> "ArrayCount(" .. a.input_atts .. ")") }`,
+}
+
+@data(R_OGL_AttributeArray) r_ogl_shader_kind_output_attributes_table:
+{
+  @expand(R_OGL_ShaderTable a) `{ $(a.output_atts), ArrayCount($(a.output_atts)) }`,
+}
+
+////////////////////////////////
+//~ rjf: UI Rectangle Shaders
+
+//- rjf: vertex
+@embed_string r_ogl_rect_vshad_src:
+```
+#version 330 core
+
+in vec4 c2v_dst_rect;
+in vec4 c2v_src_rect;
+in vec4 c2v_colors_0;
+in vec4 c2v_colors_1;
+in vec4 c2v_colors_2;
+in vec4 c2v_colors_3;
+in vec4 c2v_corner_radii;
+in vec4 c2v_style;  // x: border_thickness_px, y: softness_px, z: omit_texture, w: unused
+
+out vec2 v2p_sdf_sample_pos;
+out vec2 v2p_texcoord_pct;
+out vec2 v2p_rect_half_size_px;
+out vec4 v2p_tint;
+out float v2p_corner_radius;
+out float v2p_border_thickness;
+out float v2p_softness;
+out float v2p_omit_texture;
+
+uniform sampler2D u_tex_color;
+uniform vec2 u_viewport_size_px;
+
+void main(void)
+{
+  // rjf: constants
+  vec2 vertices[] = vec2[](vec2(-1, -1), vec2(-1, +1), vec2(+1, -1), vec2(+1, +1));
+  
+  // rjf: find dst position
+  vec2 dst_half_size = (c2v_dst_rect.zw - c2v_dst_rect.xy) / 2;
+  vec2 dst_center    = (c2v_dst_rect.zw + c2v_dst_rect.xy) / 2;
+  vec2 dst_position  = vertices[gl_VertexID] * dst_half_size + dst_center;
+  
+  // rjf: find src position
+  vec2 src_half_size = (c2v_src_rect.zw - c2v_src_rect.xy) / 2;
+  vec2 src_center    = (c2v_src_rect.zw + c2v_src_rect.xy) / 2;
+  vec2 src_position  = vertices[gl_VertexID] * src_half_size + src_center;
+  
+  // rjf: find color
+  vec4 colors[] = vec4[](c2v_colors_0, c2v_colors_1, c2v_colors_2, c2v_colors_3);
+  vec4 color = colors[gl_VertexID];
+  
+  // rjf: find corner radius
+  float corner_radii[] = float[](c2v_corner_radii.x, c2v_corner_radii.y, c2v_corner_radii.z, c2v_corner_radii.w);
+  float corner_radius = corner_radii[gl_VertexID];
+  
+  // rjf: fill outputs
+  vec2 dst_verts_pct = vec2(((gl_VertexID >> 1) != 1) ? 1.f : 0.f,
+                            ((gl_VertexID & 1) != 0)  ? 0.f : 1.f);
+  ivec2 u_tex_color_size_i = textureSize(u_tex_color, 0);
+  vec2 u_tex_color_size = vec2(float(u_tex_color_size_i.x), float(u_tex_color_size_i.y));
+  {
+    gl_Position = vec4(2 * dst_position.x / u_viewport_size_px.x - 1,
+                       2 * (1 - dst_position.y / u_viewport_size_px.y) - 1,
+                       0.0, 1.0);
+    v2p_sdf_sample_pos    = (2.f * dst_verts_pct - 1.f) * dst_half_size;
+    v2p_texcoord_pct      = src_position / u_tex_color_size;
+    v2p_rect_half_size_px = dst_half_size;
+    v2p_tint              = color;
+    v2p_corner_radius     = corner_radius;
+    v2p_border_thickness  = c2v_style.x;
+    v2p_softness          = c2v_style.y;
+    v2p_omit_texture      = c2v_style.z;
+  }
+}
+```
+
+//- rjf: pixel
+@embed_string r_ogl_rect_pshad_src:
+```
+#version 330 core
+
+in vec2 v2p_sdf_sample_pos;
+in vec2 v2p_texcoord_pct;
+in vec2 v2p_rect_half_size_px;
+in vec4 v2p_tint;
+in float v2p_corner_radius;
+in float v2p_border_thickness;
+in float v2p_softness;
+in float v2p_omit_texture;
+
+out vec4 final_color;
+
+uniform float u_opacity;
+uniform sampler2D u_tex_color;
+uniform mat4 u_texture_sample_channel_map;
+
+float rect_sdf(vec2 sample_pos, vec2 rect_half_size, float r)
+{
+  return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;
+}
+
+float linear_from_srgb_f32(float x)
+{
+  return x < 0.0404482362771082 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+}
+
+vec4 linear_from_srgba(vec4 v)
+{
+  vec4 result = vec4(linear_from_srgb_f32(v.x),
+                     linear_from_srgb_f32(v.y),
+                     linear_from_srgb_f32(v.z),
+                     v.w);
+  return result;
+}
+
+void main(void)
+{
+  // rjf: sample texture
+  vec4 albedo_sample = vec4(1, 1, 1, 1);
+  if(v2p_omit_texture < 1)
+  {
+    albedo_sample = u_texture_sample_channel_map * texture(u_tex_color, v2p_texcoord_pct);
+    albedo_sample = linear_from_srgba(albedo_sample);
+  }
+  
+  // rjf: sample for borders
+  float border_sdf_t = 1;
+  if(v2p_border_thickness > 0)
+  {
+    float border_sdf_s = rect_sdf(v2p_sdf_sample_pos,
+                                  v2p_rect_half_size_px - vec2(v2p_softness*2.f, v2p_softness*2.f) - v2p_border_thickness,
+                                  max(v2p_corner_radius-v2p_border_thickness, 0));
+    border_sdf_t = smoothstep(0, 2*v2p_softness, border_sdf_s);
+  }
+  if(border_sdf_t < 0.001f)
+  {
+    discard;
+  }
+  
+  // rjf: sample for corners
+  float corner_sdf_t = 1;
+  if(v2p_corner_radius > 0 || v2p_softness > 0.75f)
+  {
+    float corner_sdf_s = rect_sdf(v2p_sdf_sample_pos,
+                                  v2p_rect_half_size_px - vec2(v2p_softness*2.f, v2p_softness*2.f),
+                                  v2p_corner_radius);
+    corner_sdf_t = 1-smoothstep(0, 2*v2p_softness, corner_sdf_s);
+  }
+  
+  // rjf: form+return final color
+  final_color = albedo_sample;
+  final_color *= v2p_tint;
+  final_color.a *= u_opacity;
+  final_color.a *= corner_sdf_t;
+  final_color.a *= border_sdf_t;
+}
+```
+
+////////////////////////////////
+//~ rjf: Blur Shaders
+
+//- rjf: vertex
+@embed_string r_ogl_blur_vshad_src:
+```
+#version 330 core
+
+uniform vec4 rect;
+uniform vec4 corner_radii_px;
+uniform vec2 viewport_size;
+uniform uint blur_count;
+
+out vec2 texcoord;
+out vec2 sdf_sample_pos;
+out vec2 rect_half_size;
+out float corner_radius;
+
+void main(void)
+{
+  vec2 vertex_positions_scrn[] = vec2[](rect.xw,
+                                        rect.xy,
+                                        rect.zw,
+                                        rect.zy);
+  float corner_radii_px[] = float[](corner_radii_px.y,
+                                    corner_radii_px.x,
+                                    corner_radii_px.w,
+                                    corner_radii_px.z);
+  vec2 cornercoords_pct = vec2((gl_VertexID >> 1) != 0 ? 1.f : 0.f,
+                               (gl_VertexID & 1) != 0  ? 0.f : 1.f);
+  
+  vec2 vertex_position_pct = vertex_positions_scrn[gl_VertexID] / viewport_size;
+  vec2 vertex_position_scr = 2.f * vertex_position_pct - 1.f;
+  
+  vec2 rect_half_size = vec2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
+  
+  gl_Position = vec4(vertex_position_scr.x, -vertex_position_scr.y, 0.f, 1.f);
+  texcoord = vertex_position_pct;
+  sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size;
+  rect_half_size = rect_half_size - 2.f;
+  corner_radius = corner_radii_px[gl_VertexID];
+}
+```
+
+//- rjf: pixel
+@embed_string r_ogl_blur_pshad_src:
+```
+#version 330 core
+
+uniform sampler2D tex;
+uniform vec4 kernel[32];
+uniform int blur_count;
+uniform vec2 direction;
+
+in vec2 texcoord;
+in vec2 sdf_sample_pos;
+in vec2 rect_half_size;
+in float corner_radius;
+
+out vec4 final_color;
+
+float rect_sdf(vec2 sample_pos, vec2 rect_half_size, float r)
+{
+  return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;
+}
+
+void main(void)
+{
+  // rjf: blend weighted texture samples into color
+  vec3 color = kernel[0].x * texture(tex, texcoord).rgb;
+  
+  for(int i = 1; i < blur_count; i += 1)
+  {
+    float weight = kernel[i].x;
+    float offset = kernel[i].y;
+    color += weight * texture(tex, texcoord - offset * direction).rgb;
+    color += weight * texture(tex, texcoord + offset * direction).rgb;
+  }
+  
+  // rjf: sample for corners
+  float corner_sdf_s = rect_sdf(sdf_sample_pos, rect_half_size, corner_radius);
+  float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);
+  
+  // rjf: weight output color by sdf
+  // this is doing alpha testing, leave blurring only where mostly opaque pixels are
+  if(corner_sdf_t < 0.9f)
+  {
+    discard;
+  }
+  
+  final_color = vec4(color, 1.f);
+}
+```

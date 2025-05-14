@@ -1,6 +1,9 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+#undef LAYER_COLOR
+#define LAYER_COLOR 0xe34cd4ff
+
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
@@ -2313,6 +2316,7 @@ ASYNC_WORK_DEF(txt_parse_work)
     {
       if(u128_match(n->hash, hash) && n->lang == lang)
       {
+        hs_hash_downstream_inc(n->hash);
         n->arena = info_arena;
         info.bytes_processed = n->info.bytes_processed;
         info.bytes_to_process = n->info.bytes_to_process;
@@ -2340,7 +2344,7 @@ txt_evictor_thread__entry_point(void *p)
   {
     U64 check_time_us = os_now_microseconds();
     U64 check_time_user_clocks = update_tick_idx();
-    U64 evict_threshold_us = 10*1000000;
+    U64 evict_threshold_us = 2*1000000;
     U64 evict_threshold_user_clocks = 10;
     for(U64 slot_idx = 0; slot_idx < txt_shared->slots_count; slot_idx += 1)
     {
@@ -2375,6 +2379,7 @@ txt_evictor_thread__entry_point(void *p)
              n->is_working == 0)
           {
             DLLRemove(slot->first, slot->last, n);
+            hs_hash_downstream_dec(n->hash);
             if(n->arena != 0)
             {
               arena_release(n->arena);
@@ -2383,8 +2388,7 @@ txt_evictor_thread__entry_point(void *p)
           }
         }
       }
-      os_sleep_milliseconds(5);
     }
-    os_sleep_milliseconds(1000);
+    os_sleep_milliseconds(500);
   }
 }

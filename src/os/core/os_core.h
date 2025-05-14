@@ -38,13 +38,13 @@ struct OS_ProcessInfo
 typedef U32 OS_AccessFlags;
 enum
 {
-  OS_AccessFlag_Read       = (1<<0),
-  OS_AccessFlag_Write      = (1<<1),
-  OS_AccessFlag_Execute    = (1<<2),
-  OS_AccessFlag_Append     = (1<<3),
-  OS_AccessFlag_ShareRead  = (1<<4),
-  OS_AccessFlag_ShareWrite = (1<<5),
-  OS_AccessFlag_Inherited  = (1<<6),
+  OS_AccessFlag_Read        = (1<<0),
+  OS_AccessFlag_Write       = (1<<1),
+  OS_AccessFlag_Execute     = (1<<2),
+  OS_AccessFlag_Append      = (1<<3),
+  OS_AccessFlag_ShareRead   = (1<<4),
+  OS_AccessFlag_ShareWrite  = (1<<5),
+  OS_AccessFlag_Inherited   = (1<<6),
 };
 
 ////////////////////////////////
@@ -202,12 +202,15 @@ internal void os_abort(S32 exit_code);
 internal OS_Handle      os_file_open(OS_AccessFlags flags, String8 path);
 internal void           os_file_close(OS_Handle file);
 internal U64            os_file_read(OS_Handle file, Rng1U64 rng, void *out_data);
+#define os_file_read_struct(f, off, ptr) os_file_read((f), r1u64((off), (off)+sizeof(*(ptr))), (ptr))
 internal U64            os_file_write(OS_Handle file, Rng1U64 rng, void *data);
 internal B32            os_file_set_times(OS_Handle file, DateTime time);
 internal FileProperties os_properties_from_file(OS_Handle file);
 internal OS_FileID      os_id_from_file(OS_Handle file);
+internal B32            os_file_reserve_size(OS_Handle file, U64 size);
 internal B32            os_delete_file_at_path(String8 path);
 internal B32            os_copy_file_path(String8 dst, String8 src);
+internal B32            os_move_file_path(String8 dst, String8 src);
 internal String8        os_full_path_from_path(Arena *arena, String8 path);
 internal B32            os_file_path_exists(String8 path);
 internal B32            os_folder_path_exists(String8 path);
@@ -326,6 +329,7 @@ internal Guid os_make_guid(void);
 // into the standard codebase program entry points, named "entry_point".
 
 #if BUILD_ENTRY_DEFINING_UNIT
+raddbg_entry_point(entry_point);
 internal void entry_point(CmdLine *cmdline);
 #endif
 

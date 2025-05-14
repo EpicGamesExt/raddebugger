@@ -45,6 +45,7 @@ typedef struct PDB_Info
   PDB_InfoNode *first;
   PDB_InfoNode *last;
   Guid auth_guid;
+  PDB_FeatureFlags features;
 } PDB_Info;
 
 typedef struct PDB_InfoHeader

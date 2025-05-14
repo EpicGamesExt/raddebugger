@@ -8,6 +8,7 @@
 //~ rjf: Cache Types
 
 #define HS_KEY_HASH_HISTORY_COUNT 64
+#define HS_KEY_HASH_HISTORY_STRONG_REF_COUNT 2
 
 typedef struct HS_KeyNode HS_KeyNode;
 struct HS_KeyNode
@@ -35,6 +36,7 @@ struct HS_Node
   String8 data;
   U64 scope_ref_count;
   U64 key_ref_count;
+  U64 downstream_ref_count;
 };
 
 typedef struct HS_Slot HS_Slot;
@@ -137,6 +139,12 @@ internal U128 hs_submit_data(U128 key, Arena **data_arena, String8 data);
 internal HS_Scope *hs_scope_open(void);
 internal void hs_scope_close(HS_Scope *scope);
 internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node);
+
+////////////////////////////////
+//~ rjf: Downstream Accesses
+
+internal void hs_hash_downstream_inc(U128 hash);
+internal void hs_hash_downstream_dec(U128 hash);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups

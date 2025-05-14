@@ -602,3 +602,37 @@ ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_data, U64 read_s
   }
   return read_size;
 }
+
+////////////////////////////////
+
+internal U64
+u64_array_bsearch(U64 *arr, U64 count, U64 value)
+{
+  if(count > 1 && arr[0] <= value && value < arr[count-1])
+  {
+    U64 l = 0;
+    U64 r = count - 1;
+    for(; l <= r; )
+    {
+      U64 m = l + (r - l) / 2;
+      if(arr[m] == value)
+      {
+        return m;
+      }
+      else if(arr[m] < value)
+      {
+        l = m + 1;
+      }
+      else
+      {
+        r = m - 1;
+      }
+    }
+  }
+  else if (count == 1 && arr[0] == value)
+  {
+    return 0;
+  }
+  return max_U64;
+}
+

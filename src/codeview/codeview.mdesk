@@ -395,48 +395,48 @@ CV_BasicTypeTable:
   {FBASICSTR  0x06    ""                         }
   {NOTTRANS   0x07    ""                         }
   {HRESULT    0x08    "HRESULT"                  }
-  {CHAR       0x10    "char"                     }
-  {SHORT      0x11    "S16"                      }
-  {LONG       0x12    "S32"                      }
-  {QUAD       0x13    "S64"                      }
-  {OCT        0x14    "S128"                     }
+  {CHAR       0x10    "CHAR"                     }
+  {SHORT      0x11    "SHORT"                    }
+  {LONG       0x12    "LONG"                     }
+  {QUAD       0x13    "QUAD"                     }
+  {OCT        0x14    "OCT"                      }
   {UCHAR      0x20    "UCHAR"                    }
-  {USHORT     0x21    "U16"                      }
-  {ULONG      0x22    "U32"                      }
-  {UQUAD      0x23    "U64"                      }
-  {UOCT       0x24    "U128"                     }
-  {BOOL8      0x30    "B8"                       }
-  {BOOL16     0x31    "B16"                      }
-  {BOOL32     0x32    "B32"                      }
-  {BOOL64     0x33    "B64"                      }
-  {FLOAT32    0x40    "F32"                      }
-  {FLOAT64    0x41    "F64"                      }
-  {FLOAT80    0x42    "F80"                      }
-  {FLOAT128   0x43    "F128"                     }
-  {FLOAT48    0x44    "F48"                      }
-  {FLOAT32PP  0x45    "F32PP"                    }
-  {FLOAT16    0x46    "F16"                      }
+  {USHORT     0x21    "USHORT"                   }
+  {ULONG      0x22    "ULONG"                    }
+  {UQUAD      0x23    "UQUAD"                    }
+  {UOCT       0x24    "UOCT"                     }
+  {BOOL8      0x30    "BOOL8"                    }
+  {BOOL16     0x31    "BOOL16"                   }
+  {BOOL32     0x32    "BOOL32"                   }
+  {BOOL64     0x33    "BOOL64"                   }
+  {FLOAT32    0x40    "FLOAT32"                  }
+  {FLOAT64    0x41    "FLOAT64"                  }
+  {FLOAT80    0x42    "FLOAT80"                  }
+  {FLOAT128   0x43    "FLOAT128"                 }
+  {FLOAT48    0x44    "FLOAT48"                  }
+  {FLOAT32PP  0x45    "FLOAT32PP"                }
+  {FLOAT16    0x46    "FLOAT16"                  }
   {COMPLEX32  0x50    "ComplexF32"               }
   {COMPLEX64  0x51    "ComplexF64"               }
   {COMPLEX80  0x52    "ComplexF80"               }
   {COMPLEX128 0x53    "ComplexF128"              }
   {BIT        0x60    ""                         }
   {PASCHAR    0x61    ""                         }
-  {BOOL32FF   0x62    "B32FF"                    }
-  {INT8       0x68    "S8"                       }
-  {UINT8      0x69    "U8"                       }
+  {BOOL32FF   0x62    "BOOL32FF"                 }
+  {INT8       0x68    "int8"                     }
+  {UINT8      0x69    "uint8"                    }
   {RCHAR      0x70    "char"                     }
   {WCHAR      0x71    "WCHAR"                    }
-  {INT16      0x72    "S16"                      }
-  {UINT16     0x73    "U16"                      }
-  {INT32      0x74    "S32"                      }
-  {UINT32     0x75    "U32"                      }
-  {INT64      0x76    "S64"                      }
-  {UINT64     0x77    "U64"                      }
-  {INT128     0x78    "S128"                     }
-  {UINT128    0x79    "U128"                     }
-  {CHAR16     0x7a    "CHAR16"                   }
-  {CHAR32     0x7b    "CHAR32"                   }
+  {INT16      0x72    "int16"                    }
+  {UINT16     0x73    "uint16"                   }
+  {INT32      0x74    "int32"                    }
+  {UINT32     0x75    "uint32"                   }
+  {INT64      0x76    "int64"                    }
+  {UINT64     0x77    "uint64"                   }
+  {INT128     0x78    "int128"                   }
+  {UINT128    0x79    "uint128"                  }
+  {CHAR16     0x7a    "char16"                   }
+  {CHAR32     0x7b    "char32"                   }
   {CHAR8      0x7c    "char"                     }
   {PTR        0xf0    "PTR"                      }
 }

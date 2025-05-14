@@ -202,6 +202,21 @@ struct MD_NodeRec
   S32 pop_count;
 };
 
+typedef struct MD_NodePtrNode MD_NodePtrNode;
+struct MD_NodePtrNode
+{
+  MD_NodePtrNode *next;
+  MD_Node *v;
+};
+
+typedef struct MD_NodePtrList MD_NodePtrList;
+struct MD_NodePtrList
+{
+  MD_NodePtrNode *first;
+  MD_NodePtrNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Text -> Tokens Types
 
@@ -321,5 +336,11 @@ internal MD_ParseResult md_parse_from_text(Arena *arena, String8 filename, Strin
 //~ rjf: Tree -> Text Functions
 
 internal String8List md_debug_string_list_from_tree(Arena *arena, MD_Node *root);
+
+////////////////////////////////
+//~ rjf: Node Pointer List Functions
+
+internal void md_node_ptr_list_push(Arena *arena, MD_NodePtrList *list, MD_Node *node);
+internal void md_node_ptr_list_push_front(Arena *arena, MD_NodePtrList *list, MD_Node *node);
 
 #endif // MDESK_H

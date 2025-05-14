@@ -225,6 +225,7 @@ typedef struct DI_Scope DI_Scope;
 struct DI_Scope
 {
   DI_Scope *next;
+  DI_Scope *prev;
   DI_Touch *first_touch;
   DI_Touch *last_touch;
 };
@@ -233,6 +234,8 @@ typedef struct DI_TCTX DI_TCTX;
 struct DI_TCTX
 {
   Arena *arena;
+  DI_Scope *first_scope;
+  DI_Scope *last_scope;
   DI_Scope *free_scope;
   DI_Touch *free_touch;
 };
@@ -376,7 +379,6 @@ struct DI_Shared
 
 global DI_Shared *di_shared = 0;
 thread_static DI_TCTX *di_tctx = 0;
-global RDI_Parsed di_rdi_parsed_nil = {0};
 
 ////////////////////////////////
 //~ rjf: Basic Helpers

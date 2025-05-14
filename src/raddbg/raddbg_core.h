@@ -5,87 +5,27 @@
 #define RADDBG_CORE_H
 
 ////////////////////////////////
-//~ rjf: Handles
+//~ rjf: Config IDs
 
-typedef struct RD_Handle RD_Handle;
-struct RD_Handle
+typedef U64 RD_CfgID;
+
+typedef struct RD_CfgIDNode RD_CfgIDNode;
+struct RD_CfgIDNode
 {
-  U64 u64[2];
+  RD_CfgIDNode *next;
+  RD_CfgID v;
 };
 
-typedef struct RD_HandleNode RD_HandleNode;
-struct RD_HandleNode
+typedef struct RD_CfgIDList RD_CfgIDList;
+struct RD_CfgIDList
 {
-  RD_HandleNode *next;
-  RD_HandleNode *prev;
-  RD_Handle handle;
-};
-
-typedef struct RD_HandleList RD_HandleList;
-struct RD_HandleList
-{
-  RD_HandleNode *first;
-  RD_HandleNode *last;
+  RD_CfgIDNode *first;
+  RD_CfgIDNode *last;
   U64 count;
 };
 
 ////////////////////////////////
-//~ rjf: Evaluation Spaces
-
-typedef U64 RD_EvalSpaceKind;
-enum
-{
-  RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
-  RD_EvalSpaceKind_MetaEntity,
-  RD_EvalSpaceKind_MetaCtrlEntity,
-  RD_EvalSpaceKind_MetaCollection,
-};
-
-////////////////////////////////
-//~ rjf: Entity Kind Flags
-
-typedef U32 RD_EntityKindFlags;
-enum
-{
-  //- rjf: allowed operations
-  RD_EntityKindFlag_CanDelete                = (1<<0),
-  RD_EntityKindFlag_CanFreeze                = (1<<1),
-  RD_EntityKindFlag_CanEdit                  = (1<<2),
-  RD_EntityKindFlag_CanRename                = (1<<3),
-  RD_EntityKindFlag_CanEnable                = (1<<4),
-  RD_EntityKindFlag_CanCondition             = (1<<5),
-  RD_EntityKindFlag_CanDuplicate             = (1<<6),
-  
-  //- rjf: name categorization
-  RD_EntityKindFlag_NameIsCode               = (1<<7),
-  RD_EntityKindFlag_NameIsPath               = (1<<8),
-  
-  //- rjf: lifetime categorization
-  RD_EntityKindFlag_UserDefinedLifetime      = (1<<9),
-  
-  //- rjf: serialization
-  RD_EntityKindFlag_IsSerializedToConfig     = (1<<10),
-};
-
-////////////////////////////////
-//~ rjf: Entity Flags
-
-typedef U32 RD_EntityFlags;
-enum
-{
-  //- rjf: allocationless, simple equipment
-  RD_EntityFlag_HasTextPoint      = (1<<0),
-  RD_EntityFlag_HasEntityHandle   = (1<<2),
-  RD_EntityFlag_HasU64            = (1<<4),
-  RD_EntityFlag_HasColor          = (1<<6),
-  RD_EntityFlag_HasVAddr          = (1<<15),
-  
-  //- rjf: deletion
-  RD_EntityFlag_MarkedForDeletion = (1<<31),
-};
-
-////////////////////////////////
-//~ rjf: Binding Types
+//~ rjf: Key Bindings
 
 typedef struct RD_Binding RD_Binding;
 struct RD_Binding
@@ -94,38 +34,29 @@ struct RD_Binding
   OS_Modifiers modifiers;
 };
 
-typedef struct RD_BindingNode RD_BindingNode;
-struct RD_BindingNode
-{
-  RD_BindingNode *next;
-  RD_Binding binding;
-};
-
-typedef struct RD_BindingList RD_BindingList;
-struct RD_BindingList
-{
-  RD_BindingNode *first;
-  RD_BindingNode *last;
-  U64 count;
-};
-
-typedef struct RD_StringBindingPair RD_StringBindingPair;
-struct RD_StringBindingPair
-{
-  String8 string;
-  RD_Binding binding;
-};
-
-////////////////////////////////
-//~ rjf: Key Map Types
-
 typedef struct RD_KeyMapNode RD_KeyMapNode;
 struct RD_KeyMapNode
 {
-  RD_KeyMapNode *hash_next;
-  RD_KeyMapNode *hash_prev;
+  RD_KeyMapNode *name_hash_next;
+  RD_KeyMapNode *binding_hash_next;
+  RD_CfgID cfg_id;
   String8 name;
   RD_Binding binding;
+};
+
+typedef struct RD_KeyMapNodePtr RD_KeyMapNodePtr;
+struct RD_KeyMapNodePtr
+{
+  RD_KeyMapNodePtr *next;
+  RD_KeyMapNode *v;
+};
+
+typedef struct RD_KeyMapNodePtrList RD_KeyMapNodePtrList;
+struct RD_KeyMapNodePtrList
+{
+  RD_KeyMapNodePtr *first;
+  RD_KeyMapNodePtr *last;
+  U64 count;
 };
 
 typedef struct RD_KeyMapSlot RD_KeyMapSlot;
@@ -135,169 +66,64 @@ struct RD_KeyMapSlot
   RD_KeyMapNode *last;
 };
 
-////////////////////////////////
-//~ rjf: Setting Types
-
-typedef struct RD_SettingVal RD_SettingVal;
-struct RD_SettingVal
+typedef struct RD_KeyMap RD_KeyMap;
+struct RD_KeyMap
 {
-  B32 set;
-  S32 s32;
+  U64 name_slots_count;
+  RD_KeyMapSlot *name_slots;
+  U64 binding_slots_count;
+  RD_KeyMapSlot *binding_slots;
 };
 
 ////////////////////////////////
-//~ rjf: View Rule Info Types
+//~ rjf: Evaluation Spaces
 
-typedef U32 RD_ViewRuleInfoFlags;
+typedef U64 RD_EvalSpaceKind;
 enum
 {
-  RD_ViewRuleInfoFlag_ShowInDocs                 = (1<<0),
-  RD_ViewRuleInfoFlag_CanFilter                  = (1<<1),
-  RD_ViewRuleInfoFlag_FilterIsCode               = (1<<2),
-  RD_ViewRuleInfoFlag_TypingAutomaticallyFilters = (1<<3),
-  RD_ViewRuleInfoFlag_CanUseInWatchTable         = (1<<4),
-  RD_ViewRuleInfoFlag_CanFillValueCell           = (1<<5),
-  RD_ViewRuleInfoFlag_CanExpand                  = (1<<6),
-  RD_ViewRuleInfoFlag_ProjectFiltered            = (1<<7),
-};
-
-#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)
-#define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
-#define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
-typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
-
-////////////////////////////////
-//~ rjf: View Types
-
-typedef struct RD_View RD_View;
-
-typedef struct RD_ArenaExt RD_ArenaExt;
-struct RD_ArenaExt
-{
-  RD_ArenaExt *next;
-  Arena *arena;
-};
-
-typedef struct RD_TransientViewNode RD_TransientViewNode;
-struct RD_TransientViewNode
-{
-  RD_TransientViewNode *next;
-  RD_TransientViewNode *prev;
-  EV_Key key;
-  RD_View *view;
-  Arena *initial_params_arena;
-  MD_Node *initial_params;
-  U64 first_frame_index_touched;
-  U64 last_frame_index_touched;
-};
-
-typedef struct RD_TransientViewSlot RD_TransientViewSlot;
-struct RD_TransientViewSlot
-{
-  RD_TransientViewNode *first;
-  RD_TransientViewNode *last;
-};
-
-typedef struct RD_View RD_View;
-struct RD_View
-{
-  // rjf: allocation links (for iterating all views)
-  RD_View *alloc_next;
-  RD_View *alloc_prev;
-  
-  // rjf: ownership links ('owners' can have lists of views)
-  RD_View *order_next;
-  RD_View *order_prev;
-  
-  // rjf: transient view children
-  RD_View *first_transient;
-  RD_View *last_transient;
-  
-  // rjf: view specification info
-  struct RD_ViewRuleInfo *spec;
-  
-  // rjf: allocation info
-  U64 generation;
-  
-  // rjf: loading animation state
-  F32 loading_t;
-  F32 loading_t_target;
-  U64 loading_progress_v;
-  U64 loading_progress_v_target;
-  
-  // rjf: view project (for project-specific/filtered views)
-  Arena *project_path_arena;
-  String8 project_path;
-  
-  // rjf: view state
-  UI_ScrollPt2 scroll_pos;
-  
-  // rjf: view-lifetime allocation & user data extensions
-  Arena *arena;
-  RD_ArenaExt *first_arena_ext;
-  RD_ArenaExt *last_arena_ext;
-  U64 transient_view_slots_count;
-  RD_TransientViewSlot *transient_view_slots;
-  RD_TransientViewNode *free_transient_view_node;
-  void *user_data;
-  
-  // rjf: filter mode
-  B32 is_filtering;
-  F32 is_filtering_t;
-  
-  // rjf: params tree state
-  Arena *params_arenas[2];
-  MD_Node *params_roots[2];
-  U64 params_write_gen;
-  U64 params_read_gen;
-  
-  // rjf: text query state
-  TxtPt query_cursor;
-  TxtPt query_mark;
-  U64 query_string_size;
-  U8 query_buffer[KB(4)];
+  RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaQuery,
+  RD_EvalSpaceKind_MetaCfg,
+  RD_EvalSpaceKind_MetaCmd,
+  RD_EvalSpaceKind_MetaTheme,
+  RD_EvalSpaceKind_MetaCtrlEntity,
+  RD_EvalSpaceKind_MetaUnattachedProcess,
 };
 
 ////////////////////////////////
-//~ rjf: Panel Types
+//~ rjf: View UI Hook Types
 
-typedef struct RD_Panel RD_Panel;
-struct RD_Panel
+#define RD_VIEW_UI_FUNCTION_SIG(name) void name(E_Eval eval, Rng2F32 rect)
+#define RD_VIEW_UI_FUNCTION_NAME(name) rd_view_ui__##name
+#define RD_VIEW_UI_FUNCTION_DEF(name) internal RD_VIEW_UI_FUNCTION_SIG(RD_VIEW_UI_FUNCTION_NAME(name))
+typedef RD_VIEW_UI_FUNCTION_SIG(RD_ViewUIFunctionType);
+
+typedef struct RD_ViewUIRule RD_ViewUIRule;
+struct RD_ViewUIRule
 {
-  // rjf: tree links/data
-  RD_Panel *first;
-  RD_Panel *last;
-  RD_Panel *next;
-  RD_Panel *prev;
-  RD_Panel *parent;
-  U64 child_count;
-  
-  // rjf: allocation data
-  U64 generation;
-  
-  // rjf: split data
-  Axis2 split_axis;
-  F32 pct_of_parent;
-  
-  // rjf: animated rectangle data
-  Rng2F32 animated_rect_pct;
-  
-  // rjf: tab params
-  Side tab_side;
-  
-  // rjf: stable views (tabs)
-  RD_View *first_tab_view;
-  RD_View *last_tab_view;
-  U64 tab_view_count;
-  RD_Handle selected_tab_view;
+  String8 name;
+  RD_ViewUIFunctionType *ui;
 };
 
-typedef struct RD_PanelRec RD_PanelRec;
-struct RD_PanelRec
+typedef struct RD_ViewUIRuleNode RD_ViewUIRuleNode;
+struct RD_ViewUIRuleNode
 {
-  RD_Panel *next;
-  int push_count;
-  int pop_count;
+  RD_ViewUIRuleNode *next;
+  RD_ViewUIRule v;
+};
+
+typedef struct RD_ViewUIRuleSlot RD_ViewUIRuleSlot;
+struct RD_ViewUIRuleSlot
+{
+  RD_ViewUIRuleNode *first;
+  RD_ViewUIRuleNode *last;
+};
+
+typedef struct RD_ViewUIRuleMap RD_ViewUIRuleMap;
+struct RD_ViewUIRuleMap
+{
+  RD_ViewUIRuleSlot *slots;
+  U64 slots_count;
 };
 
 ////////////////////////////////
@@ -323,7 +149,8 @@ enum
   RD_QueryFlag_CodeInput        = (1<<2),
   RD_QueryFlag_KeepOldInput     = (1<<3),
   RD_QueryFlag_SelectOldInput   = (1<<4),
-  RD_QueryFlag_Required         = (1<<5),
+  RD_QueryFlag_Floating         = (1<<5),
+  RD_QueryFlag_Required         = (1<<6),
 };
 
 typedef U32 RD_CmdKindFlags;
@@ -331,6 +158,22 @@ enum
 {
   RD_CmdKindFlag_ListInUI      = (1<<0),
   RD_CmdKindFlag_ListInIPCDocs = (1<<1),
+  RD_CmdKindFlag_ListInTab     = (1<<2),
+  RD_CmdKindFlag_ListInTextPt  = (1<<3),
+  RD_CmdKindFlag_ListInTextRng = (1<<4),
+};
+
+////////////////////////////////
+//~ rjf: Autocompletion Cursor Info Type
+
+typedef struct RD_AutocompCursorInfo RD_AutocompCursorInfo;
+struct RD_AutocompCursorInfo
+{
+  String8 list_expr;
+  String8 filter;
+  Rng1U64 replaced_range;
+  String8 callee_expr;
+  MD_Node *arg_schema;
 };
 
 ////////////////////////////////
@@ -339,45 +182,93 @@ enum
 #include "generated/raddbg.meta.h"
 
 ////////////////////////////////
-//~ rjf: Config Types
+//~ rjf: View State Types
 
-typedef struct RD_CfgTree RD_CfgTree;
-struct RD_CfgTree
+typedef struct RD_ArenaExt RD_ArenaExt;
+struct RD_ArenaExt
 {
-  RD_CfgTree *next;
-  RD_CfgSrc source;
-  MD_Node *root;
+  RD_ArenaExt *next;
+  Arena *arena;
 };
 
-typedef struct RD_CfgVal RD_CfgVal;
-struct RD_CfgVal
+typedef struct RD_ViewState RD_ViewState;
+struct RD_ViewState
 {
-  RD_CfgVal *hash_next;
-  RD_CfgVal *linear_next;
-  RD_CfgTree *first;
-  RD_CfgTree *last;
-  U64 insertion_stamp;
-  String8 string;
+  // rjf: hash links & key
+  RD_ViewState *hash_next;
+  RD_ViewState *hash_prev;
+  RD_CfgID cfg_id;
+  
+  // rjf: touch info
+  U64 last_frame_index_touched;
+  U64 last_frame_index_built;
+  
+  // rjf: loading indicator info
+  F32 loading_t;
+  F32 loading_t_target;
+  U64 loading_progress_v;
+  U64 loading_progress_v_target;
+  
+  // rjf: scroll position
+  UI_ScrollPt2 scroll_pos;
+  
+  // rjf: eval visualization view state
+  EV_View *ev_view;
+  
+  // rjf: view-lifetime allocation & user data extensions
+  Arena *arena;
+  U64 arena_reset_pos;
+  RD_ArenaExt *first_arena_ext;
+  RD_ArenaExt *last_arena_ext;
+  void *user_data;
+  
+  // rjf: query state
+  B32 query_is_open;
+  TxtPt query_cursor;
+  TxtPt query_mark;
+  U8 query_buffer[KB(1)];
+  U64 query_string_size;
+  
+  // rjf: contents are focused (disables query focus)
+  B32 contents_are_focused;
 };
 
-typedef struct RD_CfgSlot RD_CfgSlot;
-struct RD_CfgSlot
+typedef struct RD_ViewStateSlot RD_ViewStateSlot;
+struct RD_ViewStateSlot
 {
-  RD_CfgVal *first;
-};
-
-typedef struct RD_CfgTable RD_CfgTable;
-struct RD_CfgTable
-{
-  U64 slot_count;
-  RD_CfgSlot *slots;
-  U64 insertion_stamp_counter;
-  RD_CfgVal *first_val;
-  RD_CfgVal *last_val;
+  RD_ViewState *first;
+  RD_ViewState *last;
 };
 
 ////////////////////////////////
-//~ rjf: New Config/Entity Data Structure
+//~ rjf: Vocabulary Map
+
+typedef struct RD_VocabInfoMapNode RD_VocabInfoMapNode;
+struct RD_VocabInfoMapNode
+{
+  RD_VocabInfoMapNode *single_next;
+  RD_VocabInfoMapNode *plural_next;
+  RD_VocabInfo v;
+};
+
+typedef struct RD_VocabInfoMapSlot RD_VocabInfoMapSlot;
+struct RD_VocabInfoMapSlot
+{
+  RD_VocabInfoMapNode *first;
+  RD_VocabInfoMapNode *last;
+};
+
+typedef struct RD_VocabInfoMap RD_VocabInfoMap;
+struct RD_VocabInfoMap
+{
+  U64 single_slots_count;
+  RD_VocabInfoMapSlot *single_slots;
+  U64 plural_slots_count;
+  RD_VocabInfoMapSlot *plural_slots;
+};
+
+////////////////////////////////
+//~ rjf: Config Tree
 
 typedef struct RD_Cfg RD_Cfg;
 struct RD_Cfg
@@ -387,7 +278,7 @@ struct RD_Cfg
   RD_Cfg *next;
   RD_Cfg *prev;
   RD_Cfg *parent;
-  U64 gen;
+  RD_CfgID id;
   String8 string;
 };
 
@@ -395,7 +286,15 @@ typedef struct RD_CfgNode RD_CfgNode;
 struct RD_CfgNode
 {
   RD_CfgNode *next;
+  RD_CfgNode *prev;
   RD_Cfg *v;
+};
+
+typedef struct RD_CfgSlot RD_CfgSlot;
+struct RD_CfgSlot
+{
+  RD_CfgNode *first;
+  RD_CfgNode *last;
 };
 
 typedef struct RD_CfgList RD_CfgList;
@@ -403,6 +302,13 @@ struct RD_CfgList
 {
   RD_CfgNode *first;
   RD_CfgNode *last;
+  U64 count;
+};
+
+typedef struct RD_CfgArray RD_CfgArray;
+struct RD_CfgArray
+{
+  RD_Cfg **v;
   U64 count;
 };
 
@@ -415,67 +321,54 @@ struct RD_CfgRec
 };
 
 ////////////////////////////////
-//~ rjf: Entity Types
+//~ rjf: Structured Locations, Parsed From Config Trees
 
-typedef U64 RD_EntityID;
-
-typedef struct RD_Entity RD_Entity;
-struct RD_Entity
+typedef struct RD_Location RD_Location;
+struct RD_Location
 {
-  // rjf: tree links
-  RD_Entity *first;
-  RD_Entity *last;
-  RD_Entity *next;
-  RD_Entity *prev;
-  RD_Entity *parent;
+  String8 file_path;
+  TxtPt pt;
+  String8 expr;
+};
+
+////////////////////////////////
+//~ rjf: Structured Panel Trees, Parsed From Config Trees
+
+typedef struct RD_PanelNode RD_PanelNode;
+struct RD_PanelNode
+{
+  // rjf: links data
+  RD_PanelNode *first;
+  RD_PanelNode *last;
+  RD_PanelNode *next;
+  RD_PanelNode *prev;
+  RD_PanelNode *parent;
+  U64 child_count;
+  RD_Cfg *cfg;
   
-  // rjf: metadata
-  RD_EntityKind kind;
-  RD_EntityFlags flags;
-  RD_EntityID id;
-  U64 gen;
-  U64 alloc_time_us;
+  // rjf: split data
+  Axis2 split_axis;
+  F32 pct_of_parent;
   
-  // rjf: basic equipment
-  TxtPt text_point;
-  B32 disabled;
-  B32 debug_subprocesses;
-  U64 u64;
-  U64 vaddr;
-  Vec4F32 color_hsva;
-  RD_CfgSrc cfg_src;
-  U64 timestamp;
+  // rjf: tab params
+  Side tab_side;
   
-  // rjf: string equipment
-  String8 string;
+  // rjf: which tabs are attached
+  RD_CfgList tabs;
+  RD_Cfg *selected_tab;
 };
 
-typedef struct RD_EntityNode RD_EntityNode;
-struct RD_EntityNode
+typedef struct RD_PanelTree RD_PanelTree;
+struct RD_PanelTree
 {
-  RD_EntityNode *next;
-  RD_Entity *entity;
+  RD_PanelNode *root;
+  RD_PanelNode *focused;
 };
 
-typedef struct RD_EntityList RD_EntityList;
-struct RD_EntityList
+typedef struct RD_PanelNodeRec RD_PanelNodeRec;
+struct RD_PanelNodeRec
 {
-  RD_EntityNode *first;
-  RD_EntityNode *last;
-  U64 count;
-};
-
-typedef struct RD_EntityArray RD_EntityArray;
-struct RD_EntityArray
-{
-  RD_Entity **v;
-  U64 count;
-};
-
-typedef struct RD_EntityRec RD_EntityRec;
-struct RD_EntityRec
-{
-  RD_Entity *next;
+  RD_PanelNode *next;
   S32 push_count;
   S32 pop_count;
 };
@@ -517,13 +410,7 @@ struct RD_RegsNode
 };
 
 ////////////////////////////////
-//~ rjf: Theme Types
-
-typedef struct RD_Theme RD_Theme;
-struct RD_Theme
-{
-  Vec4F32 colors[RD_ThemeColor_COUNT];
-};
+//~ rjf: Structured Theme Types, Parsed From Config
 
 typedef enum RD_FontSlot
 {
@@ -534,99 +421,20 @@ typedef enum RD_FontSlot
 }
 RD_FontSlot;
 
-typedef enum RD_PaletteCode
-{
-  RD_PaletteCode_Base,
-  RD_PaletteCode_MenuBar,
-  RD_PaletteCode_Floating,
-  RD_PaletteCode_ImplicitButton,
-  RD_PaletteCode_PlainButton,
-  RD_PaletteCode_PositivePopButton,
-  RD_PaletteCode_NegativePopButton,
-  RD_PaletteCode_NeutralPopButton,
-  RD_PaletteCode_ScrollBarButton,
-  RD_PaletteCode_Tab,
-  RD_PaletteCode_TabInactive,
-  RD_PaletteCode_DropSiteOverlay,
-  RD_PaletteCode_COUNT
-}
-RD_PaletteCode;
-
-////////////////////////////////
-//~ rjf: Auto-Complete Lister Types
-
-typedef U32 RD_AutoCompListerFlags;
-enum
-{
-  RD_AutoCompListerFlag_Locals        = (1<<0),
-  RD_AutoCompListerFlag_Registers     = (1<<1),
-  RD_AutoCompListerFlag_ViewRules     = (1<<2),
-  RD_AutoCompListerFlag_ViewRuleParams= (1<<3),
-  RD_AutoCompListerFlag_Members       = (1<<4),
-  RD_AutoCompListerFlag_Globals       = (1<<5),
-  RD_AutoCompListerFlag_ThreadLocals  = (1<<6),
-  RD_AutoCompListerFlag_Procedures    = (1<<7),
-  RD_AutoCompListerFlag_Types         = (1<<8),
-  RD_AutoCompListerFlag_Languages     = (1<<9),
-  RD_AutoCompListerFlag_Architectures = (1<<10),
-  RD_AutoCompListerFlag_Tex2DFormats  = (1<<11),
-  RD_AutoCompListerFlag_Files         = (1<<12),
-};
-
-typedef struct RD_AutoCompListerItem RD_AutoCompListerItem;
-struct RD_AutoCompListerItem
-{
-  String8 string;
-  String8 kind_string;
-  FuzzyMatchRangeList matches;
-  U64 group;
-  B32 is_non_code;
-};
-
-typedef struct RD_AutoCompListerItemChunkNode RD_AutoCompListerItemChunkNode;
-struct RD_AutoCompListerItemChunkNode
-{
-  RD_AutoCompListerItemChunkNode *next;
-  RD_AutoCompListerItem *v;
-  U64 count;
-  U64 cap;
-};
-
-typedef struct RD_AutoCompListerItemChunkList RD_AutoCompListerItemChunkList;
-struct RD_AutoCompListerItemChunkList
-{
-  RD_AutoCompListerItemChunkNode *first;
-  RD_AutoCompListerItemChunkNode *last;
-  U64 chunk_count;
-  U64 total_count;
-};
-
-typedef struct RD_AutoCompListerItemArray RD_AutoCompListerItemArray;
-struct RD_AutoCompListerItemArray
-{
-  RD_AutoCompListerItem *v;
-  U64 count;
-};
-
-typedef struct RD_AutoCompListerParams RD_AutoCompListerParams;
-struct RD_AutoCompListerParams
-{
-  RD_AutoCompListerFlags flags;
-  String8List strings;
-};
-
 ////////////////////////////////
 //~ rjf: Per-Window State
 
-typedef struct RD_Window RD_Window;
-struct RD_Window
+typedef struct RD_WindowState RD_WindowState;
+struct RD_WindowState
 {
   // rjf: links & metadata
-  RD_Window *next;
-  RD_Window *prev;
-  U64 gen;
+  RD_WindowState *order_next;
+  RD_WindowState *order_prev;
+  RD_WindowState *hash_next;
+  RD_WindowState *hash_prev;
+  RD_CfgID cfg_id;
   U64 frames_alive;
-  RD_CfgSrc cfg_src;
+  U64 last_frame_index_touched;
   
   // rjf: top-level info & handles
   Arena *arena;
@@ -635,10 +443,15 @@ struct RD_Window
   UI_State *ui;
   F32 last_dpi;
   B32 window_temporarily_focused_ipc;
+  B32 window_layout_reset;
+  Rng2F32 last_window_rect;
   
-  // rjf: config/settings
-  RD_SettingVal setting_vals[RD_SettingCode_COUNT];
-  UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme
+  // rjf: theme (recomputed each frame)
+  UI_Theme *theme;
+  Vec4F32 theme_code_colors[RD_CodeColorSlot_COUNT];
+  
+  // rjf: font raster flags (recomputed each frame)
+  FNT_RasterFlags font_slot_raster_flags[RD_FontSlot_COUNT];
   
   // rjf: dev interface state
   B32 dev_menu_is_open;
@@ -649,69 +462,35 @@ struct RD_Window
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
-  // rjf: context menu state
-  Arena *ctx_menu_arena;
-  RD_Regs *ctx_menu_regs;
-  RD_RegSlot ctx_menu_regs_slot;
-  U8 *ctx_menu_input_buffer;
-  U64 ctx_menu_input_buffer_size;
-  U64 ctx_menu_input_string_size;
-  TxtPt ctx_menu_input_cursor;
-  TxtPt ctx_menu_input_mark;
-  
   // rjf: drop-completion state
   Arena *drop_completion_arena;
   String8List drop_completion_paths;
   
-  // rjf: autocomplete lister state
-  U64 autocomp_last_frame_idx;
-  B32 autocomp_input_dirty;
-  UI_Key autocomp_root_key;
-  Arena *autocomp_lister_params_arena;
-  RD_AutoCompListerParams autocomp_lister_params;
-  U64 autocomp_cursor_off;
-  U8 autocomp_lister_input_buffer[1024];
-  U64 autocomp_lister_input_size;
-  F32 autocomp_open_t;
-  F32 autocomp_num_visible_rows_t;
-  S64 autocomp_cursor_num;
-  
-  // rjf: query view stack
-  Arena *query_cmd_arena;
-  String8 query_cmd_name;
-  RD_Regs *query_cmd_regs;
-  U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
-  RD_View *query_view_stack_top;
-  B32 query_view_selected;
-  F32 query_view_selected_t;
-  F32 query_view_t;
+  // rjf: query state
+  B32 query_is_active;
+  Arena *query_arena;
+  RD_Regs *query_regs;
+  RD_CfgID query_view_id;
+  RD_CfgID query_last_view_id;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
-  TxtPt hover_eval_txt_cursor;
-  TxtPt hover_eval_txt_mark;
-  U8 hover_eval_txt_buffer[1024];
-  U64 hover_eval_txt_size;
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
-  U64 hover_eval_first_frame_idx;
-  U64 hover_eval_last_frame_idx;
-  String8 hover_eval_file_path;
-  TxtPt hover_eval_file_pt;
-  U64 hover_eval_vaddr;
-  F32 hover_eval_open_t;
-  F32 hover_eval_num_visible_rows_t;
+  U64 hover_eval_firstt_us;
+  U64 hover_eval_lastt_us;
+  
+  // rjf: autocompletion state
+  U64 autocomp_last_frame_index;
+  Arena *autocomp_arena;
+  RD_Regs *autocomp_regs;
+  RD_AutocompCursorInfo autocomp_cursor_info;
   
   // rjf: error state
   U8 error_buffer[512];
   U64 error_string_size;
   F32 error_t;
-  
-  // rjf: panel state
-  RD_Panel *root_panel;
-  RD_Panel *free_panel;
-  RD_Panel *focused_panel;
   
   // rjf: per-frame ui events state
   UI_EventList ui_events;
@@ -720,60 +499,33 @@ struct RD_Window
   DR_Bucket *draw_bucket;
 };
 
-////////////////////////////////
-//~ rjf: Eval Visualization View Cache Types
-
-typedef struct RD_EvalVizViewCacheNode RD_EvalVizViewCacheNode;
-struct RD_EvalVizViewCacheNode
+typedef struct RD_WindowStateSlot RD_WindowStateSlot;
+struct RD_WindowStateSlot
 {
-  RD_EvalVizViewCacheNode *next;
-  RD_EvalVizViewCacheNode *prev;
-  U64 key;
-  EV_View *v;
-};
-
-typedef struct RD_EvalVizViewCacheSlot RD_EvalVizViewCacheSlot;
-struct RD_EvalVizViewCacheSlot
-{
-  RD_EvalVizViewCacheNode *first;
-  RD_EvalVizViewCacheNode *last;
-};
-
-////////////////////////////////
-//~ rjf: Meta Evaluation Cache Types
-
-typedef struct RD_CtrlEntityMetaEvalCacheNode RD_CtrlEntityMetaEvalCacheNode;
-struct RD_CtrlEntityMetaEvalCacheNode
-{
-  RD_CtrlEntityMetaEvalCacheNode *next;
-  CTRL_Handle handle;
-  CTRL_MetaEval *meval;
-  Rng1U64 range;
-};
-
-typedef struct RD_CtrlEntityMetaEvalCacheSlot RD_CtrlEntityMetaEvalCacheSlot;
-struct RD_CtrlEntityMetaEvalCacheSlot
-{
-  RD_CtrlEntityMetaEvalCacheNode *first;
-  RD_CtrlEntityMetaEvalCacheNode *last;
+  RD_WindowState *first;
+  RD_WindowState *last;
 };
 
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
+
+read_only global U64 rd_name_bucket_chunk_sizes[] =
+{
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536,
+  0xffffffffffffffffull,
+};
 
 typedef struct RD_NameChunkNode RD_NameChunkNode;
 struct RD_NameChunkNode
 {
   RD_NameChunkNode *next;
   U64 size;
-};
-
-typedef struct RD_EntityListCache RD_EntityListCache;
-struct RD_EntityListCache
-{
-  Arena *arena;
-  U64 alloc_gen;
-  RD_EntityList list;
 };
 
 typedef struct RD_AmbiguousPathNode RD_AmbiguousPathNode;
@@ -791,6 +543,46 @@ struct RD_State
   Arena *arena;
   B32 quit;
   B32 quit_after_success;
+  S32 frame_depth;
+  U64 frame_eval_memread_endt_us;
+  
+  // rjf: config bucket paths
+  Arena *user_path_arena;
+  String8 user_path;
+  Arena *project_path_arena;
+  String8 project_path;
+  Arena *theme_path_arena;
+  String8 theme_path;
+  
+  // rjf: unpacked settings (cached, because they need to be used
+  // earlier than setting evaluation is legal in a frame)
+  B32 alt_menu_bar_enabled;
+  B32 use_default_stl_type_views;
+  B32 use_default_ue_type_views;
+  
+  // rjf: animation rates
+  F32 catchall_animation_rate;
+  F32 menu_animation_rate;
+  F32 menu_animation_rate__slow;
+  F32 entity_alive_animation_rate;
+  F32 rich_hover_animation_rate;
+  F32 scrolling_animation_rate;
+  F32 tooltip_animation_rate;
+  
+  // rjf: serialized config debug string keys
+  U128 user_cfg_string_key;
+  U128 project_cfg_string_key;
+  U128 cmdln_cfg_string_key;
+  U128 transient_cfg_string_key;
+  
+  // rjf: schema table
+  MD_NodePtrList *schemas;
+  
+  // rjf: default theme table
+  MD_Node *theme_preset_trees[RD_ThemePreset_COUNT];
+  
+  // rjf: vocab table
+  RD_VocabInfoMap vocab_info_map;
   
   // rjf: log
   Log *log;
@@ -802,6 +594,7 @@ struct RD_State
   U64 frame_time_us_history[64];
   U64 num_frames_requested;
   F64 time_in_seconds;
+  U64 time_in_us;
   
   // rjf: frame parameters
   F32 frame_dt;
@@ -810,9 +603,24 @@ struct RD_State
   // rjf: dbgi match store
   DI_MatchStore *match_store;
   
-  // rjf: ambiguous path table
+  // rjf: evaluation cache
+  E_Cache *eval_cache;
+  
+  // rjf: ambiguous path table (constructed from-scratch each frame)
   U64 ambiguous_path_slots_count;
   RD_AmbiguousPathNode **ambiguous_path_slots;
+  
+  // rjf: key map (constructed from-scratch each frame)
+  RD_KeyMap *key_map;
+  
+  // rjf: slot -> font tag map (constructed from-scratch each frame)
+  FNT_Tag font_slot_table[RD_FontSlot_COUNT];
+  
+  // rjf: meta name -> eval type key map (constructed from-scratch each frame)
+  E_String2TypeKeyMap *meta_name2type_map;
+  
+  // rjf: name -> view ui map (constructed from-scratch each frame)
+  RD_ViewUIRuleMap *view_ui_rule_map;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -838,19 +646,6 @@ struct RD_State
   // rjf: text editing mode state
   B32 text_edit_mode;
   
-  // rjf: string search state
-  Arena *string_search_arena;
-  String8 string_search_string;
-  
-  // rjf: eval visualization view cache
-  U64 eval_viz_view_cache_slots_count;
-  RD_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
-  RD_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
-  
-  // rjf: ctrl entity meta eval cache
-  U64 ctrl_entity_meval_cache_slots_count;
-  RD_CtrlEntityMetaEvalCacheSlot *ctrl_entity_meval_cache_slots;
-  
   // rjf: contextual hover info
   RD_Regs *hover_regs;
   RD_RegSlot hover_regs_slot;
@@ -859,10 +654,6 @@ struct RD_State
   
   // rjf: icon texture
   R_Handle icon_texture;
-  
-  // rjf: current path
-  Arena *current_path_arena;
-  String8 current_path;
   
   // rjf: fixed ui keys
   UI_Key drop_completion_key;
@@ -875,86 +666,45 @@ struct RD_State
   RD_DragDropState drag_drop_state;
   
   // rjf: cfg state
-  RD_NameChunkNode *free_name_chunks[8];
+  RD_NameChunkNode *free_name_chunks[ArrayCount(rd_name_bucket_chunk_sizes)];
   RD_Cfg *free_cfg;
   RD_Cfg *root_cfg;
+  U64 cfg_id_slots_count;
+  RD_CfgSlot *cfg_id_slots;
+  RD_CfgNode *free_cfg_id_node;
+  U64 cfg_id_gen;
+  RD_CfgID cfg_last_accessed_id;
+  RD_Cfg *cfg_last_accessed;
+  U64 cfg_change_gen;
   
-  //-
-  // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
-  //-
+  // rjf: window state cache
+  U64 window_state_slots_count;
+  RD_WindowStateSlot *window_state_slots;
+  RD_WindowState *free_window_state;
+  RD_CfgID last_focused_window;
+  RD_WindowState *first_window_state;
+  RD_WindowState *last_window_state;
+  RD_CfgID window_state_last_accessed_id;
+  RD_WindowState *window_state_last_accessed;
   
-  // rjf: entity state
-  Arena *entities_arena;
-  RD_Entity *entities_base;
-  U64 entities_count;
-  U64 entities_id_gen;
-  RD_Entity *entities_root;
-  RD_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
-  U64 entities_free_count;
-  U64 entities_active_count;
-  
-  // rjf: entity query caches
-  U64 kind_alloc_gens[RD_EntityKind_COUNT];
-  RD_EntityListCache kind_caches[RD_EntityKind_COUNT];
-  
-  // rjf: key map table
-  Arena *key_map_arena;
-  U64 key_map_table_size;
-  RD_KeyMapSlot *key_map_table;
-  RD_KeyMapNode *free_key_map_node;
-  U64 key_map_total_count;
+  // rjf: view state cache
+  U64 view_state_slots_count;
+  RD_ViewStateSlot *view_state_slots;
+  RD_ViewState *free_view_state;
+  RD_CfgID view_state_last_accessed_id;
+  RD_ViewState *view_state_last_accessed;
   
   // rjf: bind change
   Arena *bind_change_arena;
   B32 bind_change_active;
+  RD_CfgID bind_change_binding_id;
   String8 bind_change_cmd_name;
-  RD_Binding bind_change_binding;
-  
-  // rjf: windows
-  RD_Window *first_window;
-  RD_Window *last_window;
-  RD_Window *free_window;
-  U64 window_count;
-  B32 last_window_queued_save;
-  RD_Handle last_focused_window;
-  
-  // rjf: view state
-  RD_View *first_view;
-  RD_View *last_view;
-  RD_View *free_view;
-  U64 free_view_count;
-  U64 allocated_view_count;
-  
-  // rjf: config reading state
-  Arena *cfg_path_arenas[RD_CfgSrc_COUNT];
-  String8 cfg_paths[RD_CfgSrc_COUNT];
-  U64 cfg_cached_timestamp[RD_CfgSrc_COUNT];
-  Arena *cfg_arena;
-  RD_CfgTable cfg_table;
-  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
-  
-  // rjf: running theme state
-  RD_Theme cfg_theme_target;
-  RD_Theme cfg_theme;
-  Arena *cfg_main_font_path_arena;
-  Arena *cfg_code_font_path_arena;
-  String8 cfg_main_font_path;
-  String8 cfg_code_font_path;
-  FNT_Tag cfg_font_tags[RD_FontSlot_COUNT]; // derivative from font paths
-  
-  // rjf: global settings
-  RD_SettingVal cfg_setting_vals[RD_CfgSrc_COUNT][RD_SettingCode_COUNT];
-  
-  //-
-  // TODO(rjf): TO BE ELIMINATED OR REPLACED ^^^^^^^^^^^^^^^^^^
-  //-
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global RD_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, RD_CfgSrc_User, &md_nil_node};
-read_only global RD_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
+read_only global RD_VocabInfo rd_nil_vocab_info = {0};
 
 read_only global RD_Cfg rd_nil_cfg =
 {
@@ -965,67 +715,50 @@ read_only global RD_Cfg rd_nil_cfg =
   &rd_nil_cfg,
 };
 
-read_only global RD_Entity rd_nil_entity =
+read_only global RD_PanelNode rd_nil_panel_node =
 {
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  0,
+  &rd_nil_cfg,
+  .selected_tab = &rd_nil_cfg,
 };
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
 
-read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
+RD_VIEW_UI_FUNCTION_DEF(null);
+read_only global RD_ViewUIRule rd_nil_view_ui_rule =
 {
   {0},
-  {0},
-  {0},
-  {0},
-  RD_IconKind_Null,
-  0,
-  EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
-  RD_VIEW_RULE_UI_FUNCTION_NAME(null)
+  RD_VIEW_UI_FUNCTION_NAME(null),
 };
 
-read_only global RD_View rd_nil_view =
+read_only global RD_ViewState rd_nil_view_state =
 {
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view_rule_info,
+  &rd_nil_view_state,
+  &rd_nil_view_state,
 };
 
-read_only global RD_Panel rd_nil_panel =
+read_only global RD_WindowState rd_nil_window_state =
 {
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
 };
 
 global RD_State *rd_state = 0;
-global RD_Handle rd_last_drag_drop_panel = {0};
-global RD_Handle rd_last_drag_drop_prev_tab = {0};
+global RD_CfgID rd_last_drag_drop_panel = 0;
+global RD_CfgID rd_last_drag_drop_prev_tab = 0;
 
 ////////////////////////////////
-//~ rjf: Handle Type Pure Functions
+//~ rjf: Config ID Type Functions
 
-internal RD_Handle rd_handle_zero(void);
-internal B32 rd_handle_match(RD_Handle a, RD_Handle b);
-internal void rd_handle_list_push_node(RD_HandleList *list, RD_HandleNode *node);
-internal void rd_handle_list_push(Arena *arena, RD_HandleList *list, RD_Handle handle);
-internal RD_HandleList rd_handle_list_copy(Arena *arena, RD_HandleList list);
-
-////////////////////////////////
-//~ rjf: Config Type Pure Functions
-
-internal void rd_cfg_table_push_unparsed_string(Arena *arena, RD_CfgTable *table, String8 string, RD_CfgSrc source);
-internal RD_CfgVal *rd_cfg_val_from_string(RD_CfgTable *table, String8 string);
+internal void rd_cfg_id_list_push(Arena *arena, RD_CfgIDList *list, RD_CfgID id);
+internal RD_CfgIDList rd_cfg_id_list_copy(Arena *arena, RD_CfgIDList *src);
 
 ////////////////////////////////
 //~ rjf: Registers Type Functions
@@ -1039,94 +772,12 @@ internal RD_Regs *rd_regs_copy(Arena *arena, RD_Regs *src);
 internal void rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name, RD_Regs *regs);
 
 ////////////////////////////////
-//~ rjf: Entity Type Pure Functions
+//~ rjf: View UI Rule Functions
 
-//- rjf: nil
-internal B32 rd_entity_is_nil(RD_Entity *entity);
-#define rd_require_entity_nonnil(entity, if_nil_stmts) do{if(rd_entity_is_nil(entity)){if_nil_stmts;}}while(0)
+internal RD_ViewUIRuleMap *rd_view_ui_rule_map_make(Arena *arena, U64 slots_count);
+internal void rd_view_ui_rule_map_insert(Arena *arena, RD_ViewUIRuleMap *map, String8 string, RD_ViewUIFunctionType *ui);
 
-//- rjf: handle <-> entity conversions
-internal U64 rd_index_from_entity(RD_Entity *entity);
-internal RD_Handle rd_handle_from_entity(RD_Entity *entity);
-internal RD_Entity *rd_entity_from_handle(RD_Handle handle);
-
-//- rjf: entity recursion iterators
-internal RD_EntityRec rd_entity_rec_depth_first(RD_Entity *entity, RD_Entity *subtree_root, U64 sib_off, U64 child_off);
-#define rd_entity_rec_depth_first_pre(entity, subtree_root)  rd_entity_rec_depth_first((entity), (subtree_root), OffsetOf(RD_Entity, next), OffsetOf(RD_Entity, first))
-#define rd_entity_rec_depth_first_post(entity, subtree_root) rd_entity_rec_depth_first((entity), (subtree_root), OffsetOf(RD_Entity, prev), OffsetOf(RD_Entity, last))
-
-//- rjf: ancestor/child introspection
-internal RD_Entity *rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind);
-
-//- rjf: entity list building
-internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *entity);
-internal RD_EntityArray rd_entity_array_from_list(Arena *arena, RD_EntityList *list);
-#define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &rd_nil_entity)
-
-//- rjf: entity -> color operations
-internal Vec4F32 rd_hsva_from_entity(RD_Entity *entity);
-internal Vec4F32 rd_rgba_from_entity(RD_Entity *entity);
-
-//- rjf: entity -> expansion tree keys
-internal EV_Key rd_ev_key_from_entity(RD_Entity *entity);
-internal EV_Key rd_parent_ev_key_from_entity(RD_Entity *entity);
-
-////////////////////////////////
-//~ rjf: View Type Functions
-
-internal B32 rd_view_is_nil(RD_View *view);
-internal B32 rd_view_is_project_filtered(RD_View *view);
-internal RD_Handle rd_handle_from_view(RD_View *view);
-internal RD_View *rd_view_from_handle(RD_Handle handle);
-
-////////////////////////////////
-//~ rjf: View Spec Type Functions
-
-internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
-internal RD_ViewRuleInfo *rd_view_rule_info_from_kind(RD_ViewRuleKind kind);
-internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
-
-////////////////////////////////
-//~ rjf: Panel Type Functions
-
-//- rjf: basic type functions
-internal B32 rd_panel_is_nil(RD_Panel *panel);
-internal RD_Handle rd_handle_from_panel(RD_Panel *panel);
-internal RD_Panel *rd_panel_from_handle(RD_Handle handle);
-internal UI_Key rd_ui_key_from_panel(RD_Panel *panel);
-
-//- rjf: tree construction
-internal void rd_panel_insert(RD_Panel *parent, RD_Panel *prev_child, RD_Panel *new_child);
-internal void rd_panel_remove(RD_Panel *parent, RD_Panel *child);
-
-//- rjf: tree walk
-internal RD_PanelRec rd_panel_rec_depth_first(RD_Panel *panel, U64 sib_off, U64 child_off);
-#define rd_panel_rec_depth_first_pre(panel) rd_panel_rec_depth_first(panel, OffsetOf(RD_Panel, next), OffsetOf(RD_Panel, first))
-#define rd_panel_rec_depth_first_pre_rev(panel) rd_panel_rec_depth_first(panel, OffsetOf(RD_Panel, prev), OffsetOf(RD_Panel, last))
-
-//- rjf: panel -> rect calculations
-internal Rng2F32 rd_target_rect_from_panel_child(Rng2F32 parent_rect, RD_Panel *parent, RD_Panel *panel);
-internal Rng2F32 rd_target_rect_from_panel(Rng2F32 root_rect, RD_Panel *root, RD_Panel *panel);
-
-//- rjf: view ownership insertion/removal
-internal void rd_panel_insert_tab_view(RD_Panel *panel, RD_View *prev_view, RD_View *view);
-internal void rd_panel_remove_tab_view(RD_Panel *panel, RD_View *view);
-internal RD_View *rd_selected_tab_from_panel(RD_Panel *panel);
-
-//- rjf: icons & display strings
-internal RD_IconKind rd_icon_kind_from_view(RD_View *view);
-internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, RD_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
-
-////////////////////////////////
-//~ rjf: Window Type Functions
-
-internal RD_Handle rd_handle_from_window(RD_Window *window);
-internal RD_Window *rd_window_from_handle(RD_Handle handle);
-
-////////////////////////////////
-//~ rjf: Command Parameters From Context
-
-internal B32 rd_prefer_dasm_from_window(RD_Window *window);
+internal RD_ViewUIRule *rd_view_ui_rule_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
@@ -1139,97 +790,101 @@ internal void rd_drag_kill(void);
 internal void rd_set_hover_regs(RD_RegSlot slot);
 internal RD_Regs *rd_get_hover_regs(void);
 
-internal void rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot);
-
 ////////////////////////////////
 //~ rjf: Name Allocation
 
-internal U64 rd_name_bucket_idx_from_string_size(U64 size);
+internal U64 rd_name_bucket_num_from_string_size(U64 size);
 internal String8 rd_name_alloc(String8 string);
 internal void rd_name_release(String8 string);
 
 ////////////////////////////////
-//~ rjf: New Config/Entity Data Structure Functions
+//~ rjf: Config Tree Functions
 
 internal RD_Cfg *rd_cfg_alloc(void);
 internal void rd_cfg_release(RD_Cfg *cfg);
+internal void rd_cfg_release_all_children(RD_Cfg *cfg);
+internal RD_Cfg *rd_cfg_from_id(RD_CfgID id);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
+internal RD_Cfg *rd_cfg_new_replace(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_new_replacef(RD_Cfg *parent, char *fmt, ...);
+internal RD_Cfg *rd_cfg_deep_copy(RD_Cfg *src_root);
 internal void rd_cfg_equip_string(RD_Cfg *cfg, String8 string);
+internal void rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...);
 internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child);
 internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
 internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_child_from_string_or_alloc(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_child_from_string_or_parent(RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
-internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
-internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
+internal RD_CfgArray rd_cfg_array_from_list(Arena *arena, RD_CfgList *list);
+internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string);
+internal String8 rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
 internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
+internal void rd_cfg_list_push_front(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
+#define rd_cfg_list_first(list) ((list)->count ? (list)->first->v : &rd_nil_cfg)
+#define rd_cfg_list_last(list)  ((list)->count ? (list)->last->v  : &rd_nil_cfg)
 
-////////////////////////////////
-//~ rjf: Entity Stateful Functions
+internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal RD_PanelNodeRec rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off);
+#define rd_panel_node_rec__depth_first_pre(root, p)     rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, next), OffsetOf(RD_PanelNode, first))
+#define rd_panel_node_rec__depth_first_pre_rev(root, p) rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, prev), OffsetOf(RD_PanelNode, last))
+internal RD_PanelNode *rd_panel_node_from_tree_cfg(RD_PanelNode *root, RD_Cfg *cfg);
+internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_PanelNode *parent, RD_PanelNode *panel);
+internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
 
-//- rjf: entity allocation + tree forming
-internal RD_Entity *rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind);
-internal void rd_entity_mark_for_deletion(RD_Entity *entity);
-internal void rd_entity_release(RD_Entity *entity);
-internal void rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new_parent, RD_Entity *prev_child);
-internal RD_Entity *rd_entity_child_from_kind_or_alloc(RD_Entity *entity, RD_EntityKind kind);
+internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
+internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
+internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
 
-//- rjf: entity simple equipment
-internal void rd_entity_equip_txt_pt(RD_Entity *entity, TxtPt point);
-internal void rd_entity_equip_disabled(RD_Entity *entity, B32 b32);
-internal void rd_entity_equip_u64(RD_Entity *entity, U64 u64);
-internal void rd_entity_equip_color_rgba(RD_Entity *entity, Vec4F32 rgba);
-internal void rd_entity_equip_color_hsva(RD_Entity *entity, Vec4F32 hsva);
-internal void rd_entity_equip_cfg_src(RD_Entity *entity, RD_CfgSrc cfg_src);
-internal void rd_entity_equip_timestamp(RD_Entity *entity, U64 timestamp);
+internal Vec4F32 rd_hsva_from_cfg(RD_Cfg *cfg);
+internal Vec4F32 rd_color_from_cfg(RD_Cfg *cfg);
 
-//- rjf: control layer correllation equipment
-internal void rd_entity_equip_vaddr(RD_Entity *entity, U64 vaddr);
+internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
+internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
+internal String8 rd_label_from_cfg(RD_Cfg *cfg);
+internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
+internal String8 rd_path_from_cfg(RD_Cfg *cfg);
+internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 
-//- rjf: name equipment
-internal void rd_entity_equip_name(RD_Entity *entity, String8 name);
+internal MD_NodePtrList rd_schemas_from_name(String8 name);
+internal String8 rd_default_setting_from_names(String8 schema_name, String8 setting_name);
 
-//- rjf: file path map override lookups
+internal String8 rd_setting_from_name(String8 name);
+internal B32 rd_setting_b32_from_name(String8 name);
+internal U64 rd_setting_u64_from_name(String8 name);
+internal F32 rd_setting_f32_from_name(String8 name);
+
+internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
+internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
+
 internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
-
-//- rjf: top-level state queries
-internal RD_Entity *rd_entity_root(void);
-internal RD_EntityList rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind);
-internal RD_Entity *rd_entity_from_id(RD_EntityID id);
-internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind);
-
-////////////////////////////////
-//~ rjf: Frontend Entity Info Extraction
-
-internal D_Target rd_d_target_from_entity(RD_Entity *entity);
-internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
-internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
+internal Vec4F32 rd_color_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
-internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
 
-//- rjf: entity <-> eval space
-internal RD_Entity *rd_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
+//- rjf: cfg <-> eval space
+internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
 
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
 
-//- rjf: entity -> meta eval
-internal CTRL_MetaEval *rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity);
-internal CTRL_MetaEval *rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
+//- rjf: command name <-> eval space
+internal String8 rd_cmd_name_from_eval(E_Eval eval);
 
 //- rjf: eval space reads/writes
+internal U64 rd_eval_space_gen(void *u, E_Space space);
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 
@@ -1243,44 +898,22 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 //~ rjf: Evaluation Visualization
 
 //- rjf: writing values back to child processes
-internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
-
-//- rjf: eval / view rule params tree info extraction
-internal U64 rd_base_offset_from_eval(E_Eval eval);
-internal E_Value rd_value_from_params_key(MD_Node *params, String8 key);
-internal Rng1U64 rd_range_from_eval_params(E_Eval eval, MD_Node *params);
-internal TXT_LangKind rd_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
-internal Arch rd_arch_from_eval_params(E_Eval eval, MD_Node *params);
-internal Vec2S32 rd_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
-internal R_Tex2DFormat rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
+internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string);
 
 //- rjf: eval <-> file path
+internal String8 rd_file_path_from_eval(Arena *arena, E_Eval eval);
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
 
+//- rjf: eval -> query
+internal String8 rd_query_from_eval_string(Arena *arena, String8 string);
+
 ////////////////////////////////
-//~ rjf: View State Functions
+//~ rjf: View Functions
 
-//- rjf: allocation/releasing
-internal RD_View *rd_view_alloc(void);
-internal void rd_view_release(RD_View *view);
-
-//- rjf: equipment
-internal void rd_view_equip_spec(RD_View *view, RD_ViewRuleInfo *spec, String8 query, MD_Node *params);
-internal void rd_view_equip_query(RD_View *view, String8 query);
-internal void rd_view_equip_loading_info(RD_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
-
-//- rjf: user state extensions
-internal void *rd_view_get_or_push_user_state(RD_View *view, U64 size);
-internal Arena *rd_view_push_arena_ext(RD_View *view);
-#define rd_view_user_state(view, type) (type *)rd_view_get_or_push_user_state((view), sizeof(type))
-
-//- rjf: param saving
-internal void rd_view_store_param(RD_View *view, String8 key, String8 value);
-internal void rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...);
-#define rd_view_store_param_f32(view, key, f32) rd_view_store_paramf((view), (key), "%ff", (f32))
-#define rd_view_store_param_s64(view, key, s64) rd_view_store_paramf((view), (key), "%I64d", (s64))
-#define rd_view_store_param_u64(view, key, u64) rd_view_store_paramf((view), (key), "0x%I64x", (u64))
+internal RD_Cfg *rd_view_from_eval(RD_Cfg *parent, E_Eval eval);
+internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
+internal void rd_view_ui(Rng2F32 rect);
 
 ////////////////////////////////
 //~ rjf: View Building API
@@ -1288,8 +921,18 @@ internal void rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...);
 //- rjf: view info extraction
 internal Arena *rd_view_arena(void);
 internal UI_ScrollPt2 rd_view_scroll_pos(void);
-internal String8 rd_view_expr_string(void);
-internal String8 rd_view_filter(void);
+internal EV_View *rd_view_eval_view(void);
+internal String8 rd_view_query_cmd(void);
+internal String8 rd_view_query_input(void);
+internal String8 rd_view_setting_from_name(String8 string);
+internal E_Value rd_view_setting_value_from_name(String8 string);
+internal B32 rd_view_setting_b32_from_name(String8 string);
+internal U64 rd_view_setting_u64_from_name(String8 string);
+internal F32 rd_view_setting_f32_from_name(String8 string);
+
+//- rjf: evaluation & tag (a view's 'call') parameter extraction
+internal TXT_LangKind rd_lang_kind_from_eval(E_Eval eval);
+internal Arch rd_arch_from_eval(E_Eval eval);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);
@@ -1298,7 +941,6 @@ internal Arena *rd_push_view_arena(void);
 
 //- rjf: storing view-attached state
 internal void rd_store_view_expr_string(String8 string);
-internal void rd_store_view_filter(String8 string);
 internal void rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target);
 internal void rd_store_view_scroll_pos(UI_ScrollPt2 pos);
 internal void rd_store_view_param(String8 key, String8 value);
@@ -1308,108 +950,60 @@ internal void rd_store_view_paramf(String8 key, char *fmt, ...);
 #define rd_store_view_param_u64(key, u64) rd_store_view_paramf((key), "0x%I64x", (u64))
 
 ////////////////////////////////
-//~ rjf: Expand-Keyed Transient View Functions
+//~ rjf: Window Functions
 
-internal RD_TransientViewNode *rd_transient_view_node_from_ev_key(RD_View *owner_view, EV_Key key);
-
-////////////////////////////////
-//~ rjf: Panel State Functions
-
-internal RD_Panel *rd_panel_alloc(RD_Window *ws);
-internal void rd_panel_release(RD_Window *ws, RD_Panel *panel);
-internal void rd_panel_release_all_views(RD_Panel *panel);
-
-////////////////////////////////
-//~ rjf: Window State Functions
-
-internal RD_Window *rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src);
-
-internal RD_Window *rd_window_from_os_handle(OS_Handle os);
-
-internal void rd_window_frame(RD_Window *ws);
+internal String8 rd_push_window_title(Arena *arena);
+internal RD_Cfg *rd_window_from_cfg(RD_Cfg *cfg);
+internal RD_WindowState *rd_window_state_from_cfg(RD_Cfg *cfg);
+internal RD_WindowState *rd_window_state_from_os_handle(OS_Handle os);
+internal void rd_window_frame(void);
 
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
-internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RD_EntityKind kind);
-internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RD_EntityKind kind, B32 add_new_at_top);
-internal U64                rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_EntityKind kind, B32 add_new_at_top);
-internal U64                rd_ev_view_rule_expr_num_from_id__meta_entities(U64 id, void *user_data, RD_EntityKind kind, B32 add_new_at_top);
-
-internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, CTRL_EntityKind kind);
-internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, CTRL_EntityKind kind);
-internal U64                rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(U64 num, void *user_data, CTRL_EntityKind kind);
-internal U64                rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(U64 id, void *user_data, CTRL_EntityKind kind);
-
-internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__debug_info_tables(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RDI_SectionKind section);
-internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RDI_SectionKind section);
-internal U64                rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section);
-internal U64                rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section);
-
-internal EV_View *rd_ev_view_from_key(U64 key);
-internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
-internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);
+internal String8 rd_value_string_from_eval(Arena *arena, String8 filter, EV_StringParams *params, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
+internal void rd_set_hover_eval(Vec2F32 pos, String8 string);
 
 ////////////////////////////////
-//~ rjf: Auto-Complete Lister
+//~ rjf: Autocompletion Lister
 
-internal void rd_autocomp_lister_item_chunk_list_push(Arena *arena, RD_AutoCompListerItemChunkList *list, U64 cap, RD_AutoCompListerItem *item);
-internal RD_AutoCompListerItemArray rd_autocomp_lister_item_array_from_chunk_list(Arena *arena, RD_AutoCompListerItemChunkList *list);
-internal int rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListerItem *b);
-internal void rd_autocomp_lister_item_array_sort__in_place(RD_AutoCompListerItemArray *array);
-
-internal String8 rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
-internal String8 rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off);
-internal RD_AutoCompListerParams rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off);
-
-////////////////////////////////
-//~ rjf: Search Strings
-
-internal void rd_set_search_string(String8 string);
-internal String8 rd_push_search_string(Arena *arena);
+internal void rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs);
+#define rd_set_autocomp_regs(dst_eval, ...) rd_set_autocomp_regs_((dst_eval), &(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
 
-//- rjf: keybindings
-internal OS_Key rd_os_key_from_cfg_string(String8 string);
-internal void rd_clear_bindings(void);
-internal RD_BindingList rd_bindings_from_name(Arena *arena, String8 name);
-internal void rd_bind_name(String8 name, RD_Binding binding);
-internal void rd_unbind_name(String8 name, RD_Binding binding);
-internal String8List rd_cmd_name_list_from_binding(Arena *arena, RD_Binding binding);
-
 //- rjf: colors
-internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
-internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
-internal RD_ThemeColor rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
+internal MD_Node *rd_theme_tree_from_name(Arena *arena, HS_Scope *scope, String8 theme_name);
+internal Vec4F32 rd_rgba_from_code_color_slot(RD_CodeColorSlot slot);
+internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind);
+internal RD_CodeColorSlot rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string);
 
-//- rjf: code -> palette
-internal UI_Palette *rd_palette_from_code(RD_PaletteCode code);
-
-//- rjf: fonts/sizes
+//- rjf: fonts
+internal F32 rd_font_size(void);
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);
-internal F32 rd_font_size_from_slot(RD_FontSlot slot);
 internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
-
-//- rjf: settings
-internal RD_SettingVal rd_setting_val_from_code(RD_SettingCode code);
-
-//- rjf: config serialization
-internal int rd_qsort_compare__cfg_string_bindings(RD_StringBindingPair *a, RD_StringBindingPair *b);
-internal String8List rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source);
 
 ////////////////////////////////
 //~ rjf: Process Control Info Stringification
 
 internal String8 rd_string_from_exception_code(U32 code);
-internal DR_FancyStringList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
+internal DR_FStrList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
+
+////////////////////////////////
+//~ rjf: Vocab Info Lookups
+
+internal RD_VocabInfo *rd_vocab_info_from_code_name(String8 code_name);
+internal RD_VocabInfo *rd_vocab_info_from_code_name_plural(String8 code_name_plural);
+#define rd_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->code_name_plural)
+#define rd_display_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name)
+#define rd_display_plural_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->display_name_plural)
+#define rd_icon_kind_from_code_name(code_name) (rd_vocab_info_from_code_name(code_name)->icon_kind)
+#define rd_singular_from_code_name_plural(code_name_plural) (rd_vocab_info_from_code_name_plural(code_name_plural)->code_name)
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests
@@ -1422,22 +1016,11 @@ internal void rd_request_frame(void);
 //- rjf: per-frame arena
 internal Arena *rd_frame_arena(void);
 
-//- rjf: config paths
-internal String8 rd_cfg_path_from_src(RD_CfgSrc src);
-
-//- rjf: entity cache queries
-internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
-internal RD_EntityList rd_push_active_target_list(Arena *arena);
-internal RD_Entity *rd_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind);
-
-//- rjf: config state
-internal RD_CfgTable *rd_cfg_table(void);
-
 ////////////////////////////////
 //~ rjf: Registers
 
-internal RD_Regs *rd_regs(void);
-internal RD_Regs *rd_base_regs(void);
+#define rd_regs() (&rd_state->top_regs->v)
+#define rd_base_regs() (&rd_state->base_regs.v)
 internal RD_Regs *rd_push_regs_(RD_Regs *regs);
 #define rd_push_regs(...) rd_push_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 internal RD_Regs *rd_pop_regs(void);
@@ -1457,6 +1040,7 @@ internal void rd_push_cmd(String8 name, RD_Regs *regs);
 
 //- rjf: iterating
 internal B32 rd_next_cmd(RD_Cmd **cmd);
+internal B32 rd_next_view_cmd(RD_Cmd **cmd);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls

@@ -12,14 +12,19 @@
 #define UI_FixedHeight(v) DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
 #define UI_PrefWidth(v) DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
 #define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
+#define UI_MinWidth(v) DeferLoop(ui_push_min_width(v), ui_pop_min_width())
+#define UI_MinHeight(v) DeferLoop(ui_push_min_height(v), ui_pop_min_height())
 #define UI_PermissionFlags(v) DeferLoop(ui_push_permission_flags(v), ui_pop_permission_flags())
 #define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
+#define UI_OmitFlags(v) DeferLoop(ui_push_omit_flags(v), ui_pop_omit_flags())
 #define UI_FocusHot(v) DeferLoop(ui_push_focus_hot(v), ui_pop_focus_hot())
 #define UI_FocusActive(v) DeferLoop(ui_push_focus_active(v), ui_pop_focus_active())
 #define UI_FastpathCodepoint(v) DeferLoop(ui_push_fastpath_codepoint(v), ui_pop_fastpath_codepoint())
 #define UI_GroupKey(v) DeferLoop(ui_push_group_key(v), ui_pop_group_key())
 #define UI_Transparency(v) DeferLoop(ui_push_transparency(v), ui_pop_transparency())
-#define UI_Palette(v) DeferLoop(ui_push_palette(v), ui_pop_palette())
+#define UI_Tag(v) DeferLoop(ui_push_tag(v), ui_pop_tag())
+#define UI_BackgroundColor(v) DeferLoop(ui_push_background_color(v), ui_pop_background_color())
+#define UI_TextColor(v) DeferLoop(ui_push_text_color(v), ui_pop_text_color())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
@@ -42,14 +47,18 @@ internal F32 ui_top_fixed_width(void) { UI_StackTopImpl(ui_state, FixedWidth, fi
 internal F32 ui_top_fixed_height(void) { UI_StackTopImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_top_pref_width(void) { UI_StackTopImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_top_pref_height(void) { UI_StackTopImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_top_min_width(void) { UI_StackTopImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_top_min_height(void) { UI_StackTopImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_top_permission_flags(void) { UI_StackTopImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_top_flags(void) { UI_StackTopImpl(ui_state, Flags, flags) }
+internal UI_BoxFlags ui_top_omit_flags(void) { UI_StackTopImpl(ui_state, OmitFlags, omit_flags) }
 internal UI_FocusKind ui_top_focus_hot(void) { UI_StackTopImpl(ui_state, FocusHot, focus_hot) }
 internal UI_FocusKind ui_top_focus_active(void) { UI_StackTopImpl(ui_state, FocusActive, focus_active) }
 internal U32 ui_top_fastpath_codepoint(void) { UI_StackTopImpl(ui_state, FastpathCodepoint, fastpath_codepoint) }
 internal UI_Key ui_top_group_key(void) { UI_StackTopImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_top_transparency(void) { UI_StackTopImpl(ui_state, Transparency, transparency) }
-internal UI_Palette*     ui_top_palette(void) { UI_StackTopImpl(ui_state, Palette, palette) }
+internal Vec4F32 ui_top_background_color(void) { UI_StackTopImpl(ui_state, BackgroundColor, background_color) }
+internal Vec4F32 ui_top_text_color(void) { UI_StackTopImpl(ui_state, TextColor, text_color) }
 internal F32 ui_top_squish(void) { UI_StackTopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_top_hover_cursor(void) { UI_StackTopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_top_font(void) { UI_StackTopImpl(ui_state, Font, font) }
@@ -71,14 +80,18 @@ internal F32 ui_bottom_fixed_width(void) { UI_StackBottomImpl(ui_state, FixedWid
 internal F32 ui_bottom_fixed_height(void) { UI_StackBottomImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_bottom_pref_width(void) { UI_StackBottomImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_bottom_pref_height(void) { UI_StackBottomImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_bottom_min_width(void) { UI_StackBottomImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_bottom_min_height(void) { UI_StackBottomImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_bottom_permission_flags(void) { UI_StackBottomImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_bottom_flags(void) { UI_StackBottomImpl(ui_state, Flags, flags) }
+internal UI_BoxFlags ui_bottom_omit_flags(void) { UI_StackBottomImpl(ui_state, OmitFlags, omit_flags) }
 internal UI_FocusKind ui_bottom_focus_hot(void) { UI_StackBottomImpl(ui_state, FocusHot, focus_hot) }
 internal UI_FocusKind ui_bottom_focus_active(void) { UI_StackBottomImpl(ui_state, FocusActive, focus_active) }
 internal U32 ui_bottom_fastpath_codepoint(void) { UI_StackBottomImpl(ui_state, FastpathCodepoint, fastpath_codepoint) }
 internal UI_Key ui_bottom_group_key(void) { UI_StackBottomImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_bottom_transparency(void) { UI_StackBottomImpl(ui_state, Transparency, transparency) }
-internal UI_Palette*     ui_bottom_palette(void) { UI_StackBottomImpl(ui_state, Palette, palette) }
+internal Vec4F32 ui_bottom_background_color(void) { UI_StackBottomImpl(ui_state, BackgroundColor, background_color) }
+internal Vec4F32 ui_bottom_text_color(void) { UI_StackBottomImpl(ui_state, TextColor, text_color) }
 internal F32 ui_bottom_squish(void) { UI_StackBottomImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_bottom_hover_cursor(void) { UI_StackBottomImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_bottom_font(void) { UI_StackBottomImpl(ui_state, Font, font) }
@@ -100,14 +113,18 @@ internal F32 ui_push_fixed_width(F32 v) { UI_StackPushImpl(ui_state, FixedWidth,
 internal F32 ui_push_fixed_height(F32 v) { UI_StackPushImpl(ui_state, FixedHeight, fixed_height, F32, v) }
 internal UI_Size ui_push_pref_width(UI_Size v) { UI_StackPushImpl(ui_state, PrefWidth, pref_width, UI_Size, v) }
 internal UI_Size ui_push_pref_height(UI_Size v) { UI_StackPushImpl(ui_state, PrefHeight, pref_height, UI_Size, v) }
+internal F32 ui_push_min_width(F32 v) { UI_StackPushImpl(ui_state, MinWidth, min_width, F32, v) }
+internal F32 ui_push_min_height(F32 v) { UI_StackPushImpl(ui_state, MinHeight, min_height, F32, v) }
 internal UI_PermissionFlags ui_push_permission_flags(UI_PermissionFlags v) { UI_StackPushImpl(ui_state, PermissionFlags, permission_flags, UI_PermissionFlags, v) }
 internal UI_BoxFlags ui_push_flags(UI_BoxFlags v) { UI_StackPushImpl(ui_state, Flags, flags, UI_BoxFlags, v) }
+internal UI_BoxFlags ui_push_omit_flags(UI_BoxFlags v) { UI_StackPushImpl(ui_state, OmitFlags, omit_flags, UI_BoxFlags, v) }
 internal UI_FocusKind ui_push_focus_hot(UI_FocusKind v) { UI_StackPushImpl(ui_state, FocusHot, focus_hot, UI_FocusKind, v) }
 internal UI_FocusKind ui_push_focus_active(UI_FocusKind v) { UI_StackPushImpl(ui_state, FocusActive, focus_active, UI_FocusKind, v) }
 internal U32 ui_push_fastpath_codepoint(U32 v) { UI_StackPushImpl(ui_state, FastpathCodepoint, fastpath_codepoint, U32, v) }
 internal UI_Key ui_push_group_key(UI_Key v) { UI_StackPushImpl(ui_state, GroupKey, group_key, UI_Key, v) }
 internal F32 ui_push_transparency(F32 v) { UI_StackPushImpl(ui_state, Transparency, transparency, F32, v) }
-internal UI_Palette*     ui_push_palette(UI_Palette*     v) { UI_StackPushImpl(ui_state, Palette, palette, UI_Palette*    , v) }
+internal Vec4F32 ui_push_background_color(Vec4F32 v) { UI_StackPushImpl(ui_state, BackgroundColor, background_color, Vec4F32, v) }
+internal Vec4F32 ui_push_text_color(Vec4F32 v) { UI_StackPushImpl(ui_state, TextColor, text_color, Vec4F32, v) }
 internal F32 ui_push_squish(F32 v) { UI_StackPushImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_push_hover_cursor(OS_Cursor v) { UI_StackPushImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_push_font(FNT_Tag v) { UI_StackPushImpl(ui_state, Font, font, FNT_Tag, v) }
@@ -129,14 +146,18 @@ internal F32 ui_pop_fixed_width(void) { UI_StackPopImpl(ui_state, FixedWidth, fi
 internal F32 ui_pop_fixed_height(void) { UI_StackPopImpl(ui_state, FixedHeight, fixed_height) }
 internal UI_Size ui_pop_pref_width(void) { UI_StackPopImpl(ui_state, PrefWidth, pref_width) }
 internal UI_Size ui_pop_pref_height(void) { UI_StackPopImpl(ui_state, PrefHeight, pref_height) }
+internal F32 ui_pop_min_width(void) { UI_StackPopImpl(ui_state, MinWidth, min_width) }
+internal F32 ui_pop_min_height(void) { UI_StackPopImpl(ui_state, MinHeight, min_height) }
 internal UI_PermissionFlags ui_pop_permission_flags(void) { UI_StackPopImpl(ui_state, PermissionFlags, permission_flags) }
 internal UI_BoxFlags ui_pop_flags(void) { UI_StackPopImpl(ui_state, Flags, flags) }
+internal UI_BoxFlags ui_pop_omit_flags(void) { UI_StackPopImpl(ui_state, OmitFlags, omit_flags) }
 internal UI_FocusKind ui_pop_focus_hot(void) { UI_StackPopImpl(ui_state, FocusHot, focus_hot) }
 internal UI_FocusKind ui_pop_focus_active(void) { UI_StackPopImpl(ui_state, FocusActive, focus_active) }
 internal U32 ui_pop_fastpath_codepoint(void) { UI_StackPopImpl(ui_state, FastpathCodepoint, fastpath_codepoint) }
 internal UI_Key ui_pop_group_key(void) { UI_StackPopImpl(ui_state, GroupKey, group_key) }
 internal F32 ui_pop_transparency(void) { UI_StackPopImpl(ui_state, Transparency, transparency) }
-internal UI_Palette*     ui_pop_palette(void) { UI_StackPopImpl(ui_state, Palette, palette) }
+internal Vec4F32 ui_pop_background_color(void) { UI_StackPopImpl(ui_state, BackgroundColor, background_color) }
+internal Vec4F32 ui_pop_text_color(void) { UI_StackPopImpl(ui_state, TextColor, text_color) }
 internal F32 ui_pop_squish(void) { UI_StackPopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_pop_hover_cursor(void) { UI_StackPopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_pop_font(void) { UI_StackPopImpl(ui_state, Font, font) }
@@ -158,14 +179,18 @@ internal F32 ui_set_next_fixed_width(F32 v) { UI_StackSetNextImpl(ui_state, Fixe
 internal F32 ui_set_next_fixed_height(F32 v) { UI_StackSetNextImpl(ui_state, FixedHeight, fixed_height, F32, v) }
 internal UI_Size ui_set_next_pref_width(UI_Size v) { UI_StackSetNextImpl(ui_state, PrefWidth, pref_width, UI_Size, v) }
 internal UI_Size ui_set_next_pref_height(UI_Size v) { UI_StackSetNextImpl(ui_state, PrefHeight, pref_height, UI_Size, v) }
+internal F32 ui_set_next_min_width(F32 v) { UI_StackSetNextImpl(ui_state, MinWidth, min_width, F32, v) }
+internal F32 ui_set_next_min_height(F32 v) { UI_StackSetNextImpl(ui_state, MinHeight, min_height, F32, v) }
 internal UI_PermissionFlags ui_set_next_permission_flags(UI_PermissionFlags v) { UI_StackSetNextImpl(ui_state, PermissionFlags, permission_flags, UI_PermissionFlags, v) }
 internal UI_BoxFlags ui_set_next_flags(UI_BoxFlags v) { UI_StackSetNextImpl(ui_state, Flags, flags, UI_BoxFlags, v) }
+internal UI_BoxFlags ui_set_next_omit_flags(UI_BoxFlags v) { UI_StackSetNextImpl(ui_state, OmitFlags, omit_flags, UI_BoxFlags, v) }
 internal UI_FocusKind ui_set_next_focus_hot(UI_FocusKind v) { UI_StackSetNextImpl(ui_state, FocusHot, focus_hot, UI_FocusKind, v) }
 internal UI_FocusKind ui_set_next_focus_active(UI_FocusKind v) { UI_StackSetNextImpl(ui_state, FocusActive, focus_active, UI_FocusKind, v) }
 internal U32 ui_set_next_fastpath_codepoint(U32 v) { UI_StackSetNextImpl(ui_state, FastpathCodepoint, fastpath_codepoint, U32, v) }
 internal UI_Key ui_set_next_group_key(UI_Key v) { UI_StackSetNextImpl(ui_state, GroupKey, group_key, UI_Key, v) }
 internal F32 ui_set_next_transparency(F32 v) { UI_StackSetNextImpl(ui_state, Transparency, transparency, F32, v) }
-internal UI_Palette*     ui_set_next_palette(UI_Palette*     v) { UI_StackSetNextImpl(ui_state, Palette, palette, UI_Palette*    , v) }
+internal Vec4F32 ui_set_next_background_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, BackgroundColor, background_color, Vec4F32, v) }
+internal Vec4F32 ui_set_next_text_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, TextColor, text_color, Vec4F32, v) }
 internal F32 ui_set_next_squish(F32 v) { UI_StackSetNextImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_set_next_hover_cursor(OS_Cursor v) { UI_StackSetNextImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_set_next_font(FNT_Tag v) { UI_StackSetNextImpl(ui_state, Font, font, FNT_Tag, v) }

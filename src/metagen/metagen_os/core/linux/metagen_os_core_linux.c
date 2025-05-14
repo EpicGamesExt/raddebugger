@@ -150,7 +150,25 @@ os_get_current_path(Arena *arena)
 {
   char *cwdir = getcwd(0, 0);
   String8 string = push_str8_copy(arena, str8_cstring(cwdir));
+  free(cwdir);
   return string;
+}
+
+internal U32
+os_get_process_start_time_unix(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  U64 start_time = 0;
+  pid_t pid = getpid();
+  String8 path = push_str8f(scratch.arena, "/proc/%u", pid);
+  struct stat st;
+  int err = stat((char*)path.str, &st);
+  if(err == 0)
+  {
+    start_time = st.st_mtime;
+  }
+  scratch_end(scratch);
+  return (U32)start_time;
 }
 
 ////////////////////////////////
@@ -162,6 +180,10 @@ internal void *
 os_reserve(U64 size)
 {
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  if(result == MAP_FAILED)
+  {
+    result = 0;
+  }
   return result;
 }
 
@@ -191,6 +213,10 @@ internal void *
 os_reserve_large(U64 size)
 {
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+  if(result == MAP_FAILED)
+  {
+    result = 0;
+  }
   return result;
 }
 
@@ -207,12 +233,7 @@ os_commit_large(void *ptr, U64 size)
 internal U32
 os_tid(void)
 {
-  U32 result = 0;
-#if defined(SYS_gettid)
-  result = syscall(SYS_gettid);
-#else
-  result = gettid();
-#endif
+  U32 result = gettid();
   return result;
 }
 
@@ -246,7 +267,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
   Temp scratch = scratch_begin(0, 0);
   String8 path_copy = push_str8_copy(scratch.arena, path);
   int lnx_flags = 0;
-  if(flags & (OS_AccessFlag_Read|OS_AccessFlag_Write))
+  if(flags & OS_AccessFlag_Read && flags & OS_AccessFlag_Write)
   {
     lnx_flags = O_RDWR;
   }
@@ -262,7 +283,11 @@ os_file_open(OS_AccessFlags flags, String8 path)
   {
     lnx_flags |= O_APPEND;
   }
-  int fd = open((char *)path_copy.str, lnx_flags);
+  if(flags & (OS_AccessFlag_Write|OS_AccessFlag_Append))
+  {
+    lnx_flags |= O_CREAT;
+  }
+  int fd = open((char *)path_copy.str, lnx_flags, 0755);
   OS_Handle handle = {0};
   if(fd != -1)
   {
@@ -285,16 +310,12 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
   int fd = (int)file.u64[0];
-  if(rng.min != 0)
-  {
-    lseek(fd, rng.min, SEEK_SET);
-  }
   U64 total_num_bytes_to_read = dim_1u64(rng);
   U64 total_num_bytes_read = 0;
   U64 total_num_bytes_left_to_read = total_num_bytes_to_read;
   for(;total_num_bytes_left_to_read > 0;)
   {
-    int read_result = read(fd, (U8 *)out_data + total_num_bytes_read, total_num_bytes_left_to_read);
+    int read_result = pread(fd, (U8 *)out_data + total_num_bytes_read, total_num_bytes_left_to_read, rng.min + total_num_bytes_read);
     if(read_result >= 0)
     {
       total_num_bytes_read += read_result;
@@ -313,16 +334,12 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
   int fd = (int)file.u64[0];
-  if(rng.min != 0)
-  {
-    lseek(fd, rng.min, SEEK_SET);
-  }
   U64 total_num_bytes_to_write = dim_1u64(rng);
   U64 total_num_bytes_written = 0;
   U64 total_num_bytes_left_to_write = total_num_bytes_to_write;
   for(;total_num_bytes_left_to_write > 0;)
   {
-    int write_result = write(fd, (U8 *)data + total_num_bytes_written, total_num_bytes_left_to_write);
+    int write_result = pwrite(fd, (U8 *)data + total_num_bytes_written, total_num_bytes_left_to_write, rng.min + total_num_bytes_written);
     if(write_result >= 0)
     {
       total_num_bytes_written += write_result;
@@ -402,30 +419,35 @@ os_copy_file_path(String8 dst, String8 src)
   if(!os_handle_match(src_h, os_handle_zero()) &&
      !os_handle_match(dst_h, os_handle_zero()))
   {
+    int src_fd = (int)src_h.u64[0];
+    int dst_fd = (int)dst_h.u64[0];
     FileProperties src_props = os_properties_from_file(src_h);
     U64 size = src_props.size;
     U64 total_bytes_copied = 0;
     U64 bytes_left_to_copy = size;
     for(;bytes_left_to_copy > 0;)
     {
-      Temp scratch = scratch_begin(0, 0);
-      U64 buffer_size = Min(bytes_left_to_copy, MB(8));
-      U8 *buffer = push_array_no_zero(scratch.arena, U8, buffer_size);
-      U64 bytes_read = os_file_read(src_h, r1u64(total_bytes_copied, total_bytes_copied+buffer_size), buffer);
-      U64 bytes_written = os_file_write(dst_h, r1u64(total_bytes_copied, total_bytes_copied+bytes_read), buffer);
-      U64 bytes_copied = Min(bytes_read, bytes_written);
-      bytes_left_to_copy -= bytes_copied;
-      total_bytes_copied += bytes_copied;
-      scratch_end(scratch);
-      if(bytes_copied == 0)
+      off_t sendfile_off = total_bytes_copied;
+      int send_result = sendfile(dst_fd, src_fd, &sendfile_off, bytes_left_to_copy);
+      if(send_result <= 0)
       {
         break;
       }
+      U64 bytes_copied = (U64)send_result;
+      bytes_left_to_copy -= bytes_copied;
+      total_bytes_copied += bytes_copied;
     }
   }
   os_file_close(src_h);
   os_file_close(dst_h);
   return result;
+}
+
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  // TODO(rjf)
+  return 0;
 }
 
 internal String8
@@ -453,6 +475,22 @@ os_file_path_exists(String8 path)
   }
   scratch_end(scratch);
   return result;
+}
+
+internal B32
+os_folder_path_exists(String8 path)
+{
+  Temp scratch = scratch_begin(0, 0);
+  B32      exists    = 0;
+  String8  path_copy = push_str8_copy(scratch.arena, path);
+  DIR     *handle    = opendir((char*)path_copy.str);
+  if(handle)
+  {
+    closedir(handle);
+    exists = 1;
+  }
+  scratch_end(scratch);
+  return exists;
 }
 
 internal FileProperties
@@ -497,6 +535,10 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
   if(flags & OS_AccessFlag_Read)  { prot_flags |= PROT_READ; }
   int map_flags = MAP_PRIVATE;
   void *base = mmap(0, dim_1u64(range), prot_flags, map_flags, fd, range.min);
+  if(base == MAP_FAILED)
+  {
+    base = 0;
+  }
   return base;
 }
 
@@ -589,7 +631,7 @@ os_make_directory(String8 path)
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   String8 path_copy = push_str8_copy(scratch.arena, path);
-  if(mkdir((char*)path_copy.str, 0777) != -1)
+  if(mkdir((char*)path_copy.str, 0755) != -1)
   {
     result = 1;
   }
@@ -637,6 +679,10 @@ os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
   if(os_handle_match(handle, os_handle_zero())){return 0;}
   int id = (int)handle.u64[0];
   void *base = mmap(0, dim_1u64(range), PROT_READ|PROT_WRITE, MAP_SHARED, id, range.min);
+  if(base == MAP_FAILED)
+  {
+    base = 0;
+  }
   return base;
 }
 
@@ -744,10 +790,7 @@ os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params)
   entity->thread.func = func;
   entity->thread.ptr = ptr;
   {
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    int pthread_result = pthread_create(&entity->thread.handle, &attr, os_lnx_thread_entry_point, entity);
-    pthread_attr_destroy(&attr);
+    int pthread_result = pthread_create(&entity->thread.handle, 0, os_lnx_thread_entry_point, entity);
     if(pthread_result == -1)
     {
       os_lnx_entity_release(entity);
@@ -1025,13 +1068,26 @@ os_condition_variable_broadcast(OS_Handle cv)
 internal OS_Handle
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
-  NotImplemented;
+  OS_Handle result = {0};
+  if (name.size > 0) {
+    // TODO: we need to allocate shared memory to store sem_t
+    NotImplemented;
+  } else {
+    sem_t *s = mmap(0, sizeof(*s), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    AssertAlways(s != MAP_FAILED);
+    int err = sem_init(s, 0, initial_count);
+    if (err == 0) {
+      result.u64[0] = (U64)s;
+    }
+  }
+  return result;
 }
 
 internal void
 os_semaphore_release(OS_Handle semaphore)
 {
-  NotImplemented;
+  int err = munmap((void*)semaphore.u64[0], sizeof(sem_t));
+  AssertAlways(err == 0);
 }
 
 internal OS_Handle
@@ -1049,13 +1105,37 @@ os_semaphore_close(OS_Handle semaphore)
 internal B32
 os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
-  NotImplemented;
+  AssertAlways(endt_us == max_U64);
+  for (;;) {
+    int err = sem_wait((sem_t*)semaphore.u64[0]);
+    if (err == 0) {
+      break;
+    } else {
+      if (errno == EAGAIN) {
+        continue;
+      }
+    }
+    InvalidPath;
+    break;
+  }
+  return 1;
 }
 
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  NotImplemented;
+  for (;;) {
+    int err = sem_post((sem_t*)semaphore.u64[0]);
+    if (err == 0) {
+      break;
+    } else {
+      if (errno == EAGAIN) {
+        continue;
+      }
+    }
+    InvalidPath;
+    break;
+  }
 }
 
 ////////////////////////////////
@@ -1066,7 +1146,7 @@ os_library_open(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
   char *path_cstr = (char *)push_str8_copy(scratch.arena, path).str;
-  void *so = dlopen(path_cstr, RTLD_LAZY);
+  void *so = dlopen(path_cstr, RTLD_LAZY|RTLD_LOCAL);
   OS_Handle lib = { (U64)so };
   scratch_end(scratch);
   return lib;
@@ -1130,14 +1210,11 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid
+internal Guid
 os_make_guid(void)
 {
-  U8 random_bytes[16] = {0};
-  StaticAssert(sizeof(random_bytes) == sizeof(OS_Guid), os_lnx_guid_size_check);
-  getrandom(random_bytes, sizeof(random_bytes), 0);
-  OS_Guid guid = {0};
-  MemoryCopy(&guid, random_bytes, sizeof(random_bytes));
+  Guid guid = {0};
+  getrandom(guid.v, sizeof(guid.v), 0);
   guid.data3 &= 0x0fff;
   guid.data3 |= (4 << 12);
   guid.data4[0] &= 0x3f;
@@ -1256,5 +1333,5 @@ main(int argc, char **argv)
   }
   
   //- rjf: call into "real" entry point
-  main_thread_base_entry_point(entry_point, argv, (U64)argc);
+  main_thread_base_entry_point(argc, argv);
 }

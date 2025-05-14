@@ -132,6 +132,7 @@ static union
   RDI_Local local;
 }
 rdi_nil_element_union = {0};
+static RDI_Parsed rdi_parsed_nil = {0};
 
 ////////////////////////////////
 //~ Top-Level Parsing API
@@ -181,6 +182,8 @@ RDI_PROC RDI_Procedure *rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, R
 RDI_PROC RDI_Procedure *rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr);
 RDI_PROC RDI_U8 *rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure, RDI_U64 *len_out);
 RDI_PROC RDI_Scope *rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+RDI_PROC RDI_UDT *rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+RDI_PROC RDI_Procedure *rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
 RDI_PROC RDI_U64 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
 RDI_PROC RDI_U64 rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
 RDI_PROC RDI_Procedure *rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
@@ -225,5 +228,6 @@ RDI_PROC RDI_U8 *rdi_name_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode 
 
 #define rdi_parse__min(a,b) (((a)<(b))?(a):(b))
 RDI_PROC RDI_U64 rdi_cstring_length(char *cstr);
+RDI_PROC RDI_U64 rdi_size_from_bytecode_stream(RDI_U8 *ptr, RDI_U8 *opl);
 
 #endif // RDI_FORMAT_PARSE_H

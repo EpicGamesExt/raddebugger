@@ -443,6 +443,13 @@ os_copy_file_path(String8 dst, String8 src)
   return result;
 }
 
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  // TODO(rjf)
+  return 0;
+}
+
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
@@ -562,7 +569,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 {
   B32 good = 0;
   OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
-  for(;;)
+  for(;lnx_iter->dir != 0;)
   {
     // rjf: get next entry
     lnx_iter->dp = readdir(lnx_iter->dir);
@@ -1064,7 +1071,7 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
   OS_Handle result = {0};
   if (name.size > 0) {
     // TODO: we need to allocate shared memory to store sem_t
-    NotImplemented;
+    // NotImplemented;
   } else {
     sem_t *s = mmap(0, sizeof(*s), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     AssertAlways(s != MAP_FAILED);

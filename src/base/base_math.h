@@ -379,14 +379,15 @@ struct Rng1S64Array
 #define abs_s64(v) (S64)llabs(v)
 
 #define sqrt_f32(v)   sqrtf(v)
+#define cbrt_f32(v)   cbrtf(v)
 #define mod_f32(a, b) fmodf((a), (b))
 #define pow_f32(b, e) powf((b), (e))
 #define ceil_f32(v)   ceilf(v)
 #define floor_f32(v)  floorf(v)
 #define round_f32(v)  roundf(v)
 #define abs_f32(v)    fabsf(v)
-#define radians_from_turns_f32(v) ((v)*2*3.1415926535897f)
-#define turns_from_radians_f32(v) ((v)/2*3.1415926535897f)
+#define radians_from_turns_f32(v) ((v)*(2*3.1415926535897f))
+#define turns_from_radians_f32(v) ((v)/(2*3.1415926535897f))
 #define degrees_from_turns_f32(v) ((v)*360.f)
 #define turns_from_degrees_f32(v) ((v)/360.f)
 #define degrees_from_radians_f32(v) (degrees_from_turns_f32(turns_from_radians_f32(v)))
@@ -396,14 +397,15 @@ struct Rng1S64Array
 #define tan_f32(v)    tanf(radians_from_turns_f32(v))
 
 #define sqrt_f64(v)   sqrt(v)
+#define cbrt_f64(v)   cbrt(v)
 #define mod_f64(a, b) fmod((a), (b))
 #define pow_f64(b, e) pow((b), (e))
 #define ceil_f64(v)   ceil(v)
 #define floor_f64(v)  floor(v)
 #define round_f64(v)  round(v)
 #define abs_f64(v)    fabs(v)
-#define radians_from_turns_f64(v) ((v)*2*3.1415926535897)
-#define turns_from_radians_f64(v) ((v)/2*3.1415926535897)
+#define radians_from_turns_f64(v) ((v)*(2*3.1415926535897))
+#define turns_from_radians_f64(v) ((v)/(2*3.1415926535897))
 #define degrees_from_turns_f64(v) ((v)*360.0)
 #define turns_from_degrees_f64(v) ((v)/360.0)
 #define degrees_from_radians_f64(v) (degrees_from_turns_f64(turns_from_radians_f64(v)))
@@ -543,6 +545,7 @@ internal Mat4x4F32 mul_4x4f32(Mat4x4F32 a, Mat4x4F32 b);
 internal Mat4x4F32 scale_4x4f32(Mat4x4F32 m, F32 scale);
 internal Mat4x4F32 inverse_4x4f32(Mat4x4F32 m);
 internal Mat4x4F32 derotate_4x4f32(Mat4x4F32 mat);
+internal Mat4x4F32 transpose_4x4f32(Mat4x4F32 mat);
 
 ////////////////////////////////
 //~ rjf: Range Ops
@@ -651,15 +654,29 @@ internal Rng2F32 intersect_2f32(Rng2F32 a, Rng2F32 b);
 internal Vec2F32 clamp_2f32(Rng2F32 r, Vec2F32 v);
 
 ////////////////////////////////
-//~ rjf: Miscellaneous Ops
+//~ rjf: Color Operations
 
+//- rjf: hsv <-> rgb
 internal Vec3F32 hsv_from_rgb(Vec3F32 rgb);
 internal Vec3F32 rgb_from_hsv(Vec3F32 hsv);
 internal Vec4F32 hsva_from_rgba(Vec4F32 rgba);
 internal Vec4F32 rgba_from_hsva(Vec4F32 hsva);
-internal Vec4F32 rgba_from_u32(U32 hex);
-internal U32 u32_from_rgba(Vec4F32 rgba);
 
+//- rjf: srgb <-> linear
+internal Vec3F32 linear_from_srgb(Vec3F32 srgb);
+internal Vec3F32 srgb_from_linear(Vec3F32 linear);
+internal Vec4F32 linear_from_srgba(Vec4F32 srgba);
+internal Vec4F32 srgba_from_linear(Vec4F32 linear);
+
+//- rjf: oklab <-> linear
+internal Vec3F32 oklab_from_linear(Vec3F32 linear);
+internal Vec3F32 linear_from_oklab(Vec3F32 oklab);
+internal Vec4F32 oklab_from_lineara(Vec4F32 lineara);
+internal Vec4F32 lineara_from_oklab(Vec4F32 oklab);
+
+//- rjf: rgba <-> u32
+internal U32 u32_from_rgba(Vec4F32 rgba);
+internal Vec4F32 rgba_from_u32(U32 hex);
 #define rgba_from_u32_lit_comp(h) { (((h)&0xff000000)>>24)/255.f, (((h)&0x00ff0000)>>16)/255.f, (((h)&0x0000ff00)>> 8)/255.f, (((h)&0x000000ff)>> 0)/255.f }
 
 ////////////////////////////////
@@ -668,6 +685,7 @@ internal U32 u32_from_rgba(Vec4F32 rgba);
 internal void rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng);
 internal void rng1u64_list_concat(Rng1U64List *list, Rng1U64List *to_concat);
 internal Rng1U64Array rng1u64_array_from_list(Arena *arena, Rng1U64List *list);
+internal U64 rng_1u64_array_bsearch(Rng1U64Array arr, U64 value);
 
 internal void rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng);
 internal Rng1S64Array rng1s64_array_from_list(Arena *arena, Rng1S64List *list);

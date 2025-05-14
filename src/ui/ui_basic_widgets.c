@@ -70,7 +70,6 @@ ui_label_multilinef(F32 max, char *fmt, ...)
 internal UI_Signal
 ui_button(String8 string)
 {
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|
                                          UI_BoxFlag_DrawBackground|
                                          UI_BoxFlag_DrawBorder|
@@ -134,9 +133,9 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   F32 tab_size = box->tab_size;
-  Vec4F32 cursor_color = box->palette->colors[UI_ColorCode_Cursor];
+  Vec4F32 cursor_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("cursor"));
   cursor_color.w *= box->parent->parent->focus_active_t;
-  Vec4F32 select_color = box->palette->colors[UI_ColorCode_Selection];
+  Vec4F32 select_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("selection"));
   select_color.w *= (box->parent->parent->focus_active_t*0.2f + 0.8f);
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
@@ -144,24 +143,24 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   TxtPt mark = draw_data->mark;
   F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x;
   F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x;
-  F32 cursor_thickness = ClampBot(4.f, font_size/6.f);
+  F32 cursor_thickness = ClampBot(1.f, floor_f32(font_size/10.f));
   Rng2F32 cursor_rect =
   {
-    text_position.x + cursor_pixel_off - cursor_thickness*0.50f,
-    box->rect.y0+4.f,
-    text_position.x + cursor_pixel_off + cursor_thickness*0.50f,
-    box->rect.y1-4.f,
+    text_position.x + cursor_pixel_off,
+    box->parent->parent->rect.y0+ui_top_font_size()*0.5f,
+    text_position.x + cursor_pixel_off + cursor_thickness,
+    box->parent->parent->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 mark_rect =
   {
-    text_position.x + mark_pixel_off - cursor_thickness*0.50f,
-    box->rect.y0+2.f,
-    text_position.x + mark_pixel_off + cursor_thickness*0.50f,
-    box->rect.y1-2.f,
+    text_position.x + mark_pixel_off - cursor_thickness,
+    box->parent->parent->rect.y0+ui_top_font_size()*0.5f,
+    text_position.x + mark_pixel_off + cursor_thickness,
+    box->parent->parent->rect.y1-ui_top_font_size()*0.5f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
   dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
-  dr_rect(cursor_rect, cursor_color, 0.f, 0, 1.f);
+  dr_rect(cursor_rect, cursor_color, 0.f, 0, 0.f);
 }
 
 internal UI_Signal
@@ -181,7 +180,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
-  ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_HandPoint);
+  ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_Pointer);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                       UI_BoxFlag_DrawBorder|
                                       UI_BoxFlag_MouseClickable|
@@ -480,7 +479,7 @@ ui_do_color_tooltip_hsv(Vec3F32 hsv)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
+      UI_BackgroundColor(linear_from_srgba(v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -519,7 +518,7 @@ ui_do_color_tooltip_hsva(Vec4F32 hsva)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba))
+      UI_BackgroundColor(linear_from_srgba(rgba))
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -566,18 +565,38 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
   
   // rjf: hue => rgb
   Vec3F32 hue_rgb = rgb_from_hsv(v3f32(data->hue, 1, 1));
+  Vec3F32 hue_rgb_linear = linear_from_srgb(hue_rgb);
   
-  // rjf: white -> rgb background
+  // rjf: rgb background
   {
-    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
+    dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb_linear.x, hue_rgb_linear.y, hue_rgb_linear.z, 1), 4.f, 0, 1.f);
+  }
+  
+  // rjf: white gradient overlay
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb_linear.x, hue_rgb_linear.y, hue_rgb_linear.z, 0), 4.f, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = v4f32(1, 1, 1, 1);
   }
   
-  // rjf: black gradient overlay
+  // rjf: black gradient overlay pt. 1
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 1.f);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 1.f);
+  }
+  
+  // rjf: black gradient overlay pt. 2
   {
     R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
     inst->colors[Corner_01] = v4f32(0, 0, 0, 1);
     inst->colors[Corner_11] = v4f32(0, 0, 0, 1);
+  }
+  
+  // rjf: black gradient overlay pt. 3
+  {
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 0.2f);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 0.2f);
   }
   
   // rjf: indicator
@@ -589,7 +608,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
                           center.y - half_size,
                           center.x + half_size,
                           center.y + half_size);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2.f, 2.f, 1.f);
   }
 }
 
@@ -678,13 +697,13 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
     F32 hue1 = (F32)(seg+1)/6;
     Vec3F32 rgb0 = rgb_from_hsv(v3f32(hue0, 1, 1));
     Vec3F32 rgb1 = rgb_from_hsv(v3f32(hue1, 1, 1));
-    Vec4F32 rgba0 = v4f32(rgb0.x, rgb0.y, rgb0.z, 1);
-    Vec4F32 rgba1 = v4f32(rgb1.x, rgb1.y, rgb1.z, 1);
+    Vec4F32 rgba0_linear = linear_from_srgba(v4f32(rgb0.x, rgb0.y, rgb0.z, 1));
+    Vec4F32 rgba1_linear = linear_from_srgba(v4f32(rgb1.x, rgb1.y, rgb1.z, 1));
     R_Rect2DInst *inst = dr_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0.f);
-    inst->colors[Corner_00] = rgba0;
-    inst->colors[Corner_01] = rgba1;
-    inst->colors[Corner_10] = rgba0;
-    inst->colors[Corner_11] = rgba1;
+    inst->colors[Corner_00] = rgba0_linear;
+    inst->colors[Corner_01] = rgba1_linear;
+    inst->colors[Corner_10] = rgba0_linear;
+    inst->colors[Corner_11] = rgba1_linear;
     rect.y0 += segment_dim;
     rect.y1 += segment_dim;
   }
@@ -692,13 +711,13 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
   // rjf: indicator
   {
     Vec2F32 box_rect_dim = dim_2f32(box->rect);
-    Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + data->hue*box_rect_dim.y);
-    F32 half_size = box->font_size * (0.5f + box->active_t*0.2f);
+    Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + (data->hue)*box_rect_dim.y);
+    F32 half_size = box_rect_dim.x * (0.52f + 0.02f * box->active_t);
     Rng2F32 rect = r2f32p(center.x - half_size,
-                          center.y - 2.f,
+                          center.y - box->font_size * (0.5f + 0.1f * box->active_t),
                           center.x + half_size,
-                          center.y + 2.f);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+                          center.y + box->font_size * (0.5f + 0.1f * box->active_t));
+    dr_rect(rect, v4f32(1, 1, 1, 1), 1.f, 2.f, 1.f);
   }
 }
 
@@ -780,12 +799,12 @@ internal UI_BOX_CUSTOM_DRAW(ui_alpha_picker_draw)
   {
     Vec2F32 box_rect_dim = dim_2f32(box->rect);
     Vec2F32 center = v2f32((box->rect.x0+box->rect.x1)/2, box->rect.y0 + (1-data->alpha)*box_rect_dim.y);
-    F32 half_size = box->font_size * (0.5f + box->active_t*0.2f);
+    F32 half_size = box_rect_dim.x * (0.52f + 0.02f * box->active_t);
     Rng2F32 rect = r2f32p(center.x - half_size,
-                          center.y - 2.f,
+                          center.y - box->font_size * (0.5f + 0.1f * box->active_t),
                           center.x + half_size,
-                          center.y + 2.f);
-    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+                          center.y + box->font_size * (0.5f + 0.1f * box->active_t));
+    dr_rect(rect, v4f32(1, 1, 1, 1), 1.f, 2.f, 1.f);
   }
 }
 
@@ -1212,7 +1231,8 @@ ui_scroll_list_item_from_row(UI_ScrollListRowBlockArray *blocks, U64 row)
 internal UI_ScrollPt
 ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices)
 {
-  ui_push_palette(ui_state->widget_palette_info.scrollbar_palette);
+  ui_push_tag(str8_lit("scroll_bar"));
+  ui_push_font_size(ui_bottom_font_size()*0.65f);
   
   //- rjf: unpack
   S64 idx_range_dim = Max(dim_1s64(idx_range), 1);
@@ -1258,13 +1278,12 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       if(idx_range.max != idx_range.min)
       {
         ui_set_next_pref_size(axis, ui_pct((F32)((F64)(pt.idx-idx_range.min)/(F64)idx_range_dim), 0));
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *space_before_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "##scroll_area_before");
         space_before_sig = ui_signal_from_box(space_before_box);
       }
       
       // rjf: scroller
-      UI_Flags(disabled_flags) UI_PrefSize(axis, ui_pct(Clamp(0.01f, (F32)((F64)Max(view_num_indices, 1)/(F64)idx_range_dim), 1.f), 0.f))
+      UI_Flags(disabled_flags) UI_PrefSize(axis, ui_pct(Clamp(0.05f, (F32)((F64)Max(view_num_indices, 1)/(F64)idx_range_dim), 1.f), 0.f))
       {
         scroller_sig = ui_buttonf("##_scroller_%i", axis);
         scroller_box = scroller_sig.box;
@@ -1274,7 +1293,6 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       if(idx_range.max != idx_range.min)
       {
         ui_set_next_pref_size(axis, ui_pct(1.f - (F32)((F64)(pt.idx-idx_range.min)/(F64)idx_range_dim), 0));
-        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *space_after_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "##scroll_area_after");
         space_after_sig = ui_signal_from_box(space_after_box);
       }
@@ -1332,7 +1350,8 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
     }
   }
   
-  ui_pop_palette();
+  ui_pop_font_size();
+  ui_pop_tag();
   return new_pt;
 }
 
@@ -1458,7 +1477,7 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   *visible_row_range_out = visible_row_range;
   
   //- rjf: store thread-locals
-  ui_scroll_list_scroll_bar_dim_px = ui_top_font_size()*1.5f;
+  ui_scroll_list_scroll_bar_dim_px = ui_bottom_font_size()*1.5f;
   ui_scroll_list_scroll_pt_ptr = scroll_pt;
   ui_scroll_list_dim_px = params->dim_px;
   ui_scroll_list_scroll_idx_rng = scroll_row_idx_range;

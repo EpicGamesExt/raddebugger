@@ -586,6 +586,30 @@ rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
   return scope;
 }
 
+RDI_PROC RDI_UDT *
+rdi_container_udt_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_U64 idx = 0;
+  if(procedure->link_flags & RDI_LinkFlag_TypeScoped)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, idx);
+  return udt;
+}
+
+RDI_PROC RDI_Procedure *
+rdi_container_procedure_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_U64 idx = 0;
+  if(procedure->link_flags & RDI_LinkFlag_ProcScoped)
+  {
+    idx = procedure->container_idx;
+  }
+  RDI_Procedure *container_procedure = rdi_element_from_name_idx(rdi, Procedures, idx);
+  return container_procedure;
+}
+
 RDI_PROC RDI_U64
 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
 {
@@ -812,4 +836,25 @@ rdi_cstring_length(char *cstr)
   RDI_U64 result = 0;
   for(;cstr[result] != 0; result += 1){}
   return result;
+}
+
+RDI_PROC RDI_U64
+rdi_size_from_bytecode_stream(RDI_U8 *ptr, RDI_U8 *opl)
+{
+  RDI_U64 bytecode_size = 0;
+  RDI_U8 *off_first = ptr + sizeof(RDI_LocationKind);
+  for(RDI_U8 *off = off_first, *next_off = opl; off < opl; off = next_off)
+  {
+    RDI_U8 op = *off;
+    if(op == 0)
+    {
+      break;
+    }
+    
+    RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+    RDI_U32 p_size   = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+    bytecode_size += (1 + p_size);
+    next_off = (off + 1 + p_size);
+  }
+  return bytecode_size;
 }

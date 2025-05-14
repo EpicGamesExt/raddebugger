@@ -5,83 +5,121 @@
 #define EVAL_IR_H
 
 ////////////////////////////////
-//~ rjf: Bytecode Operation Types
+//~ rjf: Identifier Resolution Rule Types
 
-enum
+typedef enum E_IdentifierResolutionPath
 {
-  E_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
-  E_IRExtKind_SetSpace,
-  E_IRExtKind_COUNT
-};
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+  E_IdentifierResolutionPath_Macros,
+}
+E_IdentifierResolutionPath;
 
-typedef struct E_Op E_Op;
-struct E_Op
+typedef struct E_IdentifierResolutionRule E_IdentifierResolutionRule;
+struct E_IdentifierResolutionRule
 {
-  E_Op *next;
-  RDI_EvalOp opcode;
-  E_Value value;
-  String8 string;
-};
-
-typedef struct E_OpList E_OpList;
-struct E_OpList
-{
-  E_Op *first;
-  E_Op *last;
-  U64 op_count;
-  U64 encoded_size;
-};
-
-////////////////////////////////
-//~ rjf: IR Tree Types
-
-typedef struct E_IRNode E_IRNode;
-struct E_IRNode
-{
-  E_IRNode *first;
-  E_IRNode *last;
-  E_IRNode *next;
-  RDI_EvalOp op;
-  String8 string;
-  E_Value value;
-};
-
-typedef struct E_IRTreeAndType E_IRTreeAndType;
-struct E_IRTreeAndType
-{
-  E_IRNode *root;
-  E_TypeKey type_key;
-  E_Mode mode;
-  E_Space space;
-  E_MsgList msgs;
+  E_IdentifierResolutionPath *paths;
+  U64 count;
 };
 
 ////////////////////////////////
-//~ rjf: Parse Context
+//~ rjf: IR State
 
-typedef struct E_IRCtx E_IRCtx;
-struct E_IRCtx
+typedef struct E_IRCacheNode E_IRCacheNode;
+struct E_IRCacheNode
 {
-  E_String2ExprMap *macro_map;
+  E_IRCacheNode *next;
+  E_Expr *expr;
+  E_IRNode *overridden_node;
+  E_IRTreeAndType irtree;
+};
+
+typedef struct E_IRCacheSlot E_IRCacheSlot;
+struct E_IRCacheSlot
+{
+  E_IRCacheNode *first;
+  E_IRCacheNode *last;
+};
+
+typedef struct E_IRState E_IRState;
+struct E_IRState
+{
+  Arena *arena;
+  U64 arena_eval_start_pos;
+  
+  // rjf: ir context
+  E_IRCtx *ctx;
+  
+  // rjf: unpacked ctx
+  RDI_Procedure *thread_ip_procedure;
+  
+  // rjf: overridden irtree
+  E_IRTreeAndType *overridden_irtree;
+  B32 disallow_autohooks;
+  B32 disallow_chained_fastpaths;
+  
+  // rjf: caches
+  E_UsedExprMap *used_expr_map;
+  E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
+  U64 string_id_gen;
+  E_StringIDMap *string_id_map;
+  U64 ir_cache_slots_count;
+  E_IRCacheSlot *ir_cache_slots;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
-global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-thread_static E_IRCtx *e_ir_ctx = 0;
+E_IdentifierResolutionPath e_default_identifier_resolution_paths[] =
+{
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+  E_IdentifierResolutionPath_Macros,
+};
+E_IdentifierResolutionRule e_default_identifier_resolution_rule =
+{
+  e_default_identifier_resolution_paths,
+  ArrayCount(e_default_identifier_resolution_paths),
+};
 
-////////////////////////////////
-//~ rjf: Expr Kind Enum Functions
-
-internal RDI_EvalOp e_opcode_from_expr_kind(E_ExprKind kind);
-internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
-
-////////////////////////////////
-//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
-
-internal E_IRCtx *e_selected_ir_ctx(void);
-internal void e_select_ir_ctx(E_IRCtx *ctx);
+E_IdentifierResolutionPath e_callable_identifier_resolution_paths[] =
+{
+  E_IdentifierResolutionPath_Macros,
+  E_IdentifierResolutionPath_ParentExpr,
+  E_IdentifierResolutionPath_ParentExprMember,
+  E_IdentifierResolutionPath_ImplicitThisMember,
+  E_IdentifierResolutionPath_Local,
+  E_IdentifierResolutionPath_Globals,
+  E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Procedures,
+  E_IdentifierResolutionPath_Types,
+  E_IdentifierResolutionPath_Registers,
+  E_IdentifierResolutionPath_RegisterAliases,
+  E_IdentifierResolutionPath_Constants,
+};
+E_IdentifierResolutionRule e_callable_identifier_resolution_rule =
+{
+  e_callable_identifier_resolution_paths,
+  ArrayCount(e_callable_identifier_resolution_paths),
+};
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions
@@ -101,6 +139,7 @@ internal void e_irnode_push_child(E_IRNode *parent, E_IRNode *child);
 
 //- rjf: ir subtree building helpers
 internal E_IRNode *e_irtree_const_u(Arena *arena, U64 v);
+internal E_IRNode *e_irtree_leaf_u128(Arena *arena, U128 u128);
 internal E_IRNode *e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *c);
 internal E_IRNode *e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *l, E_IRNode *r);
 internal E_IRNode *e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l, E_IRNode *r);
@@ -108,18 +147,27 @@ internal E_IRNode *e_irtree_conditional(Arena *arena, E_IRNode *c, E_IRNode *l, 
 internal E_IRNode *e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode);
 internal E_IRNode *e_irtree_string_literal(Arena *arena, String8 string);
 internal E_IRNode *e_irtree_set_space(Arena *arena, E_Space space, E_IRNode *c);
-internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_Space space, E_IRNode *c, E_TypeKey type_key);
+internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key);
 internal E_IRNode *e_irtree_convert_lo(Arena *arena, E_IRNode *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in);
 internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key);
 internal E_IRNode *e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in);
-internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Space from_space, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
+internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
+
+//- rjf: expression poison checking
+internal B32 e_expr_is_poisoned(E_Expr *expr);
+internal void e_expr_poison(E_Expr *expr);
+internal void e_expr_unpoison(E_Expr *expr);
 
 //- rjf: top-level irtree/type extraction
-internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
+E_TYPE_ACCESS_FUNCTION_DEF(default);
+internal E_IRTreeAndType e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_IdentifierResolutionRule *identifier_resolution_rule, B32 disallow_autohooks, B32 disallow_chained_fastpaths, E_Expr *root_expr);
 
 //- rjf: irtree -> linear ops/bytecode
-internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out);
+internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
 internal E_OpList e_oplist_from_irtree(Arena *arena, E_IRNode *root);
 internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
+
+//- rjf: leaf-bytecode expression extensions
+internal E_Expr *e_expr_irext_member_access(Arena *arena, E_Expr *lhs, E_IRTreeAndType *lhs_irtree, String8 member_name);
 
 #endif // EVAL_IR_H

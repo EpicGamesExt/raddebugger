@@ -1,9 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#undef MARKUP_LAYER_COLOR
-#define MARKUP_LAYER_COLOR 0.80f, 0.60f, 0.20f
-
 ////////////////////////////////
 //~ rjf: Input Layout Element Tables
 
@@ -520,7 +517,7 @@ r_window_equip(OS_Handle handle)
     {
       swapchain_desc.Width              = 0; // NOTE(rjf): use window width
       swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
+      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
       swapchain_desc.Stereo             = FALSE;
       swapchain_desc.SampleDesc.Count   = 1;
       swapchain_desc.SampleDesc.Quality = 0;
@@ -673,7 +670,10 @@ r_tex2d_release(R_Handle handle)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
-    SLLStackPush(r_d3d11_state->first_to_free_tex2d, texture);
+    if(texture != &r_d3d11_tex2d_nil)
+    {
+      SLLStackPush(r_d3d11_state->first_to_free_tex2d, texture);
+    }
   }
   ProfEnd();
 }
@@ -706,15 +706,18 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
-    Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
-    U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
-    Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
-    D3D11_BOX dst_box =
+    if(texture != &r_d3d11_tex2d_nil)
     {
-      (UINT)subrect.x0, (UINT)subrect.y0, 0,
-      (UINT)subrect.x1, (UINT)subrect.y1, 1,
-    };
-    r_d3d11_state->device_ctx->lpVtbl->UpdateSubresource(r_d3d11_state->device_ctx, (ID3D11Resource *)texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+      Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
+      U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
+      Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
+      D3D11_BOX dst_box =
+      {
+        (UINT)subrect.x0, (UINT)subrect.y0, 0,
+        (UINT)subrect.x1, (UINT)subrect.y1, 1,
+      };
+      r_d3d11_state->device_ctx->lpVtbl->UpdateSubresource(r_d3d11_state->device_ctx, (ID3D11Resource *)texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+    }
   }
   ProfEnd();
 }
@@ -822,6 +825,8 @@ r_end_frame(void)
       next = tex->next;
       tex->view->lpVtbl->Release(tex->view);
       tex->texture->lpVtbl->Release(tex->texture);
+      tex->view = 0;
+      tex->texture = 0;
       tex->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_tex2d, tex);
     }
@@ -888,7 +893,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
         D3D11_TEXTURE2D_DESC color_desc = zero_struct;
         {
           wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
-          color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+          color_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
         D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = zero_struct;
@@ -898,7 +903,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
         }
         D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = zero_struct;
         {
-          srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
+          srv_desc.Format                    = DXGI_FORMAT_R16G16B16A16_FLOAT;
           srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           srv_desc.Texture2D.MipLevels       = -1;
         }
@@ -1114,29 +1119,14 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(texture_handle);
             
             // rjf: get texture sample map matrix, based on format
-            Vec4F32 texture_sample_channel_map[] =
-            {
-              {1, 0, 0, 0},
-              {0, 1, 0, 0},
-              {0, 0, 1, 0},
-              {0, 0, 0, 1},
-            };
-            switch(texture->format)
-            {
-              default: break;
-              case R_Tex2DFormat_R8:
-              {
-                MemoryZeroArray(texture_sample_channel_map);
-                texture_sample_channel_map[0] = v4f32(1, 1, 1, 1);
-              }break;
-            }
+            Mat4x4F32 texture_sample_channel_map = r_sample_channel_map_from_tex2dformat(texture->format);
             
             // rjf: upload uniforms
             R_D3D11_Uniforms_Rect uniforms = {0};
             {
               uniforms.viewport_size             = v2f32(resolution.x, resolution.y);
               uniforms.opacity                   = 1-group_params->transparency;
-              MemoryCopyArray(uniforms.texture_sample_channel_map, texture_sample_channel_map);
+              uniforms.texture_sample_channel_map = texture_sample_channel_map;
               uniforms.texture_t2d_size          = v2f32(texture->size.x, texture->size.y);
               uniforms.xform[0] = v4f32(group_params->xform.v[0][0], group_params->xform.v[1][0], group_params->xform.v[2][0], 0);
               uniforms.xform[1] = v4f32(group_params->xform.v[0][1], group_params->xform.v[1][1], group_params->xform.v[2][1], 0);

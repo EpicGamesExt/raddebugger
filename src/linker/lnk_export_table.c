@@ -82,22 +82,22 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
   // to CODE instead of DATA. But if you try export global variable with:
   //    #pragma comment(linker, "/export:global_bar,CODE")
   // MSVC and LLD issue an error. For compatibility sake we do the same thing too.
-  COFF_ImportHeaderType type = coff_import_header_type_from_string(exp_parse->type);
+  COFF_ImportType type = coff_import_header_type_from_string(exp_parse->type);
   switch (type) {
-  case COFF_ImportHeaderType_CODE: {
+  case COFF_ImportHeader_Code: {
     B32 is_export_data = !(def->flags & (LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk));
     if (is_export_data) {
       lnk_error(LNK_Error_IllExport, "export \"%S\" is DATA but has specifier CODE", exp_parse->name);
     }
   } break;
-  case COFF_ImportHeaderType_DATA: {
+  case COFF_ImportHeader_Data: {
     B32 is_export_code = !!(def->flags & (LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk));
     if (is_export_code) {
       lnk_error(LNK_Error_IllExport, "export \"%S\" is CODE but has specifier DATA", exp_parse->name);
     }
   } break;
-  case COFF_ImportHeaderType_CONST: {
-    lnk_not_implemented("TODO: COFF_ImportHeaderType_CONST");
+  case COFF_ImportHeader_Const: {
+    lnk_not_implemented("TODO: COFF_ImportHeader_Const");
   } break;
   default: {
     if (exp_parse->type.size) {
@@ -171,7 +171,7 @@ lnk_export_array_from_list(Arena *arena, LNK_ExportList list)
 }
 
 internal void
-lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 image_name, COFF_MachineType machine)
+lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 image_name, COFF_MachineType machine)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -195,7 +195,7 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
     }
   }
   
-  LNK_Section *edata = lnk_section_table_search(st, str8_lit(".edata"));
+  LNK_Section *edata = lnk_section_table_search(sectab, str8_lit(".edata"));
   
   // push header
   PE_ExportTableHeader *header       = push_array(edata->arena, PE_ExportTableHeader, 1);

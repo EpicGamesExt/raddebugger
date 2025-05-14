@@ -1,9 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#undef MARKUP_LAYER_COLOR
-#define MARKUP_LAYER_COLOR 0.80f, 0.40f, 0.35f
-
 ////////////////////////////////
 //~ rjf: Globals
 
@@ -435,6 +432,8 @@ ui_state_alloc(void)
   ui->box_table = push_array(arena, UI_BoxHashSlot, ui->box_table_size);
   ui->anim_slots_count = 4096;
   ui->anim_slots = push_array(arena, UI_AnimSlot, ui->anim_slots_count);
+  ui->theme_pattern_cache_slots_count = 1024;
+  ui->theme_pattern_cache_slots = push_array(arena, UI_ThemePatternCacheSlot, ui->theme_pattern_cache_slots_count);
   UI_InitStackNils(ui);
   return ui;
 }
@@ -557,22 +556,30 @@ ui_next_event(UI_Event **ev)
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers & OS_Modifier_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers == OS_Modifier_Shift))
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && !(n->v.modifiers & OS_Modifier_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && n->v.modifiers == 0)
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_Keyboard) &&
-         (n->v.kind == UI_EventKind_Press ||
-          n->v.kind == UI_EventKind_Release) &&
+      if((n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release ||
+          n->v.kind == UI_EventKind_Navigate ||
+          n->v.kind == UI_EventKind_Edit) &&
          (n->v.key != OS_Key_LeftMouseButton &&
           n->v.key != OS_Key_MiddleMouseButton &&
           n->v.key != OS_Key_RightMouseButton))
       {
-        good = 0;
+        if((perms & UI_PermissionFlag_Keyboard) == UI_PermissionFlag_KeyboardSecondary)
+        {
+          good = !!(n->v.flags & UI_EventFlag_Secondary);
+        }
+        else if(!(perms & UI_PermissionFlag_Keyboard))
+        {
+          good = 0;
+        }
       }
       else if(!(perms & UI_PermissionFlag_Text) && (n->v.kind == UI_EventKind_Text))
       {
@@ -668,6 +675,28 @@ ui_slot_press(UI_EventActionSlot slot)
   return result;
 }
 
+//- rjf: autocomplete info
+
+internal void
+ui_set_autocomplete_string(String8 string)
+{
+  ui_state->autocomplete_string = push_str8_copy(ui_build_arena(), string);
+}
+
+internal String8
+ui_autocomplete_string(void)
+{
+  return ui_state->autocomplete_string;
+}
+
+internal String8
+ui_autocomplete(void)
+{
+  String8 result = ui_state->autocomplete_string;
+  MemoryZeroStruct(&ui_state->autocomplete_string);
+  return result;
+}
+
 //- rjf: drag data
 
 internal Vec2F32
@@ -717,17 +746,10 @@ ui_string_hover_begin_time_us(void)
   return ui_state->string_hover_begin_us;
 }
 
-internal String8
-ui_string_hover_string(Arena *arena)
+internal DR_FStrList
+ui_string_hover_fstrs(Arena *arena)
 {
-  String8 result = push_str8_copy(arena, ui_state->string_hover_string);
-  return result;
-}
-
-internal DR_FancyRunList
-ui_string_hover_runs(Arena *arena)
-{
-  DR_FancyRunList result = dr_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
+  DR_FStrList result = dr_fstrs_copy(arena, &ui_state->string_hover_fstrs);
   return result;
 }
 
@@ -789,7 +811,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_Theme *theme, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -802,7 +824,13 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
+    ui_state->default_animation_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
+    ui_state->tooltip_can_overflow_window = 0;
+    ui_state->tooltip_anchor_key = ui_key_zero();
+    ui_state->tags_key_stack_top = ui_state->tags_key_stack_free = 0;
+    ui_state->tags_cache_slots_count = 512;
+    ui_state->tags_cache_slots = push_array(ui_build_arena(), UI_TagsCacheSlot, ui_state->tags_cache_slots_count);
+    ui_state->autocomplete_string = str8_zero();
   }
   
   //- rjf: prune unused animation nodes
@@ -811,13 +839,34 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node && n != 0; n = next)
     {
       next = n->lru_next;
-      if(n->last_touched_build_index+1 < ui_state->build_index)
+      if(n->last_touched_build_index+2 < ui_state->build_index)
       {
         U64 slot_idx = n->key.u64[0]%ui_state->anim_slots_count;
         UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
         DLLRemove_NPZ(&ui_nil_anim_node, slot->first, slot->last, n, slot_next, slot_prev);;
         DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, n, lru_next, lru_prev);
         SLLStackPush_N(ui_state->free_anim_node, n, slot_next);
+      }
+      else
+      {
+        break;
+      }
+    }
+  }
+  
+  //- rjf: prune unused theme pattern cache nodes
+  ProfScope("ui prune unused theme pattern cache")
+  {
+    for(UI_ThemePatternCacheNode *n = ui_state->lru_theme_pattern_cache_node, *next = 0; n != 0; n = next)
+    {
+      next = n->lru_next;
+      if(n->last_build_index_accessed+2 < ui_state->build_index)
+      {
+        U64 slot_idx = n->key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+        UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
+        DLLRemove_NP(slot->first, slot->last, n, slot_next, slot_prev);
+        DLLRemove_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, n, lru_next, lru_prev);
+        SLLStackPush_N(ui_state->theme_pattern_cache_node_free, n, slot_next);
       }
       else
       {
@@ -850,6 +899,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   
   //- rjf: fill build phase parameters
   {
+    ui_state->theme = theme;
     ui_state->events = events;
     ui_state->window = window;
     ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= os_now_microseconds()) ? os_mouse_from_window(window) : v2f32(-100, -100);
@@ -862,7 +912,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     {
       ui_state->icon_info.icon_kind_text_map[icon_kind] = push_str8_copy(ui_build_arena(), icon_info->icon_kind_text_map[icon_kind]);
     }
-    MemoryCopyStruct(&ui_state->widget_palette_info, widget_palette_info);
     MemoryCopyStruct(&ui_state->animation_info, animation_info);
   }
   
@@ -1118,11 +1167,15 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     Vec2F32 anchor = add_2f32(ui_state->ctx_menu_anchor_box_last_pos, ui_state->ctx_menu_anchor_off);
     UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
       UI_Focus(UI_FocusKind_On)
-      UI_Squish(0.25f-ui_state->ctx_menu_open_t*0.25f)
+      UI_Squish(0.1f-ui_state->ctx_menu_open_t*0.1f)
       UI_Transparency(1-ui_state->ctx_menu_open_t)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
-      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
+      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                          UI_BoxFlag_SquishAnchored|
+                                                          UI_BoxFlag_DrawDropShadow|
+                                                          (ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY),
+                                                          "###ctx_menu_%I64x", window.u64[0]);
     }
   }
   
@@ -1169,18 +1222,18 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
       ui_state->active_box_key[k] = ui_key_zero();
     }
   }
+  
+  //- rjf: escape -> close context menu
+  if(ui_any_ctx_menu_is_open() && ui_slot_press(UI_EventActionSlot_Cancel))
+  {
+    ui_ctx_menu_close();
+  }
 }
 
 internal void
 ui_end_build(void)
 {
   ProfBeginFunction();
-  
-  //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
-  {
-    ui_ctx_menu_close();
-  }
   
   //- rjf: prune untouched or transient boxes in the cache
   ProfScope("ui prune unused boxes")
@@ -1237,13 +1290,30 @@ ui_end_build(void)
     }
   }
   
+  //- rjf: anchor tooltips
+  if(!ui_key_match(ui_state->tooltip_anchor_key, ui_key_zero()))
+  {
+    UI_Box *anchor_box = ui_box_from_key(ui_state->tooltip_anchor_key);
+    if(!ui_box_is_nil(anchor_box))
+    {
+      Vec2F32 dim = dim_2f32(ui_state->tooltip_root->rect);
+      ui_state->tooltip_root->fixed_position.x = ui_state->tooltip_root->rect.x0 = anchor_box->rect.x0;
+      ui_state->tooltip_root->fixed_position.y = ui_state->tooltip_root->rect.y0 = anchor_box->rect.y1 + anchor_box->font_size*0.5f;
+      ui_state->tooltip_root->rect.x1 = ui_state->tooltip_root->rect.x0 + dim.x;
+      ui_state->tooltip_root->rect.y1 = ui_state->tooltip_root->rect.y0 + dim.y;
+    }
+    else
+    {
+      ui_state->tooltip_root->rect.x0 = 10000;
+      ui_state->tooltip_root->rect.y0 = 10000;
+    }
+  }
+  
   //- rjf: ensure special floating roots are within screen bounds
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
   B32 force_contain[] =
   {
-    (ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()) &&
-     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero())),
+    !ui_state->tooltip_can_overflow_window,
     1,
   };
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
@@ -1271,11 +1341,11 @@ ui_end_build(void)
       root->rect = new_root_rect;
       for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis + 1))
       {
-        ui_calc_sizes_standalone__in_place_rec(root, axis);
-        ui_calc_sizes_upwards_dependent__in_place_rec(root, axis);
-        ui_calc_sizes_downwards_dependent__in_place_rec(root, axis);
-        ui_layout_enforce_constraints__in_place_rec(root, axis);
-        ui_layout_position__in_place_rec(root, axis);
+        ui_calc_sizes_standalone__in_place(root, axis);
+        ui_calc_sizes_upwards_dependent__in_place(root, axis);
+        ui_calc_sizes_downwards_dependent__in_place(root, axis);
+        ui_layout_enforce_constraints__in_place(root, axis);
+        ui_layout_position__in_place(root, axis);
       }
     }
   }
@@ -1288,9 +1358,31 @@ ui_end_build(void)
           !ui_box_is_nil(box);
           box = box->hash_next)
       {
-        if(box->flags & UI_BoxFlag_RoundChildrenByParent &&
-           !ui_box_is_nil(box->first) && !ui_box_is_nil(box->last))
+        if(box->flags & UI_BoxFlag_RoundChildrenByParent)
         {
+          for(UI_Box *b = box; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, box).next)
+          {
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_00] = box->corner_radii[Corner_00];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y0) <= floor_f32(box->rect.y0))
+            {
+              b->corner_radii[Corner_10] = box->corner_radii[Corner_10];
+            }
+            if(floor_f32(b->rect.x0) <= floor_f32(box->rect.x0) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_01] = box->corner_radii[Corner_01];
+            }
+            if(floor_f32(b->rect.x1) >= floor_f32(box->rect.x1) &&
+               floor_f32(b->rect.y1) >= floor_f32(box->rect.y1))
+            {
+              b->corner_radii[Corner_11] = box->corner_radii[Corner_11];
+            }
+          }
           box->first->corner_radii[Corner_00] = box->corner_radii[Corner_00];
           box->first->corner_radii[Corner_10] = box->corner_radii[Corner_10];
           box->last->corner_radii[Corner_01] = box->corner_radii[Corner_01];
@@ -1313,19 +1405,28 @@ ui_end_build(void)
         ui_state->is_animating = (ui_state->is_animating || abs_f32(n->params.target - n->current) > n->params.epsilon);
       }
     }
-    F32 vast_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
-    F32 fast_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
-    F32 fish_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
+    F32 fast_rate = ui_state->default_animation_rate;
     F32 slow_rate = 1 - pow_f32(2, (-30.f * ui_state->animation_dt));
-    F32 slug_rate = 1 - pow_f32(2, (-15.f * ui_state->animation_dt));
-    F32 slaf_rate = 1 - pow_f32(2, (-8.f * ui_state->animation_dt));
-    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_ContextMenuAnimations ? vast_rate : 1);
+    for(U64 slot_idx = 0; slot_idx < ui_state->theme_pattern_cache_slots_count; slot_idx += 1)
+    {
+      for(UI_ThemePatternCacheNode *n = ui_state->theme_pattern_cache_slots[slot_idx].first;
+          n != 0;
+          n = n->slot_next)
+      {
+        for EachIndex(idx, 4)
+        {
+          n->current_rgba.v[idx] += (n->target_rgba.v[idx] - n->current_rgba.v[idx]) * slow_rate;
+          ui_state->is_animating = (ui_state->is_animating || abs_f32(n->target_rgba.v[idx] - n->current_rgba.v[idx]) > 0.001f);
+        }
+      }
+    }
+    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * ui_state->animation_info.menu_animation_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
     }
-    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * (ui_state->animation_info.flags & UI_AnimationInfoFlag_TooltipAnimations ? vast_rate : 1);
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * ui_state->animation_info.tooltip_animation_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
     if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
     {
@@ -1338,7 +1439,8 @@ ui_end_build(void)
           box = box->hash_next)
       {
         // rjf: grab states informing animation
-        B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
+        B32 is_hot            = (ui_key_match(box->key, ui_state->hot_box_key) ||
+                                 ui_key_match(box->key, ui_state->drop_hot_box_key));
         B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
         B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+2 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
@@ -1347,10 +1449,10 @@ ui_end_build(void)
         B32 is_focus_active_disabled = !!(box->flags & UI_BoxFlag_FocusActiveDisabled);
         
         // rjf: determine rates
-        F32 hot_rate      = (ui_state->animation_info.flags & UI_AnimationInfoFlag_HotAnimations ? fast_rate : 1);
-        F32 active_rate   = (ui_state->animation_info.flags & UI_AnimationInfoFlag_ActiveAnimations ? fast_rate : 1);
-        F32 disabled_rate = (ui_state->animation_info.flags & UI_AnimationInfoFlag_HotAnimations ? slow_rate : 1);
-        F32 focus_rate    = (ui_state->animation_info.flags & UI_AnimationInfoFlag_FocusAnimations ? fast_rate : 1);
+        F32 hot_rate      = ui_state->animation_info.hot_animation_rate;
+        F32 active_rate   = ui_state->animation_info.active_animation_rate;
+        F32 disabled_rate = slow_rate;
+        F32 focus_rate    = ui_state->animation_info.focus_animation_rate;
         
         // rjf: determine animating status
         B32 box_is_animating = 0;
@@ -1381,7 +1483,7 @@ ui_end_build(void)
         
         // rjf: animate interaction transition states
         box->hot_t                   += hot_rate      * ((F32)is_hot - box->hot_t);
-        box->active_t                += active_rate   * ((F32)is_active - box->active_t);
+        box->active_t                = is_active ? 1.f : box->active_t + (active_rate   * ((F32)is_active - box->active_t));
         box->disabled_t              += disabled_rate * ((F32)is_disabled - box->disabled_t);
         box->focus_hot_t             += focus_rate    * ((F32)is_focus_hot - box->focus_hot_t);
         box->focus_active_t          += focus_rate    * ((F32)is_focus_active - box->focus_active_t);
@@ -1415,8 +1517,8 @@ ui_end_build(void)
         
         // rjf: animate view offset
         {
-          box->view_off.x += fast_rate * (box->view_off_target.x - box->view_off.x);
-          box->view_off.y += fast_rate * (box->view_off_target.y - box->view_off.y);
+          box->view_off.x += ui_state->animation_info.scroll_animation_rate * (box->view_off_target.x - box->view_off.x);
+          box->view_off.y += ui_state->animation_info.scroll_animation_rate * (box->view_off_target.y - box->view_off.y);
           if(abs_f32(box->view_off.x - box->view_off_target.x) < 2)
           {
             box->view_off.x = box->view_off_target.x;
@@ -1430,12 +1532,14 @@ ui_end_build(void)
     }
   }
   
-  //- rjf: animate context menu
-  if(ui_state->ctx_menu_open && !ui_box_is_nil(ui_state->ctx_menu_root) && !ui_state->ctx_menu_changed)
+  //- rjf: use group keys for box animation data if possible
+  for(UI_Box *b = ui_state->root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, ui_state->root).next)
   {
-    UI_Box *root = ui_state->ctx_menu_root;
-    Rng2F32 rect = root->rect;
-    root->rect.y1 = root->rect.y0 + dim_2f32(rect).y * ui_state->ctx_menu_open_t;
+    if(ui_key_match(b->key, ui_key_zero()) && !ui_key_match(b->group_key, ui_key_zero()))
+    {
+      UI_Box *group_box = ui_box_from_key(b->group_key);
+      b->hot_t = group_box->hot_t;
+    }
   }
   
   //- rjf: fall-through interact with context menu
@@ -1533,7 +1637,13 @@ ui_end_build(void)
             }
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
-            Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+            Vec2F32 drawn_text_dim = {0};
+            {
+              Temp scratch = scratch_begin(0, 0);
+              DR_FRunList fruns = dr_fruns_from_fstrs(scratch.arena, b->tab_size, &b->display_fstrs);
+              drawn_text_dim = fruns.dim;
+              scratch_end(scratch);
+            }
             B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
                                                          rect.y0,
@@ -1542,11 +1652,12 @@ ui_end_build(void)
                                                   ui_state->mouse);
             if(text_is_truncated && mouse_is_hovering && !(b->flags & UI_BoxFlag_DisableTruncatedHover))
             {
-              if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+              if(!str8_match(box_display_string, ui_state->string_hover_string, 0) || box->font_size != ui_state->string_hover_size)
               {
                 arena_clear(ui_state->string_hover_arena);
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-                ui_state->string_hover_fancy_runs = dr_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_size = box->font_size;
+                ui_state->string_hover_fstrs = dr_fstrs_copy(ui_state->string_hover_arena, &b->display_fstrs);
                 ui_state->string_hover_begin_us = os_now_microseconds();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
@@ -1584,293 +1695,269 @@ ui_end_build(void)
 }
 
 internal void
-ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis)
+ui_calc_sizes_standalone__in_place(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  
-  switch(root->pref_size[axis].kind)
+  for(UI_Box *b = root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, root).next)
   {
-    default:{}break;
-    case UI_SizeKind_Pixels:
+    switch(b->pref_size[axis].kind)
     {
-      root->fixed_size.v[axis] = root->pref_size[axis].value;
-    }break;
-    
-    case UI_SizeKind_TextContent:
-    {
-      F32 padding = root->pref_size[axis].value;
-      F32 text_size = root->display_string_runs.dim.x;
-      root->fixed_size.v[axis] = padding + text_size + root->text_padding*2;
-    }break;
+      default:{}break;
+      case UI_SizeKind_Pixels:
+      {
+        b->fixed_size.v[axis] = b->pref_size[axis].value;
+      }break;
+      case UI_SizeKind_TextContent:
+      {
+        F32 padding = b->pref_size[axis].value;
+        F32 text_size = b->display_fruns.dim.x;
+        b->fixed_size.v[axis] = padding + text_size + b->text_padding*2;
+      }break;
+    }
   }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_calc_sizes_standalone__in_place_rec(child, axis);
-  }
-  
   ProfEnd();
 }
 
 internal void
-ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis)
+ui_calc_sizes_upwards_dependent__in_place(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  
-  //- rjf: solve for all kinds that are upwards-dependent
-  switch(root->pref_size[axis].kind)
+  for(UI_Box *b = root; !ui_box_is_nil(b); b = ui_box_rec_df_pre(b, root).next)
   {
-    default: break;
-    
-    // rjf: if root has a parent percentage, figure out its size
-    case UI_SizeKind_ParentPct:
+    switch(b->pref_size[axis].kind)
     {
-      // rjf: find parent that has a fixed size
-      UI_Box *fixed_parent = &ui_nil_box;
-      for(UI_Box *p = root->parent; !ui_box_is_nil(p); p = p->parent)
+      default:{}break;
+      case UI_SizeKind_ParentPct:
       {
-        if(p->flags & (UI_BoxFlag_FixedWidth<<axis) ||
-           p->pref_size[axis].kind == UI_SizeKind_Pixels ||
-           p->pref_size[axis].kind == UI_SizeKind_TextContent ||
-           p->pref_size[axis].kind == UI_SizeKind_ParentPct)
+        // rjf: find parent that has a fixed size
+        UI_Box *fixed_parent = &ui_nil_box;
+        for(UI_Box *p = b->parent; !ui_box_is_nil(p); p = p->parent)
         {
-          fixed_parent = p;
-          break;
-        }
-      }
-      
-      // rjf: figure out root's size on this axis
-      F32 size = fixed_parent->fixed_size.v[axis] * root->pref_size[axis].value;
-      
-      // rjf: mutate root to have this size
-      root->fixed_size.v[axis] = size;
-    }break;
-  }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_calc_sizes_upwards_dependent__in_place_rec(child, axis);
-  }
-  
-  ProfEnd();
-}
-
-internal void
-ui_calc_sizes_downwards_dependent__in_place_rec(UI_Box *root, Axis2 axis)
-{
-  ProfBeginFunction();
-  
-  //- rjf: recurse first. we may depend on children that have
-  // the same property
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_calc_sizes_downwards_dependent__in_place_rec(child, axis);
-  }
-  
-  //- rjf: solve for all kinds that are downwards-dependent
-  switch(root->pref_size[axis].kind)
-  {
-    default: break;
-    
-    // rjf: sum children
-    case UI_SizeKind_ChildrenSum:
-    {
-      F32 sum = 0;
-      for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-      {
-        if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
-        {
-          if(axis == root->child_layout_axis)
+          if(p->flags & (UI_BoxFlag_FixedWidth<<axis) ||
+             p->pref_size[axis].kind == UI_SizeKind_Pixels ||
+             p->pref_size[axis].kind == UI_SizeKind_TextContent ||
+             p->pref_size[axis].kind == UI_SizeKind_ParentPct)
           {
-            sum += child->fixed_size.v[axis];
-          }
-          else
-          {
-            sum = Max(sum, child->fixed_size.v[axis]);
+            fixed_parent = p;
+            break;
           }
         }
-      }
-      
-      // rjf: figure out root's size on this axis
-      root->fixed_size.v[axis] = sum;
-    }break;
+        
+        // rjf: figure out box's size on this axis
+        F32 size = fixed_parent->fixed_size.v[axis] * b->pref_size[axis].value;
+        
+        // rjf: mutate box to have this size
+        b->fixed_size.v[axis] = size;
+      }break;
+    }
   }
-  
   ProfEnd();
 }
 
 internal void
-ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
+ui_calc_sizes_downwards_dependent__in_place(UI_Box *root, Axis2 axis)
+{
+  ProfBeginFunction();
+  UI_BoxRec rec = {0};
+  for(UI_Box *box = root; !ui_box_is_nil(box); box = rec.next)
+  {
+    rec = ui_box_rec_df_pre(box, root);
+    S32 pop_idx = 0;
+    for(UI_Box *b = box;
+        !ui_box_is_nil(b) && pop_idx <= rec.pop_count;
+        b = b->parent, pop_idx += 1)
+    {
+      if(b->pref_size[axis].kind == UI_SizeKind_ChildrenSum)
+      {
+        F32 sum = 0;
+        for(UI_Box *child = b->first; !ui_box_is_nil(child); child = child->next)
+        {
+          if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+          {
+            if(axis == b->child_layout_axis)
+            {
+              sum += child->fixed_size.v[axis];
+            }
+            else
+            {
+              sum = Max(sum, child->fixed_size.v[axis]);
+            }
+          }
+        }
+        b->fixed_size.v[axis] = sum;
+      }
+    }
+  }
+  ProfEnd();
+}
+
+internal void
+ui_layout_enforce_constraints__in_place(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  
-  // NOTE(rjf): The "layout axis" is the direction in which children
-  // of some node are intended to be laid out.
-  
-  //- rjf: fixup children sizes (if we're solving along the *non-layout* axis)
-  if(axis != root->child_layout_axis && !(root->flags & (UI_BoxFlag_AllowOverflowX << axis)))
+  for(UI_Box *box = root; !ui_box_is_nil(box); box = ui_box_rec_df_pre(box, root).next)
   {
-    F32 allowed_size = root->fixed_size.v[axis];
-    for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+    //- rjf: fixup children sizes (if we're solving along the *non-layout* axis)
+    if(axis != box->child_layout_axis && !(box->flags & (UI_BoxFlag_AllowOverflowX << axis)))
     {
-      if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+      F32 allowed_size = box->fixed_size.v[axis];
+      for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
       {
-        F32 child_size = child->fixed_size.v[axis];
-        F32 violation = child_size - allowed_size;
-        F32 max_fixup = child_size;
-        F32 fixup = Clamp(0, violation, max_fixup);
-        if(fixup > 0)
+        if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
         {
-          child->fixed_size.v[axis] -= fixup;
+          F32 child_size = child->fixed_size.v[axis];
+          F32 violation = child_size - allowed_size;
+          F32 max_fixup = child_size;
+          F32 fixup = Clamp(0, violation, max_fixup);
+          if(fixup > 0)
+          {
+            child->fixed_size.v[axis] -= fixup;
+          }
         }
       }
     }
     
-  }
-  
-  //- rjf: fixup children sizes (in the direction of the layout axis)
-  if(axis == root->child_layout_axis && !(root->flags & (UI_BoxFlag_AllowOverflowX << axis)))
-  {
-    // rjf: figure out total allowed size & total size
-    F32 total_allowed_size = root->fixed_size.v[axis];
-    F32 total_size = 0;
-    F32 total_weighted_size = 0;
-    for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+    //- rjf: fixup children sizes (in the direction of the layout axis)
+    if(axis == box->child_layout_axis && !(box->flags & (UI_BoxFlag_AllowOverflowX << axis)))
     {
-      if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+      // rjf: figure out total allowed size & total size
+      F32 total_allowed_size = box->fixed_size.v[axis];
+      F32 total_size = 0;
+      F32 total_weighted_size = 0;
+      for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
       {
-        total_size += child->fixed_size.v[axis];
-        total_weighted_size += child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
-      }
-    }
-    
-    // rjf: if we have a violation, we need to subtract some amount from all children
-    F32 violation = total_size - total_allowed_size;
-    if(violation > 0)
-    {
-      // rjf: figure out how much we can take in totality
-      F32 child_fixup_sum = 0;
-      F32 *child_fixups = push_array(scratch.arena, F32, root->child_count);
-      {
-        U64 child_idx = 0;
-        for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
+        if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
         {
-          if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
-          {
-            F32 fixup_size_this_child = child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
-            fixup_size_this_child = ClampBot(0, fixup_size_this_child);
-            child_fixups[child_idx] = fixup_size_this_child;
-            child_fixup_sum += fixup_size_this_child;
-          }
+          total_size += child->fixed_size.v[axis];
+          total_weighted_size += child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
         }
       }
       
-      // rjf: fixup child sizes
+      // rjf: if we have a violation, we need to subtract some amount from all children
+      F32 violation = total_size - total_allowed_size;
+      if(violation > 0 && total_weighted_size > 0)
       {
-        U64 child_idx = 0;
-        for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
+        Temp temp = temp_begin(scratch.arena);
+        
+        // rjf: figure out how much we can take in totality
+        F32 child_fixup_sum = 0;
+        F32 *child_fixups = push_array(temp.arena, F32, box->child_count);
         {
-          if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+          U64 child_idx = 0;
+          for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
           {
-            F32 fixup_pct = (violation / total_weighted_size);
-            fixup_pct = Clamp(0, fixup_pct, 1);
-            child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
+            if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+            {
+              F32 fixup_size_this_child = child->fixed_size.v[axis] * (1-child->pref_size[axis].strictness);
+              fixup_size_this_child = ClampBot(0, fixup_size_this_child);
+              child_fixups[child_idx] = fixup_size_this_child;
+              child_fixup_sum += fixup_size_this_child;
+            }
           }
+        }
+        
+        // rjf: fixup child sizes
+        {
+          U64 child_idx = 0;
+          for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next, child_idx += 1)
+          {
+            if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+            {
+              F32 fixup_pct = (violation / total_weighted_size);
+              fixup_pct = Clamp(0, fixup_pct, 1);
+              child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
+            }
+          }
+        }
+        
+        temp_end(temp);
+      }
+    }
+    
+    //- rjf: fixup upwards-relative sizes
+    if(box->flags & (UI_BoxFlag_AllowOverflowX << axis))
+    {
+      for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
+      {
+        if(child->pref_size[axis].kind == UI_SizeKind_ParentPct)
+        {
+          child->fixed_size.v[axis] = box->fixed_size.v[axis] * child->pref_size[axis].value;
         }
       }
     }
-  }
-  
-  //- rjf: fixup upwards-relative sizes
-  if(root->flags & (UI_BoxFlag_AllowOverflowX << axis))
-  {
-    for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+    
+    //- rjf: enforce clamps
+    for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
     {
-      if(child->pref_size[axis].kind == UI_SizeKind_ParentPct)
-      {
-        child->fixed_size.v[axis] = root->fixed_size.v[axis] * child->pref_size[axis].value;
-      }
+      child->fixed_size.v[axis] = Max(child->fixed_size.v[axis], child->min_size.v[axis]);
     }
   }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_layout_enforce_constraints__in_place_rec(child, axis);
-  }
-  
   scratch_end(scratch);
   ProfEnd();
 }
 
 internal void
-ui_layout_position__in_place_rec(UI_Box *root, Axis2 axis)
+ui_layout_position__in_place(UI_Box *root, Axis2 axis)
 {
   ProfBeginFunction();
-  F32 layout_position = 0;
-  
-  //- rjf: lay out children
-  F32 bounds = 0;
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
+  for(UI_Box *box = root; !ui_box_is_nil(box); box = ui_box_rec_df_pre(box, root).next)
   {
-    // rjf: grab original position
-    F32 original_position = Min(child->rect.p0.v[axis], child->rect.p1.v[axis]);
+    F32 layout_position = 0;
     
-    // rjf: calculate fixed position & size
-    if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
+    //- rjf: lay out children
+    F32 bounds = 0;
+    for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
     {
-      child->fixed_position.v[axis] = layout_position;
-      if(root->child_layout_axis == axis)
+      // rjf: grab original position
+      F32 original_position = Min(child->rect.p0.v[axis], child->rect.p1.v[axis]);
+      
+      // rjf: calculate fixed position & size
+      if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
       {
-        layout_position += child->fixed_size.v[axis];
-        bounds += child->fixed_size.v[axis];
+        child->fixed_position.v[axis] = layout_position;
+        if(box->child_layout_axis == axis)
+        {
+          layout_position += child->fixed_size.v[axis];
+          bounds += child->fixed_size.v[axis];
+        }
+        else
+        {
+          bounds = Max(bounds, child->fixed_size.v[axis]);
+        }
+      }
+      
+      // rjf: determine final rect for child, given fixed_position & size
+      if(child->flags & (UI_BoxFlag_AnimatePosX<<axis))
+      {
+        if(child->first_touched_build_index == child->last_touched_build_index)
+        {
+          child->fixed_position_animated = child->fixed_position;
+        }
+        child->rect.p0.v[axis] = box->rect.p0.v[axis] + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
       }
       else
       {
-        bounds = Max(bounds, child->fixed_size.v[axis]);
+        child->rect.p0.v[axis] = box->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
       }
+      child->rect.p1.v[axis] = child->rect.p0.v[axis] + child->fixed_size.v[axis];
+      child->rect.p0.x = floor_f32(child->rect.p0.x);
+      child->rect.p0.y = floor_f32(child->rect.p0.y);
+      child->rect.p1.x = floor_f32(child->rect.p1.x);
+      child->rect.p1.y = floor_f32(child->rect.p1.y);
+      
+      // rjf: grab new position
+      F32 new_position = Min(child->rect.p0.v[axis], child->rect.p1.v[axis]);
+      
+      // rjf: store position delta
+      child->position_delta.v[axis] = new_position - original_position;
     }
     
-    // rjf: determine final rect for child, given fixed_position & size
-    if(child->flags & (UI_BoxFlag_AnimatePosX<<axis))
+    //- rjf: store view bounds
     {
-      if(child->first_touched_build_index == child->last_touched_build_index)
-      {
-        child->fixed_position_animated = child->fixed_position;
-      }
-      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(root->view_off.v[axis]);
+      box->view_bounds.v[axis] = bounds;
     }
-    else
-    {
-      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(root->view_off.v[axis]);
-    }
-    child->rect.p1.v[axis] = child->rect.p0.v[axis] + child->fixed_size.v[axis];
-    child->rect.p0.x = floor_f32(child->rect.p0.x);
-    child->rect.p0.y = floor_f32(child->rect.p0.y);
-    child->rect.p1.x = floor_f32(child->rect.p1.x);
-    child->rect.p1.y = floor_f32(child->rect.p1.y);
-    
-    // rjf: grab new position
-    F32 new_position = Min(child->rect.p0.v[axis], child->rect.p1.v[axis]);
-    
-    // rjf: store position delta
-    child->position_delta.v[axis] = new_position - original_position;
   }
-  
-  //- rjf: store view bounds
-  {
-    root->view_bounds.v[axis] = bounds;
-  }
-  
-  //- rjf: recurse
-  for(UI_Box *child = root->first; !ui_box_is_nil(child); child = child->next)
-  {
-    ui_layout_position__in_place_rec(child, axis);
-  }
-  
   ProfEnd();
 }
 
@@ -1878,11 +1965,11 @@ internal void
 ui_layout_root(UI_Box *root, Axis2 axis)
 {
   ProfBegin("ui layout pass (%s)", axis == Axis2_X ? "x" : "y");
-  ui_calc_sizes_standalone__in_place_rec(root, axis);
-  ui_calc_sizes_upwards_dependent__in_place_rec(root, axis);
-  ui_calc_sizes_downwards_dependent__in_place_rec(root, axis);
-  ui_layout_enforce_constraints__in_place_rec(root, axis);
-  ui_layout_position__in_place_rec(root, axis);
+  ui_calc_sizes_standalone__in_place(root, axis);
+  ui_calc_sizes_upwards_dependent__in_place(root, axis);
+  ui_calc_sizes_downwards_dependent__in_place(root, axis);
+  ui_layout_enforce_constraints__in_place(root, axis);
+  ui_layout_position__in_place(root, axis);
   ProfEnd();
 }
 
@@ -1911,13 +1998,17 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
   ui_push_text_raster_flags(ui_bottom_text_raster_flags());
-  ui_push_palette(ui_bottom_palette());
+  ui_push_font_size(ui_bottom_font_size());
+  ui_push_tag(str8_lit("."));
+  ui_push_tag(str8_lit("floating"));
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
-  ui_pop_palette();
+  ui_pop_tag();
+  ui_pop_tag();
+  ui_pop_font_size();
   ui_pop_text_raster_flags();
   ui_pop_flags();
   ui_pop_parent();
@@ -1928,10 +2019,9 @@ internal void
 ui_tooltip_begin(void)
 {
   ui_tooltip_begin_base();
-  ui_push_palette(ui_state->widget_palette_info.tooltip_palette);
-  ui_set_next_squish(0.25f-ui_state->tooltip_open_t*0.25f);
+  ui_set_next_squish(0.1f-ui_state->tooltip_open_t*0.1f);
   ui_set_next_transparency(1-ui_state->tooltip_open_t);
-  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow)
+  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_SquishAnchored)
     UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     UI_CornerRadius(ui_top_font_size()*0.25f)
@@ -1960,7 +2050,6 @@ ui_tooltip_end(void)
   ui_row_end();
   UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_column_end();
-  ui_pop_palette();
   ui_tooltip_end_base();
 }
 
@@ -1998,9 +2087,9 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_pref_height(ui_bottom_pref_height());
   ui_push_focus_hot(UI_FocusKind_Root);
   ui_push_focus_active(UI_FocusKind_Root);
-  ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
+  ui_push_tag(str8_lit("."));
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
-  if(is_open != 0)
+  if(is_open != 0) UI_TagF("floating")
   {
     ui_state->ctx_menu_touched_this_frame = 1;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_RoundChildrenByParent;
@@ -2011,8 +2100,10 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
-    ui_state->ctx_menu_root->palette = ui_top_palette();
+    ui_state->ctx_menu_root->tags_key = ui_top_tags_key();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
+    ui_state->ctx_menu_root->text_color = ui_color_from_name(str8_lit("text"));
+    ui_state->ctx_menu_root->background_color = ui_color_from_name(str8_lit("background"));
     ui_spacer(ui_em(1.f, 1.f));
   }
   ui_state->is_in_open_ctx_menu = is_open;
@@ -2027,7 +2118,7 @@ ui_end_ctx_menu(void)
     ui_state->is_in_open_ctx_menu = 0;
     ui_spacer(ui_em(1.f, 1.f));
   }
-  ui_pop_palette();
+  ui_pop_tag();
   ui_pop_focus_active();
   ui_pop_focus_hot();
   ui_pop_pref_width();
@@ -2161,27 +2252,170 @@ ui_set_auto_focus_hot_key(UI_Key key)
   }
 }
 
-//- rjf: palette forming
+//- rjf: current style tags key
 
-internal UI_Palette *
-ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
+internal UI_Key
+ui_top_tags_key(void)
 {
-  UI_Palette *palette = push_array(ui_build_arena(), UI_Palette, 1);
-  if(base != 0)
+  UI_Key key = ui_key_zero();
+  if(ui_state->tags_key_stack_top != 0)
   {
-    MemoryCopyStruct(palette, base);
+    key = ui_state->tags_key_stack_top->key;
   }
-  for EachEnumVal(UI_ColorCode, code)
+  return key;
+}
+
+//- rjf: theme color lookups
+
+internal Vec4F32
+ui_color_from_name(String8 name)
+{
+  Vec4F32 result = ui_color_from_tags_key_name(ui_top_tags_key(), name);
+  return result;
+}
+
+internal Vec4F32
+ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
+{
+  Vec4F32 result = {0};
+  if(ui_state->theme_pattern_cache_slots_count && extras.count > 0)
   {
-    if(overrides->colors[code].x != 0 ||
-       overrides->colors[code].y != 0 ||
-       overrides->colors[code].z != 0 ||
-       overrides->colors[code].w != 0)
+    //- rjf: compute final key, mixing (tags_key, extras)
+    UI_Key final_key = key;
+    for EachIndex(idx, extras.count)
     {
-      palette->colors[code] = overrides->colors[code];
+      final_key = ui_key_from_string(final_key, extras.v[idx]);
+    }
+    
+    //- rjf: map to existing node
+    U64 slot_idx = final_key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+    UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
+    UI_ThemePatternCacheNode *node = 0;
+    for(UI_ThemePatternCacheNode *n = slot->first;
+        n != 0;
+        n = n->slot_next)
+    {
+      if(ui_key_match(n->key, final_key))
+      {
+        node = n;
+      }
+    }
+    
+    //- rjf: no node, or this node is stale? create and/or update
+    if(node == 0 || node->last_build_index_accessed < ui_state->build_index)
+    {
+      // rjf: map tags_key (without name) -> full list of tags
+      String8Array tags = {0};
+      {
+        U64 tags_cache_slot_idx = key.u64[0]%ui_state->tags_cache_slots_count;
+        UI_TagsCacheSlot *tags_cache_slot = &ui_state->tags_cache_slots[tags_cache_slot_idx];
+        for(UI_TagsCacheNode *n = tags_cache_slot->first; n != 0; n = n->next)
+        {
+          if(ui_key_match(n->key, key))
+          {
+            tags = n->tags;
+            break;
+          }
+        }
+      }
+      
+      // rjf: map tags to theme pattern
+      UI_Theme *theme = ui_state->theme;
+      UI_ThemePattern *pattern = 0;
+      U64 best_match_count = 0;
+      for(U64 idx = 0; idx < theme->patterns_count; idx += 1)
+      {
+        UI_ThemePattern *p = &theme->patterns[idx];
+        U64 match_count = 0;
+        B32 name_matches = 0;
+        B32 all_p_tags_in_key = 1;
+        for EachIndex(p_tags_idx, p->tags.count)
+        {
+          B32 p_tag_in_key = 0;
+          for EachIndex(key_tags_idx, tags.count + extras.count)
+          {
+            String8 key_string = key_tags_idx < tags.count ? tags.v[key_tags_idx] : extras.v[key_tags_idx - tags.count];
+            if(str8_match(p->tags.v[p_tags_idx], key_string, 0))
+            {
+              if(key_tags_idx == tags.count + extras.count - 1)
+              {
+                name_matches = 1;
+              }
+              p_tag_in_key = 1;
+              match_count += 1;
+              break;
+            }
+          }
+          if(!p_tag_in_key)
+          {
+            all_p_tags_in_key = 0;
+            break;
+          }
+        }
+        if(name_matches && all_p_tags_in_key && match_count > best_match_count)
+        {
+          pattern = p;
+          best_match_count = match_count;
+        }
+        if(match_count == tags.count + extras.count)
+        {
+          break;
+        }
+      }
+      
+      // rjf: store in (key, name) -> (pattern) cache
+      B32 node_is_new = 0;
+      if(node == 0)
+      {
+        node_is_new = 1;
+        node = ui_state->theme_pattern_cache_node_free;
+        if(node != 0)
+        {
+          SLLStackPop_N(ui_state->theme_pattern_cache_node_free, slot_next);
+        }
+        else
+        {
+          node = push_array(ui_state->arena, UI_ThemePatternCacheNode, 1);
+        }
+        DLLPushBack_NP(slot->first, slot->last, node, slot_next, slot_prev);
+        DLLPushBack_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
+        node->key = final_key;
+      }
+      
+      // rjf: update node's target color
+      if(pattern != 0)
+      {
+        node->target_rgba = pattern->linear;
+        if(node_is_new)
+        {
+          node->current_rgba = node->target_rgba;
+        }
+      }
+    }
+    
+    //- rjf: mark this node as most-recently-used
+    if(node != 0 && node->last_build_index_accessed < ui_state->build_index)
+    {
+      node->last_build_index_accessed = ui_state->build_index;
+      DLLRemove_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
+      DLLPushBack_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, node, lru_next, lru_prev);
+    }
+    
+    //- rjf: grab resultant color
+    if(node != 0)
+    {
+      result = node->current_rgba;
     }
   }
-  return palette;
+  return result;
+}
+
+internal Vec4F32
+ui_color_from_tags_key_name(UI_Key key, String8 name)
+{
+  String8Array extras = {&name, 1};
+  Vec4F32 result = ui_color_from_tags_key_extras(key, extras);
+  return result;
 }
 
 //- rjf: box node construction
@@ -2256,7 +2490,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: fill box
   {
     box->key = key;
-    box->flags = flags|ui_state->flags_stack.top->v;
+    box->flags = (flags | ui_state->flags_stack.top->v) & ~ui_state->omit_flags_stack.top->v;
     box->fastpath_codepoint = ui_state->fastpath_codepoint_stack.top->v;
     box->group_key = ui_state->group_key_stack.top->v;
     
@@ -2305,6 +2539,8 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     {
       box->pref_size[Axis2_Y] = ui_state->pref_height_stack.top->v;
     }
+    box->min_size.v[Axis2_X] = ui_state->min_width_stack.top->v;
+    box->min_size.v[Axis2_Y] = ui_state->min_height_stack.top->v;
     
     B32 is_auto_focus_active = ui_is_key_auto_focus_active(key);
     B32 is_auto_focus_hot    = ui_is_key_auto_focus_hot(key);
@@ -2329,7 +2565,6 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     
     box->text_align = ui_state->text_alignment_stack.top->v;
     box->child_layout_axis = ui_state->child_layout_axis_stack.top->v;
-    box->palette = ui_state->palette_stack.top->v;
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
@@ -2344,6 +2579,33 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
+    box->tags_key = ui_key_zero();
+    if(ui_state->tags_key_stack_top != 0)
+    {
+      box->tags_key = ui_state->tags_key_stack_top->key;
+    }
+    if(box->flags & UI_BoxFlag_DrawBackground)
+    {
+      if(ui_state->background_color_stack.top != &ui_state->background_color_nil_stack_top)
+      {
+        box->background_color = ui_state->background_color_stack.top->v;
+      }
+      else
+      {
+        box->background_color = ui_color_from_name(str8_lit("background"));
+      }
+    }
+    if(box->flags & UI_BoxFlag_DrawText)
+    {
+      if(ui_state->text_color_stack.top != &ui_state->text_color_nil_stack_top)
+      {
+        box->text_color = ui_state->text_color_stack.top->v;
+      }
+      else
+      {
+        box->text_color = ui_color_from_name(str8_lit("text"));
+      }
+    }
   }
   
   //- rjf: auto-pop all stacks
@@ -2417,13 +2679,14 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
-  UI_ColorCode text_color_code = (box->flags & UI_BoxFlag_DrawTextWeak ? UI_ColorCode_TextWeak : UI_ColorCode_Text);
+  Vec4F32 text_color = box->text_color;
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
-    DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+    DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+    DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+    box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+    box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2434,17 +2697,19 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      DR_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
-      DR_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FStrNode pst_fstr_n = {0,                   {str8_skip(display_string, fpcp_pos+fpcp.size), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrNode cdp_fstr_n = {&pst_fstr_n, {str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), {box->font, box->text_raster_flags, text_color, box->font_size, 3.f, 0}}};
+      DR_FStrNode pre_fstr_n = {&cdp_fstr_n, {str8_prefix(display_string, fpcp_pos), {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&pre_fstr_n, &pst_fstr_n, 3};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     else
     {
-      DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
-      DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FStrNode fstr_n = {0, {display_string, {box->font, box->text_raster_flags, text_color, box->font_size, 0, 0}}};
+      DR_FStrList fstrs = {&fstr_n, &fstr_n, 1};
+      box->display_fstrs = dr_fstrs_copy(ui_build_arena(), &fstrs);
+      box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
     }
     scratch_end(scratch);
   }
@@ -2452,19 +2717,12 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings)
+ui_box_equip_display_fstrs(UI_Box *box, DR_FStrList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = dr_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
-}
-
-internal inline void
-ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, DR_FancyRunList *runs)
-{
-  box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = push_str8_copy(ui_build_arena(), string);
-  box->display_string_runs = dr_fancy_run_list_copy(ui_build_arena(), runs);
+  box->string = dr_string_from_fstrs(ui_build_arena(), strings);
+  box->display_fstrs = dr_fstrs_copy(ui_build_arena(), strings);
+  box->display_fruns = dr_fruns_from_fstrs(ui_build_arena(), box->tab_size, &box->display_fstrs);
 }
 
 internal inline void
@@ -2515,7 +2773,7 @@ ui_box_text_position(UI_Box *box)
   FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   FNT_Metrics font_metrics = fnt_metrics_from_tag_size(font, font_size);
-  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f) + font_metrics.capital_height/2.f - 1.f;
+  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f) + font_metrics.ascent/2.f - 2.f;
   if(!fnt_tag_match(font, ui_icon_font()))
   {
     result.y += font_metrics.descent/2;
@@ -2529,13 +2787,13 @@ ui_box_text_position(UI_Box *box)
     }break;
     case UI_TextAlign_Center:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
     {
-      Vec2F32 text_dim = box->display_string_runs.dim;
+      Vec2F32 text_dim = box->display_fruns.dim;
       result.x = round_f32((box->rect.p1.x) - text_dim.x - box->text_padding);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
@@ -2695,6 +2953,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: focus is hot & copy event -> remember to copy this box tree's text content
     if(is_focus_hot &&
        evt->flags & UI_EventFlag_Copy &&
+       !(evt->flags & UI_EventFlag_Delete) &&
        !ui_key_match(ui_key_zero(), box->key))
     {
       ui_state->clipboard_copy_key = box->key;
@@ -2734,7 +2993,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_Modifier_Ctrl &&
+       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
@@ -2755,7 +3014,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_Modifier_Ctrl &&
+       (evt->modifiers == 0 || evt->modifiers == OS_Modifier_Shift) &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
@@ -2979,6 +3238,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
 {
   // rjf: get animation cache node
   UI_AnimNode *node = &ui_nil_anim_node;
+  if(ui_state != 0)
   {
     U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
     UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
@@ -3014,22 +3274,193 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   }
   
   // rjf: touch node & update parameters - grab current
-  node->last_touched_build_index = ui_state->build_index;
-  DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
-  MemoryCopyStruct(&node->params, params);
-  if(node->params.epsilon == 0)
+  if(node != &ui_nil_anim_node)
   {
-    node->params.epsilon = 0.01f;
-  }
-  if(node->params.rate == 1)
-  {
-    node->current = node->params.target;
+    node->last_touched_build_index = ui_state->build_index;
+    DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
+    if(params->reset)
+    {
+      node->current = params->initial;
+    }
+    MemoryCopyStruct(&node->params, params);
+    if(node->params.epsilon == 0)
+    {
+      node->params.epsilon = 0.005f;
+    }
+    if(node->params.rate == 1 || abs_f32(node->current - node->params.target) < abs_f32(node->params.epsilon))
+    {
+      node->current = node->params.target;
+    }
   }
   return node->current;
 }
 
 ////////////////////////////////
 //~ rjf: Stacks
+
+#define UI_StackTopImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.top->v;
+
+#define UI_StackBottomImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.bottom_val;
+
+#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+if(node->next == &state->name_lower##_nil_stack_top)\
+{\
+state->name_lower##_stack.bottom_val = (node->v);\
+}\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+#define UI_StackPopImpl(state, name_upper, name_lower) \
+UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
+if(popped != &state->name_lower##_nil_stack_top)\
+{\
+SLLStackPop(state->name_lower##_stack.top);\
+SLLStackPush(state->name_lower##_stack.free, popped);\
+state->name_lower##_stack.auto_pop = 0;\
+state->name_lower##_stack.gen += 1;\
+}\
+return popped->v;\
+
+#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+state->name_lower##_stack.auto_pop = 1;\
+state->name_lower##_stack.gen += 1;\
+return old_value;
+
+internal void
+ui__push_tags_key_from_appended_string(String8 string)
+{
+  B32 is_new_root = str8_match(str8_lit("."), string, 0);
+  
+  // rjf: generate new key, by combining hash of this new string with the top
+  // of the tags key stack
+  UI_Key seed_key = {0};
+  if(!is_new_root && ui_state->tags_key_stack_top != 0)
+  {
+    seed_key = ui_state->tags_key_stack_top->key;
+  }
+  UI_Key key = seed_key;
+  if(!is_new_root && string.size > 0)
+  {
+    key = ui_key_from_string(seed_key, string);
+  }
+  
+  // rjf: push this new key onto the stack
+  {
+    UI_TagsKeyStackNode *node = ui_state->tags_key_stack_free;
+    if(node != 0)
+    {
+      SLLStackPop(ui_state->tags_key_stack_free);
+    }
+    else
+    {
+      node = push_array(ui_build_arena(), UI_TagsKeyStackNode, 1);
+    }
+    SLLStackPush(ui_state->tags_key_stack_top, node);
+    node->key = key;
+  }
+  
+  // rjf: store in tags cache
+  if(!is_new_root)
+  {
+    U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
+    UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
+    UI_TagsCacheNode *node = 0;
+    for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(ui_key_match(n->key, key))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8List tags = {0};
+      if(string.size != 0)
+      {
+        str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), string));
+      }
+      for(UI_TagNode *n = ui_state->tag_stack.top; n != 0; n = n->next)
+      {
+        if(n->v.size == 1 && n->v.str[0] == '.')
+        {
+          break;
+        }
+        if(n->v.size != 0)
+        {
+          str8_list_push(scratch.arena, &tags, push_str8_copy(ui_build_arena(), n->v));
+        }
+      }
+      node = push_array(ui_build_arena(), UI_TagsCacheNode, 1);
+      SLLQueuePush(slot->first, slot->last, node);
+      node->key = key;
+      node->tags = str8_array_from_list(ui_build_arena(), &tags);
+      scratch_end(scratch);
+    }
+  }
+}
+
+internal void
+ui__pop_tags_key(void)
+{
+  if(ui_state->tags_key_stack_top != 0)
+  {
+    UI_TagsKeyStackNode *popped = ui_state->tags_key_stack_top;
+    SLLStackPop(ui_state->tags_key_stack_top);
+    SLLStackPush(ui_state->tags_key_stack_free, popped);
+  }
+}
+
+//- rjf: manual implementations
+
+internal String8
+ui_top_tag(void)
+{
+  UI_StackTopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_bottom_tag(void)
+{
+  UI_StackBottomImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_push_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackPushImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
+
+internal String8
+ui_pop_tag(void)
+{
+  ui__pop_tags_key();
+  UI_StackPopImpl(ui_state, Tag, tag)
+}
+
+internal String8
+ui_set_next_tag(String8 v)
+{
+  ui__push_tags_key_from_appended_string(v);
+  UI_StackSetNextImpl(ui_state, Tag, tag, String8, push_str8_copy(ui_build_arena(), v))
+}
 
 //- rjf: helpers
 
@@ -3116,47 +3547,34 @@ ui_pop_corner_radius(void)
   ui_pop_corner_radius_11();
 }
 
+internal void
+ui_push_tagf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  ui_push_tag(string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
+internal F32
+ui_top_px_height(void)
+{
+  F32 result = ui_top_font_size();
+  for(UI_PrefHeightNode *n = ui_state->pref_height_stack.top; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_SizeKind_Pixels)
+    {
+      result = n->v.value;
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Generated Code
-
-#define UI_StackTopImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.top->v;
-
-#define UI_StackBottomImpl(state, name_upper, name_lower) \
-return state->name_lower##_stack.bottom_val;
-
-#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-if(node->next == &state->name_lower##_nil_stack_top)\
-{\
-state->name_lower##_stack.bottom_val = (new_value);\
-}\
-state->name_lower##_stack.auto_pop = 0;\
-return old_value;
-
-#define UI_StackPopImpl(state, name_upper, name_lower) \
-UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
-if(popped != &state->name_lower##_nil_stack_top)\
-{\
-SLLStackPop(state->name_lower##_stack.top);\
-SLLStackPush(state->name_lower##_stack.free, popped);\
-state->name_lower##_stack.auto_pop = 0;\
-}\
-return popped->v;\
-
-#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
-UI_##name_upper##Node *node = state->name_lower##_stack.free;\
-if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
-else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
-type old_value = state->name_lower##_stack.top->v;\
-node->v = new_value;\
-SLLStackPush(state->name_lower##_stack.top, node);\
-state->name_lower##_stack.auto_pop = 1;\
-return old_value;
 
 #include "generated/ui.meta.c"

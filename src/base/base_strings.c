@@ -242,7 +242,7 @@ str8_cstring_capped_reverse(void *raw_start, void *raw_cap)
   for(; ptr > start; )
   {
     ptr -= 1;
-
+    
     if (*ptr == '\0')
     {
       break;
@@ -427,23 +427,53 @@ str8_chop(String8 str, U64 amt){
 }
 
 internal String8
-str8_skip_chop_whitespace(String8 string){
+str8_skip_chop_whitespace(String8 string)
+{
   U8 *first = string.str;
   U8 *opl = first + string.size;
-  for (;first < opl; first += 1){
-    if (!char_is_space(*first)){
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_space(*first))
+    {
       break;
     }
   }
-  for (;opl > first;){
+  for(;opl > first;)
+  {
     opl -= 1;
-    if (!char_is_space(*opl)){
+    if(!char_is_space(*opl))
+    {
       opl += 1;
       break;
     }
   }
   String8 result = str8_range(first, opl);
-  return(result);
+  return result;
+}
+
+internal String8
+str8_skip_chop_slashes(String8 string)
+{
+  U8 *first = string.str;
+  U8 *opl = first + string.size;
+  for(;first < opl; first += 1)
+  {
+    if(!char_is_slash(*first))
+    {
+      break;
+    }
+  }
+  for(;opl > first;)
+  {
+    opl -= 1;
+    if(!char_is_slash(*opl))
+    {
+      opl += 1;
+      break;
+    }
+  }
+  String8 result = str8_range(first, opl);
+  return result;
 }
 
 ////////////////////////////////
@@ -619,7 +649,7 @@ internal String8
 str8_from_memory_size(Arena *arena, U64 size)
 {
   String8 result;
-
+  
   if(size < KB(1))
   {
     result = push_str8f(arena, "%llu Bytes", size);
@@ -640,7 +670,7 @@ str8_from_memory_size(Arena *arena, U64 size)
   {
     result = push_str8f(arena, "%llu.%02llu TiB", size / TB(1), ((size * 100) / TB(1)) % 100);
   }
-
+  
   return result;
 }
 
@@ -648,7 +678,7 @@ internal String8
 str8_from_count(Arena *arena, U64 count)
 {
   String8 result;
-
+  
   if(count < 1 * 1000)
   {
     result = push_str8f(arena, "%llu", count);
@@ -689,7 +719,7 @@ str8_from_count(Arena *arena, U64 count)
       result = push_str8f(arena, "%lluB", count / 1000000000, frac);
     }
   }
-
+  
   return result;
 }
 
@@ -1115,6 +1145,13 @@ str8_list_from_flags(Arena *arena, String8List *list,
 //~ rjf; String Arrays
 
 internal String8Array
+str8_array_zero(void)
+{
+  String8Array result = {0};
+  return result;
+}
+
+internal String8Array
 str8_array_from_list(Arena *arena, String8List *list)
 {
   String8Array array;
@@ -1137,44 +1174,103 @@ str8_array_reserve(Arena *arena, U64 count)
   return arr;
 }
 
+internal String8Array
+str8_array_copy(Arena *arena, String8Array array)
+{
+  String8Array result = {0};
+  result.count = array.count;
+  result.v = push_array(arena, String8, result.count);
+  for EachIndex(idx, result.count)
+  {
+    result.v[idx] = push_str8_copy(arena, array.v[idx]);
+  }
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: String Version Helpers
+
+internal U64
+version_from_str8(String8 string)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  U64 version_major = 0;
+  U64 version_minor = 0;
+  U64 version_patch = 0;
+  String8List version_parts = str8_split(scratch.arena, string, (U8 *)".", 1, 0);
+  if(version_parts.first &&
+     version_parts.first->next &&
+     version_parts.first->next->next)
+  {
+    try_u64_from_str8_c_rules(version_parts.first->string, &version_major);
+    try_u64_from_str8_c_rules(version_parts.first->next->string, &version_minor);
+    try_u64_from_str8_c_rules(version_parts.first->next->next->string, &version_patch);
+    result = Version(version_major, version_minor, version_patch);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+str8_from_version(Arena *arena, U64 version)
+{
+  U64 version_major = MajorFromVersion(version);
+  U64 version_minor = MinorFromVersion(version);
+  U64 version_patch = PatchFromVersion(version);
+  String8 result = push_str8f(arena, "%I64d.%I64d.%I64d", version_major, version_minor, version_patch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String Path Helpers
 
 internal String8
-str8_chop_last_slash(String8 string){
-  if (string.size > 0){
+str8_chop_last_slash(String8 string)
+{
+  if(string.size > 0)
+  {
     U8 *ptr = string.str + string.size - 1;
-    for (;ptr >= string.str; ptr -= 1){
-      if (*ptr == '/' || *ptr == '\\'){
+    for(;ptr >= string.str; ptr -= 1)
+    {
+      if(*ptr == '/' || *ptr == '\\')
+      {
         break;
       }
     }
-    if (ptr >= string.str){
+    if(ptr >= string.str)
+    {
       string.size = (U64)(ptr - string.str);
     }
-    else{
+    else
+    {
       string.size = 0;
     }
   }
-  return(string);
+  return string;
 }
 
 internal String8
-str8_skip_last_slash(String8 string){
-  if (string.size > 0){
+str8_skip_last_slash(String8 string)
+{
+  if(string.size > 0)
+  {
     U8 *ptr = string.str + string.size - 1;
-    for (;ptr >= string.str; ptr -= 1){
-      if (*ptr == '/' || *ptr == '\\'){
+    for(;ptr >= string.str; ptr -= 1)
+    {
+      if(*ptr == '/' || *ptr == '\\')
+      {
         break;
       }
     }
-    if (ptr >= string.str){
+    if(ptr >= string.str)
+    {
       ptr += 1;
       string.size = (U64)(string.str + string.size - ptr);
       string.str = ptr;
     }
   }
-  return(string);
+  return string;
 }
 
 internal String8
@@ -1182,80 +1278,94 @@ str8_chop_last_dot(String8 string)
 {
   String8 result = string;
   U64 p = string.size;
-  for (;p > 0;){
+  for(;p > 0;)
+  {
     p -= 1;
-    if (string.str[p] == '.'){
+    if(string.str[p] == '.')
+    {
       result = str8_prefix(string, p);
       break;
     }
   }
-  return(result);
+  return result;
 }
 
 internal String8
-str8_skip_last_dot(String8 string){
+str8_skip_last_dot(String8 string)
+{
   String8 result = string;
   U64 p = string.size;
-  for (;p > 0;){
+  for(;p > 0;)
+  {
     p -= 1;
-    if (string.str[p] == '.'){
+    if(string.str[p] == '.')
+    {
       result = str8_skip(string, p + 1);
       break;
     }
   }
-  return(result);
+  return result;
 }
 
 internal PathStyle
-path_style_from_str8(String8 string){
+path_style_from_str8(String8 string)
+{
   PathStyle result = PathStyle_Relative;
-  if (string.size >= 1 && string.str[0] == '/'){
+  if(string.size >= 1 && string.str[0] == '/')
+  {
     result = PathStyle_UnixAbsolute;
   }
-  else if (string.size >= 2 &&
-           char_is_alpha(string.str[0]) &&
-           string.str[1] == ':'){
-    if (string.size == 2 ||
-        char_is_slash(string.str[2])){
+  else if(string.size >= 2 &&
+          char_is_alpha(string.str[0]) &&
+          string.str[1] == ':')
+  {
+    if(string.size == 2 || char_is_slash(string.str[2]))
+    {
       result = PathStyle_WindowsAbsolute;
     }
   }
-  return(result);
+  return result;
 }
 
 internal String8List
-str8_split_path(Arena *arena, String8 string){
+str8_split_path(Arena *arena, String8 string)
+{
   String8List result = str8_split(arena, string, (U8*)"/\\", 2, 0);
-  return(result);
+  return result;
 }
 
 internal void
-str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
+str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style)
+{
   Temp scratch = scratch_begin(0, 0);
-  
   String8MetaNode *stack = 0;
   String8MetaNode *free_meta_node = 0;
   String8Node *first = path->first;
-  
   MemoryZeroStruct(path);
-  for (String8Node *node = first, *next = 0;
-       node != 0;
-       node = next){
+  for(String8Node *node = first, *next = 0;
+      node != 0;
+      node = next)
+  {
     // save next now
     next = node->next;
     
     // cases:
-    if (node == first && style == PathStyle_WindowsAbsolute){
+    if(node == first && style == PathStyle_WindowsAbsolute)
+    {
       goto save_without_stack;
     }
-    if (node->string.size == 1 && node->string.str[0] == '.'){
+    if(node->string.size == 1 && node->string.str[0] == '.')
+    {
       goto do_nothing;
     }
-    if (node->string.size == 2 && node->string.str[0] == '.' && node->string.str[1] == '.'){
-      if (stack != 0){
+    if(node->string.size == 2 && node->string.str[0] == '.' && node->string.str[1] == '.')
+    {
+      if(stack != 0)
+      {
         goto eliminate_stack_top;
       }
-      else{
+      else
+      {
         goto save_without_stack;
       }
     }
@@ -1266,24 +1376,23 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
     save_with_stack:
     {
       str8_list_push_node(path, node);
-      
       String8MetaNode *stack_node = free_meta_node;
-      if (stack_node != 0){
+      if(stack_node != 0)
+      {
         SLLStackPop(free_meta_node);
       }
-      else{
+      else
+      {
         stack_node = push_array_no_zero(scratch.arena, String8MetaNode, 1);
       }
       SLLStackPush(stack, stack_node);
       stack_node->node = node;
-      
       continue;
     }
     
     save_without_stack:
     {
       str8_list_push_node(path, node);
-      
       continue;
     }
     
@@ -1291,13 +1400,13 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
     {
       path->node_count -= 1;
       path->total_size -= stack->node->string.size;
-      
       SLLStackPop(stack);
-      
-      if (stack == 0){
+      if(stack == 0)
+      {
         path->last = path->first;
       }
-      else{
+      else
+      {
         path->last = stack->node;
       }
       continue;
@@ -1827,10 +1936,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
     String8 data4_hi_str = list.first->next->next->next->string;
     String8 data4_lo_str = list.first->next->next->next->next->string;
     if(str8_is_integer(data1_str, 16) && 
-        str8_is_integer(data2_str, 16) &&
-        str8_is_integer(data3_str, 16) &&
-        str8_is_integer(data4_hi_str, 16) &&
-        str8_is_integer(data4_lo_str, 16))
+       str8_is_integer(data2_str, 16) &&
+       str8_is_integer(data3_str, 16) &&
+       str8_is_integer(data4_hi_str, 16) &&
+       str8_is_integer(data4_lo_str, 16))
     {
       U64 data1    = u64_from_str8(data1_str, 16);
       U64 data2    = u64_from_str8(data2_str, 16);
@@ -1838,10 +1947,10 @@ try_guid_from_string(String8 string, Guid *guid_out)
       U64 data4_hi = u64_from_str8(data4_hi_str, 16);
       U64 data4_lo = u64_from_str8(data4_lo_str, 16);
       if(data1 <= max_U32 &&
-          data2 <= max_U16 &&
-          data3 <= max_U16 &&
-          data4_hi <= max_U16 &&
-          data4_lo <= 0xffffffffffff)
+         data2 <= max_U16 &&
+         data3 <= max_U16 &&
+         data4_hi <= max_U16 &&
+         data4_lo <= 0xffffffffffff)
       {
         guid_out->data1 = (U32)data1;
         guid_out->data2 = (U16)data2;
@@ -1933,7 +2042,6 @@ escaped_from_raw_str8(Arena *arena, String8 string)
       case '\v': {separator_replace = str8_lit("\\v");}break;
       case '\\': {separator_replace = str8_lit("\\\\");}break;
       case '"':  {separator_replace = str8_lit("\\\"");}break;
-      case '?':  {separator_replace = str8_lit("\\?");}break;
     }
     if(split)
     {
@@ -2370,77 +2478,3 @@ str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out)
   *block_out = str8_substr(string, range);
   return block_out->size;
 }
-
-internal U64
-str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8  byte       = 0;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-
-    cursor += bytes_read;
-    shift += 7u;
-
-    if((byte & 0x80u) == 0)
-    {
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
-}
-
-internal U64
-str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
-{
-  U64 value  = 0;
-  U64 shift  = 0;
-  U64 cursor = off;
-  for(;;)
-  {
-    U8 byte;
-    U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
-    if(bytes_read != sizeof(byte))
-    {
-      break;
-    }
-
-    U8 val = byte & 0x7fu;
-    value |= ((U64)val) << shift;
-
-    cursor += bytes_read;
-    shift += 7u;
-
-    if((byte & 0x80u) == 0)
-    {
-      if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)
-      {
-        value |= -(S64)(1ull << shift);
-      }
-      break;
-    }
-  }
-  if(value_out != 0)
-  {
-    *value_out = value;
-  }
-  U64 bytes_read = cursor - off;
-  return bytes_read;
-}
-

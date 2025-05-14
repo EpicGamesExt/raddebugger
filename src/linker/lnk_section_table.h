@@ -110,21 +110,21 @@ internal LNK_Chunk *   lnk_section_push_chunk_list(LNK_Section *sect, LNK_Chunk 
 
 internal LNK_SectionTable *  lnk_section_table_alloc(U64 section_virt_off, U64 sect_align, U64 file_align);
 internal void                lnk_section_table_release(LNK_SectionTable **st_ptr);
-internal LNK_Section *       lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags flags);
-internal LNK_Section *       lnk_section_table_push_null(LNK_SectionTable *st);
-internal void                lnk_section_table_remove(LNK_SectionTable *st, LNK_SymbolTable *symtab, String8 name);
-internal LNK_Section *       lnk_section_table_search(LNK_SectionTable *st, String8 name);
-internal LNK_Section *       lnk_section_table_search_id(LNK_SectionTable *st, U64 id);
-internal void                lnk_section_table_merge(LNK_SectionTable *st, LNK_MergeDirectiveList merge_list);
-internal void                lnk_section_table_remove_empties(LNK_SectionTable *st, LNK_SymbolTable *symtab);
-internal void                lnk_section_table_build_data(TP_Context *tp, LNK_SectionTable *st, COFF_MachineType machine);
-internal void                lnk_section_table_assign_virtual_offsets(LNK_SectionTable *st);
-internal void                lnk_section_table_assign_file_offsets(LNK_SectionTable *st);
-internal void                lnk_section_table_assign_indices(LNK_SectionTable *st);
-internal String8             lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, COFF_MachineType machine);
+internal LNK_Section *       lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
+internal LNK_Section *       lnk_section_table_push_null(LNK_SectionTable *sectab);
+internal void                lnk_section_table_remove(LNK_SectionTable *sectab, LNK_SymbolTable *symtab, String8 name);
+internal LNK_Section *       lnk_section_table_search(LNK_SectionTable *sectab, String8 name);
+internal LNK_Section *       lnk_section_table_search_id(LNK_SectionTable *sectab, U64 id);
+internal void                lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_list);
+internal void                lnk_section_table_remove_empties(LNK_SectionTable *sectab, LNK_SymbolTable *symtab);
+internal void                lnk_section_table_build_data(TP_Context *tp, LNK_SectionTable *sectab, COFF_MachineType machine);
+internal void                lnk_section_table_assign_virtual_offsets(LNK_SectionTable *sectab);
+internal void                lnk_section_table_assign_file_offsets(LNK_SectionTable *sectab);
+internal void                lnk_section_table_assign_indices(LNK_SectionTable *sectab);
+internal String8             lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *sectab, COFF_MachineType machine);
 
-internal LNK_ChunkPtr ** lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *st);
-internal LNK_Section **  lnk_sect_id_map_from_section_table(Arena *arena, LNK_SectionTable *st);
+internal LNK_ChunkPtr ** lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *sectab);
+internal LNK_Section **  lnk_sect_id_map_from_section_table(Arena *arena, LNK_SectionTable *sectab);
 internal LNK_ChunkRef    lnk_get_final_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
 internal LNK_Section *   lnk_sect_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
 internal LNK_Chunk *     lnk_chunk_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkPtr **chunk_id_map, LNK_ChunkRef chunk_ref);
@@ -146,6 +146,6 @@ internal U64             lnk_virt_size_from_symbol(LNK_Section **sect_id_map, LN
 internal U64             lnk_file_size_from_symbol(LNK_Section **sect_id_map, LNK_Symbol *symbol);
 
 #if LNK_DEBUG_CHUNKS
-internal void lnk_dump_chunks(LNK_SectionTable *st);
+internal void lnk_dump_chunks(LNK_SectionTable *sectab);
 #endif
 

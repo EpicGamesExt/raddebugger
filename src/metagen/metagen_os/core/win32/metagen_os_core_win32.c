@@ -90,6 +90,18 @@ os_w32_sleep_ms_from_endt_us(U64 endt_us)
   return sleep_ms;
 }
 
+internal U32
+os_w32_unix_time_from_file_time(FILETIME file_time)
+{
+  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
+  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
+  
+  Assert(unix_time64 <= max_U32);
+  U32 unix_time32 = (U32)unix_time64;
+  
+  return unix_time32;
+}
+
 ////////////////////////////////
 //~ rjf: Entity Functions
 
@@ -165,6 +177,21 @@ os_get_current_path(Arena *arena)
   String8 name = str8_from_16(arena, str16(memory, length));
   scratch_end(scratch);
   return name;
+}
+
+internal U32
+os_get_process_start_time_unix(void)
+{
+  HANDLE handle = GetCurrentProcess();
+  FILETIME start_time = {0};
+  FILETIME exit_time;
+  FILETIME kernel_time;
+  FILETIME user_time;
+  if(GetProcessTimes(handle, &start_time, &exit_time, &kernel_time, &user_time))
+  {
+    return os_w32_unix_time_from_file_time(start_time);
+  }
+  return 0;
 }
 
 ////////////////////////////////
@@ -293,14 +320,19 @@ os_file_open(OS_AccessFlags flags, String8 path)
   DWORD access_flags = 0;
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
-  if(flags & OS_AccessFlag_Read)    {access_flags |= GENERIC_READ;}
-  if(flags & OS_AccessFlag_Write)   {access_flags |= GENERIC_WRITE;}
-  if(flags & OS_AccessFlag_Execute) {access_flags |= GENERIC_EXECUTE;}
-  if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
-  if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
-  if(flags & OS_AccessFlag_Write)   {creation_disposition = CREATE_ALWAYS;}
-  if(flags & OS_AccessFlag_Append)  {creation_disposition = OPEN_ALWAYS;}
-  HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, 0, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
+  SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
+  if(flags & OS_AccessFlag_Read)        {access_flags |= GENERIC_READ;}
+  if(flags & OS_AccessFlag_Write)       {access_flags |= GENERIC_WRITE;}
+  if(flags & OS_AccessFlag_Execute)     {access_flags |= GENERIC_EXECUTE;}
+  if(flags & OS_AccessFlag_ShareRead)   {share_mode |= FILE_SHARE_READ;}
+  if(flags & OS_AccessFlag_ShareWrite)  {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
+  if(flags & OS_AccessFlag_Write)       {creation_disposition = CREATE_ALWAYS;}
+  if(flags & OS_AccessFlag_Append)      {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_AccessFlag_Inherited)
+  {
+    security_attributes.bInheritHandle = 1;
+  }
+  HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, &security_attributes, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE)
   {
     result.u64[0] = (U64)file;
@@ -361,27 +393,29 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
   HANDLE win_handle = (HANDLE)file.u64[0];
   U64 src_off = 0;
   U64 dst_off = rng.min;
-  U64 bytes_to_write_total = rng.max-rng.min;
-  U64 total_bytes_written = 0;
-  for(;src_off < bytes_to_write_total;)
+  U64 total_write_size = dim_1u64(rng);
+  for(;;)
   {
-    void *bytes_src = (void *)((U8 *)data + src_off);
-    U64 bytes_to_write_64 = (bytes_to_write_total-src_off);
-    U32 bytes_to_write_32 = u32_from_u64_saturate(bytes_to_write_64);
-    U32 bytes_written = 0;
+    void *bytes_src = (U8 *)data + src_off;
+    U64 bytes_left = total_write_size - src_off;
+    DWORD write_size = Min(MB(1), bytes_left);
+    DWORD bytes_written = 0;
     OVERLAPPED overlapped = {0};
-    overlapped.Offset     = (dst_off&0x00000000ffffffffull);
+    overlapped.Offset = (dst_off&0x00000000ffffffffull);
     overlapped.OffsetHigh = (dst_off&0xffffffff00000000ull) >> 32;
-    BOOL success = WriteFile(win_handle, bytes_src, bytes_to_write_32, (DWORD *)&bytes_written, &overlapped);
+    BOOL success = WriteFile(win_handle, bytes_src, write_size, &bytes_written, &overlapped);
     if(success == 0)
     {
       break;
     }
     src_off += bytes_written;
     dst_off += bytes_written;
-    total_bytes_written += bytes_written;
+    if(bytes_left == 0)
+    {
+      break;
+    }
   }
-  return total_bytes_written;
+  return src_off;
 }
 
 internal B32
@@ -436,6 +470,19 @@ os_id_from_file(OS_Handle file)
 }
 
 internal B32
+os_file_reserve_size(OS_Handle file, U64 size)
+{
+  HANDLE handle = (HANDLE)file.u64[0];
+  
+  FILE_ALLOCATION_INFO alloc_info    = {0};
+  alloc_info.AllocationSize.LowPart  = size & max_U32;
+  alloc_info.AllocationSize.HighPart = (size >> 32) & max_U32;
+  
+  BOOL is_reserved = SetFileInformationByHandle(handle, FileAllocationInfo, &alloc_info, sizeof(alloc_info));
+  return is_reserved;
+}
+
+internal B32
 os_delete_file_at_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -456,15 +503,33 @@ os_copy_file_path(String8 dst, String8 src)
   return result;
 }
 
+internal B32
+os_move_file_path(String8 dst, String8 src)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 dst16 = str16_from_8(scratch.arena, dst);
+  String16 src16 = str16_from_8(scratch.arena, src);
+  B32 result = MoveFileW((WCHAR*)src16.str, (WCHAR*)dst16.str);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DWORD buffer_size = MAX_PATH + 1;
-  U16 *buffer = push_array_no_zero(scratch.arena, U16, buffer_size);
-  String16 path16 = str16_from_8(scratch.arena, path);
-  DWORD path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, (WCHAR*)buffer, NULL);
-  String8 full_path = str8_from_16(arena, str16(buffer, path16_size));
+  DWORD     buffer_size = Max(MAX_PATH, path.size * 2) + 1;
+  String16  path16      = str16_from_8(scratch.arena, path);
+  WCHAR    *buffer      = push_array_no_zero(scratch.arena, WCHAR, buffer_size);
+  DWORD     path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, buffer, NULL);
+  if(path16_size > buffer_size)
+  {
+    arena_pop(scratch.arena, buffer_size);
+    buffer_size = path16_size + 1;
+    buffer      = push_array_no_zero(scratch.arena, WCHAR, buffer_size);
+    path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, buffer, NULL);
+  }
+  String8 full_path = str8_from_16(arena, str16((U16*)buffer, path16_size));
   scratch_end(scratch);
   return full_path;
 }
@@ -476,6 +541,17 @@ os_file_path_exists(String8 path)
   String16 path16 = str16_from_8(scratch.arena, path);
   DWORD attributes = GetFileAttributesW((WCHAR *)path16.str);
   B32 exists = (attributes != INVALID_FILE_ATTRIBUTES) && !!(~attributes & FILE_ATTRIBUTE_DIRECTORY);
+  scratch_end(scratch);
+  return exists;
+}
+
+internal B32
+os_folder_path_exists(String8 path)
+{
+  Temp scratch = scratch_begin(0,0);
+  String16 path16     = str16_from_8(scratch.arena, path);
+  DWORD    attributes = GetFileAttributesW((WCHAR *)path16.str);
+  B32      exists     = (attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
   scratch_end(scratch);
   return exists;
 }
@@ -494,6 +570,28 @@ os_properties_from_file_path(String8 path)
     os_w32_dense_time_from_file_time(&props.created, &find_data.ftCreationTime);
     os_w32_dense_time_from_file_time(&props.modified, &find_data.ftLastWriteTime);
     props.flags = os_w32_file_property_flags_from_dwFileAttributes(find_data.dwFileAttributes);
+  }
+  else
+  {
+    Temp scratch = scratch_begin(0, 0);
+    WCHAR buffer[512] = {0};
+    DWORD length = GetLogicalDriveStringsW(sizeof(buffer), buffer);
+    U64 last_slash_pos = 0;
+    for(;last_slash_pos < path.size; last_slash_pos = str8_find_needle(path, last_slash_pos+1, str8_lit("/"), StringMatchFlag_SlashInsensitive));
+    String8 path_trimmed = str8_prefix(path, last_slash_pos);
+    for(U64 off = 0; off < (U64)length;)
+    {
+      String16 next_drive_string_16 = str16_cstring((U16 *)buffer+off);
+      off += next_drive_string_16.size+1;
+      String8 next_drive_string = str8_from_16(scratch.arena, next_drive_string_16);
+      next_drive_string = str8_chop_last_slash(next_drive_string);
+      if(str8_match(path_trimmed, next_drive_string, StringMatchFlag_CaseInsensitive))
+      {
+        props.flags |= FilePropertyFlag_IsFolder;
+        break;
+      }
+    }
+    scratch_end(scratch);
   }
   FindClose(handle);
   scratch_end(scratch);
@@ -704,7 +802,12 @@ internal void
 os_file_iter_end(OS_FileIter *iter)
 {
   OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter->memory;
-  FindClose(w32_iter->handle);
+  HANDLE zero_handle;
+  MemoryZeroStruct(&zero_handle);
+  if(!MemoryMatchStruct(&zero_handle, &w32_iter->handle))
+  {
+    FindClose(w32_iter->handle);
+  }
 }
 
 //- rjf: directory creation
@@ -805,10 +908,8 @@ os_now_unix(void)
 {
   FILETIME file_time;
   GetSystemTimeAsFileTime(&file_time);
-  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
-  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
-  U32 unix_time32 = (U32)unix_time64;
-  return unix_time32;
+  U32 unix_time = os_w32_unix_time_from_file_time(file_time);
+  return unix_time;
 }
 
 internal DateTime
@@ -926,9 +1027,31 @@ os_process_launch(OS_ProcessLaunchParams *params)
   }
   
   //- rjf: launch
+  BOOL inherit_handles = 0;
   STARTUPINFOW startup_info = {sizeof(startup_info)};
+  if(!os_handle_match(params->stdout_file, os_handle_zero()))
+  {
+    HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
+    startup_info.hStdOutput = stdout_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  if(!os_handle_match(params->stderr_file, os_handle_zero()))
+  {
+    HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
+    startup_info.hStdError = stderr_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  if(!os_handle_match(params->stdin_file, os_handle_zero()))
+  {
+    HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
+    startup_info.hStdInput = stdin_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
   PROCESS_INFORMATION process_info = {0};
-  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 0, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, inherit_handles, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
   {
     result.u64[0] = (U64)process_info.hProcess;
     CloseHandle(process_info.hThread);
@@ -977,8 +1100,9 @@ os_thread_join(OS_Handle handle, U64 endt_us)
   if(entity != 0)
   {
     wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+    CloseHandle(entity->thread.handle);
+    os_w32_entity_release(entity);
   }
-  os_w32_entity_release(entity);
   return (wait_result == WAIT_OBJECT_0);
 }
 
@@ -986,7 +1110,11 @@ internal void
 os_thread_detach(OS_Handle thread)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(thread.u64[0]);
-  os_w32_entity_release(entity);
+  if(entity != 0)
+  {
+    CloseHandle(entity->thread.handle);
+    os_w32_entity_release(entity);
+  }
 }
 
 ////////////////////////////////
@@ -1255,10 +1383,10 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid
+internal Guid
 os_make_guid(void)
 {
-  OS_Guid result; MemoryZeroStruct(&result);
+  Guid result; MemoryZeroStruct(&result);
   UUID uuid;
   RPC_STATUS rpc_status = UuidCreate(&uuid);
   if(rpc_status == RPC_S_OK)
@@ -1344,8 +1472,12 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       HANDLE thread = GetCurrentThread();
       CONTEXT* context = exception_ptrs->ContextRecord;
       
+      WCHAR module_path[MAX_PATH];
+      GetModuleFileNameW(NULL, module_path, ArrayCount(module_path));
+      PathRemoveFileSpecW(module_path);
+      
       dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
-      if(dbg_SymInitializeW(process, L"", TRUE))
+      if(dbg_SymInitializeW(process, module_path, TRUE))
       {
         // check that raddbg.pdb file is good
         B32 raddbg_pdb_valid = 0;
@@ -1384,7 +1516,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
           frame.AddrStack.Offset = context->Sp;
           frame.AddrStack.Mode = AddrModeFlat;
 #else
-#  error Architecture not supported!
+#  error Arch not supported!
 #endif
           
           for(U32 idx=0; ;idx++)
@@ -1488,129 +1620,60 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
 {
   SetUnhandledExceptionFilter(&win32_exception_filter);
   
-  //- rjf: do OS layer initialization
+  //- rjf: dynamically load windows functions which are not guaranteed
+  // in all SDKs
   {
-    // rjf: dynamically load windows functions which are not guaranteed
-    // in all SDKs
+    HMODULE module = LoadLibraryA("kernel32.dll");
+    w32_SetThreadDescription_func = (W32_SetThreadDescription_Type *)GetProcAddress(module, "SetThreadDescription");
+    FreeLibrary(module);
+  }
+  
+  //- rjf: try to allow large pages if we can
+  B32 large_pages_allowed = 0;
+  {
+    HANDLE token;
+    if(OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
     {
-      HMODULE module = LoadLibraryA("kernel32.dll");
-      w32_SetThreadDescription_func = (W32_SetThreadDescription_Type *)GetProcAddress(module, "SetThreadDescription");
-      FreeLibrary(module);
-    }
-    
-    // rjf: try to enable large pages if we can
-    {
-      HANDLE token;
-      if(OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
+      LUID luid;
+      if(LookupPrivilegeValue(0, SE_LOCK_MEMORY_NAME, &luid))
       {
-        LUID luid;
-        if(LookupPrivilegeValue(0, SE_LOCK_MEMORY_NAME, &luid))
-        {
-          TOKEN_PRIVILEGES priv;
-          priv.PrivilegeCount           = 1;
-          priv.Privileges[0].Luid       = luid;
-          priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-          AdjustTokenPrivileges(token, 0, &priv, sizeof(priv), 0, 0);
-        }
-        CloseHandle(token);
+        TOKEN_PRIVILEGES priv;
+        priv.PrivilegeCount           = 1;
+        priv.Privileges[0].Luid       = luid;
+        priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        large_pages_allowed = !!AdjustTokenPrivileges(token, 0, &priv, sizeof(priv), 0, 0);
       }
+      CloseHandle(token);
     }
-    
-    // rjf: get system info
-    SYSTEM_INFO sysinfo = {0};
-    GetSystemInfo(&sysinfo);
-    
-    // rjf: set up non-dynamically-alloc'd state
-    //
-    // (we need to set up some basics before this layer can supply
-    // memory allocation primitives)
+  }
+  
+  //- rjf: get system info
+  SYSTEM_INFO sysinfo = {0};
+  GetSystemInfo(&sysinfo);
+  
+  //- rjf: set up non-dynamically-alloc'd state
+  //
+  // (we need to set up some basics before this layer can supply
+  // memory allocation primitives)
+  {
+    os_w32_state.microsecond_resolution  = 1;
+    LARGE_INTEGER large_int_resolution;
+    if(QueryPerformanceFrequency(&large_int_resolution))
     {
-      os_w32_state.microsecond_resolution  = 1;
-      LARGE_INTEGER large_int_resolution;
-      if(QueryPerformanceFrequency(&large_int_resolution))
-      {
-        os_w32_state.microsecond_resolution = large_int_resolution.QuadPart;
-      }
+      os_w32_state.microsecond_resolution = large_int_resolution.QuadPart;
     }
-    {
-      OS_SystemInfo *info = &os_w32_state.system_info;
-      info->logical_processor_count = (U64)sysinfo.dwNumberOfProcessors;
-      info->page_size               = sysinfo.dwPageSize;
-      info->large_page_size         = GetLargePageMinimum();
-      info->allocation_granularity  = sysinfo.dwAllocationGranularity;
-    }
-    {
-      OS_ProcessInfo *info = &os_w32_state.process_info;
-      info->pid = GetCurrentProcessId();
-    }
-    
-    // rjf: set up thread context
-    local_persist TCTX tctx;
-    tctx_init_and_equip(&tctx);
-    
-    // rjf: set up dynamically-alloc'd state
-    Arena *arena = arena_alloc();
-    {
-      os_w32_state.arena = arena;
-      {
-        OS_SystemInfo *info = &os_w32_state.system_info;
-        U8 buffer[MAX_COMPUTERNAME_LENGTH + 1] = {0};
-        DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
-        if(GetComputerNameA((char*)buffer, &size))
-        {
-          info->machine_name = push_str8_copy(arena, str8(buffer, size));
-        }
-      }
-    }
-    {
-      OS_ProcessInfo *info = &os_w32_state.process_info;
-      {
-        Temp scratch = scratch_begin(0, 0);
-        DWORD size = KB(32);
-        U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
-        DWORD length = GetModuleFileNameW(0, (WCHAR*)buffer, size);
-        String8 name8 = str8_from_16(scratch.arena, str16(buffer, length));
-        String8 name_chopped = str8_chop_last_slash(name8);
-        info->binary_path = push_str8_copy(arena, name_chopped);
-        scratch_end(scratch);
-      }
-      info->initial_path = os_get_current_path(arena);
-      {
-        Temp scratch = scratch_begin(0, 0);
-        U64 size = KB(32);
-        U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
-        if(SUCCEEDED(SHGetFolderPathW(0, CSIDL_APPDATA, 0, 0, (WCHAR*)buffer)))
-        {
-          info->user_program_data_path = str8_from_16(arena, str16_cstring(buffer));
-        }
-        scratch_end(scratch);
-      }
-      {
-        WCHAR *this_proc_env = GetEnvironmentStringsW();
-        U64 start_idx = 0;
-        for(U64 idx = 0;; idx += 1)
-        {
-          if(this_proc_env[idx] == 0)
-          {
-            if(start_idx == idx)
-            {
-              break;
-            }
-            else
-            {
-              String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
-              String8 string = str8_from_16(arena, string16);
-              str8_list_push(arena, &info->environment, string);
-              start_idx = idx+1;
-            }
-          }
-        }
-      }
-    }
-    
-    // rjf: set up entity storage
-    InitializeCriticalSection(&os_w32_state.entity_mutex);
-    os_w32_state.entity_arena = arena_alloc();
+  }
+  {
+    OS_SystemInfo *info = &os_w32_state.system_info;
+    info->logical_processor_count = (U64)sysinfo.dwNumberOfProcessors;
+    info->page_size               = sysinfo.dwPageSize;
+    info->large_page_size         = GetLargePageMinimum();
+    info->allocation_granularity  = sysinfo.dwAllocationGranularity;
+  }
+  {
+    OS_ProcessInfo *info = &os_w32_state.process_info;
+    info->large_pages_allowed = large_pages_allowed;
+    info->pid = GetCurrentProcessId();
   }
   
   //- rjf: extract arguments
@@ -1620,15 +1683,91 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   {
     String16 arg16 = str16_cstring((U16 *)wargv[i]);
     String8 arg8 = str8_from_16(args_arena, arg16);
-    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
+    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive) ||
+       str8_match(arg8, str8_lit("-quiet"), StringMatchFlag_CaseInsensitive))
     {
       win32_g_is_quiet = 1;
+    }
+    if(str8_match(arg8, str8_lit("--large_pages"), StringMatchFlag_CaseInsensitive) ||
+       str8_match(arg8, str8_lit("-large_pages"), StringMatchFlag_CaseInsensitive))
+    {
+      arena_default_flags        = ArenaFlag_LargePages;
+      arena_default_reserve_size = Max(MB(64), os_w32_state.system_info.large_page_size);
+      arena_default_commit_size  = arena_default_reserve_size;
     }
     argv[i] = (char *)arg8.str;
   }
   
+  //- rjf: set up thread context
+  local_persist TCTX tctx;
+  tctx_init_and_equip(&tctx);
+  
+  //- rjf: set up dynamically-alloc'd state
+  Arena *arena = arena_alloc();
+  {
+    os_w32_state.arena = arena;
+    {
+      OS_SystemInfo *info = &os_w32_state.system_info;
+      U8 buffer[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+      DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
+      if(GetComputerNameA((char*)buffer, &size))
+      {
+        info->machine_name = push_str8_copy(arena, str8(buffer, size));
+      }
+    }
+  }
+  {
+    OS_ProcessInfo *info = &os_w32_state.process_info;
+    {
+      Temp scratch = scratch_begin(0, 0);
+      DWORD size = KB(32);
+      U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
+      DWORD length = GetModuleFileNameW(0, (WCHAR*)buffer, size);
+      String8 name8 = str8_from_16(scratch.arena, str16(buffer, length));
+      String8 name_chopped = str8_chop_last_slash(name8);
+      info->binary_path = push_str8_copy(arena, name_chopped);
+      scratch_end(scratch);
+    }
+    info->initial_path = os_get_current_path(arena);
+    {
+      Temp scratch = scratch_begin(0, 0);
+      U64 size = KB(32);
+      U16 *buffer = push_array_no_zero(scratch.arena, U16, size);
+      if(SUCCEEDED(SHGetFolderPathW(0, CSIDL_APPDATA, 0, 0, (WCHAR*)buffer)))
+      {
+        info->user_program_data_path = str8_from_16(arena, str16_cstring(buffer));
+      }
+      scratch_end(scratch);
+    }
+    {
+      WCHAR *this_proc_env = GetEnvironmentStringsW();
+      U64 start_idx = 0;
+      for(U64 idx = 0;; idx += 1)
+      {
+        if(this_proc_env[idx] == 0)
+        {
+          if(start_idx == idx)
+          {
+            break;
+          }
+          else
+          {
+            String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
+            String8 string = str8_from_16(arena, string16);
+            str8_list_push(arena, &info->environment, string);
+            start_idx = idx+1;
+          }
+        }
+      }
+    }
+  }
+  
+  //- rjf: set up entity storage
+  InitializeCriticalSection(&os_w32_state.entity_mutex);
+  os_w32_state.entity_arena = arena_alloc();
+  
   //- rjf: call into "real" entry point
-  main_thread_base_entry_point(entry_point, argv, (U64)argc);
+  main_thread_base_entry_point(argc, argv);
 }
 
 #if BUILD_CONSOLE_INTERFACE

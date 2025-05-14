@@ -2,95 +2,48 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: feature cleanup, code dedup, code elimination pass:
+//~ rjf: post-0.9.16 TODO notes
 //
-// [ ] frontend config entities, serialization/deserialization, remove hacks,
-//     etc. - the entity structure should be dramatically simplified & made
-//     to reflect a more flexible string-tree data structure which can be
-//     more trivially derived from config, and more flexibly rearranged.
-//     drag/drop watch rows -> tabs, tabs -> watch rows, etc.
-// [ ] frontend entities need to be the "upstream state" for windows, panels,
-//     tabs, etc. - entities can be mapped to caches of window/panel/view state
-//     in purely immediate-mode fashion, so the only *state* part of the
-//     equation only has to do with the string tree.
-// [ ] config hot-reloading using the wins from the previous points
-// [ ] undo/redo, using the wins from the previous points
-// [ ] watch table UI - hidden table boundaries, special-cased control hacks
-// [ ] hash store -> need to somehow hold on to hash blobs which are still
-//     depended upon by usage layers, e.g. extra dependency refcount, e.g.
-//     text cache can explicitly correllate nodes in its cache to hashes,
-//     bump their refcount - this would keep the hash correllated to its key
-//     and it would prevent it from being evicted (output debug string perf)
-// [ ] autocompletion lister, file lister, function lister, command lister,
-//     etc., all need to be merged, and optionally contextualized/filtered.
-//     right-clicking a tab should be equivalent to spawning a command lister,
-//     but only with commands that are directly
-
-////////////////////////////////
-//~ rjf: post-0.9.12 TODO notes
+//- watch improvements
+// [ ] *ALL* expressions in watch windows need to be editable.
 //
+//- cfg improvements
+// [ ] config hot-reloading, using cfg wins
+// [ ] undo/redo, using cfg wins
+// [ ] back/forward, using cfg wins
+//  [ ]  mouse back button should make view to go back after I double clicked
+//       on function to open it
+//
+//- stepping or breakpoint oddness/fixes
+// [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
+// single step over the first instruction of that line, even if the thread
+// would've stopped at the first instruction due to the step, were that bp not
+// there.
+// [ ] if a breakpoint matches the entry point's starting address, its hit count
+// is not correctly incremented.
 // [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
 //      - actually this seems to be potentially because of incomplete src-line-map info...
 // [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
 //
-// [ ] CLI argument over-mangling?
-//
-// [ ] OutputDebugString spam, keeping way too much around!
-//
-// [ ] fix light themes
-// [ ] make `array` view rule work with actual array types, to change their
-//     size dynamically
-//
-//
-// [ ] auto view rule templates (?)
-// [ ] single-line visualization busted with auto-view-rules applied, it seems...
-//     not showing member variables, just commas, check w/ mohit
-// [ ] auto-view-rules likely should apply at each level in the expression
-//     tree
-// [ ] `slice` view rule - extend to support begin/end style as well
-// [ ] disasm starting address - need to use debug info for more correct
-//     results...
-//
-//  [ ] linked list view rule
-//
-//  [ ] investigate false exceptions, being reported while stepping through init code
-//  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-//
-//  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
-//  to prioritize the primary rdi
-//
-//  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
-//      module/symbol, in cases where one line maps to many voffs
-//
-//  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
-//  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
-//  [ ] entity <-> mdesk paths
-//
-//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
-//  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
-//
-//  [ ] save view column pcts; generalize to being a first-class thing in
-//      RD_View, e.g. by just having a string -> f32 store
-//
-//  [ ] visualize all breakpoints everywhere - source view should show up in
-//      disasm, disasm should show up in source view, function should show up in
-//      both, etc.
-//    [ ] ** Function breakpoints should show up in the source listing. Without
-//        them being visible, it is confusing when you run and you stop there,
-//        because you're like "wait why did it stop" and then you later remember
-//        that's because there was a function breakpoint there.
-
-////////////////////////////////
-//~ rjf: Frontend/UI Pass Tasks
-//
-// [ ] transient view timeout releasing
-// [ ] theme lister -> fonts & font sizes
+//- ui improvements
+// [ ] we probably want to disable pop/pull out for transient things, e.g. theme color cfgs
+//     (actually, just kill the tabs on load if they refer to transient things)
+// [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
+// [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
+// [ ] tooltip coverage pass (row commands, etc.)
+// [ ] visualize all breakpoints everywhere - source view should show up in
+//     disasm, disasm should show up in source view, function should show up in
+//     both, etc.
+//  [ ] ** Function breakpoints should show up in the source listing. Without
+//      them being visible, it is confusing when you run and you stop there,
+//      because you're like "wait why did it stop" and then you later remember
+//      that's because there was a function breakpoint there.
+// [ ] (reported by forrest) 'set-next-statement' -> prioritize current
+//     module/symbol, in cases where one line maps to many voffs
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-//
-// [ ] font lister
-// [ ] per-panel font size overrides
-//
+//  [ ] (since browse buttons are currently gone i should just add them backin
+//       while respecting this old todo)
 // [ ] For the Scheduler window, it would be nice if you could dim or
 //     folderize threads that are not your threads - eg., if a thread doesn't
 //     have any resolved stack pointers in your executable code, then you can
@@ -100,98 +53,22 @@
 //     threads you haven't? Or, there could even be a debugger-specific API
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
-
-////////////////////////////////
-//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
-//
-// [ ] Setting the code_font/main_font values to a font name doesn't work.
-//     Should probably make note that you have to set it to a path to a TTF,
-//     since that's not normally how Windows fonts work.
-//
-// [ ] "root" concept in hash store, which buckets keys & allows usage code to
-//     jettison a collection of keys in retained mode fashion
-//
-// [ ] Jeff Notes
-//  [ ] sort locals by appearance in source code (or maybe just debug info)
-//  [ ] sum view rule
-//  [ ] plot view rule
-//  [ ] histogram view rule
-//  [ ] max view rule
-//  [ ] min view rule
-//
-// [ ] double-click vs. single-click for folder navigation, see if we can infer
 // [ ] use backslashes on windows by default, forward slashes elsewhere (?)
-//
-// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
-//     support it?
-//
-//
-// [ ] visualize conversion failures
-//
-//  [ ] I was a little confused about what a profile file was. I understood
-//      what the user file was, but the profile file sounded like it should
-//      perhaps be per-project, yet it sounded like it was meant to be somewhat
-//      global? I don't have any feedback here because it probably will make
-//      sense once I use the debugger more, but I just thought I'd make a note
-//      to say that I was confused about it after reading the manual, so
-//      perhaps you could elaborate a little more on it in there.
-//  [ ] It wasn't clear to me how you save a user or project file. I can see
-//      how to load them, but not how you save them. Obviously I can just copy
-//      the files myself in the shell, but it seemed weird that there was no
-//      "save" option in the menus.
-//
-// [ ] Right-clicking on a thread in the Scheduler window pops up a context
-//     menu, but you can't actually see it because the tooltip for the thread
-//     draws on top of it, so you can't see the menu.
-//
-//  [ ] In a "hover watch" (where you hover over a variable and it shows a pop-
-//      up watch window), if you expand an item near the bottom of the listing,
-//      it will be clipped to the bottom of the listing instead of showing the
-//      actual items (ie., it doesn't resize the listing based on what's
-//      actually visible)
-//
-//  [ ] ** One very nice feature of RemedyBG that I use all the time is the
-//      ability to put "$err, hr" into the watch window, which will just show
-//      the value of GetLastError() as a string. This is super useful for
-//      debugging, so you don't have to litter your own code with it.
-//      (NOTE(rjf): NtQueryInformationThread)
-//
-//  [ ] Tooltip Coverage:
-//   [ ] lock icon
-//   [ ] "rotation arrow" icon next to executables
-//
-//  [ ] For theme editing, when you hove the mouse over a theme color entry and
-//      it highlights that entry, it might help to temporarily change that
-//      color to white (or the inverse of the background color, or whatever) so
-//      that the user can see what things on the screen use that theme color.
-//
-//  [ ] I had to go into the user file to change the font. That should probably
-//      be in the theme window?
-//
-//  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
-//      to error messages that are byte-based instead of line-based.
-//
-// [ ] @feature debug info overrides (both path-based AND module-based)
-//
-// [ ] C++ virtual inheritance member visualization in watch window
-
-////////////////////////////////
-//~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
-//
-//  [ ] The hex format for color values in the config file was a real
-//      mindbender. It's prefixed with "0x", so I was assuming it was either
-//      Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
-//      my surprise, it was neither - it was actually web format (RRGGBBAA),
-//      which I was not expecting because that is normally written with a
-//      number sign (#AARRGGBB) not an 0x.
-//
+// [ ] For theme editing, when you hove the mouse over a theme color entry and
+//     it highlights that entry, it might help to temporarily change that
+//     color to white (or the inverse of the background color, or whatever) so
+//     that the user can see what things on the screen use that theme color.
+// [ ] The hex format for color values in the config file was a real
+//     mindbender. It's prefixed with "0x", so I was assuming it was either
+//     Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
+//     my surprise, it was neither - it was actually web format (RRGGBBAA),
+//     which I was not expecting because that is normally written with a
+//     number sign (#AARRGGBB) not an 0x.
+// [ ] It'd be nice to have a "goto byte" option for source views, for jumping
+//     to error messages that are byte-based instead of line-based.
 //  [ ] Clicking on either side of a scroll bar is idiosyncratic. Normally,
 //      that is "page up" / "page down", but here it is "smooth scroll upward"
 //      / "smooth scroll downward" for some reason?
-//
-//  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
-//  [ ]  mouse back button should make view to go back after I double clicked
-//       on function to open it
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
@@ -199,110 +76,92 @@
 //  [ ]  default font size is too small for me - not only source code, but
 //       menus/tab/watch names (which don't resize). Maybe you could query
 //       Windows for initial font size?
-// [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
-
-////////////////////////////////
-//~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
-//
-// [ ] @eval_upgrade
-//  [ ] new eval system; support strings, many address spaces, many debug
-//      infos, wide/async transforms (e.g. diff(blob1, blob2))
-//
-// [ ] Fancy View Rules
-//  [ ] table column boundaries should be checked against *AFTER* table
-//      contents, not before
-//  [ ] `array:(x, y)` - multidimensional array
-//
-// [ ] search-in-all-files
-//
-// [ ] Memory View
-//  [ ] memory view mutation controls
-//  [ ] memory view user-made annotations
-//
-// [ ] undo/redo
-// [ ] proper "go back" + "go forward" history navigations
-//  [ ]  undo close tab would be nice. If not for everything, then at least
-//       just for source files
-//
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
-//
-// [ ] @feature processor/data breakpoints
-// [ ] @feature automatically snap to search matches when searching source files
-// [ ] automatically start search query with selected text
-
-////////////////////////////////
-//~ rjf: Cold, Clean-up Tasks That Probably Only Ryan Notices
-// (E.G. Because They Are Code-Related Or Because Nobody Cares)
-//
-// [ ] @bug view-snapping in scroll-lists, accounting for mapping between
-//     visual positions & logical positions (variably sized rows in watch,
-//     table headers, etc.)
-// [ ] @cleanup straighten out index/number space & types & terminology for
-//     scroll lists
-// [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
-//     code slice params)
-
-////////////////////////////////
-//~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)
-//
-// [ ] @feature disasm view improvement features
-//  [ ] visualize jump destinations in disasm
-//
-// [ ] @feature eval ui improvement features
-//  [ ] serializing eval view maps
-//  [ ] view rule editors in hover-eval
-//  [ ] view rule hook coverage
-//   [ ] `each:(expr addition)` - apply some additional expression to all
-//        elements in an array/linked list would be useful to look at only a
-//        subset of an array of complex structs
-//   [ ] `slider:(min max)` view rule
-//   [ ] `v2f32` view rule
-//   [ ] `v3` view rule
-//   [ ] `quat` view rule
-//   [ ] `matrix` view rule
-//   [ ] `audio` waveform view rule
-//  [ ] smart scopes - expression operators for "grab me the first type X"
-//  [ ] "pinning" watch expressions, to attach it to a particular ctrl_ctx
-//
-// [ ] @feature header file for target -> debugger communication; printf, log,
-//     etc.
-// [ ] @feature just-in-time debugging
-// [ ] @feature step-out-of-loop
-//
-//-[ ] long-term future notes from martins
-//  [ ] core dump saving/loading
-//  [ ] parallel call stacks view
-//  [ ] parallel watch view
-//  [ ] mixed native/interpreted/jit debugging
-//      - it seems python has a top-level linked list of interpreter states,
-//        which should allow the debugger to map native callstacks to python
-//        code
-//
 // [ ] fancy string runs can include "weakness" information for text truncation
 //     ... can prioritize certain parts of strings to be truncated before
 //     others. would be good for e.g. the middle of a path
+//
+//- visualizer improvements
+// [ ] disasm starting address - need to use debug info for more correct results...
+// [ ] linked list view
+// [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
+// [ ] multidimensional `array`
+// [ ] 2-vector, 3-vector, quaternion
+// [ ] audio waveform views
+//
+//- eval improvements
+// [ ] maybe add extra caching layer to process memory querying? we pay a pretty
+//     heavy cost even to just read 8 bytes...
+// [ ] evaluate `foo.bar` symbol names without escape hatch?
+// [ ] serializing eval view maps (?)
+// [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
+//  to prioritize the primary rdi
+// [ ] wide transforms
+//  [ ] sum
+//  [ ] plot
+//  [ ] max view rule
+//  [ ] min view rule
+//  [ ] histogram view rule
+//  [ ] diffs?
+//  [ ] ** One very nice feature of RemedyBG that I use all the time is the
+//      ability to put "$err, hr" into the watch window, which will just show
+//      the value of GetLastError() as a string. This is super useful for
+//      debugging, so you don't have to litter your own code with it.
+//      (NOTE(rjf): NtQueryInformationThread)
+// [ ] C++ virtual inheritance member visualization
+// [ ] smart scopes - expression operators for "grab me the first type X"
+// [ ] "pinning" watch expressions, to attach it to a particular scope/evaluation context
+//
+//- control improvements
+// [ ] debug info overrides (both path-based AND module-based)
+// [ ] symbol server
+// [ ] can it ignore stepping into _RTC_CheckStackVars generated functions?
+// [ ] jump table thunks, on code w/o /INCREMENTAL:NO
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
+// [ ] just-in-time debugging
+// [ ] step-out-of-loop
+//
+//- late-conversion performance improvements
+// [ ] investigate wide-conversion performance
+//  [ ] oversubscribing cores?
+//  [ ] conversion crashes?
+//  [ ] fastpath lookup to determine debug info relevance?
+// [ ] live++ investigations - ctrl+alt+f11 in UE?
+//
+//- memory usage improvements
+// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+//     jettison a collection of keys in retained mode fashion
+//
+//- short-to-medium term future features
+// [ ] search-in-all-files
+//  [ ] automatically snap to search matches when searching source files
+// [ ] memory view
+//  [ ] memory view mutation controls
+//  [ ] memory view user-made annotations
+//  [ ] memory view searching
+// [ ] disasm view
+//  [ ] visualize jump destinations in disasm
+//
+//- longer-term future features
+// [ ] long-term future notes from martins
+// [ ] core dump saving/loading
+// [ ] parallel call stacks view
+// [ ] parallel watch view
+// [ ] mixed native/interpreted/jit debugging
+//     - it seems python has a top-level linked list of interpreter states,
+//       which should allow the debugger to map native callstacks to python
+//       code
+//
+//- code cleanup
+// [ ] eliminate explicit font parameters in the various ui paths (e.g.
+//     code slice params)
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
-// [ ] frontend speedup opportunities
-//  [ ] tables in UI -> currently building per-row, could probably cut down on
-//      # of boxes and # of draws by doing per-column in some cases?
-//  [ ] font cache layer -> can probably cache (string*font*size) -> (run) too
-//      (not just rasterization)... would save a *lot*, there is a ton of work
-//      just in looking up & stitching stuff repeatedly
-//  [ ] convert UI layout pass to not be naive recursive version
-//  [ ] (big change) parallelize window ui build codepaths per-panel
 
 ////////////////////////////////
 //~ rjf: Recently Completed Task Log
-//
-// [x] filesystem drag/drop support
-// [x] ** Converter performance & heuristics for asynchronously doing it early
-//  [x]  icon fonts glyphs sometimes disappear for specific font size, but they
-//       reappear if you go +1 higher or -1 lower. Mostly red triangle in watch
-//       values for "unknown identifier". But also yellow arrow in call stack
-//       disappears if font size gets too large.
-// [x] @cleanup central worker thread pool - eliminate per-layer thread pools
 
 ////////////////////////////////
 //~ rjf: Build Options
@@ -324,8 +183,6 @@
 //- rjf: [lib]
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
-#include "lib_raddbg_markup/raddbg_markup.h"
-#include "lib_raddbg_markup/raddbg_markup.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
@@ -340,6 +197,7 @@
 #include "mutable_text/mutable_text.h"
 #include "path/path.h"
 #include "coff/coff.h"
+#include "coff/coff_parse.h"
 #include "pe/pe.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
@@ -381,6 +239,7 @@
 #include "mutable_text/mutable_text.c"
 #include "path/path.c"
 #include "coff/coff.c"
+#include "coff/coff_parse.c"
 #include "pe/pe.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_parse.c"
@@ -599,106 +458,58 @@ entry_point(CmdLine *cmd_line)
         String8List args = cmd_line->inputs;
         if(args.node_count > 0 && args.first->string.size != 0)
         {
-          //- TODO(rjf): @cfg setup initial target from command line arguments
+          Temp scratch = scratch_begin(0, 0);
+          
+          //- rjf: unpack command line inputs
+          String8 executable_name_string = {0};
+          String8 arguments_string = {0};
+          String8 working_directory_string = {0};
           {
-            Temp scratch = scratch_begin(0, 0);
-            
-            //- rjf: unpack command line inputs
-            String8 executable_name_string = {0};
-            String8 arguments_string = {0};
-            String8 working_directory_string = {0};
+            // rjf: unpack full executable path
+            if(args.first->string.size != 0)
             {
-              // rjf: unpack full executable path
-              if(args.first->string.size != 0)
+              String8 exe_name = args.first->string;
+              PathStyle style = path_style_from_str8(exe_name);
+              if(style == PathStyle_Relative)
               {
                 String8 current_path = os_get_current_path(scratch.arena);
-                String8 exe_name = args.first->string;
-                PathStyle style = path_style_from_str8(exe_name);
-                if(style == PathStyle_Relative)
-                {
-                  exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-                  exe_name = path_normalized_from_string(scratch.arena, exe_name);
-                }
-                executable_name_string = exe_name;
+                exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+                exe_name = path_normalized_from_string(scratch.arena, exe_name);
               }
-              
-              // rjf: unpack working directory
-              if(args.first->string.size != 0)
-              {
-                String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-                if(path_part_of_arg.size != 0)
-                {
-                  String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-                  working_directory_string = path;
-                }
-              }
-              
-              // rjf: unpack arguments
-              String8List passthrough_args_list = {0};
-              for(String8Node *n = args.first->next; n != 0; n = n->next)
-              {
-                str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-              }
-              StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-              arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
+              executable_name_string = exe_name;
             }
             
-            //- rjf: build config tree
-            RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
-            RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
-            RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
-            RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
-            RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
-            rd_cfg_new(exe, executable_name_string);
-            rd_cfg_new(args, arguments_string);
-            rd_cfg_new(wdir, working_directory_string);
-            
-            scratch_end(scratch);
-          }
-          
-          Temp scratch = scratch_begin(0, 0);
-          RD_Entity *target = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
-          rd_entity_equip_cfg_src(target, RD_CfgSrc_CommandLine);
-          String8List passthrough_args_list = {0};
-          for(String8Node *n = args.first->next; n != 0; n = n->next)
-          {
-            str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-          }
-          
-          // rjf: get current path
-          String8 current_path = os_get_current_path(scratch.arena);
-          
-          // rjf: equip exe
-          if(args.first->string.size != 0)
-          {
-            String8 exe_name = args.first->string;
-            RD_Entity *exe = rd_entity_alloc(target, RD_EntityKind_Executable);
-            PathStyle style = path_style_from_str8(exe_name);
-            if(style == PathStyle_Relative)
+            // rjf: unpack working directory
+            if(args.first->string.size != 0)
             {
-              exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-              exe_name = path_normalized_from_string(scratch.arena, exe_name);
+              String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
+              if(path_part_of_arg.size != 0)
+              {
+                String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
+                working_directory_string = path;
+              }
             }
-            rd_entity_equip_name(exe, exe_name);
+            
+            // rjf: unpack arguments
+            String8List passthrough_args_list = {0};
+            for(String8Node *n = args.first->next; n != 0; n = n->next)
+            {
+              str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+            }
+            StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+            arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           }
           
-          // rjf: equip working directory
-          String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-          if(path_part_of_arg.size != 0)
-          {
-            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            RD_Entity *wdir = rd_entity_alloc(target, RD_EntityKind_WorkingDirectory);
-            rd_entity_equip_name(wdir, path);
-          }
+          //- rjf: build config tree
+          RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+          RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
+          RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
+          RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
+          RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
+          rd_cfg_new(exe, executable_name_string);
+          rd_cfg_new(args, arguments_string);
+          rd_cfg_new(wdir, working_directory_string);
           
-          // rjf: equip args
-          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-          String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
-          if(args_str.size != 0)
-          {
-            RD_Entity *args_entity = rd_entity_alloc(target, RD_EntityKind_Arguments);
-            rd_entity_equip_name(args_entity, args_str);
-          }
           scratch_end(scratch);
         }
       }
@@ -717,8 +528,11 @@ entry_point(CmdLine *cmd_line)
         ipc_s2m_ring_mutex = os_mutex_alloc();
         ipc_s2m_ring_cv = os_condition_variable_alloc();
         IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
-        MemoryZeroStruct(ipc_info);
-        os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
+        if(ipc_shared_memory_base != 0)
+        {
+          MemoryZeroStruct(ipc_info);
+          os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
+        }
         scratch_end(scratch);
       }
       
@@ -750,29 +564,33 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
-              RD_Window *dst_window = rd_state->first_window;
-              for(RD_Window *window = dst_window; window != 0; window = window->next)
+              RD_WindowState *dst_ws = rd_state->first_window_state;
+              for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
               {
-                if(os_window_is_focused(window->os))
+                if(os_window_is_focused(ws->os))
                 {
-                  dst_window = window;
+                  dst_ws = ws;
                   break;
                 }
               }
-              if(dst_window != 0)
+              if(dst_ws != &rd_nil_window_state)
               {
-                dst_window->window_temporarily_focused_ipc = 1;
+                dst_ws->window_temporarily_focused_ipc = 1;
                 U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
                 String8 cmd_kind_name_string = str8_prefix(msg, first_space_pos);
                 String8 cmd_args_string = str8_skip_chop_whitespace(str8_skip(msg, first_space_pos));
                 RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name_string);
                 if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
                 {
-                  if(dst_window != rd_window_from_handle(rd_regs()->window))
+                  if(dst_ws->cfg_id != rd_regs()->window)
                   {
-                    rd_regs()->window = rd_handle_from_window(dst_window);
-                    rd_regs()->panel  = rd_handle_from_panel(dst_window->focused_panel);
-                    rd_regs()->view   = dst_window->focused_panel->selected_tab_view;
+                    Temp scratch = scratch_begin(0, 0);
+                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_id(dst_ws->cfg_id));
+                    rd_regs()->window = dst_ws->cfg_id;
+                    rd_regs()->panel  = panel_tree.focused->cfg->id;
+                    rd_regs()->tab    = panel_tree.focused->selected_tab->id;
+                    rd_regs()->view   = panel_tree.focused->selected_tab->id;
+                    scratch_end(scratch);
                   }
                   rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
                   rd_push_cmd(cmd_kind_name_string, rd_regs());
@@ -795,7 +613,7 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            rd_cmd(RD_CmdKind_LaunchAndRun);
+            rd_cmd(RD_CmdKind_Run);
           }
           
           //- rjf: auto step

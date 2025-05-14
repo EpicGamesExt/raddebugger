@@ -8,10 +8,6 @@
 # define OS_FEATURE_GRAPHICAL 0
 #endif
 
-#if !defined(OS_GFX_STUB)
-# define OS_GFX_STUB 0
-#endif
-
 #include "metagen/metagen_os/core/metagen_os_core.h"
 
 #if OS_WINDOWS

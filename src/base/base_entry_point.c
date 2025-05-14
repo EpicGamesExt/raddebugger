@@ -121,6 +121,9 @@ update(void)
 {
   ProfTick(0);
   ins_atomic_u64_inc_eval(&global_update_tick_idx);
+#if defined(FONT_CACHE_H)
+  fnt_frame();
+#endif
 #if OS_FEATURE_GRAPHICAL
   B32 result = frame();
 #else

@@ -50,9 +50,9 @@ typedef int64_t  RDI_S64;
 ////////////////////////////////////////////////////////////////
 //~ Format Constants
 
-// \"raddbg\0\0\"
+// "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 10
+#define RDI_ENCODING_VERSION 11
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -386,6 +386,7 @@ typedef enum RDI_TypeModifierFlagsEnum
 {
 RDI_TypeModifierFlag_Const                = 1<<0,
 RDI_TypeModifierFlag_Volatile             = 1<<1,
+RDI_TypeModifierFlag_Restrict             = 1<<2,
 } RDI_TypeModifierFlagsEnum;
 
 typedef RDI_U32 RDI_UDTFlags;
@@ -487,7 +488,10 @@ RDI_EvalOp_Pop                  = 44,
 RDI_EvalOp_Insert               = 45,
 RDI_EvalOp_ValueRead            = 46,
 RDI_EvalOp_ByteSwap             = 47,
-RDI_EvalOp_COUNT                = 48,
+RDI_EvalOp_CallSiteValue        = 48,
+RDI_EvalOp_PartialValue         = 49,
+RDI_EvalOp_PartialValueBit      = 50,
+RDI_EvalOp_COUNT                = 51,
 } RDI_EvalOpEnum;
 
 typedef RDI_U8 RDI_EvalTypeGroup;
@@ -887,6 +891,7 @@ X(Count)\
 #define RDI_TypeModifierFlags_XList \
 X(Const)\
 X(Volatile)\
+X(Restrict)\
 
 #define RDI_TypeNode_XList \
 X(RDI_TypeKind, kind)\
@@ -968,6 +973,8 @@ X(RDI_LinkFlags, link_flags)\
 X(RDI_U32, type_idx)\
 X(RDI_U32, root_scope_idx)\
 X(RDI_U32, container_idx)\
+X(RDI_U32, frame_base_location_first)\
+X(RDI_U32, frame_base_location_opl)\
 
 #define RDI_Scope_XList \
 X(RDI_U32, proc_idx)\
@@ -1062,6 +1069,9 @@ X(Pop)\
 X(Insert)\
 X(ValueRead)\
 X(ByteSwap)\
+X(CallSiteValue)\
+X(PartialValue)\
+X(PartialValueBit)\
 
 #define RDI_EvalTypeGroup_XList \
 X(Other)\
@@ -1395,6 +1405,8 @@ RDI_LinkFlags link_flags;
 RDI_U32 type_idx;
 RDI_U32 root_scope_idx;
 RDI_U32 container_idx;
+RDI_U32 frame_base_location_first;
+RDI_U32 frame_base_location_opl;
 };
 
 typedef struct RDI_Scope RDI_Scope;
@@ -1528,9 +1540,10 @@ RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
 RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
 RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
+RDI_PROC RDI_U8 *rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out);
 
 extern RDI_U16 rdi_section_element_size_table[37];
 extern RDI_U8 rdi_section_is_required_table[37];
-extern RDI_U16 rdi_eval_op_ctrlbits_table[49];
+extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
 
 #endif // RDI_FORMAT_H

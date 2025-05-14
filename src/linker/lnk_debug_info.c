@@ -305,8 +305,8 @@ THREAD_POOL_TASK_FUNC(lnk_get_external_leaves_task)
   LNK_GetExternalLeavesTask *task      = raw_task;
   MSF_Parsed                *msf_parse = task->msf_parse_arr[ts_idx];
 
-  task->external_ti_ranges[ts_idx] = push_array_no_zero(arena, Rng1U64, CV_TypeIndexSource_COUNT);
-  task->external_leaves[ts_idx]    = push_array_no_zero(arena, CV_DebugT, CV_TypeIndexSource_COUNT);
+  task->external_ti_ranges[ts_idx] = push_array(arena, Rng1U64,   CV_TypeIndexSource_COUNT);
+  task->external_leaves[ts_idx]    = push_array(arena, CV_DebugT, CV_TypeIndexSource_COUNT);
   task->is_corrupted[ts_idx]       = 1;
 
   if (msf_parse) {
@@ -2505,7 +2505,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
     map       = &task->maps[task_id];
   }
 
-  U64 hash_max_chars = hash_length;
+  U64 hash_max_chars = hash_length*2;
   U8  temp[128];
 
   for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
@@ -2513,7 +2513,9 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
-      if (udt_info.props & CV_TypeProp_HasUniqueName && udt_info.unique_name.size > hash_max_chars) {
+      if ((udt_info.props & CV_TypeProp_HasUniqueName) &&
+           udt_info.unique_name.size > hash_max_chars &&
+           udt_info.name.size > hash_max_chars) {
         // hash unique name
         U128 name_hash;
         blake3_hasher hasher; blake3_hasher_init(&hasher);
@@ -2523,27 +2525,33 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
         // emit hash -> unique name map
         if (make_map) {
           lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
-          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.unique_name));
+          str8_list_pushf(map_arena, map, "%s %S\n", temp, str8_varg(udt_info.unique_name));
         }
 
         // parse leaf size
         CV_NumericParsed dummy;
         U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
 
-        U64 colon_pos = str8_find_needle_reverse(udt_info.name, 0, str8_lit("<lambda_"), 0);
-        B32 is_lambda = colon_pos != 0;
+        String8 lambda_prefix = str8_lit("<lambda_");
+        U64     colon_pos     = str8_find_needle_reverse(udt_info.name, 0, lambda_prefix, 0);
+        B32     is_lambda     = colon_pos != 0;
 
         if (is_lambda) {
-          // replace display type string with unique type name hash
-          udt_info.name.size = lnk_format_u128(udt_info.name.str, udt_info.name.size, hash_length, name_hash);
+          U64 size = lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
+          Assert(size < udt_info.name.size);
+          Assert(size < udt_info.unique_name.size);
+          MemoryCopy(udt_info.name.str, temp, size+1);
+          MemoryCopy(udt_info.name.str+size+1, temp, size+1);
+          udt_info.name.size        = size;
+          udt_info.unique_name.size = size;
 
           // update leaf header
           CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-          header->size          = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
-
-          // discard unique name
-          CV_LeafStruct *lf = (CV_LeafStruct *)(header + 1);
-          lf->props &= ~CV_TypeProp_HasUniqueName;
+          header->size          = sizeof(CV_LeafKind) +
+                                  sizeof(CV_LeafStruct) +
+                                  numeric_size +
+                                  udt_info.name.size + 1 +
+                                  udt_info.unique_name.size + 1;
         } else {
           // replace uniuqe type name with hash
           udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
@@ -2668,7 +2676,7 @@ lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT de
   if (task.make_map) {
     String8List map = {0};
     str8_list_concat_in_place_array(&map, task.maps, tp->worker_count);
-    lnk_write_data_list_to_file_path(map_name, map);
+    lnk_write_data_list_to_file_path(map_name, str8_zero(), map);
     tp_arena_release(&task.map_arena);
   }
 
@@ -3017,7 +3025,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   // Mod1::fUpdateSecContrib
   if (sc_count > 0) {
     for (U64 sc_idx = 0; sc_idx < sc_count; ++sc_idx) {
-      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CNT_CODE) {
+      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CntCode) {
         mod->first_sc = sc_arr[sc_idx].data;
         break;
       }

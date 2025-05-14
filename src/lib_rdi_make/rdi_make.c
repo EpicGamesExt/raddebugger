@@ -439,6 +439,153 @@ rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r
 }
 
 ////////////////////////////////
+//~ Data Model
+
+RDI_PROC RDI_TypeKind
+rdim_short_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S16;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S16;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U16;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U16;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_int_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S32;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U32;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_S64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_S64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_S64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+RDI_PROC RDI_TypeKind
+rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model)
+{
+  switch(data_model)
+  {
+    case RDIM_DataModel_Null  : break;
+    case RDIM_DataModel_ILP32 : return RDI_TypeKind_U32;
+    case RDIM_DataModel_LLP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_LP64  : return RDI_TypeKind_U64;
+    case RDIM_DataModel_ILP64 : return RDI_TypeKind_U64;
+    case RDIM_DataModel_SILP64: return RDI_TypeKind_U64;
+    default: InvalidPath;
+  }
+  return RDI_TypeKind_NULL;
+}
+
+////////////////////////////////
 //~ rjf: [Building] Binary Section List Building
 
 RDI_PROC RDIM_BinarySection *
@@ -651,6 +798,28 @@ rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList
 
 ////////////////////////////////
 //~ rjf: [Building] Type Info Building
+
+RDI_PROC RDIM_Type **
+rdim_array_from_type_list(RDIM_Arena *arena, RDIM_TypeList list)
+{
+  RDIM_Type **arr = push_array(arena, RDIM_Type *, list.count);
+  U64         i   = 0;
+  for(RDIM_TypeNode *n = list.first; n != 0; n = n->next, ++i)
+  {
+    arr[i] = n->v;
+  }
+  return arr;
+}
+
+RDI_PROC RDIM_TypeNode *
+rdim_type_list_push(RDIM_Arena *arena, RDIM_TypeList *list, RDIM_Type *v)
+{
+  RDIM_TypeNode *n = push_array(arena, RDIM_TypeNode, 1);
+  n->v = v;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return n;
+}
 
 RDI_PROC RDIM_Type *
 rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap)
@@ -1039,9 +1208,10 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
     }
     else
     {
-      left_dst->last_op = right_destroyed->last_op;
-      left_dst->op_count += right_destroyed->op_count;
-      left_dst->encoded_size += right_destroyed->encoded_size;
+      left_dst->last_op->next  = right_destroyed->first_op;
+      left_dst->last_op        = right_destroyed->last_op;
+      left_dst->op_count      += right_destroyed->op_count;
+      left_dst->encoded_size  += right_destroyed->encoded_size;
     }
     rdim_memzero_struct(right_destroyed);
   }
@@ -1107,6 +1277,59 @@ rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM
   location_case->voff_range = voff_range;
   location_case->location   = location;
   scopes->location_count +=1;
+}
+
+//- location block chunk list
+
+RDI_PROC RDI_LocationBlock *
+rdim_location_block_chunk_list_push_array(RDIM_Arena *arena, RDIM_String8List *list, RDI_U32 count)
+{
+  RDI_LocationBlock *result = rdim_push_array(arena, RDI_LocationBlock, count);
+  RDIM_String8 string = rdim_str8((RDI_U8*)result, sizeof(result[0]) * count);
+  rdim_str8_list_push(arena, list, string);
+  return result;
+}
+
+RDI_PROC RDI_U32
+rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
+{
+  RDI_U32 count = list->total_size / sizeof(RDI_LocationBlock);
+  return count;
+}
+
+////////////////////////////////
+
+RDI_PROC RDIM_Type *
+rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
+{
+  return &list.first->v[type_kind];
+}
+
+RDI_PROC RDIM_TypeChunkList
+rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
+{
+  RDIM_TypeChunkList list = {0};
+  
+  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
+  
+  // RDI_TypeKind_NULL
+  rdim_type_chunk_list_push(arena, &list, type_cap);
+  
+  for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
+  {
+    RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
+    type->name.str  = rdi_string_from_type_kind(type_kind, &type->name.size);
+    type->kind      = type_kind;
+    type->byte_size = rdi_size_from_basic_type_kind(type_kind);
+  }
+  
+  RDIM_Type *void_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Void);
+  void_type->byte_size = rdi_addr_size_from_arch(arch);
+  
+  RDIM_Type *handle_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Handle);
+  handle_type->byte_size = rdi_addr_size_from_arch(arch);
+  
+  return list;
 }
 
 ////////////////////////////////
@@ -1698,6 +1921,25 @@ rdim_bake_path_node_from_string(RDIM_BakePathTree *tree, RDIM_String8 string)
       }
     }
     
+    // rjf: .. -> go up
+    if(sub_dir.RDIM_String8_SizeMember == 2 &&
+       sub_dir.RDIM_String8_BaseMember[0] == '.' &&
+       sub_dir.RDIM_String8_BaseMember[1] == '.')
+    {
+      sub_dir_node = node->parent;
+      if(sub_dir_node == 0)
+      {
+        sub_dir_node = &tree->root;
+      }
+    }
+    
+    // rjf: . -> stay here
+    else if(sub_dir.RDIM_String8_SizeMember == 1 &&
+            sub_dir.RDIM_String8_BaseMember[0] == '.')
+    {
+      sub_dir_node = node;
+    }
+    
     // rjf: descend to child
     node = sub_dir_node;
   }
@@ -1752,8 +1994,27 @@ rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_Stri
       }
     }
     
+    // rjf: .. -> go up
+    if(sub_dir.RDIM_String8_SizeMember == 2 &&
+       sub_dir.RDIM_String8_BaseMember[0] == '.' &&
+       sub_dir.RDIM_String8_BaseMember[1] == '.')
+    {
+      sub_dir_node = node->parent;
+      if(sub_dir_node == 0)
+      {
+        sub_dir_node = &tree->root;
+      }
+    }
+    
+    // rjf: . -> stay here
+    else if(sub_dir.RDIM_String8_SizeMember == 1 &&
+            sub_dir.RDIM_String8_BaseMember[0] == '.')
+    {
+      sub_dir_node = node;
+    }
+    
     // rjf: no child -> make one
-    if(sub_dir_node == 0)
+    else if(sub_dir_node == 0)
     {
       sub_dir_node = rdim_push_array(arena, RDIM_BakePathNode, 1);
       RDIM_SLLQueuePush_N(tree->first, tree->last, sub_dir_node, next_order);
@@ -1969,6 +2230,15 @@ rdim_bake_string_map_loose_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringM
 }
 
 RDI_PROC void
+rdim_bake_string_map_loose_push_inline_site_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_InlineSite *v, RDI_U64 count)
+{
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
+  {
+    rdim_bake_string_map_loose_insert(arena, top, map, 4, v[idx].name);
+  }
+}
+
+RDI_PROC void
 rdim_bake_string_map_loose_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Scope *v, RDI_U64 count)
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
@@ -2093,6 +2363,7 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
           RDI_U32 type_idx = (RDI_U32)rdim_idx_from_type(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          if(type_idx == 0) {continue;}
           rdim_bake_name_map_push(arena, map, n->v[idx].name, type_idx);
         }
       }
@@ -2930,13 +3201,13 @@ RDI_PROC RDIM_TypeNodeBakeResult
 rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_TypeChunkList *src)
 {
   RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, src->total_count+1);
-  RDI_U32 dst_idx = 1;
   for(RDIM_TypeChunkNode *n = src->first; n != 0; n = n->next)
   {
-    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
     {
-      RDIM_Type *src = &n->v[chunk_idx];
-      RDI_TypeNode *dst = &type_nodes[dst_idx];
+      RDIM_Type    *src     = &n->v[chunk_idx];
+      U64           dst_idx = rdim_idx_from_type(src);
+      RDI_TypeNode *dst     = &type_nodes[dst_idx];
       
       //- rjf: fill shared type node info
       dst->kind      = src->kind;
@@ -2947,6 +3218,17 @@ rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeId
       if(RDI_TypeKind_FirstBuiltIn <= dst->kind && dst->kind <= RDI_TypeKind_LastBuiltIn)
       {
         dst->built_in.name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+      }
+      
+      else if(dst->kind == RDI_TypeKind_Array)
+      {
+        U64 direct_byte_size = 1;
+        if(src->direct_type && src->direct_type->byte_size > 0)
+        {
+          direct_byte_size = src->direct_type->byte_size;
+        }
+        dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type);
+        dst->constructed.count           = src->byte_size / direct_byte_size;
       }
       
       //- rjf: fill constructed type node info
@@ -3215,8 +3497,103 @@ rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
   return result;
 }
 
+RDI_PROC U64
+rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
+{
+  U64 location_data_off = location_data_blobs->total_size;
+  
+  // rjf: nil location
+  if(src_location == 0)
+  {
+    rdim_str8_list_push_align(arena, location_data_blobs, 8);
+    rdim_str8_list_push(arena, location_data_blobs, rdim_str8_lit("\0"));
+  }
+  
+  // rjf: valid location
+  else switch(src_location->kind)
+  {
+    // rjf: catchall unsupported case
+    default:
+    {
+      rdim_str8_list_push_align(arena, location_data_blobs, 8);
+      rdim_str8_list_push(arena, location_data_blobs, rdim_str8_lit("\0"));
+    }break;
+    
+    // rjf: bytecode streams
+    case RDI_LocationKind_AddrBytecodeStream:
+    case RDI_LocationKind_ValBytecodeStream:
+    {
+      rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, rdim_str8_struct(&src_location->kind)));
+      for(RDIM_EvalBytecodeOp *op_node = src_location->bytecode.first_op;
+          op_node != 0;
+          op_node = op_node->next)
+      {
+        RDI_U8 op_data[9];
+        op_data[0] = op_node->op;
+        rdim_memcpy(op_data + 1, &op_node->p, op_node->p_size);
+        RDIM_String8 op_data_str = rdim_str8(op_data, 1 + op_node->p_size);
+        rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, op_data_str));
+      }
+      {
+        RDI_U64 data = 0;
+        RDIM_String8 data_str = rdim_str8((RDI_U8 *)&data, 1);
+        rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, data_str));
+      }
+    }break;
+    
+    // rjf: simple addr+off cases
+    case RDI_LocationKind_AddrRegPlusU16:
+    case RDI_LocationKind_AddrAddrRegPlusU16:
+    {
+      RDI_LocationRegPlusU16 loc = {0};
+      loc.kind = src_location->kind;
+      loc.reg_code = src_location->reg_code;
+      loc.offset = src_location->offset;
+      rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, rdim_str8_struct(&loc)));
+    }break;
+    
+    // rjf: register cases
+    case RDI_LocationKind_ValReg:
+    {
+      RDI_LocationReg loc = {0};
+      loc.kind = src_location->kind;
+      loc.reg_code = src_location->reg_code;
+      rdim_str8_list_push(arena, location_data_blobs, rdim_str8_copy(arena, rdim_str8_struct(&loc)));
+    }break;
+  }
+  
+  return location_data_off;
+}
+
+RDI_PROC RDI_U32
+rdim_bake_locset(RDIM_Arena       *arena,
+                 RDIM_String8List *location_blocks,
+                 RDIM_String8List *location_data_blobs,
+                 RDIM_LocationSet  locset)
+{
+  RDI_U32 locset_idx = 0;
+  if(locset.location_case_count > 0)
+  {
+    locset_idx = rdim_count_from_location_block_chunk_list(location_blocks);
+    
+    RDI_LocationBlock *dst_arr = rdim_location_block_chunk_list_push_array(arena, location_blocks, locset.location_case_count);
+    RDI_LocationBlock *dst     = dst_arr;
+    for(RDIM_LocationCase *src = locset.first_location_case; src != 0; src = src->next, ++dst)
+    {
+      dst->scope_off_first   = src->voff_range.min;
+      dst->scope_off_opl     = src->voff_range.max;
+      dst->location_data_off = rdim_bake_location(arena, location_data_blobs, src->location);
+    }
+  }
+  return locset_idx;
+}
+
 RDI_PROC RDIM_ProcedureBakeResult
-rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
+rdim_bake_procedures(RDIM_Arena              *arena,
+                     RDIM_BakeStringMapTight *strings,
+                     RDIM_String8List        *location_blocks,
+                     RDIM_String8List        *location_data_blobs,
+                     RDIM_SymbolChunkList    *src)
 {
   RDI_Procedure *procedures = push_array(arena, RDI_Procedure, src->total_count+1);
   RDI_U32 dst_idx = 1;
@@ -3224,8 +3601,12 @@ rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_S
   {
     for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
     {
-      RDIM_Symbol *src = &n->v[chunk_idx];
+      RDIM_Symbol   *src = &n->v[chunk_idx];
       RDI_Procedure *dst = &procedures[dst_idx];
+      
+      RDI_U32 frame_base_location_first = rdim_bake_locset(arena, location_blocks, location_data_blobs, src->frame_base);
+      RDI_U32 frame_base_location_opl   = frame_base_location_first + src->frame_base.location_case_count;
+      
       dst->name_string_idx      = rdim_bake_idx_from_string(strings, src->name);
       dst->link_name_string_idx = rdim_bake_idx_from_string(strings, src->link_name);
       if(src->is_extern)
@@ -3242,8 +3623,10 @@ rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_S
         dst->link_flags |= RDI_LinkFlag_ProcScoped;
         dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
       }
-      dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
-      dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+      dst->type_idx                  = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+      dst->root_scope_idx            = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+      dst->frame_base_location_first = frame_base_location_first;
+      dst->frame_base_location_opl   = frame_base_location_opl;
     }
   }
   RDIM_ProcedureBakeResult result = {0};
@@ -3253,30 +3636,32 @@ rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_S
 }
 
 RDI_PROC RDIM_ScopeBakeResult
-rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_ScopeChunkList *src)
+rdim_bake_scopes(RDIM_Arena              *arena,
+                 RDIM_BakeStringMapTight *strings,
+                 RDIM_String8List        *location_blocks,
+                 RDIM_String8List        *location_data_blobs,
+                 RDIM_ScopeChunkList     *src)
 {
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   
   ////////////////////////////
   //- rjf: build all scopes, scope voffs, locals, and location blocks
   //
-  RDI_Scope *         scopes          = rdim_push_array(arena, RDI_Scope,         src->total_count+1);
-  RDI_U64 *           scope_voffs     = rdim_push_array(arena, RDI_U64,           src->scope_voff_count+1);
-  RDI_Local *         locals          = rdim_push_array(arena, RDI_Local,         src->local_count+1);
-  RDI_LocationBlock * location_blocks = rdim_push_array(arena, RDI_LocationBlock, src->location_count+1);
-  RDIM_String8List    location_data_blobs = {0};
+  RDI_Scope *scopes      = rdim_push_array(arena, RDI_Scope, src->total_count+1);
+  RDI_U64   *scope_voffs = rdim_push_array(arena, RDI_U64,   src->scope_voff_count+1);
+  RDI_Local *locals      = rdim_push_array(arena, RDI_Local, src->local_count+1);
+  
   RDIM_ProfScope("build all scopes, scope voffs, locals, and location blocks")
   {
-    RDI_U64 dst_scope_idx = 1;
+    RDI_U64 dst_scope_idx      = 1;
     RDI_U64 dst_scope_voff_idx = 1;
-    RDI_U64 dst_local_idx = 1;
-    RDI_U64 dst_location_block_idx = 1;
+    RDI_U64 dst_local_idx      = 1;
     for(RDIM_ScopeChunkNode *chunk_n = src->first; chunk_n != 0; chunk_n = chunk_n->next)
     {
       for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1, dst_scope_idx += 1)
       {
         RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
-        RDI_Scope *dst_scope = &scopes[dst_scope_idx];
+        RDI_Scope  *dst_scope = &scopes[dst_scope_idx];
         
         //- rjf: push scope's voffs
         RDI_U64 voff_idx_first = dst_scope_voff_idx;
@@ -3297,91 +3682,17 @@ rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Scope
             src_local != 0;
             src_local = src_local->next, dst_local_idx += 1)
         {
-          //- rjf: push local's locations
-          RDI_U64 location_block_idx_first = dst_location_block_idx;
-          for(RDIM_LocationCase *loccase = src_local->locset.first_location_case;
-              loccase != 0;
-              loccase = loccase->next, dst_location_block_idx += 1)
-          {
-            // rjf: fill location block
-            RDI_LocationBlock *dst_locblock = &location_blocks[dst_location_block_idx];
-            dst_locblock->scope_off_first   = loccase->voff_range.min;
-            dst_locblock->scope_off_opl     = loccase->voff_range.max;
-            dst_locblock->location_data_off = location_data_blobs.total_size;
-            
-            // rjf: serialize location into location data
-            RDIM_Location *src_location = loccase->location;
-            {
-              // rjf: nil location
-              if(src_location == 0)
-              {
-                rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
-                rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
-              }
-              
-              // rjf: valid location
-              else switch(src_location->kind)
-              {
-                // rjf: catchall unsupported case
-                default:
-                {
-                  rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
-                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
-                }break;
-                
-                // rjf: bytecode streams
-                case RDI_LocationKind_AddrBytecodeStream:
-                case RDI_LocationKind_ValBytecodeStream:
-                {
-                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&src_location->kind)));
-                  for(RDIM_EvalBytecodeOp *op_node = src_location->bytecode.first_op;
-                      op_node != 0;
-                      op_node = op_node->next)
-                  {
-                    RDI_U8 op_data[9];
-                    op_data[0] = op_node->op;
-                    rdim_memcpy(op_data + 1, &op_node->p, op_node->p_size);
-                    RDIM_String8 op_data_str = rdim_str8(op_data, 1 + op_node->p_size);
-                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, op_data_str));
-                  }
-                  {
-                    RDI_U64 data = 0;
-                    RDIM_String8 data_str = rdim_str8((RDI_U8 *)&data, 1);
-                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, data_str));
-                  }
-                }break;
-                
-                // rjf: simple addr+off cases
-                case RDI_LocationKind_AddrRegPlusU16:
-                case RDI_LocationKind_AddrAddrRegPlusU16:
-                {
-                  RDI_LocationRegPlusU16 loc = {0};
-                  loc.kind = src_location->kind;
-                  loc.reg_code = src_location->reg_code;
-                  loc.offset = src_location->offset;
-                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
-                }break;
-                
-                // rjf: register cases
-                case RDI_LocationKind_ValReg:
-                {
-                  RDI_LocationReg loc = {0};
-                  loc.kind = src_location->kind;
-                  loc.reg_code = src_location->reg_code;
-                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
-                }break;
-              }
-            }
-          }
-          RDI_U64 location_block_idx_opl = dst_location_block_idx;
+          // bake location sets
+          RDI_U32 location_block_idx_first = rdim_bake_locset(arena, location_blocks, location_data_blobs, src_local->locset);
+          RDI_U32 location_block_idx_opl   = location_block_idx_first + src_local->locset.location_case_count;
           
           //- rjf: fill local
-          RDI_Local *dst_local = &locals[dst_local_idx];
+          RDI_Local *dst_local       = &locals[dst_local_idx];
           dst_local->kind            = src_local->kind;
           dst_local->name_string_idx = rdim_bake_idx_from_string(strings, src_local->name);
           dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
-          dst_local->location_first  = (RDI_U32)location_block_idx_first; // TODO(rjf): @u64_to_u32
-          dst_local->location_opl    = (RDI_U32)location_block_idx_opl;   // TODO(rjf): @u64_to_u32
+          dst_local->location_first  = location_block_idx_first;
+          dst_local->location_opl    = location_block_idx_opl;
         }
         RDI_U64 local_idx_opl = dst_local_idx;
         
@@ -3400,28 +3711,15 @@ rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Scope
   }
   
   ////////////////////////////
-  //- rjf: build flattened location data
-  //
-  RDIM_String8 location_data_blob = {0};
-  RDIM_ProfScope("build flattened location data")
-  {
-    location_data_blob = rdim_str8_list_join(arena, &location_data_blobs, rdim_str8_lit(""));
-  }
-  
-  ////////////////////////////
   //- rjf: fill result
   //
   RDIM_ScopeBakeResult result = {0};
-  result.scopes                        = scopes;
-  result.scopes_count                  = src->total_count+1;
-  result.scope_voffs                   = scope_voffs;
-  result.scope_voffs_count             = src->scope_voff_count+1;
-  result.locals                        = locals;
-  result.locals_count                  = src->local_count+1;
-  result.location_blocks               = location_blocks;
-  result.location_blocks_count         = src->location_count+1;
-  result.location_data                 = location_data_blob.str;
-  result.location_data_size            = location_data_blob.size;
+  result.scopes               = scopes;
+  result.scopes_count         = src->total_count+1;
+  result.scope_voffs          = scope_voffs;
+  result.scope_voffs_count    = src->scope_voff_count+1;
+  result.locals               = locals;
+  result.locals_count         = src->local_count+1;
   rdim_scratch_end(scratch);
   return result;
 }
@@ -3678,8 +3976,8 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_ScopeVMap]            = rdim_serialized_section_make_unpacked_array(results->scope_vmap.vmap.vmap, results->scope_vmap.vmap.count+1);
   bundle.sections[RDI_SectionKind_InlineSites]          = rdim_serialized_section_make_unpacked_array(results->inline_sites.inline_sites, results->inline_sites.inline_sites_count);
   bundle.sections[RDI_SectionKind_Locals]               = rdim_serialized_section_make_unpacked_array(results->scopes.locals, results->scopes.locals_count);
-  bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->scopes.location_blocks, results->scopes.location_blocks_count);
-  bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->scopes.location_data, results->scopes.location_data_size);
+  bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->location_blocks.str, results->location_blocks.size);
+  bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->location_data.str, results->location_data.size);
   bundle.sections[RDI_SectionKind_NameMaps]             = rdim_serialized_section_make_unpacked_array(results->top_level_name_maps.name_maps, results->top_level_name_maps.name_maps_count);
   bundle.sections[RDI_SectionKind_NameMapBuckets]       = rdim_serialized_section_make_unpacked_array(results->name_maps.buckets, results->name_maps.buckets_count);
   bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);

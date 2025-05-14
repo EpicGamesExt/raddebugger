@@ -147,6 +147,10 @@
   </Type>
 
   <Type Name="CmdLineOptList">
+    <AlternativeType Name="Rng1U64List"/>
+    <AlternativeType Name="Rng1S64List"/>
+    <AlternativeType Name="DW_AttribList"/>
+    <AlternativeType Name="DW_LocList"/>
     <DisplayString>{{ count={count} first={first} }} </DisplayString>
     <Expand>
 			<Item Name="[count]">count</Item>
@@ -158,4 +162,32 @@
       </LinkedListItems>
     </Expand>
   </Type>
+
+	<Type Name="RDIM_TypeChunkList">
+    <AlternativeType Name="RDIM_SrcFileChunkList"/>
+    <AlternativeType Name="RDIM_LineTableChunkList"/>
+    <AlternativeType Name="RDIM_UnitChunkList"/>
+    <AlternativeType Name="RDIM_UDTChunkList"/>
+    <AlternativeType Name="RDIM_SymbolChunkList"/>
+    <AlternativeType Name="RDIM_InlineSiteChunkList"/>
+    <AlternativeType Name="RDIM_ScopeChunkList"/>
+		<Expand>
+      <Item Name="[chunk count]">chunk_count</Item>
+      <CustomListItems MaxItemsPerView="5000">
+        <Variable Name="node" InitialValue="first"/>
+        <Variable Name="idx" InitialValue="0"/>
+        <Loop>
+          <Break Condition="node == 0"/>
+          <Exec>idx = 0</Exec>
+          <Loop>
+            <Break Condition="idx >= node->count"/>
+            <Item>node->v[idx]</Item>
+            <Exec>idx += 1</Exec>
+          </Loop>
+          <Exec>node = node->next</Exec>
+        </Loop>
+      </CustomListItems>
+		</Expand>
+	</Type>
+
 </AutoVisualizer>

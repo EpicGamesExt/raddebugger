@@ -56,9 +56,11 @@ dmn_w32_entity_alloc(DMN_W32_Entity *parent, DMN_W32_EntityKind kind, U64 id)
   // rjf: allocate
   DMN_W32_Entity *e = dmn_w32_shared->entities_first_free;
   {
+    U32 gen = 0;
     if(e != 0)
     {
       SLLStackPop(dmn_w32_shared->entities_first_free);
+      gen = e->gen;
     }
     else
     {
@@ -471,7 +473,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   // rjf: get COFF header
   B32 got_coff_header = 0;
   U64 coff_header_off = 0;
-  COFF_Header coff_header = {0};
+  COFF_FileHeader coff_header = {0};
   if(pe_offset > 0)
   {
     U64 pe_magic_off = base_vaddr + pe_offset;
@@ -749,12 +751,12 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->fs.u16  = ctx->SegFs;
       dst->gs.u16  = ctx->SegGs;
       dst->ss.u16  = ctx->SegSs;
-      dst->dr0.u32 = ctx->Dr0;
-      dst->dr1.u32 = ctx->Dr1;
-      dst->dr2.u32 = ctx->Dr2;
-      dst->dr3.u32 = ctx->Dr3;
-      dst->dr6.u32 = ctx->Dr6;
-      dst->dr7.u32 = ctx->Dr7;
+      dst->dr0.u64 = ctx->Dr0;
+      dst->dr1.u64 = ctx->Dr1;
+      dst->dr2.u64 = ctx->Dr2;
+      dst->dr3.u64 = ctx->Dr3;
+      dst->dr6.u64 = ctx->Dr6;
+      dst->dr7.u64 = ctx->Dr7;
       // NOTE(rjf): this bit is "supposed to always be 1", according to old info.
       // may need to be investigated.
       dst->rflags.u64 = ctx->EFlags | 0x2;
@@ -1020,12 +1022,12 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       ctx->SegFs = src->fs.u16;
       ctx->SegGs = src->gs.u16;
       ctx->SegSs = src->ss.u16;
-      ctx->Dr0 = src->dr0.u32;
-      ctx->Dr1 = src->dr1.u32;
-      ctx->Dr2 = src->dr2.u32;
-      ctx->Dr3 = src->dr3.u32;
-      ctx->Dr6 = src->dr6.u32;
-      ctx->Dr7 = src->dr7.u32;
+      ctx->Dr0 = src->dr0.u64;
+      ctx->Dr1 = src->dr1.u64;
+      ctx->Dr2 = src->dr2.u64;
+      ctx->Dr3 = src->dr3.u64;
+      ctx->Dr6 = src->dr6.u64;
+      ctx->Dr7 = src->dr7.u64;
       ctx->EFlags = src->rflags.u64;
       fxsave->ControlWord = src->fcw.u16;
       fxsave->StatusWord = src->fsw.u16;
@@ -1291,7 +1293,6 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
       inherit_handles = 1;
     }
     PROCESS_INFORMATION process_info = {0};
-    AllocConsole();
     if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, creation_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
     {
       // check if we are 32-bit app, and just close it immediately
@@ -1313,15 +1314,13 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     }
     else
     {
-      MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
-    }
-    FreeConsole();
-    
-    //- rjf: eliminate all handles which have stuck around from the AllocConsole
-    {
-      SetStdHandle(STD_INPUT_HANDLE, 0);
-      SetStdHandle(STD_OUTPUT_HANDLE, 0);
-      SetStdHandle(STD_ERROR_HANDLE, 0);
+      DWORD error = GetLastError();
+      LPWSTR message = 0;
+      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, MAKELANGID(LANG_NEUTRAL,SUBLANG_NEUTRAL), (LPWSTR)&message, 0, 0);
+      String8 message8 = message ? str8_from_16(scratch.arena, str16_cstring(message)) : str8_lit("unknown error");
+      LocalFree(message);
+      
+      log_user_errorf("There was an error starting %S: %S", params->cmd_line.first->string, message8);
     }
   }
   scratch_end(scratch);
@@ -1560,10 +1559,161 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
           {
             DMN_Trap *trap = n->v+n_idx;
-            trap_swap_bytes[trap_idx] = 0xCC;
-            dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
-            U8 int3 = 0xCC;
-            dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
+            if(trap->flags == 0)
+            {
+              trap_swap_bytes[trap_idx] = 0xCC;
+              dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
+              U8 int3 = 0xCC;
+              dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: gather all flagged traps, bucketed by process
+      //
+      typedef struct DMN_FlaggedTrapTask DMN_FlaggedTrapTask;
+      struct DMN_FlaggedTrapTask
+      {
+        DMN_FlaggedTrapTask *next;
+        DMN_Handle process;
+        DMN_TrapChunkList traps;
+      };
+      DMN_FlaggedTrapTask *first_flagged_trap_task = 0;
+      DMN_FlaggedTrapTask *last_flagged_trap_task= 0;
+      for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
+      {
+        for(U64 n_idx = 0; n_idx < n->count; n_idx += 1)
+        {
+          DMN_Trap *trap = n->v+n_idx;
+          if(trap->flags != 0)
+          {
+            DMN_FlaggedTrapTask *task = 0;
+            for(DMN_FlaggedTrapTask *t = first_flagged_trap_task; t != 0; t = t->next)
+            {
+              if(dmn_handle_match(t->process, trap->process))
+              {
+                task = t;
+                break;
+              }
+            }
+            if(task == 0)
+            {
+              task = push_array(scratch.arena, DMN_FlaggedTrapTask, 1);
+              SLLQueuePush(first_flagged_trap_task, last_flagged_trap_task, task);
+              task->process = trap->process;
+            }
+            B32 already_in_task = 0;
+            for(DMN_TrapChunkNode *n = task->traps.first; n != 0; n = n->next)
+            {
+              for(U64 n_idx = 0; n_idx < n->count; n_idx += 1)
+              {
+                if(n->v[n_idx].id == trap->id)
+                {
+                  already_in_task = 1;
+                  goto end_look_for_existing_trap_in_task;
+                }
+              }
+            }
+            end_look_for_existing_trap_in_task:;
+            if(!already_in_task)
+            {
+              dmn_trap_chunk_list_push(scratch.arena, &task->traps, 8, trap);
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: write all debug register states, for flagged-traps
+      //
+      ProfScope("write all debug register states, for flagged-traps")
+      {
+        //- rjf: for each flagged trap task, iterate all threads in the
+        // associated process, and prepare debug registers accordingly
+        for(DMN_FlaggedTrapTask *t = first_flagged_trap_task; t != 0; t = t->next)
+        {
+          DMN_Handle process = t->process;
+          DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+          for(DMN_W32_Entity *child = process_entity->first;
+              child != &dmn_w32_entity_nil;
+              child = child->next)
+          {
+            if(child->kind == DMN_W32_EntityKind_Thread)
+            {
+              switch(child->arch)
+              {
+                default:{}break;
+                
+                //- rjf: x64
+                case Arch_x64:
+                {
+                  REGS_RegBlockX64 regs = {0};
+                  dmn_w32_thread_read_reg_block(child->arch, child->handle, &regs);
+                  {
+                    U64 trap_idx = 0;
+                    for(DMN_TrapChunkNode *n = t->traps.first; n != 0; n = n->next)
+                    {
+                      for(U64 n_idx = 0; n_idx < n->count && trap_idx < 4; n_idx += 1, trap_idx += 1)
+                      {
+                        DMN_Trap *trap = &n->v[n_idx];
+                        REGS_Reg64 *addr_reg = &regs.dr0;
+                        switch(trap_idx)
+                        {
+                          default:{}break;
+                          case 0:{addr_reg = &regs.dr0;}break;
+                          case 1:{addr_reg = &regs.dr1;}break;
+                          case 2:{addr_reg = &regs.dr2;}break;
+                          case 3:{addr_reg = &regs.dr3;}break;
+                        }
+                        addr_reg->u64 = trap->vaddr;
+                        regs.dr7.u64 |= bit9|bit10|bit11;
+                        regs.dr7.u64 |= (1ull << (trap_idx*2));
+                        // NOTE(rjf): global-enable regs.dr7.u64 |= (1ull << (trap_idx*2+1));
+                        regs.dr7.u64 &= ~((U64)(bit17|bit18|bit19|bit20) << (trap_idx*4));
+                        regs.dr7.u64 &= ~((U64)(bit15|bit16));
+                        switch(trap->flags)
+                        {
+                          case DMN_TrapFlag_BreakOnExecute:
+                          default:{}break;
+                          case DMN_TrapFlag_BreakOnWrite:
+                          case DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
+                          {
+                            regs.dr7.u64 |= ((U64)bit17) << (trap_idx*4);
+                          }break;
+                          case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
+                          case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite:
+                          {
+                            regs.dr7.u64 |= (((U64)bit17) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
+                          }break;
+                        }
+                        switch(trap->size)
+                        {
+                          case 1:
+                          default:{}break;
+                          case 2:
+                          {
+                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                          }break;
+                          case 4:
+                          {
+                            regs.dr7.u64 |= (((U64)bit19) << (trap_idx*4));
+                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
+                          }break;
+                          case 8:
+                          {
+                            regs.dr7.u64 |= (((U64)bit20) << (trap_idx*4));
+                          }break;
+                        }
+                      }
+                    }
+                  }
+                  dmn_w32_thread_write_reg_block(child->arch, child->handle, &regs);
+                }break;
+              }
+            }
           }
         }
       }
@@ -2089,6 +2239,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               
               //- rjf: check if this trap is a usage-code-specified trap or something else
               B32 hit_user_trap = 0;
+              U64 user_trap_id = 0;
               if(is_trap)
               {
                 for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
@@ -2098,6 +2249,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     if(dmn_handle_match(n->v[idx].process, dmn_w32_handle_from_entity(process)) && n->v[idx].vaddr == instruction_pointer)
                     {
                       hit_user_trap = 1;
+                      user_trap_id = n->v[idx].id;
                       break;
                     }
                   }
@@ -2186,6 +2338,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 e->code    = exception->ExceptionCode;
                 e->flags   = exception->ExceptionFlags;
                 e->instruction_pointer = (U64)exception->ExceptionAddress;
+                e->user_data = user_trap_id;
                 
                 //- rjf: fill according to exception code
                 switch(exception->ExceptionCode)
@@ -2215,6 +2368,72 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case DMN_W32_EXCEPTION_SINGLE_STEP:
                   {
                     e->kind = DMN_EventKind_SingleStep;
+                    
+                    // NOTE(rjf): data breakpoints are reported via single-steps
+                    // over the instructions which caused the breakpoint to be
+                    // hit - so if we have data breakpoints set, we need to
+                    // check this thread's debug registers, to determine if this
+                    // is a regular single-step or a data breakpoint hit.
+                    if(first_flagged_trap_task != 0)
+                    {
+                      // rjf: first determine the flagged trap index
+                      U64 flagged_trap_idx = 0;
+                      switch(thread->arch)
+                      {
+                        default:{NotImplemented;}break;
+                        case Arch_x64:
+                        {
+                          REGS_RegBlockX64 regs = {0};
+                          dmn_w32_thread_read_reg_block(thread->arch, thread->handle, &regs);
+                          if(regs.dr6.u64 & 0xF)
+                          {
+                            e->kind = DMN_EventKind_Breakpoint;
+                            if(0){}
+                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 0; }
+                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 1; }
+                            else if(regs.dr7.u64 & (1ull<<4) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 2; }
+                            else if(regs.dr7.u64 & (1ull<<8) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; }
+                          }
+                        }break;
+                      }
+                      
+                      // rjf: find the flagged trap task for this thread's process
+                      DMN_W32_Entity *process = thread->parent;
+                      DMN_FlaggedTrapTask *task = 0;
+                      for(DMN_FlaggedTrapTask *t = first_flagged_trap_task; t != 0; t = t->next)
+                      {
+                        if(dmn_handle_match(t->process, dmn_w32_handle_from_entity(process)))
+                        {
+                          task = t;
+                          break;
+                        }
+                      }
+                      
+                      // rjf: find the trap
+                      DMN_Trap *trap = 0;
+                      if(task != 0)
+                      {
+                        U64 trap_idx = 0;
+                        for(DMN_TrapChunkNode *n = task->traps.first; n != 0; n = n->next)
+                        {
+                          for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
+                          {
+                            if(trap_idx == flagged_trap_idx)
+                            {
+                              trap = &n->v[n_idx];
+                              goto break_search_for_flagged_trap;
+                            }
+                          }
+                        }
+                        break_search_for_flagged_trap:;
+                      }
+                      
+                      // rjf: fill event based on trap
+                      if(trap != 0)
+                      {
+                        e->user_data = trap->id;
+                      }
+                    }
                   }break;
                   
                   //- rjf: fill throw info
@@ -2301,6 +2520,31 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     {
                       e->code = exception->ExceptionInformation[2];
                     }
+                  }break;
+                  
+                  //- rjf: fill set-thread-color info
+                  case DMN_W32_EXCEPTION_RADDBG_SET_THREAD_COLOR:
+                  {
+                    e->kind = DMN_EventKind_SetThreadColor;
+                    e->code = exception->ExceptionInformation[0];
+                    e->user_data = exception->ExceptionInformation[1];
+                  }break;
+                  
+                  //- rjf: fill set-data-breakpoint info
+                  case DMN_W32_EXCEPTION_RADDBG_SET_BREAKPOINT:
+                  {
+                    U64 vaddr = exception->ExceptionInformation[0];
+                    U64 size  = exception->ExceptionInformation[1];
+                    U64 read  = exception->ExceptionInformation[2];
+                    U64 write = exception->ExceptionInformation[3];
+                    U64 exec  = exception->ExceptionInformation[4];
+                    U64 set   = exception->ExceptionInformation[5];
+                    e->kind = set ? DMN_EventKind_SetBreakpoint : DMN_EventKind_UnsetBreakpoint;
+                    e->address = vaddr;
+                    e->size    = size;
+                    if(read)  { e->flags |= DMN_TrapFlag_BreakOnRead; }
+                    if(write) { e->flags |= DMN_TrapFlag_BreakOnWrite; }
+                    if(exec)  { e->flags |= DMN_TrapFlag_BreakOnExecute; }
                   }break;
                   
                   //- rjf: unhandled exception case
@@ -2428,7 +2672,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
       }
       
+      ////////////////////////
       //- rjf: gather new thread-names
+      //
       ProfScope("gather new thread names") if(dmn_w32_GetThreadDescription != 0)
       {
         for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first;
@@ -2481,10 +2727,46 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
           {
             DMN_Trap *trap = n->v+n_idx;
-            U8 og_byte = trap_swap_bytes[trap_idx];
-            if(og_byte != 0xCC)
+            if(trap->flags == 0)
             {
-              dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &og_byte);
+              U8 og_byte = trap_swap_bytes[trap_idx];
+              if(og_byte != 0xCC)
+              {
+                dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &og_byte);
+              }
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: clear all debug register states, for flagged-traps
+      //
+      ProfScope("clear all debug register states, for flagged-traps")
+      {
+        for(DMN_FlaggedTrapTask *t = first_flagged_trap_task; t != 0; t = t->next)
+        {
+          DMN_Handle process = t->process;
+          DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+          for(DMN_W32_Entity *child = process_entity->first;
+              child != &dmn_w32_entity_nil;
+              child = child->next)
+          {
+            if(child->kind == DMN_W32_EntityKind_Thread)
+            {
+              switch(child->arch)
+              {
+                default:{}break;
+                
+                //- rjf: x64
+                case Arch_x64:
+                {
+                  REGS_RegBlockX64 regs = {0};
+                  dmn_w32_thread_read_reg_block(child->arch, child->handle, &regs);
+                  regs.dr7.u64 = 0;
+                  dmn_w32_thread_write_reg_block(child->arch, child->handle, &regs);
+                }break;
+              }
             }
           }
         }

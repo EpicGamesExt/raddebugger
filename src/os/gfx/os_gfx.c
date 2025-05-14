@@ -45,6 +45,24 @@ os_string_list_from_modifiers(Arena *arena, OS_Modifiers modifiers)
   return result;
 }
 
+internal String8
+os_string_from_modifiers_key(Arena *arena, OS_Modifiers modifiers, OS_Key key)
+{
+  String8 result = {0};
+  if(key != OS_Key_Null)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List mods = os_string_list_from_modifiers(scratch.arena, modifiers);
+    String8 key_string = os_g_key_display_string_table[key];
+    str8_list_push(scratch.arena, &mods, key_string);
+    StringJoin join = {0};
+    join.sep = str8_lit(" + ");
+    result = str8_list_join(arena, &mods, &join);
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 internal U32
 os_codepoint_from_modifiers_and_key(OS_Modifiers modifiers, OS_Key key)
 {
@@ -138,6 +156,7 @@ os_codepoint_from_modifiers_and_key(OS_Modifiers modifiers, OS_Key key)
     {'X', OS_Key_X, OS_Modifier_Shift},
     {'Y', OS_Key_Y, OS_Modifier_Shift},
     {'Z', OS_Key_Z, OS_Modifier_Shift},
+    {' ', OS_Key_Space, 0},
   };
   
   // rjf: check numeric

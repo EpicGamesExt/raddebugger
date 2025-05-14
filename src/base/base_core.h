@@ -66,6 +66,14 @@
 #endif
 
 ////////////////////////////////
+//~ rjf: Versions
+
+#define Version(major, minor, patch) (U64)((((U64)(major) & 0xffff) << 32) | ((((U64)(minor) & 0xffff) << 16)) | ((((U64)(patch) & 0xffff) << 0)))
+#define MajorFromVersion(version) (((version) & 0xffff00000000ull) >> 32)
+#define MinorFromVersion(version) (((version) & 0x0000ffff0000ull) >> 16)
+#define PatchFromVersion(version) (((version) & 0x00000000ffffull) >> 0)
+
+////////////////////////////////
 //~ rjf: Units
 
 #define KB(n)  (((U64)(n)) << 10)
@@ -348,6 +356,9 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 #define IsPow2OrZero(x)    ((((x) - 1)&(x)) == 0)
 
 #define ExtractBit(word, idx) (((word) >> (idx)) & 1)
+#define Extract8(word, pos)   (((word) >> ((pos)*8))  & max_U8)
+#define Extract16(word, pos)  (((word) >> ((pos)*16)) & max_U16)
+#define Extract32(word, pos)  (((word) >> ((pos)*32)) & max_U32)
 
 #if LANG_CPP
 # define zero_struct {}
@@ -379,10 +390,32 @@ typedef S64      B64;
 typedef float    F32;
 typedef double   F64;
 typedef void VoidProc(void);
-typedef struct U128 U128;
-struct U128
+typedef union U128 U128;
+union U128
 {
+  U8 u8[16];
+  U16 u16[8];
+  U32 u32[4];
   U64 u64[2];
+};
+typedef union U256 U256;
+union U256
+{
+  U8 u8[32];
+  U16 u16[16];
+  U32 u32[8];
+  U64 u64[4];
+  U128 u128[2];
+};
+typedef union U512 U512;
+union U512
+{
+  U8 u8[64];
+  U16 u16[32];
+  U32 u32[16];
+  U64 u64[8];
+  U128 u128[4];
+  U256 u256[2];
 };
 
 ////////////////////////////////
@@ -565,15 +598,15 @@ global U32 max_U32 = 0xffffffff;
 global U16 max_U16 = 0xffff;
 global U8  max_U8  = 0xff;
 
-global S64 max_S64 = (S64)0x7fffffffffffffffull;
+global S64 max_S64 = (S64)0x7fffffffffffffffll;
 global S32 max_S32 = (S32)0x7fffffff;
 global S16 max_S16 = (S16)0x7fff;
 global S8  max_S8  =  (S8)0x7f;
 
-global S64 min_S64 = (S64)0xffffffffffffffffull;
-global S32 min_S32 = (S32)0xffffffff;
-global S16 min_S16 = (S16)0xffff;
-global S8  min_S8  =  (S8)0xff;
+global S64 min_S64 = (S64)0x8000000000000000ll;
+global S32 min_S32 = (S32)0x80000000;
+global S16 min_S16 = (S16)0x8000;
+global S8  min_S8  =  (S8)0x80;
 
 global const U32 bitmask1  = 0x00000001;
 global const U32 bitmask2  = 0x00000003;
@@ -884,5 +917,9 @@ internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_dat
 //~ rjf: Sorts
 
 #define quick_sort(ptr, count, element_size, cmp_function) qsort((ptr), (count), (element_size), (int (*)(const void *, const void *))(cmp_function))
+
+////////////////////////////////
+
+internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
 
 #endif // BASE_CORE_H

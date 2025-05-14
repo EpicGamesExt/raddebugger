@@ -31,8 +31,7 @@ struct FS_Node
   
   // rjf: file metadata
   String8 path;
-  U64 timestamp;
-  U64 size;
+  FileProperties props;
   
   // rjf: sub-table of per-requested-file-range info
   U64 slots_count;
@@ -108,8 +107,7 @@ internal U64 fs_change_gen(void);
 internal U128 fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us);
 internal U128 fs_key_from_path_range(String8 path, Rng1U64 range);
 
-internal U64 fs_timestamp_from_path(String8 path);
-internal U64 fs_size_from_path(String8 path);
+internal FileProperties fs_properties_from_path(String8 path);
 
 ////////////////////////////////
 //~ rjf: Streaming Work

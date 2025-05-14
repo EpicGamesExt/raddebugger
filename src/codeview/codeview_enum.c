@@ -2,6 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
+cv_string_from_unknown_value(Arena *arena, U32 x)
+{
+  return push_str8f(arena, "%#x", x);
+}
+
+internal String8
 cv_string_from_type_index_source(CV_TypeIndexSource ti_source)
 {
   switch (ti_source) {
@@ -308,6 +314,16 @@ cv_string_from_c13_checksum_kind(CV_C13ChecksumKind x)
 }
 
 internal String8
+cv_string_from_label_kind(Arena *arena, CV_LabelKind x)
+{
+  switch (x) {
+    case CV_LabelKind_Near: return str8_lit("Near");
+    case CV_LabelKind_Far:  return str8_lit("Far");
+  }
+  return cv_string_from_unknown_value(arena, x);
+}
+
+internal String8
 cv_string_from_c13_subsection_kind(CV_C13SubSectionKind x)
 {
   switch (x) {
@@ -572,7 +588,7 @@ cv_string_from_frame_proc_flags(Arena *arena, CV_FrameprocFlags x)
 }
 
 internal String8
-cv_string_from_type_props(Arena *arena, CV_TypeProps x)
+cv_string_from_type_props(Arena *arena, CV_TypeProps32 x)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -911,15 +927,6 @@ internal String8
 cv_string_from_itemid(Arena *arena, CV_ItemId itemid)
 {
   String8 result = push_str8f(arena, "%x", itemid);
-  return result;
-}
-
-internal String8
-cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg, U32 off)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8 result = push_str8f(arena, "%S+%x", cv_string_from_reg_id(scratch.arena, arch, reg), off);
-  scratch_end(scratch);
   return result;
 }
 

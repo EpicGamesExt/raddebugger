@@ -42,139 +42,44 @@ rd_stderr(char *fmt, ...)
   scratch_end(scratch);
 }
 
-internal B32
-rd_invoke_rdi_converter(String8 exe_name, String8 exe_data, String8 pdb_path, String8 out_path)
-{
-  Temp scratch = scratch_begin(0,0);
-
-  P2R_User2Convert user2convert = {0};
-  user2convert.input_pdb_name   = pdb_path;
-  user2convert.input_pdb_data   = os_data_from_file_path(scratch.arena, pdb_path);
-  user2convert.input_exe_name   = exe_name;
-  user2convert.input_exe_data   = exe_data;
-  user2convert.output_name      = out_path;
-  user2convert.flags            = P2R_ConvertFlag_All;
-
-  P2R_Convert2Bake             *convert2bake    = p2r_convert(scratch.arena, &user2convert);
-  P2R_Bake2Serialize           *bake2srlz       = p2r_bake(scratch.arena, convert2bake);
-  RDIM_SerializedSectionBundle  bundle          = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
-  String8List                   rdi_blobs       = rdim_file_blobs_from_section_bundle(scratch.arena, &bundle);
-  B32                           is_rdi_write_ok = os_write_data_list_to_file_path(user2convert.output_name, rdi_blobs);
-
-  scratch_end(scratch);
-  return is_rdi_write_ok;
-}
-
 internal RDI_Parsed *
-rd_rdi_from_pe(Arena *arena, String8 data_path, String8 raw_data)
+rd_rdi_from_pe(Arena *arena, String8 pe_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
+  // make command line for converter
+  String8List cmdl_string = {0};
+  str8_list_pushf(scratch.arena, &cmdl_string, "-pe:%S", pe_path);
+  CmdLine cmdl = cmd_line_from_string_list(scratch.arena, cmdl_string);
+
+  // run converter
+  String8 raw_rdi = rc_rdi_from_cmd_line(scratch.arena, &cmdl);
+
+  // load RDI
   RDI_Parsed *rdi = 0;
-  PE_BinInfo  pe  = pe_bin_info_from_data(scratch.arena, raw_data);
+  if (raw_rdi.size) {
+    rdi = push_array(arena, RDI_Parsed, 1);
 
-  // PDB 2.0
-  COFF_TimeStamp pdb20_time_stamp = 0;
-  U32            pdb20_age        = 0;
-  String8        pdb20_path       = str8_zero();
-  // PDB 7.0
-  U32            pdb70_age        = 0;
-  Guid           pdb70_guid       = {0};
-  String8        pdb70_path       = str8_zero();
-  // RDI
-  String8        rdi_path         = str8_zero();
-  Guid           rdi_guid         = {0};
-  if (PE_DataDirectoryIndex_DEBUG < pe.data_dir_count) {
-    String8            raw_debug_dir   = str8_substr(raw_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
-    PE_DebugDirectory *debug_entry     = str8_deserial_get_raw_ptr(raw_debug_dir, 0, sizeof(*debug_entry));
-    PE_DebugDirectory *debug_entry_opl = debug_entry + raw_debug_dir.size/sizeof(*debug_entry_opl);
-    for (PE_DebugDirectory *debug_entry_ptr = debug_entry; debug_entry_ptr < debug_entry_opl; ++debug_entry_ptr) {
-      if (debug_entry_ptr->type == PE_DebugDirectoryType_CODEVIEW) {
-        U32 cv_magic = 0;
-        str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv_magic);
+    // TODO: check guid
+    RDI_ParseStatus parse_status = rdi_parse(raw_rdi.str, raw_rdi.size, rdi);
 
-        switch (cv_magic) {
-          case PE_CODEVIEW_PDB20_MAGIC: {
-            PE_CvHeaderPDB20 cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              pdb20_time_stamp = cv.time_stamp;
-              pdb20_age        = cv.age;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &pdb20_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderPDB20");
-            }
-          } break;
-          case PE_CODEVIEW_PDB70_MAGIC: {
-            PE_CvHeaderPDB70 cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              pdb70_age  = cv.age;
-              pdb70_guid = cv.guid;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &pdb70_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderPDB70");
-            }
-          } break;
-          case PE_CODEVIEW_RDI_MAGIC: {
-            PE_CvHeaderRDI cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              rdi_guid = cv.guid;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &rdi_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderRDI");
-            }
-          } break;
-          default: break;
-        }
-      }
-    }
-  }
-
-  // convert debug info to RDI
-  if (!rdi_path.size && (pdb20_path.size || pdb70_path.size)) {
-    if (pdb20_path.size && pdb70_path.size) {
-      rd_warningf("multiple PDB paths defined %S, %S (picking first)", pdb70_path, pdb20_path);
-    }
-    String8 pdb_path  = pdb70_path.size ? pdb70_path : pdb20_path;
-    String8 out_path  = push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(pdb_path));
-    B32     is_rdi_ok = rd_invoke_rdi_converter(data_path, raw_data, pdb_path, out_path);
-    if (is_rdi_ok) {
-      rdi_path = out_path;
+    String8 parse_status_string = str8_zero();
+    if (parse_status == RDI_ParseStatus_Good) {
+    } else if (parse_status == RDI_ParseStatus_HeaderDoesNotMatch) {
+      parse_status_string = str8_lit("Header does not match");
+    } else if (parse_status == RDI_ParseStatus_UnsupportedVersionNumber) {
+      parse_status_string = str8_lit("Unsupported version number");
+    } else if (parse_status == RDI_ParseStatus_InvalidDataSecionLayout) {
+      parse_status_string = str8_lit("Invalid data section layout");
+    } else if (parse_status == RDI_ParseStatus_MissingRequiredSection) {
+      parse_status_string = str8_lit("Missing required section");
     } else {
-      rd_errorf("unable write RDI to %S", out_path);
+      parse_status_string = push_str8f(scratch.arena, "unknown parse status code: %u", parse_status);
     }
-  }
 
-  if (rdi_path.size) {
-    String8 raw_rdi = os_data_from_file_path(arena, rdi_path);
-    if (raw_rdi.size > 0) {
-      rdi = push_array(arena, RDI_Parsed, 1);
-
-      // TODO: check guid
-      RDI_ParseStatus parse_status = rdi_parse(raw_rdi.str, raw_rdi.size, rdi);
-
-      String8 parse_status_string = str8_zero();
-      if (parse_status == RDI_ParseStatus_Good) {
-      } else if (parse_status == RDI_ParseStatus_HeaderDoesNotMatch) {
-        parse_status_string = str8_lit("Header does not match");
-      } else if (parse_status == RDI_ParseStatus_UnsupportedVersionNumber) {
-        parse_status_string = str8_lit("Unsupported version number");
-      } else if (parse_status == RDI_ParseStatus_InvalidDataSecionLayout) {
-        parse_status_string = str8_lit("Invalid data section layout");
-      } else if (parse_status == RDI_ParseStatus_MissingRequiredSection) {
-        parse_status_string = str8_lit("Missing required section");
-      } else {
-        parse_status_string = push_str8f(scratch.arena, "unknown parse status code: %u", parse_status);
-      }
-
-      if (parse_status_string.size) {
-        rdi = 0;
-        rd_errorf("RDI parse status(%u): %S", parse_status, parse_status_string);
-      }
-    } else {
-      rd_errorf("unable to open RDI: %S", rdi_path);
+    if (parse_status_string.size) {
+      rdi = 0;
+      rd_errorf("RDI parse status(%u): %S", parse_status, parse_status_string);
     }
   }
 
@@ -253,11 +158,108 @@ rd_format_line_from_voff(Arena *arena, RDI_Parsed *rdi, U64 voff, PathStyle path
 }
 
 internal B32
-rd_is_pe(String8 raw_data)
+rd_is_rdi(String8 raw_data)
 {
-  PE_DosHeader header = {0};
-  str8_deserial_read_struct(raw_data, 0, &header);
-  return header.magic == PE_DOS_MAGIC;
+  B32 is_rdi = 0;
+  if (raw_data.size > 8) {
+    U64 *magic = (U64 *)raw_data.str;
+    is_rdi = *magic == RDI_MAGIC_CONSTANT;
+  }
+  return is_rdi;
+}
+
+internal String8
+rd_string_from_reg_off(Arena *arena, String8 reg_str, S64 reg_off)
+{
+  String8 result;
+  if (reg_off > 0) {
+    result = push_str8f(arena, "%S%+lld", reg_str, reg_off);
+  } else {
+    result = push_str8f(arena, "%S", reg_str);
+  }
+  return result;
+}
+
+internal String8
+rd_string_from_flags(Arena *arena, String8List list, U64 remaining_flags)
+{
+  String8 result;
+  if (list.node_count == 0 && remaining_flags == 0) {
+    result = str8_lit("0");
+  } else {
+    Temp scratch = scratch_begin(&arena, 1);
+    if (remaining_flags != 0) {
+      str8_list_pushf(scratch.arena, &list, "Unknown flags: %#llx", remaining_flags);
+    }
+    result = str8_list_join(arena, &list, &(StringJoin){.sep = str8_lit(", ") });
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+internal String8
+rd_string_from_array_u32(Arena *arena, U32 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i < count; ++i) {
+    str8_list_pushf(scratch.arena, &list, "%u", v[i]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_string_from_hex_u8(Arena *arena, U8 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i < count; ++i) {
+    str8_list_pushf(scratch.arena, &list, "%#x", v[i]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_string_from_array_hex_u32(Arena *arena, U32 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i < count; ++i) {
+    str8_list_pushf(scratch.arena, &list, "%#x", v[i]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_string_from_array_hex_u64(Arena *arena, U64 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i < count; ++i) {
+    str8_list_pushf(scratch.arena, &list, "%#llx", v[i]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_string_from_range_array_u64_hex(Arena *arena, U64 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i+2 <= count; i += 2) {
+    str8_list_pushf(scratch.arena, &list, "[%#llx, %#llx)", v[i+0], v[i+1]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
 }
 
 internal void
@@ -265,24 +267,30 @@ rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  char *input_type_string = "???";
-  if (coff_is_archive(raw_data)) {
-    input_type_string = "Archive";
+  String8 input_type_string = str8_lit("???");
+  if (coff_is_regular_archive(raw_data)) {
+    input_type_string = str8_lit("Archive");
   } else if (coff_is_thin_archive(raw_data)) {
-    input_type_string = "Thin Archive";
+    input_type_string = str8_lit("Thin Archive");
   } else if (coff_is_big_obj(raw_data)) {
-    input_type_string = "Big Obj";
+    input_type_string = str8_lit("Big Obj");
   } else if (coff_is_obj(raw_data)) {
-    input_type_string = "Obj";
-  } else if (rd_is_pe(raw_data)) {
-    input_type_string = "COFF/PE";
+    input_type_string = str8_lit("Obj");
+  } else if (pe_check_magic(raw_data)) {
+    input_type_string = str8_lit("COFF/PE");
+  } else if (rd_is_rdi(raw_data)) {
+    input_type_string = str8_lit("RDI");
+  } else if (elf_check_magic(raw_data)) {
+    U8 sig[ELF_Identifier_Max] = {0};
+    str8_deserial_read(raw_data, 0, &sig[0], sizeof(sig), 1);
+    input_type_string = push_str8f(scratch.arena, "ELF (Class: %S)", elf_string_from_class(scratch.arena, sig[ELF_Identifier_Class]));
   }
 
   DateTime universal_dt = os_now_universal_time();
   DateTime local_dt     = os_local_time_from_universal(&universal_dt);
   String8  time         = push_date_time_string(scratch.arena, &local_dt);
   String8  full_path    = os_full_path_from_path(scratch.arena, input_path);
-  rd_printf("# %S, [%s] %S", time, input_type_string, full_path);
+  rd_printf("# %S, [%S] %S", time, input_type_string, full_path);
 
   scratch_end(scratch);
 }
@@ -293,29 +301,123 @@ rd_marker_is_before(void *a, void *b)
   return u64_is_before(&((RD_Marker*)a)->off, &((RD_Marker*)b)->off);
 }
 
+internal int
+rd_range_min_is_before(void *raw_a, void *raw_b)
+{
+  Rng1U64 *a = raw_a;
+  Rng1U64 *b = raw_b;
+  return a->min < b->min;
+}
+
+internal U64
+rd_range_bsearch(Rng1U64 *ranges, U64 count, U64 x)
+{
+  if (count > 0 && ranges[0].min <= x && x < ranges[count - 1].min) {
+    U64 first = 0;
+    U64 opl   = count;
+    for (;;) {
+      U64 mid = (first + opl)/2;
+      if (ranges[mid].min < x) {
+        first = mid;
+      } else if (ranges[mid].min > x) {
+        opl = mid;
+      } else {
+        first = mid;
+        break;
+      }
+      if (opl - first <= 1) {
+        break;
+      }
+    }
+    return first;
+  }
+  return max_U64;
+}
+
 internal RD_MarkerArray *
-rd_section_markers_from_coff_symbol_table(Arena *arena, String8 raw_data, U64 string_table_off, U64 section_count, COFF_Symbol32Array symbols)
+rd_section_markers_from_rdi(Arena *arena, RDI_Parsed *rdi)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64                sect_count = 0;
+  RDI_BinarySection *sect_lo    = rdi_table_from_name(rdi, BinarySections, &sect_count);
+
+  Rng1U64 *sect_vranges = push_array(scratch.arena, Rng1U64, sect_count);
+  for (U64 i = 0; i < sect_count; ++i) {
+    sect_vranges[i].min = sect_lo[i].voff_first;
+    sect_vranges[i].max = i;
+  }
+  radsort(sect_vranges, sect_count, rd_range_min_is_before);
+
+  U64            proc_count = 0;
+  RDI_Procedure *proc_lo    = rdi_table_from_name(rdi, Procedures, &proc_count);
+
+  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, sect_count);
+  for (U64 i = 0; i < proc_count; ++i) {
+    RDI_Procedure *proc         = proc_lo + i;
+    U64            proc_voff_lo = rdi_first_voff_from_procedure(rdi, proc);
+    U64            proc_voff_hi = rdi_opl_voff_from_procedure(rdi, proc);
+
+    U64 sect_range_idx = rd_range_bsearch(sect_vranges, sect_count, proc_voff_lo);
+    if (sect_range_idx < sect_count) {
+      Rng1U64 sect_range = sect_vranges[sect_range_idx];
+      U64     sect_idx   = sect_range.max;
+
+      String8 name = str8_zero();
+      name.str = rdi_name_from_procedure(rdi, proc, &name.size);
+
+      RD_MarkerNode *n = push_array(scratch.arena, RD_MarkerNode, 1);
+      n->v.off         = proc_voff_lo - sect_range.min;
+      n->v.string      = name;
+
+      RD_MarkerList *list = &markers[sect_idx];
+      SLLQueuePush(list->first, list->last, n);
+      ++list->count;
+    }
+  }
+
+  // lists -> arrays
+  RD_MarkerArray *result = push_array(arena, RD_MarkerArray, sect_count);
+  for (U64 i = 0; i < sect_count; ++i) {
+    result[i].count = 0;
+    result[i].v     = push_array(arena, RD_Marker, markers[i].count);
+    for (RD_MarkerNode *n = markers[i].first; n != 0; n = n->next) {
+      result[i].v[result[i].count++] = n->v;
+    }
+  }
+
+  // sort arrays
+  for (U64 i = 0; i < sect_count; ++i) {
+    radsort(result[i].v, result[i].count, rd_marker_is_before);
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal RD_MarkerArray *
+rd_section_markers_from_coff_symbol_table(Arena *arena, String8 string_table, U64 section_count, COFF_Symbol32Array symbols)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
   // extract markers from symbol table
-  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, section_count);
+  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, section_count+1);
   for (U64 symbol_idx = 0; symbol_idx < symbols.count; ++symbol_idx) {
     COFF_Symbol32 *symbol = &symbols.v[symbol_idx];
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol->section_number, symbol->value, symbol->storage_class);
-    B32 is_marker = interp == COFF_SymbolValueInterp_REGULAR &&
+    B32 is_marker = interp == COFF_SymbolValueInterp_Regular &&
                     symbol->aux_symbol_count == 0 &&
-                    (symbol->storage_class == COFF_SymStorageClass_EXTERNAL || symbol->storage_class == COFF_SymStorageClass_STATIC);
+                    (symbol->storage_class == COFF_SymStorageClass_External || symbol->storage_class == COFF_SymStorageClass_Static);
 
     if (is_marker) {
-      String8 name = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+      String8 name = coff_read_symbol_name(string_table, &symbol->name);
 
       RD_MarkerNode *n = push_array(scratch.arena, RD_MarkerNode, 1);
       n->v.off         = symbol->value;
       n->v.string      = name;
 
-      RD_MarkerList *list = &markers[symbol->section_number-1];
+      RD_MarkerList *list = &markers[symbol->section_number];
       SLLQueuePush(list->first, list->last, n);
       ++list->count;
     }
@@ -339,47 +441,6 @@ rd_section_markers_from_coff_symbol_table(Arena *arena, String8 raw_data, U64 st
   }
 
   scratch_end(scratch);
-  return result;
-}
-
-internal DW_SectionArray
-rd_dw_sections_from_coff_section_table(Arena              *arena,
-                                       String8             raw_image,
-                                       U64                 string_table_off,
-                                       U64                 section_count,
-                                       COFF_SectionHeader *sections)
-{
-  DW_SectionArray result                            = {0};
-  B32             sect_status[ArrayCount(result.v)] = {0};
-
-  for (U64 i = 0; i < section_count; ++i) {
-    COFF_SectionHeader *header         = &sections[i];
-    Rng1U64             raw_data_range = rng_1u64(header->foff, header->foff + header->fsize);
-    String8             name           = coff_name_from_section_header(header, raw_image, string_table_off);
-
-    DW_SectionKind  s      = DW_Section_Null;
-    B32             is_dwo = 0;
-    #define X(_K,_L,_M,_W)                                            \
-      if (str8_match(name, str8_lit(_L), 0)) { s = DW_Section_##_K; } \
-      if (str8_match(name, str8_lit(_M), 0)) { s = DW_Section_##_K; } \
-      if (str8_match(name, str8_lit(_W), 0)) { s = DW_Section_##_K; is_dwo = 1; }
-      DW_SectionKind_XList(X)
-    #undef X
-
-    if (s != DW_Section_Null) {
-      if (sect_status[s]) {
-        rd_warningf("file contains multiple %S sections, picking first", name);
-      } else {
-        sect_status[s] = 1;
-        DW_Section *d = &result.v[s];
-        d->name       = push_str8_copy(arena, name);
-        d->data       = str8_substr(raw_image, raw_data_range);
-        d->mode       = dim_1u64(raw_data_range) > max_U32 ? DW_Mode_64Bit : DW_Mode_32Bit;
-        d->is_dwo     = is_dwo;
-      }
-    }
-  }
-
   return result;
 }
 
@@ -476,7 +537,7 @@ rd_print_disasm(Arena            *arena,
 internal String8
 rd_format_hex_array(Arena *arena, U8 *ptr, U64 size)
 {
-  U64   buf_max  = size * 8;
+  U64   buf_max  = 32 + size * 8;
   char *buf      = push_array(arena, char, buf_max);
   U64   buf_size = 0;
 
@@ -543,8 +604,1203 @@ rd_print_raw_data(Arena       *arena,
   }
 }
 
+internal String8
+str8_from_rdi_string_idx(RDI_Parsed *rdi, U32 idx)
+{
+  String8 result = str8_zero();
+  result.str = rdi_string_from_idx(rdi, idx, &result.size);
+  return result;
+}
+
+internal String8
+rdi_string_from_data_section_kind(Arena *arena, RDI_SectionKind v)
+{
+  String8 result;
+  switch (v) {
+    default: result = push_str8f(arena, "<invalid RDI_SectionKind %u>", v); break;
+#define X(name, lower, type) case RDI_SectionKind_##name:{result = str8_lit(#name);} break;
+    RDI_SectionKind_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_arch(Arena *arena, RDI_Arch v)
+{
+  String8 result;
+  switch (v) {
+    default:{ result = push_str8f(arena, "<invalid RDI_Arch %u", v); } break;
+#define X(name) case RDI_Arch_##name:{result = str8_lit(#name);} break;
+    RDI_Arch_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_language(Arena *arena, RDI_Language v)
+{
+  String8 result;
+  switch (v) {
+    default:{ result = push_str8f(arena, "<invalid RDI_Language %u ", v); } break;
+#define X(name) case RDI_Language_##name:{result = str8_lit(#name);} break;
+    RDI_Language_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_local_kind(Arena *arena, RDI_LocalKind v)
+{
+  String8 result;
+  switch(v)
+  {
+    default: { result = push_str8f(arena, "<invalid RDI_LocalKind %u>", v); } break;
+#define X(name) case RDI_LocalKind_##name:{ result = str8_lit(#name); } break;
+    RDI_LocalKind_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_member_kind(Arena *arena, RDI_MemberKind v)
+{
+  String8 result;
+  switch (v) {
+    default: { result = push_str8f(arena, "<invalid RDI_MemberKind %u>", v); } break;
+#define X(name) case RDI_MemberKind_##name: { result = str8_lit(#name); } break;
+    RDI_MemberKind_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_reg_code_x86(U64 reg_code)
+{
+#define X(name, value) case RDI_RegCodeX86_##name: return str8_lit(#name);
+  switch (reg_code) {
+    RDI_RegCodeX86_XList
+  }
+#undef X
+  return str8_lit("");
+}
+
+internal String8
+rdi_string_from_reg_code_x64(U64 reg_code)
+{
+#define X(name, value) case RDI_RegCodeX64_##name: return str8_lit(#name);
+  switch (reg_code) {
+    RDI_RegCodeX64_XList
+  }
+#undef X
+  return str8_lit("");
+}
+
+internal String8
+rdi_string_from_reg_code(Arena *arena, RDI_Arch arch, U64 reg_code)
+{
+  switch (arch) {
+  case RDI_Arch_NULL: break;
+  case RDI_Arch_X86: return rdi_string_from_reg_code_x86(reg_code);
+  case RDI_Arch_X64: return rdi_string_from_reg_code_x64(reg_code);
+  default: InvalidPath;
+  }
+  return push_str8f(arena, "??? (%llu)", reg_code);
+}
+
+internal String8
+rdi_string_from_eval_op(Arena *arena, RDI_EvalOp op)
+{
+  switch (op) {
+  case RDI_EvalOp_Stop:            return str8_lit("Stop");
+  case RDI_EvalOp_Noop:            return str8_lit("Noop");
+  case RDI_EvalOp_Cond:            return str8_lit("Cond");
+  case RDI_EvalOp_Skip:            return str8_lit("Skip");
+  case RDI_EvalOp_MemRead:         return str8_lit("MemRead");
+  case RDI_EvalOp_RegRead:         return str8_lit("RegRead");
+  case RDI_EvalOp_RegReadDyn:      return str8_lit("RegReadDyn");
+  case RDI_EvalOp_FrameOff:        return str8_lit("FrameOff");
+  case RDI_EvalOp_ModuleOff:       return str8_lit("ModuleOff");
+  case RDI_EvalOp_TLSOff:          return str8_lit("TLSOff");
+  case RDI_EvalOp_ObjectOff:       return str8_lit("ObjectOff");
+  case RDI_EvalOp_CFA:             return str8_lit("CFA");
+  case RDI_EvalOp_ConstU8:         return str8_lit("ConstU8");
+  case RDI_EvalOp_ConstU16:        return str8_lit("ConstU16");
+  case RDI_EvalOp_ConstU32:        return str8_lit("ConstU32");
+  case RDI_EvalOp_ConstU64:        return str8_lit("ConstU64");
+  case RDI_EvalOp_ConstU128:       return str8_lit("ConstU128");
+  case RDI_EvalOp_ConstString:     return str8_lit("ConstString");
+  case RDI_EvalOp_Abs:             return str8_lit("Abs");
+  case RDI_EvalOp_Neg:             return str8_lit("Neg");
+  case RDI_EvalOp_Add:             return str8_lit("Add");
+  case RDI_EvalOp_Sub:             return str8_lit("Sub");
+  case RDI_EvalOp_Mul:             return str8_lit("Mul");
+  case RDI_EvalOp_Div:             return str8_lit("Div");
+  case RDI_EvalOp_Mod:             return str8_lit("Mod");
+  case RDI_EvalOp_LShift:          return str8_lit("LShift");
+  case RDI_EvalOp_RShift:          return str8_lit("RShift");
+  case RDI_EvalOp_BitAnd:          return str8_lit("BitAnd");
+  case RDI_EvalOp_BitOr:           return str8_lit("BitOr");
+  case RDI_EvalOp_BitXor:          return str8_lit("BitXor");
+  case RDI_EvalOp_BitNot:          return str8_lit("BitNot");
+  case RDI_EvalOp_LogAnd:          return str8_lit("LogAnd");
+  case RDI_EvalOp_LogOr:           return str8_lit("LogOr");
+  case RDI_EvalOp_LogNot:          return str8_lit("LogNot");
+  case RDI_EvalOp_EqEq:            return str8_lit("EqEq");
+  case RDI_EvalOp_NtEq:            return str8_lit("NtEq");
+  case RDI_EvalOp_LsEq:            return str8_lit("LsEq");
+  case RDI_EvalOp_GrEq:            return str8_lit("GrEq");
+  case RDI_EvalOp_Less:            return str8_lit("Less");
+  case RDI_EvalOp_Grtr:            return str8_lit("Grtr");
+  case RDI_EvalOp_Trunc:           return str8_lit("Trunc");
+  case RDI_EvalOp_TruncSigned:     return str8_lit("TruncSigned");
+  case RDI_EvalOp_Convert:         return str8_lit("Convert");
+  case RDI_EvalOp_Pick:            return str8_lit("Pick");
+  case RDI_EvalOp_Pop:             return str8_lit("Pop");
+  case RDI_EvalOp_Insert:          return str8_lit("Insert");
+  case RDI_EvalOp_ValueRead:       return str8_lit("ValueRead");
+  case RDI_EvalOp_ByteSwap:        return str8_lit("ByteSwap");
+  case RDI_EvalOp_CallSiteValue:   return str8_lit("CallSiteValue");
+  case RDI_EvalOp_PartialValue:    return str8_lit("PartialValue");
+  case RDI_EvalOp_PartialValueBit: return str8_lit("PartialValueBit");
+  }
+  return push_str8f(arena, "%#x", op);
+}
+
+internal String8
+rdi_string_from_eval_type_group(Arena *arena, RDI_EvalTypeGroup x)
+{
+  switch (x) {
+  case RDI_EvalTypeGroup_Other: return str8_lit("Other");
+  case RDI_EvalTypeGroup_U:     return str8_lit("U");
+  case RDI_EvalTypeGroup_S:     return str8_lit("S");
+  case RDI_EvalTypeGroup_F32:   return str8_lit("F32");
+  case RDI_EvalTypeGroup_F64:   return str8_lit("F64");
+  }
+  return push_str8f(arena, "%#x", x);
+}
+
+internal String8
+rdi_string_from_binary_section_flags(Arena *arena, RDI_BinarySectionFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+#define X(name) if (flags & RDI_BinarySectionFlag_##name) { flags &= ~RDI_BinarySectionFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
+  RDI_BinarySectionFlags_XList;
+#undef X
+  String8 result = rd_string_from_flags(arena, list, flags);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rdi_string_from_type_modifier_flags(Arena *arena, RDI_TypeModifierFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+#define X(name) if(flags & RDI_TypeModifierFlag_##name) { flags &= ~RDI_TypeModifierFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
+  RDI_TypeModifierFlags_XList;
+#undef X
+  String8 result = rd_string_from_flags(arena, list, flags);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rdi_string_from_udt_flags(Arena *arena, RDI_UDTFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+#define X(name) if (flags & RDI_UDTFlag_##name) { flags &= ~RDI_UDTFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
+  RDI_UDTFlags_XList;
+#undef X
+  String8 result = rd_string_from_flags(arena, list, flags);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rdi_string_from_link_flags(Arena *arena, RDI_LinkFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+#define X(name) if (flags & RDI_LinkFlag_##name) { flags &= ~RDI_LinkFlag_##name; str8_list_push(scratch.arena, &list, str8_lit(#name)); }
+  RDI_LinkFlags_XList;
+#undef X
+  String8 result = rd_string_from_flags(arena, list, flags);
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+rdi_print_data_sections(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  for(U64 idx = 0; idx < rdi->sections_count; idx += 1) {
+    RDI_SectionKind  kind     = (RDI_SectionKind)idx;
+    RDI_Section     *section  = &rdi->sections[idx];
+    String8          kind_str = rdi_string_from_data_section_kind(scratch.arena, kind);
+    rd_printf("data_section[%5llu] = {%#08llx, %7u, %7u}, %S", idx, section->off, section->encoded_size, section->unpacked_size, kind_str);
+  }
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_top_level_info(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_TopLevelInfo *tli)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("arch         =%S",      rdi_string_from_arch(scratch.arena, tli->arch));
+  rd_printf("exe_name     ='%S'",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
+  rd_printf("voff_max     =%#08llx", tli->voff_max);
+  rd_printf("producer_name='%S'",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_binary_section(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_BinarySection *bin_section)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("name      ='%S'",  str8_from_rdi_string_idx(rdi, bin_section->name_string_idx));
+  rd_printf("flags     =%S",    rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags));
+  rd_printf("voff_first=%#08x", bin_section->voff_first);
+  rd_printf("voff_opl  =%#08x", bin_section->voff_opl);
+  rd_printf("foff_first=%#08x", bin_section->foff_first);
+  rd_printf("foff_opl  =%#08x", bin_section->foff_opl);
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_file_path(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_FilePathNode *file_path)
+{
+  U64               file_path_count = 0;
+  RDI_FilePathNode *file_path_array = rdi_table_from_name(rdi, FilePathNodes, &file_path_count);
+
+  String8 name     = str8_from_rdi_string_idx(rdi, file_path->name_string_idx);
+  U64     this_idx = (U64)(file_path - file_path_array);
+
+  if (file_path->source_file_idx == 0) {
+    rd_printf("[%llu] '%S'", this_idx, name);
+  } else {
+    rd_printf("[%llu] '%S'; source_file=%u", this_idx, name, file_path->source_file_idx);
+  }
+  
+  for (U32 child = file_path->first_child; child != 0; ) {
+    // get node for child
+    RDI_FilePathNode *child_node = 0;
+    if (child < file_path_count) {
+      child_node = file_path_array + child;
+    }
+    if (child_node == 0) {
+      break;
+    }
+    
+    // stringize child
+    rd_indent();
+    rdi_print_file_path(arena, out, indent, rdi, child_node);
+    rd_unindent();
+    
+    // increment iterator
+    child = child_node->next_sibling;
+  }
+}
+
+internal void
+rdi_print_source_file(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_SourceFile *source_file)
+{
+  rd_printf("{ file_path_node_idx= ");
+  rd_printf("file_path_node_idx= %u",   source_file->file_path_node_idx);
+  rd_printf("path=               '%S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
+  rd_printf("source_line_map=    %u",   source_file->source_line_map_idx);
+}
+
+internal void
+rdi_print_line_table(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_LineTable *line_table)
+{
+  RDI_ParsedLineTable parsed_line_table = {0};
+  rdi_parsed_from_line_table(rdi, line_table, &parsed_line_table);
+  
+  rd_printf("lines:");
+  for (U32 i = 0; i < parsed_line_table.count; i += 1) {
+    U64         first = parsed_line_table.voffs[i];
+    U64         opl   = parsed_line_table.voffs[i + 1];
+    RDI_Line   *line  = parsed_line_table.lines + i;
+    RDI_Column *col   = 0;
+    if (i < parsed_line_table.col_count) {
+      col = parsed_line_table.cols + i;
+    }
+    if (col == 0) {
+      rd_printf("[0x%08llx,0x%08llx) file=%u; line=%u", first, opl, line->file_idx, line->line_num);
+    } else {
+      rd_printf("[0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)", first, opl, line->file_idx, line->line_num, col->col_first, col->col_opl);
+    }
+  }
+}
+
+internal void
+rdi_print_source_line_map(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_SourceLineMap *map)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  RDI_ParsedSourceLineMap line_map = {0};
+  rdi_parsed_from_source_line_map(rdi, map, &line_map);
+
+  rd_printf("source lines:");
+  for (U32 line_num_idx = 0; line_num_idx < line_map.count; ++line_num_idx) {
+    Temp temp = temp_begin(scratch.arena);
+
+    String8List list = {0};
+    U32 voff_lo = line_map.ranges[line_num_idx];
+    U32 voff_hi = ClampTop(line_map.ranges[line_num_idx + 1], line_map.voff_count);
+    for (U64 voff_idx = voff_lo; voff_idx < voff_hi; ++voff_idx) {
+      str8_list_pushf(temp.arena, &list, "%#llx", line_map.voffs[voff_idx]);
+    }
+    
+    String8 voffs = str8_list_join(temp.arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+    rd_printf("%u: %S", line_map.nums[line_num_idx], voffs);
+
+    temp_end(temp);
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_unit(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Unit *unit)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("unit_name        ='%S'", str8_from_rdi_string_idx(rdi, unit->unit_name_string_idx));
+  rd_printf("compiler_name    ='%S'", str8_from_rdi_string_idx(rdi, unit->compiler_name_string_idx));
+  rd_printf("source_file_path =%u",   unit->source_file_path_node);
+  rd_printf("object_file_path =%u",   unit->object_file_path_node);
+  rd_printf("archive_file_path=%u",   unit->archive_file_path_node);
+  rd_printf("build_path       =%u",   unit->build_path_node);
+  rd_printf("language         =%S",   rdi_string_from_language(scratch.arena, unit->language));
+  rd_printf("line_table_idx   =%u",   unit->line_table_idx);
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_type_node(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_TypeNode *type)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  String8 type_kind_str = {0};
+  type_kind_str.str = rdi_string_from_type_kind(type->kind, &type_kind_str.size);
+
+  rd_printf("kind                    =%S", type_kind_str);
+  if (type->kind == RDI_TypeKind_Modifier) {
+    rd_printf("flags                   =%S", rdi_string_from_type_modifier_flags(scratch.arena, type->flags));
+  } else {
+    if (type->flags != 0) {
+      rd_printf("flags=%#x (missing stringizer path)", type->flags);
+    }
+  }
+  rd_printf("byte_size               =%u", type->byte_size);
+  if (RDI_TypeKind_FirstBuiltIn <= type->kind && type->kind <= RDI_TypeKind_LastBuiltIn) {
+    rd_printf("built_in.name           ='%S'", str8_from_rdi_string_idx(rdi, type->built_in.name_string_idx));
+  } else if (type->kind == RDI_TypeKind_Array) {
+    rd_printf("constructed.direct_type =%u", type->constructed.direct_type_idx);
+    rd_printf("constructed.array_count =%u", type->constructed.count);
+  } else if (type->kind == RDI_TypeKind_Function) {
+    U32  param_idx_count = 0;
+    U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
+    String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
+    rd_printf("constructed.params      =%S", param_idx_str);
+    rd_printf("return type             =%u", type->constructed.direct_type_idx);
+  } else if (type->kind == RDI_TypeKind_Method) {
+    U32  param_idx_count = 0;
+    U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
+    String8 this_type_str = str8_lit("\?\?\?");
+    if (param_idx_count > 0) {
+      this_type_str = push_str8f(scratch.arena, "%u", param_idx_array[0]);
+      param_idx_count -= 1;
+      param_idx_array += 1;
+    }
+    String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
+    rd_printf("constructed.this_type   =%S", this_type_str);
+    rd_printf("constructed.params      =%S", param_idx_str);
+    rd_printf("return type             =%u", type->constructed.direct_type_idx);
+  } else if (RDI_TypeKind_FirstConstructed <= type->kind && type->kind <= RDI_TypeKind_LastConstructed) {
+
+    rd_printf("constructed.direct_type =%u", type->constructed.direct_type_idx);
+  } else if (RDI_TypeKind_FirstUserDefined <= type->kind && type->kind <= RDI_TypeKind_LastUserDefined){
+    rd_printf("user_defined.name       ='%S'", str8_from_rdi_string_idx(rdi, type->user_defined.name_string_idx));
+    rd_printf("user_defined.direct_type=%u",   type->user_defined.direct_type_idx);
+    rd_printf("user_defined.udt        =%u",   type->user_defined.udt_idx);
+  } else if (type->kind == RDI_TypeKind_Bitfield) {
+    rd_printf("bitfield.off            =%u", type->bitfield.off);
+    rd_printf("bitfield.size           =%u", type->bitfield.size);
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_udt(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_UDT *udt)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64             member_count      = 0;
+  U64             enum_member_count = 0;
+  RDI_Member     *member_array      = rdi_table_from_name(rdi, Members,     &member_count);
+  RDI_EnumMember *enum_member_array = rdi_table_from_name(rdi, EnumMembers, &enum_member_count);
+
+  String8 flags_str = rdi_string_from_udt_flags(scratch.arena, udt->flags);
+
+  rd_printf("self_type=%u", udt->self_type_idx);
+  rd_printf("flags    =%S", flags_str);
+  if (udt->file_idx != 0) {
+    rd_printf("loc      ={file=%u; line=%u; col=%u}", udt->file_idx, udt->line, udt->col);
+  }
+  
+  // enum members
+  if (udt->flags & RDI_UDTFlag_EnumMembers) {
+    U32 member_hi = ClampTop(udt->member_first + udt->member_count, enum_member_count);
+    U32 member_lo = ClampTop(udt->member_first, member_hi);
+    if (member_lo < member_hi) {
+      rd_printf("members={");
+      rd_indent();
+      RDI_EnumMember *enum_member = enum_member_array + member_lo;
+      for (U32 i = member_lo; i < member_hi; ++i, ++enum_member) {
+        rd_printf("{ %llu, '%S' }", enum_member->val, str8_from_rdi_string_idx(rdi, enum_member->name_string_idx));
+      }
+      rd_unindent();
+      rd_printf("}");
+    }
+  }
+  // field members
+  else {
+    U32 member_hi = ClampTop(udt->member_first + udt->member_count, member_count);
+    U32 member_lo = ClampTop(udt->member_first, member_hi);
+    if (member_lo < member_hi) {
+      rd_printf("members={");
+      rd_indent();
+      RDI_Member *member = member_array + member_lo;
+      for (U32 i = member_lo; i < member_hi; ++i, ++member) {
+        String8 kind_str = rdi_string_from_member_kind(scratch.arena, member->kind);
+        String8 name_str = str8_from_rdi_string_idx(rdi, member->name_string_idx);
+        rd_printf("{ kind=%S, type=%u, off=%u, name='%S' }", kind_str, member->type_idx, member->off, name_str);
+      }
+      rd_unindent();
+      rd_printf("}");
+    }
+  }
+  scratch_end(scratch);
+}
+
+internal String8
+rdi_string_from_bytecode(Arena *arena, RDI_Arch arch, String8 bc)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List fmt = {0};
+  for (U64 cursor = 0; cursor < bc.size; ) {
+    RDI_EvalOp op = RDI_EvalOp_Stop;
+    cursor += str8_deserial_read_struct(bc, cursor, &op);
+
+    U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+    U32 imm_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+
+    String8 imm = {0};
+    cursor += str8_deserial_read_block(bc, cursor, imm_size, &imm);
+    if (imm.size != imm_size) {
+      str8_list_pushf(scratch.arena, &fmt, "(ERROR: not enough bytes to read immediate)");
+      break;
+    }
+
+    String8 imm_fmt = {0};
+    switch (op) {
+    case RDI_EvalOp_Stop: goto exit;
+    case RDI_EvalOp_Noop: break;
+    case RDI_EvalOp_Cond: break;
+    case RDI_EvalOp_Skip:  {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U16 *)imm.str);
+    } break;
+    case RDI_EvalOp_MemRead: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U8 *)imm.str);
+    } break;
+    case RDI_EvalOp_RegRead: {
+      U32         regread   = *(U32 *)imm.str;
+      RDI_RegCode reg_code  = Extract8(regread, 0);
+      U8          byte_size = Extract8(regread, 1);
+      U8          byte_off  = Extract8(regread, 2);
+      String8     reg_str   = rdi_string_from_reg_code(scratch.arena, arch, reg_code);
+      imm_fmt = push_str8f(scratch.arena, "%S, Size: %u", rd_string_from_reg_off(scratch.arena, reg_str, byte_off), byte_size);
+    } break;
+    case RDI_EvalOp_RegReadDyn: break;
+    case RDI_EvalOp_FrameOff: {
+      imm_fmt = push_str8f(scratch.arena, "%+lld", *(S64 *)imm.str);
+    } break;
+    case RDI_EvalOp_ModuleOff: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_TLSOff: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU8: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U8 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU16: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U16 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU32: {
+      imm_fmt = push_str8f(scratch.arena, "%u", *(U32 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU64: {
+      imm_fmt = push_str8f(scratch.arena, "%llu", *(U64 *)imm.str);
+    } break;
+    case RDI_EvalOp_ConstU128: {
+      imm_fmt = push_str8f(scratch.arena, "Lo: %llu, Hi: %llu", *(U64 *)imm.str, *((U64 *)imm.str + 1));
+    } break;
+    case RDI_EvalOp_ConstString: {
+      U8      size   = *(U8 *)imm.str;
+      String8 string = {0};
+      cursor += str8_deserial_read_block(bc, cursor, size, &string);
+
+      imm_fmt = push_str8f(scratch.arena, "(%u) \"%S\"", size, string);
+    } break;
+    case RDI_EvalOp_Abs:
+    case RDI_EvalOp_Neg: 
+    case RDI_EvalOp_Add:
+    case RDI_EvalOp_Sub:
+    case RDI_EvalOp_Mul:
+    case RDI_EvalOp_Div:
+    case RDI_EvalOp_Mod:
+    case RDI_EvalOp_LShift:
+    case RDI_EvalOp_RShift:
+    case RDI_EvalOp_BitAnd:
+    case RDI_EvalOp_BitOr:
+    case RDI_EvalOp_BitXor:
+    case RDI_EvalOp_BitNot:
+    case RDI_EvalOp_LogAnd:
+    case RDI_EvalOp_LogOr:
+    case RDI_EvalOp_LogNot:
+    case RDI_EvalOp_EqEq:
+    case RDI_EvalOp_NtEq:
+    case RDI_EvalOp_LsEq:
+    case RDI_EvalOp_GrEq:
+    case RDI_EvalOp_Less:
+    case RDI_EvalOp_Grtr: {
+      U8 eval_type_group = *(U8 *)imm.str;
+      imm_fmt = rdi_string_from_eval_type_group(scratch.arena, eval_type_group);
+    } break;
+    case RDI_EvalOp_Trunc:
+    case RDI_EvalOp_TruncSigned: {
+      U8 trunc = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", trunc);
+    } break;
+    case RDI_EvalOp_Convert: {
+      U16 convert = *(U16 *)imm.str;
+      U8 in  = Extract8(convert, 0);
+      U8 out = Extract8(convert, 1);
+      String8 in_str  = rdi_string_from_eval_type_group(scratch.arena, in);
+      String8 out_str = rdi_string_from_eval_type_group(scratch.arena, out);
+      imm_fmt = push_str8f(scratch.arena, "in: %S out: %S", in_str, out_str);
+    } break;
+    case RDI_EvalOp_Pick: {
+      U8 pick = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", pick);
+    } break;
+    case RDI_EvalOp_Pop: break;
+    case RDI_EvalOp_Insert: {
+      U8 insert = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", insert);
+    } break;
+    case RDI_EvalOp_ValueRead: {
+      U8 bytes_to_read = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", bytes_to_read);
+    } break;
+    case RDI_EvalOp_ByteSwap: {
+      U8 byte_size = *(U8 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", byte_size);
+    } break;
+    case RDI_EvalOp_CallSiteValue: {
+      U32     call_site_bc_size = *(U32 *)imm.str;
+      String8 call_site_bc      = {0};
+      cursor += str8_deserial_read_block(bc, cursor, call_site_bc_size, &call_site_bc);
+
+      String8 call_site_str = rdi_string_from_bytecode(scratch.arena, arch, call_site_bc);
+      imm_fmt = push_str8f(scratch.arena, "%S", call_site_str);
+    } break;
+    case RDI_EvalOp_PartialValue: {
+      U32 partial_value_size = *(U32 *)imm.str;
+      imm_fmt = push_str8f(scratch.arena, "%u", partial_value_size);
+    } break;
+    case RDI_EvalOp_PartialValueBit: {
+      U64 partial_value = *(U64 *)imm.str;
+      U32 bit_size = Extract32(partial_value, 0);
+      U32 bit_off  = Extract32(partial_value, 1);
+      imm_fmt = push_str8f(scratch.arena, "Off: %u, Size: %u", bit_size, bit_off);
+    } break;
+    }
+
+    String8 op_str = rdi_string_from_eval_op(scratch.arena, op);
+    if (imm_fmt.size) {
+      str8_list_pushf(scratch.arena, &fmt, "RDI_EvalOp_%S(%S)", op_str, imm_fmt);
+    } else {
+      str8_list_pushf(scratch.arena, &fmt, "RDI_EvalOp_%S", op_str);
+    }
+  }
+  exit:;
+
+  String8 result = str8_list_join(arena, &fmt, &(StringJoin){.sep = str8_lit(", ")});
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+rdi_print_locations(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Arch arch, U64 block_lo, U64 block_hi)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64                location_block_count = 0;
+  U64                location_data_size   = 0;
+  RDI_LocationBlock *location_block_array = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
+  RDI_U8            *location_data        = rdi_table_from_name(rdi, LocationData,   &location_data_size);
+
+  block_lo = ClampTop(block_lo, location_block_count);
+  block_hi = ClampTop(block_hi, location_block_count);
+
+  for (U32 block_idx = block_lo; block_idx < block_hi; ++block_idx) {
+    RDI_LocationBlock *block_ptr = &location_block_array[block_idx];
+
+    String8List fmt = {0};
+
+    if (block_ptr->scope_off_first == 0 && block_ptr->scope_off_opl == max_U32) {
+      str8_list_pushf(scratch.arena, &fmt, "*always*:");
+    } else {
+      str8_list_pushf(scratch.arena, &fmt, "[%#08x, %#08x):", block_ptr->scope_off_first, block_ptr->scope_off_opl);
+    }
+
+    if (block_ptr->location_data_off >= location_data_size) {
+      str8_list_pushf(scratch.arena, &fmt, "<bad-location-data-offset %x>", block_ptr->location_data_off);
+    } else {
+      U8               *loc_data_opl = location_data + location_data_size;
+      U8               *loc_base_ptr = location_data + block_ptr->location_data_off;
+      RDI_LocationKind  kind         = *(RDI_LocationKind*)loc_base_ptr;
+      switch (kind) {
+      default: {
+        str8_list_pushf(scratch.arena, &fmt, "\?\?\?: %u", kind);
+      } break;
+
+      case RDI_LocationKind_AddrBytecodeStream: {
+        String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
+        String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
+        str8_list_pushf(scratch.arena, &fmt, "AddrBytecodeStream(%S)", bc_str);
+      } break;
+
+      case RDI_LocationKind_ValBytecodeStream: {
+        String8 bc     = str8_range(loc_base_ptr + 1, loc_data_opl);
+        String8 bc_str = rdi_string_from_bytecode(scratch.arena, arch, bc);
+        str8_list_pushf(scratch.arena, &fmt, "ValBytecodeStream(%S)", bc_str);
+      } break;
+
+      case RDI_LocationKind_AddrRegPlusU16: {
+        if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl) {
+          str8_list_pushf(scratch.arena, &fmt, "AddrRegPlusU16(\?\?\?)");
+        } else {
+          RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
+          str8_list_pushf(scratch.arena, &fmt, "AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+        }
+      } break;
+
+      case RDI_LocationKind_AddrAddrRegPlusU16: {
+        if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
+          str8_list_pushf(scratch.arena, &fmt, "AddrAddrRegPlusU16(\?\?\?)");
+        } else {
+          RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
+          str8_list_pushf(scratch.arena, &fmt, "AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
+        }
+      } break;
+
+      case RDI_LocationKind_ValReg: {
+        if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl) {
+          str8_list_pushf(scratch.arena, &fmt, "ValReg(\?\?\?)");
+        } else {
+          RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
+          str8_list_pushf(scratch.arena, &fmt, "ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
+        }
+      } break;
+      }
+    }
+
+    String8 print_string = str8_list_join(scratch.arena, &fmt, &(StringJoin){.sep=str8_lit(" ")});
+    rd_printf("%S", print_string);
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_global_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_GlobalVariable *gvar)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("name         ='%S'",  str8_from_rdi_string_idx(rdi, gvar->name_string_idx));
+  rd_printf("link_flags   =%S",    rdi_string_from_link_flags(scratch.arena, gvar->link_flags));
+  rd_printf("voff         =%#08x", gvar->voff);
+  rd_printf("type_idx     =%u",    gvar->type_idx);
+  rd_printf("container_idx=%u",    gvar->container_idx);
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_thread_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_ThreadVariable *tvar)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("name         ='%S'",  str8_from_rdi_string_idx(rdi, tvar->name_string_idx));
+  rd_printf("link_flags   =%S",    rdi_string_from_link_flags(scratch.arena, tvar->link_flags));
+  rd_printf("tls_off      =%#08x", tvar->tls_off);
+  rd_printf("type_idx     =%u",    tvar->type_idx);
+  rd_printf("container_idx=%u",    tvar->container_idx);
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_procedure(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure *proc, RDI_Arch arch)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  rd_printf("name           ='%S'", str8_from_rdi_string_idx(rdi, proc->name_string_idx));
+  rd_printf("link_name      ='%S'", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
+  rd_printf("link_flags     =%S",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
+  rd_printf("type_idx       =%u",   proc->type_idx);
+  rd_printf("root_scope_idx =%u",   proc->root_scope_idx);
+  rd_printf("container_idx  =%u",   proc->container_idx);
+  rd_printf("frame_base (first=%u, opl=%u)", proc->frame_base_location_first, proc->frame_base_location_opl);
+  rd_indent();
+  rdi_print_locations(arena, out, indent, rdi, arch, proc->frame_base_location_first, proc->frame_base_location_opl);
+  rd_unindent();
+
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Scope *scope, RDI_Arch arch)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64                scope_count          = 0;
+  U64                scope_voff_count     = 0;
+  U64                local_count          = 0;
+  U64                proc_count           = 0;
+  U64                inline_site_count    = 0;
+  RDI_Scope         *scope_array          = rdi_table_from_name(rdi, Scopes,         &scope_count);
+  U64               *scope_voff_array     = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voff_count);
+  RDI_Local         *local_array          = rdi_table_from_name(rdi, Locals,         &local_count);
+  RDI_Procedure     *proc_array           = rdi_table_from_name(rdi, Procedures,     &proc_count);
+  RDI_InlineSite    *inline_site_array    = rdi_table_from_name(rdi, InlineSites,    &inline_site_count);
+
+  U32      voff_range_lo    = ClampTop(scope->voff_range_first, scope_voff_count);
+  U32      voff_range_hi    = ClampTop(scope->voff_range_opl,   scope_voff_count);
+  U32      voff_range_count = (voff_range_hi - voff_range_lo);
+  U64     *voff_ptr         = scope_voff_array + voff_range_lo;
+  String8  voff_str         = rd_string_from_range_array_u64_hex(scratch.arena, voff_ptr, voff_range_count);
+  
+  U64 scope_idx = (U64)(scope - scope_array);
+  rd_printf("scope[%llu]", scope_idx);
+  rd_indent();
+
+  String8 proc_name = str8_lit("???");
+  if (scope->proc_idx < proc_count) {
+    RDI_Procedure *proc = &proc_array[scope->proc_idx];
+    proc_name           = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
+  }
+
+  String8 inline_site_name = str8_lit("");
+  if (scope->inline_site_idx != 0) {
+    if (scope->inline_site_idx < inline_site_count) {
+      RDI_InlineSite *inline_site = &inline_site_array[scope->inline_site_idx];
+      inline_site_name = str8_from_rdi_string_idx(rdi, inline_site->name_string_idx);
+    } else {
+      inline_site_name = str8_lit("???");
+    }
+    inline_site_name = push_str8f(scratch.arena, " '%S'", inline_site_name);
+  }
+
+  rd_printf("proc_idx              =%u '%S'", scope->proc_idx, proc_name);
+  rd_printf("first_child_scope_idx =%u",      scope->first_child_scope_idx);
+  rd_printf("next_sibling_scope_idx=%u",      scope->next_sibling_scope_idx);
+  rd_printf("inline_site_idx       =%u%S",    scope->inline_site_idx, inline_site_name);
+  rd_printf("voff_ranges           =%S",      voff_str);
+  
+  // local_array
+  {
+    U32 local_lo = ClampTop(scope->local_first, local_count);
+    U32 local_hi = ClampTop(local_lo + scope->local_count, local_count);
+    if (local_lo < local_hi) {
+      for (U32 local_idx = local_lo; local_idx < local_hi; ++local_idx) {
+        RDI_Local *local_ptr = &local_array[local_idx];
+
+        rd_printf("local[%u]", local_idx);
+        rd_indent();
+        rd_printf("kind    =%S",   rdi_string_from_local_kind(scratch.arena, local_ptr->kind));
+        rd_printf("name    ='%S'", str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx));
+        rd_printf("type_idx=%u",   local_ptr->type_idx);
+        
+        if (local_ptr->location_first < local_ptr->location_opl) {
+          rd_printf("locations:");
+          rd_indent();
+          rdi_print_locations(arena, out, indent, rdi, arch, local_ptr->location_first, local_ptr->location_opl);
+          rd_unindent();
+        }
+        rd_unindent();
+      }
+    }
+  }
+  
+  for (U32 child_scope_idx = scope->first_child_scope_idx; child_scope_idx != 0; ) {
+    if (child_scope_idx >= scope_count) {
+      rd_errorf("child scope index (%u) is out of bounds", child_scope_idx);
+      break;
+    }
+
+    rd_indent();
+    RDI_Scope *child_scope = scope_array + child_scope_idx;
+    rdi_print_scope(arena, out, indent, rdi, child_scope, arch);
+    rd_unindent();
+    
+    // advance to next child
+    child_scope_idx = child_scope->next_sibling_scope_idx;
+  }
+  
+  rd_unindent();
+  rd_printf("[/%llu]", scope_idx);
+
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_inline_site(Arena          *arena,
+                      String8List    *out,
+                      String8         indent,
+                      RDI_Parsed     *rdi,
+                      U64             idx,
+                      RDI_InlineSite *inline_site)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 inline_site_idx = push_str8f(scratch.arena, "inline_site[%u]",      idx);
+  String8 type_idx        = push_str8f(scratch.arena, "type_idx = %u,",       inline_site->type_idx);
+  String8 owner_type_idx  = push_str8f(scratch.arena, "owner_type_idx = %u,", inline_site->owner_type_idx);
+  String8 line_table_idx  = push_str8f(scratch.arena, "line_table_idx = %u,", inline_site->line_table_idx);
+  rd_printf("%-20S = { %-25S %-25S %-25S name = '%-20S' }",
+            inline_site_idx,
+            type_idx,
+            owner_type_idx,
+            line_table_idx,
+            str8_from_rdi_string_idx(rdi, inline_site->name_string_idx));
+  scratch_end(scratch);
+}
+
+internal void
+rdi_print_vmap_entry(Arena *arena, String8List *out, String8 indent, RDI_VMapEntry *v)
+{
+  rd_printf("%#llx: %llu", v->voff, v->idx);
+}
+
+internal void
+rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Option opts)
+{
+  RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+
+  if (opts & RD_Option_RdiDataSections) {
+    rd_printf("# DATA SECTIONS");
+    rd_indent();
+    rdi_print_data_sections(arena, out, indent, rdi);
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiTopLevelInfo) {
+    rd_printf("# TOP LEVEL INFO");
+    rd_indent();
+    rdi_print_top_level_info(arena, out, indent, rdi, tli);
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiBinarySections) {
+    U64 count;
+    RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
+    rd_printf("# BINARY SECTIONS");
+    rd_indent();
+    for (U64 idx = 0; idx < count; ++idx) {
+      rd_printf("section[%llu]:", idx);
+      rd_indent();
+      rdi_print_binary_section(arena, out, indent, rdi, &v[idx]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiFilePaths) {
+    U64                file_path_count = 0;
+    RDI_FilePathNode *file_path_array = rdi_table_from_name(rdi, FilePathNodes, &file_path_count);
+    rd_printf("# FILE PATHS");
+    rd_indent();
+    for (U64 i = 0; i < file_path_count; ++i) {
+      if (file_path_array[i].parent_path_node == 0) {
+        rdi_print_file_path(arena, out, indent, rdi, &file_path_array[i]);
+      }
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiSourceFiles) {
+    U64             source_file_count = 0;
+    RDI_SourceFile *source_file_array = rdi_table_from_name(rdi, SourceFiles, &source_file_count);
+    rd_printf("# SOURCE FILES");
+    rd_indent();
+    for (U64 i = 0; i < source_file_count; ++i) {
+      RDI_SourceFile *source_file = &source_file_array[i];
+      rd_printf("source_file[%4llu] = { file_path_node_idx = %4u, source_line_map = %4u, path = '%S' }",
+                i,
+                source_file->file_path_node_idx,
+                source_file->source_line_map_idx,
+                str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiUnits) {
+    U64       unit_count = 0;
+    RDI_Unit *unit_array = rdi_table_from_name(rdi, Units, &unit_count);
+    rd_printf("# UNITS");
+    rd_indent();
+    for (U64 i = 0; i < unit_count; ++i) {
+      rd_printf("unit[%llu]:", i);
+      rd_indent();
+      rdi_print_unit(arena, out, indent, rdi, &unit_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiUnitVMap) {
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, UnitVMap, &vmap_count);
+    rd_printf("# UNIT VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiLineTables) {
+    U64            line_table_count = 0;
+    RDI_LineTable *line_table_array = rdi_table_from_name(rdi, LineTables, &line_table_count);
+    rd_printf("# LINE TABLES");
+    rd_indent();
+    for (U64 i = 0; i < line_table_count; ++i) {
+      rd_printf("line_table[%llu]", i);
+      rd_indent();
+      rdi_print_line_table(arena, out, indent, rdi, &line_table_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiSourceLineMaps) {
+    U64                source_line_map_count = 0;
+    RDI_SourceLineMap *source_line_map_array = rdi_table_from_name(rdi, SourceLineMaps, &source_line_map_count);
+    rd_printf("# SOURCE LINE MAPS");
+    rd_indent();
+    for (U64 i = 0; i < source_line_map_count; ++i) {
+      rd_printf("source_line_map[%llu]:", i);
+      rd_indent();
+      rdi_print_source_line_map(arena, out, indent, rdi, &source_line_map_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiTypeNodes) {
+    U64           type_node_count = 0;
+    RDI_TypeNode *type_node_array = rdi_table_from_name(rdi, TypeNodes, &type_node_count);
+    rd_printf("# TYPE NODES");
+    rd_indent();
+    for (U64 i = 0; i < type_node_count; ++i) {
+      rd_printf("type[%llu]", i);
+      rd_indent();
+      rdi_print_type_node(arena, out, indent, rdi, &type_node_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiUserDefinedTypes) {
+    U64      udt_count = 0;
+    RDI_UDT *udt_array = rdi_table_from_name(rdi, UDTs, &udt_count);
+    rd_printf("# UDTS");
+    rd_indent();
+    for (U64 i = 0; i < udt_count; ++i) {
+      rd_printf("udt[%u]:", i);
+      rd_indent();
+      rdi_print_udt(arena, out, indent, rdi, &udt_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiGlobalVars) {
+    U64                 gvar_count = 0;
+    RDI_GlobalVariable *gvar_array = rdi_table_from_name(rdi, GlobalVariables, &gvar_count);
+    rd_printf("# GLOBAL VARIABLES");
+    rd_indent();
+    for (U64 i = 0; i < gvar_count; ++i) {
+      rd_printf("global_variable[%llu]:", i);
+      rd_indent();
+      rdi_print_global_variable(arena, out, indent, rdi, &gvar_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiGlobalVarsVMap) {
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, GlobalVMap, &vmap_count);
+    rd_printf("# GLOBAL VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiThreadVars) {
+    U64                 tvar_count = 0;
+    RDI_ThreadVariable *tvar_array = rdi_table_from_name(rdi, ThreadVariables, &tvar_count);
+    rd_printf("# THREAD VARIABLES");
+    rd_indent();
+    for (U64 i = 0; i < tvar_count; ++i) {
+      rd_printf("thread_variable[%llu]:", i);
+      rdi_print_thread_variable(arena, out, indent, rdi, &tvar_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiProcedures) {
+    U64            proc_count = 0;
+    RDI_Procedure *proc_array = rdi_table_from_name(rdi, Procedures, &proc_count);
+    rd_printf("# PROCEDURES");
+    rd_indent();
+    for (U64 i = 0; i < proc_count; ++i) {
+      rd_printf("procedure[%llu]:", i);
+      rd_indent();
+      rdi_print_procedure(arena, out, indent, rdi, &proc_array[i], tli->arch);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiScopes) {
+    U64        scope_count = 0;
+    RDI_Scope *scope_array = rdi_table_from_name(rdi, Scopes, &scope_count);
+    rd_printf("# SCOPES");
+    rd_indent();
+    for (U64 i = 0; i < scope_count; ++i) {
+      if (scope_array[i].parent_scope_idx == 0) {
+        rdi_print_scope(arena, out, indent, rdi, &scope_array[i], tli->arch);
+      }
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiScopeVMap) {
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, ScopeVMap, &vmap_count);
+    rd_printf("# SCOPE VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiInlineSites) {
+    U64             inline_site_count = 0;
+    RDI_InlineSite *inline_site_array = rdi_table_from_name(rdi, InlineSites, &inline_site_count);
+    rd_printf("# INLINE SITES");
+    rd_indent();
+    for (U64 i = 0; i < inline_site_count; ++i) {
+      rdi_print_inline_site(arena, out, indent, rdi, i, &inline_site_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiNameMaps) {
+    Temp scratch = scratch_begin(&arena, 1);
+    U64          name_map_count = 0;
+    RDI_NameMap *name_map_array = rdi_table_from_name(rdi, NameMaps, &name_map_count);
+    rd_printf("# NAME MAPS");
+    rd_indent();
+    for (U64 i = 0; i < name_map_count; ++i) {
+      if (i > 0) {
+        rd_newline();
+      }
+      RDI_ParsedNameMap name_map = {0};
+      rdi_parsed_from_name_map(rdi, &name_map_array[i], &name_map);
+      rd_printf("name_map[%S]",rdi_string_from_name_map_kind(i));
+      rd_indent();
+      for (U64 bucket_idx = 0; bucket_idx < name_map.bucket_count; ++bucket_idx) {
+        if (name_map.buckets[bucket_idx].node_count == 0) {
+          continue;
+        }
+        rd_printf("bucket[%llu]:", bucket_idx);
+        rd_indent();
+        RDI_NameMapNode *node_ptr = name_map.nodes + name_map.buckets[bucket_idx].first_node;
+        RDI_NameMapNode *node_opl = node_ptr + name_map.buckets[bucket_idx].node_count;
+        for (; node_ptr < node_opl; ++node_ptr) {
+          Temp temp = temp_begin(scratch.arena);
+          String8 str     = str8_from_rdi_string_idx(rdi, node_ptr->string_idx);
+          String8 indices;
+          if (node_ptr->match_count == 1) {
+            indices = push_str8f(temp.arena, "%u", node_ptr->match_idx_or_idx_run_first);
+          } else {
+            U32  idx_count = 0;
+            U32 *idx_array = rdi_idx_run_from_first_count(rdi, node_ptr->match_idx_or_idx_run_first, node_ptr->match_count, &idx_count);
+            indices = rd_string_from_array_u32(temp.arena, idx_array, idx_count);
+          }
+          rd_printf("match \"%S\": %S", str, indices);
+          temp_end(temp);
+        }
+        rd_unindent();
+      }
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+    scratch_end(scratch);
+  }
+  if (opts & RD_Option_RdiStrings) {
+    U64  stridx_count = 0;
+    U32 *stridx_array = rdi_table_from_name(rdi, StringTable, &stridx_count);
+    rd_printf("# STRINGS");
+    rd_indent();
+    for (U64 i = 0; i < stridx_count; ++i) {
+      rd_printf("string[%llu]: \"%S\"", i, str8_from_rdi_string_idx(rdi, i));
+    }
+    rd_unindent();
+    rd_newline();
+  }
+}
+
+internal String8
+dw_string_from_reg_off(Arena *arena, Arch arch, U64 reg_idx, S64 reg_off)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 reg_str = dw_string_from_register(scratch.arena, arch, reg_idx);
+  String8 result = rd_string_from_reg_off(arena, reg_str, reg_off);
+  scratch_end(scratch);
+  return result;
+}
+
+B32 is_global_var = 0;
+
 internal String8List
-dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64)
+dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List result = {0};
@@ -581,15 +1837,16 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
       case DW_ExprOp_Const8S:size_param = 8; is_signed = 1; goto const_n;
       const_n:
       {
-        U64 x = 0;
-        cursor += str8_deserial_read(raw_data, cursor, &x, size_param, 1);
-        if (is_signed){
-          U64 bit_shift = (size_param << 3) - 1;
-          if ((x >> bit_shift) != 0){
-            x |= ~((1 << bit_shift) - 1);
-          }
+        if (is_signed) {
+          S64 x = 0;
+          cursor += str8_deserial_read(raw_data, cursor, &x, size_param, 1);
+          x = extend_sign64(x, size_param);
+          op_value = push_str8f(scratch.arena, "%lld", x);
+        } else {
+          U64 x = 0;
+          cursor += str8_deserial_read(raw_data, cursor, &x, size_param, 1);
+          op_value = push_str8f(scratch.arena, "%llu", x);
         }
-        op_value = push_str8f(scratch.arena, "%llu", x);
       } break;
       
       case DW_ExprOp_Addr: {
@@ -622,19 +1879,24 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
       case DW_ExprOp_Reg27: case DW_ExprOp_Reg28: case DW_ExprOp_Reg29:
       case DW_ExprOp_Reg30: case DW_ExprOp_Reg31: {
         U64 reg_idx = op - DW_ExprOp_Reg0;
-        op_value = push_str8f(scratch.arena, "%S", dw_string_from_register(scratch.arena, arch, reg_idx));
+        op_value = dw_string_from_reg_off(scratch.arena, arch, reg_idx, 0);
       } break;
       
       case DW_ExprOp_RegX: {
         U64 reg_idx = 0;
         cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
-        op_value = push_str8f(scratch.arena, "register %llu (%S)", reg_idx, dw_string_from_register(scratch.arena, arch, reg_idx));
+        op_value = dw_string_from_reg_off(scratch.arena, arch, reg_idx, 0);
       } break;
       
       case DW_ExprOp_ImplicitValue: {
-        U64 size = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &size);
-        op_value = push_str8f(scratch.arena, "block @ %#llx with size %u", cursor, size);
+        U64 value_size = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &value_size);
+        Rng1U64 value_range = rng_1u64(cursor, cursor + value_size);
+        String8 value_data  = str8_substr(raw_data, value_range);
+        cursor += value_size;
+
+        String8 value_str = rd_string_from_hex_u8(scratch.arena, value_data.str, value_data.size);
+        op_value = push_str8f(scratch.arena, "{ %S }", value_str);
       } break;
       
       case DW_ExprOp_Piece: {
@@ -665,20 +1927,13 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
       case DW_ExprOp_Skip: {
         S16 x = 0;
         cursor += str8_deserial_read_struct(raw_data, cursor, &x);
-        
-        S64 new_offset = (S64)cursor + x;
-        if (new_offset >= 0) {
-          cursor = (U64)new_offset;
-          op_value = push_str8f(scratch.arena, "constant %lld", x);
-        } else {
-          op_value = push_str8f(scratch.arena, "ERROR: negative read offset %lld", new_offset);
-        }
+        op_value = push_str8f(scratch.arena, "%+d bytes", x);
       } break;
       
       case DW_ExprOp_Bra: {
         S16 x = 0;
         cursor += str8_deserial_read_struct(raw_data, cursor, &x);
-        op_value = push_str8f(scratch.arena, "%d", x);
+        op_value = push_str8f(scratch.arena, "%+d", x);
       } break;
       
       case DW_ExprOp_BReg0:  case DW_ExprOp_BReg1:  case DW_ExprOp_BReg2: 
@@ -695,7 +1950,7 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
         U64 reg_idx = op - DW_ExprOp_BReg0;
         S64 reg_off = 0;
         cursor += str8_deserial_read_sleb128(raw_data, cursor, &reg_off);
-        op_value = push_str8f(scratch.arena, "%S offset %lld", dw_string_from_register(scratch.arena, arch, reg_idx), reg_off);
+        op_value = dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off);
       } break;
       
       case DW_ExprOp_FBReg: {
@@ -709,7 +1964,7 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
         S64 reg_off = 0;
         cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
         cursor += str8_deserial_read_sleb128(raw_data, cursor, &reg_off);
-        op_value = push_str8f(scratch.arena, "register %u (%S) offset %lld", reg_idx, dw_string_from_register(scratch.arena, arch, reg_idx), reg_off);
+        op_value = dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off);
       } break;
       
       case DW_ExprOp_XDerefSize:
@@ -731,12 +1986,71 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
       } break;
       case DW_ExprOp_CallRef: {
         U64 x = 0;
-        if (is_dwarf64) {
-          cursor += str8_deserial_read(raw_data, cursor, &x, 8, 1);
-        } else {
-          cursor += str8_deserial_read(raw_data, cursor, &x, 4, 1);
-        }
+        cursor += str8_deserial_read_dwarf_uint(raw_data, cursor, format, &x);
         op_value = push_str8f(scratch.arena, "%llu", x);
+      } break;
+      case DW_ExprOp_ImplicitPointer:
+      case DW_ExprOp_GNU_ImplicitPointer: {
+        U64 info_off = 0;
+        cursor += str8_deserial_read_dwarf_uint(raw_data, cursor, format, &info_off);
+        S64 ptr = 0;
+        cursor += str8_deserial_read_sleb128(raw_data, cursor, &ptr);
+
+        op_value = push_str8f(scratch.arena, ".debug_info+%#llx, ptr %llx", info_off, ptr);
+      } break;
+      case DW_ExprOp_Convert:
+      case DW_ExprOp_GNU_Convert: {
+        U64 type_cu_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &type_cu_off);
+        op_value = push_str8f(scratch.arena, "TypeCuOff %#llx", cu_base + type_cu_off);
+      } break;
+      case DW_ExprOp_GNU_ParameterRef: {
+        // TODO: always 4 bytes?
+        U32 cu_off = 0;
+        cursor += str8_deserial_read_struct(raw_data, cursor, &cu_off);
+        op_value = push_str8f(scratch.arena, "CuOff %#x", cu_base + cu_off);
+      } break;
+      case DW_ExprOp_DerefType:
+      case DW_ExprOp_GNU_DerefType: {
+        U8  deref_size  = 0;
+        U64 type_cu_off = 0;
+        cursor += str8_deserial_read_struct(raw_data, cursor, &deref_size);
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &type_cu_off);
+        op_value = push_str8f(scratch.arena, "%#x, TypeCuOff %#llx", deref_size, cu_base + type_cu_off);
+      } break;
+      case DW_ExprOp_ConstType:
+      case DW_ExprOp_GNU_ConstType: {
+        U64 type_cu_off      = 0;
+        U8  const_value_size = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &type_cu_off);
+        cursor += str8_deserial_read_struct(raw_data, cursor, &const_value_size);
+        Rng1U64 const_value_range = rng_1u64(cursor, cursor + const_value_size);
+        String8 const_value_data  = str8_substr(raw_data, const_value_range);
+        String8 const_value_str   = rd_string_from_hex_u8(scratch.arena, const_value_data.str, const_value_data.size);
+        op_value = push_str8f(scratch.arena, "TypeCuOff %#llx, Const Value { %S }", cu_base + type_cu_off, const_value_str);
+        cursor += const_value_size;
+      } break;
+      case DW_ExprOp_RegvalType:
+      case DW_ExprOp_GNU_RegvalType: {
+        U64 reg_idx = 0, type_cu_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &type_cu_off);
+        op_value = push_str8f(scratch.arena, "%S, TypeCuOff %#llx", dw_string_from_register(scratch.arena, arch, reg_idx), cu_base + type_cu_off);
+      } break;
+      case DW_ExprOp_EntryValue:
+      case DW_ExprOp_GNU_EntryValue: {
+        U64 block_size = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &block_size);
+        Rng1U64     block_range = rng_1u64(cursor, cursor + block_size);
+        String8     block_data  = str8_substr(raw_data, block_range);
+        String8List block_expr  = dw_string_list_from_expression(scratch.arena, block_data, cu_base, address_size, arch, ver, ext, format);
+        op_value = str8_list_join(scratch.arena, &block_expr, &(StringJoin){.pre = str8_lit("{ "), .sep = str8_lit(","), .post = str8_lit(" }")});
+        cursor += block_size;
+      } break;
+      case DW_ExprOp_Addrx: {
+        U64 addr = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &addr);
+        op_value = push_str8f(scratch.arena, "%#llx", addr);
       } break;
       
       case DW_ExprOp_CallFrameCfa:
@@ -774,7 +2088,7 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
         // no operands
       } break;
     }
-    
+
     String8 opcode_str = dw_string_from_expr_op(scratch.arena, ver, ext, op);
     if (op_value.size == 0) {
       str8_list_pushf(arena, &result, "DW_OP_%S", opcode_str);
@@ -787,17 +2101,17 @@ dw_string_list_from_expression(Arena *arena, String8 raw_data, U64 address_size,
 }
 
 internal String8
-dw_format_expression_single_line(Arena *arena, String8 raw_data, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64)
+dw_format_expression_single_line(Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format)
 {
   Temp        scratch    = scratch_begin(&arena, 1);
-  String8List list       = dw_string_list_from_expression(scratch.arena, raw_data, address_size, arch, ver, ext, is_dwarf64);
+  String8List list       = dw_string_list_from_expression(scratch.arena, raw_data, cu_base, address_size, arch, ver, ext, format);
   String8     expression = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
   scratch_end(scratch);
   return expression;
 }
 
 internal void
-dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, B32 is_dwarf64)
+dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -846,14 +2160,12 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         rd_printf("DW_CFA_advance_loc4: %+u", delta * cie->code_align_factor);
       } break;
       case DW_CFA_OffsetExt: {
-        U64 reg = 0, offset = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &offset);
+        U64 reg_idx = 0, reg_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_off);
 
-        rd_printf("DW_CFA_offset_extended: register %llu (%S), offset %+llu", 
-                  reg, 
-                  dw_string_from_register(arena, arch, reg), 
-                  (S64)offset * cie->data_align_factor);
+        rd_printf("DW_CFA_offset_extended: %S register %llu (%S), offset %+llu", 
+                  dw_string_from_reg_off(scratch.arena, arch, reg_idx, (S64)reg_off * cie->data_align_factor));
       } break;
       case DW_CFA_RestoreExt: {
         rd_printf("DW_CFA_restore_extended");
@@ -868,19 +2180,14 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         U64 reg = 0;
         cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
 
-        rd_printf("DW_CFA_same_value: register %llu (%S)", 
-                  reg, 
-                  dw_string_from_register(scratch.arena, arch, reg));
+        rd_printf("DW_CFA_same_value: %S", dw_string_from_register(scratch.arena, arch, reg));
       } break;
       case DW_CFA_Register: {
-        U64 reg = 0, offset = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &offset);
-        
-        rd_printf("DW_CFA_register: register %llu (%S), offset %+llu", 
-                  reg, 
-                  dw_string_from_register(scratch.arena, arch, reg), 
-                  offset);
+        U64 reg_idx = 0, reg_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_off);
+
+        rd_printf("DW_CFA_register: %S", dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off));
       } break;
       case DW_CFA_RememberState: {
         rd_printf("DW_CFA_remember_state");
@@ -889,14 +2196,11 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         rd_printf("DW_CFA_restore_state");
       } break;
       case DW_CFA_DefCfa: {
-        U64 reg = 0, offset = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &offset);
+        U64 reg_idx = 0, reg_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_off);
 
-        rd_printf("DW_CFA_def_cfa: register %llu (%S), offset %llu", 
-                  reg, 
-                  dw_string_from_register(scratch.arena, arch, reg), 
-                  offset);
+        rd_printf("DW_CFA_def_cfa: %S", dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off));
       } break;
       case DW_CFA_DefCfaRegister: {
         U64 reg = 0;
@@ -919,7 +2223,7 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         cursor += block_size;
         
         rd_printf("DW_CFA_def_cfa_expression: %S",
-                  dw_format_expression_single_line(scratch.arena, raw_expr, address_size, arch, ver, ext, is_dwarf64));
+                  dw_format_expression_single_line(scratch.arena, raw_expr, 0, address_size, arch, ver, ext, format));
       } break;
       case DW_CFA_Expr: {
         U64 reg = 0, block_size = 0;
@@ -928,28 +2232,25 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         String8 raw_expr = str8_substr(raw_data, rng_1u64(cursor, cursor + block_size));
         cursor += block_size;
         
-        rd_printf("DW_CFA_expression: register %llu (%S), expression %S", 
-                  reg, 
+        rd_printf("DW_CFA_expression: %S, expression %S", 
                   dw_string_from_register(scratch.arena, arch, reg), 
-                  dw_format_expression_single_line(scratch.arena, raw_expr, address_size, arch, ver, ext, is_dwarf64));
+                  dw_format_expression_single_line(scratch.arena, raw_expr, 0, address_size, arch, ver, ext, format));
       } break;
       case DW_CFA_OffsetExtSf: {
-        U64 reg    = 0;
-        S64 offset = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
-        cursor += str8_deserial_read_sleb128(raw_data, cursor, &offset);
+        U64 reg_idx = 0;
+        S64 reg_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_sleb128(raw_data, cursor, &reg_off);
 
-        rd_printf("DW_CFA_offset_ext_sf: register %llu (%S), offset %+lld", 
-                  reg, dw_string_from_register(scratch.arena, arch, reg), offset * cie->data_align_factor);
+        rd_printf("DW_CFA_offset_ext_sf: %S", dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off * cie->data_align_factor));
       } break;
       case DW_CFA_DefCfaSf: {
-        U64 reg    = 0;
-        S64 offset = 0;
-        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg);
-        cursor += str8_deserial_read_sleb128(raw_data, cursor, &offset);
+        U64 reg_idx = 0;
+        S64 reg_off = 0;
+        cursor += str8_deserial_read_uleb128(raw_data, cursor, &reg_idx);
+        cursor += str8_deserial_read_sleb128(raw_data, cursor, &reg_off);
 
-        rd_printf("DW_CFA_def_cfa_sf: register %llu (%S), offset %+lld",
-                  reg, dw_string_from_register(scratch.arena, arch, reg), offset * cie->data_align_factor);
+        rd_printf("DW_CFA_def_cfa_sf: %S", dw_string_from_reg_off(scratch.arena, arch, reg_idx, reg_off * cie->data_align_factor));
       } break;
       case DW_CFA_ValOffset: {
         U64 val = 0, offset = 0;
@@ -976,7 +2277,7 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
 
         rd_printf("DW_CFA_val_expr: value %+llu, expression %S",
                   val,
-                  dw_format_expression_single_line(scratch.arena, raw_expr, address_size, arch, ver, ext, is_dwarf64));
+                  dw_format_expression_single_line(scratch.arena, raw_expr, 0, address_size, arch, ver, ext, format));
       } break;
       case DW_CFA_AdvanceLoc: {
         rd_printf("DW_CFA_advance_loc: %+llu", operand);
@@ -986,10 +2287,10 @@ dw_print_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw
         cursor += str8_deserial_read_uleb128(raw_data, cursor, &offset);
         S64 v = (S64)offset * cie->data_align_factor;
 
-        rd_printf("DW_CFA_offset: register %llu (%S), offset %lld", operand, dw_string_from_register(arena, arch, operand), v);
+        rd_printf("DW_CFA_offset: %S", dw_string_from_reg_off(scratch.arena, arch, operand, v));
       } break;
       case DW_CFA_Restore: {
-        rd_printf("DW_CFA_restore: register %llu (%S)", operand, dw_string_from_register(scratch.arena, arch, operand));
+        rd_printf("DW_CFA_restore: %S", operand, dw_string_from_register(scratch.arena, arch, operand));
       } break;
       default: {
         rd_errorf("unknown CFI opcode %u", opcode);
@@ -1098,9 +2399,9 @@ dw_print_eh_frame(Arena *arena, String8List *out, String8 indent, String8 raw_eh
     rd_printf("CFI Program:");
     rd_indent();
 
-    B32     is_dwarf64 = length > max_U32;
-    String8 raw_cfi    = str8_substr(raw_eh_frame, cfi_range);
-    dw_print_cfi_program(scratch.arena, out, indent, raw_cfi, &cie, ptr_ctx, arch, ver, ext, is_dwarf64);
+    DW_Format format  = DW_FormatFromSize(length);
+    String8   raw_cfi = str8_substr(raw_eh_frame, cfi_range);
+    dw_print_cfi_program(scratch.arena, out, indent, raw_cfi, &cie, ptr_ctx, arch, ver, ext, format);
 
     rd_unindent();
     rd_newline();
@@ -1112,71 +2413,60 @@ dw_print_eh_frame(Arena *arena, String8List *out, String8 indent, String8 raw_eh
   scratch_end(scratch);
 }
 
-internal DW_AttribValueResolveParams
-rd_dw_resolve_params_from_comp_root(DW_CompRoot comp_root)
-{
-  DW_AttribValueResolveParams resolve_params  = {0};
-  resolve_params.version                  = comp_root.version;
-  resolve_params.addr_size                = comp_root.address_size;
-  resolve_params.containing_unit_info_off = comp_root.info_off;
-  resolve_params.debug_addrs_base         = comp_root.addrs_base;
-  resolve_params.debug_rnglists_base      = comp_root.rnglist_base;
-  resolve_params.debug_str_offs_base      = comp_root.stroffs_base;
-  resolve_params.debug_loclists_base      = comp_root.loclist_base;
-  return resolve_params;
-}
-
 internal void
-dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed)
+dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, Arch arch, B32 relaxed)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  Rng1U64List comp_unit_ranges = dw_comp_unit_ranges_from_info(scratch.arena, sections->v[DW_Section_Info]);
+  Rng1U64List      cu_ranges = dw_unit_ranges_from_data(scratch.arena, input->sec[DW_Section_Info].data);
 
-  if (comp_unit_ranges.count > 0) {
-    rd_printf("# %S", sections->v[DW_Section_Info].name);
+  if (cu_ranges.count > 0) {
+    rd_printf("# %S", input->sec[DW_Section_Info].name);
     rd_indent();
   }
 
   U64 comp_idx = 0;
-  for (Rng1U64Node *comp_unit_range_n = comp_unit_ranges.first; comp_unit_range_n != 0; comp_unit_range_n = comp_unit_range_n->next, ++comp_idx) {
+  for (Rng1U64Node *cu_range_n = cu_ranges.first; cu_range_n != 0; cu_range_n = cu_range_n->next, ++comp_idx) {
     Temp comp_temp = temp_begin(scratch.arena);
 
-    Rng1U64                     comp_unit_range = comp_unit_range_n->v;
-    DW_CompRoot                 comp_root       = dw_comp_root_from_range(comp_temp.arena, sections, comp_unit_range, relaxed);
-    DW_AttribValueResolveParams resolve_params  = dw_attrib_value_resolve_params_from_comp_root(&comp_root);
-    DW_Ext                      ext             = dw_ext_from_params(comp_root.producer, arch, image_type);
+    U64         cu_base  = cu_range_n->v.min;
+    Rng1U64     cu_range = cu_range_n->v;
+    DW_CompUnit cu       = dw_cu_from_info_off(comp_temp.arena, input, lu_input, cu_range.min, relaxed);
+
+    String8 cu_dir    = dw_string_from_attrib  (input, &cu, cu.tag, DW_Attrib_CompDir );
+    String8 cu_name   = dw_string_from_attrib  (input, &cu, cu.tag, DW_Attrib_Name    );
+    String8 stmt_list = dw_line_ptr_from_attrib(input, &cu, cu.tag, DW_Attrib_StmtList);
+
+    DW_LineVMHeader line_vm   = {0};
+    dw_read_line_vm_header(comp_temp.arena, stmt_list, 0, input, cu_dir, cu_name, cu.address_size, cu.str_offsets_lu, &line_vm);
 
     // print comp info
     rd_printf("Compilation Unit #%u", comp_idx);
     rd_indent();
-    rd_printf("Version:       %u",                       comp_root.version);
-    rd_printf("Address Size:  %llu",                     comp_root.address_size);
-    rd_printf("Abbrev Offset: %#llx",                    comp_root.abbrev_off);
-    rd_printf("Tags Range:    %#llx-%#llx (Size %#llx)", comp_root.tags_info_range.min, comp_root.tags_info_range.max, dim_1u64(comp_root.tags_info_range));
+    rd_printf("Version:       %u",               cu.version);
+    rd_printf("Address Size:  %llu",             cu.address_size);
+    rd_printf("Abbrev Offset: %#llx",            cu.abbrev_off);
+    rd_printf("Info Range:    %#llx-%#llx (%M)", cu.info_range.min, cu.info_range.max, dim_1u64(cu.info_range));
     rd_newline();
 
     // prase tags
     U32 tag_depth = 0;
-    for (U64 info_off = comp_root.tags_info_range.min; info_off < comp_root.tags_info_range.max; /* empty */) {
+    for (U64 info_off = cu.first_tag_info_off; info_off < cu.info_range.max; ) {
       Temp tag_temp = temp_begin(scratch.arena);
 
-      U64     tag_info_off = info_off;
-      DW_Tag *tag          = dw_tag_from_info_offset(tag_temp.arena, sections, comp_root.abbrev_table, comp_root.version, ext, comp_root.language, comp_root.address_size, info_off, relaxed);
+      U64    tag_info_off = info_off;
+      DW_Tag tag          = {0};
+      info_off += dw_read_tag_cu(tag_temp.arena, input, &cu, tag_info_off, &tag);
 
-      // advance parse
-      info_off = tag->info_range.max;
-
-      String8 tag_str = dw_string_from_tag_kind(tag_temp.arena, tag->kind);
-      rd_printf("<%x><%llx> DW_Tag_%S (Abbrev Number: %llu)", tag_depth, tag_info_off, tag_str, tag->abbrev_id);
+      String8 tag_str = dw_string_from_tag_kind(tag_temp.arena, tag.kind);
+      rd_printf("<%x><%llx> DW_Tag_%S (Abbrev Number: %llu)", tag_depth, tag_info_off, tag_str, tag.abbrev_id);
       rd_indent();
 
       // parse attributes
-      for (DW_AttribNode *attrib_node = tag->attribs.first; attrib_node != 0; attrib_node = attrib_node->next) {
+      for (DW_AttribNode *attrib_n = tag.attribs.first; attrib_n != 0; attrib_n = attrib_n->next) {
         Temp attrib_temp = temp_begin(tag_temp.arena);
 
-        DW_Attrib      *attrib       = &attrib_node->attrib;
-        DW_AttribValue  attrib_value = dw_attrib_value_from_form_value(sections, resolve_params, attrib->form_kind, attrib->value_class, attrib->form_value);
+        DW_Attrib *attrib = &attrib_n->v;
 
         String8List attrib_list = {0};
 
@@ -1184,10 +2474,10 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
         str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx> ", attrib->info_off);
 
         // attribute kind
-        String8 attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, comp_root.version, ext, attrib->attrib_kind);
+        String8 attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, cu.version, cu.ext, attrib->attrib_kind);
         if (attrib_kind_str.size == 0) {
           if (relaxed) {
-            attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, DW_Version_Last, ext, attrib->attrib_kind);
+            attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, DW_Version_Last, cu.ext, attrib->attrib_kind);
           }
         }
         if (attrib_kind_str.size == 0) {
@@ -1197,89 +2487,165 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
         }
 
         // form kind
-        String8 form_kind_str = dw_string_from_form_kind(scratch.arena, comp_root.version, attrib->form_kind);
+        String8 form_kind_str = dw_string_from_form_kind(scratch.arena, cu.version, attrib->form_kind);
         str8_list_pushf(attrib_temp.arena, &attrib_list, "DW_Form_%-15S", form_kind_str);
 
-        switch (attrib->value_class) {
+        DW_AttribClass value_class = dw_value_class_from_attrib(&cu, attrib);
+        switch (value_class) {
         default: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: Unknown value class");
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unknown value class");
         } break;
         case DW_AttribClass_Undefined: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: Undefined value class");
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: undefined value class");
         } break;
         case DW_AttribClass_Address: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          U64 address = dw_address_from_attrib_ptr(input, &cu, attrib);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", address);
         } break;
         case DW_AttribClass_Block: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx %#llx", attrib_value.v[0], attrib_value.v[1]);
+          String8 block     = dw_block_from_attrib_ptr(input, &cu, attrib);
+          String8 block_str = rd_string_from_hex_u8(attrib_temp.arena, block.str, block.size);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "%S", block_str);
         } break;
         case DW_AttribClass_Const: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
-          switch (attrib->attrib_kind) {
-          case DW_Attrib_Language: {
-            String8 lang_str = dw_string_from_language(attrib_temp.arena, attrib_value.v[0]);
-            str8_list_pushf(attrib_temp.arena, &attrib_list, " (%S)", lang_str);
-          } break;
-          }
+          U64 constant = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", constant);
         } break;
         case DW_AttribClass_ExprLoc: {
-          DW_Mode mode       = dw_mode_from_sec(sections, DW_Section_Info);
-          Rng1U64 sect_range = rng_1u64(0, sections->v[DW_Section_Info].data.size);
-          Rng1U64 expr_range = rng_1u64(sect_range.min+attrib_value.v[0], sect_range.min+attrib_value.v[0]+attrib_value.v[1]);
-          String8 raw_expr   = str8_substr(sections->v[DW_Section_Info].data, expr_range);
-          B32     is_dwarf64 = mode == DW_Mode_32Bit ? 1 : 0;
-          String8 expression = dw_format_expression_single_line(attrib_temp.arena, raw_expr, comp_root.address_size, arch, comp_root.version, ext, is_dwarf64);
-          str8_list_push(attrib_temp.arena, &attrib_list, expression);
+          String8 exprloc     = dw_exprloc_from_attrib_ptr(input, &cu, attrib);
+          String8 exprloc_str = dw_format_expression_single_line(attrib_temp.arena, exprloc, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+          str8_list_push(attrib_temp.arena, &attrib_list, exprloc_str);
         } break;
         case DW_AttribClass_Flag: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          B32 flag = dw_flag_from_attrib_ptr(input, &cu, attrib);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu (%s)", flag, flag == 0 ? "false" : "true");
         } break;
         case DW_AttribClass_LinePtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
+          }
         } break;
         case DW_AttribClass_LocListPtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
+          }
         } break;
         case DW_AttribClass_MacPtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+          }
         } break;
         case DW_AttribClass_RngListPtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+          }
         } break;
         case DW_AttribClass_RngList: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+          }
         } break;
         case DW_AttribClass_Reference: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx>", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_Ref1 ||
+              attrib->form_kind == DW_Form_Ref2 ||
+              attrib->form_kind == DW_Form_Ref4 ||
+              attrib->form_kind == DW_Form_Ref8 ||
+              attrib->form_kind == DW_Form_RefUData) {
+            U64 info_off = cu.info_range.min + attrib->form.ref;
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx>", info_off);
+            if (!contains_1u64(cu.info_range, attrib->form.ref)) {
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "(ERROR: out of bounds reference)");
+            }
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.ref);
+          }
         } break;
         case DW_AttribClass_String: {
-          String8 string = dw_string_from_attrib_value(sections, attrib_value);
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "\"%S\"", string);
+          if (attrib->form_kind == DW_Form_Strp) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          }
+          String8 string = dw_string_from_attrib_ptr(input, &cu, attrib);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", string);
         } break;
         case DW_AttribClass_StrOffsetsPtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
+          }
         } break;
         case DW_AttribClass_AddrPtr: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+          if (attrib->form_kind == DW_Form_SecOffset) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
+          }
         } break;
         }
 
-        String8 print = str8_list_join(attrib_temp.arena, &attrib_list, 0);
+        String8 attrib_str = {0};
+        switch (attrib->attrib_kind) {
+        case DW_Attrib_Language: {
+          DW_Language lang = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = dw_string_from_language(attrib_temp.arena, lang);
+        } break;
+        case DW_Attrib_DeclFile: {
+          U64          file_idx = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          DW_LineFile *file     = dw_file_from_attrib_ptr(&cu, &line_vm, attrib);
+          attrib_str = str8_lit("\?\?\?");
+          if (file) {
+            attrib_str = dw_path_from_file(attrib_temp.arena, &line_vm, file);
+          }
+        } break;
+        case DW_Attrib_DeclLine: {
+          U64 line = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = push_str8f(attrib_temp.arena, "%llu", line);
+        } break;
+        case DW_Attrib_Inline: {
+          DW_InlKind inl = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = dw_string_from_inl(attrib_temp.arena, inl);
+        } break;
+        case DW_Attrib_Accessibility: {
+          DW_AccessKind access = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = dw_string_from_access_kind(attrib_temp.arena, access);
+        } break;
+        case DW_Attrib_CallingConvention: {
+          DW_CallingConventionKind calling_convetion = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = dw_string_from_calling_convetion(attrib_temp.arena, calling_convetion);
+        } break;
+        case DW_Attrib_Encoding: {
+          DW_ATE encoding = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
+          attrib_str = dw_string_from_attrib_type_encoding(attrib_temp.arena, encoding);
+        } break;
+        }
+
+        if (attrib_str.size) {
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", attrib_str);
+        }
+        String8 print = str8_list_join(attrib_temp.arena, &attrib_list, &(StringJoin){.sep=str8_lit(" ")});
         rd_printf("%S", print);
 
         temp_end(attrib_temp);
       }
 
-      B32 is_ender_tag = tag->abbrev_id == 0;
-
-      if (tag->has_children) {
+      B32 is_ender_tag = tag.abbrev_id == 0;
+      if (tag.has_children) {
         if (is_ender_tag) {
           rd_errorf("null-tag cannot have children");
         }
         rd_indent();
         tag_depth += 1;
       }
-
       if (is_ender_tag) {
         if (tag_depth == 0) {
           rd_errorf("malformed data detected, too many null tags");
@@ -1290,7 +2656,6 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
       }
 
       rd_unindent();
-
       temp_end(tag_temp);
     }
     temp_end(comp_temp);
@@ -1299,7 +2664,7 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
     rd_newline();
   }
 
-  if (comp_unit_ranges.count > 0) {
+  if (cu_ranges.count > 0) {
     rd_unindent();
   }
 
@@ -1307,19 +2672,21 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
 }
 
 internal void
-dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  DW_Section abbrev     = sections->v[DW_Section_Abbrev];
+  DW_Section abbrev     = input->sec[DW_Section_Abbrev];
   String8    raw_abbrev = abbrev.data;
 
   if (raw_abbrev.size) {
-    rd_printf("# %S", sections->v[DW_Section_Abbrev].name);
+    rd_printf("# %S", input->sec[DW_Section_Abbrev].name);
     rd_indent();
   }
 
   for (U64 cursor = 0; cursor < raw_abbrev.size; ) {
+    U64 id_off = cursor;
+
     U64 id = 0;
     cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &id);
 
@@ -1334,9 +2701,11 @@ dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Section
     cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &tag);
     cursor += str8_deserial_read_struct(raw_abbrev, cursor, &has_children);
 
-    rd_printf("%llu DW_Tag_%S %s", id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "[has children]" : "[no children]");
+    rd_printf("<%llx> %llu DW_Tag_%S %s", id_off, id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "[has children]" : "[no children]");
     rd_indent();
     for (;;) {
+      U64 attrib_off = cursor;
+
       U64 attrib_id = 0, form_id = 0;
       cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &attrib_id);
       cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &form_id);
@@ -1345,7 +2714,7 @@ dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Section
       }
       String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
       String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
-      rd_printf("DW_Attrib_%-20S DW_Form_%S", attrib_str, form_str);
+      rd_printf("<%llx> DW_Attrib_%-20S DW_Form_%S", attrib_off, attrib_str, form_str);
     }
     rd_unindent();
 
@@ -1360,282 +2729,287 @@ dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Section
 }
 
 internal void
-dw_print_debug_line(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, B32 relaxed)
+dw_print_debug_line(Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, B32 relaxed)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  DW_Mode      mode                 = dw_mode_from_sec(sections, DW_Section_Line);
-  Rng1U64      range                = dw_range_from_sec(sections, DW_Section_Line);
-  void        *base                 = dw_base_from_sec(sections, DW_Section_Line);
-  Rng1U64List  comp_unit_range_list = dw_comp_unit_ranges_from_info(scratch.arena, sections->v[DW_Section_Info]);
+  rd_printf("# .debug_line");
 
-  if (dim_1u64(range)) {
-    rd_printf("# %S", sections->v[DW_Section_Line].name);
-    rd_indent();
-  }
+  Rng1U64List unit_ranges = dw_unit_ranges_from_data(scratch.arena, input->sec[DW_Section_Line].data);
+  for (Rng1U64Node *unit_range_n = unit_ranges.first; unit_range_n != 0; unit_range_n = unit_range_n->next) {
+    Temp unit_temp = temp_begin(scratch.arena);
 
-  U64 cursor   = 0;
-  for (Rng1U64Node *comp_unit_range_n = comp_unit_range_list.first; comp_unit_range_n != 0; comp_unit_range_n = comp_unit_range_n->next) {
-    Temp comp_temp = temp_begin(scratch.arena);
+    String8         unit_data      = str8_substr(input->sec[DW_Section_Line].data, unit_range_n->v);
+    String8         cu_dir         = {0};
+    String8         cu_name        = {0};
+    DW_ListUnit     cu_str_offsets = {0};
+    DW_LineVMHeader line_vm        = {0};
+    U64             line_vm_size   = dw_read_line_vm_header(unit_temp.arena, unit_data, 0, input, cu_dir, cu_name, line_vm.address_size, &cu_str_offsets, &line_vm);
 
-    Rng1U64                     comp_unit_range   = comp_unit_range_n->v;
-    U64                         line_table_offset = cursor;
-    DW_CompRoot                 comp_root         = dw_comp_root_from_range(comp_temp.arena, sections, comp_unit_range, relaxed);
-    DW_AttribValueResolveParams resolve_params    = dw_attrib_value_resolve_params_from_comp_root(&comp_root);
-
-    DW_LineVMHeader vm_header = {0};
-    cursor += dw_read_line_vm_header(arena, base, range, cursor, mode, sections, resolve_params, comp_root.compile_dir, comp_root.name, &vm_header);
-
-    if (vm_header.unit_length == 0) {
+    if (line_vm_size == 0) {
       continue;
     }
 
-    rd_printf("Line table offset:       %#llx", line_table_offset);
-    rd_printf("Line table length:       %llu",  vm_header.unit_length);
-    rd_printf("Version:                 %u",    vm_header.version);
-    rd_printf("Address size:            %u",    vm_header.address_size);
-    rd_printf("Segment selector size:   %u",    vm_header.segment_selector_size);
-    rd_printf("Header length:           %llu",  vm_header.header_length);
-    rd_printf("Program offset:          %#llx", vm_header.program_off);
-    rd_printf("Min instruction length:  %u",    vm_header.min_inst_len);
-    rd_printf("Max ops for instruction: %u",    vm_header.max_ops_for_inst);
-    rd_printf("Default Is Stmt:         %u",    vm_header.default_is_stmt);
-    rd_printf("Line base:               %d",    vm_header.line_base);
-    rd_printf("Line range:              %u",    vm_header.line_range);
-    rd_printf("Opcode base:             %u",    vm_header.opcode_base);
-    rd_printf("Opcode lengths:          %S",    rd_format_hex_array(comp_temp.arena, vm_header.opcode_lens, vm_header.num_opcode_lens));
-    rd_newline();
-
-    rd_printf("Directory Table:");
-    rd_indent();
-    rd_printf("%-4s %-8s", "No.", "String");
-    for (U64 dir_idx = 0; dir_idx < vm_header.dir_table.count; ++dir_idx) {
-      rd_printf("%-4llu %S", dir_idx, vm_header.dir_table.v[dir_idx]);
+    {
+      rd_printf("Header:", line_vm_size);
+      rd_indent();
+      String8 opcode_lengths = rd_format_hex_array(unit_temp.arena, line_vm.opcode_lens, line_vm.num_opcode_lens);
+      rd_printf("Version:                 %u",    line_vm.version              );
+      rd_printf("Line table offset:       %#llx", line_vm.unit_range.min       );
+      rd_printf("Line table length:       %llu",  dim_1u64(line_vm.unit_range) );
+      rd_printf("Version:                 %u",    line_vm.version              );
+      rd_printf("Address size:            %u",    line_vm.address_size         );
+      rd_printf("Segment selector size:   %u",    line_vm.segment_selector_size);
+      rd_printf("Header length:           %llu",  line_vm.header_length        );
+      rd_printf("Min instruction length:  %u",    line_vm.min_inst_len         );
+      rd_printf("Max ops for instruction: %u",    line_vm.max_ops_for_inst     );
+      rd_printf("Default Is Stmt:         %u",    line_vm.default_is_stmt      );
+      rd_printf("Line base:               %d",    line_vm.line_base            );
+      rd_printf("Line range:              %u",    line_vm.line_range           );
+      rd_printf("Opcode base:             %u",    line_vm.opcode_base          );
+      rd_printf("Opcode lengths:          %S",    opcode_lengths               );
+      rd_unindent();
+      rd_newline();
     }
-    rd_unindent();
-    rd_newline();
 
-    rd_printf("File Table:");
-    rd_indent();
-    rd_printf("%-4s %-8s %-8s %-17s %-8s %-8s", "No.", "DirIdx", "Time", "MD5", "Size", "Name");
-    for (U64 file_idx = 0; file_idx < vm_header.file_table.count; ++file_idx) {
-      DW_LineFile *file = &vm_header.file_table.v[file_idx];
-      rd_printf("%-4llu %-8llu %-8llu %08llx-%08llx %-8llu %S",
-                file_idx,
-                file->dir_idx,
-                file->modify_time,
-                file->md5_digest[0],
-                file->md5_digest[1],
-                file->file_size,
-                file->file_name);
+    {
+      rd_printf("Directory Table:");
+      rd_indent();
+      rd_printf("%-4s %-8s", "No.", "String");
+      for (U64 dir_idx = 0; dir_idx < line_vm.dir_table.count; ++dir_idx) {
+        rd_printf("%-4llu %S", dir_idx, line_vm.dir_table.v[dir_idx]);
+      }
+      rd_unindent();
+      rd_newline();
     }
-    rd_unindent();
-    rd_newline();
 
-    B32            end_of_seq = 0;
-    DW_LineVMState vm_state   = {0};
-    dw_line_vm_reset(&vm_state, vm_header.default_is_stmt);
+    {
+      rd_printf("File Table:");
+      rd_indent();
+      rd_printf("%-4s %-8s %-8s %-33s %-8s %-8s", "No.", "DirIdx", "Time", "MD5", "Size", "Name");
+      for (U64 file_idx = 0; file_idx < line_vm.file_table.count; ++file_idx) {
+        DW_LineFile *file = &line_vm.file_table.v[file_idx];
+        rd_printf("%-4llu %-8llu %-8llu %016llx-%016llx %-8llu %S",
+                  file_idx,
+                  file->dir_idx,
+                  file->modify_time,
+                  file->md5_digest.u64[1],
+                  file->md5_digest.u64[0],
+                  file->file_size,
+                  file->file_name);
+      }
+      rd_unindent();
+      rd_newline();
+    }
 
-    rd_printf("Opcodes:");
-    for (; cursor < vm_header.unit_opl; ) {
-      U64 opcode_offset = cursor;
+    {
+      rd_printf("Opcodes:");
+      rd_indent();
 
-      Temp opcode_temp = temp_begin(scratch.arena);
+      String8        opcodes    = str8_skip(unit_data, line_vm_size);
+      B32            end_of_seq = 0;
+      DW_LineVMState vm_state   = {0};
+      dw_line_vm_reset(&vm_state, line_vm.default_is_stmt);
 
-      String8List list = {0};
+      for (U64 cursor = 0; cursor < opcodes.size; ) {
+        Temp opcode_temp = temp_begin(unit_temp.arena);
 
-      // parse opcode
-      U8 opcode = 0;
-      cursor += dw_based_range_read_struct(base, range, cursor, &opcode);
+        String8List opcode_fmt = {0};
 
-      // push opcode id
-      String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, opcode);
-      str8_list_push(arena, &list, opcode_str);
-      
-      // format operands
-      switch (opcode) {
-      default: {
-        if (opcode >= vm_header.opcode_base) {
-          U32 adjusted_opcode = 0;
-          U32 op_advance      = 0;
-          S32 line_advance    = 0;
-          U64 addr_advance    = 0;
-          if (vm_header.line_range > 0 && vm_header.max_ops_for_inst > 0) {
-            adjusted_opcode = (U32)(opcode - vm_header.opcode_base);
-            op_advance      = adjusted_opcode / vm_header.line_range;
-            line_advance    = (S32)vm_header.line_base + ((S32)adjusted_opcode) % (S32)vm_header.line_range;
-            addr_advance    = vm_header.min_inst_len * ((vm_state.op_index+op_advance) / vm_header.max_ops_for_inst);
+        // opcode offset
+        str8_list_pushf(opcode_temp.arena, &opcode_fmt, "[%08llx]", cursor);
+
+        // parse opcode
+        U8 opcode = 0;
+        cursor += str8_deserial_read_struct(opcodes, cursor, &opcode);
+
+        // push opcode id
+        String8 opcode_str = dw_string_from_std_opcode(opcode_temp.arena, opcode);
+        str8_list_push(arena, &opcode_fmt, opcode_str);
+        
+        // format operands
+        switch (opcode) {
+        default: {
+          if (opcode >= line_vm.opcode_base) {
+            U32 adjusted_opcode = 0;
+            U32 op_advance      = 0;
+            S32 line_advance    = 0;
+            U64 addr_advance    = 0;
+            if (line_vm.line_range > 0 && line_vm.max_ops_for_inst > 0) {
+              adjusted_opcode = (U32)(opcode - line_vm.opcode_base);
+              op_advance      = adjusted_opcode / line_vm.line_range;
+              line_advance    = (S32)line_vm.line_base + ((S32)adjusted_opcode) % (S32)line_vm.line_range;
+              addr_advance    = line_vm.min_inst_len * ((vm_state.op_index+op_advance) / line_vm.max_ops_for_inst);
+            }
+
+            vm_state.address        += addr_advance;
+            vm_state.op_index        = (vm_state.op_index + op_advance) % line_vm.max_ops_for_inst;
+            vm_state.line            = (U32)((S32)vm_state.line + line_advance);
+            vm_state.basic_block     = 0;
+            vm_state.prologue_end    = 0;
+            vm_state.epilogue_begin  = 0;
+            vm_state.discriminator   = 0;
+
+            end_of_seq = 0;
+
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance line by %d, advance address by %lld", line_advance, addr_advance);
+          } else {
+            if (opcode > 0 && opcode <= line_vm.num_opcode_lens) {
+              str8_list_pushf(opcode_temp.arena, &opcode_fmt, "skip operands:");
+              U64 num_operands = line_vm.opcode_lens[opcode - 1];
+              for (U8 i = 0; i < num_operands; i += 1){
+                U64 operand = 0;
+                cursor += str8_deserial_read_uleb128(opcodes, cursor, &operand);
+                str8_list_pushf(opcode_temp.arena, &opcode_fmt, " %llx", operand);
+              }
+            }
           }
+        }break;
 
-          vm_state.address        += addr_advance;
-          vm_state.op_index        = (vm_state.op_index + op_advance) % vm_header.max_ops_for_inst;
-          vm_state.line            = (U32)((S32)vm_state.line + line_advance);
+        case DW_StdOpcode_Copy: {
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "Line = %u, Column = %u, Address = %#llx", vm_state.line, vm_state.column, vm_state.address);
+          end_of_seq = 0;
+          vm_state.discriminator   = 0;
           vm_state.basic_block     = 0;
           vm_state.prologue_end    = 0;
           vm_state.epilogue_begin  = 0;
-          vm_state.discriminator   = 0;
-
-          end_of_seq = 0;
-
-          str8_list_pushf(opcode_temp.arena, &list, "advance line by %d, advance address by %lld", line_advance, addr_advance);
-        } else {
-          if (opcode > 0 && opcode <= vm_header.num_opcode_lens) {
-            str8_list_pushf(opcode_temp.arena, &list, "skip operands:");
-            U64 num_operands = vm_header.opcode_lens[opcode - 1];
-            for (U8 i = 0; i < num_operands; i += 1){
-              U64 operand = 0;
-              cursor += dw_based_range_read_uleb128(base, range, cursor, &operand);
-              str8_list_pushf(opcode_temp.arena, &list, " %llx", operand);
-            }
-          }
-        }
-      }break;
-
-      case DW_StdOpcode_Copy: {
-        str8_list_pushf(opcode_temp.arena, &list, "Line = %u, Column = %u, Address = %#llx", vm_state.line, vm_state.column, vm_state.address);
-        end_of_seq = 0;
-        vm_state.discriminator   = 0;
-        vm_state.basic_block     = 0;
-        vm_state.prologue_end    = 0;
-        vm_state.epilogue_begin  = 0;
-      } break;
-      case DW_StdOpcode_AdvancePc: {
-        U64 advance = 0;
-        cursor += dw_based_range_read_uleb128(base, range, cursor, &advance);
-        dw_line_vm_advance(&vm_state, advance, vm_header.min_inst_len, vm_header.max_ops_for_inst);
-        str8_list_pushf(opcode_temp.arena, &list, "advance %#llx ; current address %#llx", advance, vm_state.address);
-      } break;
-
-      case DW_StdOpcode_AdvanceLine: {
-        S64 advance = 0;
-        cursor += dw_based_range_read_sleb128(base, range, cursor, &advance);
-        vm_state.line += advance;
-        str8_list_pushf(opcode_temp.arena, &list, "advance %lld ; current line %u", advance, vm_state.line);
-      } break;
-
-      case DW_StdOpcode_SetFile: {
-        U64 file_idx = 0;
-        cursor += dw_based_range_read_uleb128(base, range, cursor, &file_idx);
-        vm_state.file_index = file_idx;
-
-        String8 path = dw_path_from_file_idx(opcode_temp.arena, &vm_header, file_idx);
-        str8_list_pushf(opcode_temp.arena, &list, "%llu \"%S\"", file_idx, path);
-      } break;
-
-      case DW_StdOpcode_SetColumn: {
-        U64 column = 0;
-        cursor += dw_based_range_read_uleb128(base, range, cursor, &column);
-        vm_state.column = column;
-        str8_list_pushf(opcode_temp.arena, &list, "%llu", column);
-      } break;
-
-      case DW_StdOpcode_NegateStmt: {
-        vm_state.is_stmt = !vm_state.is_stmt;
-        str8_list_pushf(opcode_temp.arena, &list, "is_stmt = %u", vm_state.is_stmt);
-      } break;
-      
-      case DW_StdOpcode_SetBasicBlock: {
-        vm_state.basic_block = 1;
-      } break;
-
-      case DW_StdOpcode_ConstAddPc: {
-        U64 advance = (0xffu - vm_header.opcode_base)/vm_header.line_range;
-        dw_line_vm_advance(&vm_state, advance, vm_header.min_inst_len, vm_header.max_ops_for_inst);
-        str8_list_pushf(opcode_temp.arena, &list, "%lld ; address %#llx", advance, vm_state.address);
-      }break;
-
-      case DW_StdOpcode_FixedAdvancePc: {
-        U64 operand = 0;
-        cursor += dw_based_range_read_struct(base, range, cursor, &operand);
-        vm_state.address += operand;
-        vm_state.op_index = 0;
-        str8_list_pushf(opcode_temp.arena, &list, "%llu", operand);
-      } break;
-
-      case DW_StdOpcode_SetPrologueEnd: {
-        vm_state.prologue_end = 1;
-      } break;
-
-      case DW_StdOpcode_SetEpilogueBegin: {
-        vm_state.epilogue_begin = 1;
-      } break;
-
-      case DW_StdOpcode_SetIsa: {
-        U64 v = 0;
-        cursor += dw_based_range_read_uleb128(base, range, cursor, &v);
-        vm_state.isa = v;
-        str8_list_pushf(opcode_temp.arena, &list, "%llu", v);
-      } break;
-
-      case DW_StdOpcode_ExtendedOpcode: {
-        U64 length = 0;
-        U8 ext_opcode = 0;
-
-        cursor += dw_based_range_read_uleb128(base, range, cursor, &length);
-        U64 opcode_end = cursor + length;
-
-        cursor += dw_based_range_read_struct(base, range, cursor, &ext_opcode);
-
-        String8 ext_opcode_str = dw_string_from_ext_opcode(opcode_temp.arena, ext_opcode);
-        //str8_list_pushf(opcode_temp.arena, &list, "length: %u", length);
-        str8_list_push(opcode_temp.arena, &list, ext_opcode_str);
-        switch (ext_opcode) {
-        case DW_ExtOpcode_EndSequence: {
-          vm_state.end_sequence = 1;
-          dw_line_vm_reset(&vm_state, vm_header.default_is_stmt);
-          end_of_seq = 1;
         } break;
-        case DW_ExtOpcode_SetAddress: {
-          U64 address = 0;
-          cursor += dw_based_range_read(base, range, cursor, comp_root.address_size, &address);
-          vm_state.address    = address;
-          vm_state.op_index   = 0;
-          vm_state.busted_seq = address != 0;
-          str8_list_pushf(opcode_temp.arena, &list, "%#llx", address);
+        case DW_StdOpcode_AdvancePc: {
+          U64 advance = 0;
+          cursor += str8_deserial_read_uleb128(opcodes, cursor, &advance);
+          dw_line_vm_advance(&vm_state, advance, line_vm.min_inst_len, line_vm.max_ops_for_inst);
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %#llx ; current address %#llx", advance, vm_state.address);
         } break;
-        case DW_ExtOpcode_DefineFile: {
-          String8 file_name = dw_based_range_read_string(base, range, cursor);
-          cursor += file_name.size + 1;
-          U64 dir_idx = 0, modify_time = 0, file_size = 0;
-          cursor += dw_based_range_read_uleb128(base, range, cursor, &dir_idx);
-          cursor += dw_based_range_read_uleb128(base, range, cursor, &modify_time);
-          cursor += dw_based_range_read_uleb128(base, range, cursor, &file_size);
-          str8_list_pushf(opcode_temp.arena, &list, "%S Dir: %llu, Time: %llu, Size: %llu", file_name, dir_idx, modify_time, file_size);
+
+        case DW_StdOpcode_AdvanceLine: {
+          S64 advance = 0;
+          cursor += str8_deserial_read_sleb128(opcodes, cursor, &advance);
+          vm_state.line += advance;
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "advance %lld ; current line %u", advance, vm_state.line);
         } break;
-        case DW_ExtOpcode_SetDiscriminator: {
+
+        case DW_StdOpcode_SetFile: {
+          U64 file_idx = 0;
+          cursor += str8_deserial_read_uleb128(opcodes, cursor, &file_idx);
+          vm_state.file_index = file_idx;
+
+          String8 path = dw_path_from_file_idx(opcode_temp.arena, &line_vm, file_idx);
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%llu \"%S\"", file_idx, path);
+        } break;
+
+        case DW_StdOpcode_SetColumn: {
+          U64 column = 0;
+          cursor += str8_deserial_read_uleb128(opcodes, cursor, &column);
+          vm_state.column = column;
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%llu", column);
+        } break;
+
+        case DW_StdOpcode_NegateStmt: {
+          vm_state.is_stmt = !vm_state.is_stmt;
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "is_stmt = %u", vm_state.is_stmt);
+        } break;
+        
+        case DW_StdOpcode_SetBasicBlock: {
+          vm_state.basic_block = 1;
+        } break;
+
+        case DW_StdOpcode_ConstAddPc: {
+          U64 advance = (0xffu - line_vm.opcode_base)/line_vm.line_range;
+          dw_line_vm_advance(&vm_state, advance, line_vm.min_inst_len, line_vm.max_ops_for_inst);
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%lld ; address %#llx", advance, vm_state.address);
+        }break;
+
+        case DW_StdOpcode_FixedAdvancePc: {
+          U64 operand = 0;
+          cursor += str8_deserial_read_struct(opcodes, cursor, &operand);
+          vm_state.address += operand;
+          vm_state.op_index = 0;
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%llu", operand);
+        } break;
+
+        case DW_StdOpcode_SetPrologueEnd: {
+          vm_state.prologue_end = 1;
+        } break;
+
+        case DW_StdOpcode_SetEpilogueBegin: {
+          vm_state.epilogue_begin = 1;
+        } break;
+
+        case DW_StdOpcode_SetIsa: {
           U64 v = 0;
-          cursor += dw_based_range_read_uleb128(base, range, cursor, &v);
-          vm_state.discriminator = v;
-          str8_list_pushf(arena, &list, "%llu", v);
+          cursor += str8_deserial_read_uleb128(opcodes, cursor, &v);
+          vm_state.isa = v;
+          str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%llu", v);
+        } break;
+
+        case DW_StdOpcode_ExtendedOpcode: {
+          U64 length = 0;
+          U8 ext_opcode = 0;
+
+          cursor += str8_deserial_read_uleb128(opcodes, cursor, &length);
+          U64 opcode_end = cursor + length;
+
+          cursor += str8_deserial_read_struct(opcodes, cursor, &ext_opcode);
+
+          String8 ext_opcode_str = dw_string_from_ext_opcode(opcode_temp.arena, ext_opcode);
+          //str8_list_pushf(opcode_temp.arena, &opcode_fmt, "length: %u", length);
+          str8_list_push(opcode_temp.arena, &opcode_fmt, ext_opcode_str);
+          switch (ext_opcode) {
+          case DW_ExtOpcode_EndSequence: {
+            vm_state.end_sequence = 1;
+            dw_line_vm_reset(&vm_state, line_vm.default_is_stmt);
+            end_of_seq = 1;
+          } break;
+          case DW_ExtOpcode_SetAddress: {
+            U64 address = 0;
+            cursor += str8_deserial_read(opcodes, cursor, &address, line_vm.address_size, line_vm.address_size);
+            vm_state.address    = address;
+            vm_state.op_index   = 0;
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%#llx", address);
+          } break;
+          case DW_ExtOpcode_DefineFile: {
+            String8 file_name = {0};
+            cursor += str8_deserial_read_cstr(opcodes, cursor, &file_name);
+
+            U64 dir_idx = 0, modify_time = 0, file_size = 0;
+            cursor += str8_deserial_read_uleb128(opcodes, cursor, &dir_idx);
+            cursor += str8_deserial_read_uleb128(opcodes, cursor, &modify_time);
+            cursor += str8_deserial_read_uleb128(opcodes, cursor, &file_size);
+            str8_list_pushf(opcode_temp.arena, &opcode_fmt, "%S Dir: %llu, Time: %llu, Size: %llu", file_name, dir_idx, modify_time, file_size);
+          } break;
+          case DW_ExtOpcode_SetDiscriminator: {
+            U64 v = 0;
+            cursor += str8_deserial_read_uleb128(opcodes, cursor, &v);
+            vm_state.discriminator = v;
+            str8_list_pushf(arena, &opcode_fmt, "%llu", v);
+          } break;
+          }
+
+          cursor = opcode_end;
         } break;
         }
 
-        cursor = opcode_end;
-      } break;
+        String8 string = str8_list_join(opcode_temp.arena, &opcode_fmt, &(StringJoin){.sep=str8_lit(" ")});
+        rd_printf("%S", string);
+
+        temp_end(opcode_temp);
       }
 
-      String8 string = str8_list_join(opcode_temp.arena, &list, &(StringJoin){.sep=str8_lit(" ")});
-      rd_printf("[%08llx] %S", opcode_offset, string);
-
-      temp_end(opcode_temp);
+      rd_unindent();
+      rd_newline();
     }
-    temp_end(comp_temp);
 
-    rd_newline();
-  }
-
-  if (dim_1u64(range)) {
-    rd_unindent();
+    temp_end(unit_temp);
   }
 
   scratch_end(scratch);
 }
 
 internal void
-dw_print_debug_str(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_str(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
-  String8 data = sections->v[DW_Section_Str].data;
-  rd_printf("# %S", sections->v[DW_Section_Str].name);
+  String8 data = input->sec[DW_Section_Str].data;
+  rd_printf("# %S", input->sec[DW_Section_Str].name);
   rd_indent();
   for (U64 cursor = 0, read_size = 0; cursor < data.size; cursor += read_size) {
     String8 string = {0};
@@ -1646,10 +3020,11 @@ dw_print_debug_str(Arena *arena, String8List *out, String8 indent, DW_SectionArr
 }
 
 internal void
-dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed)
+dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed)
 {
-  DW_Section info = sections->v[DW_Section_Info];
-  DW_Section loc  = sections->v[DW_Section_Loc];
+#if 0
+  DW_Section info = input->sec[DW_Section_Info];
+  DW_Section loc  = input->sec[DW_Section_Loc];
 
   if (loc.data.size == 0) {
     return;
@@ -1657,55 +3032,54 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArr
 
   Temp scratch = scratch_begin(&arena, 1);
 
-  rd_printf("# %S", sections->v[DW_Section_Loc].name);
+  rd_printf("# %S", input->sec[DW_Section_Loc].name);
   rd_indent();
 
   // TODO: warn about overlaps in ranges
 
-  Rng1U64List comp_unit_range_list = dw_comp_unit_ranges_from_info(scratch.arena, info);
+  Rng1U64List cu_range_list = dw_comp_unit_ranges_from_info(scratch.arena, info);
 
   // parse debug_info for attributes with LOCLIST and store .debug_loc offsets 
-  U64List    *loc_lists     = push_array(scratch.arena, U64List,    comp_unit_range_list.count);
-  U64        *address_sizes = push_array(scratch.arena, U64,        comp_unit_range_list.count);
-  U64        *address_bases = push_array(scratch.arena, U64,        comp_unit_range_list.count);
-  DW_Version *ver_arr       = push_array(scratch.arena, DW_Version, comp_unit_range_list.count);
-  DW_Ext     *ext_arr       = push_array(scratch.arena, DW_Ext,     comp_unit_range_list.count);
+  U64List    *loc_lists     = push_array(scratch.arena, U64List,    cu_range_list.count);
+  U64        *address_sizes = push_array(scratch.arena, U64,        cu_range_list.count);
+  U64        *address_bases = push_array(scratch.arena, U64,        cu_range_list.count);
+  U64        *cu_bases      = push_array(scratch.arena, U64,        cu_range_list.count);
+  DW_Version *ver_arr       = push_array(scratch.arena, DW_Version, cu_range_list.count);
+  DW_Ext     *ext_arr       = push_array(scratch.arena, DW_Ext,     cu_range_list.count);
 
   U64 comp_idx = 0;
-  for (Rng1U64Node *comp_unit_range_n = comp_unit_range_list.first; comp_unit_range_n != 0; comp_unit_range_n = comp_unit_range_n->next, ++comp_idx) {
+  for (Rng1U64Node *cu_range_n = cu_range_list.first; cu_range_n != 0; cu_range_n = cu_range_n->next, ++comp_idx) {
     Temp comp_temp = temp_begin(arena);
 
-    Rng1U64                     comp_unit_range = comp_unit_range_n->v;
-    DW_CompRoot                 comp_root       = dw_comp_root_from_range(comp_temp.arena, sections, comp_unit_range, relaxed);
-    DW_AttribValueResolveParams resolve_params  = dw_attrib_value_resolve_params_from_comp_root(&comp_root);
+    Rng1U64     cu_range = cu_range_n->v;
+    DW_CompUnit cu       = dw_comp_unit_from_info_off(comp_temp.arena, input, cu_range.min, relaxed);
 
     // store info about comp unit
-    address_sizes[comp_idx] = comp_root.address_size;
-    address_bases[comp_idx] = comp_root.base_addr;
-    ver_arr[comp_idx]       = comp_root.version;
-    ext_arr[comp_idx]       = dw_ext_from_params(comp_root.producer, arch, image_type);
+    address_sizes[comp_idx] = cu.address_size;
+    address_bases[comp_idx] = cu.base_addr;
+    ver_arr[comp_idx]       = cu.version;
+    cu_bases[comp_idx]      = cu_range_n->v.min;
 
     // parse tags
-    for (U64 info_off = comp_root.tags_info_range.min; info_off < comp_root.tags_info_range.max; /* empty */) {
+    for (U64 info_off = cu.tags_range.min; info_off < cu.tags_range.max; /* empty */) {
       Temp tag_temp = temp_begin(scratch.arena);
 
-      DW_Tag *tag = dw_tag_from_info_offset(tag_temp.arena, sections, comp_root.abbrev_table, ver_arr[comp_idx], ext_arr[comp_idx], comp_root.language, comp_root.address_size, info_off, relaxed);
+      DW_Tag tag = dw_tag_from_info_offset_cu(tag_temp.arena, input, &cu, ext_arr[comp_idx], info_off);
 
       // parse attribs
-      for (DW_AttribNode *attrib_node = tag->attribs.first; attrib_node != 0; attrib_node = attrib_node->next) {
-        DW_Attrib *attrib         = &attrib_node->attrib;
+      for (DW_AttribNode *attrib_node = tag.attribs.first; attrib_node != 0; attrib_node = attrib_node->next) {
+        DW_Attrib *attrib         = &attrib_node->v;
         B32        is_sect_offset = attrib->value_class == DW_AttribClass_LocListPtr || (attrib->value_class == DW_AttribClass_LocList && attrib->form_kind == DW_Form_SecOffset);
         B32        is_sect_index  = attrib->value_class == DW_AttribClass_LocList && attrib->form_kind == DW_Form_LocListx;
         if (is_sect_offset) {
-          DW_AttribValue attrib_value = dw_attrib_value_from_form_value(sections, resolve_params, attrib->form_kind, attrib->value_class, attrib->form_value);
-          u64_list_push(scratch.arena, &loc_lists[comp_idx], attrib_value.v[0]);
+          u64_list_push(scratch.arena, &loc_lists[comp_idx], attrib->value.v[0]);
         } else if (is_sect_index) {
           // TODO: support for section indexing
         }
       }
 
       // advance to next tag
-      info_off = tag->info_range.max;
+      info_off = tag.next_info_off;
 
       temp_end(tag_temp);
     }
@@ -1713,13 +3087,13 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArr
     temp_end(comp_temp);
   }
 
-  void    *base  = dw_base_from_sec(sections, DW_Section_Loc);
-  Rng1U64  range = dw_range_from_sec(sections, DW_Section_Loc);
+  void    *base  = dw_base_from_sec(input, DW_Section_Loc);
+  Rng1U64  range = dw_range_from_sec(input, DW_Section_Loc);
 
-  rd_printf("%S:", dw_string_from_section_kind(scratch.arena, DW_Section_Loc));
+  rd_printf(".debug_loc");
   rd_indent();
   rd_printf("%-8s %-8s %-8s %s", "Offset", "Min", "Max", "Expression");
-  for (U32 comp_idx = 0; comp_idx < comp_unit_range_list.count; ++comp_idx) {
+  for (U32 comp_idx = 0; comp_idx < cu_range_list.count; ++comp_idx) {
     Temp locs_temp = temp_begin(scratch.arena);
 
     DW_Version ver = ver_arr[comp_idx];
@@ -1753,8 +3127,6 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArr
         } else if (v0 == base_selector) {
           base_address = v1;
         } else {
-          // this is not mentioned in the spec (june 10, 2010)
-          // found reference in gdb/binutils/dwarf.c => display_loc_list
           U16 expr_size = 0;
           cursor += dw_based_range_read_struct(base, range, cursor, &expr_size);
           Rng1U64 expr_range = rng_1u64(range.min+cursor, range.min+cursor+expr_size);
@@ -1763,7 +3135,7 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArr
           // format dwarf expression
           B32     is_dwarf64 = (address_size == 8);
           String8 raw_expr   = str8((U8*)base+expr_range.min, dim_1u64(expr_range));
-          String8 expression = dw_format_expression_single_line(range_temp.arena, raw_expr, address_size, arch, ver, ext, is_dwarf64);
+          String8 expression = dw_format_expression_single_line(range_temp.arena, raw_expr, cu_bases[comp_idx], address_size, arch, ver, ext, input->sec[DW_Section_Loc].mode);
 
           // push entry
           U64 min = base_address + v0;
@@ -1791,14 +3163,17 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_SectionArr
 
   rd_unindent();
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Arch arch, ImageType image_type, B32 relaxed)
+dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed)
 {
-  DW_Section  ranges = sections->v[DW_Section_Ranges];
-  void       *base   = dw_base_from_sec(sections, DW_Section_Ranges);
-  Rng1U64     range  = dw_range_from_sec(sections, DW_Section_Ranges);
+  NotImplemented;
+#if 0
+  DW_Section  ranges = input->sec[DW_Section_Ranges];
+  void       *base   = dw_base_from_sec(input, DW_Section_Ranges);
+  Rng1U64     range  = dw_range_from_sec(input, DW_Section_Ranges);
 
   if (dim_1u64(range) == 0) {
     return;
@@ -1806,42 +3181,40 @@ dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Section
 
   Temp scratch = scratch_begin(&arena, 1);
 
-  Rng1U64List  comp_unit_range_list = dw_comp_unit_ranges_from_info(scratch.arena, sections->v[DW_Section_Info]);
+  Rng1U64List  cu_range_list = dw_comp_unit_ranges_from_info(scratch.arena, sections->v[DW_Section_Info]);
 
   // parse debug_info for attributes with LOCLIST and store .debug_loc offsets 
-  U64List *loc_lists     = push_array(scratch.arena, U64List, comp_unit_range_list.count);
-  U64     *address_sizes = push_array(scratch.arena, U64,     comp_unit_range_list.count);
-  U64     *address_bases = push_array(scratch.arena, U64,     comp_unit_range_list.count);
+  U64List *loc_lists     = push_array(scratch.arena, U64List, cu_range_list.count);
+  U64     *address_sizes = push_array(scratch.arena, U64,     cu_range_list.count);
+  U64     *address_bases = push_array(scratch.arena, U64,     cu_range_list.count);
 
   {
     U64 comp_idx = 0;
-    for (Rng1U64Node *comp_unit_range_n = comp_unit_range_list.first; comp_unit_range_n != 0; comp_unit_range_n = comp_unit_range_n->next, ++comp_idx) {
-      Rng1U64                     comp_unit_range = comp_unit_range_n->v;
-      DW_CompRoot                 comp_root       = dw_comp_root_from_range(scratch.arena, sections, comp_unit_range, relaxed);
-      DW_AttribValueResolveParams resolve_params  = dw_attrib_value_resolve_params_from_comp_root(&comp_root);
-      DW_Ext                      ext             = dw_ext_from_params(comp_root.producer, arch, image_type);
+    for (Rng1U64Node *cu_range_n = cu_range_list.first; cu_range_n != 0; cu_range_n = cu_range_n->next, ++comp_idx) {
+      Rng1U64     cu_range = cu_range_n->v;
+      DW_CompUnit cu       = dw_comp_unit_from_info_offset(scratch.arena, sections, cu_range.min, relaxed);
 
       // store info about comp unit
-      address_sizes[comp_idx] = comp_root.address_size;
-      address_bases[comp_idx] = comp_root.base_addr;
+      address_sizes[comp_idx] = cu.address_size;
+      address_bases[comp_idx] = cu.base_addr;
 
       // parse tags
-      for (U64 info_off = comp_root.tags_info_range.min; info_off < comp_root.tags_info_range.max; /* empty */) {
-        DW_Tag *tag = dw_tag_from_info_offset(scratch.arena, sections, comp_root.abbrev_table, comp_root.version, ext, comp_root.language, comp_root.address_size, info_off, relaxed);
+      for (U64 info_off = cu.tags_range.min; info_off < cu.tags_range.max; /* empty */) {
+        DW_Tag tag = dw_tag_from_info_offset_cu(scratch.arena, sections, &cu, info_off);
 
         // parse attribs
-        for (DW_AttribNode *attrib_node = tag->attribs.first; attrib_node != 0; attrib_node = attrib_node->next) {
-          DW_Attrib *attrib         = &attrib_node->attrib;
+        for (DW_AttribNode *attrib_node = tag.attribs.first; attrib_node != 0; attrib_node = attrib_node->next) {
+          DW_Attrib *attrib         = &attrib_node->v;
           B32        is_sect_offset = attrib->value_class == DW_AttribClass_RngListPtr || (attrib->value_class == DW_AttribClass_RngList && attrib->form_kind == DW_Form_SecOffset);
           B32        is_sect_index  = attrib->value_class == DW_AttribClass_RngList && attrib->form_kind == DW_Form_RngListx;
           if (is_sect_offset) {
-            DW_AttribValue attrib_value = dw_attrib_value_from_form_value(sections, resolve_params, attrib->form_kind, attrib->value_class, attrib->form_value);
-            u64_list_push(scratch.arena, &loc_lists[comp_idx], attrib_value.v[0]);
+            u64_list_push(scratch.arena, &loc_lists[comp_idx], attrib->value.v[0]);
           } else if (is_sect_index) {
             // TODO: support for section indexing
           }
         }
-        info_off = tag->info_range.max;
+
+        info_off = tag.next_info_off;
       }
     }
   }
@@ -1849,7 +3222,7 @@ dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Section
   rd_printf("# %S", sections->v[DW_Section_Ranges].name);
   rd_indent();
   rd_printf("%-8s %-8s %-8s", "Offset", "Min", "Max");
-  for (U32 comp_idx = 0; comp_idx < comp_unit_range_list.count; ++comp_idx) {
+  for (U32 comp_idx = 0; comp_idx < cu_range_list.count; ++comp_idx) {
     U64Array locs = u64_array_from_list(scratch.arena, &loc_lists[comp_idx]);
     u64_array_sort(locs.count, locs.v);
     U64Array locs_set      = remove_duplicates_u64_array(scratch.arena, locs);
@@ -1896,11 +3269,14 @@ dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Section
       }
     }
   }
+#endif
 }
 
 internal void
-dw_print_debug_aranges(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_aranges(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
+  NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_ARanges);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_ARanges);
 
@@ -1982,11 +3358,14 @@ dw_print_debug_aranges(Arena *arena, String8List *out, String8 indent, DW_Sectio
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_print_debug_addr(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_addr(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
+  NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_Addr);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_Addr);
 
@@ -2061,6 +3440,7 @@ dw_print_debug_addr(Arena *arena, String8List *out, String8 indent, DW_SectionAr
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal U64
@@ -2091,8 +3471,10 @@ dw_based_range_read_address(void *base, Rng1U64 range, U64 offset, Rng1U64Array 
 }
 
 internal void
-dw_print_debug_loclists(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Rng1U64Array segment_virtual_ranges, Arch arch)
+dw_print_debug_loclists(Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_virtual_ranges, Arch arch)
 {
+  NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_LocLists);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_LocLists);
 
@@ -2208,8 +3590,10 @@ dw_print_debug_loclists(Arena *arena, String8List *out, String8 indent, DW_Secti
 
         String8 raw_expr = str8((U8*)base+cursor, expr_length);
         cursor += expr_length;
-
-        String8 expression = dw_format_expression_single_line(temp.arena, raw_expr, address_size, arch, version, DW_Ext_Null, is_dwarf64);
+        
+        // TODO: we need actual cu base to format expression correctly
+        NotImplemented;
+        String8 expression = dw_format_expression_single_line(temp.arena, raw_expr, 0, address_size, arch, version, DW_Ext_Null, is_dwarf64);
         str8_list_pushf(temp.arena, &list, "(%S)", expression);
       } break;
       case DW_LocListEntryKind_StartXLength: {
@@ -2236,11 +3620,14 @@ dw_print_debug_loclists(Arena *arena, String8List *out, String8 indent, DW_Secti
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_print_debug_rnglists(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, Rng1U64Array segment_ranges)
+dw_print_debug_rnglists(Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_ranges)
 {
+  NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_RngLists);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_RngLists);
 
@@ -2372,11 +3759,14 @@ dw_print_debug_rnglists(Arena *arena, String8List *out, String8 indent, DW_Secti
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_format_string_table(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections, DW_SectionKind sec)
+dw_format_string_table(Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_SectionKind sec)
 {
+NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, sec);
   Rng1U64  range = dw_range_from_sec(sections, sec);
 
@@ -2431,23 +3821,26 @@ dw_format_string_table(Arena *arena, String8List *out, String8 indent, DW_Sectio
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_print_debug_pubnames(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_pubnames(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
-  dw_format_string_table(arena, out, indent, sections, DW_Section_PubNames);
+  dw_format_string_table(arena, out, indent, input, DW_Section_PubNames);
 }
 
 internal void
-dw_print_debug_pubtypes(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_pubtypes(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
-  dw_format_string_table(arena, out, indent, sections, DW_Section_PubTypes);
+  dw_format_string_table(arena, out, indent, input, DW_Section_PubTypes);
 }
 
 internal void
-dw_print_debug_line_str(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_line_str(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
+NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_LineStr);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_LineStr);
 
@@ -2470,11 +3863,14 @@ dw_print_debug_line_str(Arena *arena, String8List *out, String8 indent, DW_Secti
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_SectionArray *sections)
+dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Input *input)
 {
+NotImplemented;
+#if 0
   void    *base  = dw_base_from_sec(sections, DW_Section_StrOffsets);
   Rng1U64  range = dw_range_from_sec(sections, DW_Section_StrOffsets);
   
@@ -2533,60 +3929,76 @@ dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Se
   rd_unindent();
 
   scratch_end(scratch);
+#endif
 }
 
 internal void
-dw_format(Arena *arena, String8List *out, String8 indent, RD_Option opts, DW_SectionArray *sections, Arch arch, ImageType image_type)
+dw_format(Arena *arena, String8List *out, String8 indent, RD_Option opts, DW_Input *input, Arch arch, ImageType image_type)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+
   Rng1U64Array segment_vranges = {0};
 
-  B32 relaxed = !!(opts & RD_Option_RelaxDwarfParser);
+  DW_ListUnitInput lu_input = dw_list_unit_input_from_input(scratch.arena, input);
+  B32              relaxed  = !!(opts & RD_Option_RelaxDwarfParser);
 
   if (opts & RD_Option_DebugInfo) {
-    dw_print_debug_info(arena, out, indent, sections, arch, image_type, relaxed);
+    dw_print_debug_info(arena, out, indent, input, lu_input, arch, relaxed);
   }
   if (opts & RD_Option_DebugAbbrev) {
-    dw_print_debug_abbrev(arena, out, indent, sections);
+    dw_print_debug_abbrev(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugLine) {
-    dw_print_debug_line(arena, out, indent, sections, relaxed);
+    dw_print_debug_line(arena, out, indent, input, lu_input, relaxed);
   }
   if (opts & RD_Option_DebugStr) {
-    dw_print_debug_str(arena, out, indent, sections);
+    dw_print_debug_str(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugLoc) {
-    dw_print_debug_loc(arena, out, indent, sections, arch, image_type, relaxed);
+    dw_print_debug_loc(arena, out, indent, input, arch, image_type, relaxed);
   }
   if (opts & RD_Option_DebugRanges) {
-    dw_print_debug_ranges(arena, out, indent, sections, arch, image_type, relaxed);
+    dw_print_debug_ranges(arena, out, indent, input, arch, image_type, relaxed);
   }
   if (opts & RD_Option_DebugARanges) {
-    dw_print_debug_aranges(arena, out, indent, sections);
+    dw_print_debug_aranges(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugAddr) {
-    dw_print_debug_addr(arena, out, indent, sections);
+    dw_print_debug_addr(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugLocLists) {
-    dw_print_debug_loclists(arena, out, indent, sections, segment_vranges, arch);
+    dw_print_debug_loclists(arena, out, indent, input, segment_vranges, arch);
   }
   if (opts & RD_Option_DebugRngLists) {
-    dw_print_debug_rnglists(arena, out, indent, sections, segment_vranges);
+    dw_print_debug_rnglists(arena, out, indent, input, segment_vranges);
   }
   if (opts & RD_Option_DebugPubNames) {
-    dw_print_debug_pubnames(arena, out, indent, sections);
+    dw_print_debug_pubnames(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugPubTypes) {
-    dw_print_debug_pubtypes(arena, out, indent, sections);
+    dw_print_debug_pubtypes(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugLineStr) {
-    dw_print_debug_line_str(arena, out, indent, sections);
+    dw_print_debug_line_str(arena, out, indent, input);
   }
   if (opts & RD_Option_DebugStrOffsets) {
-    dw_print_debug_str_offsets(arena, out, indent, sections);
+    dw_print_debug_str_offsets(arena, out, indent, input);
   }
+
+  scratch_end(scratch);
 }
 
 // CodeView
+
+internal String8
+cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg_idx, U32 reg_off)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 reg_str = cv_string_from_reg_id(scratch.arena, arch, reg_idx);
+  String8 result  = rd_string_from_reg_off(arena, reg_str, reg_off);
+  scratch_end(scratch);
+  return result;
+}
 
 internal void
 cv_print_binary_annots(Arena *arena, String8List *out, String8 indent, CV_Arch arch, String8 raw_data)
@@ -2668,26 +4080,26 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
   switch (type) {
     case CV_SymKind_THUNK32_ST:
     case CV_SymKind_THUNK32: {
-      CV_SymThunk32 sym   = {0};
+      CV_SymThunk32 sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Parent:  %x", sym.parent);
-      rd_printf("End:     %x", sym.end);
-      rd_printf("Next:    %x", sym.next);
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:  %u", sym.len);
-      rd_printf("Ordinal: %S", cv_string_from_thunk_ordinal(sym.ord));
+      rd_printf("Name   : %S",  name);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
+      rd_printf("Next   : %#x", sym.next);
+      rd_printf("Address: %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length : %u",  sym.len);
+      rd_printf("Ordinal: %S",  cv_string_from_thunk_ordinal(sym.ord));
     } break;
     case CV_SymKind_FILESTATIC: {
       CV_SymFileStatic sym   = {0};
       String8          name = str8_zero();
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
-      rd_printf("Name:  %S", name);
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name : %S", name);
+      rd_printf("Type : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Flags: %S", cv_string_from_local_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_CALLERS:
@@ -2704,7 +4116,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       rd_indent();
       for (U32 i = 0; i < sym.count; ++i) {
         U32 invoks = i < invocation_count ? invocations[i] : 0;
-        rd_printf("%08x (%u)", funcs[i], invoks);
+        rd_printf("%#08x (%u)", funcs[i], invoks);
       }
       rd_unindent();
     } break;
@@ -2727,20 +4139,20 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_annots.size;
 
-      rd_printf("Parent:  %#x", sym.parent);
-      rd_printf("End:     %#x", sym.end);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
       rd_printf("Inlinee: %S",  cv_string_from_itemid(arena, sym.inlinee));
       cv_print_binary_annots(arena, out, indent, arch, raw_annots);
     } break;
     case CV_SymKind_INLINESITE2: {
-      CV_SymInlineSite2 sym         = {0};
+      CV_SymInlineSite2 sym        = {0};
       String8           raw_annots = str8_skip(raw_symbol, sizeof(CV_SymInlineSite2));
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_annots.size;
 
-      rd_printf("Parent:      %#x", sym.parent_off);
-      rd_printf("End:         %#x", sym.end_off);
-      rd_printf("Inlinee:     %S",  cv_string_from_itemid(arena, sym.inlinee));
+      rd_printf("Parent     : %#x", sym.parent_off);
+      rd_printf("End        : %#x", sym.end_off);
+      rd_printf("Inlinee    : %S",  cv_string_from_itemid(arena, sym.inlinee));
       rd_printf("Invocations: %u",  sym.invocations);
       cv_print_binary_annots(arena, out, indent, arch, raw_annots);
     } break;
@@ -2751,37 +4163,37 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
     case CV_SymKind_GTHREAD32_ST:
     case CV_SymKind_LTHREAD32:
     case CV_SymKind_GTHREAD32: {
-      CV_SymThread32 sym   = {0};
+      CV_SymThread32 sym  = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:        %S", name);
+      rd_printf("Name       : %S", name);
       rd_printf("TSL Address: %S", cv_string_sec_off(scratch.arena, sym.tls_seg, sym.tls_off));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type       : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_OBJNAME: {
-      CV_SymObjName sym   = {0};
+      CV_SymObjName sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:      %S",  name);
+      rd_printf("Name     : %S",  name);
       rd_printf("Signature: %#x", sym.sig);
     } break;
     case CV_SymKind_BLOCK32_ST:
     case CV_SymKind_BLOCK32: {
-      CV_SymBlock32 sym   = {0};
+      CV_SymBlock32 sym  = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Parent:  %x", sym.parent);
-      rd_printf("End:     %x", sym.end);
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:  %u", sym.len);
+      rd_printf("Parent : %#x", sym.parent);
+      rd_printf("End    : %#x", sym.end);
+      rd_printf("Address: %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length : %u",  sym.len);
+      rd_printf("Name   : %S",  name);
       if (name.size) {
-        rd_printf("Name:    %S", name);
       }
     } break;
     case CV_SymKind_LABEL32_ST:
@@ -2805,13 +4217,13 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       U32     float_pkg    = CV_CompileFlags_Extract_FloatPkg(sym.flags);
       U32     ambient_data = CV_CompileFlags_Extract_AmbientData(sym.flags);
       U32     mode         = CV_CompileFlags_Extract_Mode(sym.flags);
-      rd_printf("Arch:           %S", cv_string_from_arch(sym.machine));
-      rd_printf("Language:       %S", cv_string_from_language(language));
-      rd_printf("FloatPrec:      %x", float_prec);
-      rd_printf("FloatPkg:       %x", float_pkg);
-      rd_printf("Ambient Data:   %x", ambient_data);
-      rd_printf("Mode:           %x", mode);
-      rd_printf("Version String: %S", version_string);
+      rd_printf("Arch          : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Language      : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("FloatPrec     : %#x",      float_prec);
+      rd_printf("FloatPkg      : %#x",      float_pkg);
+      rd_printf("Ambient Data  : %#x",      ambient_data);
+      rd_printf("Mode          : %#x",      mode);
+      rd_printf("Version String: %S",       version_string);
     } break;
     case CV_SymKind_COMPILE2_ST:
     case CV_SymKind_COMPILE2: {
@@ -2822,14 +4234,14 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &version_string);
 
       U32 language = CV_Compile2Flags_Extract_Language(sym.flags);
-      rd_printf("Machine:          %S",    cv_string_from_arch(sym.machine));
-      rd_printf("Flags:            %x",    sym.flags);
-      rd_printf("Language:         %S",    cv_string_from_language(language));
-      rd_printf("Frontend Version: %u.%u", sym.ver_fe_major, sym.ver_fe_minor);
-      rd_printf("Frontend Build:   %u",    sym.ver_fe_build);
-      rd_printf("Backend Version:  %u.%u", sym.ver_major, sym.ver_minor);
-      rd_printf("Backend Build:    %u",    sym.ver_build);
-      rd_printf("Version String:   %S",    version_string);
+      rd_printf("Machine         : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Flags           : %#x",      sym.flags);
+      rd_printf("Language        : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("Frontend Version: %u.%u",    sym.ver_fe_major, sym.ver_fe_minor);
+      rd_printf("Frontend Build  : %u",       sym.ver_fe_build);
+      rd_printf("Backend Version : %u.%u",    sym.ver_major, sym.ver_minor);
+      rd_printf("Backend Build   : %u",       sym.ver_build);
+      rd_printf("Version String  : %S",       version_string);
     } break;
     case CV_SymKind_COMPILE3: {
       CV_SymCompile3 sym            = {0};
@@ -2838,16 +4250,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &version_string);
 
       U32 language = CV_Compile3Flags_Extract_Language(sym.flags);
-      rd_printf("Machine:          %S",    cv_string_from_arch(sym.machine));
-      rd_printf("Flags:            %x",    sym.flags);
-      rd_printf("Language:         %S",    cv_string_from_language(language));
-      rd_printf("Frontend Version: %u.%u", sym.ver_fe_major, sym.ver_fe_minor);
-      rd_printf("Frontend Build:   %u",    sym.ver_fe_build);
-      rd_printf("Fontend QFE:      %u",    sym.ver_feqfe);
-      rd_printf("Backend Version:  %u.%u", sym.ver_major, sym.ver_minor);
-      rd_printf("Backend Build:    %u",    sym.ver_build);
-      rd_printf("Backend QFE:      %u",    sym.ver_qfe);
-      rd_printf("Version String:   %S",    version_string);
+      rd_printf("Machine         : %#x (%S)", sym.machine, cv_string_from_arch(sym.machine));
+      rd_printf("Flags           : %#x",      sym.flags);
+      rd_printf("Language        : %#x (%S)", language, cv_string_from_language(language));
+      rd_printf("Frontend Version: %u.%u",    sym.ver_fe_major, sym.ver_fe_minor);
+      rd_printf("Frontend Build  : %u",       sym.ver_fe_build);
+      rd_printf("Fontend QFE     : %u",       sym.ver_feqfe);
+      rd_printf("Backend Version : %u.%u",    sym.ver_major, sym.ver_minor);
+      rd_printf("Backend Build   : %u",       sym.ver_build);
+      rd_printf("Backend QFE     : %u",       sym.ver_qfe);
+      rd_printf("Version String  : %S",       version_string);
     } break;
     case CV_SymKind_GPROC32_ST:
     case CV_SymKind_LPROC32_ST:
@@ -2860,16 +4272,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 name = str8_zero();
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:        %S",  name);
-      rd_printf("Parent:      %#x", sym.parent);
-      rd_printf("End:         %#x", sym.end);
-      rd_printf("Next:        %#x", sym.next);
-      rd_printf("Address:     %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Length:      %u",  sym.len);
-      rd_printf("Type:        %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("Flags:       %S",  cv_string_from_proc_flags(scratch.arena, sym.flags));
-      rd_printf("Debug Start: %#x", sym.dbg_start);
-      rd_printf("Debug End:   %#x", sym.dbg_end);
+      rd_printf("Name       : %S",       name);
+      rd_printf("Parent     : %#x",      sym.parent);
+      rd_printf("End        : %#x",      sym.end);
+      rd_printf("Next       : %#x",      sym.next);
+      rd_printf("Address    : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Length     : %u",       sym.len);
+      rd_printf("Type       : %S",       cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Flags      : %#x (%S)", sym.flags, cv_string_from_proc_flags(scratch.arena, sym.flags));
+      rd_printf("Debug Start: %#x",      sym.dbg_start);
+      rd_printf("Debug End  : %#x",      sym.dbg_end);
     } break;
     case CV_SymKind_LDATA32_ST:
     case CV_SymKind_GDATA32_ST:
@@ -2880,8 +4292,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name   : %S", name);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_CONSTANT_ST:
@@ -2904,14 +4316,14 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 flags     = cv_string_from_frame_proc_flags(scratch.arena, sym.flags);
       U32     local_ptr = CV_FrameprocFlags_Extract_LocalBasePointer(sym.flags);
       U32     param_ptr = CV_FrameprocFlags_Extract_ParamBasePointer(sym.flags);
-      rd_printf("Frame Size:          %x", sym.frame_size);
-      rd_printf("Pad Size:            %x", sym.pad_size);
-      rd_printf("Pad Offset:          %x", sym.pad_off);
-      rd_printf("Save Registers Area: %u", sym.save_reg_size);
-      rd_printf("Exception Handler:   %S", cv_string_sec_off(arena, sym.eh_sec, sym.eh_off));
-      rd_printf("Flags:               %S", flags);
-      rd_printf("Local pointer:       %S", cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, local_ptr)));
-      rd_printf("Param pointer:       %S", cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, param_ptr)));
+      rd_printf("Frame Size         : %#x", sym.frame_size);
+      rd_printf("Pad Size           : %#x", sym.pad_size);
+      rd_printf("Pad Offset         : %#x", sym.pad_off);
+      rd_printf("Save Registers Area: %u",  sym.save_reg_size);
+      rd_printf("Exception Handler  : %S",  cv_string_sec_off(arena, sym.eh_sec, sym.eh_off));
+      rd_printf("Flags              : %S",  flags);
+      rd_printf("Local pointer      : %S",  cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, local_ptr)));
+      rd_printf("Param pointer      : %S",  cv_string_from_reg_id(scratch.arena, arch, cv_map_encoded_base_pointer(arch, param_ptr)));
     } break;
     case CV_SymKind_LOCAL: {
       CV_SymLocal sym  = {0};
@@ -2919,8 +4331,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name : %S", name);
+      rd_printf("Type : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Flags: %S", cv_string_from_local_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_DEFRANGE: {
@@ -2939,7 +4351,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Register:   %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
+      rd_printf("Register  : %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
       rd_printf("Attributes: %S", cv_string_from_range_attribs(scratch.arena, sym.attribs));
       cv_print_lvar_addr_range(arena, out, indent, sym.range);
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
@@ -2959,9 +4371,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Register:      %S",  cv_string_from_reg_id(scratch.arena, arch, sym.reg));
-      rd_printf("Attributes:    %S",  cv_string_from_range_attribs(scratch.arena, sym.attribs));
-      rd_printf("Parent Offset: %#x", sym.field_offset);
+      rd_printf("Register     : %#x (%S)", sym.reg, cv_string_from_reg_id(scratch.arena, arch, sym.reg));
+      rd_printf("Attributes   : %#x (%S)", sym.attribs, cv_string_from_range_attribs(scratch.arena, sym.attribs));
+      rd_printf("Parent Offset: %#x",      sym.field_offset);
       cv_print_lvar_addr_range(arena, out, indent, sym.range);
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
     } break;
@@ -2976,8 +4388,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += raw_gaps.size;
 
-      rd_printf("Flags:   %S", cv_string_from_defrange_register_rel_flags(scratch.arena, sym.flags));
-      rd_printf("Address: %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.reg_off));
+      rd_printf("Flags  : %#x (%S)", sym.flags, cv_string_from_defrange_register_rel_flags(scratch.arena, sym.flags));
+      rd_printf("Address: %S",       cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.reg_off));
       cv_print_lvar_addr_gap(arena, out, indent, raw_gaps);
     } break;
     case CV_SymKind_END:
@@ -3023,16 +4435,16 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
-      rd_printf("Pad:     %u", sym.pad);
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Pad    : %u", sym.pad);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_FRAMECOOKIE: {
       CV_SymFrameCookie sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Address: %S",  cv_string_sec_off(arena, sym.reg, sym.off));
-      rd_printf("Kind:    %S",  cv_string_from_frame_cookie_kind(sym.kind));
-      rd_printf("Flags:   %#x", sym.flags); // TODO: llvm and cvinfo.h don't define these flags...
+      rd_printf("Address: %S",       cv_string_sec_off(arena, sym.reg, sym.off));
+      rd_printf("Kind   : %#x (%S)", sym.kind, cv_string_from_frame_cookie_kind(sym.kind));
+      rd_printf("Flags  : %#x",      sym.flags); // TODO: llvm and cvinfo.h don't define these flags...
     } break;
     case CV_SymKind_HEAPALLOCSITE: {
       CV_SymHeapAllocSite sym = {0};
@@ -3040,8 +4452,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
 
       String8 addr  = cv_string_sec_off(arena, sym.sec, sym.off);
       String8 itype = cv_string_from_itype(arena, min_itype, sym.itype);
-      rd_printf("Address: %S", addr);
-      rd_printf("Type:    %S", itype);
+      rd_printf("Address                : %S", addr);
+      rd_printf("Type                   : %S", itype);
       rd_printf("Call instruction length: %x", sym.call_inst_len);
     } break;
     case CV_SymKind_ALIGN: {
@@ -3074,7 +4486,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Start Symbol: %#x", sym.start_symbol);
-      rd_printf("Segment:      %#x", sym.segment);
+      rd_printf("Segment     : %#x", sym.segment);
     } break;
     case CV_SymKind_RETURN: {
       Assert(!"TODO: test");
@@ -3082,15 +4494,15 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymReturn sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Flags: %S", cv_string_from_generic_flags(scratch.arena, sym.flags));
-      rd_printf("Style: %S", cv_string_from_generic_style(sym.style));
+      rd_printf("Flags     : %#x (%S)", sym.flags, cv_string_from_generic_flags(scratch.arena, sym.flags));
+      rd_printf("Style     : %#x (%S)", sym.style, cv_string_from_generic_style(sym.style));
       if (sym.style == CV_GenericStyle_REG) {
         U8 count = 0;
         cursor += str8_deserial_read_struct(raw_symbol, cursor, &count);
 
         String8 data = rd_format_hex_array(scratch.arena, raw_symbol.str, raw_symbol.size);
         rd_printf("Byte Count: %u", count);
-        rd_printf("Data:       %S", data);
+        rd_printf("Data      : %S", data);
       }
     } break;
     case CV_SymKind_ENTRYTHIS: {
@@ -3104,13 +4516,13 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cv_print_symbol(arena, out, indent, arch, min_itype, type, raw_subsym);
     } break;
     case CV_SymKind_SLINK32: {
-      Assert(!"ret");
+      Assert(!"TODO: test");
       
       CV_SymSLink32 sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
       rd_printf("Frame Size: %x", sym.frame_size);
-      rd_printf("Address:    %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.offset));
+      rd_printf("Address   : %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.offset));
     } break;
     case CV_SymKind_OEM: {
       Assert(!"TODO: test");
@@ -3123,7 +4535,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       //
       // CV-spec doesn't even mention S_OEM just LF_OEM and cvdump.exe prints out type with guid...
       rd_printf("Type: %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("ID:   %S", string_from_guid(scratch.arena, sym.id));
+      rd_printf("ID  : %S", string_from_guid(scratch.arena, sym.id));
     } break;
     case CV_SymKind_VFTABLE32:{
       Assert(!"TODO: test");
@@ -3131,8 +4543,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymVPath32 sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Root:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.root));
-      rd_printf("Path:    %S", cv_string_from_itype(scratch.arena, min_itype, sym.path));
+      rd_printf("Root   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.root));
+      rd_printf("Path   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.path));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
     } break;
     case CV_SymKind_PUB32_ST:
@@ -3142,8 +4554,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Flags:   %S", cv_string_from_pub32_flags(scratch.arena, sym.flags));
+      rd_printf("Name   : %S", name);
+      rd_printf("Flags  : %S", cv_string_from_pub32_flags(scratch.arena, sym.flags));
       rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_BPREL32_ST:
@@ -3155,9 +4567,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:   %S",  name);
+      rd_printf("Name  : %S",  name);
       rd_printf("Offset: %#x", sym.off);
-      rd_printf("Type:   %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type  : %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_REGISTER: {
       Assert(!"TODO: test");
@@ -3167,9 +4579,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
+      rd_printf("Name    : %S", name);
       rd_printf("Register: %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_PROCREF_ST:
     case CV_SymKind_DATAREF_ST:
@@ -3185,9 +4597,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name: %S",  name);
-      rd_printf("SUC:  %#x", sym.suc_name);
-      rd_printf("IMod: %#x", sym.imod);
+      rd_printf("Name                : %S",  name);
+      rd_printf("SUC                 : %#x", sym.suc_name);
+      rd_printf("IMod                : %#x", sym.imod);
       rd_printf("Symbol Stream Offset: %#x", sym.sym_off);
     } break;
     case CV_SymKind_SEPCODE: {
@@ -3196,12 +4608,12 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymSepcode sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Parent:         %#x", sym.parent);
-      rd_printf("End:            %#x", sym.end);
-      rd_printf("Length:         %u",  sym.len);
-      rd_printf("Flags:          %S",  cv_string_from_sepcode(scratch.arena, sym.flags));
-      rd_printf("Address:        %S",  cv_string_sec_off(scratch.arena, sym.sec, sym.sec_off));
-      rd_printf("Parent Address: %S",  cv_string_sec_off(scratch.arena, sym.sec_parent, sym.sec_parent_off));
+      rd_printf("Parent        : %#x",      sym.parent);
+      rd_printf("End           : %#x",      sym.end);
+      rd_printf("Length        : %u",       sym.len);
+      rd_printf("Flags         : %#x (%S)", sym.flags, cv_string_from_sepcode(scratch.arena, sym.flags));
+      rd_printf("Address       : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.sec_off));
+      rd_printf("Parent Address: %S",       cv_string_sec_off(scratch.arena, sym.sec_parent, sym.sec_parent_off));
     } break;
     case CV_SymKind_PARAMSLOT_ST:
     case CV_SymKind_LOCALSLOT_ST:
@@ -3223,10 +4635,10 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymTrampoline sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:       %S",   cv_string_from_trampoline_kind(sym.kind));
-      rd_printf("Thunk Size: %u",   sym.thunk_size);
-      rd_printf("Thunk:      %.*s", cv_string_sec_off(scratch.arena, sym.thunk_sec, sym.thunk_sec_off));
-      rd_printf("Target:     %.*s", cv_string_sec_off(scratch.arena, sym.target_sec, sym.target_sec_off));
+      rd_printf("Type      : %S", cv_string_from_trampoline_kind(sym.kind));
+      rd_printf("Thunk Size: %u", sym.thunk_size);
+      rd_printf("Thunk     : %S", cv_string_sec_off(scratch.arena, sym.thunk_sec, sym.thunk_sec_off));
+      rd_printf("Target    : %S", cv_string_sec_off(scratch.arena, sym.target_sec, sym.target_sec_off));
     } break;
     case CV_SymKind_POGODATA: {
       Assert(!"TODO: test");
@@ -3234,9 +4646,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymPogoInfo sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Invocations:                          %u", sym.invocations);
-      rd_printf("Dynamic instruction count:            %u", sym.dynamic_inst_count);
-      rd_printf("Static instruction count:             %u", sym.static_inst_count);
+      rd_printf("Invocations                         : %u", sym.invocations);
+      rd_printf("Dynamic instruction count           : %u", sym.dynamic_inst_count);
+      rd_printf("Static instruction count            : %u", sym.static_inst_count);
       rd_printf("Post inline static instruction count: %u", sym.post_inline_static_inst_count);
     } break;
     case CV_SymKind_MANYREG: {
@@ -3245,9 +4657,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymManyreg sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:      %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Type     : %S", cv_string_from_itype(arena, min_itype, sym.itype));
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U8 i = 0; i < sym.count; ++i) {
         U8 v = 0;
@@ -3263,9 +4675,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymManyreg sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Type:      %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Type     : %S", cv_string_from_itype(arena, min_itype, sym.itype));
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U16 i = 0; i < sym.count; ++i) {
         U16 v = 0;
@@ -3282,11 +4694,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:            %S",  name);
-      rd_printf("Index:           %u",  sym.sec_index);
-      rd_printf("Align:           %u",  sym.align);
-      rd_printf("Virtual Offset:  %#x", sym.rva);
-      rd_printf("Size:            %u",  sym.size);
+      rd_printf("Name           : %S",  name);
+      rd_printf("Index          : %u",  sym.sec_index);
+      rd_printf("Align          : %u",  sym.align);
+      rd_printf("Virtual Offset : %#x", sym.rva);
+      rd_printf("Size           : %u",  sym.size);
       rd_printf("Characteristics: %S",  coff_string_from_section_flags(scratch.arena, sym.characteristics));
     } break;
     case CV_SymKind_ENVBLOCK: {
@@ -3312,10 +4724,10 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:            %S", name);
-      rd_printf("Size:            %u", sym.size);
-      rd_printf("Characteristics: %S", coff_string_from_section_flags(scratch.arena, sym.characteristics));
-      rd_printf("Address:         %S", cv_string_sec_off(scratch.arena, sym.sec, sym.off));
+      rd_printf("Name           : %S",       name);
+      rd_printf("Size           : %u",       sym.size);
+      rd_printf("Characteristics: %#x (%S)", sym.characteristics, coff_string_from_section_flags(scratch.arena, sym.characteristics));
+      rd_printf("Address        : %S",       cv_string_sec_off(scratch.arena, sym.sec, sym.off));
     } break;
     case CV_SymKind_EXPORT: {
       Assert(!"TODO: test");
@@ -3325,9 +4737,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:    %S",  name);
+      rd_printf("Name   : %S",  name);
       rd_printf("Ordinal: %#x", sym.ordinal);
-      rd_printf("Flags:   %S",  cv_string_from_export_flags(scratch.arena, sym.flags));
+      rd_printf("Flags  : %S",  cv_string_from_export_flags(scratch.arena, sym.flags));
     } break;
     case CV_SymKind_ANNOTATION: {
       Assert(!"TODO: test");
@@ -3335,8 +4747,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymAnnotation sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Address: %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
-      rd_printf("Count:   %u", sym.count);
+      rd_printf("Address    : %S", cv_string_sec_off(scratch.arena, sym.seg, sym.off));
+      rd_printf("Count      : %u", sym.count);
       rd_printf("Annotations:");
       rd_indent();
       for (U16 i = 0; i < sym.count; ++i) {
@@ -3355,9 +4767,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:   %S",  name);
+      rd_printf("Name  : %S",  name);
       rd_printf("Offset: %#x", sym.off);
-      rd_printf("Type:   %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Type  : %S",  cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
     case CV_SymKind_MANREGISTER:
@@ -3369,8 +4781,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name    : %S", name);
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       rd_printf("Register: %S", cv_string_from_reg_id(scratch.arena, arch, sym.reg));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
@@ -3382,9 +4794,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:     %S", name);
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
-      rd_printf("Address:  %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.off));
+      rd_printf("Name   : %S", name);
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Address: %S", cv_string_from_reg_off(scratch.arena, arch, sym.reg, sym.off));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
     } break;
     case CV_SymKind_MANYREG_ST:
@@ -3399,11 +4811,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       String8 name = str8_zero();
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:      %S", name);
-      rd_printf("Type:      %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
+      rd_printf("Name     : %S", name);
+      rd_printf("Type     : %S", cv_string_from_itype(scratch.arena, min_itype, sym.itype));
       cv_print_lvar_attr(arena, out, indent, sym.attr);
       rd_printf("Reg Count: %u", sym.count);
-      rd_printf("Regs:");
+      rd_printf("Regs     :");
       rd_indent();
       for (U8 i = 0; i < sym.count; ++i) {
         rd_printf("%S", cv_string_from_reg_id(scratch.arena, arch, regs[i]));
@@ -3450,8 +4862,8 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &symbol_type);
       String8 raw_subsym = str8_skip(raw_symbol, cursor);
 
-      rd_printf("Kind:             %x", sym.kind);
-      rd_printf("File ID:          %x", sym.file_id);
+      rd_printf("Kind            : %x", sym.kind);
+      rd_printf("File ID         : %x", sym.file_id);
       rd_printf("File Line Number: %u", sym.file_ln);
       rd_printf("# Discarded Symbol");
       cv_print_symbol(arena, out, indent, arch, min_itype, symbol_type, raw_subsym);
@@ -3465,7 +4877,7 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &to);
 
       rd_printf("From: %S", from);
-      rd_printf("To:   %S", to);
+      rd_printf("To  : %S", to);
     } break;
     case CV_SymKind_FASTLINK: {
       Assert(!"TODO: test");
@@ -3475,9 +4887,9 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Flags: %x", sym.flags);
-      rd_printf("Type:  %S", cv_string_from_itype(arena, min_itype, sym.itype));
+      rd_printf("Name : %S",  name);
+      rd_printf("Flags: %#x", sym.flags);
+      rd_printf("Type : %S",  cv_string_from_itype(arena, min_itype, sym.itype));
     } break;
     case CV_SymKind_ARMSWITCHTABLE: {
       Assert(!"TODO: test");
@@ -3485,11 +4897,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       CV_SymArmSwitchTable sym = {0};
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
 
-      rd_printf("Base Address:   %S", cv_string_sec_off(scratch.arena, sym.sec_base,   sym.off_base));
+      rd_printf("Base Address  : %S", cv_string_sec_off(scratch.arena, sym.sec_base,   sym.off_base));
       rd_printf("Branch Address: %S", cv_string_sec_off(scratch.arena, sym.sec_branch, sym.off_branch));
-      rd_printf("Table Address:  %S", cv_string_sec_off(scratch.arena, sym.sec_table,  sym.off_table));
-      rd_printf("Entry count:    %u", sym.entry_count);
-      rd_printf("Switch Type:    %x", sym.kind);
+      rd_printf("Table Address : %S", cv_string_sec_off(scratch.arena, sym.sec_table,  sym.off_table));
+      rd_printf("Entry count   : %u", sym.entry_count);
+      rd_printf("Switch Type   : %x", sym.kind);
     } break;
     case CV_SymKind_REF_MINIPDB: {
       Assert(!"TODO: test");
@@ -3499,11 +4911,11 @@ cv_print_symbol(Arena *arena, String8List *out, String8 indent, CV_Arch arch, CV
       cursor += str8_deserial_read_struct(raw_symbol, cursor, &sym);
       cursor += str8_deserial_read_cstr(raw_symbol, cursor, &name);
 
-      rd_printf("Name:  %S", name);
-      rd_printf("Flags: %x", sym.flags);
-      rd_printf("IMod:  %04x", sym.imod);
+      rd_printf("Name      : %S", name);
+      rd_printf("Flags     : %x", sym.flags);
+      rd_printf("IMod      : %04x", sym.imod);
       if (sym.flags & CV_RefMiniPdbFlag_UDT) {
-        rd_printf("Type: %S", cv_string_from_itype(scratch.arena, min_itype, (CV_TypeIndex)sym.data));
+        rd_printf("Type      : %S", cv_string_from_itype(scratch.arena, min_itype, (CV_TypeIndex)sym.data));
       } else {
         rd_printf("Coff ISect: %#x", sym.data);
       }
@@ -3620,8 +5032,8 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       CV_LeafBitField lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Type:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Length:   %u", lf.len);
+      rd_printf("Type    : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Length  : %u", lf.len);
       rd_printf("Position: %u", lf.pos);
     } break;
     case CV_LeafKind_CLASS2:
@@ -3633,13 +5045,12 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &size);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:          %S", name);
-      rd_printf("Fields:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Properties:    %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Derived:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
-      rd_printf("VShape:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
-      rd_printf("Unknown1:      %x", lf.unknown1);
-      rd_printf("Unknown2:      %x", lf.unknown2);
+      rd_printf("Name       : %S",       name);
+      rd_printf("Fields     : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Derived    : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
+      rd_printf("VShape     : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
+      rd_printf("Unknown    : %#x",      lf.unknown);
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = str8_zero();
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -3648,25 +5059,25 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_PRECOMP_ST: 
     case CV_LeafKind_PRECOMP: { 
-      CV_LeafPreComp lf  = {0};
+      CV_LeafPreComp lf   = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
+      rd_printf("Name       : %S", name);
       rd_printf("Start Index: %x", lf.start_index);
-      rd_printf("Count:       %u", lf.count);
-      rd_printf("Signature:   %x", lf.sig);
+      rd_printf("Count      : %u", lf.count);
+      rd_printf("Signature  : %x", lf.sig);
     } break;
     case CV_LeafKind_TYPESERVER2: {
-      CV_LeafTypeServer2 lf  = {0};
+      CV_LeafTypeServer2 lf   = {0};
       String8            name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:  %S", name);
+      rd_printf("Name : %S", name);
       rd_printf("Sig70: %S", string_from_guid(arena, lf.sig70));
-      rd_printf("Age:   %u", lf.age);
+      rd_printf("Age  : %u", lf.age);
     } break;
     case CV_LeafKind_BUILDINFO: {
       CV_LeafBuildInfo lf = {0};
@@ -3682,13 +5093,13 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       rd_unindent();
     } break;
     case CV_LeafKind_MFUNC_ID: {
-      CV_LeafMFuncId lf  = {0};
+      CV_LeafMFuncId lf   = {0};
       String8        name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:       %S", name);
+      rd_printf("Name      : %S", name);
       rd_printf("Owner Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.owner_itype));
-      rd_printf("Type:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Type      : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_VFUNCTAB: {
       CV_LeafVFuncTab lf = {0};
@@ -3706,8 +5117,8 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
         if (has_vbase) {
           cursor += str8_deserial_read_struct(raw_leaf, cursor, &vbase);
         }
-        rd_printf("Attribs:      %S", cv_string_from_field_attribs(scratch.arena, ml.attribs));
-        rd_printf("Type:         %S", cv_string_from_itype(scratch.arena, min_itype, ml.itype));
+        rd_printf("Attribs     : %#x (%S)", ml.attribs, cv_string_from_field_attribs(scratch.arena, ml.attribs));
+        rd_printf("Type        : %S",       cv_string_from_itype(scratch.arena, min_itype, ml.itype));
         if (has_vbase) {
           rd_printf("Virtual Base: %x", vbase);
         }
@@ -3725,48 +5136,48 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       }
       String8 name = {0};
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:          %S", name);
-      rd_printf("Field Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:          %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name         : %S",       name);
+      rd_printf("Field Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type         : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       if (has_vbase) {
         rd_printf("Virtual Base:  %#x", vbase);
       }
     } break;
     case CV_LeafKind_METHOD_ST: 
     case CV_LeafKind_METHOD: {
-      CV_LeafMethod lf  = {0};
+      CV_LeafMethod lf   = {0};
       String8       name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:      %S", name);
-      rd_printf("Count:     %u", lf.count);
+      rd_printf("Name     : %S", name);
+      rd_printf("Count    : %u", lf.count);
       rd_printf("Type List: %S", cv_string_from_itype(scratch.arena, min_itype, lf.list_itype));
     } break;
     case CV_LeafKind_VBCLASS:
     case CV_LeafKind_IVBCLASS: {
-      CV_LeafVBClass   lf         = {0};
+      CV_LeafVBClass   lf          = {0};
       CV_NumericParsed vbptr_off   = {0};
       CV_NumericParsed vbtable_off = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &vbptr_off);
       cursor += cv_read_numeric(raw_leaf, cursor, &vbtable_off);
 
-      rd_printf("Attribs:          %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Attribs         : %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
       rd_printf("Direct Base Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       rd_printf("Virtual Base Ptr: %S", cv_string_from_itype(scratch.arena, min_itype, lf.vbptr_itype));
-      rd_printf("vbpoff:           %S", cv_string_from_numeric(scratch.arena, vbptr_off));
-      rd_printf("vbind:            %S", cv_string_from_numeric(scratch.arena, vbtable_off));
+      rd_printf("vbpoff          : %S", cv_string_from_numeric(scratch.arena, vbptr_off));
+      rd_printf("vbind           : %S", cv_string_from_numeric(scratch.arena, vbtable_off));
     } break;
     case CV_LeafKind_BCLASS: {
-      CV_LeafBClass    lf    = {0};
+      CV_LeafBClass    lf     = {0};
       CV_NumericParsed offset = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &offset);
 
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Offset:  %S", cv_string_from_numeric(scratch.arena, offset));
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Offset : %S",       cv_string_from_numeric(scratch.arena, offset));
     } break;
     case CV_LeafKind_VTSHAPE: {
       CV_LeafVTShape lf = {0};
@@ -3785,26 +5196,26 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_STMEMBER_ST: 
     case CV_LeafKind_STMEMBER: {
-      CV_LeafStMember lf  = {0};
+      CV_LeafStMember lf   = {0};
       String8         name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name   : %S",       name);
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_MFUNCTION: {
       CV_LeafMFunction lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Return Type:      %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
-      rd_printf("Class Type:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.class_itype));
-      rd_printf("This Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.this_itype));
-      rd_printf("Call Kind:        %S", cv_string_from_call_kind(lf.call_kind));
-      rd_printf("Function Attribs: %S", cv_string_from_function_attribs(scratch.arena, lf.attribs));
-      rd_printf("Argument Count:   %u", lf.arg_count);
-      rd_printf("Argument Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
+      rd_printf("Return Type     : %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
+      rd_printf("Class Type      : %S", cv_string_from_itype(scratch.arena, min_itype, lf.class_itype));
+      rd_printf("This Type       : %S", cv_string_from_itype(scratch.arena, min_itype, lf.this_itype));
+      rd_printf("Call Kind       : %#x (%S)", lf.call_kind, cv_string_from_call_kind(lf.call_kind));
+      rd_printf("Function Attribs: %#x (%S)", lf.attribs, cv_string_from_function_attribs(scratch.arena, lf.attribs));
+      rd_printf("Argument Count  : %u", lf.arg_count);
+      rd_printf("Argument Type   : %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
     } break;
     #if 0
     case CV_LeafKind_SKIP_16t: {
@@ -3828,11 +5239,11 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Field Count: %u", lf.count);
-      rd_printf("Properties:  %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.base_itype));
-      rd_printf("Field:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Name       : %S",       name);
+      rd_printf("Field Count: %u",       lf.count);
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Type       : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.base_itype));
+      rd_printf("Field      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -3847,9 +5258,9 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &value);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
+      rd_printf("Name   : %S", name);
       rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Value:   %S", cv_string_from_numeric(scratch.arena, value));
+      rd_printf("Value  : %S", cv_string_from_numeric(scratch.arena, value));
     } break;
     case CV_LeafKind_NESTTYPE_ST: 
     case CV_LeafKind_NESTTYPE: {
@@ -3857,7 +5268,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       String8         name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
-      rd_printf("Name:  %S", name);
+      rd_printf("Name : %S", name);
       rd_printf("Index: %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_NOTTRAN: {
@@ -3876,7 +5287,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &string);
 
-      rd_printf("string:     %S", string);
+      rd_printf("string    : %S", string);
       rd_printf("Substrings: %S", cv_string_from_itemid(arena, lf.substr_list_id)); // TODO: print actual strings instead
     } break;
     case CV_LeafKind_POINTER: {
@@ -3886,7 +5297,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       CV_PointerKind kind = CV_PointerAttribs_Extract_Kind(lf.attribs);
       CV_PointerMode mode = CV_PointerAttribs_Extract_Mode(lf.attribs);
 
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Type   : %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       rd_printf("Attribs: %S", cv_string_from_pointer_attribs(arena, lf.attribs));
       rd_indent();
       if (mode == CV_PointerMode_PtrMem) {
@@ -3896,7 +5307,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
         cursor += str8_deserial_read_struct(raw_leaf, cursor, &pm);
 
         rd_printf("Class Type: %S", cv_string_from_itype(scratch.arena, min_itype, itype));
-        rd_printf("Format:     %S", cv_string_from_member_pointer_kind(pm));
+        rd_printf("Format    : %S", cv_string_from_member_pointer_kind(pm));
       } else {
         if (kind == CV_PointerKind_BaseSeg) {
           U16 seg;
@@ -3910,25 +5321,25 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
           cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
           rd_printf("Base Type: %S", cv_string_from_itype(scratch.arena, min_itype, base_itype));
-          rd_printf("Name:      %S", name);
+          rd_printf("Name     : %S", name);
         }
       }
       rd_unindent();
     } break;
     case CV_LeafKind_UNION_ST: 
     case CV_LeafKind_UNION: {
-      CV_LeafUnion     lf  = {0};
+      CV_LeafUnion     lf   = {0};
       CV_NumericParsed num  = {0};
       String8          name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Field Count: %u", lf.count);
-      rd_printf("Properties:  %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Field:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Size:        %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name       : %S",       name);
+      rd_printf("Field Count: %u",       lf.count);
+      rd_printf("Properties : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Field      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Size       : %S",       cv_string_from_numeric(scratch.arena, num));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -3946,13 +5357,13 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:             %S", name);
-      rd_printf("Field Count:      %u", lf.count);
-      rd_printf("Properties:       %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Field List Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Derived Type:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
-      rd_printf("VShape:           %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
-      rd_printf("Size:             %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name           : %S",       name);
+      rd_printf("Field Count    : %u",       lf.count);
+      rd_printf("Properties     : %#x (%S)", lf.props, cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Field List Type: %S",       cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Derived Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
+      rd_printf("VShape         : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
+      rd_printf("Size           : %S",       cv_string_from_numeric(scratch.arena, num));
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = {0};
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);
@@ -3980,11 +5391,11 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       String8 call_kind    = cv_string_from_call_kind(lf.call_kind);
       String8 func_attribs = cv_string_from_function_attribs(scratch.arena, lf.attribs);
 
-      rd_printf("Return type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
-      rd_printf("Call Convention:    %S", call_kind);
-      rd_printf("Function Attribs:   %S", func_attribs);
-      rd_printf("Argumnet Count:     %u", lf.arg_count);
-      rd_printf("Argument List Type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
+      rd_printf("Return type       : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.ret_itype));
+      rd_printf("Call Convention   : %#x (%S)", lf.call_kind, call_kind);
+      rd_printf("Function Attribs  : %#x (%S)", lf.attribs, func_attribs);
+      rd_printf("Argumnet Count    : %u",       lf.arg_count);
+      rd_printf("Argument List Type: %S",       cv_string_from_itype(scratch.arena, min_itype, lf.arg_itype));
     } break;
     case CV_LeafKind_FUNC_ID: {
       CV_LeafFuncId lf  = {0};
@@ -3992,16 +5403,16 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:        %S", name);
-      rd_printf("Scope Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.scope_string_id));
-      rd_printf("Type:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Name      : %S",       name);
+      rd_printf("Scope Type: %#x (%S)", lf.scope_string_id, cv_string_from_itype(scratch.arena, min_itype, lf.scope_string_id));
+      rd_printf("Type      : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
     } break;
     case CV_LeafKind_MODIFIER: {
       CV_LeafModifier lf = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
 
-      rd_printf("Type:  %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Flags: %S", cv_string_from_modifier_flags(scratch.arena, lf.flags));
+      rd_printf("Type : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Flags: %#x (%S)", lf.flags, cv_string_from_modifier_flags(scratch.arena, lf.flags));
     } break;
     case CV_LeafKind_ARRAY_ST: 
     case CV_LeafKind_ARRAY: {
@@ -4012,7 +5423,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
 
       rd_printf("Entry type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.entry_itype));
       rd_printf("Index type: %S", cv_string_from_itype(scratch.arena, min_itype, lf.index_itype));
-      rd_printf("Length:     %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Length    : %S", cv_string_from_numeric(scratch.arena, num));
     } break;
     case CV_LeafKind_FIELDLIST: {
       for (U64 idx = 0; cursor < raw_leaf.size;) {
@@ -4029,17 +5440,28 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_MEMBER_ST:
     case CV_LeafKind_MEMBER: {
-      CV_LeafMember    lf  = {0};
+      CV_LeafMember    lf   = {0};
       CV_NumericParsed num  = {0};
       String8          name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
       cursor += cv_read_numeric(raw_leaf, cursor, &num);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:    %S", name);
-      rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
-      rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
-      rd_printf("Offset:  %S", cv_string_from_numeric(scratch.arena, num));
+      rd_printf("Name   : %S",       name);
+      rd_printf("Attribs: %#x (%S)", lf.attribs, cv_string_from_field_attribs(scratch.arena, lf.attribs));
+      rd_printf("Type   : %S",       cv_string_from_itype(scratch.arena, min_itype, lf.itype));
+      rd_printf("Offset : %S",       cv_string_from_numeric(scratch.arena, num));
+    } break;
+    case CV_LeafKind_LABEL: {
+      CV_LeafLabel lf = {0};
+      cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
+
+      rd_printf("Kind: %S", cv_string_from_label_kind(scratch.arena, lf.kind));
+    } break;
+    case CV_LeafKind_ENDPRECOMP: {
+      CV_LeafEndPreComp lf = {0};
+      cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
+      rd_printf("Sig: %#x", lf.sig);
     } break;
     // 16bit
     case CV_LeafKind_OEM_16t: 
@@ -4090,8 +5512,6 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     // Manged
     case CV_LeafKind_MANAGED_ST: 
     // undefined
-    case CV_LeafKind_LABEL: 
-    case CV_LeafKind_ENDPRECOMP: 
     case CV_LeafKind_LIST: 
     case CV_LeafKind_REFSYM: 
     case CV_LeafKind_BARRAY: 
@@ -4433,17 +5853,17 @@ cv_print_symbols_section(Arena       *arena,
 }
 
 internal void
-cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8 raw_image, U64 string_table_off, U64 section_count, COFF_SectionHeader *sections)
+cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8 raw_image, String8 string_table, U64 section_count, COFF_SectionHeader *sections)
 {
   CV_Arch arch = ~0;
   {
     B32 keep_parsing = 1;
     for (U64 i = 0; i < section_count && keep_parsing; ++i) {
       COFF_SectionHeader *header      = &sections[i];
-      String8             sect_name   = coff_name_from_section_header(header, raw_image, string_table_off);
+      String8             sect_name   = coff_name_from_section_header(string_table, header);
       Rng1U64             sect_frange = rng_1u64(header->foff, header->foff+header->fsize);
       String8             raw_sect    = str8_substr(raw_image, sect_frange);
-      if (str8_match(sect_name, str8_lit(".debug$S"), 0)) {
+      if (str8_match_lit(".debug$S", sect_name, 0)) {
         Temp scratch = scratch_begin(&arena, 1);
         CV_DebugS debug_s = cv_parse_debug_s(scratch.arena, raw_sect);
         for (String8Node *string_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first;
@@ -4488,15 +5908,15 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
 
   for (U64 i = 0; i < section_count; ++i) {
     COFF_SectionHeader *header      = &sections[i];
-    String8             sect_name   = coff_name_from_section_header(header, raw_image, string_table_off);
+    String8             sect_name   = coff_name_from_section_header(string_table, header);
     Rng1U64             sect_frange = rng_1u64(header->foff, header->foff+header->fsize);
     String8             raw_sect    = str8_substr(raw_image, sect_frange);
-    if (str8_match(sect_name, str8_lit(".debug$S"), 0)) {
+    if (str8_match_lit(".debug$S", sect_name, 0)) {
       rd_printf("# .debug$S No. %llx", i+1);
       rd_indent();
       cv_print_symbols_section(arena, out, indent, arch, raw_sect);
       rd_unindent();
-    } else if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
+    } else if (str8_match_lit(".debug$T", sect_name, 0)) {
       Temp scratch = scratch_begin(&arena, 1);
       CV_Signature sig = 0;
       str8_deserial_read_struct(raw_sect, 0, &sig);
@@ -4521,51 +5941,50 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
 // COFF
 
 internal void
-coff_print_archive_member_header(Arena *arena, String8List *out, String8 indent, COFF_ArchiveMemberHeader header, String8 long_names)
+coff_print_archive_member_header(Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveMemberHeader header, String8 long_names)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8 time_stamp = coff_string_from_time_stamp(scratch.arena, header.time_stamp);
 
-  rd_printf("Name:       %S"             , header.name    );
-  rd_printf("Time Stamp: %S"             , time_stamp     );
-  rd_printf("User ID:    %u"             , header.user_id );
-  rd_printf("Group ID:   %u"             , header.group_id);
-  rd_printf("Mode:       %S"             , header.mode    );
-  rd_printf("Data:       [%#llx-%#llx)", header.data_range.min, header.data_range.max);
+  rd_printf("Name      : %S"             , header.name    );
+  rd_printf("Time Stamp: (%#x) %S"       , header.time_stamp, time_stamp     );
+  rd_printf("User ID   : %u"             , header.user_id );
+  rd_printf("Group ID  : %u"             , header.group_id);
+  rd_printf("Mode      : %S"             , header.mode    );
+  rd_printf("Data      : [%#llx-%#llx)", header.data_range.min, header.data_range.max);
 
   scratch_end(scratch);
 }
 
 internal void
-coff_print_seciton_table(Arena              *arena,
+coff_print_section_table(Arena               *arena,
                           String8List        *out,
                           String8             indent,
-                          String8             raw_data,
-                          U64                 string_table_off,
-                          COFF_Symbol32Array  symbols,
-                          U64                 sect_count,
-                          COFF_SectionHeader *sect_headers)
+                          String8             string_table,
+                          COFF_Symbol32Array  symbol_table,
+                          U64                 section_count,
+                          COFF_SectionHeader *section_table)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  String8 *symlinks = push_array(scratch.arena, String8, sect_count);
-  for (U64 i = 0; i < symbols.count; ++i) {
-    COFF_Symbol32              *symbol = symbols.v+i;
+  String8 *symlinks = push_array(scratch.arena, String8, section_count);
+  for (U64 i = 0; i < symbol_table.count; ++i) {
+    COFF_Symbol32              *symbol = symbol_table.v+i;
     COFF_SymbolValueInterpType  interp = coff_interp_symbol(symbol->section_number, symbol->value, symbol->storage_class);
-    if (interp == COFF_SymbolValueInterp_REGULAR &&
+    if (interp == COFF_SymbolValueInterp_Regular &&
         symbol->aux_symbol_count == 0 &&
-        (symbol->storage_class == COFF_SymStorageClass_EXTERNAL || symbol->storage_class == COFF_SymStorageClass_STATIC)) {
-      if (symbol->section_number > 0 && symbol->section_number <= symbols.count) {
-        COFF_SectionHeader *header = sect_headers+(symbol->section_number-1);
-        if (header->flags & COFF_SectionFlag_LNK_COMDAT) {
-          symlinks[symbol->section_number-1] = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+        (symbol->storage_class == COFF_SymStorageClass_External || symbol->storage_class == COFF_SymStorageClass_Static)) {
+      if (symbol->section_number > 0 && symbol->section_number <= symbol_table.count) {
+        COFF_SectionHeader *header = section_table+(symbol->section_number-1);
+        if (header->flags & COFF_SectionFlag_LnkCOMDAT) {
+          symlinks[symbol->section_number-1] = coff_read_symbol_name(string_table, &symbol->name);
         }
       }
     }
     i += symbol->aux_symbol_count;
   }
 
-  if (sect_count) {
+  if (section_count) {
     rd_printf("# Section Table");
     rd_indent();
 
@@ -4584,11 +6003,11 @@ coff_print_seciton_table(Arena              *arena,
                 "Flags",
                 "Symlink");
 
-    for (U64 i = 0; i < sect_count; ++i) {
-      COFF_SectionHeader *header = sect_headers+i;
+    for (U64 i = 0; i < section_count; ++i) {
+      COFF_SectionHeader *header = section_table+i;
 
       String8 name      = str8_cstring_capped(header->name, header->name+sizeof(header->name));
-      String8 full_name = coff_name_from_section_header(header, raw_data, string_table_off);
+      String8 full_name = coff_name_from_section_header(string_table, header);
 
       String8 align;
       {
@@ -4599,69 +6018,69 @@ coff_print_seciton_table(Arena              *arena,
       String8 flags;
       {
         String8List mem_flags = {0};
-        if (header->flags & COFF_SectionFlag_MEM_READ) {
+        if (header->flags & COFF_SectionFlag_MemRead) {
           str8_list_pushf(scratch.arena, &mem_flags, "r");
         }
-        if (header->flags & COFF_SectionFlag_MEM_WRITE) {
+        if (header->flags & COFF_SectionFlag_MemWrite) {
           str8_list_pushf(scratch.arena, &mem_flags, "w");
         }
-        if (header->flags & COFF_SectionFlag_MEM_EXECUTE) {
+        if (header->flags & COFF_SectionFlag_MemExecute) {
           str8_list_pushf(scratch.arena, &mem_flags, "x");
         }
 
         String8List cnt_flags = {0};
-        if (header->flags & COFF_SectionFlag_CNT_CODE) {
+        if (header->flags & COFF_SectionFlag_CntCode) {
           str8_list_pushf(scratch.arena, &cnt_flags, "c");
         }
-        if (header->flags & COFF_SectionFlag_CNT_INITIALIZED_DATA) {
+        if (header->flags & COFF_SectionFlag_CntInitializedData) {
           str8_list_pushf(scratch.arena, &cnt_flags, "d");
         }
-        if (header->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+        if (header->flags & COFF_SectionFlag_CntUninitializedData) {
           str8_list_pushf(scratch.arena, &cnt_flags, "u");
         }
 
         String8List mem_extra_flags = {0};
-        if (header->flags & COFF_SectionFlag_MEM_SHARED) {
+        if (header->flags & COFF_SectionFlag_MemShared) {
           str8_list_pushf(scratch.arena, &mem_flags, "s");
         }
-        if (header->flags & COFF_SectionFlag_MEM_16BIT) {
+        if (header->flags & COFF_SectionFlag_Mem16Bit) {
           str8_list_pushf(scratch.arena, &mem_extra_flags, "h");
         }
-        if (header->flags & COFF_SectionFlag_MEM_LOCKED) {
+        if (header->flags & COFF_SectionFlag_MemLocked) {
           str8_list_pushf(scratch.arena, &mem_extra_flags, "l");
         }
-        if (header->flags & COFF_SectionFlag_MEM_DISCARDABLE) {
+        if (header->flags & COFF_SectionFlag_MemDiscardable) {
           str8_list_pushf(scratch.arena, &mem_extra_flags, "d");
         }
-        if (header->flags & COFF_SectionFlag_MEM_NOT_CACHED) {
+        if (header->flags & COFF_SectionFlag_MemNotCached) {
           str8_list_pushf(scratch.arena, &mem_extra_flags, "c");
         }
-        if (header->flags & COFF_SectionFlag_MEM_NOT_PAGED) {
+        if (header->flags & COFF_SectionFlag_MemNotPaged) {
           str8_list_pushf(scratch.arena, &mem_extra_flags, "p");
         }
 
         String8List lnk_flags = {0};
-        if (header->flags & COFF_SectionFlag_LNK_REMOVE) {
+        if (header->flags & COFF_SectionFlag_LnkRemove) {
           str8_list_pushf(scratch.arena, &lnk_flags, "r");
         }
-        if (header->flags & COFF_SectionFlag_LNK_COMDAT) {
+        if (header->flags & COFF_SectionFlag_LnkCOMDAT) {
           str8_list_pushf(scratch.arena, &lnk_flags, "c");
         }
-        if (header->flags & COFF_SectionFlag_LNK_OTHER) {
+        if (header->flags & COFF_SectionFlag_LnkOther) {
           str8_list_pushf(scratch.arena, &lnk_flags, "o");
         }
-        if (header->flags & COFF_SectionFlag_LNK_INFO) {
+        if (header->flags & COFF_SectionFlag_LnkInfo) {
           str8_list_pushf(scratch.arena, &lnk_flags, "i");
         }
-        if (header->flags & COFF_SectionFlag_LNK_NRELOC_OVFL) {
+        if (header->flags & COFF_SectionFlag_LnkNRelocOvfl) {
           str8_list_pushf(scratch.arena, &lnk_flags, "f");
         }
 
         String8List other_flags = {0};
-        if (header->flags & COFF_SectionFlag_TYPE_NO_PAD) {
+        if (header->flags & COFF_SectionFlag_TypeNoPad) {
           str8_list_pushf(scratch.arena, &other_flags, "n");
         }
-        if (header->flags & COFF_SectionFlag_GPREL) {
+        if (header->flags & COFF_SectionFlag_GpRel) {
           str8_list_pushf(scratch.arena, &other_flags, "g");
         }
 
@@ -4717,11 +6136,11 @@ coff_print_seciton_table(Arena              *arena,
     rd_newline();
     rd_printf("Flags:");
     rd_indent();
-    rd_printf("r = MEM_READ    w = MEM_WRITE        x = MEM_EXECUTE");
-    rd_printf("c = CNT_CODE    d = INITIALIZED_DATA u = UNINITIALIZED_DATA");
-    rd_printf("s = MEM_SHARED  h = MEM_16BIT        l = MEM_LOCKED          d = MEM_DISCARDABLE c = MEM_NOT_CACHED  p = MEM_NOT_PAGED");
-    rd_printf("r = LNK_REMOVE  c = LNK_COMDAT       o = LNK_OTHER           i = LNK_INFO        f = LNK_NRELOC_OVFL");
-    rd_printf("g = GPREL       n = TYPE_NO_PAD");
+    rd_printf("r = MemRead    w = MemWrite        x = MemExecute");
+    rd_printf("c = CntCode    d = InitializedData u = UninitializedData");
+    rd_printf("s = MemShared  h = Mem16bit        l = MemLocked          d = MemDiscardable c = MemNotCached  p = MemNotPaged");
+    rd_printf("r = LnkRemove  c = LnkComdat       o = LnkOther           i = LnkInfo        f = LnkNRelocOvfl");
+    rd_printf("g = GpRel      n = TypeNoPad");
     rd_unindent();
 
     rd_unindent();
@@ -4746,15 +6165,16 @@ coff_disasm_sections(Arena              *arena,
   if (section_count) {
     for (U64 sect_idx = 0; sect_idx < section_count; ++sect_idx) {
       COFF_SectionHeader *sect = sections+sect_idx;
-      if (sect->flags & COFF_SectionFlag_CNT_CODE) {
-        U64         sect_off  = is_obj ? sect->foff : sect->voff;
-        U64         sect_size = is_obj ? sect->fsize : sect->vsize;
-        String8     raw_code  = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
-        RD_MarkerArray markers   = section_markers[sect_idx];
+      if (sect->flags & COFF_SectionFlag_CntCode) {
+        U64            sect_off    = is_obj ? sect->foff : sect->voff;
+        U64            sect_size   = is_obj ? sect->fsize : sect->vsize;
+        String8        raw_code    = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
+        U64            sect_number = sect_idx+1;
+        RD_MarkerArray markers     = section_markers[sect_number];
 
-        rd_printf("# Disassembly [Section No. %#llx]", (sect_idx+1));
+        rd_printf("# Disassembly [Section No. %#llx]", sect_number);
         rd_indent();
-        rd_print_disasm(arena, out, indent, machine, image_base, sect_off, markers.count, markers.v, raw_code);
+        rd_print_disasm(arena, out, indent, arch_from_coff_machine(machine), image_base, sect_off, markers.count, markers.v, raw_code);
         rd_unindent();
       }
     }
@@ -4767,13 +6187,13 @@ coff_raw_data_sections(Arena              *arena,
                        String8             indent,
                        String8             raw_data,
                        B32                 is_obj,
-                       RD_MarkerArray        *section_markers,
+                       RD_MarkerArray     *section_markers,
                        U64                 section_count,
-                       COFF_SectionHeader *sections)
+                       COFF_SectionHeader *section_table)
 {
   if (section_count) {
     for (U64 sect_idx = 0; sect_idx < section_count; ++sect_idx) {
-      COFF_SectionHeader *sect = sections+sect_idx;
+      COFF_SectionHeader *sect = section_table+sect_idx;
       if (sect->fsize > 0) {
         U64         sect_size = is_obj ? sect->fsize : sect->vsize;
         String8     raw_sect  = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
@@ -4794,7 +6214,7 @@ coff_print_relocs(Arena              *arena,
                    String8List        *out,
                    String8             indent,
                    String8             raw_data,
-                   U64                 string_table_off,
+                   String8             string_table,
                    COFF_MachineType    machine,
                    U64                 sect_count,
                    COFF_SectionHeader *sect_headers,
@@ -4842,7 +6262,7 @@ coff_print_relocs(Arena              *arena,
         }
 
         COFF_Symbol32 *symbol      = symbols.v+reloc->isymbol;
-        String8        symbol_name = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+        String8        symbol_name = coff_read_symbol_name(string_table, &symbol->name);
 
         String8List line = {0};
         str8_list_pushf(scratch.arena, &line, "%-4x",  reloc_idx       );
@@ -4873,7 +6293,7 @@ coff_print_symbol_table(Arena              *arena,
                          String8             indent,
                          String8             raw_data,
                          B32                 is_big_obj,
-                         U64                 string_table_off,
+                         String8             string_table,
                          COFF_Symbol32Array  symbols)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -4887,16 +6307,16 @@ coff_print_symbol_table(Arena              *arena,
 
     for (U64 i = 0; i < symbols.count; ++i) {
       COFF_Symbol32 *symbol        = &symbols.v[i];
-      String8        name          = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+      String8        name          = coff_read_symbol_name(string_table, &symbol->name);
       String8        msb           = coff_string_from_sym_dtype(symbol->type.u.msb);
       String8        lsb           = coff_string_from_sym_type(symbol->type.u.lsb);
       String8        storage_class = coff_string_from_sym_storage_class(symbol->storage_class);
       String8        section_number;
       switch (symbol->section_number) {
-        case COFF_SYMBOL_UNDEFINED_SECTION: section_number = str8_lit("UNDEF"); break;
-        case COFF_SYMBOL_ABS_SECTION:       section_number = str8_lit("ABS");   break;
-        case COFF_SYMBOL_DEBUG_SECTION:     section_number = str8_lit("DEBUG"); break;
-        default:                            section_number = push_str8f(scratch.arena, "%010x", symbol->section_number); break;
+        case COFF_Symbol_UndefinedSection: section_number = str8_lit("Undef"); break;
+        case COFF_Symbol_AbsSection32:     section_number = str8_lit("Abs");   break;
+        case COFF_Symbol_DebugSection32:   section_number = str8_lit("Debug"); break;
+        default:                           section_number = push_str8f(scratch.arena, "%010x", symbol->section_number); break;
       }
 
       String8List line = {0};
@@ -4916,28 +6336,28 @@ coff_print_symbol_table(Arena              *arena,
       for (U64 k=i+1, c = i+symbol->aux_symbol_count; k <= c; ++k) {
         void *raw_aux = &symbols.v[k];
         switch (symbol->storage_class) {
-          case COFF_SymStorageClass_EXTERNAL: {
+          case COFF_SymStorageClass_External: {
             COFF_SymbolFuncDef *func_def = (COFF_SymbolFuncDef*)&symbols.v[k];
             rd_printf("Tag Index %#x, Total Size %#x, Line Numbers %#x, Next Function %#x", 
                         func_def->tag_index, func_def->total_size, func_def->ptr_to_ln, func_def->ptr_to_next_func);
           } break;
-          case COFF_SymStorageClass_FUNCTION: {
+          case COFF_SymStorageClass_Function: {
             COFF_SymbolFunc *func = raw_aux;
             rd_printf("Ordinal Line Number %#x, Next Function %#x", func->ln, func->ptr_to_next_func);
           } break;
-          case COFF_SymStorageClass_WEAK_EXTERNAL: {
+          case COFF_SymStorageClass_WeakExternal: {
             COFF_SymbolWeakExt *weak = raw_aux;
             String8             type = coff_string_from_weak_ext_type(weak->characteristics);
             rd_printf("Tag Index %#x, Characteristics %S", weak->tag_index, type);
           } break;
-          case COFF_SymStorageClass_FILE: {
+          case COFF_SymStorageClass_File: {
             COFF_SymbolFile *file = raw_aux;
             String8          name = str8_cstring_capped(file->name, file->name+sizeof(file->name));
             rd_printf("Name %S", name);
           } break;
-          case COFF_SymStorageClass_STATIC: {
+          case COFF_SymStorageClass_Static: {
             COFF_SymbolSecDef *sd        = raw_aux;
-            String8            selection = coff_string_from_selection(sd->selection);
+            String8            selection = coff_string_from_comdat_select_type(sd->selection);
             U32 number = sd->number_lo;
             if (is_big_obj) {
               number |= (U32)sd->number_hi << 16;
@@ -4968,7 +6388,7 @@ coff_print_symbol_table(Arena              *arena,
 }
 
 internal void
-coff_print_big_obj_header(Arena *arena, String8List *out, String8 indent, COFF_HeaderBigObj *header)
+coff_print_big_obj_header(Arena *arena, String8List *out, String8 indent, COFF_BigObjHeader *header)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -4977,20 +6397,18 @@ coff_print_big_obj_header(Arena *arena, String8List *out, String8 indent, COFF_H
 
   rd_printf("# Big Obj");
   rd_indent();
-
-  rd_printf("Time Stamp:    %S",     time_stamp             );
-  rd_printf("Machine:       %S",        machine             );
-  rd_printf("Section Count: %u",  header->section_count     );
-  rd_printf("Symbol Table:  %#x", header->symbol_table_foff);
-  rd_printf("Symbol Count:  %u",   header->symbol_count     );
-
+  rd_printf("Time Stamp   : %#x (%S)",  header->time_stamp, time_stamp);
+  rd_printf("Machine      : %#x (%S)",  header->machine, machine      );
+  rd_printf("Section Count: %u",  header->section_count    );
+  rd_printf("Symbol Table : %#x", header->symbol_table_foff);
+  rd_printf("Symbol Count : %u",  header->symbol_count     );
   rd_unindent();
 
   scratch_end(scratch);
 }
 
 internal void
-coff_print_header(Arena *arena, String8List *out, String8 indent, COFF_Header *header)
+coff_print_file_header(Arena *arena, String8List *out, String8 indent, COFF_FileHeader *header)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -4998,22 +6416,22 @@ coff_print_header(Arena *arena, String8List *out, String8 indent, COFF_Header *h
   String8 machine    = coff_string_from_machine_type(header->machine);
   String8 flags      = coff_string_from_flags(scratch.arena, header->flags);
 
-  rd_printf("# COFF Header");
+  rd_printf("# COFF File Header");
   rd_indent();
-  rd_printf("Time Stamp:           %S",   time_stamp                  );
-  rd_printf("Machine:              %S",   machine                     );
-  rd_printf("Section Count:        %u",   header->section_count       );
-  rd_printf("Symbol Table:         %#x", header->symbol_table_foff   );
-  rd_printf("Symbol Count:         %u",   header->symbol_count        );
-  rd_printf("Optional Header Size: %m",   header->optional_header_size);
-  rd_printf("Flags:                %S",   flags                       );
+  rd_printf("Time Stamp          : %#x (%S)", header->time_stamp, time_stamp                            );
+  rd_printf("Machine             : %#x %S",   header->machine, machine                                  );
+  rd_printf("Section Count       : %u",       header->section_count                                     );
+  rd_printf("Symbol Table        : %#x",      header->symbol_table_foff                                 );
+  rd_printf("Symbol Count        : %u",       header->symbol_count                                      );
+  rd_printf("Optional Header Size: %#x (%m)", header->optional_header_size, header->optional_header_size);
+  rd_printf("Flags               : %#x (%S)", header->flags, flags                                      );
   rd_unindent();
 
   scratch_end(scratch);
 }
 
 internal void
-coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ImportHeader *header)
+coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveImportHeader *header)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -5022,15 +6440,15 @@ coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ImportHea
 
   rd_printf("# Import");
   rd_indent();
-  rd_printf("Version:    %u", header->version  );
-  rd_printf("Machine:    %S", machine          );
-  rd_printf("Time Stamp: %S", time_stamp       );
-  rd_printf("Data Size:  %m", header->data_size);
-  rd_printf("Hint:       %u", header->hint     );
-  rd_printf("Type:       %u", header->type     );
-  rd_printf("Name Type:  %u", header->name_type);
-  rd_printf("Function:   %S", header->func_name);
-  rd_printf("DLL:        %S", header->dll_name );
+  rd_printf("Version   : %u", header->version        );
+  rd_printf("Machine   : %S", machine                );
+  rd_printf("Time Stamp: %#x (%S)", header->time_stamp, time_stamp      );
+  rd_printf("Data Size : %#x (%m)", header->data_size, header->data_size);
+  rd_printf("Hint      : %u", header->hint_or_ordinal);
+  rd_printf("Type      : %u", header->type           );
+  rd_printf("Import By : %u", header->import_by      );
+  rd_printf("Function  : %S", header->func_name      );
+  rd_printf("DLL       : %S", header->dll_name       );
   rd_unindent();
 
   scratch_end(scratch);
@@ -5041,10 +6459,15 @@ coff_print_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_d
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  COFF_HeaderBigObj  *big_obj          = str8_deserial_get_raw_ptr(raw_data, 0, sizeof(COFF_HeaderBigObj));
-  COFF_SectionHeader *sections         = str8_deserial_get_raw_ptr(raw_data, sizeof(COFF_HeaderBigObj), sizeof(COFF_SectionHeader)*big_obj->section_count);
-  U64                 string_table_off = big_obj->symbol_table_foff + sizeof(COFF_Symbol32)*big_obj->symbol_count;
-  COFF_Symbol32Array  symbols          = coff_symbol_array_from_data_32(scratch.arena, raw_data, big_obj->symbol_table_foff, big_obj->symbol_count);
+  COFF_FileHeaderInfo header_info = coff_file_header_info_from_data(raw_data);
+
+  String8 raw_header        = str8_substr(raw_data, header_info.header_range);
+  String8 raw_section_table = str8_substr(raw_data, header_info.section_table_range);
+  String8 raw_string_table  = str8_substr(raw_data, header_info.string_table_range);
+
+  COFF_BigObjHeader  *big_obj       = (COFF_BigObjHeader *)raw_header.str;
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_section_table.str;
+  COFF_Symbol32Array  symbol_table  = coff_symbol_array_from_data_32(scratch.arena, raw_data, header_info.symbol_table_range.min, big_obj->symbol_count);
 
   if (opts & RD_Option_Headers) {
     coff_print_big_obj_header(arena, out, indent, big_obj);
@@ -5071,17 +6494,17 @@ coff_print_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_d
       }
     }
 
-    coff_print_seciton_table(arena, out, indent, raw_data, string_table_off, symbols, big_obj->section_count, sections);
+    coff_print_section_table(arena, out, indent, raw_string_table, symbol_table, big_obj->section_count, section_table);
     rd_newline();
   }
 
   if (opts & RD_Option_Relocs) {
-    coff_print_relocs(arena, out, indent, raw_data, string_table_off, big_obj->machine, big_obj->section_count, sections, symbols);
+    coff_print_relocs(arena, out, indent, raw_data, raw_string_table, big_obj->machine, big_obj->section_count, section_table, symbol_table);
     rd_newline();
   }
 
   if (opts & RD_Option_Symbols) {
-    coff_print_symbol_table(arena, out, indent, raw_data, string_table_off, 1, symbols);
+    coff_print_symbol_table(arena, out, indent, raw_data, 1, raw_string_table, symbol_table);
     rd_newline();
   }
 
@@ -5094,14 +6517,19 @@ coff_print_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data,
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  COFF_Header        *header           = (COFF_Header *)raw_data.str;
-  COFF_SectionHeader *sections         = (COFF_SectionHeader *)(header+1);
-  U64                 string_table_off = header->symbol_table_foff + sizeof(COFF_Symbol16)*header->symbol_count;
-  COFF_Symbol32Array  symbols          = coff_symbol_array_from_data_16(scratch.arena, raw_data, header->symbol_table_foff, header->symbol_count);
-  Arch                arch             = arch_from_coff_machine(header->machine);
+  COFF_FileHeaderInfo header_info = coff_file_header_info_from_data(raw_data);
+
+  String8 raw_header        = str8_substr(raw_data, header_info.header_range);
+  String8 raw_section_table = str8_substr(raw_data, header_info.section_table_range);
+  String8 raw_string_table  = str8_substr(raw_data, header_info.string_table_range);
+
+  COFF_FileHeader    *header        = (COFF_FileHeader *)raw_header.str;
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_section_table.str;
+  COFF_Symbol32Array  symbol_table  = coff_symbol_array_from_data_16(scratch.arena, raw_data, header_info.symbol_table_range.min, header->symbol_count);
+  Arch                arch          = arch_from_coff_machine(header->machine);
 
   if (opts & RD_Option_Headers) {
-    coff_print_header(arena, out, indent, header);
+    coff_print_file_header(arena, out, indent, header);
     rd_newline();
   }
 
@@ -5125,41 +6553,41 @@ coff_print_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data,
       }
     }
 
-    coff_print_seciton_table(arena, out, indent, raw_data, string_table_off, symbols, header->section_count, sections);
+    coff_print_section_table(arena, out, indent, raw_string_table, symbol_table, header->section_count, section_table);
     rd_newline();
   }
 
   if (opts & RD_Option_Relocs) {
-    coff_print_relocs(arena, out, indent, raw_data, string_table_off, header->machine, header->section_count, sections, symbols);
+    coff_print_relocs(arena, out, indent, raw_data, raw_string_table, header->machine, header->section_count, section_table, symbol_table);
     rd_newline();
   }
 
   if (opts & RD_Option_Symbols) {
-    coff_print_symbol_table(arena, out, indent, raw_data, 0, string_table_off, symbols);
+    coff_print_symbol_table(arena, out, indent, raw_data, 0, raw_string_table, symbol_table);
     rd_newline();
   }
 
   RD_MarkerArray *section_markers = 0;
   if (opts & (RD_Option_Disasm|RD_Option_Rawdata)) {
-    section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, header->section_count, symbols);
+    section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_string_table, header->section_count, symbol_table);
   }
 
   if (opts & RD_Option_Rawdata) {
-    coff_raw_data_sections(arena, out, indent, raw_data, 1, section_markers, header->section_count, sections);
+    coff_raw_data_sections(arena, out, indent, raw_data, 1, section_markers, header->section_count, section_table);
   }
 
   if (opts & RD_Option_Disasm) {
-    coff_disasm_sections(arena, out, indent, raw_data, header->machine, 0, 1, section_markers, header->section_count, sections);
+    coff_disasm_sections(arena, out, indent, raw_data, header->machine, 0, 1, section_markers, header->section_count, section_table);
     rd_newline();
   }
 
   if (opts & RD_Option_Codeview) {
-    cv_format_debug_sections(arena, out, indent, raw_data, string_table_off, header->section_count, sections);
+    cv_format_debug_sections(arena, out, indent, raw_data, raw_string_table, header->section_count, section_table);
   }
 
   if (opts & RD_Option_Dwarf) {
-    DW_SectionArray dwarf_sections = rd_dw_sections_from_coff_section_table(scratch.arena, raw_data, string_table_off, header->section_count, sections);
-    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_CoffPe);
+    DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, header->section_count, section_table);
+    dw_format(arena, out, indent, opts, &dwarf_input, arch, Image_CoffPe);
   }
 
 exit:;
@@ -5183,8 +6611,8 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
     rd_printf("# First Header");
     rd_indent();
 
-    rd_printf("Symbol Count:      %u", first_member.symbol_count);
-    rd_printf("String Table Size: %M", first_member.string_table.size);
+    rd_printf("Symbol Count     : %u",         first_member.symbol_count);
+    rd_printf("String Table Size: %#llx (%M)", first_member.string_table.size, first_member.string_table.size);
 
     rd_printf("Members:");
     rd_indent();
@@ -5213,9 +6641,9 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
     rd_printf("# Second Header");
     rd_indent();
 
-    rd_printf("Member Count:      %u", second_member.member_count);
-    rd_printf("Symbol Count:      %u", second_member.symbol_count);
-    rd_printf("String Table Size: %M", second_member.string_table.size);
+    rd_printf("Member Count     : %u",         second_member.member_count);
+    rd_printf("Symbol Count     : %u",         second_member.symbol_count);
+    rd_printf("String Table Size: %#llx (%M)", second_member.string_table.size, second_member.string_table.size);
 
     String8List string_table = str8_split_by_string_chars(scratch.arena, second_member.string_table, str8_lit("\0"), 0);
 
@@ -5296,16 +6724,16 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
     }
 
     switch (member_type) {
-      case COFF_DataType_BIG_OBJ: {
-        coff_print_big_obj(arena, out, indent, member.data, opts);
-      } break;
-      case COFF_DataType_OBJ: {
+      case COFF_DataType_Obj: {
         coff_print_obj(arena, out, indent, member.data, opts);
       } break;
-      case COFF_DataType_IMPORT: {
+      case COFF_DataType_BigObj: {
+        coff_print_big_obj(arena, out, indent, member.data, opts);
+      } break;
+      case COFF_DataType_Import: {
         if (opts & RD_Option_Headers) {
-          COFF_ImportHeader header = {0};
-          U64 parse_size = coff_parse_archive_import(member.data, 0, &header);
+          COFF_ParsedArchiveImportHeader header = {0};
+          U64 parse_size = coff_parse_import(member.data, 0, &header);
           if (parse_size) {
             coff_print_import(arena, out, indent, &header);
           } else {
@@ -5313,7 +6741,7 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
           }
         }
       } break;
-      case COFF_DataType_NULL: {
+      case COFF_DataType_Null: {
         rd_errorf("unknown member format", member_offset);
       } break;
     }
@@ -5335,11 +6763,11 @@ mscrt_print_eh_handler_type32(Arena *arena, String8List *out, String8 indent, RD
   Temp scratch = scratch_begin(&arena, 1);
   String8 catch_line     = rd_format_line_from_voff(scratch.arena, rdi, handler->catch_handler_voff, PathStyle_WindowsAbsolute);
   String8 adjectives_str = mscrt_string_from_eh_adjectives(scratch.arena, handler->adjectives);
-  rd_printf("Adjectives:                %S",      adjectives_str, handler->adjectives);
-  rd_printf("Descriptor:                %#x",     handler->descriptor_voff);
-  rd_printf("Catch Object Frame Offset: %#x",     handler->catch_obj_frame_offset);
-  rd_printf("Catch Handler:             %#x%s%S", handler->catch_handler_voff, catch_line.size ? " " : "", catch_line);
-  rd_printf("Delta to FP Handler:       %#x",     handler->fp_distance);
+  rd_printf("Adjectives               : %#x (%S)", handler->adjectives, adjectives_str);
+  rd_printf("Descriptor               : %#x",      handler->descriptor_voff);
+  rd_printf("Catch Object Frame Offset: %#x",      handler->catch_obj_frame_offset);
+  rd_printf("Catch Handler            : %#x%s%S",  handler->catch_handler_voff, catch_line.size ? " " : "", catch_line);
+  rd_printf("Delta to FP Handler      : %#x",      handler->fp_distance);
   scratch_end(scratch);
 }
 
@@ -5374,32 +6802,32 @@ pe_print_optional_header32(Arena *arena, String8List *out, String8 indent, PE_Op
 
   rd_printf("# PE Optional Header 32");
   rd_indent();
-  rd_printf("Magic:                 %#x",   opt_header->magic);
-  rd_printf("Linker version:        %u.%u", opt_header->major_linker_version, opt_header->minor_linker_version);
-  rd_printf("Size of code:          %m",    opt_header->sizeof_code);
-  rd_printf("Size of inited data:   %m",    opt_header->sizeof_inited_data);
-  rd_printf("Size of uninited data: %m",    opt_header->sizeof_uninited_data);
-  rd_printf("Entry point:           %#x",   opt_header->entry_point_va);
-  rd_printf("Code base:             %#x",   opt_header->code_base);
-  rd_printf("Data base:             %#x",   opt_header->data_base);
-  rd_printf("Image base:            %#x",   opt_header->image_base);
-  rd_printf("Section align:         %#x",   opt_header->section_alignment);
-  rd_printf("File align:            %#x",   opt_header->file_alignment);
-  rd_printf("OS version:            %u.%u", opt_header->major_os_ver, opt_header->minor_os_ver);
-  rd_printf("Image Version:         %u.%u", opt_header->major_img_ver, opt_header->minor_img_ver);
-  rd_printf("Subsystem version:     %u.%u", opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
-  rd_printf("Win32 version:         %u",    opt_header->win32_version_value);
-  rd_printf("Size of image:         %m",    opt_header->sizeof_image);
-  rd_printf("Size of headers:       %m",    opt_header->sizeof_headers);
-  rd_printf("Checksum:              %#x",   opt_header->check_sum);
-  rd_printf("Subsystem:             %S",    subsystem);
-  rd_printf("DLL Characteristics:   %S",    dll_chars);
-  rd_printf("Stack reserve:         %m",    opt_header->sizeof_stack_reserve);
-  rd_printf("Stack commit:          %m",    opt_header->sizeof_stack_commit);
-  rd_printf("Heap reserve:          %m",    opt_header->sizeof_heap_reserve);
-  rd_printf("Heap commit:           %m",    opt_header->sizeof_heap_commit);
-  rd_printf("Loader flags:          %#x",   opt_header->loader_flags);
-  rd_printf("RVA and offset count:  %u",    opt_header->data_dir_count);
+  rd_printf("Magic                : %#x",        opt_header->magic);
+  rd_printf("Linker version       : %u.%u",      opt_header->major_linker_version, opt_header->minor_linker_version);
+  rd_printf("Size of code         : %#-8x (%m)", opt_header->sizeof_code, opt_header->sizeof_code);
+  rd_printf("Size of inited data  : %#-8x (%m)", opt_header->sizeof_inited_data, opt_header->sizeof_inited_data);
+  rd_printf("Size of uninited data: %#-8x (%m)", opt_header->sizeof_uninited_data, opt_header->sizeof_uninited_data);
+  rd_printf("Entry point          : %#x",        opt_header->entry_point_va);
+  rd_printf("Code base            : %#x",        opt_header->code_base);
+  rd_printf("Data base            : %#x",        opt_header->data_base);
+  rd_printf("Image base           : %#x",        opt_header->image_base);
+  rd_printf("Section align        : %#x",        opt_header->section_alignment);
+  rd_printf("File align           : %#x",        opt_header->file_alignment);
+  rd_printf("OS version           : %u.%u",      opt_header->major_os_ver, opt_header->minor_os_ver);
+  rd_printf("Image Version        : %u.%u",      opt_header->major_img_ver, opt_header->minor_img_ver);
+  rd_printf("Subsystem version    : %u.%u",      opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
+  rd_printf("Win32 version        : %u",         opt_header->win32_version_value);
+  rd_printf("Size of image        : %#x (%m)",   opt_header->sizeof_image, opt_header->sizeof_image);
+  rd_printf("Size of headers      : %#x (%m)",   opt_header->sizeof_headers, opt_header->sizeof_headers);
+  rd_printf("Checksum             : %#x",        opt_header->check_sum);
+  rd_printf("Subsystem            : %#x (%S)",   opt_header->subsystem, subsystem);
+  rd_printf("DLL Characteristics  : %#x (%S)",   opt_header->dll_characteristics, dll_chars);
+  rd_printf("Stack reserve        : %#-8x (%m)", opt_header->sizeof_stack_reserve, opt_header->sizeof_stack_reserve);
+  rd_printf("Stack commit         : %#-8x (%m)", opt_header->sizeof_stack_commit, opt_header->sizeof_stack_commit);
+  rd_printf("Heap reserve         : %#-8x (%m)", opt_header->sizeof_heap_reserve, opt_header->sizeof_heap_reserve);
+  rd_printf("Heap commit          : %#-8x (%m)", opt_header->sizeof_heap_commit, opt_header->sizeof_heap_commit);
+  rd_printf("Loader flags         : %#x",        opt_header->loader_flags);
+  rd_printf("RVA and offset count : %u",         opt_header->data_dir_count);
   rd_newline();
 
   pe_print_data_directory_ranges(arena, out, indent, opt_header->data_dir_count, dirs);
@@ -5418,31 +6846,31 @@ pe_print_optional_header32plus(Arena *arena, String8List *out, String8 indent, P
 
   rd_printf("# PE Optional Header 32+");
   rd_indent();
-  rd_printf("Magic:                 %#x",   opt_header->magic);
-  rd_printf("Linker version:        %u.%u", opt_header->major_linker_version, opt_header->minor_linker_version);
-  rd_printf("Size of code:          %m",    opt_header->sizeof_code);
-  rd_printf("Size of inited data:   %m",    opt_header->sizeof_inited_data);
-  rd_printf("Size of uninited data: %m",    opt_header->sizeof_uninited_data);
-  rd_printf("Entry point:           %#x",   opt_header->entry_point_va);
-  rd_printf("Code base:             %#x",   opt_header->code_base);
-  rd_printf("Image base:            %#llx", opt_header->image_base);
-  rd_printf("Section align:         %#x",   opt_header->section_alignment);
-  rd_printf("File align:            %#x",   opt_header->file_alignment);
-  rd_printf("OS version:            %u.%u", opt_header->major_os_ver, opt_header->minor_os_ver);
-  rd_printf("Image Version:         %u.%u", opt_header->major_img_ver, opt_header->minor_img_ver);
-  rd_printf("Subsystem version:     %u.%u", opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
-  rd_printf("Win32 version:         %u",    opt_header->win32_version_value);
-  rd_printf("Size of image:         %m",    opt_header->sizeof_image);
-  rd_printf("Size of headers:       %m",    opt_header->sizeof_headers);
-  rd_printf("Checksum:              %#x",   opt_header->check_sum);
-  rd_printf("Subsystem:             %S",    subsystem);
-  rd_printf("DLL Characteristics:   %S",    dll_chars);
-  rd_printf("Stack reserve:         %M",    opt_header->sizeof_stack_reserve);
-  rd_printf("Stack commit:          %M",    opt_header->sizeof_stack_commit);
-  rd_printf("Heap reserve:          %M",    opt_header->sizeof_heap_reserve);
-  rd_printf("Heap commit:           %M",    opt_header->sizeof_heap_commit);
-  rd_printf("Loader flags:          %#x",   opt_header->loader_flags);
-  rd_printf("RVA and offset count:  %u",    opt_header->data_dir_count);
+  rd_printf("Magic                : %#x",          opt_header->magic);
+  rd_printf("Linker version       : %u.%u",        opt_header->major_linker_version, opt_header->minor_linker_version);
+  rd_printf("Size of code         : %#-8x (%m)",   opt_header->sizeof_code, opt_header->sizeof_code);
+  rd_printf("Size of inited data  : %#-8x (%m)",   opt_header->sizeof_inited_data, opt_header->sizeof_inited_data);
+  rd_printf("Size of uninited data: %#-8x (%m)",   opt_header->sizeof_uninited_data, opt_header->sizeof_uninited_data);
+  rd_printf("Entry point          : %#x",          opt_header->entry_point_va);
+  rd_printf("Code base            : %#x",          opt_header->code_base);
+  rd_printf("Image base           : %#llx",        opt_header->image_base);
+  rd_printf("Section align        : %#x",          opt_header->section_alignment);
+  rd_printf("File align           : %#x",          opt_header->file_alignment);
+  rd_printf("OS version           : %u.%u",        opt_header->major_os_ver, opt_header->minor_os_ver);
+  rd_printf("Image Version        : %u.%u",        opt_header->major_img_ver, opt_header->minor_img_ver);
+  rd_printf("Subsystem version    : %u.%u",        opt_header->major_subsystem_ver, opt_header->minor_subsystem_ver);
+  rd_printf("Win32 version        : %u",           opt_header->win32_version_value);
+  rd_printf("Size of image        : %#x (%m)",     opt_header->sizeof_image, opt_header->sizeof_image);
+  rd_printf("Size of headers      : %#x (%m)",     opt_header->sizeof_headers, opt_header->sizeof_headers);
+  rd_printf("Checksum             : %#x",          opt_header->check_sum);
+  rd_printf("Subsystem            : %#llx (%S)",   opt_header->subsystem, subsystem);
+  rd_printf("DLL Characteristics  : %#llx (%S)",   opt_header->dll_characteristics, dll_chars);
+  rd_printf("Stack reserve        : %#-8llx (%M)", opt_header->sizeof_stack_reserve, opt_header->sizeof_stack_reserve);
+  rd_printf("Stack commit         : %#-8llx (%M)", opt_header->sizeof_stack_commit, opt_header->sizeof_stack_commit);
+  rd_printf("Heap reserve         : %#-8llx (%M)", opt_header->sizeof_heap_reserve, opt_header->sizeof_heap_reserve);
+  rd_printf("Heap commit          : %#-8llx (%M)", opt_header->sizeof_heap_commit, opt_header->sizeof_heap_commit);
+  rd_printf("Loader flags         : %#x",          opt_header->loader_flags);
+  rd_printf("RVA and offset count : %u",           opt_header->data_dir_count);
   rd_newline();
 
   pe_print_data_directory_ranges(arena, out, indent, opt_header->data_dir_count, dirs);
@@ -5657,41 +7085,34 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  rd_printf("# Debug");
+  rd_printf("# Debug Directory");
   rd_indent();
 
-  U64                entry_count = raw_dir.size / sizeof(PE_DebugDirectory);
-  PE_DebugDirectory *entries      = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*entries)*entry_count);
-  for (U64 i = 0; i < entry_count; ++i) {
-    PE_DebugDirectory *de = entries+i;
-    if (i > 0) {
-      rd_newline();
-    }
-    rd_printf("Entry[%u]", i);
-    rd_indent();
+  PE_DebugInfoList debug_info_list = pe_parse_debug_directory(scratch.arena, raw_data, raw_dir);
+  U64 i = 0;
+  for (PE_DebugInfoNode *entry = debug_info_list.first; entry != 0; entry = entry->next, ++i) {
+    PE_DebugInfo *de = &entry->v;
 
-    {
-      String8 time_stamp = coff_string_from_time_stamp(scratch.arena, de->time_stamp);
-      String8 type       = pe_string_from_debug_directory_type(de->type);
-
-      rd_printf("Characteristics: %#x",   de->characteristics);
-      rd_printf("Time Stamp:      %S",    time_stamp);
-      rd_printf("Version:         %u.%u", de->major_ver, de->minor_ver);
-      rd_printf("Type:            %S",    type);
-      rd_printf("Size:            %u",    de->size);
-      rd_printf("Data virt off:   %#x",   de->voff);
-      rd_printf("Data file off:   %#x",   de->foff);
+    if (entry != debug_info_list.first) {
       rd_newline();
     }
 
-    String8 raw_entry = str8_substr(raw_data, rng_1u64(de->foff, de->foff+de->size));
-    if (raw_entry.size != de->size) {
-      rd_errorf("unable to read debug entry @ %#x", de->foff);
-      break;
-    }
-
+    rd_printf("Entry[%llu]", i);
     rd_indent();
-    switch (de->type) {
+
+    // print header
+    rd_printf("Characteristics: %#x",   de->header.characteristics);
+    rd_printf("Time Stamp:      %S",    coff_string_from_time_stamp(scratch.arena, de->header.time_stamp));
+    rd_printf("Version:         %u.%u", de->header.major_ver, de->header.minor_ver);
+    rd_printf("Type:            %S",    pe_string_from_debug_directory_type(de->header.type));
+    rd_printf("Size:            %u",    de->header.size);
+    rd_printf("Data virt off:   %#x",   de->header.voff);
+    rd_printf("Data file off:   %#x",   de->header.foff);
+    rd_newline();
+
+    // print directory contents
+    rd_indent();
+    switch (de->header.type) {
       case PE_DebugDirectoryType_ILTCG:
       case PE_DebugDirectoryType_MPX:
       case PE_DebugDirectoryType_EXCEPTION:
@@ -5709,30 +7130,30 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
 
         // TODO: is this version?
         U32 unknown  = 0;
-        off += str8_deserial_read_struct(raw_entry, off, &unknown);
+        off += str8_deserial_read_struct(de->u.raw_data, off, &unknown);
         if (unknown != 0) {
           rd_printf("TODO: unknown: %u", unknown);
         }
 
         rd_printf("%-8s %-8s %-8s", "VOFF", "Size", "Name");
-        for (; off < raw_entry.size; ) {
+        for (; off < de->u.raw_data.size; ) {
           U32     voff = 0;
           U32     size = 0;
           String8 name = str8_zero();
 
-          off += str8_deserial_read_struct(raw_entry, off, &voff);
-          off += str8_deserial_read_struct(raw_entry, off, &size);
+          off += str8_deserial_read_struct(de->u.raw_data, off, &voff);
+          off += str8_deserial_read_struct(de->u.raw_data, off, &size);
           if (voff == 0 && size == 0) {
             break;
           }
-          off += str8_deserial_read_cstr(raw_entry, off, &name);
+          off += str8_deserial_read_cstr(de->u.raw_data, off, &name);
           off = AlignPow2(off, 4);
 		  
           rd_printf("%08x %08x %S", voff, size, name);
         }
       } break;
       case PE_DebugDirectoryType_VC_FEATURE: {
-        MSCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*feat));
+        MSCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*feat));
         if (feat) {
           rd_printf("Pre-VC++ 11.0: %u", feat->pre_vcpp);
           rd_printf("C/C++:         %u", feat->c_cpp);
@@ -5744,7 +7165,7 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
         }
       } break;
       case PE_DebugDirectoryType_FPO: {
-        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*fpo));
+        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*fpo));
         if (fpo) {
           U8          prolog_size     = PE_FPOEncoded_Extract_PROLOG_SIZE(fpo->flags);
           U8          saved_regs_size = PE_FPOEncoded_Extract_SAVED_REGS_SIZE(fpo->flags);
@@ -5766,38 +7187,35 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
           rd_errorf("not enough bytes to read FPO");
         }
       } break;
-
       case PE_DebugDirectoryType_CODEVIEW: {
-        U32 magic = 0;
-        str8_deserial_read_struct(raw_entry, 0, &magic);
-        switch (magic) {
+        switch (de->u.codeview.magic) {
           case PE_CODEVIEW_PDB20_MAGIC: {
-            PE_CvHeaderPDB20 *cv20 = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*cv20));
-            String8 name; str8_deserial_read_cstr(raw_entry, sizeof(*cv20), &name);
+            PE_CvHeaderPDB20 *header = &de->u.codeview.pdb20.header;
 
-            String8 time_stamp = coff_string_from_time_stamp(scratch.arena, cv20->time_stamp);
-
-            rd_printf("Time stamp: %S", time_stamp);
-            rd_printf("Age:        %u", cv20->age);
-            rd_printf("Name:       %S", name);
+            rd_printf("Time stamp: %S", coff_string_from_time_stamp(scratch.arena, header->time_stamp));
+            rd_printf("Age:        %u", header->age);
+            rd_printf("Name:       %S", de->u.codeview.pdb20.path);
           } break;
           case PE_CODEVIEW_PDB70_MAGIC: {
-            PE_CvHeaderPDB70 *cv70 = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*cv70));
-            String8 name; str8_deserial_read_cstr(raw_entry, sizeof(*cv70), &name);
-            
-            String8 guid = string_from_guid(scratch.arena, cv70->guid);
+            PE_CvHeaderPDB70 *header = &de->u.codeview.pdb70.header;
 
-            rd_printf("GUID: %S", guid);
-            rd_printf("Age:  %u", cv70->age);
-            rd_printf("Name: %S", name);
+            rd_printf("GUID: %S", string_from_guid(scratch.arena, header->guid));
+            rd_printf("Age:  %u", header->age);
+            rd_printf("Name: %S", de->u.codeview.pdb70.path);
+          } break;
+          case PE_CODEVIEW_RDI_MAGIC: {
+            PE_CvHeaderRDI *header = &de->u.codeview.rdi.header;
+
+            rd_printf("GUID: %S", string_from_guid(scratch.arena, header->guid));
+            rd_printf("Name: %S", de->u.codeview.rdi.path);
           } break;
           default: {
-            rd_errorf("unknown CodeView magic %#x", magic);
+            rd_errorf("unknown CodeView magic %#x", de->u.codeview.magic);
           } break;
         }
       } break;
       case PE_DebugDirectoryType_MISC: {
-        PE_DebugMisc *misc = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*misc));
+        PE_DebugMisc *misc = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*misc));
         
         String8 type_string = pe_string_from_misc_type(misc->data_type);
 
@@ -5808,7 +7226,7 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
         switch (misc->data_type) {
           case PE_DebugMiscType_EXE_NAME: {
             String8 name;
-            str8_deserial_read_cstr(raw_entry, sizeof(*misc), &name);
+            str8_deserial_read_cstr(de->u.raw_data, sizeof(*misc), &name);
             rd_printf("Name: %S", name);
           } break;
           default: {
@@ -5818,12 +7236,12 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
       } break;
     }
     rd_unindent();
-
     rd_unindent();
   }
 
   rd_unindent();
   rd_newline();
+
   scratch_end(scratch);
 }
 
@@ -6102,9 +7520,6 @@ pe_print_exceptions_x8664(Arena              *arena,
     PE_IntelPdata *pdata        = str8_deserial_get_raw_ptr(raw_except, pdata_offset, sizeof(*pdata));
     String8        pdata_name   = rd_proc_name_from_voff(rdi, pdata->voff_first);
 
-    if (pdata->voff_first == 0x0020cf44) {
-        int x = 0;
-    }
     U64            unwind_info_offset = coff_foff_from_voff(sections, section_count, pdata->voff_unwind_info);
     PE_UnwindInfo *uwinfo             = str8_deserial_get_raw_ptr(raw_data, unwind_info_offset, sizeof(*uwinfo));
 
@@ -6272,19 +7687,19 @@ pe_print_exceptions_x8664(Arena              *arena,
       rd_printf("Handler: %#llx%s%S", handler, handler_name.size ? " " : "", handler_name);
 
       U32 handler_data_flags = 0;
-      if (str8_match(handler_name, str8_lit("__GSHandlerCheck_EH4"), 0)) {
+      if (str8_match_lit("__GSHandlerCheck_EH4", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo4;
-      } else if (str8_match(handler_name, str8_lit("__CxxFrameHandler4"), 0)) {
+      } else if (str8_match_lit("__CxxFrameHandler4", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo4;
-      } else if (str8_match(handler_name, str8_lit("__CxxFrameHandler3"), 0)) {
+      } else if (str8_match_lit("__CxxFrameHandler3", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo;
-      } else if (str8_match(handler_name, str8_lit("__C_specific_handler"), 0)) {
+      } else if (str8_match_lit("__C_specific_handler", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_ScopeTable;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_GS;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck_SEH"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck_SEH", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_ScopeTable|ExceptionHandlerDataFlag_GS;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck_EH"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck_EH", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo|ExceptionHandlerDataFlag_GS;
       }
 
@@ -6553,7 +7968,7 @@ pe_print_exceptions(Arena              *arena,
     rd_indent();
     rd_printf("%-8s %-8s %-8s %-8s", "Offset", "Begin", "End", "Unwind Info");
     switch (machine) {
-      case COFF_MachineType_UNKNOWN: break;
+      case COFF_MachineType_Unknown: break;
       case COFF_MachineType_X64:
       case COFF_MachineType_X86: {
         pe_print_exceptions_x8664(arena, out, indent, section_count, sections, raw_data, except_frange, rdi);
@@ -6588,7 +8003,7 @@ pe_print_base_relocs(Arena              *arena,
 
     U32 addr_size = 0;
     switch (machine) {
-      case COFF_MachineType_UNKNOWN: break;
+      case COFF_MachineType_Unknown: break;
       case COFF_MachineType_X86:     addr_size = 4; break;
       case COFF_MachineType_X64:     addr_size = 8; break;
       default: NotImplemented;
@@ -6620,9 +8035,9 @@ pe_print_base_relocs(Arena              *arena,
           case PE_BaseRelocKind_DIR64:    type_str = "DIR64";   break;
           default: {
             switch (machine) {
-              case COFF_MachineType_ARM:
-              case COFF_MachineType_ARM64:
-              case COFF_MachineType_ARMNT: {
+              case COFF_MachineType_Arm:
+              case COFF_MachineType_Arm64:
+              case COFF_MachineType_ArmNt: {
                 switch (type) {
                   case PE_BaseRelocKind_ARM_MOV32:   type_str = "ARM_MOV32";   break;
                   case PE_BaseRelocKind_THUMB_MOV32: type_str = "THUMB_MOV32"; break;
@@ -6671,14 +8086,14 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
     goto exit;
   }
 
-  U64          coff_header_off = dos_header->coff_file_offset+sizeof(pe_magic);
-  COFF_Header *coff_header     = str8_deserial_get_raw_ptr(raw_data, coff_header_off, sizeof(*coff_header));
-  if (!coff_header) {
+  U64              file_header_off = dos_header->coff_file_offset+sizeof(pe_magic);
+  COFF_FileHeader *file_header     = str8_deserial_get_raw_ptr(raw_data, file_header_off, sizeof(*file_header));
+  if (!file_header) {
     rd_errorf("not enough bytes to read COFF header");
     goto exit;
   }
 
-  U64 opt_header_off   = coff_header_off + sizeof(*coff_header);
+  U64 opt_header_off   = file_header_off + sizeof(*file_header);
   U16 opt_header_magic = 0;
   str8_deserial_read_struct(raw_data, opt_header_off, &opt_header_magic);
   if (opt_header_magic != PE_PE32_MAGIC && opt_header_magic != PE_PE32PLUS_MAGIC) {
@@ -6686,36 +8101,37 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
     goto exit;
   }
 
-  if (opt_header_magic == PE_PE32_MAGIC && coff_header->optional_header_size < sizeof(PE_OptionalHeader32)) {
-    rd_errorf("unexpected optional header size in COFF header %m, expected at least %m", coff_header->optional_header_size, sizeof(PE_OptionalHeader32));
+  if (opt_header_magic == PE_PE32_MAGIC && file_header->optional_header_size < sizeof(PE_OptionalHeader32)) {
+    rd_errorf("unexpected optional header size in COFF header %m, expected at least %m", file_header->optional_header_size, sizeof(PE_OptionalHeader32));
     goto exit;
   }
 
-  if (opt_header_magic == PE_PE32PLUS_MAGIC && coff_header->optional_header_size < sizeof(PE_OptionalHeader32Plus)) {
-    rd_errorf("unexpected optional header size %m, expected at least %m", coff_header->optional_header_size, sizeof(PE_OptionalHeader32Plus));
+  if (opt_header_magic == PE_PE32PLUS_MAGIC && file_header->optional_header_size < sizeof(PE_OptionalHeader32Plus)) {
+    rd_errorf("unexpected optional header size %m, expected at least %m", file_header->optional_header_size, sizeof(PE_OptionalHeader32Plus));
     goto exit;
   }
 
-  U64                 sections_off = coff_header_off + sizeof(*coff_header) + coff_header->optional_header_size;
-  COFF_SectionHeader *sections     = str8_deserial_get_raw_ptr(raw_data, sections_off, sizeof(*sections)*coff_header->section_count);
+  U64                 sections_off = file_header_off + sizeof(*file_header) + file_header->optional_header_size;
+  COFF_SectionHeader *sections     = str8_deserial_get_raw_ptr(raw_data, sections_off, sizeof(*sections)*file_header->section_count);
   if (!sections) {
     rd_errorf("not enough bytes to read COFF section headers");
     goto exit;
   }
 
-  U64 string_table_off = coff_header->symbol_table_foff + sizeof(COFF_Symbol16) * coff_header->symbol_count;
+  U64     string_table_off = file_header->symbol_table_foff + sizeof(COFF_Symbol16) * file_header->symbol_count;
+  String8 raw_string_table = str8_substr(raw_data, rng_1u64(string_table_off, raw_data.size));
 
-  COFF_Symbol32Array symbols = coff_symbol_array_from_data_16(scratch.arena, raw_data, coff_header->symbol_table_foff, coff_header->symbol_count);
+  COFF_Symbol32Array symbols = coff_symbol_array_from_data_16(scratch.arena, raw_data, file_header->symbol_table_foff, file_header->symbol_count);
 
-  U8 *raw_opt_header = push_array(scratch.arena, U8, coff_header->optional_header_size);
-  str8_deserial_read_array(raw_data, opt_header_off, raw_opt_header, coff_header->optional_header_size);
+  U8 *raw_opt_header = push_array(scratch.arena, U8, file_header->optional_header_size);
+  str8_deserial_read_array(raw_data, opt_header_off, raw_opt_header, file_header->optional_header_size);
 
   if (opts & RD_Option_Headers) {
-    coff_print_header(arena, out, indent, coff_header);
+    coff_print_file_header(arena, out, indent, file_header);
     rd_newline();
   }
   
-  Arch              arch       = arch_from_coff_machine(coff_header->machine);
+  Arch              arch       = arch_from_coff_machine(file_header->machine);
   U64               image_base = 0;
   U64               dir_count  = 0;
   PE_DataDirectory *dirs       = 0;
@@ -6753,26 +8169,26 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
   Rng1U64 *dirs_virt_ranges = push_array(scratch.arena, Rng1U64, dir_count);
   for (U64 i = 0; i < dir_count; ++i) {
     PE_DataDirectory dir = dirs[i];
-    U64 file_off = coff_foff_from_voff(sections, coff_header->section_count, dir.virt_off);
+    U64 file_off = coff_foff_from_voff(sections, file_header->section_count, dir.virt_off);
     dirs_file_ranges[i] = r1u64(file_off, file_off+dir.virt_size);
     dirs_virt_ranges[i] = r1u64(dir.virt_off, dir.virt_off+dir.virt_size);
   }
 
   if (opts & RD_Option_Sections) {
-    coff_print_seciton_table(arena, out, indent, raw_data, string_table_off, symbols, coff_header->section_count, sections);
+    coff_print_section_table(arena, out, indent, raw_string_table, symbols, file_header->section_count, sections);
   }
 
   if (opts & RD_Option_Relocs) {
-    coff_print_relocs(arena, out, indent, raw_data, string_table_off, coff_header->machine, coff_header->section_count, sections, symbols);
+    coff_print_relocs(arena, out, indent, raw_data, raw_string_table, file_header->machine, file_header->section_count, sections, symbols);
   }
 
   if (opts & RD_Option_Symbols) {
-    coff_print_symbol_table(arena, out, indent, raw_data, 0, string_table_off, symbols);
+    coff_print_symbol_table(arena, out, indent, raw_data, 0, raw_string_table, symbols);
   }
 
   if (opts & RD_Option_Exports) {
     PE_ParsedExportTable exptab = pe_exports_from_data(arena,
-                                                       coff_header->section_count,
+                                                       file_header->section_count,
                                                        sections,
                                                        raw_data,
                                                        dirs_file_ranges[PE_DataDirectoryIndex_EXPORT],
@@ -6782,8 +8198,8 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
 
   if (opts & RD_Option_Imports) {
     B32                        is_pe32       = opt_header_magic == PE_PE32_MAGIC;
-    PE_ParsedStaticImportTable static_imptab = pe_static_imports_from_data(arena, is_pe32, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_IMPORT]);
-    PE_ParsedDelayImportTable  delay_imptab  = pe_delay_imports_from_data(arena, is_pe32, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_DELAY_IMPORT]);
+    PE_ParsedStaticImportTable static_imptab = pe_static_imports_from_data(arena, is_pe32, file_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_IMPORT]);
+    PE_ParsedDelayImportTable  delay_imptab  = pe_delay_imports_from_data(arena, is_pe32, file_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_DELAY_IMPORT]);
     pe_print_static_import_table(arena, out, indent, image_base, static_imptab);
     pe_print_delay_import_table(arena, out, indent, image_base, delay_imptab);
   }
@@ -6795,11 +8211,11 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
   }
 
   if (opts & RD_Option_Exceptions) {
-    pe_print_exceptions(arena, out, indent, coff_header->machine, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_EXCEPTIONS], rdi);
+    pe_print_exceptions(arena, out, indent, file_header->machine, file_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_EXCEPTIONS], rdi);
   }
 
   if (opts & RD_Option_Relocs) {
-    pe_print_base_relocs(arena, out, indent, coff_header->machine, image_base, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_BASE_RELOC], rdi);
+    pe_print_base_relocs(arena, out, indent, file_header->machine, image_base, file_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_BASE_RELOC], rdi);
   }
 
   if (opts & RD_Option_Debug) {
@@ -6811,7 +8227,7 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
 
   if (opts & RD_Option_Tls) {
     if (dim_1u64(dirs_file_ranges[PE_DataDirectoryIndex_TLS])) {
-      PE_ParsedTLS tls = pe_tls_from_data(scratch.arena, coff_header->machine, image_base, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_TLS]);
+      PE_ParsedTLS tls = pe_tls_from_data(scratch.arena, file_header->machine, image_base, file_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_TLS]);
       pe_print_tls(arena, out, indent, tls);
     }
   }
@@ -6819,8 +8235,8 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
   if (opts & RD_Option_LoadConfig) {
     String8 raw_lc = str8_substr(raw_data, dirs_file_ranges[PE_DataDirectoryIndex_LOAD_CONFIG]);
     if (raw_lc.size) {
-      switch (coff_header->machine) {
-        case COFF_MachineType_UNKNOWN: break;
+      switch (file_header->machine) {
+        case COFF_MachineType_Unknown: break;
         case COFF_MachineType_X86: {
           PE_LoadConfig32 *lc = str8_deserial_get_raw_ptr(raw_lc, 0, sizeof(*lc));
           if (lc) {
@@ -6844,23 +8260,146 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
 
   RD_MarkerArray *section_markers = 0;
   if (opts & (RD_Option_Disasm|RD_Option_Rawdata)) {
-    section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, symbols);
+    if (rdi) {
+      section_markers = rd_section_markers_from_rdi(scratch.arena, rdi);
+    } else {
+      section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_string_table, file_header->section_count, symbols);
+    }
   }
 
   if (opts & RD_Option_Rawdata) {
-    coff_raw_data_sections(arena, out, indent, raw_data, 0, section_markers, coff_header->section_count, sections);
+    coff_raw_data_sections(arena, out, indent, raw_data, 0, section_markers, file_header->section_count, sections);
   }
 
   if (opts & RD_Option_Disasm) {
-    coff_disasm_sections(arena, out, indent, raw_data, coff_header->machine, 0, 1, section_markers, coff_header->section_count, sections);
+    coff_disasm_sections(arena, out, indent, raw_data, file_header->machine, 0, 1, section_markers, file_header->section_count, sections);
   }
 
   if (opts & RD_Option_Dwarf) {
-    DW_SectionArray dwarf_sections = rd_dw_sections_from_coff_section_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, sections);
-    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_CoffPe);
+    DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, file_header->section_count, sections);
+    dw_format(arena, out, indent, opts, &dwarf_input, arch, Image_CoffPe);
   }
 
 exit:;
   scratch_end(scratch);
 }
+
+#if 0
+internal void
+elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, String8 raw_data)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  ELF_BinInfo      bin         = elf_bin_from_data(raw_data);
+  Arch             arch        = arch_from_elf_machine(bin.hdr.e_machine);
+  DW_Input         dwarf_input = dw_input_from_elf_section_table(scratch.arena, raw_data, &bin);
+  ELF_Class        elf_class   = bin.hdr.e_ident[ELF_Identifier_Class];
+  ImageType        image_type  = elf_class == ELF_Class_32 ? Image_Elf32 : elf_class == ELF_Class_64 ? Image_Elf64 : ELF_Class_None;
+  B32              relaxed     = 1;
+  Rng1U64List      cu_ranges   = dw_unit_ranges_from_data(scratch.arena, dwarf_input.sec[DW_Section_Info].data);
+  DW_ListUnitInput lu_input    = dw_list_unit_input_from_input(scratch.arena, &dwarf_input);
+
+  if (bin.hdr.e_type == ELF_Type_Exec || bin.hdr.e_type == ELF_Type_Dyn) {
+    U64 cu_idx = 0;
+    for (Rng1U64Node *cu_range_n = cu_ranges.first; cu_range_n != 0; cu_range_n = cu_range_n->next, ++cu_idx) {
+      Temp comp_temp = temp_begin(scratch.arena);
+
+      U64         cu_base   = cu_range_n->v.min;
+      Rng1U64     cu_range  = cu_range_n->v;
+      DW_CompUnit cu        = dw_cu_from_info_off(comp_temp.arena, &dwarf_input, lu_input, cu_range.min, relaxed);
+
+      struct TagNode {
+        struct TagNode *next;
+        DW_Tag          tag;
+      };
+      struct TagNode *tag_stack = 0;
+      struct TagNode *free_tags = 0;
+      
+      S32 lexical_block_depth = 0;
+
+      for (U64 info_off = cu.first_tag_info_off, tag_size = 0; info_off < cu.info_range.max; info_off += tag_size) {
+        DW_Tag tag = {0};
+        tag_size = dw_read_tag_cu(comp_temp.arena, &dwarf_input, &cu, info_off, &tag);
+        if (tag.has_children) {
+          struct TagNode *n = free_tags;
+          if (n == 0) {
+            n = push_array(comp_temp.arena, struct TagNode, 1);
+          } else {
+            SLLStackPop(free_tags);
+          }
+          n->tag = tag;
+          SLLStackPush(tag_stack, n);
+        }
+
+        if (tag.kind == DW_Tag_Null) {
+          if (tag_stack) {
+            struct TagNode *n = tag_stack;
+            if ((n->tag.kind == DW_Tag_SubProgram || n->tag.kind == DW_Tag_LexicalBlock)) {
+              Assert(lexical_block_depth > 0);
+              --lexical_block_depth;
+            }
+            SLLStackPop(tag_stack);
+            SLLStackPush(free_tags, n);
+          }
+        } else if (tag.kind == DW_Tag_LexicalBlock || tag.kind == DW_Tag_SubProgram) {
+          ++lexical_block_depth;
+          if (tag.kind == DW_Tag_SubProgram) {
+              String8 expr = dw_exprloc_from_attrib(&dwarf_input, &cu, tag, DW_Attrib_FrameBase);
+              if (expr.size > 0) {
+                  String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+              }
+          }
+        } else if (tag.kind == DW_Tag_Variable || tag.kind == DW_Tag_FormalParameter) {
+#if 0
+          String8         name            = dw_string_from_attrib(&dwarf_input, &cu, tag, DW_Attrib_Name);
+          DW_Attrib      *location_attrib = dw_attrib_from_tag(&dwarf_input, &cu, tag, DW_Attrib_Location);
+          DW_AttribClass  value_class     = dw_value_class_from_attrib(&cu, location_attrib);
+          if (value_class != DW_AttribClass_Null) {
+            if (lexical_block_depth == 0) {
+              rd_printf("%llx Global: %S", info_off, name);
+              is_global_var = 1;
+            } else {
+              rd_printf("%llx Local: %S", info_off, name);
+              is_global_var = 0;
+            }
+
+            rd_indent();
+            if (value_class == DW_AttribClass_LocListPtr || value_class == DW_AttribClass_LocList) {
+              DW_LocList location = dw_loclist_from_attrib_ptr(comp_temp.arena, &dwarf_input, &cu, location_attrib);
+              for (DW_LocNode *loc_n = location.first; loc_n != 0; loc_n = loc_n->next) {
+                String8 expr_str = dw_format_expression_single_line(comp_temp.arena, loc_n->v.expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+                rd_printf("[%llx-%llx] %S", loc_n->v.range.min, loc_n->v.range.max, expr_str);
+              }
+            } else if (value_class == DW_AttribClass_ExprLoc) {
+              String8 expr = dw_exprloc_from_attrib_ptr(&dwarf_input, &cu, location_attrib);
+              String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+              rd_printf("%S", expr_str);
+            }
+            rd_unindent();
+          }
+#endif
+        }
+
+#if 0
+        if (tag.kind == DW_Tag_LexicalBlock || tag.kind == DW_Tag_CompileUnit || tag.kind == DW_Tag_InlinedSubroutine || tag.kind == DW_Tag_SubProgram) {
+          Temp temp = temp_begin(comp_temp.arena);
+          DW_Attrib *ranges_attrib = dw_attrib_from_tag(&dwarf_input, &cu, tag, DW_Attrib_Ranges);
+          if (ranges_attrib->attrib_kind == DW_Attrib_Ranges) {
+            Rng1U64List ranges = dw_rnglist_from_attrib_ptr(temp.arena, &dwarf_input, &cu, ranges_attrib);
+          }
+          temp_end(temp);
+        }
+#endif
+      }
+
+      temp_end(comp_temp);
+    }
+  } else {
+    fprintf(stderr, "Skipping unexpected ELF type %u\n", bin.hdr.e_type);
+  }
+
+  scratch_end(scratch);
+}
+#endif
+
 

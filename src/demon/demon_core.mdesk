@@ -21,6 +21,9 @@ DMN_EventKindTable:
   {Memory}
   {DebugString}
   {SetThreadName}
+  {SetThreadColor}
+  {SetBreakpoint}
+  {UnsetBreakpoint}
 }
 
 @table(name)

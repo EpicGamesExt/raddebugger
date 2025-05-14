@@ -901,6 +901,13 @@ mg_eval_table_expand_expr__string(Arena *arena, MG_StrExpr *expr, MG_TableExpand
       
       // rjf: push lookup string
       {
+        B32 is_multiline = (str8_find_needle(lookup_string, 0, str8_lit("\n"), 0) < lookup_string.size);
+        if(is_multiline)
+        {
+          lookup_string = indented_from_string(mg_arena, lookup_string);
+          lookup_string = escaped_from_raw_str8(mg_arena, lookup_string);
+          lookup_string = escaped_from_raw_str8(mg_arena, lookup_string);
+        }
         str8_list_push(arena, out, lookup_string);
       }
     }break;
@@ -1013,6 +1020,7 @@ mg_loop_table_column_expansion(Arena *arena, String8 strexpr, MG_TableExpandInfo
       String8 expansion_str = str8_list_join(arena, &expansion_strs, 0);
       if(expansion_str.size != 0)
       {
+        expansion_str = raw_from_escaped_str8(mg_arena, expansion_str);
         str8_list_push(arena, out, expansion_str);
       }
     }
@@ -1028,7 +1036,7 @@ mg_string_list_from_table_gen(Arena *arena, MG_Map grid_name_map, MG_Map grid_co
   Temp scratch = scratch_begin(&arena, 1);
   if(md_node_is_nil(gen->first) && gen->string.size != 0)
   {
-    str8_list_push(arena, &result, gen->string);
+    str8_list_push(arena, &result, raw_from_escaped_str8(arena, gen->string));
     str8_list_push(arena, &result, str8_lit("\n"));
   }
   else for MD_EachNode(strexpr_node, gen->first)
@@ -1080,7 +1088,7 @@ mg_string_list_from_table_gen(Arena *arena, MG_Map grid_name_map, MG_Map grid_co
       }
       else
       {
-        str8_list_push(arena, &result, strexpr_node->string);
+        str8_list_push(arena, &result, raw_from_escaped_str8(arena, strexpr_node->string));
       }
     }
   }

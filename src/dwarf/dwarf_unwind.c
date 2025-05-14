@@ -1,6 +1,11 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal U64 dw_based_range_read(void *base, Rng1U64 range, U64 off, U64 size, void *out) { return 0; }
+internal U64 dw_based_range_read_uleb128(void *base, Rng1U64 range, U64 off, U64 *out)    { return 0; }
+internal U64 dw_based_range_read_sleb128(void *base, Rng1U64 range, U64 off, S64 *out)    { return 0; }
+internal U64 dw_based_range_read_length(void *base, Rng1U64 range, U64 off, U64 *out)     { return 0; }
+
 ////////////////////////////////
 // x64 Unwind Function
 
@@ -148,7 +153,7 @@ dw_unwind_x64__apply_frame_rules(String8           raw_eh_frame,
       
       // is this a roll-over CFA?
       B32 is_roll_over_cfa = 0;
-      if (reg_idx == DW_Reg_x64_Rsp) {
+      if (reg_idx == DW_RegX64_Rsp) {
         DW_CFIRegisterRule rule = row->cells[reg_idx].rule;
         if (rule == DW_CFIRegisterRule_Undefined || rule == DW_CFIRegisterRule_SameValue) {
           is_roll_over_cfa = 1;
@@ -410,6 +415,8 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
 internal void
 dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off, DW_CIEUnpacked *cie_out)
 {
+  NotImplemented;
+#if 0
   MemoryZeroStruct(cie_out);
   
   // get version
@@ -521,6 +528,7 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
     cie_out->cfi_range.min         = cfi_off;
     cie_out->cfi_range.max         = cfi_off + cfi_size;
   }
+#endif
 }
 
 internal void

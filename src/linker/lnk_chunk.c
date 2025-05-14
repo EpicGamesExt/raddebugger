@@ -302,13 +302,20 @@ lnk_merge_chunks(Arena *arena, LNK_ChunkManager *dst_cman, LNK_Chunk *dst, LNK_C
   return src_node;
 }
 
+internal
+LNK_CHUNK_VISITOR_SIG(lnk_set_associate_on_chunks)
+{
+  chunk->associate = (LNK_Chunk *)ud;
+  return 0;
+}
+
 internal void
-lnk_chunk_associate(Arena *arena, LNK_Chunk *head, LNK_Chunk *chunk)
+lnk_chunk_associate(LNK_Chunk *head, LNK_Chunk *chunk)
 {
   // for simplicity we don't support multiple associations,
   // but it's possible to craft symbol table with multiple associations
-  Assert(!chunk->associate);
-  chunk->associate = head;
+  AssertAlways(!chunk->associate);
+  lnk_visit_chunks(0, chunk, lnk_set_associate_on_chunks, head);
 }
 
 internal B32
@@ -783,3 +790,15 @@ lnk_data_arr_from_chunk_ptr_list_arr(Arena *arena, LNK_ChunkList *list_arr, U64 
   return result;
 }
 
+internal String8
+lnk_string_from_chunk_type(LNK_ChunkType type)
+{
+  switch (type) {
+  case LNK_Chunk_Null:      return str8_lit("Null");
+  case LNK_Chunk_Leaf:      return str8_lit("Leaf");
+  case LNK_Chunk_LeafArray: return str8_lit("LeafArray");
+  case LNK_Chunk_List:      return str8_lit("List");
+  default: InvalidPath;
+  }
+  return str8_zero();
+}

@@ -29,7 +29,7 @@ struct R_D3D11_Uniforms_Rect
   Vec2F32 viewport_size;
   F32 opacity;
   F32 _padding0_;
-  Vec4F32 texture_sample_channel_map[4];
+  Mat4x4F32 texture_sample_channel_map;
   Vec2F32 texture_t2d_size;
   Vec2F32 translate;
   Vec4F32 xform[3];
@@ -171,9 +171,9 @@ struct R_D3D11_State
 //~ rjf: Globals
 
 global R_D3D11_State *r_d3d11_state = 0;
-global R_D3D11_Window r_d3d11_window_nil = {&r_d3d11_window_nil};
-global R_D3D11_Tex2D r_d3d11_tex2d_nil = {&r_d3d11_tex2d_nil};
-global R_D3D11_Buffer r_d3d11_buffer_nil = {&r_d3d11_buffer_nil};
+global read_only R_D3D11_Window r_d3d11_window_nil = {&r_d3d11_window_nil};
+global read_only R_D3D11_Tex2D r_d3d11_tex2d_nil = {&r_d3d11_tex2d_nil};
+global read_only R_D3D11_Buffer r_d3d11_buffer_nil = {&r_d3d11_buffer_nil};
 
 ////////////////////////////////
 //~ rjf: Helpers

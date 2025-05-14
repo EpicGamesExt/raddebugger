@@ -34,7 +34,7 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
+os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
   OS_Handle handle = {1};
   return handle;
@@ -42,6 +42,11 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 
 internal void
 os_window_close(OS_Handle window)
+{
+}
+
+internal void
+os_window_set_title(OS_Handle window, String8 title)
 {
 }
 
@@ -179,6 +184,12 @@ os_dim_from_monitor(OS_Handle monitor)
 {
   Vec2F32 v = v2f32(1000, 1000);
   return v;
+}
+
+internal F32
+os_dpi_from_monitor(OS_Handle monitor)
+{
+  return 96.f;
 }
 
 ////////////////////////////////

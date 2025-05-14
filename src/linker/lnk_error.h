@@ -31,10 +31,10 @@ typedef enum
   LNK_Error_LoadRes,
   LNK_Error_IO,
   LNK_Error_LargeAddrAwareRequired,
+  LNK_Error_InvalidPath,
   LNK_Error_StopLast,
   
   LNK_Error_First,
-  LNK_Error_InvalidPath,
   LNK_Error_AlreadyDefinedSymbol,
   LNK_Error_AlternateNameConflict,
   LNK_Error_CvPrecomp,
@@ -74,11 +74,13 @@ typedef enum
   LNK_Warning_SectionFlagsConflict,
   LNK_Warning_Subsystem,
   LNK_Warning_UnknownDirective,
+  LNK_Warning_IllegalDirective,
   LNK_Warning_UnresolvedComdat,
   LNK_Warning_UnusedDelayLoadDll,
   LNK_Warning_LongSectionName,
   LNK_Warning_UnknownSwitch,
   LNK_Warning_TLSAlign,
+  LNK_Warning_DirectiveSectionWithRelocs,
   LNK_Warning_Last,
   
   LNK_Error_Count
@@ -110,6 +112,7 @@ typedef enum
 internal void lnk_init_error_handler(void);
 internal void lnk_errorfv(LNK_ErrorCode code, char *fmt, va_list args);
 internal void lnk_error(LNK_ErrorCode code, char *fmt, ...);
+internal void lnk_error_with_loc(LNK_ErrorCode code, String8 obj_path, String8 lib_path, char *fmt, ...);
 internal void lnk_supplement_error(char *fmt, ...);
 internal void lnk_supplement_error_list(String8List list);
 internal void lnk_suppress_error(LNK_ErrorCode code);

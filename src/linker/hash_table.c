@@ -4,7 +4,16 @@
 internal void
 bucket_list_concat_in_place(BucketList *list, BucketList *to_concat)
 {
-  SLLConcatInPlaceNoCount(list, to_concat);
+  if (to_concat->first) {
+    if (list->first) {
+      list->last->next = to_concat->first;
+      list->last = to_concat->last;
+    } else {
+      list->first = to_concat->first;
+      list->last = to_concat->last;
+    }
+    MemoryZeroStruct(to_concat);
+  }
 }
 
 internal BucketNode *
@@ -120,17 +129,28 @@ hash_table_push_u64_u64(Arena *arena, HashTable *ht, U64 key, U64 value)
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_u64 = key, .value_u64 = value });
 }
 
+internal String8
+hash_table_normalize_path_string(Arena *arena, String8 path)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 result;
+  result = lower_from_str8(scratch.arena, path);
+  result = path_convert_slashes(arena, result, PathStyle_UnixAbsolute);
+  scratch_end(scratch);
+  return result;
+}
+
 internal BucketNode *
 hash_table_push_path_string(Arena *arena, HashTable *ht, String8 path, String8 value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path); 
+  String8 path_canon = hash_table_normalize_path_string(arena, path); 
   return hash_table_push_string_string(arena, ht, path_canon, value);
 }
 
 internal BucketNode *
 hash_table_push_path_u64(Arena *arena, HashTable *ht, String8 path, U64 value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path);
+  String8 path_canon = hash_table_normalize_path_string(arena, path);
   U64 hash = hash_table_hasher(path_canon);
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_string = path_canon, .value_u64 = value });
 }
@@ -138,7 +158,7 @@ hash_table_push_path_u64(Arena *arena, HashTable *ht, String8 path, U64 value)
 internal BucketNode *
 hash_table_push_path_raw(Arena *arena, HashTable *ht, String8 path, void *value)
 {
-  String8 path_canon = path_canon_from_regular_path(arena, path);
+  String8 path_canon = hash_table_normalize_path_string(arena, path);
   U64 hash = hash_table_hasher(path_canon);
   return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_string = path_canon, .value_raw = value });
 }
@@ -187,6 +207,13 @@ hash_table_search_u64(HashTable *ht, U64 key_u64)
   return 0;
 }
 
+internal void *
+hash_table_search_u64_raw(HashTable *ht, U64 key_u64)
+{
+  KeyValuePair *kv = hash_table_search_u64(ht, key_u64);
+  return kv ? kv->value_raw : 0;
+}
+
 internal KeyValuePair *
 hash_table_search_path(HashTable *ht, String8 path)
 {
@@ -197,6 +224,20 @@ hash_table_search_path(HashTable *ht, String8 path)
   KeyValuePair *result = hash_table_search_string(ht, path_canon);
   scratch_end(scratch);
   return result;
+}
+
+internal void *
+hash_table_search_path_raw(HashTable *ht, String8 path)
+{
+  KeyValuePair *kv = hash_table_search_path(ht, path);
+  return kv ? kv->value_raw : 0;
+}
+
+internal void *
+hash_table_(HashTable *ht, String8 path)
+{
+  KeyValuePair *result = hash_table_search_path(ht, path);
+  return result ? result->value_raw : 0;
 }
 
 internal B32
@@ -311,6 +352,26 @@ remove_duplicates_u64_array(Arena *arena, U64Array arr)
   U64Array result = {0};
   result.count    = ht->count;
   result.v        = keys_from_hash_table_u64(arena, ht);
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8List
+remove_duplicates_str8_list(Arena *arena, String8List list)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List  result = {0};
+  HashTable   *ht     = hash_table_init(scratch.arena, list.node_count);
+
+  for (String8Node *node = list.first; node != 0; node = node->next) {
+    KeyValuePair *is_present = hash_table_search_string(ht, node->string);
+    if (!is_present) {
+      hash_table_push_string_raw(scratch.arena, ht, node->string, 0);
+      str8_list_push(arena, &result, node->string);
+    }
+  }
 
   scratch_end(scratch);
   return result;

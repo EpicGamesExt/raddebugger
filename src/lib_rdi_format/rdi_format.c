@@ -92,7 +92,7 @@ RDI_U8 rdi_section_is_required_table[37] =
 0,
 };
 
-RDI_U16 rdi_eval_op_ctrlbits_table[49] =
+RDI_U16 rdi_eval_op_ctrlbits_table[52] =
 {
 RDI_EVAL_CTRLBITS(0, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
@@ -101,7 +101,7 @@ RDI_EVAL_CTRLBITS(2, 0, 0),
 RDI_EVAL_CTRLBITS(1, 1, 1),
 RDI_EVAL_CTRLBITS(4, 0, 1),
 RDI_EVAL_CTRLBITS(0, 1, 1),
-RDI_EVAL_CTRLBITS(1, 0, 1),
+RDI_EVAL_CTRLBITS(8, 0, 1),
 RDI_EVAL_CTRLBITS(4, 0, 1),
 RDI_EVAL_CTRLBITS(4, 0, 1),
 RDI_EVAL_CTRLBITS(0, 0, 0),
@@ -142,6 +142,9 @@ RDI_EVAL_CTRLBITS(0, 1, 0),
 RDI_EVAL_CTRLBITS(1, 0, 0),
 RDI_EVAL_CTRLBITS(1, 2, 1),
 RDI_EVAL_CTRLBITS(1, 1, 1),
+RDI_EVAL_CTRLBITS(4, 0, 0),
+RDI_EVAL_CTRLBITS(4, 0, 0),
+RDI_EVAL_CTRLBITS(8, 0, 0),
 RDI_EVAL_CTRLBITS(0, 0, 0),
 };
 
@@ -157,12 +160,12 @@ struct {RDI_EvalConversionKind dst_typegroups[RDI_EvalTypeGroup_COUNT];} rdi_eva
 
 struct {RDI_U8 *str; RDI_U64 size;} rdi_eval_conversion_kind_message_string_table[6] =
 {
-{(RDI_U8 *)"Other", sizeof("Other")},
-{(RDI_U8 *)"U", sizeof("U")},
-{(RDI_U8 *)"S", sizeof("S")},
-{(RDI_U8 *)"F32", sizeof("F32")},
-{(RDI_U8 *)"F64", sizeof("F64")},
-{(RDI_U8 *)"COUNT", sizeof("COUNT")},
+{(RDI_U8 *)"", sizeof("")},
+{(RDI_U8 *)"", sizeof("")},
+{(RDI_U8 *)"Cannot convert between these types.", sizeof("Cannot convert between these types.")},
+{(RDI_U8 *)"Cannot convert to this type.", sizeof("Cannot convert to this type.")},
+{(RDI_U8 *)"Cannot convert this type.", sizeof("Cannot convert this type.")},
+{(RDI_U8 *)"", sizeof("")},
 };
 
 RDI_PROC RDI_U64
@@ -175,6 +178,74 @@ rdi_hash(RDI_U8 *ptr, RDI_U64 size)
     result = ((result << 5) + result) + *ptr;
   }
   return result;
+}
+
+RDI_PROC RDI_U8 *
+rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out)
+{
+RDI_U8 *result = 0;
+*size_out = 0;
+switch (kind)
+{
+default:{}break;
+case RDI_TypeKind_NULL: {result = (RDI_U8*)"NULL"; *size_out = sizeof("NULL")-1;}break;
+case RDI_TypeKind_Void: {result = (RDI_U8*)"Void"; *size_out = sizeof("Void")-1;}break;
+case RDI_TypeKind_Handle: {result = (RDI_U8*)"Handle"; *size_out = sizeof("Handle")-1;}break;
+case RDI_TypeKind_HResult: {result = (RDI_U8*)"HResult"; *size_out = sizeof("HResult")-1;}break;
+case RDI_TypeKind_Char8: {result = (RDI_U8*)"Char8"; *size_out = sizeof("Char8")-1;}break;
+case RDI_TypeKind_Char16: {result = (RDI_U8*)"Char16"; *size_out = sizeof("Char16")-1;}break;
+case RDI_TypeKind_Char32: {result = (RDI_U8*)"Char32"; *size_out = sizeof("Char32")-1;}break;
+case RDI_TypeKind_UChar8: {result = (RDI_U8*)"UChar8"; *size_out = sizeof("UChar8")-1;}break;
+case RDI_TypeKind_UChar16: {result = (RDI_U8*)"UChar16"; *size_out = sizeof("UChar16")-1;}break;
+case RDI_TypeKind_UChar32: {result = (RDI_U8*)"UChar32"; *size_out = sizeof("UChar32")-1;}break;
+case RDI_TypeKind_U8: {result = (RDI_U8*)"U8"; *size_out = sizeof("U8")-1;}break;
+case RDI_TypeKind_U16: {result = (RDI_U8*)"U16"; *size_out = sizeof("U16")-1;}break;
+case RDI_TypeKind_U32: {result = (RDI_U8*)"U32"; *size_out = sizeof("U32")-1;}break;
+case RDI_TypeKind_U64: {result = (RDI_U8*)"U64"; *size_out = sizeof("U64")-1;}break;
+case RDI_TypeKind_U128: {result = (RDI_U8*)"U128"; *size_out = sizeof("U128")-1;}break;
+case RDI_TypeKind_U256: {result = (RDI_U8*)"U256"; *size_out = sizeof("U256")-1;}break;
+case RDI_TypeKind_U512: {result = (RDI_U8*)"U512"; *size_out = sizeof("U512")-1;}break;
+case RDI_TypeKind_S8: {result = (RDI_U8*)"S8"; *size_out = sizeof("S8")-1;}break;
+case RDI_TypeKind_S16: {result = (RDI_U8*)"S16"; *size_out = sizeof("S16")-1;}break;
+case RDI_TypeKind_S32: {result = (RDI_U8*)"S32"; *size_out = sizeof("S32")-1;}break;
+case RDI_TypeKind_S64: {result = (RDI_U8*)"S64"; *size_out = sizeof("S64")-1;}break;
+case RDI_TypeKind_S128: {result = (RDI_U8*)"S128"; *size_out = sizeof("S128")-1;}break;
+case RDI_TypeKind_S256: {result = (RDI_U8*)"S256"; *size_out = sizeof("S256")-1;}break;
+case RDI_TypeKind_S512: {result = (RDI_U8*)"S512"; *size_out = sizeof("S512")-1;}break;
+case RDI_TypeKind_Bool: {result = (RDI_U8*)"Bool"; *size_out = sizeof("Bool")-1;}break;
+case RDI_TypeKind_F16: {result = (RDI_U8*)"F16"; *size_out = sizeof("F16")-1;}break;
+case RDI_TypeKind_F32: {result = (RDI_U8*)"F32"; *size_out = sizeof("F32")-1;}break;
+case RDI_TypeKind_F32PP: {result = (RDI_U8*)"F32PP"; *size_out = sizeof("F32PP")-1;}break;
+case RDI_TypeKind_F48: {result = (RDI_U8*)"F48"; *size_out = sizeof("F48")-1;}break;
+case RDI_TypeKind_F64: {result = (RDI_U8*)"F64"; *size_out = sizeof("F64")-1;}break;
+case RDI_TypeKind_F80: {result = (RDI_U8*)"F80"; *size_out = sizeof("F80")-1;}break;
+case RDI_TypeKind_F128: {result = (RDI_U8*)"F128"; *size_out = sizeof("F128")-1;}break;
+case RDI_TypeKind_ComplexF32: {result = (RDI_U8*)"ComplexF32"; *size_out = sizeof("ComplexF32")-1;}break;
+case RDI_TypeKind_ComplexF64: {result = (RDI_U8*)"ComplexF64"; *size_out = sizeof("ComplexF64")-1;}break;
+case RDI_TypeKind_ComplexF80: {result = (RDI_U8*)"ComplexF80"; *size_out = sizeof("ComplexF80")-1;}break;
+case RDI_TypeKind_ComplexF128: {result = (RDI_U8*)"ComplexF128"; *size_out = sizeof("ComplexF128")-1;}break;
+case RDI_TypeKind_Modifier: {result = (RDI_U8*)"Modifier"; *size_out = sizeof("Modifier")-1;}break;
+case RDI_TypeKind_Ptr: {result = (RDI_U8*)"Ptr"; *size_out = sizeof("Ptr")-1;}break;
+case RDI_TypeKind_LRef: {result = (RDI_U8*)"LRef"; *size_out = sizeof("LRef")-1;}break;
+case RDI_TypeKind_RRef: {result = (RDI_U8*)"RRef"; *size_out = sizeof("RRef")-1;}break;
+case RDI_TypeKind_Array: {result = (RDI_U8*)"Array"; *size_out = sizeof("Array")-1;}break;
+case RDI_TypeKind_Function: {result = (RDI_U8*)"Function"; *size_out = sizeof("Function")-1;}break;
+case RDI_TypeKind_Method: {result = (RDI_U8*)"Method"; *size_out = sizeof("Method")-1;}break;
+case RDI_TypeKind_MemberPtr: {result = (RDI_U8*)"MemberPtr"; *size_out = sizeof("MemberPtr")-1;}break;
+case RDI_TypeKind_Struct: {result = (RDI_U8*)"Struct"; *size_out = sizeof("Struct")-1;}break;
+case RDI_TypeKind_Class: {result = (RDI_U8*)"Class"; *size_out = sizeof("Class")-1;}break;
+case RDI_TypeKind_Union: {result = (RDI_U8*)"Union"; *size_out = sizeof("Union")-1;}break;
+case RDI_TypeKind_Enum: {result = (RDI_U8*)"Enum"; *size_out = sizeof("Enum")-1;}break;
+case RDI_TypeKind_Alias: {result = (RDI_U8*)"Alias"; *size_out = sizeof("Alias")-1;}break;
+case RDI_TypeKind_IncompleteStruct: {result = (RDI_U8*)"IncompleteStruct"; *size_out = sizeof("IncompleteStruct")-1;}break;
+case RDI_TypeKind_IncompleteUnion: {result = (RDI_U8*)"IncompleteUnion"; *size_out = sizeof("IncompleteUnion")-1;}break;
+case RDI_TypeKind_IncompleteClass: {result = (RDI_U8*)"IncompleteClass"; *size_out = sizeof("IncompleteClass")-1;}break;
+case RDI_TypeKind_IncompleteEnum: {result = (RDI_U8*)"IncompleteEnum"; *size_out = sizeof("IncompleteEnum")-1;}break;
+case RDI_TypeKind_Bitfield: {result = (RDI_U8*)"Bitfield"; *size_out = sizeof("Bitfield")-1;}break;
+case RDI_TypeKind_Variadic: {result = (RDI_U8*)"Variadic"; *size_out = sizeof("Variadic")-1;}break;
+case RDI_TypeKind_Count: {result = (RDI_U8*)"Count"; *size_out = sizeof("Count")-1;}break;
+}
+return result;
 }
 
 RDI_PROC RDI_U32

@@ -74,34 +74,50 @@ pdb_info_from_data(Arena *arena, String8 data){
       // table layout: epilogue
       U32 epilogue_base_off = deleted_words_array_off + num_deleted_words*sizeof(U32);
       
-      // read table
-      if (hash_table_count > 0 && epilogue_base_off <= data.size){
-        PDB_InfoNode *first = 0;
-        PDB_InfoNode *last = 0;
-        
-        U32 record_off = epilogue_base_off;
-        for (U32 i = 0; i < hash_table_count; i += 1, record_off += 8){
-          U32 *record = (U32*)(data.str + record_off);
-          U32 relative_name_off = record[0];
-          MSF_StreamNumber sn = (MSF_StreamNumber)record[1];
+      if (epilogue_base_off <= data.size){
+        U64 record_off = epilogue_base_off;
+
+        // read table
+        if (hash_table_count > 0) {
+          PDB_InfoNode *first = 0;
+          PDB_InfoNode *last = 0;
           
-          U32 name_off = names_base_off + relative_name_off;
-          String8 name = str8_cstring_capped((char*)(data.str + name_off),
-                                             (char*)(data.str + names_base_opl));
+          for (U32 i = 0; i < hash_table_count; i += 1, record_off += 8){
+            U32 *record = (U32*)(data.str + record_off);
+            U32 relative_name_off = record[0];
+            MSF_StreamNumber sn = (MSF_StreamNumber)record[1];
+            
+            U32 name_off = names_base_off + relative_name_off;
+            String8 name = str8_cstring_capped((char*)(data.str + name_off),
+                                               (char*)(data.str + names_base_opl));
+            
+            // push info node
+            PDB_InfoNode *node = push_array(arena, PDB_InfoNode, 1);
+            SLLQueuePush(first, last, node);
+            node->string = name;
+            node->sn = sn;
+          }
           
-          // push info node
-          PDB_InfoNode *node = push_array(arena, PDB_InfoNode, 1);
-          SLLQueuePush(first, last, node);
-          node->string = name;
-          node->sn = sn;
+          result = push_array(arena, PDB_Info, 1);
+          result->first = first;
+          result->last = last;
+          result->auth_guid = *auth_guid;
         }
-        
-        result = push_array(arena, PDB_Info, 1);
-        result->first = first;
-        result->last = last;
-        result->auth_guid = *auth_guid;
+
+		// read PDB features
+        PDB_FeatureFlags features = 0;
+        for (; record_off + sizeof(PDB_FeatureSig) <= data.size; ) {
+          PDB_FeatureSig sig = 0;
+          record_off += str8_deserial_read_struct(data, record_off, &sig);
+          switch (sig) {
+          case PDB_FeatureSig_NULL: break;
+          case PDB_FeatureSig_VC140:              features |= PDB_FeatureFlag_HAS_ID_STREAM;    break;
+          case PDB_FeatureSig_NO_TYPE_MERGE:      features |= PDB_FeatureFlag_NO_TYPE_MERGE;    break;
+          case PDB_FeatureSig_MINIMAL_DEBUG_INFO: features |= PDB_FeatureFlag_MINIMAL_DBG_INFO; break;
+          }
+        }
+        result->features = features;
       }
-      
     }
   }
   

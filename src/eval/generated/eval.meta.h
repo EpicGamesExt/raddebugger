@@ -74,7 +74,12 @@ E_TypeKind_IncompleteClass,
 E_TypeKind_IncompleteEnum,
 E_TypeKind_Bitfield,
 E_TypeKind_Variadic,
-E_TypeKind_Collection,
+E_TypeKind_Set,
+E_TypeKind_Lens,
+E_TypeKind_LensSpec,
+E_TypeKind_MetaExpr,
+E_TypeKind_MetaDisplayName,
+E_TypeKind_MetaDescription,
 E_TypeKind_COUNT,
 E_TypeKind_FirstBasic      = E_TypeKind_Void,
 E_TypeKind_LastBasic       = E_TypeKind_ComplexF128,
@@ -86,6 +91,8 @@ E_TypeKind_FirstSigned2    = E_TypeKind_S8,
 E_TypeKind_LastSigned2     = E_TypeKind_S512,
 E_TypeKind_FirstIncomplete = E_TypeKind_IncompleteStruct,
 E_TypeKind_LastIncomplete  = E_TypeKind_IncompleteEnum,
+E_TypeKind_FirstMeta       = E_TypeKind_MetaExpr,
+E_TypeKind_LastMeta        = E_TypeKind_MetaDescription,
 } E_TypeKind;
 
 typedef U32 E_ExprKind;
@@ -124,20 +131,21 @@ E_ExprKind_BitOr,
 E_ExprKind_LogAnd,
 E_ExprKind_LogOr,
 E_ExprKind_Ternary,
+E_ExprKind_Call,
 E_ExprKind_LeafBytecode,
-E_ExprKind_LeafMember,
 E_ExprKind_LeafStringLiteral,
-E_ExprKind_LeafBool,
 E_ExprKind_LeafU64,
 E_ExprKind_LeafF64,
 E_ExprKind_LeafF32,
-E_ExprKind_LeafIdent,
+E_ExprKind_LeafIdentifier,
 E_ExprKind_LeafOffset,
+E_ExprKind_LeafValue,
 E_ExprKind_LeafFilePath,
 E_ExprKind_TypeIdent,
 E_ExprKind_Ptr,
 E_ExprKind_Array,
 E_ExprKind_Func,
+E_ExprKind_Unsigned,
 E_ExprKind_Define,
 E_ExprKind_COUNT,
 } E_ExprKindEnum;
@@ -160,11 +168,11 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_expr_kind_strings[48];
+extern String8 e_type_kind_basic_string_table[61];
+extern U8 e_type_kind_basic_byte_size_table[61];
+extern String8 e_expr_kind_strings[49];
+extern E_OpInfo e_expr_kind_op_info_table[49];
 extern String8 e_interpretation_code_display_strings[11];
-extern E_OpInfo e_expr_kind_op_info_table[48];
-extern U8 e_kind_basic_byte_size_table[56];
-extern String8 e_kind_basic_string_table[56];
 
 C_LINKAGE_END
 

@@ -73,7 +73,7 @@ struct DMN_Event
   U64 size;
   String8 string;
   U32 code; // code gives pid & tid on CreateProcess and CreateThread (respectfully)
-  U32 flags;
+  U32 flags; // DMN_TrapFlags, if `DMN_EventKind_SetBreakpoint`
   S32 signo;
   S32 sigcode;
   U64 instruction_pointer;
@@ -100,12 +100,22 @@ struct DMN_EventList
 ////////////////////////////////
 //~ rjf: Run Control Types
 
+typedef U32 DMN_TrapFlags;
+enum
+{
+  DMN_TrapFlag_BreakOnWrite   = (1<<0),
+  DMN_TrapFlag_BreakOnRead    = (1<<1),
+  DMN_TrapFlag_BreakOnExecute = (1<<2),
+};
+
 typedef struct DMN_Trap DMN_Trap;
 struct DMN_Trap
 {
   DMN_Handle process;
   U64 vaddr;
   U64 id;
+  DMN_TrapFlags flags;
+  U32 size;
 };
 
 typedef struct DMN_TrapChunkNode DMN_TrapChunkNode;

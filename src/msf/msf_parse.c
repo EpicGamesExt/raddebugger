@@ -13,11 +13,9 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
   
   //- determine msf type
   U32 index_size = 0;
-  if (msf_data.size >= sizeof(msf_msf20_magic) &&
-      str8_match(msf_data, str8_lit(msf_msf20_magic), StringMatchFlag_RightSideSloppy)) {
+  if (msf_check_magic_20(msf_data)) {
     index_size = 2;
-  } else if (msf_data.size >= sizeof(msf_msf70_magic) && 
-             str8_match(msf_data, str8_lit(msf_msf70_magic), StringMatchFlag_RightSideSloppy)) {
+  } else if (msf_check_magic_70(msf_data)) {
     index_size = 4;
   }
   
