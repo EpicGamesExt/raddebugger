@@ -1478,7 +1478,7 @@ t_import_export(void)
     coff_obj_writer_push_directive(obj_writer, str8_lit("/export:baf=baz.#1"));
     coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord,@5"));
     coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord2,@6,DATA"));
-    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord3,@7,NONAME"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord3,@7,NONAME,PRIVATE"));
     coff_obj_writer_push_directive(obj_writer, str8_lit("/export:ord4,@8,NONAME,DATA"));
     COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(export_text));
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("_DllMainCRTStartup"), 0, text_sect);

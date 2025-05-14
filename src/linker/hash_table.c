@@ -329,6 +329,19 @@ keys_from_hash_table_u64(Arena *arena, HashTable *ht)
   return result;
 }
 
+internal String8 *
+keys_from_hash_table_string(Arena *arena, HashTable *ht)
+{
+  String8 *result = push_array_no_zero(arena, String8, ht->count);
+  for (U64 bucket_idx = 0, cursor = 0; bucket_idx < ht->cap; ++bucket_idx) {
+    for (BucketNode *n = ht->buckets[bucket_idx].first; n != 0; n = n->next) {
+      Assert(cursor < ht->count);
+      result[cursor++] = n->v.key_string;
+    }
+  }
+  return result;
+}
+
 internal KeyValuePair *
 key_value_pairs_from_hash_table(Arena *arena, HashTable *ht)
 {

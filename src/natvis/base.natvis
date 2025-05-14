@@ -151,6 +151,8 @@
     <AlternativeType Name="Rng1S64List"/>
     <AlternativeType Name="DW_AttribList"/>
     <AlternativeType Name="DW_LocList"/>
+    <AlternativeType Name="COFF_LibWriterSymbolList"/>
+    <AlternativeType Name="COFF_LibWriterMemberList"/>
     <DisplayString>{{ count={count} first={first} }} </DisplayString>
     <Expand>
 			<Item Name="[count]">count</Item>

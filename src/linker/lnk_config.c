@@ -801,6 +801,122 @@ lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameLis
   return 0;
 }
 
+internal B32
+lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  B32 is_parsed = 0;
+
+  // parse "alias=name"
+  String8     name  = {0};
+  String8     alias = {0};
+  String8List flags = {0};
+  {
+    String8List alias_name_split = str8_split_by_string_chars(scratch.arena, directive.first->string, str8_lit("="), 0);
+    if (alias_name_split.node_count == 2) {
+      alias = alias_name_split.first->string;
+      name  = alias_name_split.last->string;
+    } else if (alias_name_split.node_count == 1) {
+      name = alias_name_split.first->string;
+    } else {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
+
+    flags = directive;
+    str8_list_pop_front(&flags);
+  }
+
+  // discard alias to itself
+  if (str8_match(name, alias, 0)) {
+    alias = str8_zero();
+  }
+
+  // does directive have ordinal?
+  U16 ordinal16       = 0;
+  String8 ordinal     = {0};
+  String8 noname_flag = {0};
+  if (str8_match(str8_prefix(str8_list_first(&flags), 1), str8_lit("@"), 0)) {
+    // parse ordinal
+    ordinal = str8_skip(str8_list_pop_front(&flags)->string, 1);
+    if (str8_is_integer(ordinal, 10)) {
+      U64 ordinal64 = u64_from_str8(ordinal, 10);
+      if (ordinal64 <= max_U16) {
+        ordinal16 = (U16)ordinal64;
+      } else {
+        String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+        lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "ordinal value must fit into 16-bit integer, \"/EXPORT:%S\"", d);
+        goto exit;
+      }
+    } else {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
+
+    // detect NONAME flag
+    if (str8_match(str8_list_first(&flags), str8_lit("NONAME"), StringMatchFlag_CaseInsensitive)) {
+      noname_flag = str8_list_pop_front(&flags)->string;
+    }
+  }
+
+  // detect PRIVATE flag
+  String8 private_flag = {0};
+  if (str8_match(str8_list_first(&flags), str8_lit("PRIVATE"), StringMatchFlag_CaseInsensitive)) {
+    private_flag = str8_list_pop_front(&flags)->string;
+  }
+
+  // parse export type
+  COFF_ImportType type = COFF_ImportHeader_Code;
+  if (flags.node_count) {
+    type = coff_import_header_type_from_string(str8_list_pop_front(&flags)->string);
+    if (type == COFF_ImportType_Invalid) {
+      String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      goto exit;
+    }
+  }
+
+  // are there leftover nodes?
+  if (flags.node_count != 0) {
+    String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
+    lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+    goto exit;
+  }
+
+  // fill out export
+  export_out->obj_path            = obj_path;
+  export_out->lib_path            = lib_path;
+  export_out->name                = push_str8_copy(arena, name);
+  export_out->alias               = push_str8_copy(arena, alias);
+  export_out->type                = type;
+  export_out->ordinal             = ordinal16;
+  export_out->is_ordinal_assigned = ordinal.size > 0;
+  export_out->is_noname_present   = noname_flag.size > 0;
+  export_out->is_private          = private_flag.size > 0;
+  export_out->is_forwarder        = str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
+
+  is_parsed = 1;
+  
+exit:;
+  scratch_end(scratch);
+  ProfEnd();
+  return is_parsed;
+}
+
+internal B32
+lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List split_directive = str8_split_by_string_chars(scratch.arena, directive, str8_lit(","), 0);
+  B32 is_parsed = lnk_parse_export_directive_ex(arena, split_directive, obj_path, lib_path, export_out);
+  scratch_end(scratch);
+  return is_parsed;
+}
+
+
 internal LNK_MergeDirectiveNode *
 lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data)
 {
@@ -1062,9 +1178,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Export: {
-    LNK_ExportParse export_parse = {0};
+    PE_ExportParse export_parse = {0};
     if (lnk_parse_export_directive_ex(arena, value_strings, obj_path, lib_path, &export_parse)) {
-      lnk_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
+      pe_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
     }
   } break;
 

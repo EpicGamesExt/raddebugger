@@ -16,6 +16,24 @@ coff_obj_writer_release(COFF_ObjWriter **obj_writer)
   *obj_writer = 0;
 }
 
+internal COFF_ObjSection *
+coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data)
+{
+  COFF_ObjSectionNode *sect_n = push_array(obj_writer->arena, COFF_ObjSectionNode, 1);
+  SLLQueuePush(obj_writer->sect_first, obj_writer->sect_last, sect_n);
+  obj_writer->sect_count += 1;
+
+  COFF_ObjSection *sect = &sect_n->v;
+  sect->name            = name;
+  sect->flags           = flags;
+
+  if (data.size) {
+    str8_list_push(obj_writer->arena, &sect->data, data);
+  }
+
+  return sect;
+}
+
 internal COFF_ObjSymbol *
 coff_obj_writer_push_symbol(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_SymbolLocation loc, COFF_SymbolType type, COFF_SymStorageClass storage_class)
 {
@@ -105,15 +123,6 @@ coff_obj_writer_push_symbol_undef(COFF_ObjWriter *obj_writer, String8 name)
 }
 
 internal COFF_ObjSymbol *
-coff_obj_writer_push_symbol_undef_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags)
-{
-  COFF_SymbolType type = {0};
-  COFF_SymbolLocation loc = { COFF_SymbolLocation_Undef };
-  COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, flags, loc, type, COFF_SymStorageClass_Section);
-  return s;
-}
-
-internal COFF_ObjSymbol *
 coff_obj_writer_push_symbol_undef_func(COFF_ObjWriter *obj_writer, String8 name)
 {
   COFF_SymbolType type = {0};
@@ -159,24 +168,6 @@ coff_obj_writer_push_symbol_common(COFF_ObjWriter *obj_writer, String8 name, U32
   return s;
 }
 
-internal COFF_ObjSection *
-coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data)
-{
-  COFF_ObjSectionNode *sect_n = push_array(obj_writer->arena, COFF_ObjSectionNode, 1);
-  SLLQueuePush(obj_writer->sect_first, obj_writer->sect_last, sect_n);
-  obj_writer->sect_count += 1;
-
-  COFF_ObjSection *sect = &sect_n->v;
-  sect->name            = name;
-  sect->flags           = flags;
-
-  if (data.size) {
-    str8_list_push(obj_writer->arena, &sect->data, data);
-  }
-
-  return sect;
-}
-
 internal COFF_ObjReloc*
 coff_obj_writer_section_push_reloc(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol, COFF_RelocType type)
 {
@@ -190,6 +181,30 @@ coff_obj_writer_section_push_reloc(COFF_ObjWriter *obj_writer, COFF_ObjSection *
   reloc->type          = type;
 
   return reloc;
+}
+
+internal COFF_ObjReloc *
+coff_obj_writer_section_push_reloc_addr(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol)
+{
+  COFF_RelocType reloc_type = 0;
+  switch (obj_writer->machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X64: reloc_type = COFF_Reloc_X64_Addr64; break;
+  default: { NotImplemented; } break;
+  }
+  return coff_obj_writer_section_push_reloc(obj_writer, sect, apply_off, symbol, reloc_type);
+}
+
+internal COFF_ObjReloc *
+coff_obj_writer_section_push_reloc_voff(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol)
+{
+  COFF_RelocType reloc_type = 0;
+  switch (obj_writer->machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X64: reloc_type = COFF_Reloc_X64_Addr32Nb; break;
+  default: { NotImplemented; } break;
+  }
+  return coff_obj_writer_section_push_reloc(obj_writer, sect, apply_off, symbol, reloc_type);
 }
 
 internal void
