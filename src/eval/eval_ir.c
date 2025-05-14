@@ -1597,6 +1597,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_Mode mapped_bytecode_mode = E_Mode_Offset;
         E_Space mapped_bytecode_space = zero_struct;
         String8 mapped_bytecode = {0};
+        void *mapped_user_data = 0;
         B32 generated = 0;
         
         //- rjf: iterate identifier resolution rule paths, try to resolve
@@ -1629,6 +1630,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
               mapped_bytecode_mode = parent_irtree->mode;
               mapped_type_key = parent_irtree->type_key;
+              mapped_user_data = parent_irtree->user_data;
               is_auto_hook = parent_irtree->auto_hook;
               disallow_autohooks = 1;
               E_MsgList msgs = e_msg_list_copy(arena, &parent_irtree->msgs);
@@ -2067,8 +2069,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access); 
         }
         
-        //- rjf: mark if auto hook
+        //- rjf: mark if auto hook, equip user data
         result.auto_hook = is_auto_hook;
+        result.user_data = mapped_user_data;
         
         //- rjf: error on failure-to-generate
         if(!generated && !str8_match(string, str8_lit("$"), 0))
@@ -2269,7 +2272,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           break;
         }
       }
-      if(irext != 0)
+      if(irext != 0 && result.user_data == 0)
       {
         E_IRTreeAndType irtree_stripped = result;
         if(type->kind == E_TypeKind_Lens)
