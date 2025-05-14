@@ -3200,8 +3200,6 @@ ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *proce
         SLLQueuePush(first_frame, last_frame, dst_inline);
         dst_inline->v.unwind_count = base_frame_idx;
         dst_inline->v.regs         = src->regs;
-        dst_inline->v.rdi          = rdi;
-        dst_inline->v.inline_site  = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
         frame_count += 1;
         inline_frame_count += 1;
       }
@@ -3211,8 +3209,6 @@ ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *proce
       SLLQueuePush(first_frame, last_frame, dst_base);
       dst_base->v.unwind_count = base_frame_idx;
       dst_base->v.regs         = src->regs;
-      dst_base->v.rdi          = rdi;
-      dst_base->v.procedure    = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
       frame_count += 1;
       
       // rjf: hook up inline frames to point to concrete frame, and to account for inline depth

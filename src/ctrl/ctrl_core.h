@@ -249,9 +249,6 @@ struct CTRL_CallStackFrame
   U64 unwind_count;
   U64 inline_depth;
   void *regs;
-  RDI_Parsed *rdi;
-  RDI_Procedure *procedure;
-  RDI_InlineSite *inline_site;
 };
 
 typedef struct CTRL_CallStack CTRL_CallStack;
