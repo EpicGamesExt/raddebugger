@@ -3099,6 +3099,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
     {
       // rjf: regs -> rip*module
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
+      U64 rsp = regs_rsp_from_arch_block(arch, regs_block);
       CTRL_Entity *module = &ctrl_entity_nil;
       for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
       {
@@ -3128,7 +3129,9 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
       unwind.flags |= step.flags;
       if(step.flags & CTRL_UnwindFlag_Error ||
          regs_rsp_from_arch_block(arch, regs_block) == 0 ||
-         regs_rip_from_arch_block(arch, regs_block) == 0)
+         regs_rip_from_arch_block(arch, regs_block) == 0 ||
+         (regs_rsp_from_arch_block(arch, regs_block) == rsp &&
+          regs_rip_from_arch_block(arch, regs_block) == rip))
       {
         break;
       }
