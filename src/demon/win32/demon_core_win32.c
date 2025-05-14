@@ -67,7 +67,6 @@ dmn_w32_entity_alloc(DMN_W32_Entity *parent, DMN_W32_EntityKind kind, U64 id)
       e = push_array_no_zero(dmn_w32_shared->entities_arena, DMN_W32_Entity, 1);
       dmn_w32_shared->entities_count += 1;
     }
-    U32 gen = e->gen;
     MemoryZeroStruct(e);
     e->gen = gen+1;
   }
