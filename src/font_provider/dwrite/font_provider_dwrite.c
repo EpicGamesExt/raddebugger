@@ -335,15 +335,19 @@ fp_font_open(String8 path)
   //- rjf: try to open font
   for(PathTask *t = first_task; t != 0 && font.file == 0; t = t->next)
   {
+    B32 file_exists = (os_properties_from_file_path(t->path).created != 0);
     String16 path16 = str16_from_8(scratch.arena, t->path);
-    error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
+    if(file_exists)
+    {
+      error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
+    }
     if(font.file != 0)
     {
       error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
     }
     
     // rjf: failure trying just the normal path? -> generate new tasks that search in system folders
-    if(t == first_task && font.file == 0)
+    if(t == first_task && font.file == 0 && t->path.size != 0)
     {
       // rjf: generate task for user-installed fonts
       {
