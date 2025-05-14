@@ -3218,7 +3218,6 @@ ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *proce
       U64 inline_frame_idx = 0;
       for(FrameNode *inline_frame = first_inline_frame; inline_frame != 0; inline_frame = inline_frame->next, inline_frame_idx += 1)
       {
-        inline_frame->v.parent_num = frame_count;
         inline_frame->v.inline_depth = inline_frame_count - inline_frame_idx;
         if(inline_frame == last_inline_frame)
         {
@@ -3250,7 +3249,7 @@ ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U
     U64 base_frame_idx = 0;
     for(U64 idx = 0; idx < call_stack->count; idx += 1)
     {
-      if(call_stack->frames[idx].parent_num == 0)
+      if(call_stack->frames[idx].inline_depth == 0)
       {
         if(base_frame_idx == unwind_count)
         {

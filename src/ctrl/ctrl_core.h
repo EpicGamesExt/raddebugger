@@ -245,7 +245,6 @@ struct CTRL_Unwind
 typedef struct CTRL_CallStackFrame CTRL_CallStackFrame;
 struct CTRL_CallStackFrame
 {
-  U64 parent_num;
   U64 unwind_count;
   U64 inline_depth;
   void *regs;
