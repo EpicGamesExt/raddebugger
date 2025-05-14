@@ -1432,14 +1432,14 @@ ctrl_init(void)
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
     ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
-  ctrl_state->thread_unwind_cache.slots_count = 1024;
-  ctrl_state->thread_unwind_cache.slots = push_array(arena, CTRL_ThreadUnwindCacheSlot, ctrl_state->thread_unwind_cache.slots_count);
-  ctrl_state->thread_unwind_cache.stripes_count = os_get_system_info()->logical_processor_count;
-  ctrl_state->thread_unwind_cache.stripes = push_array(arena, CTRL_ThreadUnwindCacheStripe, ctrl_state->thread_unwind_cache.stripes_count);
-  for(U64 idx = 0; idx < ctrl_state->thread_unwind_cache.stripes_count; idx += 1)
+  ctrl_state->unwind_cache.slots_count = 1024;
+  ctrl_state->unwind_cache.slots = push_array(arena, CTRL_UnwindCacheSlot, ctrl_state->unwind_cache.slots_count);
+  ctrl_state->unwind_cache.stripes_count = os_get_system_info()->logical_processor_count;
+  ctrl_state->unwind_cache.stripes = push_array(arena, CTRL_UnwindCacheStripe, ctrl_state->unwind_cache.stripes_count);
+  for(U64 idx = 0; idx < ctrl_state->unwind_cache.stripes_count; idx += 1)
   {
-    ctrl_state->thread_unwind_cache.stripes[idx].arena = arena_alloc();
-    ctrl_state->thread_unwind_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    ctrl_state->unwind_cache.stripes[idx].arena = arena_alloc();
+    ctrl_state->unwind_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
   ctrl_state->module_image_info_cache.slots_count = 1024;
   ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
@@ -1484,6 +1484,10 @@ ctrl_init(void)
   ctrl_state->u2ms_ring_base = push_array(arena, U8, ctrl_state->u2ms_ring_size);
   ctrl_state->u2ms_ring_mutex = os_mutex_alloc();
   ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
+  ctrl_state->u2uw_ring_size = KB(64);
+  ctrl_state->u2uw_ring_base = push_array(arena, U8, ctrl_state->u2uw_ring_size);
+  ctrl_state->u2uw_ring_mutex = os_mutex_alloc();
+  ctrl_state->u2uw_ring_cv = os_condition_variable_alloc();
   ctrl_state->ctrl_thread_log = log_alloc();
   ctrl_state->ctrl_thread = os_thread_launch(ctrl_thread__entry_point, 0, 0);
 }
@@ -6334,7 +6338,7 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 }
 
 ////////////////////////////////
-//~ rjf: Memory-Stream-Thread-Only Functions
+//~ rjf: Asynchronous Memory Streaming Functions
 
 //- rjf: user -> memory stream communication
 
@@ -6545,5 +6549,68 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   os_condition_variable_broadcast(process_stripe->cv);
   ProfEnd();
   ProfEnd();
+  return 0;
+}
+
+////////////////////////////////
+//~ rjf: Asynchronous Unwinding Functions
+
+//- rjf: user -> memory stream communication
+
+internal B32
+ctrl_u2uw_enqueue_req(CTRL_Handle thread, U64 endt_us)
+{
+  B32 good = 0;
+  OS_MutexScope(ctrl_state->u2uw_ring_mutex) for(;;)
+  {
+    U64 unconsumed_size = ctrl_state->u2uw_ring_write_pos - ctrl_state->u2uw_ring_read_pos;
+    U64 available_size = ctrl_state->u2uw_ring_size - unconsumed_size;
+    if(available_size >= sizeof(thread))
+    {
+      good = 1;
+      ctrl_state->u2uw_ring_write_pos += ring_write_struct(ctrl_state->u2uw_ring_base, ctrl_state->u2uw_ring_size, ctrl_state->u2uw_ring_write_pos, &thread);
+      break;
+    }
+    if(os_now_microseconds() >= endt_us)
+    {
+      break;
+    }
+    os_condition_variable_wait(ctrl_state->u2uw_ring_cv, ctrl_state->u2uw_ring_mutex, endt_us);
+  }
+  if(good)
+  {
+    os_condition_variable_broadcast(ctrl_state->u2uw_ring_cv);
+  }
+  return good;
+}
+
+internal void
+ctrl_u2uw_dequeue_req(CTRL_Handle *out_thread)
+{
+  OS_MutexScope(ctrl_state->u2uw_ring_mutex) for(;;)
+  {
+    U64 unconsumed_size = ctrl_state->u2uw_ring_write_pos - ctrl_state->u2uw_ring_read_pos;
+    if(unconsumed_size >= sizeof(*out_thread))
+    {
+      ctrl_state->u2uw_ring_read_pos += ring_read_struct(ctrl_state->u2uw_ring_base, ctrl_state->u2uw_ring_size, ctrl_state->u2uw_ring_read_pos, out_thread);
+      break;
+    }
+    os_condition_variable_wait(ctrl_state->u2uw_ring_cv, ctrl_state->u2uw_ring_mutex, max_U64);
+  }
+  os_condition_variable_broadcast(ctrl_state->u2uw_ring_cv);
+}
+
+//- rjf: entry point
+
+ASYNC_WORK_DEF(ctrl_unwind_work)
+{
+  CTRL_UnwindCache *cache = &ctrl_state->unwind_cache;
+  
+  //- rjf: get next request
+  CTRL_Handle thread_handle = {0};
+  ctrl_u2uw_dequeue_req(&thread_handle);
+  
+  
+  
   return 0;
 }

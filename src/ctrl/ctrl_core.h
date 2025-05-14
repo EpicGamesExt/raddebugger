@@ -594,13 +594,13 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
-//~ rjf: Thread Unwind Cache Types
+//~ rjf: Unwind Cache Types
 
-typedef struct CTRL_ThreadUnwindCacheNode CTRL_ThreadUnwindCacheNode;
-struct CTRL_ThreadUnwindCacheNode
+typedef struct CTRL_UnwindCacheNode CTRL_UnwindCacheNode;
+struct CTRL_UnwindCacheNode
 {
-  CTRL_ThreadUnwindCacheNode *next;
-  CTRL_ThreadUnwindCacheNode *prev;
+  CTRL_UnwindCacheNode *next;
+  CTRL_UnwindCacheNode *prev;
   Arena *arena;
   CTRL_Handle thread;
   U64 reg_gen;
@@ -608,27 +608,27 @@ struct CTRL_ThreadUnwindCacheNode
   CTRL_Unwind unwind;
 };
 
-typedef struct CTRL_ThreadUnwindCacheSlot CTRL_ThreadUnwindCacheSlot;
-struct CTRL_ThreadUnwindCacheSlot
+typedef struct CTRL_UnwindCacheSlot CTRL_UnwindCacheSlot;
+struct CTRL_UnwindCacheSlot
 {
-  CTRL_ThreadUnwindCacheNode *first;
-  CTRL_ThreadUnwindCacheNode *last;
+  CTRL_UnwindCacheNode *first;
+  CTRL_UnwindCacheNode *last;
 };
 
-typedef struct CTRL_ThreadUnwindCacheStripe CTRL_ThreadUnwindCacheStripe;
-struct CTRL_ThreadUnwindCacheStripe
+typedef struct CTRL_UnwindCacheStripe CTRL_UnwindCacheStripe;
+struct CTRL_UnwindCacheStripe
 {
   Arena *arena;
   OS_Handle rw_mutex;
 };
 
-typedef struct CTRL_ThreadUnwindCache CTRL_ThreadUnwindCache;
-struct CTRL_ThreadUnwindCache
+typedef struct CTRL_UnwindCache CTRL_UnwindCache;
+struct CTRL_UnwindCache
 {
   U64 slots_count;
-  CTRL_ThreadUnwindCacheSlot *slots;
+  CTRL_UnwindCacheSlot *slots;
   U64 stripes_count;
-  CTRL_ThreadUnwindCacheStripe *stripes;
+  CTRL_UnwindCacheStripe *stripes;
 };
 
 ////////////////////////////////
@@ -724,7 +724,7 @@ struct CTRL_State
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
-  CTRL_ThreadUnwindCache thread_unwind_cache;
+  CTRL_UnwindCache unwind_cache;
   CTRL_ModuleImageInfoCache module_image_info_cache;
   
   // rjf: user -> ctrl msg ring buffer
@@ -768,6 +768,14 @@ struct CTRL_State
   U64 u2ms_ring_read_pos;
   OS_Handle u2ms_ring_mutex;
   OS_Handle u2ms_ring_cv;
+  
+  // rjf: user -> unwind ring buffer
+  U64 u2uw_ring_size;
+  U8 *u2uw_ring_base;
+  U64 u2uw_ring_write_pos;
+  U64 u2uw_ring_read_pos;
+  OS_Handle u2uw_ring_mutex;
+  OS_Handle u2uw_ring_cv;
 };
 
 ////////////////////////////////
@@ -1039,7 +1047,7 @@ internal void ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 
 ////////////////////////////////
-//~ rjf: Memory-Stream Thread Functions
+//~ rjf: Asynchronous Memory Streaming Functions
 
 //- rjf: user -> memory stream communication
 internal B32 ctrl_u2ms_enqueue_req(CTRL_Handle process, Rng1U64 vaddr_range, B32 zero_terminated, U64 endt_us);
@@ -1047,6 +1055,15 @@ internal void ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr
 
 //- rjf: entry point
 ASYNC_WORK_DEF(ctrl_mem_stream_work);
-internal void ctrl_mem_stream_thread__entry_point(void *p);
+
+////////////////////////////////
+//~ rjf: Asynchronous Unwinding Functions
+
+//- rjf: user -> memory stream communication
+internal B32 ctrl_u2uw_enqueue_req(CTRL_Handle thread, U64 endt_us);
+internal void ctrl_u2uw_dequeue_req(CTRL_Handle *out_thread);
+
+//- rjf: entry point
+ASYNC_WORK_DEF(ctrl_unwind_work);
 
 #endif // CTRL_CORE_H
