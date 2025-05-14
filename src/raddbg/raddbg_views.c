@@ -3532,7 +3532,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   Vec2S32 dim = v2s32((S32)rd_view_setting_u64_from_name(str8_lit("w")), (S32)rd_view_setting_u64_from_name(str8_lit("h")));
   String8 fmt_string = rd_view_setting_from_name(str8_lit("fmt"));
   R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8;
-  for EachNonZeroEnumVal(R_Tex2DFormat, f)
+  for EachEnumVal(R_Tex2DFormat, f)
   {
     if(str8_match(fmt_string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
     {
