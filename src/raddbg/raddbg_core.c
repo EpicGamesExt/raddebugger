@@ -6392,8 +6392,9 @@ rd_window_frame(void)
           }
           
           // rjf: unwind
-          if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+          if(ctrl_entity->kind == CTRL_EntityKind_Thread) RD_Font(RD_FontSlot_Code)
           {
+            Vec4F32 code_color = ui_color_from_name(str8_lit("code_default"));
             Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
@@ -6402,44 +6403,17 @@ rd_window_frame(void)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
-            for(U64 idx = 0; idx < call_stack.count; idx += 1)
+            EV_StringParams string_params = {EV_StringFlag_ReadOnlyDisplayRules, .radix = 16};
+            String8 thread_handle_string = ctrl_string_from_handle(scratch.arena, ctrl_entity->handle);
+            for(U64 idx = 0; idx < 16; idx += 1)
             {
-              CTRL_CallStackFrame *f = &call_stack.frames[idx];
-              RDI_Parsed *rdi = f->rdi;
-              RDI_Procedure *procedure = f->procedure;
-              U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
-              CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-              String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
-              UI_PrefWidth(ui_children_sum(1)) UI_Row
+              E_Eval rip_eval = e_eval_from_stringf("query:control.%S.call_stack[%I64u]", thread_handle_string, idx);
+              if(rip_eval.irtree.mode != E_Mode_Value)
               {
-                String8 name = {0};
-                if(f->inline_site != 0)
-                {
-                  name.str = rdi_string_from_idx(rdi, f->inline_site->name_string_idx, &name.size);
-                  name.size = Min(512, name.size);
-                }
-                else if(f->procedure != 0)
-                {
-                  name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                  name.size = Min(512, name.size);
-                }
-                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-                if(f->parent_num != 0)
-                {
-                  RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
-                }
-                if(name.size != 0)
-                {
-                  RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
-                  {
-                    rd_code_label(1.f, 0, symbol_color, name);
-                  }
-                }
-                else
-                {
-                  RD_Font(RD_FontSlot_Code) UI_TagF("weak") UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
-                }
+                break;
               }
+              String8 rip_value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, rip_eval);
+              rd_code_label(1, 0, code_color, rip_value_string);
             }
           }
           

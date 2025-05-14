@@ -6608,7 +6608,5 @@ ASYNC_WORK_DEF(ctrl_unwind_work)
   CTRL_Handle thread_handle = {0};
   ctrl_u2uw_dequeue_req(&thread_handle);
   
-  
-  
   return 0;
 }
