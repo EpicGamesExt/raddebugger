@@ -590,41 +590,42 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
-//~ rjf: Unwind Cache Types
+//~ rjf: Call Stack Cache Types
 
-typedef struct CTRL_UnwindCacheNode CTRL_UnwindCacheNode;
-struct CTRL_UnwindCacheNode
+typedef struct CTRL_CallStackCacheNode CTRL_CallStackCacheNode;
+struct CTRL_CallStackCacheNode
 {
-  CTRL_UnwindCacheNode *next;
-  CTRL_UnwindCacheNode *prev;
+  CTRL_CallStackCacheNode *next;
+  CTRL_CallStackCacheNode *prev;
   Arena *arena;
   CTRL_Handle thread;
   U64 reg_gen;
   U64 mem_gen;
   CTRL_Unwind unwind;
+  CTRL_CallStack call_stack;
 };
 
-typedef struct CTRL_UnwindCacheSlot CTRL_UnwindCacheSlot;
-struct CTRL_UnwindCacheSlot
+typedef struct CTRL_CallStackCacheSlot CTRL_CallStackCacheSlot;
+struct CTRL_CallStackCacheSlot
 {
-  CTRL_UnwindCacheNode *first;
-  CTRL_UnwindCacheNode *last;
+  CTRL_CallStackCacheNode *first;
+  CTRL_CallStackCacheNode *last;
 };
 
-typedef struct CTRL_UnwindCacheStripe CTRL_UnwindCacheStripe;
-struct CTRL_UnwindCacheStripe
+typedef struct CTRL_CallStackCacheStripe CTRL_CallStackCacheStripe;
+struct CTRL_CallStackCacheStripe
 {
   Arena *arena;
   OS_Handle rw_mutex;
 };
 
-typedef struct CTRL_UnwindCache CTRL_UnwindCache;
-struct CTRL_UnwindCache
+typedef struct CTRL_CallStackCache CTRL_CallStackCache;
+struct CTRL_CallStackCache
 {
   U64 slots_count;
-  CTRL_UnwindCacheSlot *slots;
+  CTRL_CallStackCacheSlot *slots;
   U64 stripes_count;
-  CTRL_UnwindCacheStripe *stripes;
+  CTRL_CallStackCacheStripe *stripes;
 };
 
 ////////////////////////////////
@@ -720,7 +721,7 @@ struct CTRL_State
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
-  CTRL_UnwindCache unwind_cache;
+  CTRL_CallStackCache call_stack_cache;
   CTRL_ModuleImageInfoCache module_image_info_cache;
   
   // rjf: user -> ctrl msg ring buffer
@@ -765,13 +766,13 @@ struct CTRL_State
   OS_Handle u2ms_ring_mutex;
   OS_Handle u2ms_ring_cv;
   
-  // rjf: user -> unwind ring buffer
-  U64 u2uw_ring_size;
-  U8 *u2uw_ring_base;
-  U64 u2uw_ring_write_pos;
-  U64 u2uw_ring_read_pos;
-  OS_Handle u2uw_ring_mutex;
-  OS_Handle u2uw_ring_cv;
+  // rjf: user -> call stack builder ring buffer
+  U64 u2csb_ring_size;
+  U8 *u2csb_ring_base;
+  U64 u2csb_ring_write_pos;
+  U64 u2csb_ring_read_pos;
+  OS_Handle u2csb_ring_mutex;
+  OS_Handle u2csb_ring_cv;
 };
 
 ////////////////////////////////
@@ -1053,13 +1054,13 @@ internal void ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr
 ASYNC_WORK_DEF(ctrl_mem_stream_work);
 
 ////////////////////////////////
-//~ rjf: Asynchronous Unwinding Functions
+//~ rjf: Asynchronous Call Stack Building Functions
 
 //- rjf: user -> memory stream communication
-internal B32 ctrl_u2uw_enqueue_req(CTRL_Handle thread, U64 endt_us);
-internal void ctrl_u2uw_dequeue_req(CTRL_Handle *out_thread);
+internal B32 ctrl_u2csb_enqueue_req(CTRL_Handle thread, U64 endt_us);
+internal void ctrl_u2csb_dequeue_req(CTRL_Handle *out_thread);
 
 //- rjf: entry point
-ASYNC_WORK_DEF(ctrl_unwind_work);
+ASYNC_WORK_DEF(ctrl_call_stack_build_work);
 
 #endif // CTRL_CORE_H

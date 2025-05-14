@@ -56,9 +56,11 @@ dmn_w32_entity_alloc(DMN_W32_Entity *parent, DMN_W32_EntityKind kind, U64 id)
   // rjf: allocate
   DMN_W32_Entity *e = dmn_w32_shared->entities_first_free;
   {
+    U32 gen = 0;
     if(e != 0)
     {
       SLLStackPop(dmn_w32_shared->entities_first_free);
+      gen = e->gen;
     }
     else
     {
