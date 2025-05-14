@@ -9,31 +9,13 @@ internal RDIM_DataModel
 rdim_infer_data_model(OperatingSystem os, RDI_Arch arch)
 {
   RDIM_DataModel data_model = RDIM_DataModel_Null;
-  switch (os) {
-  case OperatingSystem_Null: break;
-  case OperatingSystem_Windows: {
-    switch (arch) {
-    case RDI_Arch_X86:
-    case RDI_Arch_X64:
-      data_model = RDIM_DataModel_LLP64; break;
-    default: NotImplemented;
-    }
-  } break;
-  case OperatingSystem_Linux: {
-    switch (arch) {
-    case RDI_Arch_X86: data_model = RDIM_DataModel_ILP32; break;
-    case RDI_Arch_X64: data_model = RDIM_DataModel_LLP64; break;
-    default: NotImplemented;
-    }
-  } break;
-  case OperatingSystem_Mac: {
-    switch (arch) {
-    case RDI_Arch_X86: NotImplemented; break;
-    case RDI_Arch_X64: data_model = RDIM_DataModel_LP64; break;
-    }
-  } break;
-  default: InvalidPath;
-  }
+#define Case(os_name, arch_name, model_name) if(os == OperatingSystem_##os_name && arch == Arch_##arch_name) { data_model = RDIM_DataModel_##model_name; }
+  Case(Windows, x86, LLP64);
+  Case(Windows, x64, LLP64);
+  Case(Linux,   x86, ILP32);
+  Case(Linux,   x64, LLP64);
+  Case(Mac,     x64, LP64);
+#undef Case
   return data_model;
 }
 
@@ -45,28 +27,28 @@ rdim_make_top_level_info(String8 image_name, Arch arch, U64 exe_hash, RDIM_Binar
   // convert arch
   RDI_Arch arch_rdi;
   switch (arch) {
-  case Arch_Null: arch_rdi = RDI_Arch_NULL; break;
-  case Arch_x64:  arch_rdi = RDI_Arch_X64;  break;
-  case Arch_x86:  arch_rdi = RDI_Arch_X86;  break;
-  default: NotImplemented; break;
+    case Arch_Null: arch_rdi = RDI_Arch_NULL; break;
+    case Arch_x64:  arch_rdi = RDI_Arch_X64;  break;
+    case Arch_x86:  arch_rdi = RDI_Arch_X86;  break;
+    default: NotImplemented; break;
   }
-
-
+  
+  
   // find max VOFF
   U64 exe_voff_max = 0;
   for (RDIM_BinarySectionNode *sect_n = sections.first; sect_n != 0 ; sect_n = sect_n->next) {
     exe_voff_max = Max(exe_voff_max, sect_n->v.voff_opl);
   }
-
-
+  
+  
   // fill out top level info
   RDIM_TopLevelInfo top_level_info = {0};
   top_level_info.arch              = arch_rdi;
   top_level_info.exe_hash          = exe_hash;
   top_level_info.voff_max          = exe_voff_max;
   top_level_info.producer_name     = str8_lit(BUILD_TITLE_STRING_LITERAL);
-
-
+  
+  
   return top_level_info;
 }
 
@@ -467,11 +449,11 @@ internal void
 rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList *udts)
 {
   ProfBeginFunction();
-
+  
   Temp scratch = scratch_begin(0,0);
-
+  
   U64 total_type_count = types->total_count + 1;
-
+  
   ProfBegin("Build Hash Table");
   RDIM_Type **name_ht = rdim_push_array(scratch.arena, RDIM_Type *, total_type_count);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
@@ -483,7 +465,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
       {
         RDIM_String8 name = type->link_name.size ? type->link_name : type->name;
         RDI_U64      hash = rdim_local_hash(name);
-
+        
         RDI_U64 best_slot = hash % types->total_count;
         RDI_U64 slot      = best_slot;
         do
@@ -493,7 +475,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
           {
             break;
           }
-
+          
           if(s->link_name.size)
           {
             if(str8_match(s->link_name, name, 0))
@@ -508,10 +490,10 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
               break;
             }
           }
-
+          
           slot = (slot + 1) % total_type_count;
         } while (slot != best_slot);
-
+        
         if(name_ht[slot] == 0)
         {
           name_ht[slot] = type;
@@ -520,7 +502,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
     }
   }
   ProfEnd();
-
+  
   ProfBegin("Make Fwd Map");
   RDIM_Type **fwd_map = rdim_push_array(scratch.arena, RDIM_Type *, total_type_count);
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
@@ -528,14 +510,14 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
     for(RDI_U64 i = 0; i < chunk->count; i += 1)
     {
       RDIM_Type *type = &chunk->v[i];
-
+      
       if(RDI_TypeKind_FirstIncomplete <= type->kind && type->kind <= RDI_TypeKind_LastIncomplete)
       {
         RDIM_String8 name      = type->link_name.size ? type->link_name : type->name;
         RDI_U64      hash      = rdim_local_hash(name);
         RDI_U64      best_slot = hash % types->total_count;
         RDI_U64      slot      = best_slot;
-
+        
         RDIM_Type *match = 0;
         do
         {
@@ -560,14 +542,14 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
               break;
             }
           }
-
+          
           slot = (slot + 1) % total_type_count;
         } while(slot != best_slot);
-
+        
         if(match)
         {
           type->kind = RDI_TypeKind_NULL;
-
+          
           RDI_U64 type_idx = rdim_idx_from_type(type);
           fwd_map[type_idx] = match;
         }
@@ -575,7 +557,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
     }
   }
   ProfEnd();
-
+  
   ProfBegin("Resolve Types");
   for(RDIM_TypeChunkNode *chunk = types->first; chunk != 0; chunk = chunk->next)
   {
@@ -613,7 +595,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
       {
         udt->self_type = fwd_map[self_idx];
       }
-
+      
       for(RDIM_UDTMember *member = udt->first_member; member != 0; member = member->next)
       {
         RDI_U64 member_idx = rdim_idx_from_type(member->type);
@@ -625,7 +607,7 @@ rdim_local_resolve_incomplete_types(RDIM_TypeChunkList *types, RDIM_UDTChunkList
     }
   }
   ProfEnd();
-
+  
   scratch_end(scratch);
   ProfEnd();
 }
@@ -650,7 +632,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
 {
   Temp scratch = scratch_begin(0,0);
   RDIM_BakeResults out = {0};
-
+  
   rdim_local_state = state;
   
   //////////////////////////////
@@ -669,7 +651,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   RDIM_BakePathTree *path_tree = 0;
   ProfScope("build interned path tree")
   {
-    path_tree = rdim_bake_path_tree_from_params(state->work_thread_arenas[0], in_params);
+    path_tree = rdim_bake_path_tree_from_params(state->arena, in_params);
   }
   
   //////////////////////////////
@@ -807,7 +789,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
         }
       }
     }
-
+    
     ProfScope("kick off inline site string map build task")
     {
       U64 items_per_task = 4096;
@@ -900,7 +882,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   //////////////////////////////
   //- rjf: produce joined string map
   //
-  RDIM_BakeStringMapLoose *unsorted_bake_string_map = rdim_bake_string_map_loose_make(state->work_thread_arenas[0], &bake_string_map_topology);
+  RDIM_BakeStringMapLoose *unsorted_bake_string_map = rdim_bake_string_map_loose_make(state->arena, &bake_string_map_topology);
   ProfScope("produce joined string map")
   {
     U64 slots_per_task = 16384;
@@ -927,16 +909,16 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
     }
     
     // rjf: insert small top-level stuff
-    rdim_bake_string_map_loose_push_top_level_info(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, &in_params->top_level_info);
-    rdim_bake_string_map_loose_push_binary_sections(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
-    rdim_bake_string_map_loose_push_path_tree(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, path_tree);
+    rdim_bake_string_map_loose_push_top_level_info(state->arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->top_level_info);
+    rdim_bake_string_map_loose_push_binary_sections(state->arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
+    rdim_bake_string_map_loose_push_path_tree(state->arena, &bake_string_map_topology, unsorted_bake_string_map, path_tree);
   }
   
   //////////////////////////////
   //- rjf: kick off string map sorting tasks
   //
   ASYNC_TaskList sort_bake_string_map_tasks = {0};
-  RDIM_BakeStringMapLoose *sorted_bake_string_map__in_progress = rdim_bake_string_map_loose_make(state->work_thread_arenas[0], &bake_string_map_topology);
+  RDIM_BakeStringMapLoose *sorted_bake_string_map__in_progress = rdim_bake_string_map_loose_make(state->arena, &bake_string_map_topology);
   {
     U64 slots_per_task = 4096;
     U64 num_tasks = (bake_string_map_topology.slots_count+slots_per_task-1)/slots_per_task;
@@ -974,10 +956,10 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   //- rjf: build finalized string map
   //
   ProfBegin("build finalized string map base indices");
-  RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(state->work_thread_arenas[0], &bake_string_map_topology, sorted_bake_string_map);
+  RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(state->arena, &bake_string_map_topology, sorted_bake_string_map);
   ProfEnd();
   ProfBegin("build finalized string map");
-  RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(state->work_thread_arenas[0], &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
+  RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(state->arena, &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
   ProfEnd();
   
   //////////////////////////////
@@ -1001,31 +983,31 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   ASYNC_Task *bake_file_paths_task = async_task_launch(scratch.arena, rdim_bake_file_paths_work, .input = &bake_file_paths_in);
   RDIM_BakeStringsIn bake_strings_in = {&bake_strings};
   ASYNC_Task *bake_strings_task = async_task_launch(scratch.arena, rdim_bake_strings_work, .input = &bake_strings_in);
-
+  
   RDIM_String8List location_blocks     = {0};
   RDIM_String8List location_data_blobs = {0};
-
+  
   // reserve null location block for opl
-  rdim_location_block_chunk_list_push_array(state->work_thread_arenas[0], &location_blocks, 1);
-
+  rdim_location_block_chunk_list_push_array(state->arena, &location_blocks, 1);
+  
   // TODO: export location instead of VOFF
   RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables};
   ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, rdim_bake_thread_variables_work, .input = &bake_thread_variables_in);
   ProfScope("thread variables") out.thread_variables = *async_task_join_struct(bake_thread_variables_task, RDIM_ThreadVariableBakeResult);
-
+  
   // TODO: export location instead of VOFF
   RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables};
   ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, rdim_bake_global_variables_work, .input = &bake_global_variables_in);
   ProfScope("global variables") out.global_variables = *async_task_join_struct(bake_global_variables_task, RDIM_GlobalVariableBakeResult);
-
+  
   RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, rdim_bake_scopes_work, .input = &bake_scopes_in);
   ProfScope("scopes") out.scopes = *async_task_join_struct(bake_scopes_task, RDIM_ScopeBakeResult);
-
+  
   RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, rdim_bake_procedures_work, .input = &bake_procedures_in);
   ProfScope("procedures") out.procedures = *async_task_join_struct(bake_procedures_task, RDIM_ProcedureBakeResult);
-
+  
   //////////////////////////////
   //- rjf: join name map building tasks
   //
@@ -1046,15 +1028,15 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   RDIM_BakeIdxRunMap *idx_runs = 0;
   ProfScope("build interned idx run map")
   {
-    idx_runs = rdim_bake_idx_run_map_from_params(state->work_thread_arenas[0], name_maps, in_params);
+    idx_runs = rdim_bake_idx_run_map_from_params(state->arena, name_maps, in_params);
   }
   
   //////////////////////////////
   //- rjf: do small top-level bakes
   //
-  ProfScope("top level info")              out.top_level_info      = rdim_bake_top_level_info(state->work_thread_arenas[0], &bake_strings, &in_params->top_level_info);
-  ProfScope("binary sections")             out.binary_sections     = rdim_bake_binary_sections(state->work_thread_arenas[0], &bake_strings, &in_params->binary_sections);
-  ProfScope("top level name maps section") out.top_level_name_maps = rdim_bake_name_maps_top_level(state->work_thread_arenas[0], &bake_strings, idx_runs, name_maps);
+  ProfScope("top level info")              out.top_level_info      = rdim_bake_top_level_info(state->arena, &bake_strings, &in_params->top_level_info);
+  ProfScope("binary sections")             out.binary_sections     = rdim_bake_binary_sections(state->arena, &bake_strings, &in_params->binary_sections);
+  ProfScope("top level name maps section") out.top_level_name_maps = rdim_bake_name_maps_top_level(state->arena, &bake_strings, idx_runs, name_maps);
   
   //////////////////////////////
   //- rjf: kick off pass 3 tasks
@@ -1117,15 +1099,15 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   //
   ProfScope("join all name map bakes into final name map bake")
   {
-    out.name_maps = rdim_name_map_bake_results_combine(state->work_thread_arenas[0], name_map_bakes, ArrayCount(name_map_bakes));
+    out.name_maps = rdim_name_map_bake_results_combine(state->arena, name_map_bakes, ArrayCount(name_map_bakes));
   }
-
-
+  
+  
   ////////////////////////////////
-
-  out.location_blocks = rdim_str8_list_join(state->work_thread_arenas[0], &location_blocks,     rdim_str8(0,0));
-  out.location_data   = rdim_str8_list_join(state->work_thread_arenas[0], &location_data_blobs, rdim_str8(0,0));
-
+  
+  out.location_blocks = rdim_str8_list_join(state->arena, &location_blocks,     rdim_str8(0,0));
+  out.location_data   = rdim_str8_list_join(state->arena, &location_data_blobs, rdim_str8(0,0));
+  
   rdim_local_state = 0;
   
   scratch_end(scratch);
@@ -1136,22 +1118,22 @@ internal RDIM_SerializedSectionBundle
 rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
 {
   RDIM_SerializedSectionBundle out = {0};
-
+  
   //- rjf: set up compression context
   rr_lzb_simple_context ctx = {0};
   ctx.m_tableSizeBits = 14;
   ctx.m_hashTable = push_array(arena, U16, 1<<ctx.m_tableSizeBits);
-
+  
   //- rjf: compress, or just copy, all sections
   for EachEnumVal(RDI_SectionKind, k)
   {
     RDIM_SerializedSection *src = &in->sections[k];
     RDIM_SerializedSection *dst = &out.sections[k];
     MemoryCopyStruct(dst, src);
-
+    
     // rjf: determine if this section should be compressed
     B32 should_compress = 1;
-
+    
     // rjf: compress if needed
     if(should_compress)
     {
@@ -1162,7 +1144,7 @@ rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
       dst->encoding = RDI_SectionEncoding_LZB;
     }
   }
-
+  
   return out;
 }
 

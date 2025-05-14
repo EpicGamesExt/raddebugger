@@ -402,12 +402,12 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
 {
   Temp scratch = scratch_begin(0,0);
   RDIM_BakeResults out = {0};
-
+  
   rdim_help_state = state;
-
+  
   ////////////////////////////////
   // compute type indices
-
+  
   RDI_U64 *type_indices = rdim_make_type_indices(scratch.arena, &in_params->types);
   
   //////////////////////////////
@@ -426,7 +426,7 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   RDIM_BakePathTree *path_tree = 0;
   ProfScope("build interned path tree")
   {
-    path_tree = rdim_bake_path_tree_from_params(state->work_thread_arenas[0], in_params);
+    path_tree = rdim_bake_path_tree_from_params(state->arena, in_params);
   }
   
   //////////////////////////////
@@ -564,7 +564,7 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
         }
       }
     }
-
+    
     ProfScope("kick off inline site string map build task")
     {
       U64 items_per_task = 4096;
@@ -658,7 +658,7 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   //////////////////////////////
   //- rjf: produce joined string map
   //
-  RDIM_BakeStringMapLoose *unsorted_bake_string_map = rdim_bake_string_map_loose_make(state->work_thread_arenas[0], &bake_string_map_topology);
+  RDIM_BakeStringMapLoose *unsorted_bake_string_map = rdim_bake_string_map_loose_make(state->arena, &bake_string_map_topology);
   ProfScope("produce joined string map")
   {
     U64 slots_per_task = 16384;
@@ -685,16 +685,16 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
     }
     
     // rjf: insert small top-level stuff
-    rdim_bake_string_map_loose_push_top_level_info(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, &in_params->top_level_info);
-    rdim_bake_string_map_loose_push_binary_sections(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
-    rdim_bake_string_map_loose_push_path_tree(state->work_thread_arenas[0], &bake_string_map_topology, unsorted_bake_string_map, path_tree);
+    rdim_bake_string_map_loose_push_top_level_info(state->arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->top_level_info);
+    rdim_bake_string_map_loose_push_binary_sections(state->arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
+    rdim_bake_string_map_loose_push_path_tree(state->arena, &bake_string_map_topology, unsorted_bake_string_map, path_tree);
   }
   
   //////////////////////////////
   //- rjf: kick off string map sorting tasks
   //
   ASYNC_TaskList sort_bake_string_map_tasks = {0};
-  RDIM_BakeStringMapLoose *sorted_bake_string_map__in_progress = rdim_bake_string_map_loose_make(state->work_thread_arenas[0], &bake_string_map_topology);
+  RDIM_BakeStringMapLoose *sorted_bake_string_map__in_progress = rdim_bake_string_map_loose_make(state->arena, &bake_string_map_topology);
   {
     U64 slots_per_task = 4096;
     U64 num_tasks = (bake_string_map_topology.slots_count+slots_per_task-1)/slots_per_task;
@@ -732,10 +732,10 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   //- rjf: build finalized string map
   //
   ProfBegin("build finalized string map base indices");
-  RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(state->work_thread_arenas[0], &bake_string_map_topology, sorted_bake_string_map);
+  RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(state->arena, &bake_string_map_topology, sorted_bake_string_map);
   ProfEnd();
   ProfBegin("build finalized string map");
-  RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(state->work_thread_arenas[0], &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
+  RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(state->arena, &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
   ProfEnd();
   
   //////////////////////////////
@@ -759,31 +759,31 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   ASYNC_Task *bake_file_paths_task = async_task_launch(scratch.arena, rdim_bake_file_paths_work, .input = &bake_file_paths_in);
   RDIM_BakeStringsIn bake_strings_in = {&bake_strings};
   ASYNC_Task *bake_strings_task = async_task_launch(scratch.arena, rdim_bake_strings_work, .input = &bake_strings_in);
-
+  
   RDIM_String8List location_blocks     = {0};
   RDIM_String8List location_data_blobs = {0};
-
+  
   // reserve null location block for opl
-  rdim_location_block_chunk_list_push_array(state->work_thread_arenas[0], &location_blocks, 1);
-
+  rdim_location_block_chunk_list_push_array(state->arena, &location_blocks, 1);
+  
   // TODO: export location instead of VOFF
   RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables, type_indices};
   ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, rdim_bake_thread_variables_work, .input = &bake_thread_variables_in);
   ProfScope("thread variables") out.thread_variables = *async_task_join_struct(bake_thread_variables_task, RDIM_ThreadVariableBakeResult);
-
+  
   // TODO: export location instead of VOFF
   RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables, type_indices};
   ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, rdim_bake_global_variables_work, .input = &bake_global_variables_in);
   ProfScope("global variables") out.global_variables = *async_task_join_struct(bake_global_variables_task, RDIM_GlobalVariableBakeResult);
-
+  
   RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, type_indices, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, rdim_bake_scopes_work, .input = &bake_scopes_in);
   ProfScope("scopes") out.scopes = *async_task_join_struct(bake_scopes_task, RDIM_ScopeBakeResult);
-
+  
   RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, type_indices, &location_blocks, &location_data_blobs};
   ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, rdim_bake_procedures_work, .input = &bake_procedures_in);
   ProfScope("procedures") out.procedures = *async_task_join_struct(bake_procedures_task, RDIM_ProcedureBakeResult);
-
+  
   //////////////////////////////
   //- rjf: join name map building tasks
   //
@@ -804,15 +804,15 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   RDIM_BakeIdxRunMap *idx_runs = 0;
   ProfScope("build interned idx run map")
   {
-    idx_runs = rdim_bake_idx_run_map_from_params(state->work_thread_arenas[0], name_maps, type_indices, in_params);
+    idx_runs = rdim_bake_idx_run_map_from_params(state->arena, name_maps, type_indices, in_params);
   }
   
   //////////////////////////////
   //- rjf: do small top-level bakes
   //
-  ProfScope("top level info")              out.top_level_info      = rdim_bake_top_level_info(state->work_thread_arenas[0], &bake_strings, &in_params->top_level_info);
-  ProfScope("binary sections")             out.binary_sections     = rdim_bake_binary_sections(state->work_thread_arenas[0], &bake_strings, &in_params->binary_sections);
-  ProfScope("top level name maps section") out.top_level_name_maps = rdim_bake_name_maps_top_level(state->work_thread_arenas[0], &bake_strings, idx_runs, name_maps);
+  ProfScope("top level info")              out.top_level_info      = rdim_bake_top_level_info(state->arena, &bake_strings, &in_params->top_level_info);
+  ProfScope("binary sections")             out.binary_sections     = rdim_bake_binary_sections(state->arena, &bake_strings, &in_params->binary_sections);
+  ProfScope("top level name maps section") out.top_level_name_maps = rdim_bake_name_maps_top_level(state->arena, &bake_strings, idx_runs, name_maps);
   
   //////////////////////////////
   //- rjf: kick off pass 3 tasks
@@ -875,15 +875,15 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
   //
   ProfScope("join all name map bakes into final name map bake")
   {
-    out.name_maps = rdim_name_map_bake_results_combine(state->work_thread_arenas[0], name_map_bakes, ArrayCount(name_map_bakes));
+    out.name_maps = rdim_name_map_bake_results_combine(state->arena, name_map_bakes, ArrayCount(name_map_bakes));
   }
-
-
+  
+  
   ////////////////////////////////
-
-  out.location_blocks = rdim_str8_list_join(state->work_thread_arenas[0], &location_blocks,     rdim_str8(0,0));
-  out.location_data   = rdim_str8_list_join(state->work_thread_arenas[0], &location_data_blobs, rdim_str8(0,0));
-
+  
+  out.location_blocks = rdim_str8_list_join(state->arena, &location_blocks,     rdim_str8(0,0));
+  out.location_data   = rdim_str8_list_join(state->arena, &location_data_blobs, rdim_str8(0,0));
+  
   rdim_help_state = 0;
   
   scratch_end(scratch);
@@ -894,22 +894,22 @@ internal RDIM_SerializedSectionBundle
 rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
 {
   RDIM_SerializedSectionBundle out = {0};
-
+  
   //- rjf: set up compression context
   rr_lzb_simple_context ctx = {0};
   ctx.m_tableSizeBits = 14;
   ctx.m_hashTable = push_array(arena, U16, 1<<ctx.m_tableSizeBits);
-
+  
   //- rjf: compress, or just copy, all sections
   for EachEnumVal(RDI_SectionKind, k)
   {
     RDIM_SerializedSection *src = &in->sections[k];
     RDIM_SerializedSection *dst = &out.sections[k];
     MemoryCopyStruct(dst, src);
-
+    
     // rjf: determine if this section should be compressed
     B32 should_compress = 1;
-
+    
     // rjf: compress if needed
     if(should_compress)
     {
@@ -920,6 +920,6 @@ rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in)
       dst->encoding = RDI_SectionEncoding_LZB;
     }
   }
-
+  
   return out;
 }
