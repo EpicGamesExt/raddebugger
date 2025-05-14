@@ -1805,7 +1805,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         default:{}break;
         case CTRL_EntityKind_Process:
         {
-          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, entity->handle, range, rd_state->frame_eval_memread_endt_us);
+          CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, range, rd_state->frame_eval_memread_endt_us);
           String8 data = slice.data;
           if(data.size == dim_1u64(range))
           {
@@ -2021,7 +2021,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 write_range = intersect_1u64(legal_range, range);
           U64 write_size = dim_1u64(write_range);
-          void *new_regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, entity->handle);
+          void *new_regs = ctrl_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, entity->handle);
           MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
           result = ctrl_thread_write_reg_block(entity->handle, new_regs);
           scratch_end(scratch);
@@ -4508,7 +4508,7 @@ rd_view_ui(Rng2F32 rect)
                         U64 size = e_type_byte_size_from_key(row->eval.irtree.type_key);
                         size = Min(size, 64);
                         Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
-                        CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
+                        CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
                         for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                         {
                           if(slice.byte_changed_flags[idx] != 0)
@@ -11644,7 +11644,7 @@ rd_frame(void)
     CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-    U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->handle);
+    U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->handle);
     CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
@@ -15650,7 +15650,7 @@ rd_frame(void)
           {
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle));
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle));
             CTRL_Entity *machine = ctrl_entity_ancestor_from_kind(process, CTRL_EntityKind_Machine);
             rd_state->base_regs.v.unwind_count = 0;
             rd_state->base_regs.v.inline_depth = 0;
@@ -16423,7 +16423,7 @@ rd_frame(void)
           CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-          U64 test_cached_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
+          U64 test_cached_vaddr = ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
           
           // rjf: valid stop thread? -> select & snap
           if(need_refocus && thread != &ctrl_entity_nil && evt->cause != D_EventCause_Halt)

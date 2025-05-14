@@ -594,6 +594,44 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
+//~ rjf: Thread Unwind Cache Types
+
+typedef struct CTRL_ThreadUnwindCacheNode CTRL_ThreadUnwindCacheNode;
+struct CTRL_ThreadUnwindCacheNode
+{
+  CTRL_ThreadUnwindCacheNode *next;
+  CTRL_ThreadUnwindCacheNode *prev;
+  Arena *arena;
+  CTRL_Handle thread;
+  U64 reg_gen;
+  U64 mem_gen;
+  CTRL_Unwind unwind;
+};
+
+typedef struct CTRL_ThreadUnwindCacheSlot CTRL_ThreadUnwindCacheSlot;
+struct CTRL_ThreadUnwindCacheSlot
+{
+  CTRL_ThreadUnwindCacheNode *first;
+  CTRL_ThreadUnwindCacheNode *last;
+};
+
+typedef struct CTRL_ThreadUnwindCacheStripe CTRL_ThreadUnwindCacheStripe;
+struct CTRL_ThreadUnwindCacheStripe
+{
+  Arena *arena;
+  OS_Handle rw_mutex;
+};
+
+typedef struct CTRL_ThreadUnwindCache CTRL_ThreadUnwindCache;
+struct CTRL_ThreadUnwindCache
+{
+  U64 slots_count;
+  CTRL_ThreadUnwindCacheSlot *slots;
+  U64 stripes_count;
+  CTRL_ThreadUnwindCacheStripe *stripes;
+};
+
+////////////////////////////////
 //~ rjf: Module Image Info Cache Types
 
 typedef struct CTRL_ModuleImageInfoCacheNode CTRL_ModuleImageInfoCacheNode;
@@ -686,6 +724,7 @@ struct CTRL_State
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
+  CTRL_ThreadUnwindCache thread_unwind_cache;
   CTRL_ModuleImageInfoCache module_image_info_cache;
   
   // rjf: user -> ctrl msg ring buffer
@@ -885,10 +924,9 @@ internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng
 internal U128 ctrl_hash_store_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
 
 //- rjf: process memory cache reading helpers
-internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, U64 endt_us);
-internal CTRL_ProcessMemorySlice ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_Handle process, U64 vaddr, U64 limit, U64 element_size, U64 endt_us);
-internal B32 ctrl_read_cached_process_memory(CTRL_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us);
-#define ctrl_read_cached_process_memory_struct(process, vaddr, is_stale_out, ptr, endt_us) ctrl_read_cached_process_memory((process), r1u64((vaddr), (vaddr)+(sizeof(*(ptr)))), (is_stale_out), (ptr), (endt_us))
+internal CTRL_ProcessMemorySlice ctrl_process_memory_slice_from_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, U64 endt_us);
+internal B32 ctrl_process_memory_read(CTRL_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us);
+#define ctrl_process_memory_read_struct(process, vaddr, is_stale_out, ptr, endt_us) ctrl_process_memory_read((process), r1u64((vaddr), (vaddr)+(sizeof(*(ptr)))), (is_stale_out), (ptr), (endt_us))
 
 //- rjf: process memory writing
 internal B32 ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src);
@@ -897,10 +935,10 @@ internal B32 ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src);
 //~ rjf: Thread Register Functions
 
 //- rjf: thread register cache reading
-internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_query_cached_rsp_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
+internal void *ctrl_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle handle);
+internal U64 ctrl_tls_root_vaddr_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
+internal U64 ctrl_rip_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
+internal U64 ctrl_rsp_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
 
 //- rjf: thread register writing
 internal B32 ctrl_thread_write_reg_block(CTRL_Handle thread, void *block);

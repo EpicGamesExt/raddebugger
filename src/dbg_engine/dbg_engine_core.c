@@ -300,13 +300,13 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread)
   // rjf: thread => unpacked info
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   Arch arch = thread->arch;
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
+  U64 ip_vaddr = ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
   
   // rjf: ip => machine code
   String8 machine_code = {0};
   {
     Rng1U64 rng = r1u64(ip_vaddr, ip_vaddr+max_instruction_size_from_arch(arch));
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, rng, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, rng, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
   }
   
@@ -337,7 +337,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
+  U64 ip_vaddr = ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
@@ -380,7 +380,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   String8 machine_code = {0};
   if(good_line_info)
   {
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+50000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
     LogInfoNamedBlockF("machine_code_slice")
     {
@@ -498,7 +498,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   
   // rjf: thread => info
   Arch arch = thread->arch;
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
+  U64 ip_vaddr = ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ip_vaddr);
   DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
@@ -536,7 +536,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   String8 machine_code = {0};
   if(good_line_info)
   {
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
   }
   
@@ -1073,7 +1073,7 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
     U64 tls_index = 0;
     if(addr_size != 0)
     {
-      CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, tls_vaddr_range, 0);
+      CTRL_ProcessMemorySlice tls_index_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, tls_vaddr_range, 0);
       if(tls_index_slice.data.size >= addr_size)
       {
         tls_index = *(U64 *)tls_index_slice.data.str;
@@ -1086,13 +1086,13 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
       U64 thread_info_addr = root_vaddr;
       U64 tls_addr_off = tls_index*addr_size;
       U64 tls_addr_array = 0;
-      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
+      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
       String8 tls_addr_array_data = tls_addr_array_slice.data;
       if(tls_addr_array_data.size >= 8)
       {
         MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
       }
-      CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
+      CTRL_ProcessMemorySlice result_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
       String8 result_data = result_slice.data;
       if(result_data.size >= 8)
       {
@@ -1267,7 +1267,7 @@ d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
   U64 result = 0;
   if(unwind_count == 0)
   {
-    result = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
+    result = ctrl_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
   }
   else
   {
@@ -2020,7 +2020,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->thread);
           U64 vaddr = params->vaddr;
-          void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->handle);
+          void *block = ctrl_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->handle);
           regs_arch_block_write_rip(thread->arch, block, vaddr);
           B32 result = ctrl_thread_write_reg_block(thread->handle, block);
           
