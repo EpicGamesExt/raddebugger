@@ -2241,7 +2241,7 @@ ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX
 }
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CTRL_Handle module_handle, REGS_RegBlockX64 *regs, U64 endt_us)
+ctrl_unwind_step__pe_x64(CTRL_Handle process_handle, CTRL_Handle module_handle, U64 module_base_vaddr, REGS_RegBlockX64 *regs, U64 endt_us)
 {
   B32 is_stale = 0;
   B32 is_good = 1;
@@ -2250,9 +2250,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  CTRL_Entity *module = ctrl_entity_from_handle(store, module_handle);
-  CTRL_Entity *process = ctrl_entity_from_handle(store, process_handle);
-  U64 rip_voff = regs->rip.u64 - module->vaddr_range.min;
+  U64 rip_voff = regs->rip.u64 - module_base_vaddr;
   
   //////////////////////////////
   //- rjf: rip_voff -> first pdata
@@ -2363,7 +2361,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       U8 inst_byte = 0;
       if(read_vaddr + sizeof(inst_byte) <= read_vaddr_opl)
       {
-        inst_byte_good = ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+        inst_byte_good = ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &inst_byte, endt_us);
       }
       if(!inst_byte_good || is_stale)
       {
@@ -2379,7 +2377,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
         check_vaddr = read_vaddr + 1;
         if(read_vaddr + sizeof(check_inst_byte) <= read_vaddr_opl)
         {
-          check_inst_byte_good = ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &check_inst_byte, endt_us);
+          check_inst_byte_good = ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &check_inst_byte, endt_us);
         }
         if(!check_inst_byte_good || is_stale)
         {
@@ -2415,7 +2413,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             B32 imm_good = 0;
             if(read_vaddr + sizeof(imm) <= read_vaddr_opl)
             {
-              imm_good = ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm, endt_us);
+              imm_good = ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm, endt_us);
             }
             if(!imm_good || is_stale)
             {
@@ -2424,7 +2422,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             if(imm_good)
             {
               U64 next_vaddr = (U64)(imm_vaddr + sizeof(imm) + imm);
-              U64 next_voff = next_vaddr - module->vaddr_range.min; // TODO(rjf): verify that this offset is from module base vaddr, not section
+              U64 next_voff = next_vaddr - module_base_vaddr; // TODO(rjf): verify that this offset is from module base vaddr, not section
               if(!(first_pdata->voff_first <= next_voff && next_voff < first_pdata->voff_one_past_last))
               {
                 keep_parsing = 0;
@@ -2444,7 +2442,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             B32 next_inst_byte_good = 0;
             if(read_vaddr + sizeof(next_inst_byte) <= read_vaddr_opl)
             {
-              next_inst_byte_good = ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &next_inst_byte, endt_us);
+              next_inst_byte_good = ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &next_inst_byte, endt_us);
             }
             if(next_inst_byte_good)
             {
@@ -2473,7 +2471,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       
       //- rjf: read next instruction byte
       U8 inst_byte = 0;
-      is_good = is_good && ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+      is_good = is_good && ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &inst_byte, endt_us);
       is_good = is_good && !is_stale;
       read_vaddr += 1;
       
@@ -2482,7 +2480,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       if((inst_byte & 0xF0) == 0x40)
       {
         rex = inst_byte & 0xF; // rex prefix
-        is_good = is_good && ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+        is_good = is_good && ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &inst_byte, endt_us);
         is_good = is_good && !is_stale;
         read_vaddr += 1;
       }
@@ -2503,7 +2501,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           // rjf: read value at rsp
           U64 sp = regs->rsp.u64;
           U64 value = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, sp, &is_stale, &value, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, sp, &is_stale, &value, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2528,7 +2526,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           
           // rjf: read the 4-byte immediate
           S32 imm = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2551,7 +2549,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           
           // rjf: read the 4-byte immediate
           S8 imm = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2571,7 +2569,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
         {
           // rjf: read source register
           U8 modrm = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &modrm, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &modrm, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2589,7 +2587,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             if((modrm >> 6) == 1)
             {
               S8 imm8 = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm8, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm8, endt_us) ||
                  is_stale)
               {
                 is_good = 0;
@@ -2602,7 +2600,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             // rjf: read 4-byte immediate
             else
             {
-              if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm, endt_us) ||
                  is_stale)
               {
                 is_good = 0;
@@ -2625,7 +2623,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           // rjf: read new ip
           U64 sp = regs->rsp.u64;
           U64 new_ip = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, sp, &is_stale, &new_ip, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, sp, &is_stale, &new_ip, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2634,7 +2632,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           
           // rjf: read 2-byte immediate & advance stack pointer
           U16 imm = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, read_vaddr, &is_stale, &imm, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2657,7 +2655,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
           // rjf: read new ip
           U64 sp = regs->rsp.u64;
           U64 new_ip = 0;
-          if(!ctrl_process_memory_read_struct(process->handle, sp, &is_stale, &new_ip, endt_us) ||
+          if(!ctrl_process_memory_read_struct(process_handle, sp, &is_stale, &new_ip, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2704,7 +2702,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
     {
       U64 unwind_info_off = first_pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
-      if(!ctrl_process_memory_read_struct(process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us) ||
+      if(!ctrl_process_memory_read_struct(process_handle, module_base_vaddr+unwind_info_off, &is_stale, &unwind_info, endt_us) ||
          is_stale)
       {
         is_good = 0;
@@ -2728,10 +2726,10 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       B32 good_unwind_info = 1;
       U64 unwind_info_off = pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
-      good_unwind_info = good_unwind_info && ctrl_process_memory_read_struct(process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
+      good_unwind_info = good_unwind_info && ctrl_process_memory_read_struct(process_handle, module_base_vaddr+unwind_info_off, &is_stale, &unwind_info, endt_us);
       PE_UnwindCode *unwind_codes = push_array(scratch.arena, PE_UnwindCode, unwind_info.codes_num);
-      good_unwind_info = good_unwind_info && ctrl_process_memory_read(process->handle, r1u64(module->vaddr_range.min+unwind_info_off+sizeof(unwind_info),
-                                                                                             module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
+      good_unwind_info = good_unwind_info && ctrl_process_memory_read(process_handle, r1u64(module_base_vaddr+unwind_info_off+sizeof(unwind_info),
+                                                                                            module_base_vaddr+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
                                                                       &is_stale, unwind_codes, endt_us);
       good_unwind_info = good_unwind_info && !is_stale;
       
@@ -2787,7 +2785,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               // rjf: read value from stack pointer
               U64 rsp = regs->rsp.u64;
               U64 value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, rsp, &is_stale, &value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, rsp, &is_stale, &value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2849,7 +2847,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               U64 off = code_ptr[1].u16*8;
               U64 addr = frame_base + off;
               U64 value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, addr, &is_stale, &value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, addr, &is_stale, &value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2868,7 +2866,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
               U64 addr = frame_base + off;
               U64 value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, addr, &is_stale, &value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, addr, &is_stale, &value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2899,7 +2897,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               U8 buf[16];
               U64 off = code_ptr[1].u16*16;
               U64 addr = frame_base + off;
-              if(!ctrl_process_memory_read(process->handle, r1u64(addr, addr+sizeof(buf)), &is_stale, buf, endt_us))
+              if(!ctrl_process_memory_read(process_handle, r1u64(addr, addr+sizeof(buf)), &is_stale, buf, endt_us))
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2917,7 +2915,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               U8 buf[16];
               U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
               U64 addr = frame_base + off;
-              if(!ctrl_process_memory_read(process->handle, r1u64(addr, addr+16), &is_stale, buf, endt_us) ||
+              if(!ctrl_process_memory_read(process_handle, r1u64(addr, addr+16), &is_stale, buf, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2949,7 +2947,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
                 sp_adj += 8;
               }
               U64 ip_value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, sp_adj, &is_stale, &ip_value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, sp_adj, &is_stale, &ip_value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2958,7 +2956,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               }
               U64 sp_after_ip = sp_adj + 8;
               U16 ss_value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, sp_after_ip, &is_stale, &ss_value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, sp_after_ip, &is_stale, &ss_value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2967,7 +2965,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               }
               U64 sp_after_ss = sp_after_ip + 8;
               U64 rflags_value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, sp_after_ss, &is_stale, &rflags_value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, sp_after_ss, &is_stale, &rflags_value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -2976,7 +2974,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               }
               U64 sp_after_rflags = sp_after_ss + 8;
               U64 sp_value = 0;
-              if(!ctrl_process_memory_read_struct(process->handle, sp_after_rflags, &is_stale, &sp_value, endt_us) ||
+              if(!ctrl_process_memory_read_struct(process_handle, sp_after_rflags, &is_stale, &sp_value, endt_us) ||
                  is_stale)
               {
                 keep_parsing = 0;
@@ -3010,7 +3008,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
         U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
         last_pdata = pdata;
         pdata = push_array(scratch.arena, PE_IntelPdata, 1);
-        if(!ctrl_process_memory_read_struct(process->handle, module->vaddr_range.min+chained_pdata_off, &is_stale, pdata, endt_us) ||
+        if(!ctrl_process_memory_read_struct(process_handle, module_base_vaddr+chained_pdata_off, &is_stale, pdata, endt_us) ||
            is_stale)
         {
           is_good = 0;
@@ -3028,7 +3026,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
     // rjf: read rip from stack pointer
     U64 rsp = regs->rsp.u64;
     U64 new_rip = 0;
-    if(!ctrl_process_memory_read_struct(process->handle, rsp, &is_stale, &new_rip, endt_us) ||
+    if(!ctrl_process_memory_read_struct(process_handle, rsp, &is_stale, &new_rip, endt_us) ||
        is_stale)
     {
       is_good = 0;
@@ -3056,7 +3054,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
 //- rjf: abstracted unwind step
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step(CTRL_EntityStore *store, CTRL_Handle process, CTRL_Handle module, Arch arch, void *reg_block, U64 endt_us)
+ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, U64 endt_us)
 {
   CTRL_UnwindStepResult result = {0};
   switch(arch)
@@ -3064,7 +3062,7 @@ ctrl_unwind_step(CTRL_EntityStore *store, CTRL_Handle process, CTRL_Handle modul
     default:{}break;
     case Arch_x64:
     {
-      result = ctrl_unwind_step__pe_x64(store, process, module, (REGS_RegBlockX64 *)reg_block, endt_us);
+      result = ctrl_unwind_step__pe_x64(process, module, module_base_vaddr, (REGS_RegBlockX64 *)reg_block, endt_us);
     }break;
   }
   return result;
@@ -3101,12 +3099,12 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
     {
       // rjf: regs -> rip*module
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
-      CTRL_Handle module = {0};
+      CTRL_Entity *module = &ctrl_entity_nil;
       for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
       {
         if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
         {
-          module = m->handle;
+          module = m;
           break;
         }
       }
@@ -3126,7 +3124,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
       frame_node_count += 1;
       
       // rjf: unwind one step
-      CTRL_UnwindStepResult step = ctrl_unwind_step(store, process_entity->handle, module, arch, regs_block, endt_us);
+      CTRL_UnwindStepResult step = ctrl_unwind_step(process_entity->handle, module->handle, module->vaddr_range.min, arch, regs_block, endt_us);
       unwind.flags |= step.flags;
       if(step.flags & CTRL_UnwindFlag_Error ||
          regs_rsp_from_arch_block(arch, regs_block) == 0 ||
