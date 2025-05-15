@@ -6783,6 +6783,7 @@ ctrl_u2csb_dequeue_req(CTRL_Handle *out_thread)
 
 ASYNC_WORK_DEF(ctrl_call_stack_build_work)
 {
+  Temp scratch = scratch_begin(0, 0);
   CTRL_CallStackCache *cache = &ctrl_state->call_stack_cache;
   
   //- rjf: get next request & unpack
@@ -6794,12 +6795,94 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
   CTRL_CallStackCacheSlot *slot = &cache->slots[slot_idx];
   CTRL_CallStackCacheStripe *stripe = &cache->stripes[stripe_idx];
   
-  //- rjf: do task
+  //- rjf: produce mini entity context for just this process
+  CTRL_EntityCtx *entity_ctx = push_array(scratch.arena, CTRL_EntityCtx, 1);
   OS_MutexScopeR(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
   {
-    Temp scratch = scratch_begin(0, 0);
-    CTRL_EntityCtx *ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
-    CTRL_Entity *thread = ctrl_entity_from_handle(ctx, thread_handle);
+    CTRL_EntityCtx *src_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+    CTRL_EntityCtx *dst_ctx = entity_ctx;
+    {
+      dst_ctx->root = &ctrl_entity_nil;
+      dst_ctx->hash_slots_count = 1024;
+      dst_ctx->hash_slots = push_array(scratch.arena, CTRL_EntityHashSlot, dst_ctx->hash_slots_count);
+      MemoryCopyArray(dst_ctx->entity_kind_counts, src_ctx->entity_kind_counts);
+      MemoryCopyArray(dst_ctx->entity_kind_alloc_gens, src_ctx->entity_kind_alloc_gens);
+    }
+    CTRL_Entity *src_thread = ctrl_entity_from_handle(src_ctx, thread_handle);
+    CTRL_Entity *src_process = ctrl_process_from_entity(src_thread);
+    {
+      CTRL_EntityRec rec = {0};
+      CTRL_Entity *dst_parent = &ctrl_entity_nil;
+      for(CTRL_Entity *src_e = src_process; src_e != &ctrl_entity_nil; src_e = rec.next)
+      {
+        rec = ctrl_entity_rec_depth_first_pre(src_e, src_process);
+        
+        // rjf: copy this entity
+        CTRL_Entity *dst_e = push_array(scratch.arena, CTRL_Entity, 1);
+        {
+          dst_e->first = dst_e->last = dst_e->next = dst_e->prev = &ctrl_entity_nil;
+          dst_e->parent           = dst_parent;
+          dst_e->kind             = src_e->kind;
+          dst_e->arch             = src_e->arch;
+          dst_e->is_frozen        = src_e->is_frozen;
+          dst_e->is_soloed        = src_e->is_soloed;
+          dst_e->rgba             = src_e->rgba;
+          dst_e->handle           = src_e->handle;
+          dst_e->id               = src_e->id;
+          dst_e->vaddr_range      = src_e->vaddr_range;
+          dst_e->stack_base       = src_e->stack_base;
+          dst_e->timestamp        = src_e->timestamp;
+          dst_e->bp_flags         = src_e->bp_flags;
+          dst_e->string           = push_str8_copy(scratch.arena, src_e->string);
+        }
+        if(dst_parent == &ctrl_entity_nil)
+        {
+          dst_ctx->root = dst_e;
+        }
+        else
+        {
+          DLLPushBack_NPZ(&ctrl_entity_nil, dst_parent->first, dst_parent->last, dst_e, next, prev);
+        }
+        
+        // rjf: insert into hash map
+        {
+          U64 hash = ctrl_hash_from_handle(dst_e->handle);
+          U64 slot_idx = hash%dst_ctx->hash_slots_count;
+          CTRL_EntityHashSlot *slot = &dst_ctx->hash_slots[slot_idx];
+          CTRL_EntityHashNode *node = 0;
+          for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
+          {
+            if(ctrl_handle_match(n->entity->handle, dst_e->handle))
+            {
+              node = n;
+              break;
+            }
+          }
+          if(node == 0)
+          {
+            node = push_array(scratch.arena, CTRL_EntityHashNode, 1);
+            MemoryZeroStruct(node);
+            DLLPushBack(slot->first, slot->last, node);
+            node->entity = dst_e;
+          }
+        }
+        
+        // rjf: push/pop
+        if(rec.push_count)
+        {
+          dst_parent = dst_e;
+        }
+        else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+        {
+          dst_parent = dst_parent->parent;
+        }
+      }
+    }
+  }
+  
+  //- rjf: do task
+  {
+    CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, thread_handle);
     CTRL_Entity *process = ctrl_process_from_entity(thread);
     
     //- rjf: compute unwind to find list of all concrete frames, then
@@ -6807,7 +6890,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     U64 pre_reg_gen = ctrl_reg_gen();
     U64 pre_mem_gen = ctrl_mem_gen();
     Arena *arena = arena_alloc();
-    CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, ctx, thread_handle, 0);
+    CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, 0);
     CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(arena, process, &unwind);
     U64 post_reg_gen = ctrl_reg_gen();
     U64 post_mem_gen = ctrl_mem_gen();
@@ -6879,9 +6962,8 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
         break;
       }
     }
-    
-    scratch_end(scratch);
   }
   
+  scratch_end(scratch);
   return 0;
 }
