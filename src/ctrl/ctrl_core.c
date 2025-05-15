@@ -6938,7 +6938,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
         // rjf: found, not committed? -> wait & retry
         if(found && !committed)
         {
-          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10000);
+          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+100);
         }
       }
       if(committed)
