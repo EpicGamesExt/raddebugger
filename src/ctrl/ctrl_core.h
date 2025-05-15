@@ -182,23 +182,29 @@ typedef struct CTRL_EntityCtx CTRL_EntityCtx;
 struct CTRL_EntityCtx
 {
   CTRL_Entity *root;
-  CTRL_EntityHashSlot *hash_slots;
   U64 hash_slots_count;
+  CTRL_EntityHashSlot *hash_slots;
+  U64 entity_kind_counts[CTRL_EntityKind_COUNT];
+  U64 entity_kind_alloc_gens[CTRL_EntityKind_COUNT];
 };
 
-typedef struct CTRL_EntityStore CTRL_EntityStore;
-struct CTRL_EntityStore
+typedef struct CTRL_EntityCtxRWStore CTRL_EntityCtxRWStore;
+struct CTRL_EntityCtxRWStore
 {
   Arena *arena;
   CTRL_EntityCtx ctx;
   CTRL_Entity *free;
   CTRL_EntityHashNode *hash_node_free;
   CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
-  U64 entity_kind_counts[CTRL_EntityKind_COUNT];
+};
+
+typedef struct CTRL_EntityCtxLookupAccel CTRL_EntityCtxLookupAccel;
+struct CTRL_EntityCtxLookupAccel
+{
+  Arena *arena;
   Arena *entity_kind_arrays_arenas[CTRL_EntityKind_COUNT];
-  U64 entity_kind_arrays_gens[CTRL_EntityKind_COUNT];
-  U64 entity_kind_alloc_gens[CTRL_EntityKind_COUNT];
   CTRL_EntityArray entity_kind_arrays[CTRL_EntityKind_COUNT];
+  U64 entity_kind_arrays_gens[CTRL_EntityKind_COUNT];
 };
 
 ////////////////////////////////
@@ -751,7 +757,7 @@ struct CTRL_State
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
   OS_Handle ctrl_thread_entity_ctx_rw_mutex;
-  CTRL_EntityStore *ctrl_thread_entity_store;
+  CTRL_EntityCtxRWStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
@@ -793,6 +799,7 @@ read_only global CTRL_Entity ctrl_entity_nil =
   &ctrl_entity_nil,
   &ctrl_entity_nil,
 };
+thread_static CTRL_EntityCtxLookupAccel *ctrl_entity_ctx_lookup_accel = 0;
 
 ////////////////////////////////
 //~ rjf: Logging Markup
@@ -892,29 +899,30 @@ internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_En
 #define ctrl_entity_rec_depth_first_pre(entity, subtree_root)  ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, next), OffsetOf(CTRL_Entity, first))
 #define ctrl_entity_rec_depth_first_post(entity, subtree_root) ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, prev), OffsetOf(CTRL_Entity, last))
 
-//- rjf: cache creation/destruction
-internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
-internal void ctrl_entity_store_release(CTRL_EntityStore *store);
+//- rjf: entity ctx r/w store state functions
+internal CTRL_EntityCtxRWStore *ctrl_entity_ctx_rw_store_alloc(void);
+internal void ctrl_entity_ctx_rw_store_release(CTRL_EntityCtxRWStore *store);
 
 //- rjf: string allocation/deletion
 internal U64 ctrl_name_bucket_num_from_string_size(U64 size);
-internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string);
-internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
+internal String8 ctrl_entity_string_alloc(CTRL_EntityCtxRWStore *store, String8 string);
+internal void ctrl_entity_string_release(CTRL_EntityCtxRWStore *store, String8 string);
 
 //- rjf: entity construction/deletion
-internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_Handle handle, U64 id);
-internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
+internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityCtxRWStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_Handle handle, U64 id);
+internal void ctrl_entity_release(CTRL_EntityCtxRWStore *store, CTRL_Entity *entity);
 
 //- rjf: entity equipment
-internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 string);
+internal void ctrl_entity_equip_string(CTRL_EntityCtxRWStore *store, CTRL_Entity *entity, String8 string);
 
-//- rjf: entity store lookups
-internal CTRL_EntityArray ctrl_entity_array_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind);
-internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);
-internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityStore *store, U64 id);
+//- rjf: accelerated entity context lookups
+internal CTRL_EntityCtxLookupAccel *ctrl_thread_entity_ctx_lookup_accel(void);
+internal CTRL_EntityArray ctrl_entity_array_from_kind(CTRL_EntityCtx *ctx, CTRL_EntityKind kind);
+internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI_Key *dbgi_key);
+internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityCtx *ctx, U64 id);
 
 //- rjf: applying events to entity caches
-internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
+internal void ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *list);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

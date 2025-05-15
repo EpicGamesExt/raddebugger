@@ -846,20 +846,16 @@ ctrl_entity_tree_is_frozen(CTRL_Entity *root)
   return is_frozen;
 }
 
-//- rjf: cache creation/destruction
+//- rjf: entity ctx r/w store state functions
 
-internal CTRL_EntityStore *
-ctrl_entity_store_alloc(void)
+internal CTRL_EntityCtxRWStore *
+ctrl_entity_ctx_rw_store_alloc(void)
 {
   Arena *arena = arena_alloc();
-  CTRL_EntityStore *store = push_array(arena, CTRL_EntityStore, 1);
+  CTRL_EntityCtxRWStore *store = push_array(arena, CTRL_EntityCtxRWStore, 1);
   store->arena = arena;
   store->ctx.hash_slots_count = 1024;
   store->ctx.hash_slots = push_array(arena, CTRL_EntityHashSlot, store->ctx.hash_slots_count);
-  for EachEnumVal(CTRL_EntityKind, k)
-  {
-    store->entity_kind_arrays_arenas[k] = arena_alloc();
-  }
   CTRL_Entity *root = store->ctx.root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, ctrl_handle_zero(), 0);
   CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()), 0);
   Temp scratch = scratch_begin(0, 0);
@@ -870,9 +866,9 @@ ctrl_entity_store_alloc(void)
 }
 
 internal void
-ctrl_entity_store_release(CTRL_EntityStore *cache)
+ctrl_entity_ctx_rw_store_release(CTRL_EntityCtxRWStore *store)
 {
-  arena_release(cache->arena);
+  arena_release(store->arena);
 }
 
 //- rjf: string allocation/deletion
@@ -896,7 +892,7 @@ ctrl_name_bucket_num_from_string_size(U64 size)
 }
 
 internal String8
-ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
+ctrl_entity_string_alloc(CTRL_EntityCtxRWStore *store, String8 string)
 {
   //- rjf: allocate node
   CTRL_EntityStringChunkNode *node = 0;
@@ -962,7 +958,7 @@ ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
 }
 
 internal void
-ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
+ctrl_entity_string_release(CTRL_EntityCtxRWStore *store, String8 string)
 {
   U64 bucket_num = ctrl_name_bucket_num_from_string_size(string.size);
   if(1 <= bucket_num && bucket_num <= ArrayCount(rd_name_bucket_chunk_sizes))
@@ -977,7 +973,7 @@ ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
 //- rjf: entity construction/deletion
 
 internal CTRL_Entity *
-ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_Handle handle, U64 id)
+ctrl_entity_alloc(CTRL_EntityCtxRWStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_Handle handle, U64 id)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
   {
@@ -1041,14 +1037,14 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
     }
     
     // rjf: bump counters
-    store->entity_kind_counts[kind] += 1;
-    store->entity_kind_alloc_gens[kind] += 1;
+    store->ctx.entity_kind_counts[kind] += 1;
+    store->ctx.entity_kind_alloc_gens[kind] += 1;
   }
   return entity;
 }
 
 internal void
-ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
+ctrl_entity_release(CTRL_EntityCtxRWStore *store, CTRL_Entity *entity)
 {
   // rjf: unhook root
   if(entity->parent != &ctrl_entity_nil)
@@ -1099,8 +1095,8 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
       }
       
       // rjf: dec counter
-      store->entity_kind_counts[t->e->kind] -= 1;
-      store->entity_kind_alloc_gens[t->e->kind] += 1;
+      store->ctx.entity_kind_counts[t->e->kind] -= 1;
+      store->ctx.entity_kind_alloc_gens[t->e->kind] += 1;
     }
     scratch_end(scratch);
   }
@@ -1109,7 +1105,7 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
 //- rjf: entity equipment
 
 internal void
-ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 string)
+ctrl_entity_equip_string(CTRL_EntityCtxRWStore *store, CTRL_Entity *entity, String8 string)
 {
   if(entity->string.size != 0)
   {
@@ -1118,37 +1114,54 @@ ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 s
   entity->string = ctrl_entity_string_alloc(store, string);
 }
 
-//- rjf: entity store lookups
+//- rjf: accelerated entity context lookups
+
+internal CTRL_EntityCtxLookupAccel *
+ctrl_thread_entity_ctx_lookup_accel(void)
+{
+  if(ctrl_entity_ctx_lookup_accel == 0)
+  {
+    Arena *arena = arena_alloc();
+    ctrl_entity_ctx_lookup_accel = push_array(arena, CTRL_EntityCtxLookupAccel, 1);
+    ctrl_entity_ctx_lookup_accel->arena = arena;
+    for EachEnumVal(CTRL_EntityKind, k)
+    {
+      ctrl_entity_ctx_lookup_accel->entity_kind_arrays_arenas[k] = arena_alloc();
+    }
+  }
+  return ctrl_entity_ctx_lookup_accel;
+}
 
 internal CTRL_EntityArray
-ctrl_entity_array_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind)
+ctrl_entity_array_from_kind(CTRL_EntityCtx *ctx, CTRL_EntityKind kind)
 {
-  if(store->entity_kind_arrays_gens[kind] != store->entity_kind_alloc_gens[kind])
+  CTRL_EntityCtxLookupAccel *accel = ctrl_thread_entity_ctx_lookup_accel();
+  if(accel->entity_kind_arrays_gens[kind] != ctx->entity_kind_alloc_gens[kind])
   {
     Temp scratch = scratch_begin(0, 0);
     CTRL_EntityList entities = {0};
-    for(CTRL_Entity *e = store->ctx.root;
+    for(CTRL_Entity *e = ctx->root;
         e != &ctrl_entity_nil;
-        e = ctrl_entity_rec_depth_first_pre(e, store->ctx.root).next)
+        e = ctrl_entity_rec_depth_first_pre(e, ctx->root).next)
     {
       if(e->kind == kind)
       {
         ctrl_entity_list_push(scratch.arena, &entities, e);
       }
     }
-    store->entity_kind_arrays_gens[kind] = store->entity_kind_alloc_gens[kind];
-    arena_clear(store->entity_kind_arrays_arenas[kind]);
-    store->entity_kind_arrays[kind] = ctrl_entity_array_from_list(store->entity_kind_arrays_arenas[kind], &entities);
+    accel->entity_kind_arrays_gens[kind] = ctx->entity_kind_alloc_gens[kind];
+    arena_clear(accel->entity_kind_arrays_arenas[kind]);
+    accel->entity_kind_arrays[kind] = ctrl_entity_array_from_list(accel->entity_kind_arrays_arenas[kind], &entities);
     scratch_end(scratch);
   }
-  return store->entity_kind_arrays[kind];
+  return accel->entity_kind_arrays[kind];
 }
 
 internal CTRL_EntityList
-ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key)
+ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityCtx *ctx, DI_Key *dbgi_key)
 {
   CTRL_EntityList list = {0};
-  CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(store, CTRL_EntityKind_Module);
+  CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(ctx, CTRL_EntityKind_Module);
   for EachIndex(idx, all_modules.count)
   {
     CTRL_Entity *module = all_modules.v[idx];
@@ -1162,10 +1175,10 @@ ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_k
 }
 
 internal CTRL_Entity *
-ctrl_thread_from_id(CTRL_EntityStore *store, U64 id)
+ctrl_thread_from_id(CTRL_EntityCtx *ctx, U64 id)
 {
   CTRL_Entity *thread = &ctrl_entity_nil;
-  CTRL_EntityArray threads = ctrl_entity_array_from_kind(store, CTRL_EntityKind_Thread);
+  CTRL_EntityArray threads = ctrl_entity_array_from_kind(ctx, CTRL_EntityKind_Thread);
   for EachIndex(idx, threads.count)
   {
     if(threads.v[idx]->id == id)
@@ -1203,7 +1216,7 @@ ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 
 //- rjf: applying events to entity caches
 
 internal void
-ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
+ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *list)
 {
   //- rjf: scan events & construct entities
   for(CTRL_EventNode *n = list->first; n != 0; n = n->next)
@@ -1245,7 +1258,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         {
           ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
         }
-        CTRL_EntityArray pending_thread_names = ctrl_entity_array_from_kind(store, CTRL_EntityKind_PendingThreadName);
+        CTRL_EntityArray pending_thread_names = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadName);
         for EachIndex(idx, pending_thread_names.count)
         {
           CTRL_Entity *entity = pending_thread_names.v[idx];
@@ -1256,7 +1269,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
             break;
           }
         }
-        CTRL_EntityArray pending_thread_colors = ctrl_entity_array_from_kind(store, CTRL_EntityKind_PendingThreadColor);
+        CTRL_EntityArray pending_thread_colors = ctrl_entity_array_from_kind(&store->ctx, CTRL_EntityKind_PendingThreadColor);
         for EachIndex(idx, pending_thread_colors.count)
         {
           CTRL_Entity *entity = pending_thread_colors.v[idx];
@@ -1285,7 +1298,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         }
         else
         {
-          thread = ctrl_thread_from_id(store, event->entity_id);
+          thread = ctrl_thread_from_id(&store->ctx, event->entity_id);
         }
         if(thread != &ctrl_entity_nil)
         {
@@ -1307,7 +1320,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         }
         else
         {
-          thread = ctrl_thread_from_id(store, event->entity_id);
+          thread = ctrl_thread_from_id(&store->ctx, event->entity_id);
         }
         if(thread != &ctrl_entity_nil)
         {
@@ -1471,7 +1484,7 @@ ctrl_init(void)
     scratch_end(scratch);
   }
   ctrl_state->ctrl_thread_entity_ctx_rw_mutex = os_rw_mutex_alloc();
-  ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
+  ctrl_state->ctrl_thread_entity_store = ctrl_entity_ctx_rw_store_alloc();
   ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
@@ -3404,7 +3417,10 @@ ctrl_c2u_push_events(CTRL_EventList *events)
 {
   if(events->count != 0) ProfScope("ctrl_c2u_push_events")
   {
-    ctrl_entity_store_apply_events(ctrl_state->ctrl_thread_entity_store, events);
+    OS_MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
+    {
+      ctrl_entity_store_apply_events(ctrl_state->ctrl_thread_entity_store, events);
+    }
     for(CTRL_EventNode *n = events->first; n != 0; n = n ->next)
     {
       Temp scratch = scratch_begin(0, 0);
@@ -3525,12 +3541,14 @@ ctrl_thread__entry_point(void *p)
           }break;
           case CTRL_MsgKind_SetModuleDebugInfoPath:
           {
+            CTRL_EntityCtxRWStore *entity_store = ctrl_state->ctrl_thread_entity_store;
+            CTRL_EntityCtx *entity_ctx = &entity_store->ctx;
             String8 path = msg->path;
-            CTRL_Entity *module = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, msg->entity);
+            CTRL_Entity *module = ctrl_entity_from_handle(entity_ctx, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
             DI_Key old_dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
             di_close(&old_dbgi_key);
-            ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
+            OS_MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex) ctrl_entity_equip_string(entity_store, debug_info_path, path);
             U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
             debug_info_path->timestamp = new_dbgi_timestamp;
             DI_Key new_dbgi_key = {debug_info_path->string, new_dbgi_timestamp};
@@ -3588,7 +3606,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
   if(user_bps->first == 0) { return; }
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *di_scope = eval_scope->di_scope;
-  CTRL_Entity *module_entity = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, module);
+  CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+  CTRL_Entity *module_entity = ctrl_entity_from_handle(entity_ctx, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
   DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
   RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
@@ -4086,6 +4105,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   ProfBeginFunction();
   DMN_Event *event = push_array(arena, DMN_Event, 1);
   Temp scratch = scratch_begin(&arena, 1);
+  CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   
   //- rjf: loop -> try to get event, run, repeat
   U64 spoof_old_ip_value = 0;
@@ -4158,7 +4178,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
             {
               DI_Scope *di_scope = di_scope_open();
-              CTRL_Entity *process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->process));
+              CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->process));
               CTRL_Entity *module = &ctrl_entity_nil;
               for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
               {
@@ -4249,7 +4269,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
       {
-        CTRL_Entity *spoof_process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, spoof->process));
+        CTRL_Entity *spoof_process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, spoof->process));
         Arch arch = spoof_process->arch;
         size_of_spoof = bit_size_from_arch(arch)/8;
         dmn_process_read(spoof_process->handle.dmn_handle, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
@@ -4315,7 +4335,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   // simply been sent other debug events first
   if(spoof != 0)
   {
-    CTRL_Entity *thread = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, spoof->thread));
+    CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, spoof->thread));
     Arch arch = thread->arch;
     void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_arch(arch));
     dmn_thread_read_reg_block(spoof->thread, regs_block);
@@ -4407,7 +4427,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       CTRL_Handle module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
-      CTRL_Entity *module_ent = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, module_handle);
+      CTRL_Entity *module_ent = ctrl_entity_from_handle(entity_ctx, module_handle);
       CTRL_Entity *process_ent = ctrl_process_from_entity(module_ent);
       String8 module_path = event->string;
       ctrl_thread__module_close(process_ent->handle, module_handle, module_ent->vaddr_range);
@@ -4500,16 +4520,16 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   // dealing with insane-town projects)
   //
   if(event->kind == DMN_EventKind_LoadModule &&
-     (ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
-      ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] == 1))
+     (entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
+      entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] == 1))
   {
     U64 endt_us = os_now_microseconds() + 1000000;
     
     //- rjf: unpack event
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
     CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
-    CTRL_Entity *process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, process_handle);
-    CTRL_Entity *loaded_module = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, loaded_module_handle);
+    CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, process_handle);
+    CTRL_Entity *loaded_module = ctrl_entity_from_handle(entity_ctx, loaded_module_handle);
     
     //- rjf: for each module, use its full path as the start to a new limited recursive
     // directory search. cache each directory once traversed in the dbg_dir tree. if any
@@ -4726,8 +4746,9 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         case CTRL_EntityKind_Thread:
         {
           Temp scratch = scratch_begin(0, 0);
+          CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
           U64 regs_size = regs_block_size_from_arch(entity->arch);
-          void *regs = ctrl_reg_block_from_thread(scratch.arena, &ctrl_state->ctrl_thread_entity_store->ctx, entity->handle);
+          void *regs = ctrl_reg_block_from_thread(scratch.arena, entity_ctx, entity->handle);
           Rng1U64 legal_range = r1u64(0, regs_size);
           Rng1U64 read_range = intersect_1u64(legal_range, range);
           U64 read_size = dim_1u64(read_range);
@@ -4752,6 +4773,7 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 internal CTRL_EvalScope *
 ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
 {
+  CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
   scope->di_scope = di_scope_open();
   
@@ -4767,14 +4789,14 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   //////////////////////////////
   //- rjf: gather evaluation modules
   //
-  U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
+  U64 eval_modules_count = Max(1, entity_ctx->entity_kind_counts[CTRL_EntityKind_Module]);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];
   eval_modules_primary->rdi = &rdi_parsed_nil;
   eval_modules_primary->vaddr_range = r1u64(0, max_U64);
   {
     U64 eval_module_idx = 0;
-    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->ctx.root->first;
+    for(CTRL_Entity *machine = entity_ctx->root->first;
         machine != &ctrl_entity_nil;
         machine = machine->next)
     {
@@ -5065,9 +5087,10 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   U32 exit_code = msg->exit_code;
+  CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   
   //- rjf: gather all currently existing processes
-  CTRL_EntityArray initial_processes = ctrl_entity_array_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+  CTRL_EntityArray initial_processes = ctrl_entity_array_from_kind(entity_ctx, CTRL_EntityKind_Process);
   typedef struct Task Task;
   struct Task
   {
@@ -5112,7 +5135,7 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         default:{}break;
         case DMN_EventKind_CreateProcess:
         {
-          CTRL_Entity *new_process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+          CTRL_Entity *new_process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
           Task *t = push_array(scratch.arena, Task, 1);
           t->process = new_process;
           DLLPushBack(first_task, last_task, t);
@@ -5122,7 +5145,7 @@ ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       }
       
       // rjf: end if all processes are gone
-      CTRL_EntityArray processes = ctrl_entity_array_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+      CTRL_EntityArray processes = ctrl_entity_array_from_kind(entity_ctx, CTRL_EntityKind_Process);
       if(processes.count == 0)
       {
         done = 1;
@@ -5201,9 +5224,10 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   Temp scratch = scratch_begin(0, 0);
   DMN_Event *stop_event = 0;
   CTRL_EventCause stop_cause = CTRL_EventCause_Null;
+  CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_Handle target_thread = msg->entity;
   CTRL_Handle target_process = msg->parent;
-  CTRL_Entity *target_process_entity = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, target_process);
+  CTRL_Entity *target_process_entity = ctrl_entity_from_handle(entity_ctx, target_process);
   U64 spoof_ip_vaddr = 911;
   log_infof("ctrl_thread__run:\n{\n");
   
@@ -5212,9 +5236,9 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   //
   DMN_TrapChunkList user_traps = {0};
   {
-    CTRL_Entity *thread = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, target_thread);
+    CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, target_thread);
     CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
-    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->ctx.root->first;
+    for(CTRL_Entity *machine = entity_ctx->root->first;
         machine != &ctrl_entity_nil;
         machine = machine->next)
     {
@@ -5527,7 +5551,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }break;
         case DMN_EventKind_LoadModule:
         {
-          CTRL_Entity *thread = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
+          CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
           CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
           {
             DMN_TrapChunkList new_traps = {0};
@@ -5552,7 +5576,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         {
           CTRL_Entity *bp = &ctrl_entity_nil;
           {
-            CTRL_Entity *process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+            CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
             for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
             {
               if(child->kind == CTRL_EntityKind_Breakpoint &&
@@ -5584,7 +5608,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         DI_Scope *di_scope = di_scope_open();
         
         //- rjf: unpack process/module info
-        CTRL_Entity *process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+        CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
         CTRL_Entity *module = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Module);
         U64 module_base_vaddr = module->vaddr_range.min;
         CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
@@ -5808,8 +5832,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //////////////////////////
       //- rjf: unpack info about thread attached to event
       //
-      CTRL_Entity *thread = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
-      CTRL_Entity *process = ctrl_entity_from_handle(&ctrl_state->ctrl_thread_entity_store->ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+      CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
+      CTRL_Entity *process = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->process));
       Arch arch = thread->arch;
       U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
       CTRL_Entity *module = &ctrl_entity_nil;
@@ -6631,23 +6655,20 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
   CTRL_CallStackCacheStripe *stripe = &cache->stripes[stripe_idx];
   
   //- rjf: do task
-#if 0
-  OS_MutexScopeR(ctrl_state->call_stack_builder_entity_store_rw_mutex)
+  OS_MutexScopeR(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
   {
     Temp scratch = scratch_begin(0, 0);
-    CTRL_EntityStore *store = ctrl_state->call_stack_builder_entity_store;
+    CTRL_EntityCtx *ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+    CTRL_Entity *thread = ctrl_entity_from_handle(ctx, thread_handle);
+    CTRL_Entity *process = ctrl_process_from_entity(thread);
     
     //- rjf: compute unwind to find list of all concrete frames, then
     // call stack, to determine list of all concrete & inline frames
-    CTRL_Unwind unwind = ctrl_unwind_from_thread(scratch.arena, store, thread_handle, os_now_microseconds()+1000000);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena);
-    
-    //- rjf: use debug info to  to list of all (concrete & inline) frames
-    
+    CTRL_Unwind unwind = ctrl_unwind_from_thread(scratch.arena, ctx, thread_handle, os_now_microseconds()+1000000);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, process, &unwind);
     
     scratch_end(scratch);
   }
-#endif
   
   return 0;
 }

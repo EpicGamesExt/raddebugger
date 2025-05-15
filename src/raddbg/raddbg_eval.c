@@ -1323,7 +1323,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     }
     else
     {
-      machines = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Machine);
+      machines = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Machine);
     }
     
     //- rjf: gather system processes from this machine
@@ -1428,7 +1428,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(ctrl_entities)
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(rd_singular_from_code_name_plural(type->name));
         E_Value rhs_value = e_value_from_expr(expr->first->next);
         U64 rhs_idx = rhs_value.u64;
-        CTRL_EntityArray entities = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, kind);
+        CTRL_EntityArray entities = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, kind);
         if(0 <= rhs_idx && rhs_idx < entities.count)
         {
           entity = entities.v[rhs_idx];
@@ -1470,7 +1470,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities)
     CTRL_EntityArray array = {0};
     if(scoping_entity == &ctrl_entity_nil)
     {
-      array = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, entity_kind);
+      array = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, entity_kind);
     }
     else
     {

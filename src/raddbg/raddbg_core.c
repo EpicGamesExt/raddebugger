@@ -2710,7 +2710,7 @@ rd_view_ui(Rng2F32 rect)
         UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
       {
         RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-        CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+        CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
         
         //- rjf: icon & info
         UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
@@ -6668,7 +6668,7 @@ rd_window_frame(void)
             {
               rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
             }
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
             if(processes.count != 0)
             {
               rd_cmd(RD_CmdKind_KillAll);
@@ -6687,7 +6687,7 @@ rd_window_frame(void)
             {
               rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
             }
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
             if(processes.count != 0)
             {
               rd_cmd(RD_CmdKind_KillAll);
@@ -7839,7 +7839,7 @@ rd_window_frame(void)
         {
           Temp scratch = scratch_begin(0, 0);
           RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           B32 can_send_signal = !d_ctrl_targets_running();
           typedef struct CenterButtonTask CenterButtonTask;
           struct CenterButtonTask
@@ -11617,7 +11617,7 @@ rd_frame(void)
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
     U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
-    CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+    CTRL_EntityArray all_modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
     U64 eval_modules_count = Max(1, all_modules.count);
     E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
     E_Module *eval_modules_primary = &eval_modules[0];
@@ -11977,7 +11977,7 @@ rd_frame(void)
       {
         String8 name = evallable_ctrl_names[idx];
         CTRL_EntityKind kind = ctrl_entity_kind_from_string(name);
-        CTRL_EntityArray array = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, kind);
+        CTRL_EntityArray array = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, kind);
         E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
         for EachIndex(idx, array.count)
         {
@@ -12303,7 +12303,7 @@ rd_frame(void)
     //- rjf: gather config from loaded modules
     //
     RD_CfgList immediate_type_views = {0};
-    CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+    CTRL_EntityArray modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
     for EachIndex(idx, modules.count)
     {
       CTRL_Entity *module = modules.v[idx];
@@ -12475,7 +12475,7 @@ rd_frame(void)
           case RD_CmdKind_Restart:
           {
             // rjf: reset hit counts
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
             if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
               RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
@@ -12631,7 +12631,7 @@ rd_frame(void)
           {
             // rjf: if control processes are live, but this is not force-confirmed, then
             // get confirmation from user
-            CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
             UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
             if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
@@ -14008,7 +14008,7 @@ rd_frame(void)
             U64 vaddr = 0;
             for(D_LineNode *n = rd_regs()->lines.first; n != 0; n = n->next)
             {
-              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
               CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
               if(module != &ctrl_entity_nil)
               {
@@ -14466,7 +14466,7 @@ rd_frame(void)
                   U64 vaddr = 0;
                   if(voff_dbgi_key.path.size != 0)
                   {
-                    CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &voff_dbgi_key);
+                    CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &voff_dbgi_key);
                     CTRL_Entity *module = ctrl_entity_list_first(&modules);
                     process = ctrl_entity_ancestor_from_kind(module, CTRL_EntityKind_Process);
                     if(process != &ctrl_entity_nil)
@@ -14564,7 +14564,7 @@ rd_frame(void)
               D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line);
               for(D_LineNode *n = lines.first; n != 0; n = n->next)
               {
-                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
                 CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
                 vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
                 break;
@@ -15507,7 +15507,7 @@ rd_frame(void)
               D_LineList *lines = &rd_regs()->lines;
               for(D_LineNode *n = lines->first; n != 0; n = n->next)
               {
-                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
                 CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
                 if(module != &ctrl_entity_nil)
                 {
@@ -16372,7 +16372,7 @@ rd_frame(void)
         case D_EventKind_ProcessEnd:
         if(rd_state->quit_after_success)
         {
-          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(evt->code == 0 && processes.count == 0)
           {
             rd_cmd(RD_CmdKind_Exit);
@@ -16409,7 +16409,7 @@ rd_frame(void)
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
           if(need_refocus && thread == &ctrl_entity_nil && selected_thread == &ctrl_entity_nil)
           {
-            CTRL_EntityArray threads = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+            CTRL_EntityArray threads = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Thread);
             CTRL_Entity *first_available_thread = ctrl_entity_array_first(&threads);
             rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle);
           }

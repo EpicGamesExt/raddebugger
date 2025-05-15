@@ -1187,7 +1187,7 @@ internal DI_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
   DI_KeyList dbgis = {0};
-  CTRL_EntityArray modules = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+  CTRL_EntityArray modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
   for EachIndex(idx, modules.count)
   {
     CTRL_Entity *module = modules.v[idx];
@@ -1484,7 +1484,7 @@ d_init(void)
   d_state->cmds_arena = arena_alloc();
   d_state->output_log_key = hs_hash_from_data(str8_lit("output_log_key"));
   hs_submit_data(d_state->output_log_key, 0, str8_zero());
-  d_state->ctrl_entity_store = ctrl_entity_store_alloc();
+  d_state->ctrl_entity_store = ctrl_entity_ctx_rw_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->ctrl_msg_arena = arena_alloc();
   
@@ -1614,7 +1614,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_NewProc:
         {
           // rjf: the first process? -> clear session output
-          CTRL_EntityArray existing_processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray existing_processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(existing_processes.count == 1)
           {
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
@@ -1697,7 +1697,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
     // rjf: build data strings of all param data
     String8List strings = {0};
     {
-      CTRL_EntityArray threads = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+      CTRL_EntityArray threads = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Thread);
       for EachIndex(idx, threads.count)
       {
         CTRL_Entity *thread = threads.v[idx];
@@ -1908,7 +1908,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_Continue:
         {
           B32 good_to_run = 0;
-          CTRL_EntityArray threads = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+          CTRL_EntityArray threads = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Thread);
           if(threads.count > 0)
           {
             for EachIndex(idx, threads.count)
@@ -2064,7 +2064,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Run:
         {
-          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(processes.count != 0)
           {
             d_cmd(D_CmdKind_Continue);
@@ -2076,7 +2076,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Restart:
         {
-          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(processes.count != 0)
           {
             d_cmd(D_CmdKind_KillAll);
@@ -2086,7 +2086,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:
         {
-          CTRL_EntityArray processes = ctrl_entity_array_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(processes.count != 0)
           {
             D_CmdKind step_cmd_kind = (cmd->kind == D_CmdKind_StepInto

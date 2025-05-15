@@ -343,7 +343,7 @@ struct D_State
   CTRL_MsgList ctrl_msgs;
   
   // rjf: ctrl -> user reading state
-  CTRL_EntityStore *ctrl_entity_store;
+  CTRL_EntityCtxRWStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
 };
