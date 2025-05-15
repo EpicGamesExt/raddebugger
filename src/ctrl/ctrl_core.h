@@ -609,10 +609,13 @@ struct CTRL_CallStackCacheNode
 {
   CTRL_CallStackCacheNode *next;
   CTRL_CallStackCacheNode *prev;
-  Arena *arena;
   CTRL_Handle thread;
+  U64 scope_touch_count;
+  U64 working_count;
+  Arena *arena;
   U64 reg_gen;
   U64 mem_gen;
+  CTRL_Unwind unwind;
   CTRL_CallStack call_stack;
 };
 
@@ -628,6 +631,7 @@ struct CTRL_CallStackCacheStripe
 {
   Arena *arena;
   OS_Handle rw_mutex;
+  OS_Handle cv;
 };
 
 typedef struct CTRL_CallStackCache CTRL_CallStackCache;
@@ -708,6 +712,32 @@ struct CTRL_EvalScope
   E_BaseCtx base_ctx;
   E_IRCtx ir_ctx;
   E_InterpretCtx interpret_ctx;
+};
+
+////////////////////////////////
+//~ rjf: Control Cache Accessing Scopes
+
+typedef struct CTRL_ScopeCallStackTouch CTRL_ScopeCallStackTouch;
+struct CTRL_ScopeCallStackTouch
+{
+  CTRL_ScopeCallStackTouch *next;
+  CTRL_CallStackCacheNode *node;
+};
+
+typedef struct CTRL_Scope CTRL_Scope;
+struct CTRL_Scope
+{
+  CTRL_Scope *next;
+  CTRL_ScopeCallStackTouch *first_call_stack_touch;
+  CTRL_ScopeCallStackTouch *last_call_stack_touch;
+};
+
+typedef struct CTRL_TCTX CTRL_TCTX;
+struct CTRL_TCTX
+{
+  Arena *arena;
+  CTRL_Scope *free_scope;
+  CTRL_ScopeCallStackTouch *free_call_stack_touch;
 };
 
 ////////////////////////////////
@@ -799,6 +829,7 @@ read_only global CTRL_Entity ctrl_entity_nil =
   &ctrl_entity_nil,
   &ctrl_entity_nil,
 };
+thread_static CTRL_TCTX *ctrl_tctx = 0;
 thread_static CTRL_EntityCtxLookupAccel *ctrl_entity_ctx_lookup_accel = 0;
 
 ////////////////////////////////
@@ -925,6 +956,13 @@ internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityCtx *ctx, U64 id);
 internal void ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *list);
 
 ////////////////////////////////
+//~ rjf: Cache Accessing Scopes
+
+internal CTRL_Scope *ctrl_scope_open(void);
+internal void ctrl_scope_close(CTRL_Scope *scope);
+internal void ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheNode *node);
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void ctrl_init(void);
@@ -999,7 +1037,7 @@ internal CTRL_CallStackFrame *ctrl_call_stack_frame_from_unwind_and_inline_depth
 ////////////////////////////////
 //~ rjf: Call Stack Cache Functions
 
-internal CTRL_CallStack ctrl_call_stack_from_thread(HS_Scope *hs_scope, CTRL_Entity *thread, U64 endt_us);
+internal CTRL_CallStack ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes

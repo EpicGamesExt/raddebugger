@@ -1404,6 +1404,60 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
 }
 
 ////////////////////////////////
+//~ rjf: Cache Accessing Scopes
+
+internal CTRL_Scope *
+ctrl_scope_open(void)
+{
+  if(ctrl_tctx == 0)
+  {
+    Arena *arena = arena_alloc();
+    ctrl_tctx = push_array(arena, CTRL_TCTX, 1);
+    ctrl_tctx->arena = arena;
+  }
+  CTRL_Scope *scope = ctrl_tctx->free_scope;
+  if(scope != 0)
+  {
+    SLLStackPop(ctrl_tctx->free_scope);
+  }
+  else
+  {
+    scope = push_array_no_zero(ctrl_tctx->arena, CTRL_Scope, 1);
+  }
+  MemoryZeroStruct(scope);
+  return scope;
+}
+
+internal void
+ctrl_scope_close(CTRL_Scope *scope)
+{
+  for(CTRL_ScopeCallStackTouch *t = scope->first_call_stack_touch, *next = 0; t != 0; t = next)
+  {
+    next = t->next;
+    ins_atomic_u64_dec_eval(&t->node->scope_touch_count);
+    SLLStackPush(ctrl_tctx->free_call_stack_touch, t);
+  }
+  SLLStackPush(ctrl_tctx->free_scope, scope);
+}
+
+internal void
+ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheNode *node)
+{
+  ins_atomic_u64_eval(&node->scope_touch_count);
+  CTRL_ScopeCallStackTouch *touch = ctrl_tctx->free_call_stack_touch;
+  if(touch != 0)
+  {
+    SLLStackPop(ctrl_tctx->free_call_stack_touch);
+  }
+  else
+  {
+    touch = push_array(ctrl_tctx->arena, CTRL_ScopeCallStackTouch, 1);
+  }
+  SLLQueuePush(scope->first_call_stack_touch, scope->last_call_stack_touch, touch);
+  touch->node = node;
+}
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void
@@ -1455,6 +1509,7 @@ ctrl_init(void)
   {
     ctrl_state->call_stack_cache.stripes[idx].arena = arena_alloc();
     ctrl_state->call_stack_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    ctrl_state->call_stack_cache.stripes[idx].cv = os_condition_variable_alloc();
   }
   ctrl_state->module_image_info_cache.slots_count = 1024;
   ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
@@ -3289,12 +3344,73 @@ ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U
 //~ rjf: Call Stack Cache Functions
 
 internal CTRL_CallStack
-ctrl_call_stack_from_thread(HS_Scope *hs_scope, CTRL_Entity *thread, U64 endt_us)
+ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, U64 endt_us)
 {
   CTRL_CallStack call_stack = {0};
   {
-    CTRL_Handle handle = thread->handle;
+    CTRL_CallStackCache *cache = &ctrl_state->call_stack_cache;
     
+    //- rjf: unpack thread
+    CTRL_Handle handle = thread->handle;
+    U64 hash = ctrl_hash_from_handle(handle);
+    U64 slot_idx = hash%cache->slots_count;
+    U64 stripe_idx = slot_idx%cache->stripes_count;
+    CTRL_CallStackCacheSlot *slot = &cache->slots[slot_idx];
+    CTRL_CallStackCacheStripe *stripe = &cache->stripes[stripe_idx];
+    
+    //- rjf: loop: try to grab cached call stack; request; wait
+    U64 reg_gen = ctrl_reg_gen();
+    U64 mem_gen = ctrl_mem_gen();
+    OS_MutexScopeW(stripe->rw_mutex) for(;;)
+    {
+      //- rjf: try to grab cached
+      B32 is_good = 0;
+      B32 is_stale = 0;
+      B32 is_working = 0;
+      CTRL_CallStackCacheNode *node = 0;
+      {
+        for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
+        {
+          if(ctrl_handle_match(n->thread, handle))
+          {
+            node = n;
+            is_good    = 1;
+            is_stale   = (reg_gen > n->reg_gen || mem_gen > n->mem_gen);
+            is_working = (n->working_count > 0);
+            call_stack = n->call_stack;
+            ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, n);
+            break;
+          }
+        }
+      }
+      
+      //- rjf: create node if needed
+      if(!is_good)
+      {
+        node = push_array(stripe->arena, CTRL_CallStackCacheNode, 1);
+        DLLPushBack(slot->first, slot->last, node);
+        node->thread = thread->handle;
+      }
+      
+      //- rjf: request if needed
+      if(!is_working && (!is_good || !is_stale))
+      {
+        if(ctrl_u2csb_enqueue_req(thread->handle, endt_us) &&
+           async_push_work(ctrl_call_stack_build_work))
+        {
+          node->working_count += 1;
+        }
+      }
+      
+      //- rjf: good, or timeout? -> exit
+      if((is_good && !is_stale) || os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
+      
+      //- rjf: time to wait for new result? -> wait
+      os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, endt_us);
+    }
   }
   return call_stack;
 }
@@ -6665,8 +6781,43 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     
     //- rjf: compute unwind to find list of all concrete frames, then
     // call stack, to determine list of all concrete & inline frames
-    CTRL_Unwind unwind = ctrl_unwind_from_thread(scratch.arena, ctx, thread_handle, os_now_microseconds()+1000000);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, process, &unwind);
+    U64 pre_reg_gen = ctrl_reg_gen();
+    U64 pre_mem_gen = ctrl_mem_gen();
+    Arena *arena = arena_alloc();
+    CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, ctx, thread_handle, os_now_microseconds()+1000000);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(arena, process, &unwind);
+    U64 post_reg_gen = ctrl_reg_gen();
+    U64 post_mem_gen = ctrl_mem_gen();
+    
+    //- rjf: store in cache
+    Arena *last_arena = arena;
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(ctrl_handle_match(n->thread, thread_handle))
+        {
+          if(pre_reg_gen == post_reg_gen &&
+             pre_mem_gen == post_mem_gen)
+          {
+            last_arena = n->arena;
+            n->arena = arena;
+            n->reg_gen = pre_reg_gen;
+            n->mem_gen = pre_mem_gen;
+            n->unwind = unwind;
+            n->call_stack = call_stack;
+          }
+          n->working_count -= 1;
+          break;
+        }
+      }
+    }
+    
+    //- rjf: release last results
+    if(last_arena != 0)
+    {
+      arena_release(last_arena);
+    }
     
     scratch_end(scratch);
   }
