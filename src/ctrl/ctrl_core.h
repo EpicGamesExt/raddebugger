@@ -178,15 +178,21 @@ read_only global U64 ctrl_entity_string_bucket_chunk_sizes[] =
   0xffffffffffffffffull,
 };
 
+typedef struct CTRL_EntityCtx CTRL_EntityCtx;
+struct CTRL_EntityCtx
+{
+  CTRL_Entity *root;
+  CTRL_EntityHashSlot *hash_slots;
+  U64 hash_slots_count;
+};
+
 typedef struct CTRL_EntityStore CTRL_EntityStore;
 struct CTRL_EntityStore
 {
   Arena *arena;
-  CTRL_Entity *root;
+  CTRL_EntityCtx ctx;
   CTRL_Entity *free;
-  CTRL_EntityHashSlot *hash_slots;
   CTRL_EntityHashNode *hash_node_free;
-  U64 hash_slots_count;
   CTRL_EntityStringChunkNode *free_string_chunks[ArrayCount(ctrl_entity_string_bucket_chunk_sizes)];
   U64 entity_kind_counts[CTRL_EntityKind_COUNT];
   Arena *entity_kind_arrays_arenas[CTRL_EntityKind_COUNT];
@@ -601,7 +607,6 @@ struct CTRL_CallStackCacheNode
   CTRL_Handle thread;
   U64 reg_gen;
   U64 mem_gen;
-  CTRL_Unwind unwind;
   CTRL_CallStack call_stack;
 };
 
@@ -745,6 +750,7 @@ struct CTRL_State
   String8 ctrl_thread_log_path;
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
+  OS_Handle ctrl_thread_entity_ctx_rw_mutex;
   CTRL_EntityStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
   Arena *dmn_event_arena;
@@ -860,12 +866,31 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 
 //- rjf: entity list data structures
 internal void ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity);
-internal CTRL_EntityList ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityStore *store, CTRL_HandleList *list);
+internal CTRL_EntityList ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityCtx *ctx, CTRL_HandleList *list);
 #define ctrl_entity_list_first(list) ((list)->first ? (list)->first->v : &ctrl_entity_nil)
 
 //- rjf: entity array data structure
 internal CTRL_EntityArray ctrl_entity_array_from_list(Arena *arena, CTRL_EntityList *list);
 #define ctrl_entity_array_first(array) ((array)->count != 0 ? (array)->v[0] : &ctrl_entity_nil)
+
+//- rjf: entity context (entity group read-only) functions
+internal CTRL_Entity *ctrl_entity_from_handle(CTRL_EntityCtx *ctx, CTRL_Handle handle);
+internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
+internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
+internal CTRL_Entity *ctrl_process_from_entity(CTRL_Entity *entity);
+internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
+internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
+internal CTRL_Entity *ctrl_module_from_thread_candidates(CTRL_EntityCtx *ctx, CTRL_Entity *thread, CTRL_EntityList *candidates);
+internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
+internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
+internal Rng1U64 ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range);
+internal Rng1U64 ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range);
+internal B32 ctrl_entity_tree_is_frozen(CTRL_Entity *root);
+
+//- rjf: entity tree iteration
+internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off);
+#define ctrl_entity_rec_depth_first_pre(entity, subtree_root)  ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, next), OffsetOf(CTRL_Entity, first))
+#define ctrl_entity_rec_depth_first_post(entity, subtree_root) ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, prev), OffsetOf(CTRL_Entity, last))
 
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
@@ -884,26 +909,9 @@ internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
 internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 string);
 
 //- rjf: entity store lookups
-internal CTRL_Entity *ctrl_entity_from_handle(CTRL_EntityStore *store, CTRL_Handle handle);
-internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
-internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
-internal CTRL_Entity *ctrl_process_from_entity(CTRL_Entity *entity);
-internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityStore *store, U64 id);
-internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
-internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
-internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);
-internal CTRL_Entity *ctrl_module_from_thread_candidates(CTRL_EntityStore *store, CTRL_Entity *thread, CTRL_EntityList *candidates);
 internal CTRL_EntityArray ctrl_entity_array_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind);
-internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
-internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
-internal Rng1U64 ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range);
-internal Rng1U64 ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range);
-internal B32 ctrl_entity_tree_is_frozen(CTRL_Entity *root);
-
-//- rjf: entity tree iteration
-internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off);
-#define ctrl_entity_rec_depth_first_pre(entity, subtree_root)  ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, next), OffsetOf(CTRL_Entity, first))
-#define ctrl_entity_rec_depth_first_post(entity, subtree_root) ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, prev), OffsetOf(CTRL_Entity, last))
+internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);
+internal CTRL_Entity *ctrl_thread_from_id(CTRL_EntityStore *store, U64 id);
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
@@ -940,10 +948,10 @@ internal B32 ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src);
 //~ rjf: Thread Register Functions
 
 //- rjf: thread register cache reading
-internal void *ctrl_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_tls_root_vaddr_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_rip_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
-internal U64 ctrl_rsp_from_thread(CTRL_EntityStore *store, CTRL_Handle handle);
+internal void *ctrl_reg_block_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle handle);
+internal U64 ctrl_tls_root_vaddr_from_thread(CTRL_EntityCtx *ctx, CTRL_Handle handle);
+internal U64 ctrl_rip_from_thread(CTRL_EntityCtx *ctx, CTRL_Handle handle);
+internal U64 ctrl_rsp_from_thread(CTRL_EntityCtx *ctx, CTRL_Handle handle);
 
 //- rjf: thread register writing
 internal B32 ctrl_thread_write_reg_block(CTRL_Handle thread, void *block);
@@ -972,13 +980,18 @@ internal CTRL_UnwindStepResult ctrl_unwind_step__pe_x64(CTRL_Handle process_hand
 internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_Handle process, CTRL_Handle module, U64 module_base_vaddr, Arch arch, void *reg_block, U64 endt_us);
 
 //- rjf: abstracted full unwind
-internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle thread, U64 endt_us);
+internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Call Stack Building Functions
 
-internal CTRL_CallStack ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
+internal CTRL_CallStack ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 internal CTRL_CallStackFrame *ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U64 unwind_count, U64 inline_depth);
+
+////////////////////////////////
+//~ rjf: Call Stack Cache Functions
+
+internal CTRL_CallStack ctrl_call_stack_from_thread(HS_Scope *hs_scope, CTRL_Entity *thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes
