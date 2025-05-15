@@ -3541,14 +3541,13 @@ ctrl_thread__entry_point(void *p)
           }break;
           case CTRL_MsgKind_SetModuleDebugInfoPath:
           {
-            CTRL_EntityCtxRWStore *entity_store = ctrl_state->ctrl_thread_entity_store;
-            CTRL_EntityCtx *entity_ctx = &entity_store->ctx;
+            CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
             String8 path = msg->path;
             CTRL_Entity *module = ctrl_entity_from_handle(entity_ctx, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
             DI_Key old_dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
             di_close(&old_dbgi_key);
-            OS_MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex) ctrl_entity_equip_string(entity_store, debug_info_path, path);
+            OS_MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex) ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
             U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
             debug_info_path->timestamp = new_dbgi_timestamp;
             DI_Key new_dbgi_key = {debug_info_path->string, new_dbgi_timestamp};
@@ -4852,7 +4851,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
     ctx->primary_module = eval_modules_primary;
     
     //- rjf: fill space hooks
-    ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
     ctx->space_read  = ctrl_eval_space_read;
   }
   e_select_base_ctx(&scope->base_ctx);
@@ -4878,7 +4876,6 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
   //
   {
     E_InterpretCtx *ctx = &scope->interpret_ctx;
-    ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
     ctx->space_read    = ctrl_eval_space_read;
     ctx->primary_space = eval_modules_primary->space;
     ctx->reg_arch      = eval_modules_primary->arch;
@@ -4964,11 +4961,15 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   os_file_close(stdin_handle);
   
   //- rjf: record (id -> entry points), so that we know custom entry points for this PID
-  for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
+  CTRL_EntityCtxRWStore *entity_ctx_rw_store = ctrl_state->ctrl_thread_entity_store;
+  OS_MutexScopeW(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
   {
-    String8 string = n->string;
-    CTRL_Entity *entry = ctrl_entity_alloc(ctrl_state->ctrl_thread_entity_store, ctrl_state->ctrl_thread_entity_store->ctx.root, CTRL_EntityKind_EntryPoint, Arch_Null, ctrl_handle_zero(), (U64)id);
-    ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, entry, string);
+    for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
+    {
+      String8 string = n->string;
+      CTRL_Entity *entry = ctrl_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, CTRL_EntityKind_EntryPoint, Arch_Null, ctrl_handle_zero(), (U64)id);
+      ctrl_entity_equip_string(entity_ctx_rw_store, entry, string);
+    }
   }
 }
 
@@ -5295,7 +5296,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   {
     // rjf: gather stuck threads
     DMN_HandleList stuck_threads = {0};
-    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->ctx.root->first;
+    for(CTRL_Entity *machine = entity_ctx->root->first;
         machine != &ctrl_entity_nil;
         machine = machine->next)
     {
@@ -5400,7 +5401,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   //- rjf: gather frozen threads
   //
   CTRL_EntityList frozen_threads = {0};
-  for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->ctx.root->first;
+  for(CTRL_Entity *machine = entity_ctx->root->first;
       machine != &ctrl_entity_nil;
       machine = machine->next)
   {
@@ -5684,7 +5685,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         //- rjf: add traps for PID-correllated entry points
         if(!entries_found)
         {
-          for(CTRL_Entity *e = ctrl_state->ctrl_thread_entity_store->ctx.root->first; e != &ctrl_entity_nil; e = e->next)
+          for(CTRL_Entity *e = entity_ctx->root->first; e != &ctrl_entity_nil; e = e->next)
           {
             if(e->id == process->id)
             {
