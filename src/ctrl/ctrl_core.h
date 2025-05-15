@@ -266,7 +266,9 @@ typedef struct CTRL_CallStack CTRL_CallStack;
 struct CTRL_CallStack
 {
   CTRL_CallStackFrame *frames;
-  U64 count;
+  U64 frames_count;
+  CTRL_CallStackFrame **concrete_frames;
+  U64 concrete_frames_count;
 };
 
 ////////////////////////////////
@@ -609,13 +611,18 @@ struct CTRL_CallStackCacheNode
 {
   CTRL_CallStackCacheNode *next;
   CTRL_CallStackCacheNode *prev;
+  
+  // rjf: key
   CTRL_Handle thread;
-  U64 scope_touch_count;
-  U64 working_count;
-  Arena *arena;
   U64 reg_gen;
   U64 mem_gen;
-  CTRL_Unwind unwind;
+  
+  // rjf: refcounts
+  U64 scope_touch_count;
+  U64 working_count;
+  
+  // rjf: value
+  Arena *arena;
   CTRL_CallStack call_stack;
 };
 

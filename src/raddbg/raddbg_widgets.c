@@ -521,13 +521,14 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   {
     Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
     dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
+    CTRL_Scope *ctrl_scope = ctrl_scope_open();
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
     Arch arch = entity->arch;
-    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-    for(U64 idx = 0, limit = 6; idx < unwind.frames.count && idx < limit; idx += 1)
+    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity, 0);
+    for(U64 idx = 0, limit = 6; idx < call_stack.frames_count && idx < limit; idx += 1)
     {
-      CTRL_UnwindFrame *f = &unwind.frames.v[unwind.frames.count - 1 - idx];
+      CTRL_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];
       U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
@@ -542,7 +543,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
         if(name.size != 0)
         {
           dr_fstrs_push_new(arena, &result, &params, name, .size = extras_size, .color = symbol_color);
-          if(idx+1 < unwind.frames.count)
+          if(idx+1 < call_stack.frames_count)
           {
             dr_fstrs_push_new(arena, &result, &params, str8_lit(" > "), .color = secondary_color, .size = extras_size);
             if(idx+1 == limit)
@@ -554,6 +555,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       }
     }
     di_scope_close(di_scope);
+    ctrl_scope_close(ctrl_scope);
   }
   
   //- rjf: modules get debug info status extras

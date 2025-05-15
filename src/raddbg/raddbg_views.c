@@ -1008,17 +1008,18 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(block_eval.space);
       if(entity->kind == CTRL_EntityKind_Thread)
       {
+        CTRL_Scope *ctrl_scope = ctrl_scope_open();
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
-        CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-        CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, ctrl_process_from_entity(entity), &unwind);
-        if(1 <= frame_num && frame_num <= call_stack.count)
+        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity, 0);
+        if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
           info.callstack_unwind_index = f->unwind_count;
           info.callstack_inline_depth = f->inline_depth;
           info.callstack_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         }
+        ctrl_scope_close(ctrl_scope);
       }
     }
     
@@ -2837,17 +2838,18 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   };
   AnnotationList *visible_memory_annotations = push_array(scratch.arena, AnnotationList, visible_memory_size);
   {
+    CTRL_Scope *ctrl_scope = ctrl_scope_open();
     CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread, 0);
     
     //- rjf: fill unwind frame annotations
-    if(unwind.frames.count != 0) UI_Tag(str8_lit("weak"))
+    if(call_stack.concrete_frames_count != 0) UI_Tag(str8_lit("weak"))
     {
-      U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, unwind.frames.v[0].regs);
-      for(U64 idx = 1; idx < unwind.frames.count; idx += 1)
+      U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, call_stack.concrete_frames[0]->regs);
+      for(U64 idx = 1; idx < call_stack.concrete_frames_count; idx += 1)
       {
-        CTRL_UnwindFrame *f = &unwind.frames.v[idx];
+        CTRL_CallStackFrame *f = call_stack.concrete_frames[idx];
         U64 f_stack_top = regs_rsp_from_arch_block(thread->arch, f->regs);
         Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
         Rng1U64 frame_vaddr_range_in_viz = intersect_1u64(frame_vaddr_range, viz_range_bytes);
@@ -2896,10 +2898,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     }
     
     //- rjf: fill selected thread stack range annotation
-    if(unwind.frames.count > 0)
+    if(call_stack.concrete_frames_count > 0)
     {
       U64 stack_base_vaddr = thread->stack_base;
-      U64 stack_top_vaddr = regs_rsp_from_arch_block(thread->arch, unwind.frames.v[0].regs);
+      U64 stack_top_vaddr = regs_rsp_from_arch_block(thread->arch, call_stack.concrete_frames[0]->regs);
       Rng1U64 stack_vaddr_range = r1u64(stack_base_vaddr, stack_top_vaddr);
       Rng1U64 stack_vaddr_range_in_viz = intersect_1u64(stack_vaddr_range, viz_range_bytes);
       if(dim_1u64(stack_vaddr_range_in_viz) != 0)
@@ -2954,6 +2956,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }
       di_scope_close(scope);
     }
+    ctrl_scope_close(ctrl_scope);
   }
   
   //////////////////////////////

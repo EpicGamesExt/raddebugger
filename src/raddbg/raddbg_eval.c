@@ -955,11 +955,9 @@ E_TYPE_IREXT_FUNCTION_DEF(call_stack)
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(interp.space);
     if(entity->kind == CTRL_EntityKind_Thread)
     {
-      CTRL_Entity *process = ctrl_process_from_entity(entity);
-      CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
       accel->arch = entity->arch;
-      accel->process = process->handle;
-      accel->call_stack = ctrl_call_stack_from_unwind(arena, process, &base_unwind);
+      accel->process = ctrl_process_from_entity(entity)->handle;
+      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, entity, 0);
     }
     scratch_end(scratch);
   }
@@ -975,7 +973,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(call_stack)
     RD_CallStackAccel *accel = (RD_CallStackAccel *)lhs_irtree->user_data;
     E_Value rhs_value = e_value_from_expr(expr->first->next);
     CTRL_CallStack *call_stack = &accel->call_stack;
-    if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->count)
+    if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->frames_count)
     {
       CTRL_Entity *process = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, accel->process);
       CTRL_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
@@ -992,7 +990,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack)
   RD_CallStackAccel *accel = (RD_CallStackAccel *)eval.irtree.user_data;
   E_TypeExpandInfo result = {0};
   result.user_data = accel;
-  result.expr_count = accel->call_stack.count;
+  result.expr_count = accel->call_stack.frames_count;
   return result;
 }
 

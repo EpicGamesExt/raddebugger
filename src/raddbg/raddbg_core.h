@@ -599,6 +599,7 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   DI_Scope *frame_di_scope;
+  CTRL_Scope *frame_ctrl_scope;
   
   // rjf: dbgi match store
   DI_MatchStore *match_store;

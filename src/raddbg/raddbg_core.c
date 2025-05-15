@@ -1815,11 +1815,12 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }break;
         case CTRL_EntityKind_Thread:
         {
-          CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-          U64 frame_idx = e_interpret_ctx->reg_unwind_count;
-          if(frame_idx < unwind.frames.count)
+          CTRL_Scope *ctrl_scope = ctrl_scope_open();
+          CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity, 0);
+          U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
+          if(concrete_frame_idx < call_stack.concrete_frames_count)
           {
-            CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
+            CTRL_CallStackFrame *f = call_stack.concrete_frames[concrete_frame_idx];
             U64 regs_size = regs_block_size_from_arch(e_interpret_ctx->reg_arch);
             Rng1U64 legal_range = r1u64(0, regs_size);
             Rng1U64 read_range = intersect_1u64(legal_range, range);
@@ -1827,6 +1828,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
             MemoryCopy(out, (U8 *)f->regs + read_range.min, read_size);
             result = (read_size == dim_1u64(range));
           }
+          ctrl_scope_close(ctrl_scope);
         }break;
       }
     }break;
@@ -6393,12 +6395,12 @@ rd_window_frame(void)
           // rjf: unwind
           if(ctrl_entity->kind == CTRL_EntityKind_Thread) RD_Font(RD_FontSlot_Code)
           {
+            CTRL_Scope *ctrl_scope = ctrl_scope_open();
             Vec4F32 code_color = ui_color_from_name(str8_lit("code_default"));
             Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, process, &base_unwind);
-            if(call_stack.count != 0)
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, ctrl_entity, 0);
+            if(call_stack.frames_count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
@@ -6414,6 +6416,7 @@ rd_window_frame(void)
               String8 rip_value_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, ui_top_font(), ui_top_font_size(), ui_top_font_size()*40.f, rip_eval);
               rd_code_label(1, 0, code_color, rip_value_string);
             }
+            ctrl_scope_close(ctrl_scope);
           }
           
         }break;
@@ -11238,10 +11241,12 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: open frame debug info scope
+  //- rjf: open frame scopes
   //
+  if(rd_state->frame_depth == 0)
   {
     rd_state->frame_di_scope = di_scope_open();
+    rd_state->frame_ctrl_scope = ctrl_scope_open();
   }
   
   //////////////////////////////
@@ -11283,7 +11288,7 @@ rd_frame(void)
         U64 candidate_frame_time_us = 1000000/(U64)candidate;
         S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
         if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff &&
-           frame_time_history_avg_us < candidate_frame_time_us + 1000)
+           frame_time_history_avg_us < candidate_frame_time_us + candidate_frame_time_us/4)
         {
           best_target_hz = candidate;
           best_target_hz_frame_time_us_diff = frame_time_us_diff;
@@ -11613,7 +11618,6 @@ rd_frame(void)
     Arch arch = thread->arch;
     U64 unwind_count = rd_regs()->unwind_count;
     U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
     CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
     U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(&d_state->ctrl_entity_store->ctx, thread->handle);
@@ -15634,10 +15638,9 @@ rd_frame(void)
           }break;
           case RD_CmdKind_SelectUnwind:
           {
+            CTRL_Scope *ctrl_scope = ctrl_scope_open();
             CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, process, &base_unwind);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread, os_now_microseconds()+10000);
             CTRL_CallStackFrame *frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             if(frame == 0)
             {
@@ -15649,14 +15652,14 @@ rd_frame(void)
               rd_state->base_regs.v.inline_depth = rd_regs()->inline_depth;
             }
             rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle, .unwind_count = rd_state->base_regs.v.unwind_count, .inline_depth = rd_state->base_regs.v.inline_depth);
+            ctrl_scope_close(ctrl_scope);
           }break;
           case RD_CmdKind_UpOneFrame:
           case RD_CmdKind_DownOneFrame:
           {
+            CTRL_Scope *ctrl_scope = ctrl_scope_open();
             CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, process, &base_unwind);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread, os_now_microseconds()+10000);
             CTRL_CallStackFrame *current_frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             CTRL_CallStackFrame *next_frame = current_frame;
             if(current_frame != 0) switch(kind)
@@ -15668,7 +15671,7 @@ rd_frame(void)
                 next_frame = current_frame-1;
               }break;
               case RD_CmdKind_DownOneFrame:
-              if(current_frame+1 < call_stack.frames + call_stack.count)
+              if(current_frame+1 < call_stack.frames + call_stack.frames_count)
               {
                 next_frame = current_frame+1;
               }break;
@@ -15680,6 +15683,7 @@ rd_frame(void)
                      .unwind_count = next_frame->unwind_count,
                      .inline_depth = next_frame->inline_depth);
             }
+            ctrl_scope_close(ctrl_scope);
           }break;
           
           //- rjf: meta controls
@@ -16700,10 +16704,12 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: close frame debug info scope
+  //- rjf: close frame scopes
   //
+  if(rd_state->frame_depth == 0)
   {
     di_scope_close(rd_state->frame_di_scope);
+    ctrl_scope_close(rd_state->frame_ctrl_scope);
   }
   
   //////////////////////////////
