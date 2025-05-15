@@ -2,6 +2,27 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: 0.9.18 Release Notes
+/*
+- Adjusted identifier resolution rules in the evaluation language to prefer visualizer names when used in a call expression. For example, even if you have a variable named `bitmap`, if you evaluate `bitmap(...)`, it will prefer resolving `bitmap` to the visualizer. You can still always disambiguate with qualifiers, e.g. `local:bitmap` or `type:bitmap`.
+- Adjusted the `only` view to allow arbitrary derivative expressions, rather than only member names. This allows custom expansions to insert rows for arbitrary expressions. These expressions are derivative from the expanded expression, meaning they can refer to the expanded expression via `$`, or implicitly, its member names.
+- Renamed the `table` view to `columns`, and the `only` view to `rows`, since these more directly reflect the way these views are used in the evaluation visualization pipeline.
+- Added an option to all text views to scroll to the bottom if the textual content changes at all. Can be used with the `Output` tab.
+- Improved toggle switches to allow clicking and dragging to toggle many switches in a single operation.
+- The debugger now records the last user file which was loaded while it was opened, and reopens that file on startup, if no user is explicitly specified. (#482)
+                                                                                                                                                           - The debugger now unfocuses query bars (e.g. that opened by `Ctrl + F` in a source view) if the main view content is clicked by the mouse. The query bar can be refocused also by clicking.
+                                                                                                                                                           - Moved call stack evaluation to occur asynchronously, so that deeper call stacks (which can be expensive to compute) do not block the UI.
+                                                                                                                                                           - Stopped the debugger from running the default Windows message handling path for most `Alt`-based keybindings, which was causing a Windows beep sound to play.
+                                                                                                                                                           - Fixed a bug which was preventing backslashes from working in file system querying interfaces correctly.
+                                                                                                                                                           - Fixed a bug which was preventing some recursive callstacks from fully displaying in the debugger.
+                                                                                                                                                           - Fixed a bug which prevented `Space` from being used as a keybinding. Bound `Space` by default to the `Accept` command (to which `Enter` / `Return` is also defaultly bound).
+                                                                                                                                                           - Fixed a bug which was preventing conditional breakpoints from correctly being placed, if the condition expression did not evaluate when the debuggees were resumed.
+                                                                                                                                                           - Fixed the debugger applying too much path processing, which was causing relative paths in debug info to be interpreted incorrectly. The debugger should now work much better with relative paths (e.g. produced via `/d1trimfile`). In these cases, the debugger may still not be able to fully compute the correct absolute paths, because this information is not stored within debug information. But once the debugger is redirected to the correct file once through the UI, it should work with relative paths correctly.
+                                                                                                                                                           - If the debugger crashes, the message box which opens and displays the crash call stack now also allows the creation of crash dump files. Please submit these, if possible, with crash reports;  it will help us to debug crashes more effectively.
+                                                                                                                                                           - Fixed a bug which was causing text rendering to fail both when running the debugger on WINE and also on Windows 7.
+*/
+
+////////////////////////////////
 //~ rjf: post-0.9.16 TODO notes
 //
 //- watch improvements
