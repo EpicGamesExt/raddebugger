@@ -1434,14 +1434,17 @@ ctrl_scope_close(CTRL_Scope *scope)
   for(CTRL_ScopeCallStackTouch *t = scope->first_call_stack_touch, *next = 0; t != 0; t = next)
   {
     next = t->next;
-    ins_atomic_u64_dec_eval(&t->node->scope_touch_count);
+    if(!ins_atomic_u64_dec_eval(&t->node->scope_touch_count))
+    {
+      os_condition_variable_broadcast(t->stripe->cv);
+    }
     SLLStackPush(ctrl_tctx->free_call_stack_touch, t);
   }
   SLLStackPush(ctrl_tctx->free_scope, scope);
 }
 
 internal void
-ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheNode *node)
+ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheStripe *stripe, CTRL_CallStackCacheNode *node)
 {
   ins_atomic_u64_inc_eval(&node->scope_touch_count);
   CTRL_ScopeCallStackTouch *touch = ctrl_tctx->free_call_stack_touch;
@@ -1454,6 +1457,7 @@ ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallS
     touch = push_array(ctrl_tctx->arena, CTRL_ScopeCallStackTouch, 1);
   }
   SLLQueuePush(scope->first_call_stack_touch, scope->last_call_stack_touch, touch);
+  touch->stripe = stripe;
   touch->node = node;
 }
 
@@ -3386,7 +3390,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, U64 endt_us)
             is_stale   = (reg_gen > n->reg_gen || mem_gen > n->mem_gen);
             is_working = (n->working_count > 0);
             call_stack = n->call_stack;
-            ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, n);
+            ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, stripe, n);
             break;
           }
         }
@@ -6813,39 +6817,50 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     if(pre_reg_gen == post_reg_gen &&
        pre_mem_gen == post_mem_gen)
     {
-      for(B32 done = 0; !done;)
+      B32 found = 0;
+      B32 committed = 0;
+      OS_MutexScopeW(stripe->rw_mutex) for(;;)
       {
-        B32 found = 0;
-        OS_MutexScopeW(stripe->rw_mutex)
+        // rjf: try to find node & commit
+        for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
         {
-          for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
+          if(ctrl_handle_match(n->thread, thread_handle))
           {
-            if(ctrl_handle_match(n->thread, thread_handle))
+            found = 1;
+            if(n->scope_touch_count == 0)
             {
-              found = 1;
-              if(n->scope_touch_count == 0)
+              committed = 1;
+              if(unwind.flags == 0 || call_stack.frames_count >= n->call_stack.frames_count)
               {
-                done = 1;
-                if(unwind.flags == 0 || call_stack.frames_count >= n->call_stack.frames_count)
-                {
-                  last_arena = n->arena;
-                  n->arena = arena;
-                  n->call_stack = call_stack;
-                }
-                if(unwind.flags == 0)
-                {
-                  n->reg_gen = pre_reg_gen;
-                  n->mem_gen = pre_mem_gen;
-                }
+                last_arena = n->arena;
+                n->arena = arena;
+                n->call_stack = call_stack;
               }
-              break;
+              if(unwind.flags == 0)
+              {
+                n->reg_gen = pre_reg_gen;
+                n->mem_gen = pre_mem_gen;
+              }
             }
+            break;
           }
         }
-        if(!found)
+        
+        // rjf: not found, or committed? -> abort
+        if(!found || committed)
         {
           break;
         }
+        
+        // rjf: found, not committed? -> wait & retry
+        if(found && !committed)
+        {
+          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10000);
+        }
+      }
+      if(committed)
+      {
+        os_condition_variable_broadcast(stripe->cv);
       }
     }
     

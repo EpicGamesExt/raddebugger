@@ -728,6 +728,7 @@ typedef struct CTRL_ScopeCallStackTouch CTRL_ScopeCallStackTouch;
 struct CTRL_ScopeCallStackTouch
 {
   CTRL_ScopeCallStackTouch *next;
+  CTRL_CallStackCacheStripe *stripe;
   CTRL_CallStackCacheNode *node;
 };
 
@@ -967,7 +968,7 @@ internal void ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_
 
 internal CTRL_Scope *ctrl_scope_open(void);
 internal void ctrl_scope_close(CTRL_Scope *scope);
-internal void ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheNode *node);
+internal void ctrl_scope_touch_call_stack_node__stripe_r_guarded(CTRL_Scope *scope, CTRL_CallStackCacheStripe *stripe, CTRL_CallStackCacheNode *node);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
