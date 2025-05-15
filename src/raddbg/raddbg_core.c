@@ -16247,14 +16247,17 @@ rd_frame(void)
             {
               E_Expr *macro_expr = e_string2expr_map_lookup(e_ir_ctx->macro_map, t->expr->string);
               E_Eval eval = e_eval_from_string(t->expr->string);
-              switch(eval.space.kind)
+              if(eval.msgs.max_kind == E_MsgKind_Null)
               {
-                default:{is_static_for_ctrl_thread = 0;}break;
-                case E_SpaceKind_Null:
-                case RD_EvalSpaceKind_MetaCfg:
+                switch(eval.space.kind)
                 {
-                  is_static_for_ctrl_thread = 1;
-                }break;
+                  default:{is_static_for_ctrl_thread = 0;}break;
+                  case E_SpaceKind_Null:
+                  case RD_EvalSpaceKind_MetaCfg:
+                  {
+                    is_static_for_ctrl_thread = 1;
+                  }break;
+                }
               }
             }
             for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
