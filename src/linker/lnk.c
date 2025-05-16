@@ -2281,6 +2281,11 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       ProfBegin("Finalize Sections Layout");
 
+      // merge sections
+      if (config->flags & LNK_ConfigFlag_Merge) {
+        lnk_section_table_merge(sectab, config->merge_list);
+      }
+
       // sort contribs
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
         for (LNK_SectionContribChunk *sc_chunk = sect_n->data.contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
@@ -2289,32 +2294,31 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         }
       }
 
-      // merge sections
-      if (config->flags & LNK_ConfigFlag_Merge) {
-        lnk_section_table_merge(sectab, config->merge_list);
-      }
-
       // assign contribs offsets, sizes, and section indices
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
         lnk_finalize_section_layout(sectab, &sect_n->data, config->file_align);
       }
 
       // remove empty sections
-      String8List empty_sect_list = {0};
-      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        LNK_Section *sect = &sect_n->data;
-        if (sect->vsize == 0) {
-          str8_list_push(scratch.arena, &empty_sect_list, sect->name);
+      {
+        String8List empty_sect_list = {0};
+        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+          LNK_Section *sect = &sect_n->data;
+          if (sect->vsize == 0) {
+            str8_list_push(scratch.arena, &empty_sect_list, sect->name);
+          }
         }
-      }
-      for (String8Node *name_n = empty_sect_list.first; name_n != 0; name_n = name_n->next) {
-        lnk_section_table_remove(sectab, name_n->string);
+        for (String8Node *name_n = empty_sect_list.first; name_n != 0; name_n = name_n->next) {
+          lnk_section_table_remove(sectab, name_n->string);
+        }
       }
 
       // assign section indices to sections
-      U64 sect_idx = 0;
-      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        sect_n->data.sect_idx = sect_idx++;
+      {
+        U64 sect_idx = 0;
+        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+          sect_n->data.sect_idx = sect_idx++;
+        }
       }
 
       // assign section indices to contribs
@@ -2325,6 +2329,19 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
             sc_chunk->v[sc_idx]->u.sect_idx = sect->sect_idx;
           }
         }
+      }
+
+      // assing layout offsets and sizes to merged sections
+      for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
+        LNK_Section *sect = &sect_n->data;
+        LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
+        LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(sect);
+        LNK_Section *final_sect = lnk_finalized_section_from_id(sectab, sect->merge_id);
+        sect->voff = final_sect->voff + first_sc->u.off;
+        sect->vsize = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+        sect->foff = final_sect->foff + first_sc->u.off;
+        sect->fsize = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+        sect->sect_idx = final_sect->sect_idx;
       }
 
       ProfEnd();
@@ -3054,7 +3071,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       ProfEnd();
     }
 
-    // patch Debug
+    // patch debug
     {
       LNK_Section *debug_dir_sect = lnk_section_table_search(sectab, str8_lit(".RAD_LINKER_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
       if (debug_dir_sect) {
