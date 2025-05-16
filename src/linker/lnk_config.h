@@ -529,6 +529,7 @@ internal void lnk_error_cmd_switch_invalid_param      (LNK_ErrorCode code, Strin
 ////////////////////////////////
 // Getters
 
+internal String8 lnk_get_image_name(LNK_Config *config);
 internal U64     lnk_get_default_function_pad_min(COFF_MachineType machine);
 internal U64     lnk_get_base_addr(LNK_Config *config);
 internal Version lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
