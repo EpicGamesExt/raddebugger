@@ -95,7 +95,8 @@ typedef struct COFF_ObjWriter
 ////////////////////////////////
 
 internal COFF_ObjWriter * coff_obj_writer_alloc(COFF_TimeStamp time_stamp, COFF_MachineType machine);
-internal void            coff_obj_writer_release(COFF_ObjWriter **obj_writer);
+internal void             coff_obj_writer_release(COFF_ObjWriter **obj_writer);
+internal String8          coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer);
 
 internal COFF_ObjSection * coff_obj_writer_push_section(COFF_ObjWriter *obj_writer, String8 name, COFF_SectionFlags flags, String8 data);
 
@@ -114,6 +115,8 @@ internal COFF_ObjSymbol * coff_obj_writer_push_symbol_common(COFF_ObjWriter *obj
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol, COFF_RelocType reloc_type);
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_addr(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_voff(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
+
+internal void coff_obj_writer_push_directive(COFF_ObjWriter *obj_writer, String8 directive);
 
 #endif // COFF_OBJ_WRITER_H
 
