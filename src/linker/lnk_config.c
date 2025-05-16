@@ -364,6 +364,15 @@ lnk_error_invalid_uac_ui_access_param(LNK_ErrorCode error_code, String8 obj_path
 
 ////////////////////////////////
 
+internal String8
+lnk_get_image_name(LNK_Config *config)
+{
+  String8 image_name = config->image_name;
+  image_name = str8_skip_last_slash(image_name);
+  image_name = str8_chop_last_dot(image_name);
+  return image_name;
+}
+
 internal U64
 lnk_get_default_function_pad_min(COFF_MachineType machine)
 {
@@ -835,8 +844,9 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
   }
 
   // does directive have ordinal?
-  U16 ordinal16       = 0;
-  String8 ordinal     = {0};
+  COFF_ImportByType import_by = COFF_ImportBy_Name;
+  U16 ordinal16 = 0;
+  String8 ordinal = {0};
   String8 noname_flag = {0};
   if (str8_match(str8_prefix(str8_list_first(&flags), 1), str8_lit("@"), 0)) {
     // parse ordinal
@@ -845,6 +855,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
       U64 ordinal64 = u64_from_str8(ordinal, 10);
       if (ordinal64 <= max_U16) {
         ordinal16 = (U16)ordinal64;
+        import_by = COFF_ImportBy_Ordinal;
       } else {
         String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
         lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "ordinal value must fit into 16-bit integer, \"/EXPORT:%S\"", d);
@@ -892,6 +903,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
   export_out->name                = push_str8_copy(arena, name);
   export_out->alias               = push_str8_copy(arena, alias);
   export_out->type                = type;
+  export_out->import_by           = import_by;
   export_out->ordinal             = ordinal16;
   export_out->is_ordinal_assigned = ordinal.size > 0;
   export_out->is_noname_present   = noname_flag.size > 0;
