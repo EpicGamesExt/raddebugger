@@ -26,11 +26,11 @@
 			</LinkedListItems>
     </Expand>
   </Type>
-
   <Type Name="LNK_SymbolList">
     <AlternativeType Name="LNK_SectionList"/>
     <AlternativeType Name="LNK_ChunkList"/>
     <AlternativeType Name="LNK_ExportParseList"/>
+    <AlternativeType Name="LNK_InputImportList"/>
     <AlternativeType Name="CV_SymbolList"/>
     <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
     <Expand>
@@ -113,6 +113,28 @@
       <ArrayItems>
         <Size>count</Size>
         <ValuePointer>v</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+	<Type Name="BucketList">
+    <DisplayString Condition="first == 0">empty</DisplayString>
+		<Expand>
+			<LinkedListItems>
+				<HeadPointer>first</HeadPointer>
+				<NextPointer>next</NextPointer>
+        <ValueNode>v</ValueNode>
+			</LinkedListItems>
+		</Expand>
+	</Type>
+  <Type Name="HashTable">
+    <Expand>
+      <Item Name="[cap]">cap</Item>
+      <Item Name="[count]">count</Item>
+      <Item Name="[free buckets]">free_buckets</Item>
+      <ArrayItems>
+        <Size>cap</Size>
+        <ValuePointer>buckets</ValuePointer>
       </ArrayItems>
     </Expand>
   </Type>
