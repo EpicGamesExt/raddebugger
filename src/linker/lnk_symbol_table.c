@@ -7,9 +7,9 @@ internal LNK_Symbol *
 lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx)
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name                 = name;
-  symbol->type                 = LNK_Symbol_Defined;
-  symbol->u.defined.obj        = obj;
+  symbol->name = name;
+  symbol->type = LNK_Symbol_Defined;
+  symbol->u.defined.obj = obj;
   symbol->u.defined.symbol_idx = symbol_idx;
   return symbol;
 }
@@ -18,9 +18,9 @@ internal LNK_Symbol *
 lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_offset)
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name                = name;
-  symbol->type                = LNK_Symbol_Lib;
-  symbol->u.lib.lib           = lib;
+  symbol->name = name;
+  symbol->type = LNK_Symbol_Lib;
+  symbol->u.lib.lib = lib;
   symbol->u.lib.member_offset = member_offset;
   return symbol;
 }
@@ -29,9 +29,19 @@ internal LNK_Symbol *
 lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj)
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name        = name;
-  symbol->type        = LNK_Symbol_Undefined;
+  symbol->name = name;
+  symbol->type = LNK_Symbol_Undefined;
   symbol->u.undef.obj = obj;
+  return symbol;
+}
+
+internal LNK_Symbol *
+lnk_make_import_symbol(Arena *arena, String8 name, String8 import_header)
+{
+  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
+  symbol->name = name;
+  symbol->type = LNK_Symbol_Import;
+  symbol->u.import.import_header = import_header;
   return symbol;
 }
 
@@ -491,9 +501,9 @@ lnk_symbol_table_push_hash(LNK_SymbolTable *symtab, U64 hash, LNK_Symbol *symbol
 {
   switch (symbol->type) {
   case LNK_Symbol_Null: break;
-  case LNK_Symbol_Defined:
-  case LNK_Symbol_Import: { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Defined, hash, symbol); } break;
-  case LNK_Symbol_Lib:    { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Lib,     hash, symbol); } break;
+  case LNK_Symbol_Defined: { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Defined, hash, symbol); } break;
+  case LNK_Symbol_Import:  { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Import,  hash, symbol); } break;
+  case LNK_Symbol_Lib:     { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Lib,     hash, symbol); } break;
   default: { InvalidPath; } break;
   }
 }

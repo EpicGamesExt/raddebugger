@@ -83,6 +83,8 @@ typedef struct
 typedef struct
 {
   LNK_InputObjList    input_obj_list;
+  U64                 input_imports_count;
+  LNK_InputImport    *input_imports;
   LNK_InputImportList input_import_list;
   LNK_SymbolList      unresolved_symbol_list;
 } LNK_SymbolFinderResult;
