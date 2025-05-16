@@ -11,6 +11,10 @@ internal COFF_ObjSymbol * pe_make_tail_merge_thunk_x64(COFF_ObjWriter *obj_write
 internal String8 pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stmap, COFF_MachineType machine, String8 dll_name, String8 debug_symbols, String8List import_headers);
 internal String8 pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 dll_name, String8 delay_load_helper_name, String8 debug_symbols, String8List import_headers, B32 emit_biat, B32 emit_uiat);
 
+internal String8 pe_make_import_entry_obj_delayed(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
+internal String8 pe_make_null_import_descriptor_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
+internal String8 pe_make_null_thunk_data_delayed(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
+
 internal String8 pe_make_import_entry_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
 internal String8 pe_make_null_import_descriptor_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
 internal String8 pe_make_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 debug_symbols);
