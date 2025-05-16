@@ -15,6 +15,20 @@ pe_name_from_export_parse(PE_ExportParse *exp)
   return name;
 }
 
+internal U16
+pe_hint_or_ordinal_from_export_parse(PE_ExportParse *exp)
+{
+  U16 hint_or_ordinal;
+  if (exp->import_by == COFF_ImportBy_Ordinal) {
+    hint_or_ordinal = exp->ordinal;
+  } else if (exp->import_by == COFF_ImportBy_Name) {
+    hint_or_ordinal = exp->hint;
+  } else {
+    NotImplemented;
+  }
+  return hint_or_ordinal;
+}
+
 internal PE_ExportParsePtrArray
 pe_array_from_export_list(Arena *arena, PE_ExportParseList list)
 {
@@ -168,6 +182,7 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
   }
 
   PE_FinalizedExports result = {0};
+  result.ordinal_low = ordinal_low;
   result.named_exports = named_exports;
   result.forwarder_exports = forwarder_exports;
   result.ordinal_exports = ordinal_exports;
@@ -331,7 +346,8 @@ pe_make_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_s
       continue;
     }
     String8 name = pe_name_from_export_parse(exp);
-    coff_lib_writer_push_export_by_name(lib_writer, machine, time_stamp, dll_name, exp->type, name, exp->hint);
+    U16 hint_or_ordinal = pe_hint_or_ordinal_from_export_parse(exp);
+    coff_lib_writer_push_import(lib_writer, machine, time_stamp, dll_name, exp->import_by, name, hint_or_ordinal, exp->type);
   }
 
   // serialize lib

@@ -6,17 +6,18 @@
 
 typedef struct PE_ExportParse
 {
-  String8         obj_path;
-  String8         lib_path;
-  String8         name;
-  String8         alias;
-  COFF_ImportType type;
-  U16             ordinal;
-  U16             hint;
-  B32             is_ordinal_assigned;
-  B32             is_noname_present;
-  B32             is_private;
-  B32             is_forwarder;
+  String8           obj_path;
+  String8           lib_path;
+  String8           name;
+  String8           alias;
+  COFF_ImportType   type;
+  COFF_ImportByType import_by;
+  U16               hint;
+  U16               ordinal;
+  B32               is_ordinal_assigned;
+  B32               is_noname_present;
+  B32               is_private;
+  B32               is_forwarder;
 } PE_ExportParse;
 
 typedef struct PE_ExportParseNode
