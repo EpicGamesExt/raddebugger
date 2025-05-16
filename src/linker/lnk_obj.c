@@ -5,7 +5,9 @@ internal void
 lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
 {
   va_list args; va_start(args, fmt);
-  lnk_error_with_loc_fv(code, obj->path, obj->lib_path, fmt, args);
+  String8 obj_path = obj ? obj->path : str8_lit("RADLINK");
+  String8 lib_path = obj ? obj->lib_path : str8_zero();
+  lnk_error_with_loc_fv(code, obj_path, lib_path, fmt, args);
   va_end(args);
 }
 
