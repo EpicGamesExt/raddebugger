@@ -60,12 +60,12 @@ typedef struct LNK_SectionDefinition
 
 typedef struct LNK_Section
 {
-  U64                id;
-  String8            name;
-  COFF_SectionFlags  flags;
-  B32                has_layout;
-  B32                is_merged;
-
+  U64                         id;
+  String8                     name;
+  COFF_SectionFlags           flags;
+  B32                         has_layout;
+  B32                         is_merged;
+  U64                         merge_id;
   LNK_SectionContribChunkList contribs;
 
   U64 voff;
@@ -101,7 +101,7 @@ typedef struct LNK_SectionTable
   U64              id_max;
   U64              next_sect_idx;
   LNK_SectionList  list;
-  LNK_SectionList  free_list;
+  LNK_SectionList  merge_list;
   HashTable       *sect_ht;   // name -> LNK_Section *
 } LNK_SectionTable;
 
@@ -116,11 +116,18 @@ internal LNK_SectionArray lnk_section_array_from_list(Arena *arena, LNK_SectionL
 
 ////////////////////////////////
 
+internal LNK_SectionContrib * lnk_get_last_section_contrib(LNK_Section *sect);
+internal LNK_SectionTable * lnk_section_table_alloc(void);
+
+////////////////////////////////
+
 internal LNK_SectionTable *  lnk_section_table_alloc(void);
 internal void                lnk_section_table_release(LNK_SectionTable **st_ptr);
 internal LNK_Section *       lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
-internal void                lnk_section_table_remove(LNK_SectionTable *sectab, String8 name);
+internal LNK_SectionNode *   lnk_section_table_remove(LNK_SectionTable *sectab, String8 name);
 internal LNK_Section *       lnk_section_table_search(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags);
+internal LNK_SectionArray    lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 full_or_partial_name);
 internal void                lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_list);
 internal LNK_SectionArray    lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab);
+internal LNK_Section *       lnk_finalized_section_from_id(LNK_SectionTable *sectab, U64 id);
 

@@ -91,6 +91,17 @@ lnk_get_first_section_contrib(LNK_Section *sect)
   return 0;
 }
 
+internal LNK_SectionContrib *
+lnk_get_last_section_contrib(LNK_Section *sect)
+{
+  if (sect->contribs.chunk_count > 0) {
+    if (sect->contribs.last->count > 0) {
+      return sect->contribs.last->v[0];
+    }
+  }
+  return 0;
+}
+
 internal LNK_SectionTable *
 lnk_section_table_alloc(void)
 {
@@ -148,7 +159,7 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
   return sect;
 }
 
-internal void
+internal LNK_SectionNode *
 lnk_section_table_remove(LNK_SectionTable *sectab, String8 name)
 {
   ProfBeginFunction();
@@ -190,6 +201,7 @@ lnk_section_table_remove(LNK_SectionTable *sectab, String8 name)
   }
 
   ProfEnd();
+  return node;
 }
 
 internal LNK_Section *
@@ -210,8 +222,12 @@ lnk_section_table_search(LNK_SectionTable *sectab, String8 full_or_partial_name,
 }
 
 internal LNK_SectionArray
-lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 name)
+lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 full_or_partial_name)
 {
+  String8 name = {0};
+  String8 postfix = {0};
+  coff_parse_section_name(full_or_partial_name, &name, &postfix);
+
   U64 match_count = 0;
   for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
     if (str8_match(sect_n->data.name, name, 0)) {
@@ -223,7 +239,7 @@ lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 na
 
   if (match_count > 0) {
     result.count = 0;
-    result.v     = push_array(arena, LNK_Section *, match_count);
+    result.v = push_array(arena, LNK_Section *, match_count);
 
     for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
       if (str8_match(sect_n->data.name, name, 0)) {
@@ -307,9 +323,14 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
       // merge section with destination
       lnk_section_contrib_chunk_list_concat_in_place(&dst->contribs, &src->contribs);
       src->is_merged = 1;
+      src->merge_id = dst->id;
 
       // remove from output section list
-      lnk_section_table_remove(sectab, src->name);
+      LNK_SectionNode *merge_node = lnk_section_table_remove(sectab, src->name);
+
+      // move node to the merge list
+      SLLQueuePush(sectab->merge_list.first, sectab->merge_list.last, merge_node);
+      sectab->merge_list.count += 1;
     }
   }
   scratch_end(scratch);
@@ -386,4 +407,23 @@ lnk_assign_section_file_space(LNK_Section *sect, U64 *foff_cursor)
     *foff_cursor += sect->fsize;
   }
 }
+
+internal LNK_Section *
+lnk_finalized_section_from_id(LNK_SectionTable *sectab, U64 id)
+{
+  for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+    if (sect_n->data.id == id) {
+      return &sect_n->data;
+    }
+  }
+
+  for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
+    if (sect_n->data.id == id) {
+      return lnk_finalized_section_from_id(sectab, sect_n->data.merge_id);
+    }
+  }
+
+  return 0;
+}
+
 
