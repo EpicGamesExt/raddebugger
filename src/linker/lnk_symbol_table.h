@@ -31,6 +31,11 @@ typedef struct LNK_SymbolUndefined
   struct LNK_Obj *obj;
 } LNK_SymbolUndefined;
 
+typedef struct LNK_SymbolImport
+{
+  String8 import_header;
+} LNK_SymbolImport;
+
 typedef struct LNK_Symbol
 {
   String8        name;
@@ -38,12 +43,10 @@ typedef struct LNK_Symbol
   union {
     LNK_SymbolDefined   defined;
     LNK_SymbolLib       lib;
-    String8             coff_import;
+    LNK_SymbolImport    import;
     LNK_SymbolUndefined undef;
   } u;
 } LNK_Symbol;
-
-////////////////////////////////
 
 typedef struct LNK_SymbolNode
 {
@@ -70,11 +73,10 @@ typedef struct LNK_SymbolArray
   LNK_Symbol *v;
 } LNK_SymbolArray;
 
-////////////////////////////////
-
 typedef enum
 {
   LNK_SymbolScope_Defined,
+  LNK_SymbolScope_Import,
   LNK_SymbolScope_Lib,
   LNK_SymbolScope_Count
 } LNK_SymbolScope;
@@ -120,14 +122,10 @@ typedef struct
 
 ////////////////////////////////
 
-global read_only LNK_Symbol   g_null_symbol     = { str8_lit_comp("NULL"), LNK_Symbol_Null };
-global read_only LNK_Symbol  *g_null_symbol_ptr = &g_null_symbol;
-
-////////////////////////////////
-
 internal LNK_Symbol * lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
 internal LNK_Symbol * lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_offset);
 internal LNK_Symbol * lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj);
+internal LNK_Symbol * lnk_make_import_symbol(Arena *arena, String8 name, String8 import_header);
 
 ////////////////////////////////
 

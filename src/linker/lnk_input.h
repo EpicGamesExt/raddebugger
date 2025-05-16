@@ -16,16 +16,22 @@ typedef String8List LNK_InputLibList;
 
 typedef struct LNK_InputImport
 {
-  struct LNK_InputImport *next;
-  String8 coff_import;
-  U64     input_idx;
+  String8         coff_import;
+  U64             input_idx;
+  struct LNK_Lib *lib;
 } LNK_InputImport;
+
+typedef struct LNK_InputImportNode
+{
+  struct LNK_InputImportNode *next;
+  LNK_InputImport data;
+} LNK_InputImportNode;
 
 typedef struct LNK_InputImportList
 {
-  U64              count;
-  LNK_InputImport *first;
-  LNK_InputImport *last;
+  U64                  count;
+  LNK_InputImportNode *first;
+  LNK_InputImportNode *last;
 } LNK_InputImportList;
 
 typedef struct LNK_InputObj
@@ -59,8 +65,8 @@ internal LNK_InputObj **  lnk_array_from_input_obj_list(Arena *arena, LNK_InputO
 internal LNK_InputObjList lnk_list_from_input_obj_arr(LNK_InputObj **arr, U64 count);
 internal LNK_InputObjList lnk_input_obj_list_from_string_list(Arena *arena, String8List list);
 
-internal LNK_InputImport *   lnk_input_import_list_push(Arena *arena, LNK_InputImportList *list);
-internal void                lnk_input_import_list_concat_in_place(LNK_InputImportList *list, LNK_InputImportList *to_concat);
-internal LNK_InputImport **  lnk_input_import_arr_from_list(Arena *arena, LNK_InputImportList list);
-internal LNK_InputImportList lnk_list_from_input_import_arr(LNK_InputImport **arr, U64 count);
+internal LNK_InputImportNode *  lnk_input_import_list_push(Arena *arena, LNK_InputImportList *list);
+internal void                   lnk_input_import_list_concat_in_place(LNK_InputImportList *list, LNK_InputImportList *to_concat);
+internal LNK_InputImportNode ** lnk_input_import_arr_from_list(Arena *arena, LNK_InputImportList list);
+internal LNK_InputImportList    lnk_list_from_input_import_arr(LNK_InputImportNode **arr, U64 count);
 
