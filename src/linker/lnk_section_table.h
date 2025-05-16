@@ -67,7 +67,6 @@ typedef struct LNK_Section
   B32                is_merged;
 
   LNK_SectionContribChunkList contribs;
-  LNK_SectionContrib *first_contrib_chunk;
 
   U64 voff;
   U64 vsize;

@@ -189,20 +189,20 @@ lnk_section_table_remove(LNK_SectionTable *sectab, String8 name)
     }
   }
 
-  // push to free list
-  SLLQueuePush(sectab->free_list.first, sectab->free_list.last, node);
-  sectab->free_list.count += 1;
-
   ProfEnd();
 }
 
 internal LNK_Section *
-lnk_section_table_search(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags flags)
+lnk_section_table_search(LNK_SectionTable *sectab, String8 full_or_partial_name, COFF_SectionFlags flags)
 {
   Temp scratch = scratch_begin(0,0);
 
-  String8     name_with_flags = lnk_make_name_with_flags(scratch.arena, name, flags);
-  LNK_Section *section        = 0;
+  String8 name = {0};
+  String8 postfix = {0};
+  coff_parse_section_name(full_or_partial_name, &name, &postfix);
+
+  String8 name_with_flags = lnk_make_name_with_flags(scratch.arena, name, flags);
+  LNK_Section *section= 0;
   hash_table_search_string_raw(sectab->sect_ht, name_with_flags, &section);
 
   scratch_end(scratch);
