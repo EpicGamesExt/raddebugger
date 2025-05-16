@@ -1011,7 +1011,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         CTRL_Scope *ctrl_scope = ctrl_scope_open();
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
-        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity, 0);
+        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
         if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
@@ -2841,7 +2841,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     CTRL_Scope *ctrl_scope = ctrl_scope_open();
     CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread, 0);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread, 1, 0);
     
     //- rjf: fill unwind frame annotations
     if(call_stack.concrete_frames_count != 0) UI_Tag(str8_lit("weak"))

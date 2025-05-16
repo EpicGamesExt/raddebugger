@@ -3356,7 +3356,7 @@ ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U
 //~ rjf: Call Stack Cache Functions
 
 internal CTRL_CallStack
-ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, U64 endt_us)
+ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, B32 high_priority, U64 endt_us)
 {
   CTRL_CallStack call_stack = {0};
   {
@@ -3419,7 +3419,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, U64 endt_us)
       if(!is_working && (!is_good || is_stale))
       {
         if(ctrl_u2csb_enqueue_req(thread->handle, endt_us) &&
-           async_push_work(ctrl_call_stack_build_work))
+           async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low))
         {
           ins_atomic_u64_inc_eval(&node->working_count);
         }
@@ -6887,13 +6887,21 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     
     //- rjf: compute unwind to find list of all concrete frames, then
     // call stack, to determine list of all concrete & inline frames
-    U64 pre_reg_gen = ctrl_reg_gen();
-    U64 pre_mem_gen = ctrl_mem_gen();
     Arena *arena = arena_alloc();
-    CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, 0);
-    CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(arena, process, &unwind);
-    U64 post_reg_gen = ctrl_reg_gen();
-    U64 post_mem_gen = ctrl_mem_gen();
+    U64 pre_reg_gen = 0;
+    U64 post_reg_gen = 0;
+    U64 pre_mem_gen = 0;
+    U64 post_mem_gen = 0;
+    CTRL_Unwind unwind = {0};
+    CTRL_CallStack call_stack = {0};
+    {
+      pre_reg_gen = ctrl_reg_gen();
+      pre_mem_gen = ctrl_mem_gen();
+      unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+1000);
+      call_stack = ctrl_call_stack_from_unwind(arena, process, &unwind);
+      post_reg_gen = ctrl_reg_gen();
+      post_mem_gen = ctrl_mem_gen();
+    }
     
     //- rjf: store new results in cache
     Arena *last_arena = arena;
@@ -6938,7 +6946,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
         // rjf: found, not committed? -> wait & retry
         if(found && !committed)
         {
-          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+100);
+          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10);
         }
       }
       if(committed)
