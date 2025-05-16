@@ -53,17 +53,17 @@ typedef struct COFF_LibWriter
 
 internal COFF_LibWriterSymbolNode * coff_lib_writer_symbol_list_push(Arena *arena, COFF_LibWriterSymbolList *list, COFF_LibWriterSymbol symbol);
 internal COFF_LibWriterMemberNode * coff_lib_writer_member_list_push(Arena *arena, COFF_LibWriterMemberList *list, COFF_LibWriterMember member);
+
 internal COFF_LibWriterSymbol * coff_lib_writer_symbol_array_from_list(Arena *arena, COFF_LibWriterSymbolList list);
 internal COFF_LibWriterMember * coff_lib_writer_member_array_from_list(Arena *arena, COFF_LibWriterMemberList list);
+
 internal void coff_lib_writer_symbol_array_sort(COFF_LibWriterSymbol *arr, U64 count);
 
 internal COFF_LibWriter * coff_lib_writer_alloc(void);
-internal void coff_lib_writer_release(COFF_LibWriter **writer_ptr);
-internal void coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_data);
-internal void coff_lib_writer_push_export(COFF_LibWriter *writer, String8 raw_import_header);
-internal void coff_lib_writer_push_export_by_ordinal(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, U16 ordinal);
-internal void coff_lib_writer_push_export_by_name(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, String8 name, U16 hint);
-internal String8List coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeStamp time_stamp, U16 mode, B32 emit_second_member);
+internal void             coff_lib_writer_release(COFF_LibWriter **writer_ptr);
+internal U64              coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_data);
+internal void             coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportByType import_by, String8 name, U16 hint_or_ordinal, COFF_ImportType import_type);
+internal String8List      coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeStamp time_stamp, U16 mode, B32 emit_second_member);
 
 #endif // COFF_LIB_WRITER_H
 

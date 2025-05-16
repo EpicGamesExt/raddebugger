@@ -87,7 +87,7 @@ coff_lib_writer_release(COFF_LibWriter **writer_ptr)
   *writer_ptr = 0;
 }
 
-internal void
+internal U64
 coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_data)
 {
   U64 member_idx = writer->member_list.count;
@@ -126,55 +126,43 @@ coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_d
       }
     }
   }
+
+  return member_idx;
 }
 
 internal void
-coff_lib_writer_push_export(COFF_LibWriter *writer, String8 raw_import_header)
+coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportByType import_by, String8 name, U16 hint_or_ordinal, COFF_ImportType import_type)
 {
-  U64                            member_idx    = writer->member_list.count;
-  COFF_ParsedArchiveImportHeader import_header = coff_archive_import_from_data(raw_import_header);
-
   // push import member
+  U64 member_idx = lib_writer->member_list.count;
   COFF_LibWriterMember member = {0};
-  member.name = import_header.dll_name;
-  member.data = raw_import_header;
-  coff_lib_writer_member_list_push(writer->arena, &writer->member_list, member);
+  member.name = dll_name;
+  member.data = coff_make_import_header(lib_writer->arena, machine, time_stamp, dll_name, import_by, name, hint_or_ordinal, import_type);
+  coff_lib_writer_member_list_push(lib_writer->arena, &lib_writer->member_list, member);
   
-  switch (import_header.type) {
-  case COFF_ImportHeader_Code: {
-    COFF_LibWriterSymbol def_symbol = {0};
-    def_symbol.name       = push_str8_copy(writer->arena, import_header.func_name);
-    def_symbol.member_idx = member_idx;
-    coff_lib_writer_symbol_list_push(writer->arena, &writer->symbol_list, def_symbol);
+  if (name.size) {
+    switch (import_type) {
+    case COFF_ImportHeader_Code: {
+      COFF_LibWriterSymbol thunk_symbol = {0};
+      thunk_symbol.name = push_str8_copy(lib_writer->arena, name);
+      thunk_symbol.member_idx = member_idx;
+      coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, thunk_symbol);
 
-    COFF_LibWriterSymbol imp_symbol = {0};
-    imp_symbol.name = push_str8f(writer->arena, "__imp_%S", import_header.func_name);
-    imp_symbol.member_idx = member_idx;
-    coff_lib_writer_symbol_list_push(writer->arena, &writer->symbol_list, def_symbol);
-  } break;
-  case COFF_ImportHeader_Data: {
-    COFF_LibWriterSymbol imp_symbol = {0};
-    imp_symbol.name       = push_str8f(writer->arena, "__imp_%S", import_header.func_name);
-    imp_symbol.member_idx = member_idx;
-    coff_lib_writer_symbol_list_push(writer->arena, &writer->symbol_list, imp_symbol);
-  } break;
-  case COFF_ImportHeader_Const: { NotImplemented; } break;
-  default: { InvalidPath; } break;
+      COFF_LibWriterSymbol imp_symbol = {0};
+      imp_symbol.name = push_str8f(lib_writer->arena, "__imp_%S", name);
+      imp_symbol.member_idx = member_idx;
+      coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
+    } break;
+    case COFF_ImportHeader_Data: {
+      COFF_LibWriterSymbol imp_symbol = {0};
+      imp_symbol.name = push_str8f(lib_writer->arena, "__imp_%S", name);
+      imp_symbol.member_idx = member_idx;
+      coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
+    } break;
+    case COFF_ImportHeader_Const: { NotImplemented; } break;
+    default: { InvalidPath; } break;
+    }
   }
-}
-
-internal void
-coff_lib_writer_push_export_by_ordinal(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, U16 ordinal)
-{
-  String8 import_header = coff_make_import_header_by_ordinal(lib_writer->arena, machine, time_stamp, dll_name, ordinal, import_type);
-  coff_lib_writer_push_export(lib_writer, import_header);
-}
-
-internal void
-coff_lib_writer_push_export_by_name(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportType import_type, String8 name, U16 hint)
-{
-  String8 import_header = coff_make_import_header_by_name(lib_writer->arena, machine, time_stamp, dll_name, name, hint, import_type);
-  coff_lib_writer_push_export(lib_writer, import_header);
 }
 
 internal String8List
