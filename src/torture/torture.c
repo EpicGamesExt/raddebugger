@@ -24,6 +24,7 @@
 #include "coff/coff_obj_writer.h"
 #include "coff/coff_lib_writer.h"
 #include "pe/pe.h"
+#include "pe/pe_section_flags.h"
 #include "linker/hash_table.h"
 
 #include "base/base_inc.c"
@@ -40,7 +41,6 @@
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
 #include "linker/lnk_error.h"
-#include "linker/lnk_image_section_flags.h"
 
 ////////////////////////////////
 
@@ -296,19 +296,19 @@ typedef enum
 internal COFF_ObjSection *
 t_push_text_section(COFF_ObjWriter *obj_writer, String8 data)
 {
-  return coff_obj_writer_push_section(obj_writer, str8_lit(".text"), LNK_TEXT_SECTION_FLAGS, data);
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, data);
 }
 
 internal COFF_ObjSection *
 t_push_data_section(COFF_ObjWriter *obj_writer, String8 data)
 {
-  return coff_obj_writer_push_section(obj_writer, str8_lit(".data"), LNK_DATA_SECTION_FLAGS, data);
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".data"), PE_DATA_SECTION_FLAGS, data);
 }
 
 internal COFF_ObjSection *
 t_push_rdata_section(COFF_ObjWriter *obj_writer, String8 data)
 {
-  return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), LNK_RDATA_SECTION_FLAGS, data);
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS, data);
 }
 
 internal T_Result
@@ -839,7 +839,7 @@ t_undef_section(void)
 
     U8 data[] = { 0, 0, 0, 0 };
     COFF_ObjSection *data_section = t_push_data_section(obj_writer, str8_array_fixed(data));
-    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_section(obj_writer, str8_lit(".mysect"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead);
+    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".mysect"), COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead);
     coff_obj_writer_section_push_reloc(obj_writer, data_section, 0, foo, COFF_Reloc_X64_Addr32Nb);
 
     U8 text[] = { 0xC3 };
@@ -882,6 +882,52 @@ t_undef_section(void)
 }
 
 internal T_Result
+t_sect_symbol(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  String8 sect_obj_name = str8_lit("sect.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".mysect$1"), PE_RDATA_SECTION_FLAGS, str8_lit("hello, world"));
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/merge:.mysect=.rdata"));
+    String8 sect_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(sect_obj_name, sect_obj)) {
+      goto exit;
+    }
+  }
+
+  String8 main_obj_name = str8_lit("main.obj");
+  {
+    U8 data[8] = {0};
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_array_fixed(data));
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".mysect$2222"), PE_RDATA_SECTION_FLAGS);
+    coff_obj_writer_section_push_reloc_addr(obj_writer, sect, 0, symbol);
+
+    U8 text[] = { 0xC3 };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+
+    String8 main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+
+    if (!t_write_file(main_obj_name, main_obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe main.obj sect.obj");
+
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_undef_reloc_section(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -892,12 +938,12 @@ t_undef_reloc_section(void)
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
 
     U8 text[] = { 0xC3 };
-    COFF_ObjSection *text_section = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), LNK_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    COFF_ObjSection *text_section = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
     COFF_ObjSymbol *my_entry_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_section);
 
     U8 data[8] = { 0 };
     COFF_ObjSection *data_section = t_push_data_section(obj_writer, str8_array_fixed(data));
-    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_section(obj_writer, str8_lit(".reloc"), LNK_RELOC_SECTION_FLAGS);
+    COFF_ObjSymbol  *foo          = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
     coff_obj_writer_section_push_reloc(obj_writer, data_section, 0, foo, COFF_Reloc_X64_Addr64);
 
     main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
@@ -1494,22 +1540,27 @@ t_import_export(void)
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(import_payload));
-    COFF_ObjSymbol *foo_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_foo"));
-    COFF_ObjSymbol *bar_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_bar"));
-    COFF_ObjSymbol *baz_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_baz"));
-    COFF_ObjSymbol *baf_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_baf"));
-    COFF_ObjSymbol *ord_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord"));
-    COFF_ObjSymbol *ord2_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord2"));
-    COFF_ObjSymbol *ord3_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord3"));
-    COFF_ObjSymbol *ord4_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_ord4"));
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0*4, foo_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 1*4, bar_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 2*4, baz_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 3*4, baf_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 4*4, ord_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 5*4, ord2_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 6*4, ord3_symbol, COFF_Reloc_X64_Addr32Nb);
-    coff_obj_writer_section_push_reloc(obj_writer, data_sect, 7*4, ord4_symbol, COFF_Reloc_X64_Addr32Nb);
+
+    char *import_symbols[] = {
+      "__imp_foo",
+      "__imp_bar",
+      "__imp_baz",
+      "__imp_baf",
+      "__imp_ord",
+      //"__imp_ord2",
+      //"__imp_ord4",
+      "baf",
+      "bar",
+      "baz",
+      "foo",
+      "ord",
+    };
+
+    for (U64 i = 0; i < ArrayCount(import_symbols); ++i) {
+      COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_cstring(import_symbols[i]));
+      coff_obj_writer_section_push_reloc_voff(obj_writer, data_sect, i * 4, symbol);
+    }
+
     String8 import_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(import_obj_name, import_obj)) {
@@ -1588,7 +1639,7 @@ t_import_export(void)
     }
   }
 
-  int import_link_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe export.lib import.obj entry.obj");
+  int import_link_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe /delayload:export.dll /export:my_entry kernel32.Lib delayimp.lib libcmt.lib export.lib import.obj entry.obj");
 
   if (import_link_exit_code != 0) {
     goto exit;
@@ -1624,6 +1675,7 @@ entry_point(CmdLine *cmdline)
     { "abs_vs_regular",      t_abs_vs_regular      },
     { "abs_vs_common",       t_abs_vs_common       },
     { "undef_weak",          t_undef_weak          },
+    { "sect_symbol",         t_sect_symbol         },
     { "weak_cycle",          t_weak_cycle          },
     { "weak_tag",            t_weak_tag            },
     { "find_merged_pdata",   t_find_merged_pdata   },
