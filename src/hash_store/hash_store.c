@@ -47,6 +47,7 @@ hs_init(void)
   hs_shared->key_stripes_count = Min(hs_shared->key_slots_count, os_get_system_info()->logical_processor_count);
   hs_shared->key_slots = push_array(arena, HS_KeySlot, hs_shared->key_slots_count);
   hs_shared->key_stripes = push_array(arena, HS_Stripe, hs_shared->key_stripes_count);
+  hs_shared->key_stripes_free_nodes = push_array(arena, HS_KeyNode *, hs_shared->key_stripes_count);
   for(U64 idx = 0; idx < hs_shared->key_stripes_count; idx += 1)
   {
     HS_Stripe *stripe = &hs_shared->key_stripes[idx];
@@ -149,9 +150,17 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     }
     if(!key_node)
     {
-      key_node = push_array(key_stripe->arena, HS_KeyNode, 1);
+      key_node = hs_shared->key_stripes_free_nodes[key_stripe_idx];
+      if(key_node)
+      {
+        SLLStackPop(hs_shared->key_stripes_free_nodes[key_stripe_idx]);
+      }
+      else
+      {
+        key_node = push_array(key_stripe->arena, HS_KeyNode, 1);
+      }
       key_node->key = key;
-      SLLQueuePush(key_slot->first, key_slot->last, key_node);
+      DLLPushBack(key_slot->first, key_slot->last, key_node);
     }
     if(key_node)
     {
@@ -251,6 +260,49 @@ hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
   MemoryZeroStruct(touch);
   touch->hash = node->hash;
   SLLStackPush(scope->top_touch, touch);
+}
+
+////////////////////////////////
+//~ rjf: Key Closing
+
+internal void
+hs_key_close(U128 key)
+{
+  U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
+  U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
+  HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
+  HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
+  OS_MutexScopeW(key_stripe->rw_mutex)
+  {
+    for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
+    {
+      if(u128_match(n->key, key))
+      {
+        for(U64 history_idx = 0; history_idx < HS_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen; history_idx += 1)
+        {
+          U128 hash = n->hash_history[(n->hash_history_gen+history_idx)%ArrayCount(n->hash_history)];
+          U64 hash_slot_idx = hash.u64[1]%hs_shared->slots_count;
+          U64 hash_stripe_idx = hash_slot_idx%hs_shared->stripes_count;
+          HS_Slot *hash_slot = &hs_shared->slots[hash_slot_idx];
+          HS_Stripe *hash_stripe = &hs_shared->stripes[hash_stripe_idx];
+          OS_MutexScope(hash_stripe->rw_mutex)
+          {
+            for(HS_Node *n = hash_slot->first; n != 0; n = n->next)
+            {
+              if(u128_match(n->hash, hash))
+              {
+                ins_atomic_u64_dec_eval(&n->key_ref_count);
+                break;
+              }
+            }
+          }
+        }
+        DLLRemove(key_slot->first, key_slot->last, n);
+        SLLStackPush(hs_shared->key_stripes_free_nodes[key_stripe_idx], n);
+        break;
+      }
+    }
+  }
 }
 
 ////////////////////////////////

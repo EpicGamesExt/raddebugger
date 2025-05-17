@@ -14,6 +14,7 @@ typedef struct HS_KeyNode HS_KeyNode;
 struct HS_KeyNode
 {
   HS_KeyNode *next;
+  HS_KeyNode *prev;
   U128 key;
   U128 hash_history[HS_KEY_HASH_HISTORY_COUNT];
   U64 hash_history_gen;
@@ -102,6 +103,7 @@ struct HS_Shared
   U64 key_stripes_count;
   HS_KeySlot *key_slots;
   HS_Stripe *key_stripes;
+  HS_KeyNode **key_stripes_free_nodes;
   
   // rjf: evictor thread
   OS_Handle evictor_thread;
@@ -139,6 +141,11 @@ internal U128 hs_submit_data(U128 key, Arena **data_arena, String8 data);
 internal HS_Scope *hs_scope_open(void);
 internal void hs_scope_close(HS_Scope *scope);
 internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node);
+
+////////////////////////////////
+//~ rjf: Key Closing
+
+internal void hs_key_close(U128 key);
 
 ////////////////////////////////
 //~ rjf: Downstream Accesses
