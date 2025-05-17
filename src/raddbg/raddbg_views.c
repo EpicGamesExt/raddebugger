@@ -1011,7 +1011,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         CTRL_Scope *ctrl_scope = ctrl_scope_open();
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
-        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
+        B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
+        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
         if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];

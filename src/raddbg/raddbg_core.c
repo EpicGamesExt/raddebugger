@@ -1816,7 +1816,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         case CTRL_EntityKind_Thread:
         {
           CTRL_Scope *ctrl_scope = ctrl_scope_open();
-          CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, 1, 0);
+          CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, 1, rd_state->frame_eval_memread_endt_us);
           U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
           if(concrete_frame_idx < call_stack.concrete_frames_count)
           {
@@ -6399,7 +6399,8 @@ rd_window_frame(void)
             Vec4F32 code_color = ui_color_from_name(str8_lit("code_default"));
             Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, ctrl_entity, ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread), 0);
+            B32 call_stack_high_priority = ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, ctrl_entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
             if(call_stack.frames_count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));

@@ -525,7 +525,8 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
     Arch arch = entity->arch;
-    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
+    B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
+    CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     for(U64 idx = 0, limit = 6; idx < call_stack.frames_count && idx < limit; idx += 1)
     {
       CTRL_CallStackFrame *f = &call_stack.frames[call_stack.frames_count - 1 - idx];

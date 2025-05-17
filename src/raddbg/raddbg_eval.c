@@ -955,9 +955,10 @@ E_TYPE_IREXT_FUNCTION_DEF(call_stack)
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(interp.space);
     if(entity->kind == CTRL_EntityKind_Thread)
     {
+      B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
       accel->arch = entity->arch;
       accel->process = ctrl_process_from_entity(entity)->handle;
-      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
+      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
     }
     scratch_end(scratch);
   }

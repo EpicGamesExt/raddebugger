@@ -6907,7 +6907,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     {
       pre_reg_gen = ctrl_reg_gen();
       pre_mem_gen = ctrl_mem_gen();
-      unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+1000);
+      unwind = ctrl_unwind_from_thread(arena, entity_ctx, thread_handle, os_now_microseconds()+5000);
       call_stack = ctrl_call_stack_from_unwind(arena, process, &unwind);
       post_reg_gen = ctrl_reg_gen();
       post_mem_gen = ctrl_mem_gen();

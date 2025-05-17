@@ -617,7 +617,7 @@ struct CTRL_CallStackCacheNode
   U64 reg_gen;
   U64 mem_gen;
   
-  // rjf: refcounts
+  // rjf: counters
   U64 scope_touch_count;
   U64 working_count;
   
