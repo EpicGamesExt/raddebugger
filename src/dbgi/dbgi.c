@@ -283,6 +283,7 @@ di_scope_close(DI_Scope *scope)
     if(t->search_node != 0)
     {
       ins_atomic_u64_dec_eval(&t->search_node->scope_refcount);
+      os_condition_variable_broadcast(t->search_stripe->cv);
     }
     SLLStackPush(di_tctx->free_touch, t);
   }
@@ -311,7 +312,7 @@ di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node)
 }
 
 internal void
-di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchNode *node)
+di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchStripe *stripe, DI_SearchNode *node)
 {
   if(node != 0)
   {
@@ -329,6 +330,7 @@ di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchNod
   MemoryZeroStruct(touch);
   SLLQueuePush(scope->first_touch, scope->last_touch, touch);
   touch->search_node = node;
+  touch->search_stripe = stripe;
 }
 
 ////////////////////////////////
@@ -709,7 +711,7 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
       B32 results_stale = 1;
       if(node->bucket_read_gen != 0)
       {
-        di_scope_touch_search_node__stripe_mutex_r_guarded(scope, node);
+        di_scope_touch_search_node__stripe_mutex_r_guarded(scope, stripe, node);
         items = node->items;
         params_stale = (params_hash != node->buckets[node->bucket_read_gen%ArrayCount(node->buckets)].params_hash);
         query_stale = !str8_match(query, node->buckets[node->bucket_read_gen%ArrayCount(node->buckets)].query, 0);
@@ -1473,13 +1475,14 @@ di_search_thread__entry_point(void *p)
       quick_sort(items.v, items.count, sizeof(DI_SearchItem), di_qsort_compare_search_items);
     }
     
-    //- rjf: commit to cache - busyloop on scope touches
+    //- rjf: commit to cache - wait on scope touches
     if(arena != 0)
     {
-      for(B32 done = 0; !done;)
+      OS_MutexScopeW(stripe->rw_mutex) for(;;)
       {
         B32 found = 0;
-        OS_MutexScopeW(stripe->rw_mutex) for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
+        B32 done = 0;
+        for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
         {
           if(u128_match(n->key, key))
           {
@@ -1498,9 +1501,13 @@ di_search_thread__entry_point(void *p)
             break;
           }
         }
-        if(!found)
+        if((found && done) || !found)
         {
           break;
+        }
+        if(found && !done)
+        {
+          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+1000);
         }
       }
     }

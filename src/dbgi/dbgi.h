@@ -219,6 +219,7 @@ struct DI_Touch
   DI_Touch *next;
   DI_Node *node;
   DI_SearchNode *search_node;
+  DI_SearchStripe *search_stripe;
 };
 
 typedef struct DI_Scope DI_Scope;
@@ -410,7 +411,7 @@ internal void di_init(void);
 internal DI_Scope *di_scope_open(void);
 internal void di_scope_close(DI_Scope *scope);
 internal void di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node);
-internal void di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchNode *node);
+internal void di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchStripe *stripe, DI_SearchNode *node);
 
 ////////////////////////////////
 //~ rjf: Per-Slot Functions
