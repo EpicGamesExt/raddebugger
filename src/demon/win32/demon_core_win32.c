@@ -156,6 +156,7 @@ dmn_w32_entity_release(DMN_W32_Entity *entity)
       {
         CloseHandle(t->e->handle);
       }
+      t->e->kind = DMN_W32_EntityKind_Null;
       
       // rjf: remove from id -> entity map
       if(t->e->id != 0)
@@ -1870,13 +1871,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           {
             dmn_w32_shared->resume_needed = 0;
             resume_good = !!ContinueDebugEvent(dmn_w32_shared->resume_pid, dmn_w32_shared->resume_tid, resume_code);
+            DWORD error = GetLastError();
             dmn_w32_shared->resume_needed = 0;
             dmn_w32_shared->resume_tid = 0;
             dmn_w32_shared->resume_pid = 0;
           }
           if(resume_good)
           {
-            evt_good = !!WaitForDebugEvent(&evt, 100);
+            evt_good = !!WaitForDebugEvent(&evt, 1000);
             if(evt_good)
             {
               dmn_w32_shared->resume_needed = 1;
@@ -1885,6 +1887,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             else
             {
+              DWORD err = GetLastError();
+              (void)err;
               keep_going = 1;
             }
             ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
@@ -1992,6 +1996,15 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
               
+              // rjf: if this was the process we were going to resume, then we will
+              // just not resume, and wait for another debug event
+              if(evt.dwProcessId == dmn_w32_shared->resume_pid)
+              {
+                dmn_w32_shared->resume_needed = 0;
+                dmn_w32_shared->resume_tid = 0;
+                dmn_w32_shared->resume_pid = 0;
+              }
+              
               // rjf: generate events for children
               for(DMN_W32_Entity *child = process->first; child != &dmn_w32_entity_nil; child = child->next)
               {
@@ -2097,6 +2110,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 e->kind = DMN_EventKind_Halt;
                 dmn_w32_shared->halter_process = dmn_handle_zero();
                 dmn_w32_shared->halter_tid = 0;
+                keep_going = 0;
               }
               
               // rjf: if this thread is *not* the halter, then generate a regular exit-thread event
@@ -2643,6 +2657,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
         {
           DMN_W32_Entity *thread = n->v;
+          if(thread->kind != DMN_W32_EntityKind_Thread)
+          {
+            continue;
+          }
           DWORD suspend_result = SuspendThread(thread->handle);
           switch(suspend_result)
           {

@@ -3356,7 +3356,7 @@ ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U
 //~ rjf: Call Stack Cache Functions
 
 internal CTRL_CallStack
-ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, B32 high_priority, U64 endt_us)
+ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_Entity *thread, B32 high_priority, U64 endt_us)
 {
   CTRL_CallStack call_stack = {0};
   {
@@ -3399,6 +3399,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Entity *thread, B32 high_pri
       //- rjf: create node if needed
       if(!is_good) OS_MutexScopeRWPromote(stripe->rw_mutex)
       {
+        node = 0;
         for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
         {
           if(ctrl_handle_match(n->thread, handle))
@@ -4271,6 +4272,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           log_infof("string:         \"%S\"\n",   ev->string);
           log_infof("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
         }
+        raddbg_log("event:\n");
+        raddbg_log("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
+        raddbg_log("process:        [%I64u]\n",  ev->process.u64[0]);
+        raddbg_log("thread:         [%I64u]\n",  ev->thread.u64[0]);
+        raddbg_log("module:         [%I64u]\n",  ev->module.u64[0]);
+        raddbg_log("pid:            %I64u\n",    ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->process))->id);
+        raddbg_log("tid:            %I64u\n",    ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->thread))->id);
+        raddbg_log("code:           %I64u\n",    ev->code);
+        raddbg_log("\n");
       }
       
       // rjf: determine if we should filter

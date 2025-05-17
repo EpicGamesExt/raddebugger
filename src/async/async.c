@@ -26,8 +26,9 @@ async_init(CmdLine *cmdline)
   String8 work_thread_count_string = cmd_line_string(cmdline, str8_lit("work_threads_count"));
   if(work_thread_count_string.size == 0 || !try_u64_from_str8_c_rules(work_thread_count_string, &async_shared->work_threads_count))
   {
-    async_shared->work_threads_count = Max(1, os_get_system_info()->logical_processor_count-1);
+    async_shared->work_threads_count = Max(4, os_get_system_info()->logical_processor_count-1);
   }
+  async_shared->work_threads_count = Max(4, async_shared->work_threads_count);
   async_shared->work_threads = push_array(arena, OS_Handle, async_shared->work_threads_count);
   for EachIndex(idx, async_shared->work_threads_count)
   {

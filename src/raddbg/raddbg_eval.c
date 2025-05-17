@@ -957,7 +957,7 @@ E_TYPE_IREXT_FUNCTION_DEF(call_stack)
     {
       accel->arch = entity->arch;
       accel->process = ctrl_process_from_entity(entity)->handle;
-      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
+      accel->call_stack = ctrl_call_stack_from_thread(rd_state->frame_ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, ctrl_handle_match(entity->handle, rd_base_regs()->thread), 0);
     }
     scratch_end(scratch);
   }
