@@ -119,7 +119,7 @@ E_ExprKindTable:
   { LogAnd               Binary              11       ""                " && "    ""        "" }
   { LogOr                Binary              12       ""                " || "    ""        "" }
   
-  { Ternary              Null                0        ""                " ? "     " : "     "" }
+  { Ternary              Null                0        ""                " ? "     ""        " : "}
   
   { Call                 Null                15       ""                "("       ")"      ", "}
   

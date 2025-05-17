@@ -231,7 +231,7 @@ E_OpInfo e_expr_kind_op_info_table[49] =
 { E_OpKind_Binary, 10, str8_lit_comp(""), str8_lit_comp(" | "), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Binary, 11, str8_lit_comp(""), str8_lit_comp(" && "), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Binary, 12, str8_lit_comp(""), str8_lit_comp(" || "), str8_lit_comp(""), str8_lit_comp("") },
-{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(" ? "), str8_lit_comp(" : "), str8_lit_comp("") },
+{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(" ? "), str8_lit_comp(""), str8_lit_comp(" : ") },
 { E_OpKind_Null, 15, str8_lit_comp(""), str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp(", ") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
