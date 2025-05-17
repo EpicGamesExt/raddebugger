@@ -1023,7 +1023,7 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         ////////////////////////
         //- rjf: descent to assembly-style dereference sub-expression [...]
         //
-        if(!got_new_atom)
+        if(atom == &e_expr_nil && !got_new_atom)
         {
           E_Token token = e_token_at_it(it, &tokens);
           String8 token_string = str8_substr(text, token.range);
