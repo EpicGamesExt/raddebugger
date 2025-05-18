@@ -180,8 +180,9 @@ struct HS_Shared
   U64 root_slots_count;
   U64 root_stripes_count;
   HS_RootSlot *root_slots;
-  HS_Stripe root_stripes;
+  HS_Stripe *root_stripes;
   HS_RootNode **root_stripes_free_nodes;
+  U64 root_id_gen;
   
   // rjf: evictor thread
   OS_Handle evictor_thread;
@@ -202,6 +203,12 @@ internal U128 hs_hash_from_data(String8 data);
 //~ rjf: Main Layer Initialization
 
 internal void hs_init(void);
+
+////////////////////////////////
+//~ rjf: Root Allocation/Deallocation
+
+internal U128 hs_root_alloc(void);
+internal void hs_root_release(U128 root);
 
 ////////////////////////////////
 //~ rjf: Cache Submission

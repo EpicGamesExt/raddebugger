@@ -55,7 +55,71 @@ hs_init(void)
     stripe->rw_mutex = os_rw_mutex_alloc();
     stripe->cv = os_condition_variable_alloc();
   }
+  hs_shared->root_slots_count = 4096;
+  hs_shared->root_stripes_count = Min(hs_shared->root_slots_count, os_get_system_info()->logical_processor_count);
+  hs_shared->root_slots = push_array(arena, HS_RootSlot, hs_shared->root_slots_count);
+  hs_shared->root_stripes = push_array(arena, HS_Stripe, hs_shared->root_stripes_count);
+  hs_shared->root_stripes_free_nodes = push_array(arena, HS_RootNode *, hs_shared->root_stripes_count);
+  for(U64 idx = 0; idx < hs_shared->root_stripes_count; idx += 1)
+  {
+    HS_Stripe *stripe = &hs_shared->root_stripes[idx];
+    stripe->arena = arena_alloc();
+    stripe->rw_mutex = os_rw_mutex_alloc();
+    stripe->cv = os_condition_variable_alloc();
+  }
   hs_shared->evictor_thread = os_thread_launch(hs_evictor_thread__entry_point, 0, 0);
+}
+
+////////////////////////////////
+//~ rjf: Root Allocation/Deallocation
+
+internal U128
+hs_root_alloc(void)
+{
+  U128 root = {0};
+  root.u64[1] = ins_atomic_u64_inc_eval(&hs_shared->root_id_gen);
+  U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
+  U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
+  HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
+  HS_Stripe *stripe = &hs_shared->root_stripes[stripe_idx];
+  OS_MutexScopeW(stripe->rw_mutex)
+  {
+    HS_RootNode *node = hs_shared->root_stripes_free_nodes[stripe_idx];
+    if(node != 0)
+    {
+      SLLStackPop(hs_shared->root_stripes_free_nodes[stripe_idx]);
+    }
+    else
+    {
+      node = push_array(stripe->arena, HS_RootNode, 1);
+    }
+    DLLPushBack(slot->first, slot->last, node);
+    node->root = root;
+    node->arena = arena_alloc();
+  }
+  return root;
+}
+
+internal void
+hs_root_release(U128 root)
+{
+  U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
+  U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
+  HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
+  HS_Stripe *stripe = &hs_shared->root_stripes[stripe_idx];
+  OS_MutexScopeW(stripe->rw_mutex)
+  {
+    for(HS_RootNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(u128_match(n->root, root))
+      {
+        DLLRemove(slot->first, slot->last, n);
+        arena_release(n->arena);
+        SLLStackPush(hs_shared->root_stripes_free_nodes[stripe_idx], n);
+        break;
+      }
+    }
+  }
 }
 
 ////////////////////////////////
