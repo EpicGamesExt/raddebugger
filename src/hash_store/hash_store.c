@@ -285,7 +285,7 @@ hs_key_close(U128 key)
           U64 hash_stripe_idx = hash_slot_idx%hs_shared->stripes_count;
           HS_Slot *hash_slot = &hs_shared->slots[hash_slot_idx];
           HS_Stripe *hash_stripe = &hs_shared->stripes[hash_stripe_idx];
-          OS_MutexScope(hash_stripe->rw_mutex)
+          OS_MutexScopeR(hash_stripe->rw_mutex)
           {
             for(HS_Node *n = hash_slot->first; n != 0; n = n->next)
             {
