@@ -696,45 +696,6 @@ d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
   return result;
 }
 
-internal U64
-d_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name)
-{
-  ProfBeginFunction();
-  DI_Scope *scope = di_scope_open();
-  U64 result = 0;
-  {
-    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-    RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
-    RDI_ParsedNameMap parsed_name_map = {0};
-    rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-    RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
-    U64 entity_num = 0;
-    if(node != 0)
-    {
-      switch(node->match_count)
-      {
-        case 1:
-        {
-          entity_num = node->match_idx_or_idx_run_first + 1;
-        }break;
-        default:
-        {
-          U32 num = 0;
-          U32 *run = rdi_matches_from_map_node(rdi, node, &num);
-          if(num != 0)
-          {
-            entity_num = run[0]+1;
-          }
-        }break;
-      }
-    }
-    result = entity_num;
-  }
-  di_scope_close(scope);
-  ProfEnd();
-  return result;
-}
-
 //- rjf: voff -> line info
 
 internal D_LineList

@@ -397,7 +397,6 @@ internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL
 
 //- rjf: symbol -> voff lookups
 internal U64 d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
-internal U64 d_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);
 
 //- rjf: voff -> line info
 internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
