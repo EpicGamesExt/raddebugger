@@ -59,20 +59,6 @@ hs_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void
-hs_tctx_ensure_inited(void)
-{
-  if(hs_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    hs_tctx = push_array(arena, HS_TCTX, 1);
-    hs_tctx->arena = arena;
-  }
-}
-
-////////////////////////////////
 //~ rjf: Cache Submission
 
 internal U128
@@ -203,7 +189,12 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
 internal HS_Scope *
 hs_scope_open(void)
 {
-  hs_tctx_ensure_inited();
+  if(hs_tctx == 0)
+  {
+    Arena *arena = arena_alloc();
+    hs_tctx = push_array(arena, HS_TCTX, 1);
+    hs_tctx->arena = arena;
+  }
   HS_Scope *scope = hs_tctx->free_scope;
   if(scope)
   {

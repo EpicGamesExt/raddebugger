@@ -5,7 +5,78 @@
 #define HASH_STORE_H
 
 ////////////////////////////////
+//~ NOTE(rjf): Hash Store Notes (2025/05/18)
+//
+// The hash store is a general-purpose data cache. It offers three layers of
+// caching: (a) content (hash of data), (b) key (unique identity correllated
+// with history of hashes), and (c) root (bucket for many keys, manually
+// allocated / deallocated).
+//
+//  (a) The "content" level of cache access is a simply hash(data) -> data
+//      mapping. This bypasses all identity/key/root mechanisms and provides a
+//      way to just talk about unique (and deduplicated) blobs of data.
+//
+//  (b) The "key" level of cache access is used to encode a history of hashes
+//      for some unique "identity", where the "identity" is a concept managed
+//      by the user. One example of an identity would be a particular address
+//      range inside of some process to which the debugger is attached. Another
+//      might be a range inside of some file.
+//
+//  (c) The "root" level is to provide a top-level allocation/deallocation
+//      mechanism for a large set of keys. It also provides an extra level of
+//      key uniqueness. For instance, each process to which the debugger is
+//      attached might have its own root, and each key might correspond to a
+//      particular address range within that process. This way, when the
+//      process ends, all of its keys can be easily destroyed using a single
+//      deallocation of the root.
+//
+// The way this might be generally used inside of the debugger would be that
+// some evaluation - let's say it's some variable `x` - is mapped (via debug
+// info) to some address range. If `x` is a `char[4096]`, then it might map
+// to some address range [&x, &x + 4096). This, together with the process
+// within which `x` is evaluated, forms both a `root` (for the process) and
+// a `key` (for the address range). Some asynchronous memory streaming system
+// can then, together with the root and key, read memory for that range, then
+// submit that data to the hash store, correllating with the root and key
+// combo.
+
+////////////////////////////////
 //~ rjf: Cache Types
+
+typedef struct HS_RootKeyChunkNode HS_RootKeyChunkNode;
+struct HS_RootKeyChunkNode
+{
+  HS_RootKeyChunkNode *next;
+  U128 *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct HS_RootKeyChunkList HS_RootKeyChunkList;
+struct HS_RootKeyChunkList
+{
+  HS_RootKeyChunkNode *first;
+  HS_RootKeyChunkNode *last;
+  U64 chunk_count;
+  U64 total_count;
+};
+
+typedef struct HS_RootNode HS_RootNode;
+struct HS_RootNode
+{
+  HS_RootNode *next;
+  HS_RootNode *prev;
+  Arena *arena;
+  U128 root;
+  HS_RootKeyChunkList keys;
+};
+
+typedef struct HS_RootSlot HS_RootSlot;
+struct HS_RootSlot
+{
+  HS_RootNode *first;
+  HS_RootNode *last;
+};
 
 #define HS_KEY_HASH_HISTORY_COUNT 64
 #define HS_KEY_HASH_HISTORY_STRONG_REF_COUNT 2
@@ -105,6 +176,13 @@ struct HS_Shared
   HS_Stripe *key_stripes;
   HS_KeyNode **key_stripes_free_nodes;
   
+  // rjf: root cache
+  U64 root_slots_count;
+  U64 root_stripes_count;
+  HS_RootSlot *root_slots;
+  HS_Stripe root_stripes;
+  HS_RootNode **root_stripes_free_nodes;
+  
   // rjf: evictor thread
   OS_Handle evictor_thread;
 };
@@ -126,12 +204,7 @@ internal U128 hs_hash_from_data(String8 data);
 internal void hs_init(void);
 
 ////////////////////////////////
-//~ rjf: Thread Context Initialization
-
-internal void hs_tctx_ensure_inited(void);
-
-////////////////////////////////
-//~ rjf: Cache Submission/Derefs
+//~ rjf: Cache Submission
 
 internal U128 hs_submit_data(U128 key, Arena **data_arena, String8 data);
 
