@@ -1434,10 +1434,8 @@ ctrl_scope_close(CTRL_Scope *scope)
   for(CTRL_ScopeCallStackTouch *t = scope->first_call_stack_touch, *next = 0; t != 0; t = next)
   {
     next = t->next;
-    if(!ins_atomic_u64_dec_eval(&t->node->scope_touch_count))
-    {
-      os_condition_variable_broadcast(t->stripe->cv);
-    }
+    ins_atomic_u64_dec_eval(&t->node->scope_touch_count);
+    os_condition_variable_broadcast(t->stripe->cv);
     SLLStackPush(ctrl_tctx->free_call_stack_touch, t);
   }
   SLLStackPush(ctrl_tctx->free_scope, scope);

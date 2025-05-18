@@ -279,6 +279,7 @@ di_scope_close(DI_Scope *scope)
     if(t->node != 0)
     {
       ins_atomic_u64_dec_eval(&t->node->touch_count);
+      os_condition_variable_broadcast(t->stripe->cv);
     }
     if(t->search_node != 0)
     {
@@ -291,7 +292,7 @@ di_scope_close(DI_Scope *scope)
 }
 
 internal void
-di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node)
+di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Stripe *stripe, DI_Node *node)
 {
   if(node != 0)
   {
@@ -309,6 +310,7 @@ di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node)
   MemoryZeroStruct(touch);
   SLLQueuePush(scope->first_touch, scope->last_touch, touch);
   touch->node = node;
+  touch->stripe = stripe;
 }
 
 internal void
@@ -529,6 +531,7 @@ di_close(DI_Key *key)
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
     log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
+    B32 closed = 0;
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
@@ -540,16 +543,8 @@ di_close(DI_Key *key)
         node->ref_count -= 1;
         if(node->ref_count == 0) for(;;)
         {
-          //- rjf: wait for touch count to go to 0
-          if(ins_atomic_u64_eval(&node->touch_count) != 0)
-          {
-            os_rw_mutex_drop_w(stripe->rw_mutex);
-            for(U64 start_t = os_now_microseconds(); os_now_microseconds() <= start_t + 250;);
-            os_rw_mutex_take_w(stripe->rw_mutex);
-          }
-          
           //- rjf: release
-          if(node->ref_count == 0 && ins_atomic_u64_eval(&node->touch_count) == 0)
+          if(ins_atomic_u64_eval(&node->touch_count) == 0)
           {
             di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
             if(node->file_base != 0)
@@ -572,6 +567,9 @@ di_close(DI_Key *key)
             SLLStackPush(stripe->free_node, node);
             break;
           }
+          
+          //- rjf: wait for touch count to go to 0
+          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
         }
       }
     }
@@ -617,7 +615,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
       //- rjf: parse done -> touch, grab result
       if(node != 0 && node->parse_done)
       {
-        di_scope_touch_node__stripe_mutex_r_guarded(scope, node);
+        di_scope_touch_node__stripe_mutex_r_guarded(scope, stripe, node);
         result = &node->rdi;
         break;
       }
