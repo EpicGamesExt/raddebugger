@@ -367,23 +367,24 @@ typedef U16 COFF_RelocType;
 typedef COFF_RelocType COFF_Reloc_X64;
 enum
 {
-  COFF_Reloc_X64_Abs      = 0x0,
-  COFF_Reloc_X64_Addr64   = 0x1,
-  COFF_Reloc_X64_Addr32   = 0x2,
-  COFF_Reloc_X64_Addr32Nb = 0x3,  // NB => No Base
-  COFF_Reloc_X64_Rel32    = 0x4,
-  COFF_Reloc_X64_Rel32_1  = 0x5,
-  COFF_Reloc_X64_Rel32_2  = 0x6,
-  COFF_Reloc_X64_Rel32_3  = 0x7,
-  COFF_Reloc_X64_Rel32_4  = 0x8,
-  COFF_Reloc_X64_Rel32_5  = 0x9,
-  COFF_Reloc_X64_Section  = 0xA,
-  COFF_Reloc_X64_SecRel   = 0xB,
-  COFF_Reloc_X64_SecRel7  = 0xC,  // TODO(nick): MSDN doesn't specify size for CLR token
-  COFF_Reloc_X64_Token    = 0xD,
-  COFF_Reloc_X64_SRel32   = 0xE,  // TODO(nick): MSDN doesn't specify size for PAIR
-  COFF_Reloc_X64_Pair     = 0xF,
-  COFF_Reloc_X64_SSpan32  = 0x10
+  COFF_Reloc_X64_Abs        = 0x0,
+  COFF_Reloc_X64_Addr64     = 0x1,
+  COFF_Reloc_X64_Addr32     = 0x2,
+  COFF_Reloc_X64_Addr32Nb   = 0x3,  // NB => No Base
+  COFF_Reloc_X64_Rel32      = 0x4,
+  COFF_Reloc_X64_Rel32_1    = 0x5,
+  COFF_Reloc_X64_Rel32_2    = 0x6,
+  COFF_Reloc_X64_Rel32_3    = 0x7,
+  COFF_Reloc_X64_Rel32_4    = 0x8,
+  COFF_Reloc_X64_Rel32_5    = 0x9,
+  COFF_Reloc_X64_Section    = 0xA,
+  COFF_Reloc_X64_SecRel     = 0xB,
+  COFF_Reloc_X64_SecRel7    = 0xC,  // TODO(nick): MSDN doesn't specify size for CLR token
+  COFF_Reloc_X64_Token      = 0xD,
+  COFF_Reloc_X64_SRel32     = 0xE,  // TODO(nick): MSDN doesn't specify size for PAIR
+  COFF_Reloc_X64_Pair       = 0xF,
+  COFF_Reloc_X64_SSpan32    = 0x10,
+  COFF_Reloc_X64_Unknown_11 = 0x11,
 };
 
 typedef COFF_RelocType COFF_Reloc_X86;
