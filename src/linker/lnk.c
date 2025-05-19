@@ -1034,7 +1034,12 @@ lnk_section_contrib_ptr_is_before(void *raw_a, void *raw_b)
 
     // sort on obj position on command line
     if (cmp == 0) {
-      cmp = u64_compar(&a->u.obj_idx, &b->u.obj_idx);
+      cmp = u32_compar(&a->u.obj_idx, &b->u.obj_idx);
+
+      // sort on section index
+      if (cmp == 0) {
+        cmp = u32_compar(&a->u.obj_sect_idx, &b->u.obj_sect_idx);
+      }
     }
   }
 
@@ -2256,6 +2261,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
           sc->align              = sc_align;
           sc->data_list          = data_n;
           sc->u.obj_idx          = obj_idx;
+          sc->u.obj_sect_idx     = sect_idx;
           sc->u.sort_idx_size    = (U16)sect_sort_idx.size;
           sc->u.sort_idx         = sect_sort_idx.str;
 
