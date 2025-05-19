@@ -290,9 +290,6 @@ typedef struct COFF_Symbol32
   U8                   aux_symbol_count;
 } COFF_Symbol32;
 
-// Auxilary symbols are allocated with fixed size so that symbol table could be maintaned as array of regular size.
-#define COFF_AuxSymbolSize 18
-
 typedef U32 COFF_WeakExtType;
 enum
 {
