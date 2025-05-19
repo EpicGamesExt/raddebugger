@@ -385,6 +385,7 @@ enum
   COFF_Reloc_X64_Pair       = 0xF,
   COFF_Reloc_X64_SSpan32    = 0x10,
   COFF_Reloc_X64_Unknown_11 = 0x11,
+  COFF_Reloc_X64_Last       = COFF_Reloc_X64_Unknown_11,
 };
 
 typedef COFF_RelocType COFF_Reloc_X86;
