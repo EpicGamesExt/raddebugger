@@ -8,7 +8,6 @@ coff_align_size_from_section_flags(COFF_SectionFlags flags)
   U32 align_index = COFF_SectionFlags_ExtractAlign(flags);
   switch (align_index) {
     default: break;
-    case 0:                           align = 1;    break; // alignment isn't specified, default to 1
     case COFF_SectionAlign_1Bytes:    align = 1;    break;
     case COFF_SectionAlign_2Bytes:    align = 2;    break;
     case COFF_SectionAlign_4Bytes:    align = 4;    break;
@@ -32,20 +31,21 @@ coff_section_flag_from_align_size(U64 align)
 {
   COFF_SectionFlags flags = 0;
   switch (align) {
-    case 1:    flags = COFF_SectionAlign_1Bytes;    break;
-    case 2:    flags = COFF_SectionAlign_2Bytes;    break;
-    case 4:    flags = COFF_SectionAlign_4Bytes;    break;
-    case 8:    flags = COFF_SectionAlign_8Bytes;    break;
-    case 16:   flags = COFF_SectionAlign_16Bytes;   break;
-    case 32:   flags = COFF_SectionAlign_32Bytes;   break;
-    case 64:   flags = COFF_SectionAlign_64Bytes;   break;
-    case 128:  flags = COFF_SectionAlign_128Bytes;  break;
-    case 256:  flags = COFF_SectionAlign_256Bytes;  break;
-    case 512:  flags = COFF_SectionAlign_512Bytes;  break;
-    case 1024: flags = COFF_SectionAlign_1024Bytes; break;
-    case 2048: flags = COFF_SectionAlign_2048Bytes; break;
-    case 4096: flags = COFF_SectionAlign_4096Bytes; break;
-    case 8192: flags = COFF_SectionAlign_8192Bytes; break;
+  case 0:    flags = COFF_SectionAlign_None;      break;
+  case 1:    flags = COFF_SectionAlign_1Bytes;    break;
+  case 2:    flags = COFF_SectionAlign_2Bytes;    break;
+  case 4:    flags = COFF_SectionAlign_4Bytes;    break;
+  case 8:    flags = COFF_SectionAlign_8Bytes;    break;
+  case 16:   flags = COFF_SectionAlign_16Bytes;   break;
+  case 32:   flags = COFF_SectionAlign_32Bytes;   break;
+  case 64:   flags = COFF_SectionAlign_64Bytes;   break;
+  case 128:  flags = COFF_SectionAlign_128Bytes;  break;
+  case 256:  flags = COFF_SectionAlign_256Bytes;  break;
+  case 512:  flags = COFF_SectionAlign_512Bytes;  break;
+  case 1024: flags = COFF_SectionAlign_1024Bytes; break;
+  case 2048: flags = COFF_SectionAlign_2048Bytes; break;
+  case 4096: flags = COFF_SectionAlign_4096Bytes; break;
+  case 8192: flags = COFF_SectionAlign_8192Bytes; break;
   }
   flags <<= COFF_SectionFlag_AlignShift;
   return flags;

@@ -103,6 +103,7 @@ typedef struct COFF_BigObjHeader
 typedef U32 COFF_SectionAlign;
 enum
 {
+  COFF_SectionAlign_None      = 0x0,
   COFF_SectionAlign_1Bytes    = 0x1,
   COFF_SectionAlign_2Bytes    = 0x2,
   COFF_SectionAlign_4Bytes    = 0x3,
