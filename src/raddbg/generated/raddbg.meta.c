@@ -456,7 +456,7 @@ Rng1U64 rd_reg_slot_range_table[44] =
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},
 {OffsetOf(RD_Regs, cursor), OffsetOf(RD_Regs, cursor) + sizeof(TxtPt)},
 {OffsetOf(RD_Regs, mark), OffsetOf(RD_Regs, mark) + sizeof(TxtPt)},
-{OffsetOf(RD_Regs, text_key), OffsetOf(RD_Regs, text_key) + sizeof(U128)},
+{OffsetOf(RD_Regs, text_key), OffsetOf(RD_Regs, text_key) + sizeof(HS_Key)},
 {OffsetOf(RD_Regs, lang_kind), OffsetOf(RD_Regs, lang_kind) + sizeof(TXT_LangKind)},
 {OffsetOf(RD_Regs, lines), OffsetOf(RD_Regs, lines) + sizeof(D_LineList)},
 {OffsetOf(RD_Regs, dbgi_key), OffsetOf(RD_Regs, dbgi_key) + sizeof(DI_Key)},

@@ -38,9 +38,10 @@ mtx_init(void)
 //~ rjf: Buffer Operations
 
 internal void
-mtx_push_op(U128 buffer_key, MTX_Op op)
+mtx_push_op(HS_Key buffer_key, MTX_Op op)
 {
-  MTX_MutThread *thread = &mtx_shared->mut_threads[buffer_key.u64[1]%mtx_shared->mut_threads_count];
+  U64 hash = hs_little_hash_from_data(str8_struct(&buffer_key));
+  MTX_MutThread *thread = &mtx_shared->mut_threads[hash%mtx_shared->mut_threads_count];
   mtx_enqueue_op(thread, buffer_key, op);
 }
 
@@ -48,7 +49,7 @@ mtx_push_op(U128 buffer_key, MTX_Op op)
 //~ rjf: Mutation Threads
 
 internal void
-mtx_enqueue_op(MTX_MutThread *thread, U128 buffer_key, MTX_Op op)
+mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
 {
   // TODO(rjf): if op.replace is too big, need to split into multiple edits
   OS_MutexScope(thread->mutex) for(;;)
@@ -70,7 +71,7 @@ mtx_enqueue_op(MTX_MutThread *thread, U128 buffer_key, MTX_Op op)
 }
 
 internal void
-mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, U128 *buffer_key_out, MTX_Op *op_out)
+mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, HS_Key *buffer_key_out, MTX_Op *op_out)
 {
   OS_MutexScope(thread->mutex) for(;;)
   {
@@ -100,7 +101,7 @@ mtx_mut_thread__entry_point(void *p)
     HS_Scope *hs_scope = hs_scope_open();
     
     //- rjf: get next op
-    U128 buffer_key = {0};
+    HS_Key buffer_key = {0};
     MTX_Op op = {0};
     mtx_dequeue_op(scratch.arena, mut_thread, &buffer_key, &op);
     

@@ -159,7 +159,7 @@ struct DASM_Result
 typedef struct DASM_Info DASM_Info;
 struct DASM_Info
 {
-  U128 text_key;
+  HS_Key text_key;
   DASM_LineArray lines;
 };
 
@@ -177,6 +177,9 @@ struct DASM_Node
   U128 hash;
   DASM_Params params;
   
+  // rjf: root
+  HS_Root root;
+  
   // rjf: generations
   U64 change_gen;
   
@@ -185,11 +188,10 @@ struct DASM_Node
   DASM_Info info;
   
   // rjf: metadata
-  B32 is_working;
+  U64 working_count;
   U64 scope_ref_count;
   U64 last_time_touched_us;
   U64 last_user_clock_idx_touched;
-  U64 load_count;
   U64 last_time_requested_us;
   U64 last_user_clock_idx_requested;
 };
@@ -309,13 +311,13 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 //~ rjf: Cache Lookups
 
 internal DASM_Info dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params);
-internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128 *hash_out);
+internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM_Params *params, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
 
-internal B32 dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us);
-internal void dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out);
+internal B32 dasm_u2p_enqueue_req(HS_Root root, U128 hash, DASM_Params *params, U64 endt_us);
+internal void dasm_u2p_dequeue_req(Arena *arena, HS_Root *root_out, U128 *hash_out, DASM_Params *params_out);
 ASYNC_WORK_DEF(dasm_parse_work);
 
 ////////////////////////////////

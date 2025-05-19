@@ -450,7 +450,7 @@ U64 inline_depth;
 String8 file_path;
 TxtPt cursor;
 TxtPt mark;
-U128 text_key;
+HS_Key text_key;
 TXT_LangKind lang_kind;
 D_LineList lines;
 DI_Key dbgi_key;

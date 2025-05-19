@@ -41,22 +41,45 @@
 // combo.
 
 ////////////////////////////////
+//~ rjf: Key Types
+
+typedef struct HS_Root HS_Root;
+struct HS_Root
+{
+  U64 u64[1];
+};
+
+typedef struct HS_ID HS_ID;
+struct HS_ID
+{
+  U128 u128[1];
+};
+
+typedef struct HS_Key HS_Key;
+struct HS_Key
+{
+  HS_Root root;
+  U64 _padding_;
+  HS_ID id;
+};
+
+////////////////////////////////
 //~ rjf: Cache Types
 
-typedef struct HS_RootKeyChunkNode HS_RootKeyChunkNode;
-struct HS_RootKeyChunkNode
+typedef struct HS_RootIDChunkNode HS_RootIDChunkNode;
+struct HS_RootIDChunkNode
 {
-  HS_RootKeyChunkNode *next;
+  HS_RootIDChunkNode *next;
   U128 *v;
   U64 count;
   U64 cap;
 };
 
-typedef struct HS_RootKeyChunkList HS_RootKeyChunkList;
-struct HS_RootKeyChunkList
+typedef struct HS_RootIDChunkList HS_RootIDChunkList;
+struct HS_RootIDChunkList
 {
-  HS_RootKeyChunkNode *first;
-  HS_RootKeyChunkNode *last;
+  HS_RootIDChunkNode *first;
+  HS_RootIDChunkNode *last;
   U64 chunk_count;
   U64 total_count;
 };
@@ -67,8 +90,8 @@ struct HS_RootNode
   HS_RootNode *next;
   HS_RootNode *prev;
   Arena *arena;
-  U128 root;
-  HS_RootKeyChunkList keys;
+  HS_Root root;
+  HS_RootIDChunkList ids;
 };
 
 typedef struct HS_RootSlot HS_RootSlot;
@@ -86,7 +109,7 @@ struct HS_KeyNode
 {
   HS_KeyNode *next;
   HS_KeyNode *prev;
-  U128 key;
+  HS_Key key;
   U128 hash_history[HS_KEY_HASH_HISTORY_COUNT];
   U64 hash_history_gen;
 };
@@ -197,7 +220,12 @@ global HS_Shared *hs_shared = 0;
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
+internal U64 hs_little_hash_from_data(String8 data);
 internal U128 hs_hash_from_data(String8 data);
+internal HS_ID hs_id_make(U64 u64_0, U64 u64_1);
+internal B32 hs_id_match(HS_ID a, HS_ID b);
+internal HS_Key hs_key_make(HS_Root root, HS_ID id);
+internal B32 hs_key_match(HS_Key a, HS_Key b);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
@@ -207,13 +235,13 @@ internal void hs_init(void);
 ////////////////////////////////
 //~ rjf: Root Allocation/Deallocation
 
-internal U128 hs_root_alloc(void);
-internal void hs_root_release(U128 root);
+internal HS_Root hs_root_alloc(void);
+internal void hs_root_release(HS_Root root);
 
 ////////////////////////////////
 //~ rjf: Cache Submission
 
-internal U128 hs_submit_data(U128 key, Arena **data_arena, String8 data);
+internal U128 hs_submit_data(HS_Key key, Arena **data_arena, String8 data);
 
 ////////////////////////////////
 //~ rjf: Scoped Access
@@ -225,7 +253,7 @@ internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *no
 ////////////////////////////////
 //~ rjf: Key Closing
 
-internal void hs_key_close(U128 key);
+internal void hs_key_close(HS_Key key);
 
 ////////////////////////////////
 //~ rjf: Downstream Accesses
@@ -236,7 +264,7 @@ internal void hs_hash_downstream_dec(U128 hash);
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal U128 hs_hash_from_key(U128 key, U64 rewind_count);
+internal U128 hs_hash_from_key(HS_Key key, U64 rewind_count);
 internal String8 hs_data_from_hash(HS_Scope *scope, U128 hash);
 
 ////////////////////////////////

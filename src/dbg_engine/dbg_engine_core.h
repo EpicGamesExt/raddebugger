@@ -312,7 +312,7 @@ struct D_State
   D_CmdList cmds;
   
   // rjf: output log key
-  U128 output_log_key;
+  HS_Key output_log_key;
   
   // rjf: per-run caches
   D_UnwindCache unwind_cache;

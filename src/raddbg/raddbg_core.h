@@ -890,7 +890,7 @@ internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range
 internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
-internal U128 rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
+internal HS_Key rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
 
 //- rjf: space -> entire range
 internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);

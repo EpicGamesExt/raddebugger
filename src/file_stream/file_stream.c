@@ -71,125 +71,151 @@ fs_change_gen(void)
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
-internal U128
-fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
+internal HS_Key
+fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: unpack args
   path = path_normalized_from_string(scratch.arena, path);
-  U128 key = fs_big_hash_from_string_range(path, range);
+  U64 path_little_hash = fs_little_hash_from_string(path);
+  U64 path_slot_idx = path_little_hash%fs_shared->slots_count;
+  U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
+  FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
+  FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
   
-  //- rjf: loop through key -> hash history; obtain most recent hash for this key
-  U128 result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
+  //- rjf: get root for this path
+  HS_Root root = {0};
+  OS_MutexScopeR(path_stripe->rw_mutex)
   {
-    result = hs_hash_from_key(key, rewind_idx);
-    
-    //- rjf: nonzero hash -> got valid results, return
-    if(!u128_match(result, u128_zero()))
+    B32 node_found = 0;
+    for(FS_Node *n = path_slot->first; n != 0; n = n->next)
     {
-      break;
-    }
-    
-    //- rjf: zero hash, not rewound? -> send new stream request if needed
-    else if(u128_match(result, u128_zero()) && rewind_idx == 0)
-    {
-      // rjf: unpack path cache info
-      U64 path_little_hash = fs_little_hash_from_string(path);
-      U64 path_slot_idx = path_little_hash%fs_shared->slots_count;
-      U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
-      FS_Slot *path_slot = &fs_shared->slots[path_slot_idx];
-      FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
-      
-      // rjf: loop: request, check for results, return until we can't
-      OS_MutexScopeW(path_stripe->rw_mutex) for(;;)
+      if(str8_match(n->path, path, 0))
       {
-        // rjf: path -> node
-        FS_Node *node = 0;
-        for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+        node_found = 1;
+        root = n->root;
+        break;
+      }
+    }
+    if(!node_found) OS_MutexScopeRWPromote(path_stripe->rw_mutex)
+    {
+      B32 node_found = 0;
+      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->path, path, 0))
         {
-          if(str8_match(path, n->path, 0))
-          {
-            node = n;
-            break;
-          }
-        }
-        
-        // rjf: node does not exist? -> create & store
-        if(node == 0)
-        {
-          node = push_array(path_stripe->arena, FS_Node, 1);
-          SLLQueuePush(path_slot->first, path_slot->last, node);
-          node->path = push_str8_copy(path_stripe->arena, path);
-          node->slots_count = 64;
-          node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
-        }
-        
-        // rjf: range -> node
-        U64 range_hash = fs_little_hash_from_string(str8_struct(&range));
-        U64 range_slot_idx = range_hash%node->slots_count;
-        FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
-        FS_RangeNode *range_node = 0;
-        for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-        {
-          if(MemoryMatchStruct(&n->range, &range))
-          {
-            range_node = n;
-            break;
-          }
-        }
-        
-        // rjf: range node does not exist? create & store
-        if(range_node == 0)
-        {
-          range_node = push_array(path_stripe->arena, FS_RangeNode, 1);
-          SLLQueuePush(range_slot->first, range_slot->last, range_node);
-          range_node->range = range;
-        }
-        
-        // rjf: try to send stream request
-        if((ins_atomic_u64_eval(&range_node->request_count) == ins_atomic_u64_eval(&range_node->completion_count) ||
-            ins_atomic_u64_eval(&range_node->last_time_requested_us)+100000 < os_now_microseconds()) &&
-           fs_u2s_enqueue_req(range, path, endt_us))
-        {
-          ins_atomic_u64_eval_assign(&range_node->last_time_requested_us, os_now_microseconds());
-          ins_atomic_u64_inc_eval(&range_node->request_count);
-          DeferLoop(os_rw_mutex_drop_w(path_stripe->rw_mutex), os_rw_mutex_take_w(path_stripe->rw_mutex))
-          {
-            async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
-          }
-        }
-        
-        // rjf: try to reobtain results
-        result = hs_hash_from_key(key, 0);
-        
-        // rjf: have time to wait? -> wait on this stripe; otherwise exit
-        if(u128_match(result, u128_zero()) && os_now_microseconds() <= endt_us)
-        {
-          os_condition_variable_wait_rw_w(path_stripe->cv, path_stripe->rw_mutex, endt_us);
-        }
-        else
-        {
+          node_found = 1;
+          root = n->root;
           break;
         }
+      }
+      if(!node_found)
+      {
+        FS_Node *node = push_array(path_stripe->arena, FS_Node, 1);
+        SLLQueuePush(path_slot->first, path_slot->last, node);
+        node->path = push_str8_copy(path_stripe->arena, path);
+        node->root = hs_root_alloc();
+        node->slots_count = 64;
+        node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
+        root = node->root;
+      }
+    }
+  }
+  
+  //- rjf: build a key for this path/range combo
+  HS_Key key = hs_key_make(root, hs_id_make(range.min, range.max));
+  
+  //- rjf: if the most recent hash for this key is zero, then try to submit a new
+  // request to pull it in.
+  if(u128_match(hs_hash_from_key(key, 0), u128_zero()))
+  {
+    // rjf: loop: request, check for results, return until we can't
+    OS_MutexScopeW(path_stripe->rw_mutex) for(;;)
+    {
+      // rjf: path -> node
+      FS_Node *node = 0;
+      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(path, n->path, 0))
+        {
+          node = n;
+          break;
+        }
+      }
+      
+      // rjf: no node? -> weird case, node should've been made at this point.
+      if(node == 0)
+      {
+        break;
+      }
+      
+      // rjf: range -> node
+      U64 range_hash = fs_little_hash_from_string(str8_struct(&key.id));
+      U64 range_slot_idx = range_hash%node->slots_count;
+      FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
+      FS_RangeNode *range_node = 0;
+      for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
+      {
+        if(hs_id_match(n->id, key.id))
+        {
+          range_node = n;
+          break;
+        }
+      }
+      
+      // rjf: range node does not exist? create & store
+      if(range_node == 0)
+      {
+        range_node = push_array(path_stripe->arena, FS_RangeNode, 1);
+        SLLQueuePush(range_slot->first, range_slot->last, range_node);
+        range_node->id = key.id;
+      }
+      
+      // rjf: try to send stream request
+      if(ins_atomic_u64_eval(&range_node->working_count) == 0 &&
+         fs_u2s_enqueue_req(key, range, path, endt_us))
+      {
+        ins_atomic_u64_inc_eval(&range_node->working_count);
+        DeferLoop(os_rw_mutex_drop_w(path_stripe->rw_mutex), os_rw_mutex_take_w(path_stripe->rw_mutex))
+        {
+          async_push_work(fs_stream_work, .working_counter = &range_node->working_count);
+        }
+      }
+      
+      // rjf: have time to wait? -> wait on this stripe; otherwise exit
+      B32 have_results = !u128_match(hs_hash_from_key(key, 0), u128_zero());
+      if(!have_results && os_now_microseconds() < endt_us)
+      {
+        os_condition_variable_wait_rw_w(path_stripe->cv, path_stripe->rw_mutex, endt_us);
+      }
+      else
+      {
+        break;
       }
     }
   }
   
   scratch_end(scratch);
-  return result;
+  return key;
 }
 
 internal U128
-fs_key_from_path_range(String8 path, Rng1U64 range)
+fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
 {
-  Temp scratch = scratch_begin(0, 0);
-  String8 path_normalized = path_normalized_from_string(scratch.arena, path);
-  U128 key = fs_big_hash_from_string_range(path_normalized, range);
-  fs_hash_from_path_range(path_normalized, range, 0);
-  scratch_end(scratch);
-  return key;
+  U128 hash = {0};
+  {
+    HS_Key key = fs_key_from_path_range(path, range, endt_us);
+    for EachIndex(rewind_idx, HS_KEY_HASH_HISTORY_COUNT)
+    {
+      hash = hs_hash_from_key(key, rewind_idx);
+      if(!u128_match(hash, u128_zero()))
+      {
+        break;
+      }
+    }
+  }
+  return hash;
 }
 
 internal FileProperties
@@ -222,7 +248,7 @@ fs_properties_from_path(String8 path)
 //~ rjf: Streamer Threads
 
 internal B32
-fs_u2s_enqueue_req(Rng1U64 range, String8 path, U64 endt_us)
+fs_u2s_enqueue_req(HS_Key key, Rng1U64 range, String8 path, U64 endt_us)
 {
   B32 result = 0;
   path.size = Min(path.size, fs_shared->u2s_ring_size);
@@ -230,10 +256,11 @@ fs_u2s_enqueue_req(Rng1U64 range, String8 path, U64 endt_us)
   {
     U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
     U64 available_size = fs_shared->u2s_ring_size - unconsumed_size;
-    U64 needed_size = sizeof(range.min) + sizeof(range.max) + sizeof(path.size) + path.size;
+    U64 needed_size = sizeof(key) + sizeof(range.min) + sizeof(range.max) + sizeof(path.size) + path.size;
     if(available_size >= needed_size)
     {
       result = 1;
+      fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &key);
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.min);
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.max);
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &path.size);
@@ -250,13 +277,14 @@ fs_u2s_enqueue_req(Rng1U64 range, String8 path, U64 endt_us)
 }
 
 internal void
-fs_u2s_dequeue_req(Arena *arena, Rng1U64 *range_out, String8 *path_out)
+fs_u2s_dequeue_req(Arena *arena, HS_Key *key_out, Rng1U64 *range_out, String8 *path_out)
 {
   OS_MutexScope(fs_shared->u2s_ring_mutex) for(;;)
   {
     U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
-    if(unconsumed_size >= sizeof(U64))
+    if(unconsumed_size >= sizeof(*key_out) + sizeof(U64)*2 + sizeof(U64))
     {
+      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, key_out);
       fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &range_out->min);
       fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &range_out->max);
       fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &path_out->size);
@@ -275,12 +303,12 @@ ASYNC_WORK_DEF(fs_stream_work)
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: get next request
+  HS_Key key = {0};
   Rng1U64 range = {0};
   String8 path = {0};
-  fs_u2s_dequeue_req(scratch.arena, &range, &path);
+  fs_u2s_dequeue_req(scratch.arena, &key, &range, &path);
   
   //- rjf: unpack request
-  U128 key = fs_big_hash_from_string_range(path, range);
   U64 path_hash = fs_little_hash_from_string(path);
   U64 path_slot_idx = path_hash%fs_shared->slots_count;
   U64 path_stripe_idx = path_slot_idx%fs_shared->stripes_count;
@@ -387,12 +415,12 @@ fs_detector_thread__entry_point(void *p)
                   range_n != 0;
                   range_n = range_n->next)
               {
-                if(ins_atomic_u64_eval(&range_n->request_count) == ins_atomic_u64_eval(&range_n->completion_count) &&
-                   fs_u2s_enqueue_req(range_n->range, n->path, os_now_microseconds()+100000))
+                HS_Key key = hs_key_make(n->root, range_n->id);
+                if(ins_atomic_u64_eval(&range_n->working_count) == 0 &&
+                   fs_u2s_enqueue_req(key, r1u64(key.id.u128[0].u64[0], key.id.u128[0].u64[1]), n->path, os_now_microseconds()+100000))
                 {
-                  ins_atomic_u64_eval_assign(&range_n->last_time_requested_us, os_now_microseconds());
-                  ins_atomic_u64_inc_eval(&range_n->request_count);
-                  async_push_work(fs_stream_work, .completion_counter = &range_n->completion_count);
+                  ins_atomic_u64_inc_eval(&range_n->working_count);
+                  async_push_work(fs_stream_work, .working_counter = &range_n->working_count);
                 }
               }
             }

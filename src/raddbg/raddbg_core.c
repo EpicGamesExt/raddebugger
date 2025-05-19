@@ -1747,7 +1747,9 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: reads from hash store key
     case E_SpaceKind_HashStoreKey:
     {
-      U128 key = space.u128;
+      HS_Root root = {space.u64_0};
+      HS_ID id = {space.u128};
+      HS_Key key = hs_key_make(root, id);
       U128 hash = hs_hash_from_key(key, 0);
       HS_Scope *scope = hs_scope_open();
       {
@@ -1778,7 +1780,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       containing_range.max -= containing_range.max%chunk_size;
       
       // rjf: map to hash
-      U128 key = fs_key_from_path_range(file_path, containing_range);
+      HS_Key key  = fs_key_from_path_range(file_path, containing_range, 0);
       U128 hash = hs_hash_from_key(key, 0);
       
       // rjf: look up from hash store
@@ -2136,28 +2138,30 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
 
-internal U128
+internal HS_Key
 rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
 {
-  U128 result = {0};
+  HS_Key result = {0};
   switch(space.kind)
   {
     case E_SpaceKind_HashStoreKey:
     {
-      result = space.u128;
+      HS_Root root = {space.u64_0};
+      HS_ID id = {space.u128};
+      result = hs_key_make(root, id);
     }break;
     case E_SpaceKind_File:
     {
       U64 file_path_string_id = space.u64_0;
       String8 file_path = e_string_from_id(file_path_string_id);
-      result = fs_key_from_path_range(file_path, range);
+      result = fs_key_from_path_range(file_path, range, 0);
     }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
       {
-        result = ctrl_hash_store_key_from_process_vaddr_range(entity->handle, range, zero_terminated);
+        result = ctrl_key_from_process_vaddr_range(entity->handle, range, zero_terminated, 0, 0);
       }
     }break;
   }
@@ -2174,7 +2178,9 @@ rd_whole_range_from_eval_space(E_Space space)
   {
     case E_SpaceKind_HashStoreKey:
     {
-      U128 key = space.u128;
+      HS_Root root = {space.u64_0};
+      HS_ID id = {space.u128};
+      HS_Key key = hs_key_make(root, id);
       U128 hash = hs_hash_from_key(key, 0);
       HS_Scope *hs_scope = hs_scope_open();
       {
@@ -2867,7 +2873,7 @@ rd_view_ui(Rng2F32 rect)
       // rjf: unpack view's target expression & hash
       E_Eval eval = e_eval_from_string(expr_string);
       Rng1U64 range = r1u64(0, 1024);
-      U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
+      HS_Key key = rd_key_from_eval_space_range(eval.space, range, 0);
       U128 hash = hs_hash_from_key(key, 0);
       
       // rjf: determine if hash's blob is ready, and which viewer to use
@@ -6519,7 +6525,7 @@ rd_window_frame(void)
     if(ws->dev_menu_is_open) RD_Font(RD_FontSlot_Code)
     {
       ui_set_next_flags(UI_BoxFlag_ViewScrollY|UI_BoxFlag_AllowOverflowY|UI_BoxFlag_ViewClamp);
-      UI_PaneF(r2f32p(30, 30, 30+ui_top_font_size()*100, ui_top_font_size()*150), "###dev_ctx_menu")
+      UI_PaneF(r2f32p(30, 30, 30+ui_top_font_size()*100, ui_top_font_size()*60), "###dev_ctx_menu")
       {
         //- rjf: capture
         if(!ProfIsCapturing() && ui_clicked(ui_buttonf("Begin Profiler Capture###prof_cap")))
@@ -6580,7 +6586,7 @@ rd_window_frame(void)
           ui_labelf("mark: (L:%I64d, C:%I64d)", regs->mark.line, regs->mark.column);
           ui_labelf("unwind_count: %I64u", regs->unwind_count);
           ui_labelf("inline_depth: %I64u", regs->inline_depth);
-          ui_labelf("text_key: [0x%I64x, 0x%I64x]", regs->text_key.u64[0], regs->text_key.u64[1]);
+          ui_labelf("text_key: [0x%I64x / 0x%I64x:0x%I64x]", regs->text_key.root.u64[0], regs->text_key.id.u128[0].u64[0], regs->text_key.id.u128[0].u64[1]);
           ui_labelf("lang_kind: '%S'", txt_extension_from_lang_kind(regs->lang_kind));
           ui_labelf("vaddr_range: [0x%I64x, 0x%I64x)", regs->vaddr_range.min, regs->vaddr_range.max);
           ui_labelf("voff_range: [0x%I64x, 0x%I64x)", regs->voff_range.min, regs->voff_range.max);
@@ -12174,12 +12180,13 @@ rd_frame(void)
       //- rjf: add macro for output log
       {
         HS_Scope *hs_scope = hs_scope_open();
-        U128 key = d_state->output_log_key;
+        HS_Key key = d_state->output_log_key;
         U128 hash = hs_hash_from_key(key, 0);
         String8 data = hs_data_from_hash(hs_scope, hash);
         E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
+        space.u64_0 = key.root.u64[0];
+        space.u128 = key.id.u128[0];
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
-        space.u128 = key;
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);
@@ -15479,7 +15486,7 @@ rd_frame(void)
             HS_Scope *hs_scope = hs_scope_open();
             TXT_Scope *txt_scope = txt_scope_open();
             RD_Regs *regs = rd_regs();
-            U128 text_key = regs->text_key;
+            HS_Key text_key = regs->text_key;
             TXT_LangKind lang_kind = regs->lang_kind;
             TxtRng range = txt_rng(regs->cursor, regs->mark);
             U128 hash = {0};

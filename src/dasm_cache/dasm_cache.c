@@ -345,10 +345,13 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
   DASM_Info info = {0};
   if(!u128_match(hash, u128_zero()))
   {
+    //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%dasm_shared->slots_count;
     U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
     DASM_Slot *slot = &dasm_shared->slots[slot_idx];
     DASM_Stripe *stripe = &dasm_shared->stripes[stripe_idx];
+    
+    //- rjf: try to get existing results
     B32 found = 0;
     OS_MutexScopeR(stripe->rw_mutex)
     {
@@ -363,9 +366,13 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
         }
       }
     }
-    B32 node_is_new = 0;
+    
+    //- rjf: miss -> kick off work to fill cache
     if(!found)
     {
+      B32 node_is_new = 0;
+      U64 *node_working_count = 0;
+      HS_Root root = {0};
       OS_MutexScopeW(stripe->rw_mutex)
       {
         DASM_Node *node = 0;
@@ -379,16 +386,7 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
         }
         if(node == 0)
         {
-          LogInfoNamedBlockF("dasm_new_node")
-          {
-            log_infof("hash:        [0x%I64x 0x%I64x]\n", hash.u64[0], hash.u64[1]);
-            log_infof("vaddr:       0x%I64x\n", params->vaddr);
-            log_infof("arch:        %S\n", string_from_arch(params->arch));
-            log_infof("style_flags: 0x%x\n", params->style_flags);
-            log_infof("syntax:      %i\n",   params->syntax);
-            log_infof("base_vaddr:  0x%I64x\n", params->base_vaddr);
-            log_infof("dbgi_key:    [%S 0x%I64x]\n", params->dbgi_key.path, params->dbgi_key.min_timestamp);
-          }
+          // rjf: allocate node
           node = stripe->free_node;
           if(node)
           {
@@ -399,26 +397,34 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
             node = push_array_no_zero(stripe->arena, DASM_Node, 1);
           }
           MemoryZeroStruct(node);
+          
+          // rjf: fill node
           DLLPushBack(slot->first, slot->last, node);
           node->hash = hash;
           MemoryCopyStruct(&node->params, params);
+          node->root = hs_root_alloc();
           // TODO(rjf): need to make this releasable - currently all exe_paths just leak
           node->params.dbgi_key = di_key_copy(stripe->arena, &node->params.dbgi_key);
+          
+          // rjf: gather work kickoff params
           node_is_new = 1;
+          ins_atomic_u64_inc_eval(&node->working_count);
+          node_working_count = &node->working_count;
+          root = node->root;
         }
       }
-    }
-    if(node_is_new)
-    {
-      dasm_u2p_enqueue_req(hash, params, max_U64);
-      async_push_work(dasm_parse_work);
+      if(node_is_new)
+      {
+        dasm_u2p_enqueue_req(root, hash, params, max_U64);
+        async_push_work(dasm_parse_work, .working_counter = node_working_count);
+      }
     }
   }
   return info;
 }
 
 internal DASM_Info
-dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128 *hash_out)
+dasm_info_from_key_params(DASM_Scope *scope, HS_Key key, DASM_Params *params, U128 *hash_out)
 {
   DASM_Info result = {0};
   for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
@@ -441,16 +447,17 @@ dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128
 //~ rjf: Parse Threads
 
 internal B32
-dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
+dasm_u2p_enqueue_req(HS_Root root, U128 hash, DASM_Params *params, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(dasm_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = dasm_shared->u2p_ring_write_pos - dasm_shared->u2p_ring_read_pos;
     U64 available_size = dasm_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(hash)+sizeof(U64)+sizeof(Arch)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbgi_key.path.size+sizeof(U64))
+    if(available_size >= sizeof(root)+sizeof(hash)+sizeof(U64)+sizeof(Arch)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbgi_key.path.size+sizeof(U64))
     {
       good = 1;
+      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &root);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &hash);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->vaddr);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->arch);
@@ -476,13 +483,14 @@ dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
 }
 
 internal void
-dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
+dasm_u2p_dequeue_req(Arena *arena, HS_Root *root_out, U128 *hash_out, DASM_Params *params_out)
 {
   OS_MutexScope(dasm_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = dasm_shared->u2p_ring_write_pos - dasm_shared->u2p_ring_read_pos;
     if(unconsumed_size >= sizeof(*hash_out)+sizeof(U64)+sizeof(Arch)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+sizeof(U64))
     {
+      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, root_out);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, hash_out);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->vaddr);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->arch);
@@ -509,9 +517,10 @@ ASYNC_WORK_DEF(dasm_parse_work)
   TXT_Scope *txt_scope = txt_scope_open();
   
   //- rjf: get next request
+  HS_Root root = {0};
   U128 hash = {0};
   DASM_Params params = {0};
-  dasm_u2p_dequeue_req(scratch.arena, &hash, &params);
+  dasm_u2p_dequeue_req(scratch.arena, &root, &hash, &params);
   U64 change_gen = fs_change_gen();
   
   //- rjf: unpack hash
@@ -520,38 +529,19 @@ ASYNC_WORK_DEF(dasm_parse_work)
   DASM_Slot *slot = &dasm_shared->slots[slot_idx];
   DASM_Stripe *stripe = &dasm_shared->stripes[stripe_idx];
   
-  //- rjf: take task
-  B32 got_task = 0;
-  OS_MutexScopeR(stripe->rw_mutex)
-  {
-    for(DASM_Node *n = slot->first; n != 0; n = n->next)
-    {
-      if(u128_match(n->hash, hash) && dasm_params_match(&n->params, &params))
-      {
-        got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
-        break;
-      }
-    }
-  }
-  
   //- rjf: get dbg info
   RDI_Parsed *rdi = &rdi_parsed_nil;
-  if(got_task && params.dbgi_key.path.size != 0)
+  if(params.dbgi_key.path.size != 0)
   {
     rdi = di_rdi_from_key(di_scope, &params.dbgi_key, max_U64);
   }
   
   //- rjf: hash -> data
-  String8 data = {0};
-  if(got_task)
-  {
-    data = hs_data_from_hash(hs_scope, hash);
-  }
+  String8 data = hs_data_from_hash(hs_scope, hash);
   
   //- rjf: data * arch * addr * dbg -> decode artifacts
   DASM_LineChunkList line_list = {0};
   String8List inst_strings = {0};
-  if(got_task)
   {
     switch(params.arch)
     {
@@ -621,7 +611,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
                   {
                     // TODO(rjf): need redirection path - this may map to a different path on the local machine,
                     // need frontend to communicate path remapping info to this layer
-                    U128 key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64));
+                    HS_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
                     TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
                     U64 endt_us = max_U64;
                     U128 hash = {0};
@@ -712,7 +702,6 @@ ASYNC_WORK_DEF(dasm_parse_work)
   //- rjf: artifacts -> value bundle
   Arena *info_arena = 0;
   DASM_Info info = {0};
-  if(got_task)
   {
     //- rjf: produce joined text
     Arena *text_arena = arena_alloc();
@@ -721,21 +710,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
     String8 text = str8_list_join(text_arena, &inst_strings, &text_join);
     
     //- rjf: produce unique key for this disassembly's text
-    U128 text_key = {0};
-    {
-      U64 hash_data[] =
-      {
-        hash.u64[0],
-        hash.u64[1],
-        params.vaddr,
-        (U64)params.arch,
-        (U64)params.style_flags,
-        (U64)params.syntax,
-        (U64)rdi,
-        0x4d534144,
-      };
-      text_key = hs_hash_from_data(str8((U8 *)hash_data, sizeof(hash_data)));
-    }
+    HS_Key text_key = hs_key_make(root, hs_id_make(0, 0));
     
     //- rjf: submit text data to hash store
     U128 text_hash = hs_submit_data(text_key, &text_arena, text);
@@ -747,7 +722,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
   }
   
   //- rjf: commit results to cache
-  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  OS_MutexScopeW(stripe->rw_mutex)
   {
     for(DASM_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -763,8 +738,6 @@ ASYNC_WORK_DEF(dasm_parse_work)
         {
           n->change_gen = 0;
         }
-        ins_atomic_u32_eval_assign(&n->is_working, 0);
-        ins_atomic_u64_inc_eval(&n->load_count);
         break;
       }
     }
@@ -807,8 +780,7 @@ dasm_evictor_detector_thread__entry_point(void *p)
           if(n->scope_ref_count == 0 &&
              n->last_time_touched_us+evict_threshold_us <= check_time_us &&
              n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             n->load_count != 0 &&
-             n->is_working == 0)
+             ins_atomic_u64_eval(&n->working_count) == 0)
           {
             slot_has_work = 1;
             break;
@@ -830,8 +802,7 @@ dasm_evictor_detector_thread__entry_point(void *p)
           if(n->scope_ref_count == 0 &&
              n->last_time_touched_us+evict_threshold_us <= check_time_us &&
              n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
-             n->load_count != 0 &&
-             n->is_working == 0)
+             ins_atomic_u64_eval(&n->working_count) == 0)
           {
             DLLRemove(slot->first, slot->last, n);
             if(n->info_arena != 0)
@@ -844,7 +815,7 @@ dasm_evictor_detector_thread__entry_point(void *p)
              n->last_time_requested_us+retry_threshold_us <= check_time_us &&
              n->last_user_clock_idx_requested+retry_threshold_user_clocks <= check_time_user_clocks)
           {
-            if(dasm_u2p_enqueue_req(n->hash, &n->params, max_U64))
+            if(dasm_u2p_enqueue_req(n->root, n->hash, &n->params, max_U64))
             {
               async_push_work(dasm_parse_work);
               n->last_time_requested_us = os_now_microseconds();

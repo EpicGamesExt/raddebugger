@@ -2381,7 +2381,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
       syntax = DASM_Syntax_ATT;
     }
   }
-  U128 dasm_key = rd_key_from_eval_space_range(space, range, 0);
+  HS_Key dasm_key = rd_key_from_eval_space_range(space, range, 0);
   U128 dasm_data_hash = {0};
   DASM_Params dasm_params = {0};
   {
@@ -3572,7 +3572,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: map expression artifacts -> texture
   //
-  U128 texture_key = rd_key_from_eval_space_range(eval.space, offset_range, 0);
+  HS_Key texture_key = rd_key_from_eval_space_range(eval.space, offset_range, 0);
   TEX_Topology topology = tex_topology_make(dim, fmt);
   U128 data_hash = {0};
   R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
@@ -4058,8 +4058,8 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   U64 base_offset = e_base_offset_from_eval(eval);
   Rng1U64 idxs_range = r1u64(base_offset, base_offset+count*sizeof(U32));
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
-  U128 idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);
-  U128 vtxs_key = rd_key_from_eval_space_range(eval.space, vtxs_range, 0);
+  HS_Key idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);
+  HS_Key vtxs_key = rd_key_from_eval_space_range(eval.space, vtxs_range, 0);
   R_Handle idxs_buffer = geo_buffer_from_key(geo_scope, idxs_key);
   R_Handle vtxs_buffer = geo_buffer_from_key(geo_scope, vtxs_key);
   

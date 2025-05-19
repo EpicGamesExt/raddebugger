@@ -61,6 +61,7 @@ async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params
   work.output             = params->output;
   work.semaphore          = params->semaphore;
   work.completion_counter = params->completion_counter;
+  work.working_counter    = params->working_counter;
   
   // rjf: loop; try to write into user -> writer ring buffer. if we're on a
   // worker thread, determine if we need to execute this task locally on this
@@ -226,6 +227,12 @@ async_execute_work(ASYNC_Work work)
   if(work.completion_counter != 0)
   {
     ins_atomic_u64_inc_eval(work.completion_counter);
+  }
+  
+  //- rjf: decrement working counter
+  if(work.working_counter != 0)
+  {
+    ins_atomic_u64_dec_eval(work.working_counter);
   }
 }
 

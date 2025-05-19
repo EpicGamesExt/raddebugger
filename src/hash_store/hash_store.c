@@ -13,6 +13,13 @@
 # include "third_party/xxHash/xxhash.h"
 #endif
 
+internal U64
+hs_little_hash_from_data(String8 data)
+{
+  U64 result = XXH3_64bits(data.str, data.size);
+  return result;
+}
+
 internal U128
 hs_hash_from_data(String8 data)
 {
@@ -20,6 +27,35 @@ hs_hash_from_data(String8 data)
   XXH128_hash_t hash = XXH3_128bits(data.str, data.size);
   MemoryCopy(&u128, &hash, sizeof(u128));
   return u128;
+}
+
+internal HS_ID
+hs_id_make(U64 u64_0, U64 u64_1)
+{
+  HS_ID id;
+  id.u128[0].u64[0] = u64_0;
+  id.u128[0].u64[1] = u64_1;
+  return id;
+}
+
+internal B32
+hs_id_match(HS_ID a, HS_ID b)
+{
+  B32 result = MemoryMatchStruct(&a, &b);
+  return result;
+}
+
+internal HS_Key
+hs_key_make(HS_Root root, HS_ID id)
+{
+  HS_Key key = {root, 0, id};
+  return key;
+}
+
+internal B32
+hs_key_match(HS_Key a, HS_Key b)
+{
+  return (MemoryMatchStruct(&a.root, &b.root) && hs_id_match(a.id, b.id));
 }
 
 ////////////////////////////////
@@ -73,11 +109,11 @@ hs_init(void)
 ////////////////////////////////
 //~ rjf: Root Allocation/Deallocation
 
-internal U128
+internal HS_Root
 hs_root_alloc(void)
 {
-  U128 root = {0};
-  root.u64[1] = ins_atomic_u64_inc_eval(&hs_shared->root_id_gen);
+  HS_Root root = {0};
+  root.u64[0] = ins_atomic_u64_inc_eval(&hs_shared->root_id_gen);
   U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
   U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
   HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
@@ -101,7 +137,7 @@ hs_root_alloc(void)
 }
 
 internal void
-hs_root_release(U128 root)
+hs_root_release(HS_Root root)
 {
   U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
   U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
@@ -111,7 +147,7 @@ hs_root_release(U128 root)
   {
     for(HS_RootNode *n = slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->root, root))
+      if(MemoryMatchStruct(&root, &n->root))
       {
         DLLRemove(slot->first, slot->last, n);
         arena_release(n->arena);
@@ -126,9 +162,10 @@ hs_root_release(U128 root)
 //~ rjf: Cache Submission
 
 internal U128
-hs_submit_data(U128 key, Arena **data_arena, String8 data)
+hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
 {
-  U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
+  U64 key_hash = hs_little_hash_from_data(str8_struct(&key));
+  U64 key_slot_idx = key_hash%hs_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
   HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
   HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
@@ -192,7 +229,7 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     HS_KeyNode *key_node = 0;
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->key, key))
+      if(hs_key_match(n->key, key))
       {
         key_node = n;
         break;
@@ -321,9 +358,10 @@ hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
 //~ rjf: Key Closing
 
 internal void
-hs_key_close(U128 key)
+hs_key_close(HS_Key key)
 {
-  U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
+  U64 key_hash = hs_little_hash_from_data(str8_struct(&key));
+  U64 key_slot_idx = key_hash%hs_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
   HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
   HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
@@ -331,7 +369,7 @@ hs_key_close(U128 key)
   {
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->key, key))
+      if(hs_key_match(n->key, key))
       {
         for(U64 history_idx = 0; history_idx < HS_KEY_HASH_HISTORY_STRONG_REF_COUNT && history_idx < n->hash_history_gen; history_idx += 1)
         {
@@ -407,10 +445,11 @@ hs_hash_downstream_dec(U128 hash)
 //~ rjf: Cache Lookup
 
 internal U128
-hs_hash_from_key(U128 key, U64 rewind_count)
+hs_hash_from_key(HS_Key key, U64 rewind_count)
 {
   U128 result = {0};
-  U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
+  U64 key_hash = hs_little_hash_from_data(str8_struct(&key));
+  U64 key_slot_idx = key_hash%hs_shared->key_slots_count;
   U64 key_stripe_idx = key_slot_idx%hs_shared->key_stripes_count;
   HS_KeySlot *key_slot = &hs_shared->key_slots[key_slot_idx];
   HS_Stripe *key_stripe = &hs_shared->key_stripes[key_stripe_idx];
@@ -418,7 +457,7 @@ hs_hash_from_key(U128 key, U64 rewind_count)
   {
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->key, key) && n->hash_history_gen > 0 && n->hash_history_gen-1 >= rewind_count)
+      if(hs_key_match(n->key, key) && n->hash_history_gen > 0 && n->hash_history_gen-1 >= rewind_count)
       {
         result = n->hash_history[(n->hash_history_gen-1-rewind_count)%ArrayCount(n->hash_history)];
         break;

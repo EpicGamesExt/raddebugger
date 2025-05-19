@@ -29,6 +29,7 @@ struct ASYNC_WorkParams
   void **output;
   OS_Handle semaphore;
   U64 *completion_counter;
+  U64 *working_counter;
   U64 endt_us;
   ASYNC_Priority priority;
 };
@@ -41,6 +42,7 @@ struct ASYNC_Work
   void **output;
   OS_Handle semaphore;
   U64 *completion_counter;
+  U64 *working_counter;
 };
 
 ////////////////////////////////
