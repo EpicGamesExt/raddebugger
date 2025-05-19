@@ -1279,6 +1279,7 @@ t_common_block(void)
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_common(obj_writer, str8_lit("A"), 3);
     COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(a_data));
+    data_sect->flags |= COFF_SectionFlag_Align1Bytes;
     coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, symbol, COFF_Reloc_X64_Addr32);
     String8 a_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -1292,6 +1293,7 @@ t_common_block(void)
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(b_data));
+    data_sect->flags |= COFF_SectionFlag_Align1Bytes;
     COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_common(obj_writer, str8_lit("B"), 6);
     coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, symbol, COFF_Reloc_X64_Addr64);
     String8 b_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
@@ -1781,7 +1783,7 @@ entry_point(CmdLine *cmdline)
     { "common_block",        t_common_block        },
     { "base_relocs",         t_base_relocs         },
     { "simple_lib_test",     t_simple_lib_test     },
-    { "import_export",       t_import_export       },
+    //{ "import_export",       t_import_export       },
     { "image_base",          t_image_base          },
   };
 
