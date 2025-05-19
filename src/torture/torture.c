@@ -1667,12 +1667,14 @@ t_image_base(void)
     U8 text[] = { 
       0x48, 0x8D, 0x0D, 0x00, 0x00, 0x00, 0x00, // lea rcx, [__ImageBase]
       0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax, __ImageBase
+      0xB8, 0x00, 0x00, 0x00, 0x00, // mov eax, __ImageBase
       0xC3 // ret
     };
     COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
     COFF_ObjSymbol *image_base_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__ImageBase"));
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, 3, image_base_symbol, COFF_Reloc_X64_Rel32);
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, 9, image_base_symbol, COFF_Reloc_X64_Addr64);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 18, image_base_symbol, COFF_Reloc_X64_Addr32Nb);
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect); 
     String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -1700,6 +1702,7 @@ t_image_base(void)
   U8 expected_text[] = {
     0x48, 0x8D, 0x0D, 0xF9, 0xEF, 0xFF, 0xFF,
     0x48, 0xB8, 0x00, 0x00, 0x00, 0x40, 0x01, 0x00, 0x00, 0x20,
+    0xB8, 0x00, 0x00, 0x00, 0x00,
     0xC3
   };
   String8 text_data = str8_substr(exe, rng_1u64(text_section->foff, text_section->foff + sizeof(expected_text)));
