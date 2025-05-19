@@ -1654,6 +1654,66 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_image_base(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  String8 obj_name = str8_lit("image_base.obj");
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = { 
+      0x48, 0x8D, 0x0D, 0x00, 0x00, 0x00, 0x00, // lea rcx, [__ImageBase]
+      0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax, __ImageBase
+      0xC3 // ret
+    };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    COFF_ObjSymbol *image_base_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__ImageBase"));
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 3, image_base_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 9, image_base_symbol, COFF_Reloc_X64_Addr64);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect); 
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(obj_name, obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /base:0x2000000140000000 /out:a.exe image_base.obj");
+
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *text_section  = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+
+  if (!text_section) {
+    goto exit;
+  }
+
+  U8 expected_text[] = {
+    0x48, 0x8D, 0x0D, 0xF9, 0xEF, 0xFF, 0xFF,
+    0x48, 0xB8, 0x00, 0x00, 0x00, 0x40, 0x01, 0x00, 0x00, 0x20,
+    0xC3
+  };
+  String8 text_data = str8_substr(exe, rng_1u64(text_section->foff, text_section->foff + sizeof(expected_text)));
+  if (!str8_match(text_data, str8_array_fixed(expected_text), 0)) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
+
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -1686,6 +1746,7 @@ entry_point(CmdLine *cmdline)
     { "base_relocs",         t_base_relocs         },
     { "simple_lib_test",     t_simple_lib_test     },
     { "import_export",       t_import_export       },
+    { "image_base",          t_image_base          },
   };
 
   //
