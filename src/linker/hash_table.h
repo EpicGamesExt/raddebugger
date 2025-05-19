@@ -74,6 +74,9 @@ internal KeyValuePair * hash_table_search_path    (HashTable *ht, String8 path  
 internal void *         hash_table_search_path_raw(HashTable *ht, String8 path  );
 
 internal B32 hash_table_search_path_u64(HashTable *ht, String8 key, U64 *value_out);
+internal B32 hash_table_search_string_u64(HashTable *ht, String8 key, U64 *value_out);
+internal B32 hash_table_search_string_raw(HashTable *ht, String8 key, void *value_out);
+internal B32 hash_table_search_string_string(HashTable *ht, String8 key, String8 *value_out);
 
 //- key-value helpers
 

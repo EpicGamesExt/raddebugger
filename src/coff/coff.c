@@ -174,11 +174,11 @@ coff_apply_size_from_reloc(COFF_MachineType machine, COFF_RelocType x)
 
 internal COFF_RelocValue
 coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
+                          U64            image_base,
                           U64            reloc_virtual_offset,
                           U32            symbol_section_number,
                           U32            symbol_section_offset,
-                          U32            symbol_virtual_offset,
-                          U64            symbol_address)
+                          U32            symbol_virtual_offset)
 {
   U64 reloc_value_size = 0;
   S64 reloc_value      = 0;
@@ -187,11 +187,11 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
   case COFF_Reloc_X64_Abs: {} break;
   case COFF_Reloc_X64_Addr64: {
     reloc_value_size = 8;
-    reloc_value      = symbol_address;
+    reloc_value      = symbol_virtual_offset + image_base;
   } break;
   case COFF_Reloc_X64_Addr32: {
     reloc_value_size = 4;
-    reloc_value      = symbol_address;
+    reloc_value      = symbol_virtual_offset + image_base;
   } break;
   case COFF_Reloc_X64_Addr32Nb: {
     reloc_value_size = 4;

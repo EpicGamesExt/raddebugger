@@ -233,6 +233,16 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   return result;
 }
 
+internal COFF_SectionHeader *
+lnk_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
+{
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+  if (section_number > 0 && section_number <= obj->header.section_count_no_null) {
+    return &section_table[section_number-1];
+  }
+  return 0;
+}
+
 internal String8List *
 lnk_collect_obj_chunks_parallel(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8 name, String8 postfix, B32 collect_discarded)
 {

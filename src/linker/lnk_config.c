@@ -776,38 +776,19 @@ lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_pat
 
 ////////////////////////////////
 
-internal void
-lnk_alt_name_list_concat_in_place(LNK_AltNameList *list, LNK_AltNameList *to_concat)
-{
-  str8_list_concat_in_place(&list->from_list, &to_concat->from_list);
-  str8_list_concat_in_place(&list->to_list, &to_concat->to_list);
-}
-
 internal B32
-lnk_parse_alt_name_directive(Arena *arena, String8 input, LNK_AltNameList *list_out)
+lnk_parse_alt_name_directive(String8 input, LNK_AltName *alt_out)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  Temp scratch = scratch_begin(0,0);
   B32 is_parse_ok = 0;
   String8List pair = str8_split_by_string_chars(scratch.arena, input, str8_lit("="), 0);
   if (pair.node_count == 2) {
-    str8_list_push(arena, &list_out->from_list, pair.first->string);
-    str8_list_push(arena, &list_out->to_list,   pair.last->string);
+    alt_out->from = pair.first->string;
+    alt_out->to = pair.last->string;
     is_parse_ok = 1;
   }
   scratch_end(scratch);
   return is_parse_ok;
-}
-
-internal String8 *
-lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameList *list_out)
-{
-  for (String8Node *str_n = list.first; str_n != 0; str_n = str_n->next) {
-    B32 is_parse_ok = lnk_parse_alt_name_directive(arena, str_n->string, list_out);
-    if ( ! is_parse_ok) {
-      return &str_n->string;
-    }
-  }
-  return 0;
 }
 
 internal B32
@@ -1076,10 +1057,18 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_AlternateName: {
-    String8List value_strings_copy = str8_list_copy(arena, &value_strings);
-    String8 *error_string = lnk_parse_alt_name_directive_list(arena, value_strings_copy, &config->alt_name_list);
-    if (error_string != 0) {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid syntax \"%S\", expected format \"FROM=TO\"", *error_string);
+    if (value_strings.node_count == 1) {
+      LNK_AltName alt_name;
+      if (lnk_parse_alt_name_directive(value_strings.first->string, &alt_name)) {
+        LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
+        alt_name_n->data = alt_name;
+        SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
+        config->alt_name_list.count += 1;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "syntax error in \"%S\", expected format \"FROM=TO\"", value_strings.first->string);
+      }
+    } else {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
     }
   } break;
 
