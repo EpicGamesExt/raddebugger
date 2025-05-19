@@ -229,19 +229,12 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
     reloc_value_size = 4;
     reloc_value      = symbol_section_offset;
   } break;
-  case COFF_Reloc_X64_SecRel7: {
-    NotImplemented;
-  } break;
-  case COFF_Reloc_X64_Token: {
-    NotImplemented;
-  } break;
-  case COFF_Reloc_X64_SRel32: {
-    NotImplemented;
-  } break;
-  case COFF_Reloc_X64_Pair: {
-    NotImplemented;
-  } break;
-  case COFF_Reloc_X64_SSpan32: {
+  case COFF_Reloc_X64_SecRel7:
+  case COFF_Reloc_X64_Token:
+  case COFF_Reloc_X64_SRel32:
+  case COFF_Reloc_X64_Pair:
+  case COFF_Reloc_X64_SSpan32:
+  case COFF_Reloc_X64_Unknown_11: {
     NotImplemented;
   } break;
   }
