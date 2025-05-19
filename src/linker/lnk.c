@@ -1101,6 +1101,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
     for (U64 reloc_idx = 0; reloc_idx < reloc_info.count; reloc_idx += 1) {
       COFF_Reloc *reloc = &relocs[reloc_idx];
 
+      // error check relocation
+      if (obj->header.machine == COFF_MachineType_X64) {
+        if (reloc->type > COFF_Reloc_X64_Last) {
+          lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation 0x%x", reloc->type);
+        }
+      } else if (obj->header.machine == COFF_MachineType_Unknown) {
+        NotImplemented;
+      }
+
       // compute relocation file/virtual offsets
       U64 reloc_foff = section_header->foff + reloc->apply_off;
       U64 reloc_voff = section_header->voff + reloc->apply_off;
@@ -1121,8 +1130,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         if (interp == COFF_SymbolValueInterp_Regular) {
           symbol_secnum = symbol.section_number;
           symbol_secoff = symbol.value;
-          symbol_voff = task->image_section_table[symbol.section_number]->voff + symbol_secoff;
+          symbol_voff = safe_cast_u32((U64)task->image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
         } else if (interp == COFF_SymbolValueInterp_Abs) {
+          // error check relocation
+          if (obj->header.machine == COFF_MachineType_X64) {
+            if (reloc->type == COFF_Reloc_X64_SecRel) {
+              lnk_error_obj(LNK_Error_IllegalRelocation, obj, "section-relative relocation (No. 0x%x) cannot be applied to absolute symbol (No. 0x%x)", reloc_idx, reloc->isymbol);
+            }
+          } else if (obj->header.machine != COFF_MachineType_Unknown) {
+            NotImplemented;
+          }
           symbol_secnum = 0;
           symbol_secoff = 0;
           symbol_voff = safe_cast_u32(symbol.value);

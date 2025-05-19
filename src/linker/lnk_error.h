@@ -35,6 +35,7 @@ typedef enum
   LNK_Error_MultiplyDefinedSymbol,
   LNK_Error_SectRefsDiscardedMemory,
   LNK_Error_IllegalSectionMerge,
+  LNK_Error_IllegalRelocation,
   LNK_Error_StopLast,
   
   LNK_Error_First,
