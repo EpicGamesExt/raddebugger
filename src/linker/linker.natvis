@@ -43,6 +43,26 @@
     </Expand>
   </Type>
 
+  <Type Name="LNK_SectionContribChunk">
+    <Expand>
+      <ArrayItems>
+        <Size>count</Size>
+        <ValuePointer>v</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="LNK_SectionContribChunkList">
+    <Expand>
+      <LinkedListItems>
+        <Size>chunk_count</Size>
+        <HeadPointer>first</HeadPointer>
+        <NextPointer>next</NextPointer>
+        <ValueNode>this</ValueNode>
+      </LinkedListItems>
+    </Expand>
+  </Type>
+
   <Type Name="Rng1U64List">
     <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
     <Expand>
