@@ -108,6 +108,7 @@ typedef struct LNK_SymbolTable
   TP_Arena                    *arena;
   LNK_SymbolHashTrie          *scopes[LNK_SymbolScope_Count];
   LNK_SymbolHashTrieChunkList *chunk_lists[LNK_SymbolScope_Count];
+  HashTable                   *alt_names;
 } LNK_SymbolTable;
 
 ////////////////////////////////
@@ -161,4 +162,6 @@ internal LNK_Symbol *      lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK
 internal void              lnk_symbol_table_push_hash(LNK_SymbolTable *symtab, U64 hash, LNK_Symbol *symbol);
 internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Symbol *symbol);
 internal void              lnk_symbol_table_remove(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name);
+
+internal void lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, struct LNK_Obj *obj, String8 from, String8 to);
 

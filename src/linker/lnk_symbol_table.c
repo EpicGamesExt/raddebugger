@@ -457,6 +457,7 @@ lnk_symbol_table_init(TP_Arena *arena)
   for (U64 i = 0; i < LNK_SymbolScope_Count; ++i) {
     symtab->chunk_lists[i] = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
   }
+  symtab->alt_names = hash_table_init(arena->v[0], 1024);
   return symtab;
 }
 
@@ -464,6 +465,13 @@ internal LNK_Symbol *
 lnk_symbol_table_search_hash(LNK_SymbolTable *symtab, LNK_SymbolScope scope, U64 hash, String8 name)
 {
   LNK_SymbolHashTrie *trie = lnk_symbol_hash_trie_search(symtab->scopes[scope], hash, name);
+  if (trie == 0) {
+    String8 alt_name = {0};
+    if (hash_table_search_string_string(symtab->alt_names, name, &alt_name)) {
+      U64 alt_hash = lnk_symbol_hash(alt_name);
+      trie = lnk_symbol_hash_trie_search(symtab->scopes[scope], alt_hash, alt_name);
+    }
+  }
   return trie ? trie->symbol : 0;
 }
 
@@ -525,4 +533,16 @@ lnk_symbol_table_remove(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 
   }
 }
 
+internal void
+lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, LNK_Obj *obj, String8 from, String8 to)
+{
+  String8 to_extant;
+  if (hash_table_search_string_string(symtab->alt_names, from, &to_extant)) {
+    if (!str8_match(to_extant, to, 0)) {
+      lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", from, to_extant, from, to);
+    }
+  } else {
+    hash_table_push_string_string(symtab->arena->v[0], symtab->alt_names, from, to);
+  }
+}
 

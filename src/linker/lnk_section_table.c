@@ -63,7 +63,6 @@ lnk_section_contrib_chunk_list_concat_in_place(LNK_SectionContribChunkList *list
     list->last->next   = to_concat->first;
     list->last         = to_concat->last;
     list->chunk_count += to_concat->chunk_count;
-    MemoryZeroStruct(to_concat);
   }
 }
 

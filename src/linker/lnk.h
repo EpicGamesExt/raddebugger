@@ -102,7 +102,7 @@ typedef struct
 {
   String8              image_data;
   LNK_Obj            **objs;
-  U64                  base_addr;
+  U64                  image_base;
   COFF_SectionHeader **image_section_table;
 } LNK_ObjRelocPatcher;
 
