@@ -888,11 +888,12 @@ t_sect_symbol(void)
 
   T_Result result = T_Result_Fail;
 
+  String8 sect_payload = str8_lit("hello, world");
   String8 sect_obj_name = str8_lit("sect.obj");
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".mysect$1"), PE_RDATA_SECTION_FLAGS, str8_lit("hello, world"));
-    coff_obj_writer_push_directive(obj_writer, str8_lit("/merge:.mysect=.rdata"));
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".mysect$1"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, sect_payload);
+    coff_obj_writer_push_directive(obj_writer, str8_lit("/merge:.mysect=.data"));
     String8 sect_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(sect_obj_name, sect_obj)) {
@@ -905,7 +906,7 @@ t_sect_symbol(void)
     U8 data[8] = {0};
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_array_fixed(data));
-    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".mysect$2222"), PE_RDATA_SECTION_FLAGS);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit(".mysect$2222"), PE_DATA_SECTION_FLAGS);
     coff_obj_writer_section_push_reloc_addr(obj_writer, sect, 0, symbol);
 
     U8 text[] = { 0xC3 };
@@ -921,6 +922,38 @@ t_sect_symbol(void)
   }
 
   int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe main.obj sect.obj");
+
+  if (linker_exit_code != 0) { 
+    goto exit;
+  }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *sect          = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+
+  if (!sect) {
+    goto exit;
+  }
+
+  String8 sect_data = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
+
+  String8 addr_data = str8_substr(sect_data, rng_1u64(0, sizeof(U64)));
+  if (addr_data.size != sizeof(U64)) {
+    goto exit;
+  }
+  U64 addr = *(U64 *)addr_data.str;
+  if (addr - (pe.image_base + sect->voff) != 8) {
+    goto exit;
+  }
+
+  String8 payload_got = str8_substr(sect_data, rng_1u64(8, sect_data.size));
+  if (!str8_match(payload_got, sect_payload, 0)) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
 
   exit:;
   scratch_end(scratch);
