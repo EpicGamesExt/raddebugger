@@ -1752,6 +1752,129 @@ t_image_base(void)
   return result;
 }
 
+internal T_Result
+t_sect_align(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+
+    COFF_ObjSection *sect_align_shift = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS, str8_lit("q"));
+    COFF_ObjSection *sect_align_none = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS, str8_lit("abc"));
+    COFF_ObjSection *sect_align_1 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, str8_lit("wr"));
+    COFF_ObjSection *sect_align_2 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_lit("e"));
+    COFF_ObjSection *sect_align_4 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align4Bytes, str8_lit("ttttt"));
+    COFF_ObjSection *sect_align_8 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align8Bytes, str8_lit("g"));
+    COFF_ObjSection *sect_align_16 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align16Bytes, str8_lit("o"));
+    COFF_ObjSection *sect_align_32 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align32Bytes, str8_lit("p"));
+    COFF_ObjSection *sect_align_64 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align64Bytes, str8_lit("f"));
+    COFF_ObjSection *sect_align_128 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align128Bytes, str8_lit("x"));
+    COFF_ObjSection *sect_align_256 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align256Bytes, str8_lit("c"));
+    COFF_ObjSection *sect_align_512 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align512Bytes, str8_lit("v"));
+    COFF_ObjSection *sect_align_1024 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1024Bytes, str8_lit("b"));
+    COFF_ObjSection *sect_align_2048 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align2048Bytes, str8_lit("n"));
+    COFF_ObjSection *sect_align_4096 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align4096Bytes, str8_lit("m"));
+    COFF_ObjSection *sect_align_8192 = coff_obj_writer_push_section(obj_writer, str8_lit(".a"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align8192Bytes, str8_lit("z"));
+
+    U8 text[] = { 0xC3 };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("test.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe /align:8192 test.obj");
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  COFF_SectionHeader *sect = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".a"));
+  if (!sect) {
+    goto exit;
+  }
+  String8 sect_data = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
+
+  String8 shift = str8_substr(sect_data, rng_1u64(0, 1));
+  if (!str8_match(shift, str8_lit("q"), 0)) {
+    goto exit;
+  }
+  String8 a_none = str8_substr(sect_data, rng_1u64(16, 16 + 3));
+  if (!str8_match(a_none, str8_lit("abc"), 0)) {
+    goto exit;
+  }
+  String8 a_1 = str8_substr(sect_data, rng_1u64(19, 21));
+  if (!str8_match(a_1, str8_lit("wr"), 0)) {
+    goto exit;
+  }
+  String8 a_2 = str8_substr(sect_data, rng_1u64(22, 23));
+  if (!str8_match(a_2, str8_lit("e"), 0)) {
+    goto exit;
+  }
+  String8 a_4 = str8_substr(sect_data, rng_1u64(24, 29));
+  if (!str8_match(a_4, str8_lit("ttttt"), 0)) {
+    goto exit;
+  }
+  String8 a_8 = str8_substr(sect_data, rng_1u64(32, 33));
+  if (!str8_match(a_8, str8_lit("g"), 0)) {
+    goto exit;
+  }
+  String8 a_16 = str8_substr(sect_data, rng_1u64(48, 49));
+  if (!str8_match(a_16, str8_lit("o"), 0)) {
+    goto exit;
+  }
+  String8 a_32 = str8_substr(sect_data, rng_1u64(64, 65));
+  if (!str8_match(a_32, str8_lit("p"), 0)) {
+    goto exit;
+  }
+  String8 a_64 = str8_substr(sect_data, rng_1u64(128, 129));
+  if (!str8_match(a_64, str8_lit("f"), 0)) {
+    goto exit;
+  }
+  String8 a_128 = str8_substr(sect_data, rng_1u64(256, 257));
+  if (!str8_match(a_128, str8_lit("x"), 0)) {
+    goto exit;
+  }
+  String8 a_256 = str8_substr(sect_data, rng_1u64(512, 513));
+  if (!str8_match(a_256, str8_lit("c"), 0)) {
+    goto exit;
+  }
+  String8 a_512 = str8_substr(sect_data, rng_1u64(1024, 1025));
+  if (!str8_match(a_512, str8_lit("v"), 0)) {
+    goto exit;
+  }
+  String8 a_1024 = str8_substr(sect_data, rng_1u64(2048, 2049));
+  if (!str8_match(a_1024, str8_lit("b"), 0)) {
+    goto exit;
+  }
+  String8 a_2048 = str8_substr(sect_data, rng_1u64(4096, 4097));
+  if (!str8_match(a_2048, str8_lit("n"), 0)) {
+    goto exit;
+  }
+  String8 a_4096 = str8_substr(sect_data, rng_1u64(8192, 8193));
+  if (!str8_match(a_4096, str8_lit("m"), 0)) {
+    goto exit;
+  }
+  String8 a_8192 = str8_substr(sect_data, rng_1u64(16384, 16385));
+  if (!str8_match(a_8192, str8_lit("z"), 0)) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
+
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -1783,6 +1906,7 @@ entry_point(CmdLine *cmdline)
     { "common_block",        t_common_block        },
     { "base_relocs",         t_base_relocs         },
     { "simple_lib_test",     t_simple_lib_test     },
+    { "sect_align",          t_sect_align          },
     //{ "import_export",       t_import_export       },
     { "image_base",          t_image_base          },
   };
