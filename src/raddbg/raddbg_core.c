@@ -5778,7 +5778,6 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
   if(window_cfg != &rd_nil_cfg && ws == &rd_nil_window_state)
   {
     Temp scratch = scratch_begin(0, 0);
-    rd_state->frame_depth += 1;
     
     // rjf: unpack configuration options
     B32 has_pos = 0;
@@ -5853,7 +5852,6 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
     DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
     
-    rd_state->frame_depth -= 1;
     scratch_end(scratch);
   }
   
@@ -11026,6 +11024,7 @@ rd_frame(void)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   log_scope_begin();
+  rd_state->frame_depth += 1;
   
   //////////////////////////////
   //- rjf: (DEBUG) take top-level cfg roots, stringize them, and store them to hash store
@@ -11076,7 +11075,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: iterate all tabs, touch their view-states
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     Temp scratch = scratch_begin(0, 0);
     RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
@@ -11103,7 +11102,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: garbage collect untouched immediate cfg trees
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     RD_Cfg *transient = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
     for(RD_Cfg *tln = transient->first, *next = &rd_nil_cfg; tln != &rd_nil_cfg; tln = next)
@@ -11136,7 +11135,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: garbage collect untouched view states
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     for EachIndex(slot_idx, rd_state->view_state_slots_count)
     {
@@ -11195,7 +11194,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: animate all views
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     F32 slow_rate = 1 - pow_f32(2, (-10.f * rd_state->frame_dt));
     F32 fast_rate = 1 - pow_f32(2, (-40.f * rd_state->frame_dt));
@@ -11242,7 +11241,7 @@ rd_frame(void)
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
-  if(rd_state->frame_depth == 0) DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1)
+  if(rd_state->frame_depth == 1)
   {
     events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0);
   }
@@ -11250,8 +11249,10 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: open frame scopes
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
+    if(rd_state->frame_di_scope) { di_scope_close(rd_state->frame_di_scope); }
+    if(rd_state->frame_ctrl_scope) { ctrl_scope_close(rd_state->frame_ctrl_scope); }
     rd_state->frame_di_scope = di_scope_open();
     rd_state->frame_ctrl_scope = ctrl_scope_open();
   }
@@ -12456,7 +12457,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: process top-level graphical commands
     //
-    if(rd_state->frame_depth == 0)
+    if(rd_state->frame_depth == 1)
     {
       for(;rd_next_cmd(&cmd);) RD_RegsScope()
       {
@@ -16512,7 +16513,7 @@ rd_frame(void)
   // the commands pushed by the view will be in the queue, and the core can
   // treat that queue as r/w again.
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     // rjf: rotate
     {
@@ -16715,15 +16716,6 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: close frame scopes
-  //
-  if(rd_state->frame_depth == 0)
-  {
-    di_scope_close(rd_state->frame_di_scope);
-    ctrl_scope_close(rd_state->frame_ctrl_scope);
-  }
-  
-  //////////////////////////////
   //- rjf: submit rendering to all windows
   //
   ProfScope("submit rendering to all windows")
@@ -16741,7 +16733,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: show windows after first frame
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     RD_CfgIDList windows_to_show = {0};
     for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
@@ -16755,7 +16747,7 @@ rd_frame(void)
     {
       RD_Cfg *window = rd_cfg_from_id(n->v);
       RD_WindowState *ws = rd_window_state_from_cfg(window);
-      DeferLoop(rd_state->frame_depth += 1, rd_state->frame_depth -= 1) os_window_first_paint(ws->os);
+      os_window_first_paint(ws->os);
     }
   }
   
@@ -16776,7 +16768,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: bump command batch ring buffer generation
   //
-  if(rd_state->frame_depth == 0)
+  if(rd_state->frame_depth == 1)
   {
     rd_state->cmds_gen += 1;
   }
@@ -16809,6 +16801,7 @@ rd_frame(void)
   }
 #endif
   
+  rd_state->frame_depth -= 1;
   scratch_end(scratch);
   ProfEnd();
 }

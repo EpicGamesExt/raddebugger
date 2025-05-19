@@ -70,7 +70,7 @@ typedef struct HS_RootIDChunkNode HS_RootIDChunkNode;
 struct HS_RootIDChunkNode
 {
   HS_RootIDChunkNode *next;
-  U128 *v;
+  HS_ID *v;
   U64 count;
   U64 cap;
 };
@@ -109,6 +109,8 @@ struct HS_KeyNode
 {
   HS_KeyNode *next;
   HS_KeyNode *prev;
+  HS_RootIDChunkNode *root_id_chunk_node;
+  U64 root_id_chunk_idx;
   HS_Key key;
   U128 hash_history[HS_KEY_HASH_HISTORY_COUNT];
   U64 hash_history_gen;
@@ -249,11 +251,6 @@ internal U128 hs_submit_data(HS_Key key, Arena **data_arena, String8 data);
 internal HS_Scope *hs_scope_open(void);
 internal void hs_scope_close(HS_Scope *scope);
 internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node);
-
-////////////////////////////////
-//~ rjf: Key Closing
-
-internal void hs_key_close(HS_Key key);
 
 ////////////////////////////////
 //~ rjf: Downstream Accesses
