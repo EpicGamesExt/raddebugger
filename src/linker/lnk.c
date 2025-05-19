@@ -2239,7 +2239,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
           String8 sect_data = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
 
           // extract align
-          U16 sc_align = coff_align_size_from_section_flags(COFF_SectionFlags_ExtractAlign(sect_header->flags));
+          U16 sc_align = coff_align_size_from_section_flags(sect_header->flags);
           if (sc_align == 0) {
             sc_align = default_align;
           }
