@@ -14,6 +14,7 @@ typedef struct LNK_SectionContrib
     struct {
       U16  sort_idx_size;
       U32  obj_idx;
+      U32  obj_sect_idx;
       U8  *sort_idx;
     };
     struct {
