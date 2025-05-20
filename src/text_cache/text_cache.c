@@ -262,7 +262,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
           }break;
           case TXT_TokenKind_Identifier:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$' && byte < 128);
           }break;
           case TXT_TokenKind_Numeric:
           {
@@ -606,7 +606,7 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
           }break;
           case TXT_TokenKind_Identifier:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$' && byte < 128);
           }break;
           case TXT_TokenKind_Numeric:
           {
@@ -892,7 +892,7 @@ txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, Str
           }break;
           case TXT_TokenKind_Identifier:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$' && byte < 128);
           }break;
           case TXT_TokenKind_Numeric:
           {
@@ -1177,7 +1177,7 @@ txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, Str
           }break;
           case TXT_TokenKind_Identifier:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$' && byte < 128);
           }break;
           case TXT_TokenKind_Numeric:
           {
