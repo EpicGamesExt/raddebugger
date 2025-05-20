@@ -275,6 +275,19 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
         }
       }
     }
+
+    // guard against circular merges
+    {
+      if (str8_match(merge_node->data.dst, merge_node->data.src, 0)) {
+        lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
+      }
+      for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
+        if (str8_match(sect_n->data.name, merge_node->data.dst, 0) ||
+            str8_match(sect_n->data.name, merge_node->data.src, 0)) {
+          lnk_error(LNK_Error_CircularMerge, "detected circular /MERGE:%S=%S", merge_node->data.src, merge_node->data.dst);
+        }
+      }
+    }
     
     // are we trying to merge section that was already merged?
     LNK_Section *merge_sect = 0;
