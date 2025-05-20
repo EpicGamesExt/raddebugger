@@ -92,17 +92,6 @@ pe_ordinal_export_is_before(void *raw_a, void *raw_b)
 internal PE_FinalizedExports
 pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
 {
-  // compute max ordinal and used ordinal flag array
-  U64 ordinal_low = max_U64;
-  B8 *is_ordinal_used = push_array(arena, B8, max_U16);
-  for (PE_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
-    PE_ExportParse *exp = &exp_n->data;
-    if (exp->is_ordinal_assigned) {
-      ordinal_low = Min(ordinal_low, exp->ordinal);
-      is_ordinal_used[exp->ordinal] = 1;
-    }
-  }
-
   PE_ExportParsePtrArray named_exports = {0};
   PE_ExportParsePtrArray ordinal_exports = {0};
   PE_ExportParsePtrArray forwarder_exports = {0};
@@ -137,6 +126,20 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     pe_export_parse_list_concat_in_place(&export_list, &named_exports_list);
     pe_export_parse_list_concat_in_place(&export_list, &forwarder_exports_list);
     pe_export_parse_list_concat_in_place(&export_list, &ordinal_exports_list);
+  }
+
+  // compute max ordinal and used ordinal flag array
+  U64 ordinal_low = max_U64;
+  B8 *is_ordinal_used = push_array(arena, B8, max_U16);
+  for (PE_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
+    PE_ExportParse *exp = &exp_n->data;
+    if (exp->is_ordinal_assigned) {
+      ordinal_low = Min(ordinal_low, exp->ordinal);
+      is_ordinal_used[exp->ordinal] = 1;
+    }
+  }
+  if (ordinal_low == max_U64) {
+    ordinal_low = 0;
   }
 
   // assign omitted ordinals
@@ -259,8 +262,8 @@ pe_make_edata_obj(Arena               *arena,
         str8_list_push(obj_writer->arena, &string_table_sect->data, export_name_cstr);
 
         // create symbol for the name string
-        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "RAD_NAME:%S", name);
-        COFF_ObjSymbol *export_name_symbol      = coff_obj_writer_push_symbol_extern(obj_writer, export_name_symbol_name, export_name_offset, string_table_sect);
+        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "RADNAME:%S", name);
+        COFF_ObjSymbol *export_name_symbol      = coff_obj_writer_push_symbol_static(obj_writer, export_name_symbol_name, export_name_offset, string_table_sect);
 
         // create slot for export virtual offset
         U64 export_name_voff_offset = name_voff_table_sect->data.total_size;

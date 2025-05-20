@@ -79,7 +79,7 @@ lnk_error_with_loc_fv(LNK_ErrorCode code, String8 obj_path, String8 lib_path, ch
       lnk_error(code, "%S: %S", obj_path, text);
     }
   } else {
-    lnk_error(code, "%S", text);
+    lnk_error(code, "RADLINK: %S", text);
   }
   scratch_end(scratch);
 }
