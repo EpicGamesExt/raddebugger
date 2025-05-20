@@ -50,7 +50,7 @@ typedef struct COFF_Symbol32Array
 typedef struct COFF_ParsedSymbol
 {
   String8               name;
-  U32                   value;
+  U64                   value;
   U32                   section_number;
   COFF_SymbolType       type;
   COFF_SymStorageClass  storage_class;

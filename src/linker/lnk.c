@@ -1146,16 +1146,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
             NotImplemented;
           }
 
-          symbol_secnum = 0;
-          symbol_secoff = 0;
           // There aren't enough bits in COFF symbol to store full image base address,
           // so we special case __ImageBase. A better solution would be to add
           // a 64-bit symbol format to COFF.
           if (str8_match(symbol.name, str8_lit("__ImageBase"), 0)) {
-            symbol_voff = 0;
-          } else {
-            symbol_voff = (S64)symbol.value - (S64)task->image_base;
+            symbol.value = task->image_base;
           }
+
+          symbol_secnum = 0;
+          symbol_secoff = 0;
+          symbol_voff = (S64)symbol.value - (S64)task->image_base;
         } else if (interp == COFF_SymbolValueInterp_Weak) {
           // unresolved weak
         } else if (interp == COFF_SymbolValueInterp_Undefined) {
