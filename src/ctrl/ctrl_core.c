@@ -3206,8 +3206,8 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle thread, U
         }
       }
       
-      // rjf: cancel on 0 rip
-      if(rip == 0)
+      // rjf: cancel on 0 rip/rsp
+      if(rsp == 0 && rip == 0)
       {
         break;
       }
