@@ -15,6 +15,7 @@
 #pragma comment(lib, "UxTheme")
 #pragma comment(lib, "ole32")
 #pragma comment(lib, "user32")
+#pragma comment(lib, "comdlg32")
 #ifndef WM_NCUAHDRAWCAPTION
 #define WM_NCUAHDRAWCAPTION (0x00AE)
 #endif

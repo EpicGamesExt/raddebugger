@@ -191,6 +191,7 @@ internal void           os_set_cursor(OS_Cursor cursor);
 //~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void           os_graphical_message(B32 error, String8 title, String8 message);
+internal String8        os_graphical_pick_file(Arena *arena, String8 initial_path);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Shell Operations

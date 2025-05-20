@@ -12645,6 +12645,25 @@ rd_frame(void)
               RD_RegsScope(.cmd_name = str8_zero()) rd_push_cmd(cmd->regs->cmd_name, rd_regs());
             }
             
+            // rjf: command has filesystem query, user wants native filesystem UI -> get the path then run the command
+            else if(info->query.slot == RD_RegSlot_FilePath && rd_setting_b32_from_name(str8_lit("use_native_file_system_dialog")))
+            {
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_Cfg *current_path = rd_cfg_child_from_string(user, str8_lit("current_path"));
+              String8 current_path_string = current_path->first->string;
+              if(current_path_string.size == 0)
+              {
+                current_path_string = path_normalized_from_string(scratch.arena, os_get_current_path(scratch.arena));
+              }
+              String8 file_path = os_graphical_pick_file(scratch.arena, current_path_string);
+              file_path = path_normalized_from_string(scratch.arena, file_path);
+              if(file_path.size != 0)
+              {
+                RD_RegsScope(.cmd_name = str8_zero(), .file_path = file_path) rd_push_cmd(cmd->regs->cmd_name, rd_regs());
+                rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = str8_chop_last_slash(file_path));
+              }
+            }
+            
             // rjf: command has required query -> prep query
             else
             {

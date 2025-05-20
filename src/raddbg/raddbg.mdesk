@@ -279,6 +279,10 @@ RD_VocabTable:
       //- rjf: windows style menu bar
       @default(1) @display_name('Focus Menu Bar With Alt') @description("Mimics standard Windows behavior of focusing the menu bar using the Alt key.")
         'focus_menu_bar_with_alt': bool,
+      
+      //- rjf: native filesystem dialogues
+      @default(0) @display_name('Use Native File System Dialog') @description("Uses the operating system's file system dialog box, rather than the debugger's built-in UI.")
+        'use_native_file_system_dialog': bool,
     }
     ```
   }

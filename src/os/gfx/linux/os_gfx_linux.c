@@ -680,6 +680,12 @@ os_graphical_message(B32 error, String8 title, String8 message)
   fprintf(stderr, "%.*s\n\n", str8_varg(message));
 }
 
+internal String8
+os_graphical_pick_file(Arena *arena, String8 initial_path)
+{
+  return str8_zero();
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Shell Operations
 
