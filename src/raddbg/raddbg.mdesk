@@ -580,9 +580,9 @@ RD_VocabTable:
       'arguments':          string,
       'working_directory':  path,
       'entry_point':        expr_string,
-      'stdout_path':        path,
-      'stderr_path':        path,
-      'stdin_path':         path,
+      'stdout_path':        @no_relativize path,
+      'stderr_path':        @no_relativize path,
+      'stdin_path':         @no_relativize path,
       'environment':        query,
       'debug_subprocesses': bool,
       @no_revert @no_expand @default(0) 'enabled': bool,
@@ -630,7 +630,7 @@ RD_VocabTable:
   //- rjf: file path maps
   {
     file_path_map,
-    ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @absolute path, 'dest': @absolute path}```,
+    ```@collection_commands(add_file_path_map) @row_commands(remove_cfg) x:{'source': @no_relativize path, 'dest': @no_relativize path}```,
   }
   
   //- rjf: type views

@@ -640,7 +640,7 @@ rd_cfg_tree_list_from_string(Arena *arena, String8 root_path, String8 string)
       {
         String8 src_n_string = src_n->string;
         String8 src_n_string__raw = raw_from_escaped_str8(scratch.arena, src_n_string);
-        if(!md_node_has_tag(schema->first, str8_lit("absolute"), 0))
+        if(!md_node_has_tag(schema->first, str8_lit("no_relativize"), 0))
         {
           if(str8_match(schema->first->string, str8_lit("path"), 0))
           {
@@ -730,7 +730,7 @@ rd_string_from_cfg_tree(Arena *arena, String8 root_path, RD_Cfg *cfg)
           }
           
           // rjf: paths -> relativize
-          if(!md_node_has_tag(c_schema->first, str8_lit("absolute"), 0))
+          if(!md_node_has_tag(c_schema->first, str8_lit("no_relativize"), 0))
           {
             if(str8_match(c_schema->first->string, str8_lit("path"), 0))
             {
