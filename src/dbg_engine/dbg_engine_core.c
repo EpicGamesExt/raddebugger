@@ -555,6 +555,16 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
                                                               machine_code);
   }
   
+  // rjf: determine last 
+  DASM_CtrlFlowPoint *last_call_point = 0;
+  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  {
+    if(n->v.inst_flags & DASM_InstFlag_Call)
+    {
+      last_call_point = &n->v;
+    }
+  }
+  
   // rjf: push traps for all exit points
   if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
@@ -562,6 +572,23 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
     CTRL_TrapFlags flags = 0;
     B32 add = 1;
     U64 trap_addr = point->vaddr;
+    
+    // rjf: if this is not the last call instruction in the control flow,
+    // and if we have no line info for this address, then do not add.
+    if(point != last_call_point &&
+       point->inst_flags & DASM_InstFlag_Call &&
+       point->jump_dest_vaddr != 0)
+    {
+      U64 jump_dest_vaddr = point->jump_dest_vaddr;
+      CTRL_Entity *jump_dest_module = ctrl_module_from_process_vaddr(process, jump_dest_vaddr);
+      U64 jump_dest_voff = ctrl_voff_from_vaddr(jump_dest_module, jump_dest_vaddr);
+      DI_Key jump_dest_dbgi_key = ctrl_dbgi_key_from_module(jump_dest_module);
+      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &jump_dest_dbgi_key, jump_dest_voff);
+      if(lines.count == 0)
+      {
+        add = 0;
+      }
+    }
     
     // rjf: branches/jumps/returns => single-step & end, OR trap @ destination.
     if(point->inst_flags & (DASM_InstFlag_Call|
