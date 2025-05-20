@@ -2091,6 +2091,7 @@ ctrl_rsp_from_thread(CTRL_EntityCtx *ctx, CTRL_Handle handle)
 internal B32
 ctrl_thread_write_reg_block(CTRL_Handle thread, void *block)
 {
+  // TODO(rjf): @callstacks immediately reflect this in the call stack cache
   B32 good = dmn_thread_write_reg_block(thread.dmn_handle, block);
   return good;
 }
