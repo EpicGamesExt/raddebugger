@@ -4500,50 +4500,12 @@ rd_view_ui(Rng2F32 rect)
                   last_row_info = *row_info;
                   
                   ////////////////////////
-                  //- rjf: determine if row's data is fresh and/or bad
-                  //
-                  ProfBegin("determine if row's data is fresh and/or bad");
-                  B32 row_is_fresh = 0;
-                  B32 row_is_bad = 0;
-                  switch(row->eval.irtree.mode)
-                  {
-                    default:{}break;
-                    case E_Mode_Offset:
-                    {
-                      CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
-                      if(row->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
-                      {
-                        U64 size = e_type_byte_size_from_key(row->eval.irtree.type_key);
-                        size = Min(size, 64);
-                        Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
-                        CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
-                        for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
-                        {
-                          if(slice.byte_changed_flags[idx] != 0)
-                          {
-                            row_is_fresh = 1;
-                          }
-                          if(slice.byte_bad_flags[idx] != 0)
-                          {row_is_bad = 1;
-                          }
-                        }
-                      }
-                    }break;
-                  }
-                  ProfEnd();
-                  
-                  ////////////////////////
                   //- rjf: determine row's flags & color palette
                   //
                   ProfBegin("determine row's flags & color palette");
                   UI_BoxFlags row_flags = UI_BoxFlag_DisableFocusOverlay;
                   {
-                    if(row_is_fresh)
-                    {
-                      ui_set_next_tag(str8_lit("fresh"));
-                      row_flags |= UI_BoxFlag_DrawBackground;
-                    }
-                    else if(global_row_idx & 1)
+                    if(global_row_idx & 1)
                     {
                       ui_set_next_tag(str8_lit("alt"));
                       row_flags |= UI_BoxFlag_DrawBackground;
@@ -4653,6 +4615,43 @@ rd_view_ui(Rng2F32 rect)
                       B32 cell_toggled = (cell_value_eval.value.u64 != 0);
                       B32 next_cell_toggled = cell_toggled;
                       
+                      ////////////////////////
+                      //- rjf: determine if cell evaluation's data is fresh and/or bad
+                      //
+                      ProfBegin("determine if cell evaluation's data is fresh and/or bad");
+                      B32 cell_is_fresh = 0;
+                      B32 cell_is_bad = 0;
+                      if(!(cell_info.flags & RD_WatchCellFlag_NoEval))
+                      {
+                        switch(cell->eval.irtree.mode)
+                        {
+                          default:{}break;
+                          case E_Mode_Offset:
+                          {
+                            CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
+                            if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
+                            {
+                              U64 size = e_type_byte_size_from_key(cell->eval.irtree.type_key);
+                              size = Min(size, 64);
+                              Rng1U64 vaddr_rng = r1u64(cell->eval.value.u64, cell->eval.value.u64+size);
+                              CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
+                              for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
+                              {
+                                if(slice.byte_changed_flags[idx] != 0)
+                                {
+                                  cell_is_fresh = 1;
+                                }
+                                if(slice.byte_bad_flags[idx] != 0)
+                                {
+                                  cell_is_bad = 1;
+                                }
+                              }
+                            }
+                          }break;
+                        }
+                      }
+                      ProfEnd();
+                      
                       ////////////
                       //- rjf: compute slider parameters
                       //
@@ -4694,9 +4693,7 @@ rd_view_ui(Rng2F32 rect)
                       ////////////
                       //- rjf: determine cell's palette
                       //
-                      UI_BoxFlags cell_flags = 0;
                       Vec4F32 cell_background_color_override = {0};
-                      String8 cell_tag = {0};
                       {
                         if(cell_info.cfg->id == rd_get_hover_regs()->cfg &&
                            rd_state->hover_regs_slot == RD_RegSlot_Cfg)
@@ -4711,7 +4708,6 @@ rd_view_ui(Rng2F32 rect)
                           }
                           rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###cfg_hover_t_%p", cfg), 1.f, .rate = entity_hover_t_rate);
                           cell_background_color_override = rgba;
-                          cell_flags |= UI_BoxFlag_DrawBackground;
                         }
                         else if(ctrl_handle_match(cell_info.entity->handle, rd_get_hover_regs()->ctrl_entity) &&
                                 rd_state->hover_regs_slot == RD_RegSlot_CtrlEntity)
@@ -4726,7 +4722,21 @@ rd_view_ui(Rng2F32 rect)
                           }
                           rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                           cell_background_color_override = rgba;
-                          cell_flags |= UI_BoxFlag_DrawBackground;
+                        }
+                        else if(cell_is_fresh)
+                        {
+                          UI_TagF(".") UI_TagF("fresh")
+                          {
+                            cell_background_color_override = ui_color_from_name(str8_lit("background"));
+                          }
+                        }
+                        else if(cell_is_bad)
+                        {
+                          UI_TagF(".") UI_TagF("bad_pop")
+                          {
+                            cell_background_color_override = ui_color_from_name(str8_lit("background"));
+                            cell_background_color_override.w *= 0.2f;
+                          }
                         }
                       }
                       
@@ -4737,7 +4747,7 @@ rd_view_ui(Rng2F32 rect)
                       UI_PrefWidth(ui_px(cell_width_px, cell_width_strictness))
                       {
                         ui_set_next_fixed_height(floor_f32(row->visual_size * row_height_px));
-                        cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft|cell_flags, "cell_%I64x_%I64x", row_hash, cell_id);
+                        cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft, "cell_%I64x_%I64x", row_hash, cell_id);
                       }
                       
                       ////////////
@@ -4752,7 +4762,6 @@ rd_view_ui(Rng2F32 rect)
                         UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                         RD_Font(RD_FontSlot_Code)
                         UI_TagF("weak")
-                        UI_Tag(cell_tag)
                       {
                         //- rjf: cell has hook? -> build ui by calling hook
                         if(cell->kind == RD_WatchCellKind_ViewUI && cell_info.view_ui_rule != &rd_nil_view_ui_rule)
@@ -5011,6 +5020,12 @@ rd_view_ui(Rng2F32 rect)
                             {
                               cell_params.flags |= RD_CellFlag_Bindings;
                               cell_params.bindings_name = rd_cmd_name_from_eval(cell->eval);
+                            }
+                            
+                            // rjf: apply background override
+                            if(cell_background_color_override.w != 0)
+                            {
+                              cell_params.flags &= ~RD_CellFlag_NoBackground;
                             }
                           }
                           
