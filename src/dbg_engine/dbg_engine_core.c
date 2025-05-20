@@ -1183,6 +1183,7 @@ d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
     {
       result = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->regs);
     }
+    ctrl_scope_close(ctrl_scope);
   }
   return result;
 }
