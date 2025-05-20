@@ -831,6 +831,21 @@ os_gfx_init(void)
   {
     SetProcessDpiAwarenessContext_func(w32_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   }
+  else
+  {
+    HMODULE shcore = LoadLibraryA("shcore.dll");
+    if(shcore)
+    {
+      typedef HRESULT (WINAPI* SetProcessDpiAwareness_t)(int);
+      SetProcessDpiAwareness_t SetProcessDpiAwareness = (void*)GetProcAddress(shcore, "SetProcessDpiAwareness");
+      if(SetProcessDpiAwareness)
+      {
+        SetProcessDpiAwareness(2);
+      }
+      FreeLibrary(shcore);
+    }
+    SetProcessDPIAware();
+  }
   
   //- rjf: register graphical-window class
   {
