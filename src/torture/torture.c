@@ -311,6 +311,81 @@ t_push_rdata_section(COFF_ObjWriter *obj_writer, String8 data)
   return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS, data);
 }
 
+////////////////////////////////
+
+internal T_Result
+t_machine_compat_check(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+    t_push_data_section(obj_writer, str8_lit("unknown"));
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("unknown.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    t_push_data_section(obj_writer, str8_lit("x64"));
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("x64.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Arm64);
+    t_push_data_section(obj_writer, str8_lit("arm64"));
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("arm64.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = { 0xC3 };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code;
+  
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe entry.obj unknown.obj x64.obj");
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe entry.obj unknown.obj x64.obj arm64.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:my_entry /out:a.exe /machine:amd64 arm64.obj entry.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+
+  result = T_Result_Pass;
+
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 internal T_Result
 t_simple_link_test(void)
 {
@@ -1889,26 +1964,27 @@ entry_point(CmdLine *cmdline)
     char *label;
     T_Result (*r)(void);
   } target_array[] = {
-    { "simple_link_test",    t_simple_link_test    },
-    { "undef_section",       t_undef_section       },
-    { "undef_reloc_section", t_undef_reloc_section },
-    { "abs_vs_weak",         t_abs_vs_weak         },
-    { "abs_vs_regular",      t_abs_vs_regular      },
-    { "abs_vs_common",       t_abs_vs_common       },
-    { "undef_weak",          t_undef_weak          },
-    { "sect_symbol",         t_sect_symbol         },
-    { "weak_cycle",          t_weak_cycle          },
-    { "weak_tag",            t_weak_tag            },
-    { "find_merged_pdata",   t_find_merged_pdata   },
-    { "section_sort",        t_section_sort        },
-    { "flag_conf",           t_flag_conf           },
-    { "invalid_bss",         t_invalid_bss         },
-    { "common_block",        t_common_block        },
-    { "base_relocs",         t_base_relocs         },
-    { "simple_lib_test",     t_simple_lib_test     },
-    { "sect_align",          t_sect_align          },
-    //{ "import_export",       t_import_export       },
-    { "image_base",          t_image_base          },
+    { "machine_compat_check", t_machine_compat_check },
+    { "simple_link_test",     t_simple_link_test     },
+    { "undef_section",        t_undef_section        },
+    { "undef_reloc_section",  t_undef_reloc_section  },
+    { "abs_vs_weak",          t_abs_vs_weak          },
+    { "abs_vs_regular",       t_abs_vs_regular       },
+    { "abs_vs_common",        t_abs_vs_common        },
+    { "undef_weak",           t_undef_weak           },
+    { "sect_symbol",          t_sect_symbol          },
+    { "weak_cycle",           t_weak_cycle           },
+    { "weak_tag",             t_weak_tag             },
+    { "find_merged_pdata",    t_find_merged_pdata    },
+    { "section_sort",         t_section_sort         },
+    { "flag_conf",            t_flag_conf            },
+    { "invalid_bss",          t_invalid_bss          },
+    { "common_block",         t_common_block         },
+    { "base_relocs",          t_base_relocs          },
+    { "simple_lib_test",      t_simple_lib_test      },
+    { "sect_align",           t_sect_align           },
+    //{ "import_export",        t_import_export        },
+    { "image_base",           t_image_base           },
   };
 
   //
