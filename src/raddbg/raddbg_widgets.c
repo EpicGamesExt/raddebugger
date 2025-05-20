@@ -1954,7 +1954,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num += 1, line_idx += 1)
     {
       DR_FStrList line_fstrs = lines_fstrs[line_idx];
-      F32 line_text_dim = dr_dim_from_fstrs(&line_fstrs).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
+      F32 line_text_dim = dr_dim_from_fstrs(params->tab_size, &line_fstrs).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
       line_extras_off[line_idx] = Max(line_text_dim, params->font_size*30);
     }
   }

@@ -8920,7 +8920,7 @@ rd_window_frame(void)
                 TabTask *t = push_array(scratch.arena, TabTask, 1);
                 t->tab = tab;
                 t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
-                F32 tab_width_target = dr_dim_from_fstrs(&t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+                F32 tab_width_target = dr_dim_from_fstrs(ui_top_tab_size(), &t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
                 tab_width_target = Min(max_tab_width_px, tab_width_target);
                 t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
                 SLLQueuePush(first_tab_task, last_tab_task, t);

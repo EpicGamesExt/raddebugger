@@ -187,10 +187,10 @@ dr_fruns_from_fstrs(Arena *arena, F32 tab_size_px, DR_FStrList *strs)
 }
 
 internal Vec2F32
-dr_dim_from_fstrs(DR_FStrList *fstrs)
+dr_dim_from_fstrs(F32 tab_size_px, DR_FStrList *fstrs)
 {
   Temp scratch = scratch_begin(0, 0);
-  DR_FRunList fruns = dr_fruns_from_fstrs(scratch.arena, 0, fstrs);
+  DR_FRunList fruns = dr_fruns_from_fstrs(scratch.arena, tab_size_px, fstrs);
   Vec2F32 dim = fruns.dim;
   scratch_end(scratch);
   return dim;
