@@ -164,7 +164,6 @@ async_task_join(ASYNC_Task *task)
 internal ASYNC_Work
 async_pop_work(void)
 {
-  ProfBeginFunction();
   ASYNC_Work work = {0};
   B32 done = 0;
   ASYNC_Priority taken_priority = ASYNC_Priority_Low;
@@ -199,7 +198,6 @@ async_pop_work(void)
   }
   os_condition_variable_broadcast(async_shared->ring_cv);
   os_condition_variable_broadcast(async_shared->rings[taken_priority].ring_cv);
-  ProfEnd();
   return work;
 }
 
