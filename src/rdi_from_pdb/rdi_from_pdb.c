@@ -2482,7 +2482,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             if(is_stack_reg)
             {
               U32 frame_size = 0xFFFFFFFF;
-              if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+              if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num <= procedure_frameprocs_count)
               {
                 CV_SymFrameproc *frameproc = procedure_frameprocs[procedure_num-1];
                 frame_size = frameproc->frame_size;
