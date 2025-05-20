@@ -3111,8 +3111,10 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       LNK_Section *edata_sect = lnk_section_table_search(sectab, str8_lit(".edata"), PE_EDATA_SECTION_FLAGS);
       if (edata_sect) {
         PE_DataDirectory *export_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXPORT, sizeof(PE_DataDirectory));
-        export_dir->virt_off  = edata_sect->voff;
-        export_dir->virt_size = edata_sect->vsize;
+        LNK_SectionContrib *edata_first_contrib = lnk_get_first_section_contrib(edata_sect);
+        LNK_SectionContrib *edata_last_contrib = lnk_get_last_section_contrib(edata_sect);
+        export_dir->virt_off  = image_section_table[edata_first_contrib->u.sect_idx+1]->voff + edata_first_contrib->u.off;
+        export_dir->virt_size = (edata_last_contrib->u.off + edata_last_contrib->u.size) - edata_first_contrib->u.off;
       }
     }
 
@@ -3136,7 +3138,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         LNK_SectionContrib *idata_first_contrib = lnk_get_first_section_contrib(idata_sect);
 
         PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_IMPORT, sizeof(PE_DataDirectory));
-        import_dir->virt_off = image_section_table[idata_first_contrib->u.sect_idx + 1]->voff;
+        import_dir->virt_off = image_section_table[idata_first_contrib->u.sect_idx + 1]->voff + idata_first_contrib->u.off;
         import_dir->virt_size = null_import_desc_parsed.value - idata_first_contrib->u.off;
 
         COFF_ParsedSymbol last_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(last_import_desc->u.defined.obj, last_import_desc->u.defined.symbol_idx);
@@ -3160,7 +3162,9 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         COFF_ParsedSymbol null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
         LNK_SectionContrib *didat_first_contrib = lnk_get_first_section_contrib(didat_sect);
         PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DELAY_IMPORT, sizeof(PE_DataDirectory));
-        import_dir->virt_off = image_section_table[didat_first_contrib->u.sect_idx]->voff;
+        Assert(null_import_desc_parsed.section_number == didat_first_contrib->u.sect_idx+1);
+        Assert(null_import_desc_parsed.value >= didat_first_contrib->u.off);
+        import_dir->virt_off = image_section_table[didat_first_contrib->u.sect_idx]->voff + didat_first_contrib->u.off;
         import_dir->virt_size = null_import_desc_parsed.value - didat_first_contrib->u.off;
       }
     }

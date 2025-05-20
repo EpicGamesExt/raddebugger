@@ -95,7 +95,7 @@ lnk_get_last_section_contrib(LNK_Section *sect)
 {
   if (sect->contribs.chunk_count > 0) {
     if (sect->contribs.last->count > 0) {
-      return sect->contribs.last->v[0];
+      return sect->contribs.last->v[sect->contribs.last->count-1];
     }
   }
   return 0;
