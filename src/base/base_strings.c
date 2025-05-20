@@ -603,44 +603,50 @@ s32_from_str8(String8 string, U32 radix)
 }
 
 internal B32
-try_u64_from_str8_c_rules(String8 string, U64 *x){
+try_u64_from_str8_c_rules(String8 string, U64 *x)
+{
   B32 is_integer = 0;
-  if (str8_is_integer(string, 10)){
+  if(str8_is_integer(string, 10) && !str8_match(str8_prefix(string, 1), str8_lit("0"), 0))
+  {
     is_integer = 1;
     *x = u64_from_str8(string, 10);
   }
-  else{
+  else
+  {
     String8 hex_string = str8_skip(string, 2);
-    if (str8_match(str8_prefix(string, 2), str8_lit("0x"), 0) &&
-        str8_is_integer(hex_string, 0x10)){
+    if(str8_match(str8_prefix(string, 2), str8_lit("0x"), 0) &&
+       str8_is_integer(hex_string, 0x10))
+    {
       is_integer = 1;
       *x = u64_from_str8(hex_string, 0x10);
     }
-    else if (str8_match(str8_prefix(string, 2), str8_lit("0b"), 0) &&
-             str8_is_integer(hex_string, 2)){
+    else if(str8_match(str8_prefix(string, 2), str8_lit("0b"), 0) && str8_is_integer(hex_string, 2))
+    {
       is_integer = 1;
       *x = u64_from_str8(hex_string, 2);
     }
-    else{
+    else
+    {
       String8 oct_string = str8_skip(string, 1);
-      if (str8_match(str8_prefix(string, 1), str8_lit("0"), 0) &&
-          str8_is_integer(hex_string, 010)){
+      if(str8_match(str8_prefix(string, 1), str8_lit("0"), 0) && str8_is_integer(hex_string, 010))
+      {
         is_integer = 1;
         *x = u64_from_str8(oct_string, 010);
       }
     }
   }
-  return(is_integer);
+  return is_integer;
 }
 
 internal B32
-try_s64_from_str8_c_rules(String8 string, S64 *x){
+try_s64_from_str8_c_rules(String8 string, S64 *x)
+{
   String8 string_tail = {0};
   S64 sign = sign_from_str8(string, &string_tail);
   U64 x_u64 = 0;
   B32 is_integer = try_u64_from_str8_c_rules(string_tail, &x_u64);
   *x = x_u64*sign;
-  return(is_integer);
+  return is_integer;
 }
 
 //- rjf: integer -> string
