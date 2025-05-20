@@ -3398,6 +3398,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   //- rjf: loop: try to grab cached call stack; request; wait
   //
   B32 can_request = !ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+  B32 did_request = 0;
   OS_MutexScopeR(stripe->rw_mutex) for(;;)
   {
     ////////////////////////////
@@ -3450,10 +3451,12 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
     //
     if(can_request && node != 0 && !is_working && is_stale)
     {
-      if(ctrl_u2csb_enqueue_req(thread->handle, endt_us) &&
-         async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low))
+      if(ctrl_u2csb_enqueue_req(thread->handle, endt_us))
       {
+        did_request = 1;
+        is_working = 1;
         ins_atomic_u64_inc_eval(&node->working_count);
+        async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
       }
     }
     
@@ -3468,7 +3471,14 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
     ////////////////////////////
     //- rjf: time to wait for new result? -> wait
     //
-    os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+    if(did_request && !is_working)
+    {
+      break;
+    }
+    else if(did_request)
+    {
+      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+    }
   }
   return call_stack;
 }
