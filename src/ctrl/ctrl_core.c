@@ -4671,6 +4671,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     }break;
     case DMN_EventKind_UnsetBreakpoint:
     {
+      // TODO(rjf): this needs to be reflected in the resolved trap list too!!!!!!!!
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       out_evt->kind       = CTRL_EventKind_UnsetBreakpoint;
       out_evt->entity     = ctrl_handle_make(CTRL_MachineID_Local, event->thread);
