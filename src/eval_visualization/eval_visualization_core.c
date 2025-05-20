@@ -1648,7 +1648,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           new_task.eval = eval;
           new_task.eval.irtree.type_key = e_type_key_direct(eval.irtree.type_key);
         }
-        else if(type->expand.info != 0)
+        else if(type->kind != E_TypeKind_Lens && type->expand.info != 0)
         {
           need_new_task = 1;
           need_pop = 1;
