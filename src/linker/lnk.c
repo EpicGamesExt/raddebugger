@@ -3585,7 +3585,7 @@ lnk_run(int argc, char **argv)
   String8List            input_disallow_lib_list           = config->disallow_lib_list;
   String8List            input_manifest_path_list          = str8_list_copy(scratch.arena, &config->input_list[LNK_Input_Manifest]);
   String8List            manifest_dep_list                 = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
-  PE_ExportParseList     export_symbol_list                = config->export_symbol_list;
+  PE_ExportParseList     export_symbol_list                = {0};
   HashTable             *export_ht                         = hash_table_init(scratch.arena, max_U16/2);
   LNK_InputObjList       input_obj_list                    = {0};
   LNK_InputImportList    input_import_list                 = {0};
@@ -4329,34 +4329,20 @@ lnk_run(int argc, char **argv)
             exp_n_next = exp_n->next;
             PE_ExportParse *exp = &exp_n->data;
 
+            if (str8_match(exp->name, config->entry_point_name, 0)) {
+              lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "exported entry point \"%S\"", exp->name);
+            }
+            if (str8_match(exp->alias, config->entry_point_name, 0)) {
+              lnk_error_with_loc(LNK_Warning_TryingToExportEntryPoint, exp->obj_path, exp->lib_path, "alias exports entry point \"%S=%S\"", exp->name, exp->alias);
+              continue;
+            }
+
             if (!exp->is_forwarder) {
               // filter out unresolved exports
               LNK_Symbol *symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, exp_n->data.name);
               if (symbol == 0) {
                 lnk_error_with_loc(LNK_Warning_IllExport, exp->obj_path, exp->lib_path, "unresolved export symbol %S\n", exp->name);
                 continue;
-              }
-
-              // check export type
-              switch (exp->type) {
-              case COFF_ImportHeader_Code: {
-                COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-                B32 is_export_data = !COFF_SymbolType_IsFunc(defn.type);
-                if (is_export_data) {
-                  lnk_error_with_loc(LNK_Warning_IllExport, exp->obj_path, exp->lib_path, "export \"%S\" is DATA but has type CODE", exp->name);
-                }
-              } break;
-              case COFF_ImportHeader_Data: {
-                COFF_ParsedSymbol defn = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-                B32 is_export_code = COFF_SymbolType_IsFunc(defn.type);
-                if (is_export_code) {
-                  lnk_error_with_loc(LNK_Warning_IllExport, exp->obj_path, exp->lib_path, "export \"%S\" is CODE but has type DATA", exp->name);
-                }
-              } break;
-              case COFF_ImportHeader_Const: {
-                lnk_not_implemented("TODO: COFF_ImportHeader_Const");
-              } break;
-              default: { InvalidPath; } break;
               }
             }
 
