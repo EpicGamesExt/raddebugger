@@ -129,9 +129,13 @@ typedef struct
   } u;
 } LNK_SymbolPusher;
 
+// --- Config -----------------------------------------------------------------
+
+internal LNK_Config * lnk_config_from_argcv(Arena *arena, int argc, char **argv);
+
 // --- Entry Point -------------------------------------------------------------
 
-internal void lnk_run(int argc, char **argv);
+internal void lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);
 
 // --- Path --------------------------------------------------------------------
 
