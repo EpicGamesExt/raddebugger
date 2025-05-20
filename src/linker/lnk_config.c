@@ -1924,68 +1924,13 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 }
 
 internal LNK_Config *
-lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
+lnk_config_from_cmd_line(Arena *arena, LNK_CmdLine cmd_line)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
-  // parse command line
-  String8List unwrapped_cmd_line = lnk_unwrap_rsp(scratch.arena, raw_cmd_line);
-  LNK_CmdLine cmd_line           = lnk_cmd_line_parse_windows_rules(scratch.arena, unwrapped_cmd_line);
-
-  // setup default flags
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Align,     "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Debug,     "none");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_FileAlign, "%u", 512);
-  if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
-    lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_SubSystem, "%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
-  }
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_HighEntropyVa,                 "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_ManifestUac,                   "\"level='asInvoker' uiAccess='false'\"");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_NxCompat,                      "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_FunctionPadMin,                "0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware,             "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbAltPath,                    "%%_RAD_PDB_PATH%%");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbPageSize,                   "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp,                 "%u", os_get_process_start_time_unix());
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                       "%u", 1);
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,   "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DelayBind,                 "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DoMerge,                   "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_EnvLib,                    "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Exe,                       "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Guid,                      "imageblake3");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LargePages,                "no");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LinkVer,                   "14.0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_OsVer,                     "6.0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PageSize,                  "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle,                 "system");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SectVirtOff,               "0x1000");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                   "%u", os_get_system_info()->logical_processor_count);
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TargetOs,                  "windows");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapDefined,     "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapInternal,    "0x1000");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak,        "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib,         "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,              "%%_RAD_RDI_PATH%%");
-#if BUILD_DEBUG
-  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
-  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
-#else
-  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "%u", LNK_Error_InvalidTypeIndex);
-#endif
-
-  // set default max worker count 
-  if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_SharedThreadPool)) {
-    lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, "");
-  }
-
-  if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_MtPath)) {
-    lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%s", LNK_MANIFEST_MERGE_TOOL_NAME);
-  }
-
   LNK_Config *config                = push_array(arena, LNK_Config, 1);
-  config->raw_cmd_line              = raw_cmd_line;
+  config->raw_cmd_line              = str8_list_copy(arena, &cmd_line.raw_cmd_line);
   config->work_dir                  = os_get_current_path(arena);
   config->build_imp_lib             = 1;
   config->build_exp                 = 1;
@@ -2212,40 +2157,8 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     config->temp_rad_debug_name     = push_str8f(arena, "%S.tmp%x", config->rad_debug_name,     config->time_stamp);
   }
 
-  if (lnk_get_log_status(LNK_Log_Debug)) {
-    String8 full_cmd_line = str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
-  }
-
   scratch_end(scratch);
   ProfEnd();
-  return config;
-}
-
-internal LNK_Config *
-lnk_build_config(Arena *arena, int argc, char **argv)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8List raw_cmd_line = os_string_list_from_argcv(arena, argc, argv);
-
-  // remove exe name first argument
-  str8_list_pop_front(&raw_cmd_line); 
-
-  // init config
-  LNK_Config *config = lnk_config_from_cmd_line(arena, raw_cmd_line);
-
-#if PROFILE_TELEMETRY
-  {
-    String8 cmdl = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    tmMessage(0, TMMF_ICON_NOTE, "Command Line: %.*s", str8_varg(cmdl));
-  }
-#endif
-
-  scratch_end(scratch);
   return config;
 }
 

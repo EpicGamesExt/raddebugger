@@ -16,6 +16,7 @@ typedef struct LNK_CmdLine
   LNK_CmdOption *first_option;
   LNK_CmdOption *last_option;
   String8List    input_list;
+  String8List    raw_cmd_line;
 } LNK_CmdLine;
 
 internal String8List     lnk_arg_list_parse_windows_rules(Arena *arena, String8 string);

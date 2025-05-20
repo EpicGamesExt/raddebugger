@@ -132,6 +132,7 @@ lnk_cmd_line_parse_windows_rules(Arena *arena, String8List arg_list)
   Temp scratch = scratch_begin(&arena, 1);
 
   LNK_CmdLine cmd_line = {0};
+  cmd_line.raw_cmd_line = str8_list_copy(arena, &arg_list);
 
   for (String8Node *arg_node = arg_list.first; arg_node != 0; arg_node = arg_node->next) {
     String8 arg = arg_node->string;
