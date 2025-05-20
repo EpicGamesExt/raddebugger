@@ -311,6 +311,20 @@ t_push_rdata_section(COFF_ObjWriter *obj_writer, String8 data)
   return coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS, data);
 }
 
+internal void
+t_write_entry_obj(void)
+{
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  U8 text[] = { 0xc3 };
+  COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+  coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+  String8 obj = coff_obj_writer_serialize(obj_writer->arena, obj_writer);
+  if (!t_write_file(str8_lit("entry.obj"), obj)) {
+    AssertAlways(!"unable to write entry obj");
+  }
+  coff_obj_writer_release(&obj_writer);
+}
+
 ////////////////////////////////
 
 internal T_Result
@@ -379,6 +393,134 @@ t_machine_compat_check(void)
     goto exit;
   }
 
+  result = T_Result_Pass;
+
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_merge(void)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_section(obj_writer, str8_lit(".test"), PE_DATA_SECTION_FLAGS, str8_lit("hello, world"));
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("test.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  t_write_entry_obj();
+
+  int linker_exit_code;
+
+  // circular merge
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.test entry.obj test.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_CircularMerge) {
+      goto exit;
+    }
+  }
+
+  // circular merge with extra link
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.data /merge:.data=.test entry.obj test.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_CircularMerge) {
+      goto exit;
+    }
+  }
+
+  // merge with non-defined section
+  {
+    linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.qwe entry.obj test.obj");
+    if (linker_exit_code != 0) {
+      goto exit;
+    }
+
+    // make sure linker created .qwe and merged .test into it
+    String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".qwe"));
+    if (sect == 0) {
+      goto exit;
+    }
+    if (sect->flags != PE_DATA_SECTION_FLAGS) {
+      goto exit;
+    }
+    String8 qwe = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
+    if (!str8_match(qwe, str8_lit("hello, world"),0)) {
+      goto exit;
+    }
+  }
+
+  // illegal merge with .reloc
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.reloc entry.obj test.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_IllegalSectionMerge) {
+     goto exit;
+    }
+  }
+
+  // illegal merge with .rsrc
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.rsrc entry.obj test.obj");
+  if (linker_exit_code == 0) {
+    goto exit;
+  }
+  if (t_ident_linker() == T_Linker_RAD) {
+    if (linker_exit_code != LNK_Error_IllegalSectionMerge) {
+      goto exit;
+    }
+  }
+
+  // merge non-defined section with defined section
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.qwe=.test entry.obj test.obj");
+  if (linker_exit_code != 0) {
+    goto exit;
+  }
+
+  // merge .test -> .qwe -> .data
+  {
+    linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.qwe /merge:.qwe=.data entry.obj test.obj");
+    if (linker_exit_code != 0) {
+      goto exit;
+    }
+
+    // make sure linker merged .test into .data
+    String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".data"));
+    if (sect == 0) {
+      goto exit;
+    }
+    if (sect->flags != PE_DATA_SECTION_FLAGS) {
+      goto exit;
+    }
+    String8 data = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
+    if (!str8_match(data, str8_lit("hello, world"),0)) {
+      goto exit;
+    }
+  }
+  
   result = T_Result_Pass;
 
   exit:;
@@ -1964,8 +2106,9 @@ entry_point(CmdLine *cmdline)
     char *label;
     T_Result (*r)(void);
   } target_array[] = {
-    { "machine_compat_check", t_machine_compat_check },
     { "simple_link_test",     t_simple_link_test     },
+    { "machine_compat_check", t_machine_compat_check },
+    { "merge",                t_merge                },
     { "undef_section",        t_undef_section        },
     { "undef_reloc_section",  t_undef_reloc_section  },
     { "abs_vs_weak",          t_abs_vs_weak          },
