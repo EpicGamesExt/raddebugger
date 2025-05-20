@@ -5262,25 +5262,32 @@ ctrl_thread__end_and_flush_info_log(void)
 internal void
 ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: produce full stdout/stderr/stdin paths
+  String8 stdout_path = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stdout_path, msg->path);
+  String8 stdin_path  = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stdin_path, msg->path);
+  String8 stderr_path = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stderr_path, msg->path);
+  
   //- rjf: obtain stdout/stderr/stdin handles
   OS_Handle stdout_handle = {0};
   OS_Handle stderr_handle = {0};
   OS_Handle stdin_handle  = {0};
-  if(msg->stdout_path.size != 0)
+  if(stdout_path.size != 0)
   {
-    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, msg->stdout_path);
+    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stdout_path);
     os_file_close(f);
     stdout_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stdout_path);
   }
-  if(msg->stderr_path.size != 0)
+  if(stderr_path.size != 0)
   {
-    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, msg->stderr_path);
+    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stderr_path);
     os_file_close(f);
     stderr_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stderr_path);
   }
-  if(msg->stdin_path.size != 0)
+  if(stdin_path.size != 0)
   {
-    stdin_handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stdin_path);
+    stdin_handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, stdin_path);
   }
   
   //- rjf: launch
@@ -5313,6 +5320,8 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       ctrl_entity_equip_string(entity_ctx_rw_store, entry, string);
     }
   }
+  
+  scratch_end(scratch);
 }
 
 internal void

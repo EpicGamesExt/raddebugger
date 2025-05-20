@@ -90,7 +90,7 @@ path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src)
 {
   String8 result = dst;
   PathStyle dst_style = path_style_from_str8(dst);
-  if(dst_style == PathStyle_Relative)
+  if(dst.size != 0 && dst_style == PathStyle_Relative)
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8 dst_from_src_absolute = push_str8f(scratch.arena, "%S/%S", src, dst);
