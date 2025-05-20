@@ -574,7 +574,10 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           
           // rjf: ops to compute the final address
           new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
-          mode = E_Mode_Offset;
+          if(mode != E_Mode_Null)
+          {
+            mode = E_Mode_Offset;
+          }
         }
       }
       
