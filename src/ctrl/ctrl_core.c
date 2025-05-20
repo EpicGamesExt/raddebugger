@@ -3361,6 +3361,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   //////////////////////////////
   //- rjf: loop: try to grab cached call stack; request; wait
   //
+  B32 can_request = !ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
   OS_MutexScopeR(stripe->rw_mutex) for(;;)
   {
     ////////////////////////////
@@ -3411,7 +3412,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
     ////////////////////////////
     //- rjf: request if needed
     //
-    if(node != 0 && !is_working && is_stale)
+    if(can_request && node != 0 && !is_working && is_stale)
     {
       if(ctrl_u2csb_enqueue_req(thread->handle, endt_us) &&
          async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low))
@@ -3423,7 +3424,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
     ////////////////////////////
     //- rjf: good, or timeout? -> exit
     //
-    if(!is_stale || os_now_microseconds() >= endt_us)
+    if(!can_request || !is_stale || os_now_microseconds() >= endt_us)
     {
       break;
     }
@@ -3639,6 +3640,7 @@ ctrl_thread__entry_point(void *p)
     //- rjf: process messages
     DMN_CtrlExclusiveAccessScope
     {
+      ins_atomic_u64_eval_assign(&ctrl_state->ctrl_thread_run_state, 1);
       for(CTRL_MsgNode *msg_n = msgs.first; msg_n != 0; msg_n = msg_n->next)
       {
         CTRL_Msg *msg = &msg_n->v;
@@ -3715,6 +3717,7 @@ ctrl_thread__entry_point(void *p)
           }break;
         }
       }
+      ins_atomic_u64_eval_assign(&ctrl_state->ctrl_thread_run_state, 0);
     }
     
     //- rjf: gather & output logs
@@ -4269,15 +4272,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           log_infof("string:         \"%S\"\n",   ev->string);
           log_infof("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
         }
-        raddbg_log("event:\n");
-        raddbg_log("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
-        raddbg_log("process:        [%I64u]\n",  ev->process.u64[0]);
-        raddbg_log("thread:         [%I64u]\n",  ev->thread.u64[0]);
-        raddbg_log("module:         [%I64u]\n",  ev->module.u64[0]);
-        raddbg_log("pid:            %I64u\n",    ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->process))->id);
-        raddbg_log("tid:            %I64u\n",    ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, ev->thread))->id);
-        raddbg_log("code:           %I64u\n",    ev->code);
-        raddbg_log("\n");
       }
       
       // rjf: determine if we should filter
@@ -6943,10 +6937,6 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
           os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10);
         }
       }
-      if(committed)
-      {
-        os_condition_variable_broadcast(stripe->cv);
-      }
     }
     
     //- rjf: release last results
@@ -6964,6 +6954,9 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
         break;
       }
     }
+    
+    //- rjf: broadcast update
+    os_condition_variable_broadcast(stripe->cv);
   }
   
   scratch_end(scratch);

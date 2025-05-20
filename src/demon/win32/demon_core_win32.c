@@ -1878,7 +1878,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
           if(resume_good)
           {
-            evt_good = !!WaitForDebugEvent(&evt, 1000);
+            evt_good = !!WaitForDebugEvent(&evt, 100);
             if(evt_good)
             {
               dmn_w32_shared->resume_needed = 1;

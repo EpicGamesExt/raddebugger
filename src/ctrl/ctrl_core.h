@@ -798,6 +798,7 @@ struct CTRL_State
   OS_Handle c2u_ring_cv;
   
   // rjf: ctrl thread state
+  U64 ctrl_thread_run_state;
   String8 ctrl_thread_log_path;
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
