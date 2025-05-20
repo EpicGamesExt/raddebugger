@@ -345,8 +345,6 @@ hs_submit_data(HS_Key key, Arena **data_arena, String8 data)
               chunk->v = push_array_no_zero(n->arena, HS_ID, chunk->cap);
             }
             chunk->v[chunk->count] = key.id;
-            key_node->root_id_chunk_node = chunk;
-            key_node->root_id_chunk_idx = chunk->count;
             chunk->count += 1;
             n->ids.total_count += 1;
             break;
