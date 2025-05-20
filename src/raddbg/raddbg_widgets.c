@@ -99,6 +99,27 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
       params.color = rgba_secondary;
     }
     
+    //- rjf: [breakpoints] push hit marker
+    if(str8_match(cfg->string, str8_lit("breakpoint"), 0))
+    {
+      CTRL_Event stop_event = d_ctrl_last_stop_event();
+      if(stop_event.cause == CTRL_EventCause_UserBreakpoint)
+      {
+        RD_Cfg *bp = rd_cfg_from_id(stop_event.u64_code);
+        if(bp == cfg)
+        {
+          CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, stop_event.entity);
+          Vec4F32 thread_color = rd_color_from_ctrl_entity(thread);
+          if(thread_color.w == 0)
+          {
+            thread_color = rgba_secondary;
+          }
+          dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_RightArrow], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .color = thread_color);
+          dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
+        }
+      }
+    }
+    
     //- rjf: push icon
     if(icon_kind != RD_IconKind_Null)
     {
