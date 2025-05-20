@@ -53,15 +53,12 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   // set & check machine compatibility
   //
-  {
-    if (task->machine == COFF_MachineType_Unknown) {
-      ins_atomic_u32_eval_assign(&task->machine, coff_info.machine);
-    }
-
-    if (coff_info.machine != COFF_MachineType_Unknown && task->machine != coff_info.machine) {
+  if (coff_info.machine != COFF_MachineType_Unknown) {
+    COFF_MachineType current_machine = ins_atomic_u32_eval_cond_assign(&task->machine, coff_info.machine, COFF_MachineType_Unknown);
+    if (current_machine != COFF_MachineType_Unknown && current_machine != coff_info.machine) {
       lnk_error_with_loc(LNK_Error_IncompatibleMachine, input->path, input->lib_path,
           "conflicting machine types expected %S but got %S",
-          coff_string_from_machine_type(task->machine),
+          coff_string_from_machine_type(current_machine),
           coff_string_from_machine_type(coff_info.machine));
     }
   }
