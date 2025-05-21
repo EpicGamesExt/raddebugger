@@ -12,6 +12,7 @@ typedef struct LNK_Obj
   String8             lib_path;
   U64                 input_idx;
   COFF_FileHeaderInfo header;
+  U32                *comdats;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode
@@ -100,6 +101,7 @@ internal U32 lnk_obj_get_vol_md(LNK_Obj *obj);
 
 internal COFF_ParsedSymbol lnk_parsed_symbol_from_coff(LNK_Obj *obj, void *coff_symbol);
 internal COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
 
 ////////////////////////////////
 

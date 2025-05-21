@@ -2369,37 +2369,18 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
     // build obj section map
     for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
-      LNK_Obj            *obj           = objs[obj_idx];
-      COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-      String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
-
-      String8 *symlinks = push_array(scratch.arena, String8, obj->header.section_count_no_null);
-      {
-        COFF_ParsedSymbol symbol;
-        for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-          symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-          COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-          if (interp == COFF_SymbolValueInterp_Regular) {
-            if (symbol.storage_class == COFF_SymStorageClass_External) {
-              U64 sect_idx = symbol.section_number-1;
-              COFF_SectionHeader *sect_header = &section_table[sect_idx];
-              if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-                // TODO: check that we don't override COMDAT symbol link
-                symlinks[sect_idx] = symbol.name;
-              }
-            }
-          }
-        }
-      }
-
-      for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-        COFF_SectionHeader *sect_header = &section_table[sect_idx];
-        if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-          String8 comdat_name = symlinks[sect_idx];
-          if (comdat_name.size) {
-            LNK_Symbol        *defn   = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, comdat_name);
-            COFF_ParsedSymbol  symbol = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
-            sect_map[obj_idx][sect_idx] = sect_map[defn->u.defined.obj->input_idx][symbol.section_number-1];
+      LNK_Obj *obj = objs[obj_idx];
+      COFF_ParsedSymbol symbol;
+      for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+        symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+        COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+        if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_External && symbol.value == 0) {
+          COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+          if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
+            // replace contrib with leader
+            LNK_Symbol *defn = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, symbol.name);
+            COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
+            sect_map[obj_idx][symbol.section_number - 1] = sect_map[defn->u.defined.obj->input_idx][symbol.section_number - 1];
           }
         }
       }
