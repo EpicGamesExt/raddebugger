@@ -636,3 +636,26 @@ u64_array_bsearch(U64 *arr, U64 count, U64 value)
   return max_U64;
 }
 
+////////////////////////////////
+
+internal U64
+index_of_zero_u32(U32 *ptr, U64 count)
+{
+  for (U64 i = 0; i < count; i += 1) {
+    if (ptr[i] == 0) {
+      return i;
+    }
+  }
+  return max_U64;
+}
+
+internal U64
+index_of_zero_u64(U64 *ptr, U64 count)
+{
+  for (U64 i = 0; i < count; i += 1) {
+    if (ptr[i] == 0) {
+      return i;
+    }
+  }
+  return max_U64;
+}

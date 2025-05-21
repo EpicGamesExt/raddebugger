@@ -925,4 +925,9 @@ internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_dat
 
 internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
 
+////////////////////////////////
+
+internal U64 index_of_zero_u32(U32 *ptr, U64 count);
+internal U64 index_of_zero_u64(U64 *ptr, U64 count);
+
 #endif // BASE_CORE_H

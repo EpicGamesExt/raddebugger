@@ -341,11 +341,11 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
   COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$5"), PE_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
   COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$6"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_zero());
   COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$7"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
-  COFF_ObjSection *biat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$8"), PE_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *uiat_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$9"), PE_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
-  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  PE_TEXT_SECTION_FLAGS,                               str8_zero());
-  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$h"),  PE_DATA_SECTION_FLAGS,                               str8_array(handle, handle_size));
+  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_zero());
+  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$h"),  PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_array(handle, handle_size));
   COFF_ObjSection *debug_sect    = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
+  COFF_ObjSection *biat_sect     = 0;
+  COFF_ObjSection *uiat_sect     = 0;
 
   // sections symbols
   COFF_ObjSymbol *dll_symbol      = coff_obj_writer_push_symbol_static(obj_writer, dll_sect->name,      0, dll_sect);
@@ -362,12 +362,14 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
 
   // patch BIAT virtual offset in import header
   if (emit_biat) {
+    biat_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$8"), PE_IDATA_SECTION_FLAGS|import_align, str8_zero());
     COFF_ObjSymbol *biat_symbol = coff_obj_writer_push_symbol_static(obj_writer, biat_sect->name, 0, biat_sect);
     coff_obj_writer_section_push_reloc_voff(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, bound_table_voff), biat_symbol);
   }
 
   // patch UIAT virtual offset in import header
   if (emit_uiat) {
+    uiat_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$9"), PE_IDATA_SECTION_FLAGS|import_align, str8_zero());
     COFF_ObjSymbol *uiat_symbol = coff_obj_writer_push_symbol_static(obj_writer, uiat_sect->name, 0, uiat_sect);
     coff_obj_writer_section_push_reloc_voff(obj_writer, dll_sect, OffsetOf(PE_DelayedImportEntry, unload_table_voff), uiat_symbol);
   }
