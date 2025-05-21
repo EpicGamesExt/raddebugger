@@ -17,6 +17,11 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   tmInitialize(sizeof(tm_data), tm_data);
 #endif
   
+  //- rjf: set up spall
+#if PROFILE_SPALL
+  spall_profile = spall_init_file("spall_capture", 1);
+#endif
+  
   //- rjf: parse command line
   String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, arguments_count, arguments);
   CmdLine cmdline = cmd_line_from_string_list(scratch.arena, command_line_argument_strings);

@@ -2591,7 +2591,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Rng1S64 scroll_idx_rng = r1s64(0, (view_range_last - view_range.min) / num_columns);
   
   //////////////////////////////
-  //- rjf: determine visible range of rows
+  //- rjf: determine visible range of rows (including occluded)
   //
   Rng1S64 viz_range_rows = {0};
   S64 num_possible_visible_rows = 0;
@@ -2612,6 +2612,19 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Rng2F32 header_rect = r2f32p(0, 0, panel_dim.x, row_height_px);
   Rng2F32 footer_rect = r2f32p(0, panel_dim.y-footer_dim, panel_dim.x-scroll_bar_dim, panel_dim.y);
   Rng2F32 content_rect = r2f32p(0, row_height_px, panel_dim.x-scroll_bar_dim, panel_dim.y);
+  
+  //////////////////////////////
+  //- rjf: determine visible range of rows (only non-occluded)
+  //
+  Rng1S64 viz_range_nonoccluded_rows = {0};
+  S64 num_possible_nonoccluded_visible_rows = 0;
+  {
+    num_possible_nonoccluded_visible_rows = (dim_2f32(content_rect).y - dim_2f32(footer_rect).y) / row_height_px;
+    viz_range_nonoccluded_rows.min = viz_range_rows.min + (S64)(content_rect.y0 / row_height_px);
+    viz_range_nonoccluded_rows.max = viz_range_nonoccluded_rows.min + num_possible_nonoccluded_visible_rows;
+    viz_range_nonoccluded_rows.min = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.min);
+    viz_range_nonoccluded_rows.max = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.max);
+  }
   
   //////////////////////////////
   //- rjf: bump backwards if we are past the first
@@ -2766,7 +2779,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   {
     mv->center_cursor = 0;
     S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
-    S64 new_idx = (cursor_row_idx-num_possible_visible_rows/2+1);
+    S64 new_idx = (cursor_row_idx-num_possible_nonoccluded_visible_rows/2+1);
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
     ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
   }
@@ -2779,8 +2792,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     mv->contain_cursor = 0;
     S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
     Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
-    S64 min_delta = Min(0, cursor_viz_range.min-viz_range_rows.min);
-    S64 max_delta = Max(0, cursor_viz_range.max-viz_range_rows.max);
+    S64 min_delta = Min(0, cursor_viz_range.min-viz_range_nonoccluded_rows.min);
+    S64 max_delta = Max(0, cursor_viz_range.max-viz_range_nonoccluded_rows.max);
     S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
     ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);

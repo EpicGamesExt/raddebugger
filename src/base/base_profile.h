@@ -10,6 +10,9 @@
 #if !defined(PROFILE_TELEMETRY)
 # define PROFILE_TELEMETRY 0
 #endif
+#if !defined(PROFILE_SPALL)
+# define PROFILE_SPALL 0
+#endif
 
 ////////////////////////////////
 //~ rjf: Third Party Includes
@@ -19,6 +22,8 @@
 # if OS_WINDOWS
 #  pragma comment(lib, "rad_tm_win64.lib")
 # endif
+#elif PROFILE_SPALL
+# include "spall.h"
 #endif
 
 ////////////////////////////////
@@ -59,6 +64,32 @@ hash = TM_API_PTR->_tmSendDynamicString(hash, (char*)string.str);              \
 TM_API_PTR->_tmMessageFast_Core(0, TMMF_ICON_NOTE, file_id, __LINE__, hash);   \
 scratch_end(scratch);                                                          \
 }
+#endif
+
+////////////////////////////////
+//~ rjf: Spall Profile Defines
+
+#if PROFILE_SPALL
+global U64 spall_capturing = 1;
+global SpallProfile spall_profile = {0};
+thread_static SpallBuffer spall_buffer = {0};
+internal inline void spall_begin(char *fmt, ...);
+# define ProfBegin(...)           (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
+# define ProfBeginDynamic(...)    (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
+# define ProfEnd(...)             (spall_capturing ? (spall_buffer_end(&spall_profile, &spall_buffer, os_now_microseconds())), 0 : 0)
+# define ProfTick(...)            
+# define ProfIsCapturing(...)     (!!spall_capturing)
+# define ProfBeginCapture(...)    (spall_capturing = 1)
+# define ProfEndCapture(...)      (spall_capturing = 0)
+# define ProfThreadName(...)
+# define ProfMsg(...)
+# define ProfBeginLockWait(...)
+# define ProfEndLockWait(...)
+# define ProfLockTake(...)
+# define ProfLockDrop(...)
+# define ProfColor(color)
+# define ProfBeginV(...)
+# define ProfNoteV(...)
 #endif
 
 ////////////////////////////////

@@ -24,6 +24,7 @@ cd /D "%~dp0"
 ::
 :: - `asan`: enable address sanitizer
 :: - `telemetry`: enable RAD telemetry profiling support
+:: - `spall`: enable spall profiling support
 
 :: --- Unpack Arguments -------------------------------------------------------
 for %%a in (%*) do set "%%a=1"
@@ -39,6 +40,7 @@ if "%~1"=="release" if "%~2"=="" echo [default mode, assuming `raddbg` build] &&
 :: --- Unpack Command Line Build Arguments ------------------------------------
 set auto_compile_flags=
 if "%telemetry%"=="1" set auto_compile_flags=%auto_compile_flags% -DPROFILE_TELEMETRY=1 && echo [telemetry profiling enabled]
+if "%spall%"=="1"     set auto_compile_flags=%auto_compile_flags% -DPROFILE_SPALL=1 && echo [spall profiling enabled]
 if "%asan%"=="1"      set auto_compile_flags=%auto_compile_flags% -fsanitize=address && echo [asan enabled]
 if "%opengl%"=="1"    set auto_compile_flags=%auto_compile_flags% -DR_BACKEND=R_BACKEND_OPENGL && echo [opengl render backend]
 
