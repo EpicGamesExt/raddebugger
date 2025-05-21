@@ -139,7 +139,7 @@ pe_finalize_export_list(Arena *arena, PE_ExportParseList export_list)
     }
   }
   if (ordinal_low == max_U64) {
-    ordinal_low = 0;
+    ordinal_low = 1;
   }
 
   // assign omitted ordinals
@@ -262,7 +262,7 @@ pe_make_edata_obj(Arena               *arena,
         str8_list_push(obj_writer->arena, &string_table_sect->data, export_name_cstr);
 
         // create symbol for the name string
-        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "RADNAME:%S", name);
+        String8         export_name_symbol_name = push_str8f(obj_writer->arena, "%S", name);
         COFF_ObjSymbol *export_name_symbol      = coff_obj_writer_push_symbol_static(obj_writer, export_name_symbol_name, export_name_offset, string_table_sect);
 
         // create slot for export virtual offset

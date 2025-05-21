@@ -48,38 +48,38 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   // parse obj header
   //
-  COFF_FileHeaderInfo coff_info = coff_file_header_info_from_data(input->data);
+  COFF_FileHeaderInfo header = coff_file_header_info_from_data(input->data);
 
   //
   // set & check machine compatibility
   //
-  if (coff_info.machine != COFF_MachineType_Unknown) {
-    COFF_MachineType current_machine = ins_atomic_u32_eval_cond_assign(&task->machine, coff_info.machine, COFF_MachineType_Unknown);
-    if (current_machine != COFF_MachineType_Unknown && current_machine != coff_info.machine) {
+  if (header.machine != COFF_MachineType_Unknown) {
+    COFF_MachineType current_machine = ins_atomic_u32_eval_cond_assign(&task->machine, header.machine, COFF_MachineType_Unknown);
+    if (current_machine != COFF_MachineType_Unknown && current_machine != header.machine) {
       lnk_error_with_loc(LNK_Error_IncompatibleMachine, input->path, input->lib_path,
           "conflicting machine types expected %S but got %S",
           coff_string_from_machine_type(current_machine),
-          coff_string_from_machine_type(coff_info.machine));
+          coff_string_from_machine_type(header.machine));
     }
   }
 
   //
   // extract COFF info
   //
-  String8 raw_coff_section_table = str8_substr(input->data, coff_info.section_table_range);
-  String8 raw_coff_symbol_table  = str8_substr(input->data, coff_info.symbol_table_range);
-  String8 raw_coff_string_table  = str8_substr(input->data, coff_info.string_table_range);
+  String8 raw_coff_section_table = str8_substr(input->data, header.section_table_range);
+  String8 raw_coff_symbol_table  = str8_substr(input->data, header.symbol_table_range);
+  String8 raw_coff_string_table  = str8_substr(input->data, header.string_table_range);
 
   //
   // error check: section table / symbol table / string table
   //
-  if (raw_coff_section_table.size != dim_1u64(coff_info.section_table_range)) {
+  if (raw_coff_section_table.size != dim_1u64(header.section_table_range)) {
     lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read section header table");
   }
-  if (raw_coff_symbol_table.size != dim_1u64(coff_info.symbol_table_range)) {
+  if (raw_coff_symbol_table.size != dim_1u64(header.symbol_table_range)) {
     lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read symbol table");
   }
-  if (raw_coff_string_table.size != dim_1u64(coff_info.string_table_range)) {
+  if (raw_coff_string_table.size != dim_1u64(header.string_table_range)) {
     lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read string table");
   }
 
@@ -87,7 +87,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // error check section headers
   //
   COFF_SectionHeader *coff_section_table = (COFF_SectionHeader *)raw_coff_section_table.str;
-  for (U64 sect_idx = 0; sect_idx < coff_info.section_count_no_null; sect_idx += 1) {
+  for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *coff_sect_header = &coff_section_table[sect_idx];
 
     // read name
@@ -97,20 +97,66 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       if (coff_sect_header->fsize > 0) {
         Rng1U64 sect_range = rng_1u64(coff_sect_header->foff, coff_sect_header->foff + coff_sect_header->fsize);
 
-        if (contains_1u64(coff_info.header_range, coff_sect_header->foff) ||
-            (coff_sect_header->fsize > 0 && contains_1u64(coff_info.header_range, sect_range.max-1))) {
+        if (contains_1u64(header.header_range, coff_sect_header->foff) ||
+            (coff_sect_header->fsize > 0 && contains_1u64(header.header_range, sect_range.max-1))) {
           lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into file header)", sect_name, sect_idx+1);
         }
-        if (contains_1u64(coff_info.section_table_range, coff_sect_header->foff) ||
-            (coff_sect_header->fsize > 0 && contains_1u64(coff_info.section_table_range, sect_range.max-1))) {
+        if (contains_1u64(header.section_table_range, coff_sect_header->foff) ||
+            (coff_sect_header->fsize > 0 && contains_1u64(header.section_table_range, sect_range.max-1))) {
           lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into section header table)", sect_name, sect_idx+1);
         }
-        if (contains_1u64(coff_info.symbol_table_range, coff_sect_header->foff) ||
-            (coff_sect_header->fsize > 0 && contains_1u64(coff_info.symbol_table_range, sect_range.max-1))) {
+        if (contains_1u64(header.symbol_table_range, coff_sect_header->foff) ||
+            (coff_sect_header->fsize > 0 && contains_1u64(header.symbol_table_range, sect_range.max-1))) {
           lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into symbol table)", sect_name, sect_idx+1);
         }
         if (dim_1u64(sect_range) != coff_sect_header->fsize) {
           lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data", sect_name, sect_idx+1);
+        }
+      }
+    }
+  }
+
+  //
+  // create symbol links to COMDAT sections
+  //
+  U32 *comdats;
+  {
+    comdats = push_array_no_zero(arena, U32, header.section_count_no_null);
+    MemorySet(comdats, 0xff, header.section_count_no_null * sizeof(comdats[0]));
+
+    String8 string_table = str8_substr(input->data, header.string_table_range);
+    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
+    COFF_ParsedSymbol symbol;
+    for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+      if (header.is_big_obj) {
+        symbol = coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
+      } else {
+        symbol = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
+      }
+
+      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+      if (interp == COFF_SymbolValueInterp_Regular) {
+        if (symbol.storage_class == COFF_SymStorageClass_Static) {
+          if (symbol.section_number > 0 && symbol.section_number <= header.section_count_no_null) {
+            COFF_SectionHeader *sect_header = &coff_section_table[symbol.section_number-1];
+            if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
+              if (symbol.aux_symbol_count) {
+                U32 section_length = 0;
+                coff_parse_secdef(symbol, header.is_big_obj, 0, 0, &section_length, 0);
+                if (sect_header->fsize == section_length) {
+                  if (comdats[symbol.section_number-1] == ~0) {
+                    comdats[symbol.section_number-1] = symbol_idx;
+                  } else {
+                    lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbo (No. 0x%llx) tries to ovewrite comdat", symbol_idx);
+                  }
+                } else {
+                  lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section size specified by section definition symbol (No 0x%llx) doesn't match size in section header (No. 0x%x); expected 0x%x got 0x%x", symbol_idx, symbol.section_number, section_length, sect_header->fsize);
+                }
+              }
+            }
+          } else {
+            lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbol (No. 0x%llx) has out of bounds section number 0x%x", symbol_idx, symbol.section_number);
+          }
         }
       }
     }
@@ -121,7 +167,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->path      = push_str8_copy(arena, input->path);
   obj->lib_path  = push_str8_copy(arena, input->lib_path);
   obj->input_idx = obj_idx;
-  obj->header    = coff_info;
+  obj->header    = header;
+  obj->comdats   = comdats;
 }
 
 internal LNK_ObjNodeArray

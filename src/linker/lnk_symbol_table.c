@@ -237,25 +237,27 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) &&
              (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
       COFF_ComdatSelectType dst_select;
-      U32                   dst_section_length;
-      U32                   dst_check_sum;
+      U32 dst_section_length;
+      U32 dst_check_sum;
       if (dst_interp == COFF_SymbolValueInterp_Regular) {
-        coff_parse_secdef(dst_parsed, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
+        COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(dst_obj, dst_obj->comdats[dst_parsed.section_number-1]);
+        coff_parse_secdef(secdef, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
       } else {
-        dst_select         = COFF_ComdatSelect_Largest;
+        dst_select = COFF_ComdatSelect_Largest;
         dst_section_length = dst_parsed.value;
-        dst_check_sum      = 0;
+        dst_check_sum = 0;
       }
 
       COFF_ComdatSelectType src_select;
-      U32                   src_section_length;
-      U32                   src_check_sum;
+      U32 src_section_length;
+      U32 src_check_sum;
       if (src_interp == COFF_SymbolValueInterp_Regular) {
-        coff_parse_secdef(src_parsed, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
+        COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(src_obj, src_obj->comdats[src_parsed.section_number-1]);
+        coff_parse_secdef(secdef, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
       } else {
-        src_select         = COFF_ComdatSelect_Largest;
+        src_select = COFF_ComdatSelect_Largest;
         src_section_length = src_parsed.value;
-        src_check_sum      = 0;
+        src_check_sum = 0;
       }
 
       // handle objs compiled with /GR- and /GR
@@ -332,6 +334,12 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
   if (dst->type == LNK_Symbol_Lib && src->type == LNK_Symbol_Lib) {
     dst->u.lib = src->u.lib;
   } else if (dst->type == LNK_Symbol_Defined && src->type == LNK_Symbol_Defined) {
+    COFF_ParsedSymbol dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
+    COFF_ParsedSymbol src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
+    COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->u.defined.obj, dst_parsed.section_number);
+    COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
+    AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
+    dst_sect->flags |= COFF_SectionFlag_LnkRemove;
     dst->u.defined = src->u.defined;
   } else {
     InvalidPath;
