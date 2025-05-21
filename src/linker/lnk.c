@@ -1190,13 +1190,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   for (U64 sect_idx = 0; sect_idx < obj_header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *section_header = &section_table[sect_idx];
 
+    // was section discarded?
     if (section_header->flags & COFF_SectionFlag_LnkRemove) {
       continue;
     }
 
+    // find section relocs
     COFF_RelocInfo reloc_info = coff_reloc_info_from_section_header(obj->data, section_header);
     COFF_Reloc    *relocs     = (COFF_Reloc *)(obj->data.str + reloc_info.array_off);
 
+    // apply relocs
     for (U64 reloc_idx = 0; reloc_idx < reloc_info.count; reloc_idx += 1) {
       COFF_Reloc *reloc = &relocs[reloc_idx];
 
@@ -3154,14 +3157,14 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       LNK_Section *didat_sect = lnk_section_table_search(sectab, str8_lit(".didat"), PE_IDATA_SECTION_FLAGS);
       LNK_Symbol *null_import_desc = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("__NULL_DELAY_IMPORT_DESCRIPTOR"));
-      LNK_Symbol *last_import_desc = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA_DLA", lnk_get_image_name(config));
-      if (didat_sect && null_import_desc && last_import_desc) {
+      LNK_Symbol *last_null_thunk = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA_DLA", lnk_get_image_name(config));
+      if (didat_sect && null_import_desc && last_null_thunk) {
         COFF_ParsedSymbol null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
         LNK_SectionContrib *didat_first_contrib = lnk_get_first_section_contrib(didat_sect);
         PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DELAY_IMPORT, sizeof(PE_DataDirectory));
         Assert(null_import_desc_parsed.section_number == didat_first_contrib->u.sect_idx+1);
         Assert(null_import_desc_parsed.value >= didat_first_contrib->u.off);
-        import_dir->virt_off = image_section_table[didat_first_contrib->u.sect_idx]->voff + didat_first_contrib->u.off;
+        import_dir->virt_off = image_section_table[didat_first_contrib->u.sect_idx+1]->voff + didat_first_contrib->u.off;
         import_dir->virt_size = null_import_desc_parsed.value - didat_first_contrib->u.off;
       }
     }

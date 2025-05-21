@@ -998,33 +998,24 @@ pe_parsed_imports_from_data(Arena              *arena,
 {
   PE_ParsedImport *imports      = 0;
   U64              import_count = 0;
-  
-  U64 name_table_off = coff_foff_from_voff(sections, section_count, name_table_voff);
-  
+
+  U64 name_table_foff = coff_foff_from_voff(sections, section_count, name_table_voff);
+  String8 entries = str8_substr(raw_data, rng_1u64(name_table_foff, raw_data.size));
   if (is_pe32) {
-    for (;; ++import_count) {
-      U32 raw_entry = 0;
-      str8_deserial_read_struct(raw_data, name_table_off + import_count*sizeof(raw_entry), &raw_entry);
-      if (raw_entry == 0) {
-        break;
-      }
-    }
-    
+    import_count = index_of_zero_u32((U32 *)entries.str, entries.size/sizeof(U32));
+    if (import_count == max_U64) { import_count = 0; }
     imports = push_array(arena, PE_ParsedImport, import_count);
-    
-    for (U64 imp_idx = 0; imp_idx < import_count; ++imp_idx) {
+
+    for (U64 imp_idx = 0; imp_idx < import_count; imp_idx += 1) {
       U32 raw_entry = 0;
-      str8_deserial_read_struct(raw_data, name_table_off + imp_idx*sizeof(raw_entry), &raw_entry);
-      
-      B32 is_ordinal = raw_entry & (1 << 31);
-      
-      PE_ParsedImport *imp = imports+imp_idx;
-      ++imp_idx;
-      
+      str8_deserial_read_struct(entries, imp_idx*sizeof(raw_entry), &raw_entry);
+
+      B32 is_ordinal = ExtractBit(raw_entry, 31);
       if (is_ordinal) {
         // fill out ordinal import
+        PE_ParsedImport *imp = imports+imp_idx;
         imp->type      = PE_ParsedImport_Ordinal;
-        imp->u.ordinal = raw_entry & max_U16;
+        imp->u.ordinal = Extract16(raw_entry, 0);
       } else {
         // map voff -> foff
         U64 off = coff_foff_from_voff(sections, section_count, raw_entry);
@@ -1036,35 +1027,27 @@ pe_parsed_imports_from_data(Arena              *arena,
         str8_deserial_read_cstr(raw_data, off+sizeof(hint), &name);
         
         // fill out named import
+        PE_ParsedImport *imp = imports+imp_idx;
         imp->type          = PE_ParsedImport_Name;
         imp->u.name.hint   = hint;
         imp->u.name.string = name;
       }
     }
   } else {
-    for (;; ++import_count) {
-      U64 raw_entry = 0;
-      str8_deserial_read_struct(raw_data, name_table_off + import_count*sizeof(raw_entry), &raw_entry);
-      if (raw_entry == 0) {
-        break;
-      }
-    }
-    
+    import_count = index_of_zero_u64((U64 *)entries.str, entries.size/sizeof(U64));
+    if (import_count == max_U64) { import_count = 0; }
     imports = push_array(arena, PE_ParsedImport, import_count);
-    
-    for (U64 imp_idx = 0; imp_idx < import_count; ++imp_idx) {
+
+    for (U64 imp_idx = 0; imp_idx < import_count; imp_idx += 1) {
       U64 raw_entry = 0;
-      str8_deserial_read_struct(raw_data, name_table_off + imp_idx*sizeof(raw_entry), &raw_entry);
-      
-      B32 is_ordinal = raw_entry & (1ull << 63);
-      
-      PE_ParsedImport *imp = imports+imp_idx;
-      ++imp_idx;
-      
+      str8_deserial_read_struct(entries, imp_idx*sizeof(raw_entry), &raw_entry);
+
+      B32 is_ordinal = ExtractBit(raw_entry, 63);
       if (is_ordinal) {
         // fill out ordinal import
+        PE_ParsedImport *imp = imports+imp_idx;
         imp->type      = PE_ParsedImport_Ordinal;
-        imp->u.ordinal = raw_entry & max_U16;
+        imp->u.ordinal = Extract16(raw_entry, 0);
       } else {
         // map voff -> foff
         U64 off = coff_foff_from_voff(sections, section_count, raw_entry);
@@ -1076,6 +1059,7 @@ pe_parsed_imports_from_data(Arena              *arena,
         str8_deserial_read_cstr(raw_data, off + sizeof(hint), &name);
         
         // fill out named import
+        PE_ParsedImport *imp = imports+imp_idx;
         imp->type          = PE_ParsedImport_Name;
         imp->u.name.hint   = hint;
         imp->u.name.string = name;
@@ -1220,18 +1204,25 @@ pe_delay_imports_from_data(Arena              *arena,
                                                                 raw_dll->name_table_voff,
                                                                 &import_count);
     
+
     // parse bound table
-    U64     bound_table_foff  = coff_foff_from_voff(sections, section_count, raw_dll->bound_table_voff);
-    Rng1U64 bound_table_range = rng_1u64(bound_table_foff, raw_data.size);
-    U64     bound_table_count;
-    U64 *   bound_table       = pe_array_from_null_term_addr(arena, is_pe32, raw_data, bound_table_range, &bound_table_count);
-    
+    Rng1U64 bound_table_range = {0};
+    if (raw_dll->bound_table_voff) {
+      U64 bound_table_foff = coff_foff_from_voff(sections, section_count, raw_dll->bound_table_voff);
+      bound_table_range = rng_1u64(bound_table_foff, raw_data.size);
+    }
+    U64  bound_table_count;
+    U64 *bound_table = pe_array_from_null_term_addr(arena, is_pe32, raw_data, bound_table_range, &bound_table_count);
+
     // parse unload table
-    U64     unload_table_foff  = coff_foff_from_voff(sections, section_count, raw_dll->unload_table_voff);
-    Rng1U64 unload_table_range = rng_1u64(unload_table_foff, raw_data.size);
-    U64     unload_table_count;
-    U64 *   unload_table       = pe_array_from_null_term_addr(arena, is_pe32, raw_data, unload_table_range, &unload_table_count);
-    
+    Rng1U64 unload_table_range = {0};
+    if (raw_dll->unload_table_voff) {
+      U64 unload_table_foff  = coff_foff_from_voff(sections, section_count, raw_dll->unload_table_voff);
+      unload_table_range = rng_1u64(unload_table_foff, raw_data.size);
+    }
+    U64 unload_table_count;
+    U64 *unload_table = pe_array_from_null_term_addr(arena, is_pe32, raw_data, unload_table_range, &unload_table_count);
+
     // fill out DLL
     PE_ParsedDelayDLLImport *dll = dlls+dll_idx;
     dll->attributes              = raw_dll->attributes;
