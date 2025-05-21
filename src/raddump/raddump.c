@@ -3112,15 +3112,17 @@ pe_print_delay_import_table(Arena *arena, String8List *out, String8 indent, U64 
       
       rd_printf("Attributes:               %#08x", dll->attributes);
       rd_printf("Name:                     %S",    dll->name);
-      rd_printf("HMODULE address:          %#llx", image_base + dll->module_handle_voff);
-      rd_printf("Import address table:     %#llx", image_base + dll->iat_voff);
-      rd_printf("Import name table:        %#llx", image_base + dll->name_table_voff);
-      rd_printf("Bound import name table:  %#llx", image_base + dll->bound_table_voff);
-      rd_printf("Unload import name table: %#llx", image_base + dll->unload_table_voff);
+      rd_printf("HMODULE address:          %#llx", dll->module_handle_voff ? image_base + dll->module_handle_voff : 0);
+      rd_printf("Import address table:     %#llx", dll->iat_voff ? image_base + dll->iat_voff : 0);
+      rd_printf("Import name table:        %#llx", dll->name_table_voff ? image_base + dll->name_table_voff : 0);
+      rd_printf("Bound import name table:  %#llx", dll->bound_table_voff ? image_base + dll->bound_table_voff : 0);
+      rd_printf("Unload import name table: %#llx", dll->unload_table_voff ? image_base + dll->unload_table_voff : 0);
       rd_printf("Time stamp:               %#x",   dll->time_stamp);
       rd_newline();
       
       rd_indent();
+      rd_printf("%-16s %-16s %-8s %s", "BIAT", "UIAT", "Hint/Ord", "Name");
+      rd_printf("---------------- ---------------- -------- ----");
       for (U64 imp_idx = 0; imp_idx < dll->import_count; ++imp_idx) {
         PE_ParsedImport *imp = dll->imports+imp_idx;
         
@@ -3137,9 +3139,9 @@ pe_print_delay_import_table(Arena *arena, String8List *out, String8 indent, U64 
         }
         
         if (imp->type == PE_ParsedImport_Ordinal) {
-          rd_printf("%-16S %-16S %#-4x", bound, unload, imp->u.ordinal);
+          rd_printf("%-16S %-16S 0x%-6x %S", bound, unload, imp->u.ordinal, str8_lit("[NONAME]"));
         } else if (imp->type == PE_ParsedImport_Name) {
-          rd_printf("%-16S %-16S %#-4x %S", bound, unload, imp->u.name.hint, imp->u.name.string);
+          rd_printf("%-16S %-16S 0x%-6x %S", bound, unload, imp->u.name.hint, imp->u.name.string);
         }
       }
       rd_unindent();
