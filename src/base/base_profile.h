@@ -70,7 +70,7 @@ scratch_end(scratch);                                                          \
 //~ rjf: Spall Profile Defines
 
 #if PROFILE_SPALL
-global U64 spall_capturing = 1;
+global U64 spall_capturing = 0;
 global SpallProfile spall_profile = {0};
 thread_static SpallBuffer spall_buffer = {0};
 thread_static U32 spall_tid = 0;
@@ -79,10 +79,10 @@ internal inline void spall_begin(char *fmt, ...);
 # define ProfBegin(...)           (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
 # define ProfBeginDynamic(...)    (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
 # define ProfEnd(...)             (spall_capturing ? (spall_buffer_end_ex(&spall_profile, &spall_buffer, os_now_microseconds(), spall_tid, spall_pid)), 0 : 0)
-# define ProfTick(...)            
+# define ProfTick(...)
 # define ProfIsCapturing(...)     (!!spall_capturing)
 # define ProfBeginCapture(...)    (spall_capturing = 1)
-# define ProfEndCapture(...)      (spall_capturing = 0)
+# define ProfEndCapture(...)      (spall_capturing = 0, spall_flush(&spall_profile))
 # define ProfThreadName(...)
 # define ProfMsg(...)
 # define ProfBeginLockWait(...)

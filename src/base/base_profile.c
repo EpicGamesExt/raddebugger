@@ -5,6 +5,13 @@
 internal inline void
 spall_begin(char *fmt, ...)
 {
+  if(spall_buffer.data == 0)
+  {
+    spall_buffer.length = MB(1);
+    spall_buffer.data   = os_reserve(spall_buffer.length);
+    os_commit(spall_buffer.data, spall_buffer.length);
+    spall_buffer_init(&spall_profile, &spall_buffer);
+  }
   if(spall_pid == 0)
   {
     spall_pid = os_get_process_info()->pid;

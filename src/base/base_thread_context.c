@@ -18,11 +18,6 @@ tctx_init_and_equip(TCTX *tctx)
   {
     *arena_ptr = arena_alloc();
   }
-#if PROFILE_SPALL
-  spall_buffer.length = MB(1);
-  spall_buffer.data   = push_array_no_zero(tctx->arenas[0], U8, spall_buffer.length);
-  spall_buffer_init(&spall_profile, &spall_buffer);
-#endif
   tctx_thread_local = tctx;
 }
 
