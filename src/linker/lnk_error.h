@@ -37,6 +37,7 @@ typedef enum
   LNK_Error_IllegalSectionMerge,
   LNK_Error_IllegalRelocation,
   LNK_Error_CircularMerge,
+  LNK_Error_UnresolvedSymbol,
   LNK_Error_StopLast,
   
   LNK_Error_First,
@@ -45,8 +46,6 @@ typedef enum
   LNK_Error_CvPrecomp,
   LNK_Error_Natvis,
   LNK_Error_TooManyFiles,
-  LNK_Error_UndefinedSymbol,
-  LNK_Error_UnresolvedSymbol,
   LNK_Error_UnableToOpenTypeServer,
   LNK_Error_UnexpectedCodePath,
   LNK_Error_CvIllSymbolData,

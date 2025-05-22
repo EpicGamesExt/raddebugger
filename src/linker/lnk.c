@@ -221,6 +221,11 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
     lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%s", LNK_MANIFEST_MERGE_TOOL_NAME);
   }
 
+  // when /FORCE is specified on the command line, do not stop on these errors
+  if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force)) {
+    g_error_mode_arr[LNK_Error_UnresolvedSymbol] = LNK_ErrorMode_Continue;
+  }
+
   // init config
   LNK_Config *config = lnk_config_from_cmd_line(arena, cmd_line);
 
@@ -2748,7 +2753,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
             symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
             COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-            if (interp == COFF_SymbolValueInterp_Undefined) {
+            if (interp == COFF_SymbolValueInterp_Undefined && symbol.storage_class == COFF_SymStorageClass_External) {
               String8  lookup_name       = symbol.name;
               LNK_Obj *lookup_obj        = obj;
               U64      lookup_symbol_idx = symbol_idx;
@@ -2960,7 +2965,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
                 lnk_error_obj(LNK_Error_SectRefsDiscardedMemory, obj, "symbol %S (No. 0x%llx) references section with discard flag", symbol.name, symbol_idx);
               }
             } else {
-              lnk_error_obj(LNK_Error_UndefinedSymbol, obj, "undefined section symbol %S (No 0x%llx) refers to section that does not exist", symbol.name, symbol_idx);
+              lnk_error_obj(LNK_Error_UnresolvedSymbol, obj, "undefined section symbol %S (No 0x%llx) refers to an image section that doesn't exist", symbol.name, symbol_idx);
             }
           }
         }
