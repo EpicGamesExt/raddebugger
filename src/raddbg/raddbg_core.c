@@ -11262,15 +11262,12 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: open frame scopes
+  //- rjf: push frame scopes
   //
-  if(rd_state->frame_depth == 1)
-  {
-    if(rd_state->frame_di_scope) { di_scope_close(rd_state->frame_di_scope); }
-    if(rd_state->frame_ctrl_scope) { ctrl_scope_close(rd_state->frame_ctrl_scope); }
-    rd_state->frame_di_scope = di_scope_open();
-    rd_state->frame_ctrl_scope = ctrl_scope_open();
-  }
+  DI_Scope *frame_di_scope_restore = rd_state->frame_di_scope;
+  CTRL_Scope *frame_ctrl_scope_restore = rd_state->frame_ctrl_scope;
+  rd_state->frame_di_scope = di_scope_open();
+  rd_state->frame_ctrl_scope = ctrl_scope_open();
   
   //////////////////////////////
   //- rjf: calculate avg length in us of last many frames
@@ -16748,6 +16745,14 @@ rd_frame(void)
   {
     rd_state->num_frames_requested -= 1;
   }
+  
+  //////////////////////////////
+  //- rjf: close frame scopes
+  //
+  di_scope_close(rd_state->frame_di_scope);
+  ctrl_scope_close(rd_state->frame_ctrl_scope);
+  rd_state->frame_di_scope = frame_di_scope_restore;
+  rd_state->frame_ctrl_scope = frame_ctrl_scope_restore;
   
   //////////////////////////////
   //- rjf: submit rendering to all windows

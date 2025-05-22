@@ -1722,16 +1722,15 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
               range_n->vaddr_range = vaddr_range;
               range_n->zero_terminated = zero_terminated;
               range_n->id = id;
-              ins_atomic_u64_inc_eval(&range_n->working_count);
               node_needs_stream = 1;
             }
             else
             {
               node_needs_stream = (range_n->mem_gen < mem_gen);
-              if(node_needs_stream)
-              {
-                ins_atomic_u64_inc_eval(&range_n->working_count);
-              }
+            }
+            if(node_needs_stream)
+            {
+              ins_atomic_u64_inc_eval(&range_n->working_count);
             }
             node_working_count = &range_n->working_count;
             break;
