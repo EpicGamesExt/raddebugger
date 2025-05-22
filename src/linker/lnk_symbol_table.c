@@ -287,12 +287,16 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
             lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
           } break;
           case COFF_ComdatSelect_SameSize: {
-            if (dst_section_length != src_section_length) {
+            if (dst_section_length == src_section_length) {
+              can_replace = src_obj->input_idx < dst_obj->input_idx;
+            } else {
               lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
             }
           } break;
           case COFF_ComdatSelect_ExactMatch: {
-            if (dst_check_sum != src_check_sum) {
+            if (dst_check_sum == src_check_sum) {
+              can_replace = src_obj->input_idx < dst_obj->input_idx;
+            } else {
               lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
             }
           } break;
@@ -398,26 +402,28 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
     if (curr_name && str8_match(*curr_name, symbol->name, 0)) {
       for (LNK_Symbol *src = symbol;;) {
         // try replacing current symbol with zero, otherwise loop back and retry
-        LNK_Symbol *dst = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
+        LNK_Symbol *leader = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
 
-        // apply replacement logic
-        LNK_Symbol *current_symbol = dst;
-        if (dst) {
-          if (lnk_can_replace_symbol(dst, src)) {
-            // HACK: patch dst because relocations might point to it
-            lnk_on_symbol_replace(dst, src);
-            current_symbol = src;
+        // apply replacement
+        if (leader) {
+          if (lnk_can_replace_symbol(leader, src)) {
+            // discard leader
+            lnk_on_symbol_replace(leader, src);
+            leader = src;
           } else {
             // discard source
-            lnk_on_symbol_replace(src, dst);
+            lnk_on_symbol_replace(src, leader);
+            src = leader;
           }
+        } else {
+          leader = src;
         }
 
-        // try replacing symbol, if another thread has already taken the slot, rerun the whole loop
-        dst = ins_atomic_ptr_eval_cond_assign(&curr_trie->symbol, current_symbol, 0);
+        // try replacing symbol, if another thread has already taken the slot, rerun replacement loop again
+        LNK_Symbol *was_replaced = ins_atomic_ptr_eval_cond_assign(&curr_trie->symbol, leader, 0);
 
         // symbol replaced, exit
-        if (dst == 0) {
+        if (was_replaced == 0) {
           goto exit;
         }
       }
