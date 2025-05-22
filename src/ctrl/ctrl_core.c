@@ -6768,6 +6768,13 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   
   //- rjf: broadcast changes
   os_condition_variable_broadcast(process_stripe->cv);
+  if(!u128_match(u128_zero(), hash))
+  {
+    if(ctrl_state->wakeup_hook != 0)
+    {
+      ctrl_state->wakeup_hook();
+    }
+  }
   ProfEnd();
   ProfEnd();
   return 0;
@@ -7011,6 +7018,10 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     
     //- rjf: broadcast update
     os_condition_variable_broadcast(stripe->cv);
+    if(ctrl_state->wakeup_hook != 0)
+    {
+      ctrl_state->wakeup_hook();
+    }
   }
   
   scratch_end(scratch);
