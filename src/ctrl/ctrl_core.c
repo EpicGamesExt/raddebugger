@@ -1743,6 +1743,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
         {
           async_push_work(ctrl_mem_stream_work, .working_counter = node_working_count);
           requested = 1;
+          id_working = 1;
         }
         else OS_MutexScopeR(process_stripe->rw_mutex)
         {

@@ -399,10 +399,11 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
       log_infof("]\n");
     }
   }
+  B32 good_machine_code = (good_line_info && machine_code.size == dim_1u64(line_vaddr_rng));
   
   // rjf: machine code => ctrl flow analysis
   DASM_CtrlFlowInfo ctrl_flow_info = {0};
-  if(good_line_info)
+  if(good_machine_code)
   {
     ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
                                                               DASM_InstFlag_Call|
@@ -423,7 +424,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   }
   
   // rjf: push traps for all exit points
-  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  if(good_machine_code) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
     DASM_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
@@ -539,10 +540,11 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
     CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
   }
+  B32 good_machine_code = (good_line_info && machine_code.size == dim_1u64(line_vaddr_rng));
   
   // rjf: machine code => ctrl flow analysis
   DASM_CtrlFlowInfo ctrl_flow_info = {0};
-  if(good_line_info)
+  if(good_machine_code)
   {
     ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
                                                               DASM_InstFlag_Call|
@@ -557,7 +559,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   
   // rjf: determine last 
   DASM_CtrlFlowPoint *last_call_point = 0;
-  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  if(good_machine_code) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
     if(n->v.inst_flags & DASM_InstFlag_Call)
     {
@@ -566,7 +568,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   }
   
   // rjf: push traps for all exit points
-  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  if(good_machine_code) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
     DASM_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
