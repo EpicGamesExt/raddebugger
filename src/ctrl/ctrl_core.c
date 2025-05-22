@@ -3399,85 +3399,93 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   //
   B32 can_request = !ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
   B32 did_request = 0;
-  OS_MutexScopeR(stripe->rw_mutex) for(;;)
+  OS_MutexScopeR(stripe->rw_mutex)
   {
-    ////////////////////////////
-    //- rjf: try to grab cached
-    //
-    B32 is_good = 0;
-    B32 is_stale = 1;
-    B32 is_working = 0;
-    CTRL_CallStackCacheNode *node = 0;
+    CTRL_CallStackCacheNode *taken_node = 0;
+    for(;;)
     {
-      for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
+      ////////////////////////////
+      //- rjf: try to grab cached
+      //
+      B32 is_good = 0;
+      B32 is_stale = 1;
+      B32 is_working = 0;
+      CTRL_CallStackCacheNode *node = 0;
       {
-        if(ctrl_handle_match(n->thread, handle))
+        for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
         {
-          node = n;
-          is_good    = 1;
-          is_stale   = (reg_gen > n->reg_gen || mem_gen > n->mem_gen);
-          is_working = (n->working_count > 0);
-          call_stack = n->call_stack;
-          ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, stripe, n);
-          break;
+          if(ctrl_handle_match(n->thread, handle))
+          {
+            node = n;
+            is_good    = 1;
+            is_stale   = (reg_gen > n->reg_gen || mem_gen > n->mem_gen);
+            is_working = (n->working_count > 0);
+            call_stack = n->call_stack;
+            taken_node = node;
+            break;
+          }
         }
       }
-    }
-    
-    ////////////////////////////
-    //- rjf: create node if needed
-    //
-    if(!is_good) OS_MutexScopeRWPromote(stripe->rw_mutex)
-    {
-      node = 0;
-      for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
+      
+      ////////////////////////////
+      //- rjf: create node if needed
+      //
+      if(!is_good) OS_MutexScopeRWPromote(stripe->rw_mutex)
       {
-        if(ctrl_handle_match(n->thread, handle))
+        node = 0;
+        for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
         {
-          node = n;
-          break;
+          if(ctrl_handle_match(n->thread, handle))
+          {
+            node = n;
+            break;
+          }
+        }
+        if(node == 0)
+        {
+          node = push_array(stripe->arena, CTRL_CallStackCacheNode, 1);
+          DLLPushBack(slot->first, slot->last, node);
+          node->thread = thread->handle;
         }
       }
-      if(node == 0)
+      
+      ////////////////////////////
+      //- rjf: request if needed
+      //
+      if(can_request && node != 0 && !is_working && is_stale)
       {
-        node = push_array(stripe->arena, CTRL_CallStackCacheNode, 1);
-        DLLPushBack(slot->first, slot->last, node);
-        node->thread = thread->handle;
+        if(ctrl_u2csb_enqueue_req(thread->handle, endt_us))
+        {
+          did_request = 1;
+          is_working = 1;
+          ins_atomic_u64_inc_eval(&node->working_count);
+          async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
+        }
+      }
+      
+      ////////////////////////////
+      //- rjf: good, or timeout? -> exit
+      //
+      if(!can_request || !is_stale || os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
+      
+      ////////////////////////////
+      //- rjf: time to wait for new result? -> wait
+      //
+      if(did_request && !is_working)
+      {
+        break;
+      }
+      else if(did_request)
+      {
+        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
       }
     }
-    
-    ////////////////////////////
-    //- rjf: request if needed
-    //
-    if(can_request && node != 0 && !is_working && is_stale)
+    if(taken_node != 0)
     {
-      if(ctrl_u2csb_enqueue_req(thread->handle, endt_us))
-      {
-        did_request = 1;
-        is_working = 1;
-        ins_atomic_u64_inc_eval(&node->working_count);
-        async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: good, or timeout? -> exit
-    //
-    if(!can_request || !is_stale || os_now_microseconds() >= endt_us)
-    {
-      break;
-    }
-    
-    ////////////////////////////
-    //- rjf: time to wait for new result? -> wait
-    //
-    if(did_request && !is_working)
-    {
-      break;
-    }
-    else if(did_request)
-    {
-      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, stripe, taken_node);
     }
   }
   return call_stack;
