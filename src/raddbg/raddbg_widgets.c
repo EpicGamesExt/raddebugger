@@ -1279,7 +1279,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     };
     U64 line_idx = 0;
     for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
+        line_num <= params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
       String8 line_string = params->line_text[line_idx];
@@ -1971,7 +1971,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     U64 line_idx = 0;
     for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
+        line_num <= params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
       DR_FStrList line_fstrs = lines_fstrs[line_idx];
