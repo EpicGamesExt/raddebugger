@@ -294,7 +294,20 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
             }
           } break;
           case COFF_ComdatSelect_ExactMatch: {
-            if (dst_check_sum == src_check_sum) {
+            COFF_SectionHeader *dst_section_table = (COFF_SectionHeader *)str8_substr(dst_obj->data, dst_obj->header.section_table_range).str;
+            COFF_SectionHeader *src_section_table = (COFF_SectionHeader *)str8_substr(src_obj->data, src_obj->header.section_table_range).str;
+            COFF_SectionHeader *dst_sect_header = &dst_section_table[dst_parsed.section_number-1];
+            COFF_SectionHeader *src_sect_header = &src_section_table[src_parsed.section_number-1];
+            String8 dst_data = str8_substr(dst_obj->data, rng_1u64(dst_sect_header->foff, dst_sect_header->foff + dst_sect_header->fsize));
+            String8 src_data = str8_substr(src_obj->data, rng_1u64(src_sect_header->foff, src_sect_header->foff + src_sect_header->fsize));
+            B32 is_exact_match = 0;
+            if (dst_check_sum != 0 && src_check_sum != 0) {
+              is_exact_match = dst_check_sum == src_check_sum && str8_match(dst_data, src_data, 0);
+            } else {
+              is_exact_match = str8_match(dst_data, src_data, 0);
+            }
+
+            if (is_exact_match) {
               can_replace = src_obj->input_idx < dst_obj->input_idx;
             } else {
               lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
