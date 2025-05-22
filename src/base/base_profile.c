@@ -5,11 +5,19 @@
 internal inline void
 spall_begin(char *fmt, ...)
 {
+  if(spall_pid == 0)
+  {
+    spall_pid = os_get_process_info()->pid;
+  }
+  if(spall_tid == 0)
+  {
+    spall_tid = os_tid();
+  }
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
-  spall_buffer_begin(&spall_profile, &spall_buffer, string.str, string.size, os_now_microseconds());
+  spall_buffer_begin_ex(&spall_profile, &spall_buffer, string.str, string.size, os_now_microseconds(), spall_tid, spall_pid);
   va_end(args);
   scratch_end(scratch);
 }
