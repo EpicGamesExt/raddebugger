@@ -2176,10 +2176,26 @@ t_comdat_same_size(void)
     if (!t_write_file(str8_lit("c.obj"), obj)) { goto exit; }
   }
 
-  t_write_entry_obj();
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) {
+      goto exit;
+    }
+  }
 
   int same_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
   if (same_exit_code != 0) { goto exit; }
+
   {
     String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
     PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
