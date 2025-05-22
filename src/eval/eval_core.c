@@ -1090,6 +1090,11 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
             break;
           }
           scan_pos = pattern_part_pos + n->string.size;
+          if(n->next == 0 && scan_pos < type_string.size)
+          {
+            fits_this_type_string = 0;
+            break;
+          }
         }
         if(fits_this_type_string)
         {

@@ -159,6 +159,14 @@ struct Dynamic_Array
 };
 raddbg_type_view(Dynamic_Array, slice($));
 
+template<typename T>
+struct TemplatedDynamicArray
+{
+  T *v;
+  int count;
+};
+raddbg_type_view(TemplatedDynamicArray<?>, rows($, count, array(v, count)));
+
 struct Struct_With_Embedded_Arrays
 {
   int x;
@@ -425,6 +433,16 @@ type_coverage_eval_tests(void)
   {
     memory_,
     6
+  };
+  
+  TemplatedDynamicArray<Pair> templated_dynamic = {dynamic.pairs, dynamic.count};
+  TemplatedDynamicArray<Pair> templated_dynamics[] =
+  {
+    {dynamic.pairs, dynamic.count},
+    {dynamic.pairs, dynamic.count},
+    {dynamic.pairs, dynamic.count},
+    {dynamic.pairs, dynamic.count},
+    {dynamic.pairs, dynamic.count},
   };
   
   raddbg_pin(columns(sequence(6), fixed.pairs[$], memory_[$]));
