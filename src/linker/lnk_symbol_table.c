@@ -236,86 +236,92 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     // regular,common vs regular,common
     else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) &&
              (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
-      COFF_ComdatSelectType dst_select;
-      U32 dst_section_length;
-      U32 dst_check_sum;
-      if (dst_interp == COFF_SymbolValueInterp_Regular) {
-        COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(dst_obj, dst_obj->comdats[dst_parsed.section_number-1]);
-        coff_parse_secdef(secdef, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
+      U32 dst_comdat_symbol_idx = dst_obj->comdats[dst_parsed.section_number-1];
+      U32 src_comdat_symbol_idx = src_obj->comdats[src_parsed.section_number-1];
+      if (dst_comdat_symbol_idx == ~0 || src_comdat_symbol_idx == ~0) {
+        lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
       } else {
-        dst_select = COFF_ComdatSelect_Largest;
-        dst_section_length = dst_parsed.value;
-        dst_check_sum = 0;
-      }
-
-      COFF_ComdatSelectType src_select;
-      U32 src_section_length;
-      U32 src_check_sum;
-      if (src_interp == COFF_SymbolValueInterp_Regular) {
-        COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(src_obj, src_obj->comdats[src_parsed.section_number-1]);
-        coff_parse_secdef(secdef, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
-      } else {
-        src_select = COFF_ComdatSelect_Largest;
-        src_section_length = src_parsed.value;
-        src_check_sum = 0;
-      }
-
-      // handle objs compiled with /GR- and /GR
-      if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
-          (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
-        dst_select = COFF_ComdatSelect_Largest;
-        src_select = COFF_ComdatSelect_Largest;
-      }
-
-      if (src_select == dst_select) {
-        switch (src_select) {
-        case COFF_ComdatSelect_Null:
-        case COFF_ComdatSelect_Any: {
-          if (src_section_length == dst_section_length) {
-            can_replace = src_obj->input_idx < dst_obj->input_idx;
-          } else {
-            // both COMDATs are valid but to get smaller exe pick smallest
-            can_replace = src_section_length < dst_section_length;
-          }
-        } break;
-        case COFF_ComdatSelect_NoDuplicates: {
-          lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S.", dst->name, dst_obj->path);
-        } break;
-        case COFF_ComdatSelect_SameSize: {
-          if (dst_section_length != src_section_length) {
-            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S.", dst->name, dst_obj->path);
-          }
-        } break;
-        case COFF_ComdatSelect_ExactMatch: {
-          if (dst_check_sum != src_check_sum) {
-            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S.", dst->name, dst_obj->path);
-          }
-        } break;
-        case COFF_ComdatSelect_Largest: {
-          if (dst_section_length == src_section_length) {
-            if (dst_interp == COFF_SymbolValueInterp_Common) {
-              // handle communal variable
-              //
-              // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
-              can_replace = 1;
-            } else {
-              can_replace = src_obj->input_idx < dst_obj->input_idx;
-            }
-          } else {
-            can_replace = dst_section_length < src_section_length;
-          }
-        } break;
-        case COFF_ComdatSelect_Associative: {
-          // ignore
-        } break;
-        default: { InvalidPath; }
+        COFF_ComdatSelectType dst_select;
+        U32 dst_section_length;
+        U32 dst_check_sum;
+        if (dst_interp == COFF_SymbolValueInterp_Regular) {
+          COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(dst_obj, dst_comdat_symbol_idx);
+          coff_parse_secdef(secdef, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
+        } else {
+          dst_select = COFF_ComdatSelect_Largest;
+          dst_section_length = dst_parsed.value;
+          dst_check_sum = 0;
         }
-      } else {
-        String8 src_select_str = coff_string_from_comdat_select_type(src_select);
-        String8 dst_select_str = coff_string_from_comdat_select_type(dst_select);
-        lnk_error_obj(LNK_Warning_UnresolvedComdat, src_obj,
-            "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
-            src->name, src_select_str, dst_select_str, dst_obj);
+
+        COFF_ComdatSelectType src_select;
+        U32 src_section_length;
+        U32 src_check_sum;
+        if (src_interp == COFF_SymbolValueInterp_Regular) {
+          COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(src_obj, src_comdat_symbol_idx);
+          coff_parse_secdef(secdef, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
+        } else {
+          src_select = COFF_ComdatSelect_Largest;
+          src_section_length = src_parsed.value;
+          src_check_sum = 0;
+        }
+
+        // handle objs compiled with /GR- and /GR
+        if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
+            (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
+          dst_select = COFF_ComdatSelect_Largest;
+          src_select = COFF_ComdatSelect_Largest;
+        }
+
+        if (src_select == dst_select) {
+          switch (src_select) {
+          case COFF_ComdatSelect_Null:
+          case COFF_ComdatSelect_Any: {
+            if (src_section_length == dst_section_length) {
+              can_replace = src_obj->input_idx < dst_obj->input_idx;
+            } else {
+              // both COMDATs are valid but to get smaller exe pick smallest
+              can_replace = src_section_length < dst_section_length;
+            }
+          } break;
+          case COFF_ComdatSelect_NoDuplicates: {
+            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+          } break;
+          case COFF_ComdatSelect_SameSize: {
+            if (dst_section_length != src_section_length) {
+              lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+            }
+          } break;
+          case COFF_ComdatSelect_ExactMatch: {
+            if (dst_check_sum != src_check_sum) {
+              lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+            }
+          } break;
+          case COFF_ComdatSelect_Largest: {
+            if (dst_section_length == src_section_length) {
+              if (dst_interp == COFF_SymbolValueInterp_Common) {
+                // handle communal variable
+                //
+                // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
+                can_replace = 1;
+              } else {
+                can_replace = src_obj->input_idx < dst_obj->input_idx;
+              }
+            } else {
+              can_replace = dst_section_length < src_section_length;
+            }
+          } break;
+          case COFF_ComdatSelect_Associative: {
+            // ignore
+          } break;
+          default: { InvalidPath; }
+          }
+        } else {
+          String8 src_select_str = coff_string_from_comdat_select_type(src_select);
+          String8 dst_select_str = coff_string_from_comdat_select_type(dst_select);
+          lnk_error_obj(LNK_Warning_UnresolvedComdat, src_obj,
+              "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
+              src->name, src_select_str, dst_select_str, dst_obj);
+        }
       }
     } else {
       lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
