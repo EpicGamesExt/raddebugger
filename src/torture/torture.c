@@ -2021,7 +2021,7 @@ t_comdat_any(void)
 
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text$mn"), PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT|COFF_SectionFlag_Align1Bytes, str8_lit("1"));
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".test$mn"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT|COFF_SectionFlag_Align1Bytes, str8_lit("1"));
     coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Any);
     COFF_ObjSymbol *test = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 0, sect);
     test->type.u.msb = COFF_SymDType_Func;
@@ -2034,10 +2034,9 @@ t_comdat_any(void)
 
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text$mn"), PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT|COFF_SectionFlag_Align1Bytes, str8_lit("2"));
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".test$mn"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT|COFF_SectionFlag_Align1Bytes, str8_lit("2"));
     coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Any);
     COFF_ObjSymbol *test = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 0, sect);
-    test->type.u.msb = COFF_SymDType_Func;
     String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(str8_lit("2.obj"), obj)) {
@@ -2053,7 +2052,7 @@ t_comdat_any(void)
     };
     COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
-    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef_sect(obj_writer, str8_lit("TEST"), 0);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
     coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
     String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -2063,7 +2062,7 @@ t_comdat_any(void)
   }
 
   {
-    int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:1.exe /opt:noref /opt:noicf 1.obj 2.obj entry.obj");
+    int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:1.exe 1.obj 2.obj entry.obj");
     if (linker_exit_code != 0) {
         goto exit;
     }
@@ -2071,7 +2070,7 @@ t_comdat_any(void)
     PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
     COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
     String8             string_table  = str8_substr(exe, pe.string_table_range);
-    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".data"));
+    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".test"));
     String8             data          = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
     if (!str8_match(data, str8_lit("1"), 0)) {
       goto exit;
@@ -2079,7 +2078,7 @@ t_comdat_any(void)
   }
 
   {
-    int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:2.exe /opt:noref /opt:noicf 2.obj 1.obj entry.obj");
+    int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:2.exe 2.obj 1.obj entry.obj");
     if (linker_exit_code != 0) {
         goto exit;
     }
@@ -2087,7 +2086,7 @@ t_comdat_any(void)
     PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
     COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
     String8             string_table  = str8_substr(exe, pe.string_table_range);
-    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".data"));
+    COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".test"));
     String8             data          = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
     if (!str8_match(data, str8_lit("2"), 0)) {
       goto exit;
