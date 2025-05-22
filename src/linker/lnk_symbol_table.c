@@ -336,11 +336,17 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
   } else if (dst->type == LNK_Symbol_Defined && src->type == LNK_Symbol_Defined) {
     COFF_ParsedSymbol dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
     COFF_ParsedSymbol src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
-    COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->u.defined.obj, dst_parsed.section_number);
-    COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
-    AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
-    dst_sect->flags |= COFF_SectionFlag_LnkRemove;
-    dst->u.defined = src->u.defined;
+    COFF_SymbolValueInterpType dst_interp = coff_interp_symbol(dst_parsed.section_number, dst_parsed.value, dst_parsed.storage_class);
+    COFF_SymbolValueInterpType src_interp = coff_interp_symbol(src_parsed.section_number, src_parsed.value, src_parsed.storage_class);
+    if (dst_interp == COFF_SymbolValueInterp_Regular) {
+      COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->u.defined.obj, dst_parsed.section_number);
+      dst_sect->flags |= COFF_SectionFlag_LnkRemove;
+      dst->u.defined = src->u.defined;
+    }
+    if (src_interp == COFF_SymbolValueInterp_Regular) {
+      COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
+      AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
+    }
   } else {
     InvalidPath;
   }
