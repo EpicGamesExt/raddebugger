@@ -2101,6 +2101,46 @@ t_comdat_any(void)
 }
 
 internal T_Result
+t_comdat_no_duplicates(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *test_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".test"), PE_DATA_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT|COFF_SectionFlag_Align1Bytes, str8_lit("a"));
+    coff_obj_writer_push_symbol_secdef(obj_writer, test_sect, COFF_ComdatSelect_NoDuplicates);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("a"), 0, test_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("a.obj"), obj)) { goto exit; }
+    if (!t_write_file(str8_lit("b.obj"), obj)) { goto exit; }
+  }
+
+  t_write_entry_obj();
+
+  int duplicates_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
+  if (duplicates_exit_code == 0) { goto exit; }
+  if (t_ident_linker() == T_Linker_RAD && duplicates_exit_code != LNK_Error_MultiplyDefinedSymbol) { goto exit; }
+
+  int good_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe a.obj entry.obj");
+  if (good_exit_code != 0) { goto exit; }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("b.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".test"));
+  String8             data          = str8_substr(exe, rng_1u64(sect->foff, sect->foff + sect->vsize));
+  if (!str8_match(data, str8_lit("a"), 0)) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_sect_align(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -2259,6 +2299,7 @@ entry_point(CmdLine *cmdline)
     { "sect_align",           t_sect_align           },
     { "image_base",           t_image_base           },
     { "comdat_any",           t_comdat_any           },
+    { "comdat_no_duplicates", t_comdat_no_duplicates },
     //{ "import_export",        t_import_export        },
   };
 
