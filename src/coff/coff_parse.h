@@ -258,6 +258,7 @@ internal COFF_SectionHeader ** coff_section_table_from_data(Arena *arena, String
 
 internal COFF_ParsedSymbol coff_parse_symbol32(String8 string_table, COFF_Symbol32 *sym32);
 internal COFF_ParsedSymbol coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16);
+internal COFF_ParsedSymbol coff_parse_symbol(COFF_FileHeaderInfo header, String8 string_table, String8 symbol_table, U32 symbol_idx);
 
 internal COFF_Symbol32Array coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
 internal COFF_Symbol32Array coff_symbol_array_from_data_32(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
