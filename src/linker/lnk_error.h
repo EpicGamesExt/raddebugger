@@ -38,6 +38,7 @@ typedef enum
   LNK_Error_IllegalRelocation,
   LNK_Error_CircularMerge,
   LNK_Error_UnresolvedSymbol,
+  LNK_Error_AssociativeLoop,
   LNK_Error_StopLast,
   
   LNK_Error_First,

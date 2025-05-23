@@ -2201,6 +2201,44 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   U64       objs_count = obj_list.count;
   LNK_Obj **objs       = lnk_obj_arr_from_list(scratch.arena, obj_list);
 
+  ProfBegin("Remove Associatives");
+  {
+    for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
+      LNK_Obj *obj = objs[obj_idx];
+      String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
+      String8 symbol_table = str8_substr(obj->data, obj->header.symbol_table_range);
+      for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+        // find associate section head section index
+        U32 head_sect_idx = max_U32;
+        for (U64 current_sect_idx = sect_idx;;) {
+          U32 symbol_idx = obj->comdats[current_sect_idx];
+          if (symbol_idx == max_U32) {
+            break;
+          }
+
+          COFF_ParsedSymbol symbol = coff_parse_symbol(obj->header, string_table, symbol_table, symbol_idx);
+          COFF_ComdatSelectType selection = COFF_ComdatSelect_Null;
+          U32 section_number = 0;
+          coff_parse_secdef(symbol, obj->header.is_big_obj, &selection, &section_number, 0, 0);
+          if (selection != COFF_ComdatSelect_Associative) {
+            head_sect_idx = current_sect_idx;
+            break;
+          }
+
+          current_sect_idx = section_number-1;
+        }
+
+        if (head_sect_idx != max_U32) {
+          // flag current section with remove if head section was removed
+          COFF_SectionHeader *head_sect_header = lnk_coff_section_header_from_section_number(obj, head_sect_idx+1);
+          COFF_SectionHeader *curr_sect_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
+          curr_sect_header->flags |= (head_sect_header->flags & COFF_SectionFlag_LnkRemove);
+        }
+      }
+    }
+  }
+  ProfEnd();
+
   {
     ProfBegin("Define And Count Sections");
     Temp temp = temp_begin(scratch.arena);

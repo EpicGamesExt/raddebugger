@@ -229,13 +229,11 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
       can_replace = 0;
     }
     // weak vs regular,common,abs
-    else if (dst_interp == COFF_SymbolValueInterp_Weak &&
-        (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common || src_interp == COFF_SymbolValueInterp_Abs)) {
+    else if (dst_interp == COFF_SymbolValueInterp_Weak && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common || src_interp == COFF_SymbolValueInterp_Abs)) {
       can_replace = 1;
     }
     // regular,common vs regular,common
-    else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) &&
-             (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
+    else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
       U32 dst_comdat_symbol_idx = dst_obj->comdats[dst_parsed.section_number-1];
       U32 src_comdat_symbol_idx = src_obj->comdats[src_parsed.section_number-1];
       if (dst_comdat_symbol_idx == ~0 || src_comdat_symbol_idx == ~0) {
