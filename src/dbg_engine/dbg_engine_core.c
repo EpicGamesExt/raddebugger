@@ -378,10 +378,12 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   
   // rjf: line vaddr range => line's machine code
   String8 machine_code = {0};
+  B32 good_machine_code = 0;
   if(good_line_info)
   {
     CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
+    good_machine_code = (machine_code.size == dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
     LogInfoNamedBlockF("machine_code_slice")
     {
       log_infof("stale: %i\n", machine_code_slice.stale);
@@ -399,7 +401,6 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
       log_infof("]\n");
     }
   }
-  B32 good_machine_code = (good_line_info && machine_code.size == dim_1u64(line_vaddr_rng));
   
   // rjf: machine code => ctrl flow analysis
   DASM_CtrlFlowInfo ctrl_flow_info = {0};
@@ -535,12 +536,13 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   
   // rjf: line vaddr range => line's machine code
   String8 machine_code = {0};
+  B32 good_machine_code = 0;
   if(good_line_info)
   {
     CTRL_ProcessMemorySlice machine_code_slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, process->handle, line_vaddr_rng, os_now_microseconds()+5000);
     machine_code = machine_code_slice.data;
+    good_machine_code = (machine_code.size == dim_1u64(line_vaddr_rng) && !machine_code_slice.any_byte_bad);
   }
-  B32 good_machine_code = (good_line_info && machine_code.size == dim_1u64(line_vaddr_rng));
   
   // rjf: machine code => ctrl flow analysis
   DASM_CtrlFlowInfo ctrl_flow_info = {0};
