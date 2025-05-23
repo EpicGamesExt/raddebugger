@@ -112,7 +112,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
           d_sd->length                = safe_cast_u32(sect->data.total_size);
           d_sd->number_of_relocations = (U16)sect->reloc_count;
           d_sd->check_sum             = 0;
-          d_sd->number_lo             = (U16)sect->section_number;
+          d_sd->number_lo             = s_sd->selection == COFF_ComdatSelect_Associative ? safe_cast_u16(s_sd->associate->section_number) : 0;
           d_sd->selection             = s_sd->selection;
 
           str8_list_push(scratch.arena, &symbol_table, str8_struct(d_sd));
@@ -300,12 +300,20 @@ internal COFF_ObjSymbol *
 coff_obj_writer_push_symbol_secdef(COFF_ObjWriter *obj_writer, COFF_ObjSection *section, COFF_ComdatSelectType selection)
 {
   COFF_ObjSymbol *s = coff_obj_writer_push_symbol_static(obj_writer, section->name, 0, section);
-
   COFF_ObjSymbolSecDef *sd = push_array(obj_writer->arena, COFF_ObjSymbolSecDef, 1);
-  sd->selection            = selection;
-
+  sd->selection = selection;
   str8_list_push(obj_writer->arena, &s->aux_symbols, str8_struct(sd));
+  return s;
+}
 
+internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_associative(COFF_ObjWriter *obj_writer, COFF_ObjSection *head, COFF_ObjSection *associate)
+{
+  COFF_ObjSymbol *s = coff_obj_writer_push_symbol_static(obj_writer, head->name, 0, head);
+  COFF_ObjSymbolSecDef *sd = push_array(obj_writer->arena, COFF_ObjSymbolSecDef, 1);
+  sd->selection = COFF_ComdatSelect_Associative;
+  sd->associate = associate;
+  str8_list_push(obj_writer->arena, &s->aux_symbols, str8_struct(sd));
   return s;
 }
 

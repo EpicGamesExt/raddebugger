@@ -27,6 +27,7 @@ typedef struct COFF_ObjSymbolWeak
 typedef struct COFF_ObjSymbolSecDef
 {
   COFF_ComdatSelectType selection;
+  struct COFF_ObjSection *associate;
 } COFF_ObjSymbolSecDef;
 
 typedef struct COFF_ObjSymbol
@@ -104,6 +105,7 @@ internal COFF_ObjSymbol*  coff_obj_writer_push_symbol(COFF_ObjWriter *obj_writer
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_extern(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_ObjSection *section);
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_static(COFF_ObjWriter *obj_writer, String8 name, U32 off, COFF_ObjSection *section);
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_secdef(COFF_ObjWriter *obj_writer, COFF_ObjSection *section, COFF_ComdatSelectType selection);
+internal COFF_ObjSymbol * coff_obj_writer_push_symbol_associative(COFF_ObjWriter *obj_writer, COFF_ObjSection *head, COFF_ObjSection *associate);
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_weak(COFF_ObjWriter *obj_writer, String8 name, COFF_WeakExtType characteristics, COFF_ObjSymbol *tag);
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_abs(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_SymStorageClass storage_class);
 internal COFF_ObjSymbol * coff_obj_writer_push_symbol_undef(COFF_ObjWriter *obj_writer, String8 name);
