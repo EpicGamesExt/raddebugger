@@ -167,6 +167,18 @@ coff_parse_symbol16(String8 string_table, COFF_Symbol16 *sym16)
   return result;
 }
 
+internal COFF_ParsedSymbol
+coff_parse_symbol(COFF_FileHeaderInfo header, String8 string_table, String8 symbol_table, U32 symbol_idx)
+{
+  COFF_ParsedSymbol symbol;
+  if (header.is_big_obj) {
+    symbol = coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
+  } else {
+    symbol = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
+  }
+  return symbol;
+}
+
 internal COFF_Symbol32Array
 coff_symbol_array_from_data_16(Arena *arena, String8 raw_coff, U64 symbol_array_off, U64 symbol_count)
 {
