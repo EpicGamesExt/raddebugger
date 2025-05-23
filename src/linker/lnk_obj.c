@@ -117,6 +117,35 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   //
+  // error check symbols
+  //
+  {
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(input->data, header.section_table_range).str;
+    String8 string_table = str8_substr(input->data, header.string_table_range);
+    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
+    COFF_ParsedSymbol symbol;
+    for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+      if (interp == COFF_SymbolValueInterp_Regular) {
+        if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
+          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "symbol %S (No. 0x%x) points to an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
+        }
+        if (symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
+          COFF_ComdatSelectType select;
+          U32 section_number = 0;
+          coff_parse_secdef(symbol, header.is_big_obj, &select, &section_number, 0, 0);
+          if (select == COFF_ComdatSelect_Associative) {
+            if (section_number == 0 || section_number > header.section_count_no_null) {
+              lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbol %S (No. 0x%x) associates with an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  //
   // create symbol links to COMDAT sections
   //
   U32 *comdats;
@@ -128,11 +157,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      if (header.is_big_obj) {
-        symbol = coff_parse_symbol32(string_table, (COFF_Symbol32 *)symbol_table.str + symbol_idx);
-      } else {
-        symbol = coff_parse_symbol16(string_table, (COFF_Symbol16 *)symbol_table.str + symbol_idx);
-      }
+      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
 
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
@@ -160,6 +185,57 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         }
       }
     }
+  }
+
+  //
+  // COMDAT loop checker
+  //
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+
+    String8    string_table     = str8_substr(input->data, header.string_table_range);
+    String8    symbol_table     = str8_substr(input->data, header.symbol_table_range);
+    HashTable *visited_sections = hash_table_init(scratch.arena, 32);
+    for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
+      for (U32 curr_section = sect_idx;;) {
+        U32 symbol_idx = comdats[curr_section];
+
+        // is section COMDAT?
+        if (symbol_idx == max_U32) {
+          break;
+        }
+
+        // extract COMDAT info for current section
+        COFF_ParsedSymbol     symbol         = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+        COFF_ComdatSelectType select         = COFF_ComdatSelect_Null;
+        U32                   section_number = 0;
+        coff_parse_secdef(symbol, header.is_big_obj, &select, &section_number, 0, 0);
+
+        if (select != COFF_ComdatSelect_Associative) {
+          // section terminates at non-associative COMDAT -- no loop
+          break;
+        }
+
+        // was section visited? -- loop found
+        if (hash_table_search_u64(visited_sections, curr_section)) {
+          COFF_ParsedSymbol symbol = coff_parse_symbol(header, string_table, symbol_table, comdats[sect_idx]);
+          lnk_error_with_loc(LNK_Error_AssociativeLoop, input->path, input->lib_path, "section symbol %S (No. 0x%x) does not terminate on a non-associate COMDAT symbol", symbol.name, comdats[sect_idx]);
+          break;
+        }
+
+        // track visited sections
+        hash_table_push_u64_u64(scratch.arena, visited_sections, curr_section, 0);
+
+        // follow association
+        Assert(section_number > 0);
+        curr_section = section_number-1;
+      }
+
+      // purge hash table for next run
+      hash_table_purge(visited_sections);
+    }
+
+    scratch_end(scratch);
   }
 
   // fill out obj
