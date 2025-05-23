@@ -665,6 +665,7 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
             str8_lit_comp("align_of"),
             str8_lit_comp("asm"),
             str8_lit_comp("auto_cast"),
+            str8_lit_comp("bit_field"),
             str8_lit_comp("bit_set"),
             str8_lit_comp("break"),
             str8_lit_comp("case"),
