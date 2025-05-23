@@ -401,6 +401,56 @@ t_machine_compat_check(void)
 }
 
 internal T_Result
+t_out_of_bounds_section_number(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *foo = coff_obj_writer_push_section(obj_writer, str8_lit(".foo"), PE_DATA_SECTION_FLAGS, str8_lit("foo"));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("foo"), 0, foo);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    {
+      COFF_FileHeaderInfo header = coff_file_header_info_from_data(obj);
+      String8 string_table = str8_substr(obj, header.string_table_range);
+      String8 symbol_table = str8_substr(obj, header.symbol_table_range);
+      COFF_ParsedSymbol symbol = coff_parse_symbol(header, string_table, symbol_table, 0);
+      COFF_Symbol16 *symbol16 = symbol.raw_symbol;
+      symbol16->section_number = 123;
+    }
+    if (!t_write_file(str8_lit("bad.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("foo"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj bad.obj");
+  if (linker_exit_code == 0) { goto exit; }
+  if (t_ident_linker() == T_Linker_RAD && linker_exit_code != LNK_Error_IllData) { goto exit; }
+
+  result = T_Result_Pass;
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_merge(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -2761,6 +2811,7 @@ entry_point(CmdLine *cmdline)
   } target_array[] = {
     { "simple_link_test",                 t_simple_link_test                 },
     { "machine_compat_check",             t_machine_compat_check             },
+    { "out_of_bounds_section_number",     t_out_of_bounds_section_number     },
     { "merge",                            t_merge                            },
     { "undef_section",                    t_undef_section                    },
     { "undef_reloc_section",              t_undef_reloc_section              },
