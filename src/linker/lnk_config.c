@@ -1060,6 +1060,8 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 1) {
       LNK_AltName alt_name;
       if (lnk_parse_alt_name_directive(value_strings.first->string, &alt_name)) {
+        alt_name.from = push_str8_copy(arena, alt_name.from);
+        alt_name.to = push_str8_copy(arena, alt_name.to);
         LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
         alt_name_n->data = alt_name;
         SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
