@@ -166,6 +166,12 @@ lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *
   return result;
 }
 
+internal void
+lnk_error_multiply_defined_symbol(LNK_Symbol *dst, LNK_Symbol *src)
+{
+  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+}
+
 internal B32
 lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
@@ -196,25 +202,25 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     COFF_SymbolValueInterpType src_interp = coff_interp_symbol(src_parsed.section_number, src_parsed.value, src_parsed.storage_class);
 
     if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs) {
-      lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+      lnk_error_multiply_defined_symbol(dst, src);
     }
     // abs vs regular
     else if ((dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Regular) ||
              (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs)) {
-      lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+      lnk_error_multiply_defined_symbol(dst, src);
     }
     // abs vs common
     else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Common) {
       if (dst->u.defined.obj->input_idx < src->u.defined.obj->input_idx) {
         can_replace = 1;
       } else {
-        lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+        lnk_error_multiply_defined_symbol(dst, src);
       }
     }
     // common vs abs
     else if (dst_interp == COFF_SymbolValueInterp_Common && src_interp == COFF_SymbolValueInterp_Abs) {
       if (dst->u.defined.obj->input_idx < src->u.defined.obj->input_idx) {
-        lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+        lnk_error_multiply_defined_symbol(dst, src);
       }
     }
     // weak vs weak
@@ -234,40 +240,52 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     }
     // regular,common vs regular,common
     else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
-      U32 dst_comdat_symbol_idx = dst_obj->comdats[dst_parsed.section_number-1];
-      U32 src_comdat_symbol_idx = src_obj->comdats[src_parsed.section_number-1];
-      if (dst_comdat_symbol_idx == ~0 || src_comdat_symbol_idx == ~0) {
-        lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
-      } else {
-        COFF_ComdatSelectType dst_select;
-        U32 dst_section_length;
-        U32 dst_check_sum;
-        if (dst_interp == COFF_SymbolValueInterp_Regular) {
+      B32 is_dst_single_defn = 0;
+      B32 is_src_single_defn = 0;
+
+      COFF_ComdatSelectType dst_select;
+      U32 dst_section_length;
+      U32 dst_check_sum;
+      if (dst_interp == COFF_SymbolValueInterp_Regular) {
+        U32 dst_comdat_symbol_idx = dst_obj->comdats[dst_parsed.section_number-1];
+        if (dst_comdat_symbol_idx != max_U32) {
           COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(dst_obj, dst_comdat_symbol_idx);
           coff_parse_secdef(secdef, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
         } else {
-          dst_select = COFF_ComdatSelect_Largest;
-          dst_section_length = dst_parsed.value;
-          dst_check_sum = 0;
+          is_dst_single_defn = 1;
         }
+      } else if (dst_interp == COFF_SymbolValueInterp_Common) {
+        dst_select = COFF_ComdatSelect_Largest;
+        dst_section_length = dst_parsed.value;
+        dst_check_sum = 0;
+      }
 
-        COFF_ComdatSelectType src_select;
-        U32 src_section_length;
-        U32 src_check_sum;
-        if (src_interp == COFF_SymbolValueInterp_Regular) {
+      COFF_ComdatSelectType src_select;
+      U32 src_section_length;
+      U32 src_check_sum;
+      if (src_interp == COFF_SymbolValueInterp_Regular) {
+        U32 src_comdat_symbol_idx = src_obj->comdats[src_parsed.section_number-1];
+        if (src_comdat_symbol_idx != max_U32) {
           COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(src_obj, src_comdat_symbol_idx);
           coff_parse_secdef(secdef, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
         } else {
-          src_select = COFF_ComdatSelect_Largest;
-          src_section_length = src_parsed.value;
-          src_check_sum = 0;
+          is_src_single_defn = 1;
         }
+      } else if (src_interp == COFF_SymbolValueInterp_Common) {
+        src_select = COFF_ComdatSelect_Largest;
+        src_section_length = src_parsed.value;
+        src_check_sum = 0;
+      }
 
+      if (is_dst_single_defn || is_src_single_defn) {
+        lnk_error_multiply_defined_symbol(dst, src);
+      } else {
         // handle objs compiled with /GR- and /GR
-        if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest) ||
-            (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any)) {
-          dst_select = COFF_ComdatSelect_Largest;
+        if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest)) {
           src_select = COFF_ComdatSelect_Largest;
+        }
+        if (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any) {
+          dst_select = COFF_ComdatSelect_Largest;
         }
 
         if (src_select == dst_select) {
@@ -282,13 +300,13 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
             }
           } break;
           case COFF_ComdatSelect_NoDuplicates: {
-            lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+            lnk_error_multiply_defined_symbol(dst, src);
           } break;
           case COFF_ComdatSelect_SameSize: {
             if (dst_section_length == src_section_length) {
               can_replace = src_obj->input_idx < dst_obj->input_idx;
             } else {
-              lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+              lnk_error_multiply_defined_symbol(dst, src);
             }
           } break;
           case COFF_ComdatSelect_ExactMatch: {
@@ -308,7 +326,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
             if (is_exact_match) {
               can_replace = src_obj->input_idx < dst_obj->input_idx;
             } else {
-              lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, src_obj, "multiply defined symbol %S in %S", dst->name, dst_obj->path);
+              lnk_error_multiply_defined_symbol(dst, src);
             }
           } break;
           case COFF_ComdatSelect_Largest: {
@@ -334,8 +352,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
           String8 src_select_str = coff_string_from_comdat_select_type(src_select);
           String8 dst_select_str = coff_string_from_comdat_select_type(dst_select);
           lnk_error_obj(LNK_Warning_UnresolvedComdat, src_obj,
-              "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
-              src->name, src_select_str, dst_select_str, dst_obj);
+                        "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
+                        src->name, src_select_str, dst_select_str, dst_obj);
         }
       }
     } else {
