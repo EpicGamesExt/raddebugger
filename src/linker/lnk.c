@@ -2661,8 +2661,9 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
           if (interp == COFF_SymbolValueInterp_Common) {
             LNK_Symbol *defn = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, symbol.name);
+            COFF_ParsedSymbol defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
             if (defn) {
-              LNK_SectionContrib *sc = sect_map[obj_idx][symbol.section_number-1];
+              LNK_SectionContrib *sc = sect_map[defn->u.defined.obj->input_idx][defn_parsed.section_number-1];
               if (obj->header.is_big_obj) {
                 COFF_Symbol32 *symbol32  = symbol.raw_symbol;
                 symbol32->section_number = safe_cast_u32(sc->u.sect_idx + 1);

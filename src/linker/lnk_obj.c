@@ -11,12 +11,6 @@ lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
   va_end(args);
 }
 
-internal void
-lnk_error_multiply_defined_symbol(LNK_Obj *defn_obj, LNK_Obj *conf_obj, String8 symbol_name)
-{
-  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, defn_obj, "symbol %S is multiply defined in %S", symbol_name, conf_obj->path);
-}
-
 ////////////////////////////////
 
 internal LNK_ObjNodeArray
