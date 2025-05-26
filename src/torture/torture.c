@@ -2795,6 +2795,99 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_alt_name(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_lit("test"));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("test"), 0, sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("test.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_lit("foo"));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("foo"), 0, sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("foo.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("foo"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code;
+
+  // basic alternate name test
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /alternatename:foo=test test.obj entry.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  // linker should not chase alt name links
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe /alternatename:foo=bar /alternatename:bar=test test.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // alt name conflict
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:c.exe /alternatename:foo=test /alternatename:foo=qwe test.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:d.exe /alternatename:foo foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+  
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:e.exe /alternatename:foo-oof foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /alternatename:foo=test=bar foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /alternatename:foo= foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /alternatename:= foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // syntax error
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /alternatename: foo.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  // TODO: check that RAD Linker prints these warnings
+
+  // warn about alt name to self alt name?
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:f.exe /alternatename:foo=foo foo.obj entry.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  // warn about alt name to unknown symbol?
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:g.exe /alternatename:qwe=ewq foo.obj entry.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -2840,6 +2933,7 @@ entry_point(CmdLine *cmdline)
     { "comdat_associative_loop",          t_comdat_associative_loop          },
     { "comdat_associative_non_comdat",    t_comdat_associative_non_comdat    },
     { "comdat_associative_out_of_bounds", t_comdat_associative_out_of_bounds },
+    { "alt_name",                         t_alt_name                         },
     //{ "import_export",        t_import_export        },
   };
 
