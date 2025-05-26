@@ -2952,6 +2952,75 @@ t_include(void)
   return result;
 }
 
+internal T_Result
+t_communal_var(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_common(obj_writer, str8_lit("TEST"), 1);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("communal.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *sect = t_push_data_section(obj_writer, str8_lit("test"));
+    sect->flags |= COFF_SectionFlag_LnkCOMDAT;
+    coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Largest);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 0, sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("large.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) {
+      goto exit;
+    }
+  }
+
+  // linker should replace communal TEST with .data TEST
+  int linker_exit_code;
+
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe communal.obj large.obj entry.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:b.exe large.obj communal.obj entry.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  char *exes[] = { "a.exe", "b.exe" };
+  for (U64 i = 0; i < ArrayCount(exes); i += 1) {
+    String8             exe           = t_read_file(scratch.arena, str8_cstring(exes[i]));
+    PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    String8             string_table  = str8_substr(exe, pe.string_table_range);
+    COFF_SectionHeader *data_sect     = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".data"));
+    if (!data_sect) { goto exit; }
+    String8             data          = str8_substr(exe, rng_1u64(data_sect->foff, data_sect->foff + data_sect->vsize));
+    if (!str8_match(data, str8_lit("test"), 0)) { goto exit; }
+  }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -2999,6 +3068,7 @@ entry_point(CmdLine *cmdline)
     { "comdat_associative_out_of_bounds", t_comdat_associative_out_of_bounds },
     { "alt_name",                         t_alt_name                         },
     { "include",                          t_include                          },
+    { "communal_var",                     t_communal_var                     },
     //{ "import_export",        t_import_export        },
   };
 
