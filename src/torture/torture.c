@@ -3092,6 +3092,54 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_delay_import_user32(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *data_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".str"), PE_DATA_SECTION_FLAGS, str8_zero());
+    U64 msg_off = data_sect->data.total_size;
+    str8_list_pushf(obj_writer->arena, &data_sect->data, "test\0");
+    U64 caption_off = data_sect->data.total_size;
+    str8_list_pushf(obj_writer->arena, &data_sect->data, "foo\0");
+    COFF_ObjSymbol *msg_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("msg"), msg_off, data_sect);
+    COFF_ObjSymbol *caption_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("caption"), caption_off, data_sect);
+
+    U8 text[] = {
+      0x48, 0x83, 0xEC, 0x28,                   // sub  rsp,28h
+      0x45, 0x33, 0xC9,                         // xor  r9d,r9d
+      0x4C, 0x8D, 0x05, 0x00, 0x00, 0x00, 0x00, // lea  r8,[msg]
+      0x48, 0x8D, 0x15, 0x00, 0x00, 0x00, 0x00, // lea  rdx,[caption]
+      0x33, 0xC9,                               // xor  ecx,ecx
+      0xFF, 0x15, 0x00, 0x00, 0x00, 0x00,       // call qword ptr [__imp_MessageBoxA]
+      0x33, 0xC0,                               // xor  eax,eax
+      0x48, 0x83, 0xC4, 0x28,                   // add  rsp,28h
+      0xC3,                                     // ret
+    };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    COFF_ObjSymbol *text_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    COFF_ObjSymbol *message_box_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_MessageBoxA"));
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 10, msg_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 16, caption_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 25, message_box_symbol, COFF_Reloc_X64_Rel32);
+
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("delay_import.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /out:a.exe /entry:entry /fixed /delayload:user32.dll kernel32.lib user32.lib libcmt.lib delayimp.lib delay_import.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+ scratch_end(scratch);
+ return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -3141,6 +3189,7 @@ entry_point(CmdLine *cmdline)
     { "include",                          t_include                          },
     { "communal_var",                     t_communal_var                     },
     { "import_kernel32",                  t_import_kernel32                  },
+    { "delay_import_user32",              t_delay_import_user32              },
     //{ "import_export",        t_import_export        },
   };
 
