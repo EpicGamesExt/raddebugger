@@ -357,19 +357,41 @@ lnk_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
   return 0;
 }
 
-internal String8List *
-lnk_collect_obj_chunks_parallel(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8 name, String8 postfix, B32 collect_discarded)
+internal
+THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {
-  NotImplemented;
-  return 0;
+  LNK_SectionCollector *task = raw_task;
+  LNK_Obj              *obj  = task->objs[task_id];
+
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+  String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
+  for (U32 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+    COFF_SectionHeader *section_header = &section_table[sect_idx];
+
+    if (section_header->flags & COFF_SectionFlag_LnkRemove) {
+      if (!task->collect_discarded) {
+        continue;
+      }
+    }
+
+    String8 section_name = coff_name_from_section_header(string_table, section_header);
+    if (str8_match(section_name, task->name, 0)) {
+      String8 section_data = str8_substr(obj->data, rng_1u64(section_header->foff, section_header->foff + section_header->fsize));
+      str8_list_push(arena, &task->out_lists[task_id], section_data);
+    }
+  }
 }
 
-internal String8List
-lnk_collect_obj_chunks(Arena *arena, LNK_Obj *obj, String8 name, String8 postfix, B32 collect_discarded)
+internal String8List *
+lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded)
 {
-  NotImplemented;
-  String8List result = {0};
-  return result;
+  LNK_SectionCollector task = {0};
+  task.objs              = objs;
+  task.name              = name;
+  task.collect_discarded = collect_discarded;
+  task.out_lists         = push_array(arena->v[0], String8List, objs_count);
+  tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_chunks_task, &task);
+  return task.out_lists;
 }
 
 internal void

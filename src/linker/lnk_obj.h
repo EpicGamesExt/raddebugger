@@ -81,6 +81,14 @@ typedef struct
   LNK_SymbolList  *undef_lists;
 } LNK_InputCoffSymbolTable;
 
+typedef struct
+{
+  LNK_Obj **objs;
+  String8 name;
+  B32 collect_discarded;
+  String8List *out_lists;
+} LNK_SectionCollector;
+
 ////////////////////////////////
 
 internal void lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...);
@@ -105,8 +113,7 @@ internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Ob
 
 ////////////////////////////////
 
-internal String8List * lnk_collect_obj_chunks_parallel(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8 name, String8 postfix, B32 collect_discarded);
-internal String8List   lnk_collect_obj_chunks(Arena *arena, LNK_Obj *obj, String8 name, String8 postfix, B32 collect_discarded);
+internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
 
 ////////////////////////////////
 

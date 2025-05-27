@@ -373,9 +373,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
   ProfBegin("Collect CodeView");
   // TODO: fix memory leak, we need a Temp wrapper for pool arena
   B32 collect_discarded_flag = 0;
-  String8List *debug_s_list_arr = lnk_collect_obj_chunks_parallel(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug"), str8_lit("S"), collect_discarded_flag);
-  String8List *debug_p_list_arr = lnk_collect_obj_chunks_parallel(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug"), str8_lit("P"), collect_discarded_flag);
-  String8List *debug_t_list_arr = lnk_collect_obj_chunks_parallel(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug"), str8_lit("T"), collect_discarded_flag);
+  String8List *debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), collect_discarded_flag);
+  String8List *debug_p_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$P"), collect_discarded_flag);
+  String8List *debug_t_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$T"), collect_discarded_flag);
   ProfEnd();
 
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
@@ -3269,9 +3269,13 @@ lnk_build_pdb(TP_Context               *tp,
     Rng1U64Array image_section_file_ranges = {0};
     image_section_file_ranges.count = image_section_table_count;
     image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
+    Rng1U64Array image_section_virt_ranges = {0};
+    image_section_virt_ranges.count = image_section_table_count;
+    image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
     for (U64 i = 0; i < image_section_table_count; i += 1) {
       COFF_SectionHeader *sect_header = image_section_table[i];
       image_section_file_ranges.v[i] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+      image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
     }
 
     LNK_PushDbiSecContribTaskData task = {0};
@@ -3280,6 +3284,7 @@ lnk_build_pdb(TP_Context               *tp,
     task.sc_list                       = push_array(scratch.arena, PDB_DbiSectionContribList, obj_count);
     task.image_data                    = image_data;
     task.image_section_file_ranges     = image_section_file_ranges;
+    task.image_section_virt_ranges     = image_section_virt_ranges;
     tp_for_parallel(tp, tp_arena, obj_count, lnk_push_dbi_sec_contrib_task, &task);
 
     dbi_sec_list_concat_arr(&pdb->dbi->sec_contrib_list, obj_count, task.sc_list);
