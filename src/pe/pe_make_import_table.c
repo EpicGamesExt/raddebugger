@@ -390,9 +390,10 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
     COFF_ObjSymbol *load_thunk_symbol = 0;
     if (import_header.type == COFF_ImportHeader_Code) {
       switch (machine) {
+      case COFF_MachineType_Unknown: {} break;
       case COFF_MachineType_X64: {
         String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", import_header.func_name);
-        coff_obj_writer_push_symbol_undef(obj_writer, iat_symbol_name);
+        coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_sect->data.total_size, iat_sect);
 
         // emit jmp thunk
         jmp_thunk_symbol = pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
@@ -410,10 +411,6 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
       String8 ordinal_data = coff_ordinal_data_from_hint(obj_writer->arena, import_header.machine, import_header.hint_or_ordinal);
       str8_list_push(obj_writer->arena, &ilt_sect->data, ordinal_data);
       str8_list_push(obj_writer->arena, &iat_sect->data, ordinal_data);
-
-      String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", import_header.func_name);
-      iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_offset, iat_sect);
-
 
       if (emit_biat) {
         U64 import_size = coff_word_size_from_machine(machine);
@@ -448,11 +445,11 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
       coff_obj_writer_section_push_reloc_voff(obj_writer, ilt_sect, ilt_data_offset, int_symbol);
 
       // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses.
-      U64 iat_data_offset = iat_sect->data.total_size;
+      U64 iat_offset = iat_sect->data.total_size;
       str8_list_push(obj_writer->arena, &iat_sect->data, str8(0, import_size));
 
       // patch-in thunk address
-      coff_obj_writer_section_push_reloc_addr(obj_writer, iat_sect, iat_data_offset, load_thunk_symbol);
+      coff_obj_writer_section_push_reloc_addr(obj_writer, iat_sect, iat_offset, load_thunk_symbol);
 
       if (emit_biat) {
         U64 biat_data_offset = biat_sect->data.total_size;
