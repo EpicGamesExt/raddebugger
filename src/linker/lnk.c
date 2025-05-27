@@ -1239,15 +1239,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
           symbol_secoff = symbol.value;
           symbol_voff = safe_cast_u32((U64)task->image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
         } else if (interp == COFF_SymbolValueInterp_Abs) {
-          // error check relocation
-          if (obj->header.machine == COFF_MachineType_X64) {
-            if (reloc->type == COFF_Reloc_X64_SecRel) {
-              lnk_error_obj(LNK_Error_IllegalRelocation, obj, "section-relative relocation (No. 0x%x) cannot be applied to absolute symbol (No. 0x%x)", reloc_idx, reloc->isymbol);
-            }
-          } else if (obj->header.machine != COFF_MachineType_Unknown) {
-            NotImplemented;
-          }
-
           // There aren't enough bits in COFF symbol to store full image base address,
           // so we special case __ImageBase. A better solution would be to add
           // a 64-bit symbol format to COFF.
@@ -1278,7 +1269,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       // read addend
       Assert(reloc_foff + reloc_value.size <= task->image_data.size);
       U64 raw_addend = 0;
-      str8_deserial_read(task->image_data, reloc_foff, &raw_addend, reloc_value.size, reloc_value.size);
+      str8_deserial_read(task->image_data, reloc_foff, &raw_addend, reloc_value.size, 1);
 
       // compute new reloc value
       S64 addend       = extend_sign64(raw_addend, reloc_value.size);
