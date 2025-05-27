@@ -367,7 +367,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
 
   // obj list -> array
   U64       obj_count = obj_list.count;
-  LNK_Obj **obj_arr   = lnk_obj_arr_from_list(tp_arena->v[0], obj_list);
+  LNK_Obj **obj_arr   = lnk_array_from_obj_list(tp_arena->v[0], obj_list);
   
   // gather debug info sections from objs
   ProfBegin("Collect CodeView");

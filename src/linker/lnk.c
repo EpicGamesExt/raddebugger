@@ -2199,7 +2199,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   // obj list -> array
   //
   U64       objs_count = obj_list.count;
-  LNK_Obj **objs       = lnk_obj_arr_from_list(scratch.arena, obj_list);
+  LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, obj_list);
 
   ProfBegin("Remove Associatives");
   {
