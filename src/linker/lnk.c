@@ -4376,8 +4376,7 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
             input->data = pe_make_import_dll_obj_delayed(scratch.arena, time_stamp, config->machine, dll_names[dll_idx], delay_load_helper_name, import_debug_symbols, *dll_import_headers[dll_idx], emit_biat, emit_uiat);
             input->path = dll_names[dll_idx];
             input->dedup_id = input->path;
-
-            os_write_data_to_file_path(str8_lit("delay_imp.obj"), input->data);
+            //os_write_data_to_file_path(str8_lit("delay_imp.obj"), input->data);
           }
           String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
           {

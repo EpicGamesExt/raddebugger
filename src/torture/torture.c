@@ -3021,6 +3021,77 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_import_kernel32(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 data[] = "test";
+    U8 text[] = {
+      0x48, 0x83, 0xec, 0x68,                               // sub  rsp,68h                        ; alloc space on stack
+      0xc7, 0x44, 0x24, 0x48, 0x18, 0x00, 0x00, 0x00,       // mov  dword ptr [rsp+48h],18h        ; SECURITY_ATTRIBUTES.nLength
+      0x48, 0xc7, 0x44, 0x24, 0x50, 0x00, 0x00, 0x00, 0x00, // mov  qword ptr [rsp+50h],0          ; SECURITY_ATTRIBUTES.lpSecurityDescriptor
+      0xc7, 0x44, 0x24, 0x58, 0x00, 0x00, 0x00, 0x00,       // mov  dword ptr [rsp+58h],0          ; SECURITY_ATTRIBUTES.bInheritHandle
+      0x48, 0xc7, 0x44, 0x24, 0x30, 0x00, 0x00, 0x00, 0x00, // mov  qword ptr [rsp+30h],0          ; hTemplateFile
+      0xc7, 0x44, 0x24, 0x28, 0x80, 0x00, 0x00, 0x00,       // mov  dword ptr [rsp+28h],80h        ; dwFlagsAndAttributes
+      0xc7, 0x44, 0x24, 0x20, 0x02, 0x00, 0x00, 0x00,       // mov  dword ptr [rsp+20h],2          ; dwCreationDisposition
+      0x4c, 0x8d, 0x4c, 0x24, 0x48,                         // lea  r9,[rsp+48h]                   ; lpSecurityAttributes
+      0x45, 0x33, 0xc0,                                     // xor  r8d,r8d                        ; dwShareMode
+      0xba, 0x00, 0x00, 0x00, 0x40,                         // mov  edx,40000000h                  ; dwDesiredAccess
+      0x48, 0x8d, 0x0d, 0x00, 0x00, 0x00, 0x00,             // lea  rcx,[test]                     ; lpFileName
+      0xff, 0x15, 0x00, 0x00, 0x00, 0x00,                   // call qword ptr [__imp_CreateFileA]  ; call CreateFileA
+      0x48, 0x89, 0xc1,                                     // mov  rcx,rax                        ; hObject
+      0xff, 0x15, 0x00, 0x00, 0x00, 0x00,                   // call qword ptr [__imp_CloseHandle]  ; call CloseHandle
+      0x33, 0xc0,                                           // xor  eax,eax                        ; clear result
+      0x48, 0x83, 0xc4, 0x68,                               // add  rsp,68h                        ; dealloc stack
+      0xc3                                                  // ret                                 ; return
+    };
+    COFF_ObjSection *data_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".data"), PE_DATA_SECTION_FLAGS, str8_array_fixed(data));
+    COFF_ObjSection *text_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    COFF_ObjSymbol *data_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("test"), 0, data_sect);
+    COFF_ObjSymbol *entry_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    COFF_ObjSymbol *create_file_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_CreateFileA"));
+    COFF_ObjSymbol *close_handle_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_CloseHandle"));
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 70, data_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 76, create_file_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 85, close_handle_symbol, COFF_Reloc_X64_Rel32);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("import.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /fixed import.obj kernel32.lib");
+  if (linker_exit_code != 0) { goto exit; }
+
+#if OS_WINDOWS
+  {
+    String8 test_file_path = push_str8f(scratch.arena, "%S/test", g_wdir);
+    os_delete_file_at_path(test_file_path);
+
+    OS_ProcessLaunchParams launch_opts = {0};
+    launch_opts.inherit_env = 0;
+    launch_opts.path = g_wdir;
+    str8_list_pushf(scratch.arena, &launch_opts.cmd_line, "%S/a.exe", g_wdir);
+    OS_Handle handle = os_process_launch(&launch_opts);
+    AssertAlways(!os_handle_match(handle, os_handle_zero()));
+    int exit_code = -1;
+    os_process_join_exit_code(handle, max_U64, &exit_code);
+    os_process_detach(handle);
+    if (exit_code != 0) { goto exit; }
+
+    if (!os_file_path_exists(test_file_path)) { goto exit; }
+  }
+#endif
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -3069,6 +3140,7 @@ entry_point(CmdLine *cmdline)
     { "alt_name",                         t_alt_name                         },
     { "include",                          t_include                          },
     { "communal_var",                     t_communal_var                     },
+    { "import_kernel32",                  t_import_kernel32                  },
     //{ "import_export",        t_import_export        },
   };
 
