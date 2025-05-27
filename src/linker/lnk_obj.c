@@ -11,23 +11,14 @@ lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
   va_end(args);
 }
 
-////////////////////////////////
-
-internal LNK_ObjNodeArray
-lnk_obj_list_reserve(Arena *arena, LNK_ObjList *list, U64 count)
+internal LNK_Obj **
+lnk_array_from_obj_list(Arena *arena, LNK_ObjList list)
 {
-  LNK_ObjNodeArray arr = {0};
-  if (count) {
-    arr.count = count;
-    arr.v = push_array(arena, LNK_ObjNode, count);
-    for (LNK_ObjNode *ptr = arr.v, *opl = arr.v + arr.count; ptr < opl; ++ptr) {
-      SLLQueuePush(list->first, list->last, ptr);
-    }
-    list->count += count;
-  } else {
-    MemoryZeroStruct(&arr);
+  LNK_Obj **arr = push_array_no_zero(arena, LNK_Obj *, list.count);
+  U64 idx = 0;
+  for (LNK_ObjNode *node = list.first; node != 0; node = node->next, ++idx) {
+    arr[idx] = &node->data;
   }
-  
   return arr;
 }
 
@@ -244,33 +235,131 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 internal LNK_ObjNodeArray
 lnk_obj_list_push_parallel(TP_Context        *tp,
                            TP_Arena          *arena,
-                           LNK_ObjList       *obj_list,
+                           LNK_ObjList       *list,
                            COFF_MachineType   machine,
                            U64                input_count,
                            LNK_InputObj     **inputs)
 {
   ProfBeginFunction();
+
+  // store base id
+  U64 obj_id_base = list->count;
+
+  // reserve obj nodes
+  LNK_ObjNodeArray objs = {0};
+  if (input_count > 0) {
+    objs.count = input_count;
+    objs.v = push_array(arena->v[0], LNK_ObjNode, input_count);
+    for (LNK_ObjNode *ptr = objs.v, *opl = objs.v + input_count; ptr < opl; ++ptr) {
+      SLLQueuePush(list->first, list->last, ptr);
+    }
+    list->count += input_count;
+  }
   
+  // fill out & run task
   LNK_ObjIniter task = {0};
   task.inputs        = inputs;
-  task.obj_id_base   = obj_list->count;
-  task.objs          = lnk_obj_list_reserve(arena->v[0], obj_list, input_count);
+  task.obj_id_base   = obj_id_base;
+  task.objs          = objs;
   task.machine       = machine;
   tp_for_parallel(tp, arena, input_count, lnk_obj_initer, &task);
   
   ProfEnd();
-  return task.objs;
+  return objs;
 }
 
-internal LNK_Obj **
-lnk_obj_arr_from_list(Arena *arena, LNK_ObjList list)
+internal
+THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
 {
-  LNK_Obj **arr = push_array_no_zero(arena, LNK_Obj *, list.count);
-  U64 idx = 0;
-  for (LNK_ObjNode *node = list.first; node != 0; node = node->next, ++idx) {
-    arr[idx] = &node->data;
+  LNK_InputCoffSymbolTable *task = raw_task;
+  LNK_Obj                  *obj  = &task->objs.v[task_id].data;
+
+  //
+  // parse obj header
+  //
+  COFF_FileHeaderInfo header = coff_file_header_info_from_data(obj->data);
+
+  //
+  // extract COFF info
+  //
+  String8 raw_coff_section_table = str8_substr(obj->data, header.section_table_range);
+  String8 raw_coff_symbol_table  = str8_substr(obj->data, header.symbol_table_range);
+  String8 raw_coff_string_table  = str8_substr(obj->data, header.string_table_range);
+
+  COFF_ParsedSymbol symbol = {0};
+  for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    // read symbol
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    switch (interp) {
+    case COFF_SymbolValueInterp_Regular: {
+      if (symbol.storage_class == COFF_SymStorageClass_External) {
+        LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
+        U64         hash = lnk_symbol_hash(symbol.name);
+        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
+      }
+    } break;
+    case COFF_SymbolValueInterp_Weak: {
+      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
+      U64         hash = lnk_symbol_hash(symbol.name);
+      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
+
+      lnk_symbol_list_push(arena, &task->weak_lists[task_id], defn);
+    } break;
+    case COFF_SymbolValueInterp_Common: {
+      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
+      U64         hash = lnk_symbol_hash(symbol.name);
+      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
+    } break;
+    case COFF_SymbolValueInterp_Abs: {
+      if (symbol.storage_class == COFF_SymStorageClass_External) {
+        LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
+        U64         hash = lnk_symbol_hash(symbol.name);
+        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
+      }
+    } break;
+    case COFF_SymbolValueInterp_Undefined: {
+      LNK_Symbol *s = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
+      if (s == 0) {
+        if (symbol.storage_class == COFF_SymStorageClass_External) {
+          LNK_Symbol *undef = lnk_make_undefined_symbol(arena, symbol.name, obj);
+          lnk_symbol_list_push(arena, &task->undef_lists[worker_id], undef);
+        } else if (symbol.storage_class == COFF_SymStorageClass_Section) {
+          // lookup is performed during image patching step
+        } else {
+          Assert(!"unexpected storage class on undefined symbol");
+        }
+      }
+    } break;
+    case COFF_SymbolValueInterp_Debug: {
+      // not used
+    } break;
+    default: { InvalidPath; } break;
+    }
   }
-  return arr;
+}
+
+internal LNK_SymbolInputResult
+lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  LNK_InputCoffSymbolTable task = {0};
+  task.symtab                   = symtab;
+  task.objs                     = objs;
+  task.weak_lists               = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
+  task.undef_lists              = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
+  tp_for_parallel(tp, arena, objs.count, lnk_input_coff_symbol_table, &task);
+
+  LNK_SymbolInputResult result = {0};
+  SLLConcatInPlaceArray(&result.weak_symbols,  task.weak_lists,  tp->worker_count);
+  SLLConcatInPlaceArray(&result.undef_symbols, task.undef_lists, tp->worker_count);
+
+  scratch_end(scratch);
+  ProfEnd();
+  return result;
 }
 
 internal COFF_ParsedSymbol
@@ -439,99 +528,5 @@ lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *d
   }
   
   scratch_end(scratch);
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
-{
-  LNK_InputCoffSymbolTable *task = raw_task;
-  LNK_Obj                  *obj  = &task->objs.v[task_id].data;
-
-  //
-  // parse obj header
-  //
-  COFF_FileHeaderInfo header = coff_file_header_info_from_data(obj->data);
-
-  //
-  // extract COFF info
-  //
-  String8 raw_coff_section_table = str8_substr(obj->data, header.section_table_range);
-  String8 raw_coff_symbol_table  = str8_substr(obj->data, header.symbol_table_range);
-  String8 raw_coff_string_table  = str8_substr(obj->data, header.string_table_range);
-
-  COFF_ParsedSymbol symbol = {0};
-  for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    // read symbol
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    switch (interp) {
-    case COFF_SymbolValueInterp_Regular: {
-      if (symbol.storage_class == COFF_SymStorageClass_External) {
-        LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-        U64         hash = lnk_symbol_hash(symbol.name);
-        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
-      }
-    } break;
-    case COFF_SymbolValueInterp_Weak: {
-      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-      U64         hash = lnk_symbol_hash(symbol.name);
-      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
-
-      lnk_symbol_list_push(arena, &task->weak_lists[task_id], defn);
-    } break;
-    case COFF_SymbolValueInterp_Common: {
-      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-      U64         hash = lnk_symbol_hash(symbol.name);
-      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
-    } break;
-    case COFF_SymbolValueInterp_Abs: {
-      if (symbol.storage_class == COFF_SymStorageClass_External) {
-        LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-        U64         hash = lnk_symbol_hash(symbol.name);
-        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
-      }
-    } break;
-    case COFF_SymbolValueInterp_Undefined: {
-      LNK_Symbol *s = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
-      if (s == 0) {
-        if (symbol.storage_class == COFF_SymStorageClass_External) {
-          LNK_Symbol *undef = lnk_make_undefined_symbol(arena, symbol.name, obj);
-          lnk_symbol_list_push(arena, &task->undef_lists[worker_id], undef);
-        } else if (symbol.storage_class == COFF_SymStorageClass_Section) {
-          // lookup is performed during image patching step
-        } else {
-          Assert(!"unexpected storage class on undefined symbol");
-        }
-      }
-    } break;
-    case COFF_SymbolValueInterp_Debug: {
-      // not used
-    } break;
-    default: { InvalidPath; } break;
-    }
-  }
-}
-
-internal LNK_SymbolInputResult
-lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(arena->v, arena->count);
-
-  LNK_InputCoffSymbolTable task = {0};
-  task.symtab                   = symtab;
-  task.objs                     = objs;
-  task.weak_lists               = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
-  task.undef_lists              = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
-  tp_for_parallel(tp, arena, objs.count, lnk_input_coff_symbol_table, &task);
-
-  LNK_SymbolInputResult result = {0};
-  SLLConcatInPlaceArray(&result.weak_symbols,  task.weak_lists,  tp->worker_count);
-  SLLConcatInPlaceArray(&result.undef_symbols, task.undef_lists, tp->worker_count);
-
-  scratch_end(scratch);
-  ProfEnd();
-  return result;
 }
 
