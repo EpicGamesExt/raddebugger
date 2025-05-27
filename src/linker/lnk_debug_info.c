@@ -2985,20 +2985,31 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
       continue;
     }
 
-    U64     sect_number = rng_1u64_array_bsearch(task->image_section_file_ranges, obj_sect_header->foff);
-    String8 sect_data   = str8_substr(task->image_data, rng_1u64(obj_sect_header->foff, obj_sect_header->foff + obj_sect_header->fsize));
-    U32     sect_off    = obj_sect_header->foff - task->image_section_file_ranges.v[sect_number].min;
+    U64     sect_number;
+    String8 sect_data;
+    U32     sect_off;
+    U32     data_crc;
+    if (obj_sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+      sect_number = rng_1u64_array_bsearch(task->image_section_virt_ranges, obj_sect_header->voff);
+      sect_data   = str8_zero();
+      sect_off    = obj_sect_header->voff - task->image_section_virt_ranges.v[sect_number].min;
+      data_crc    = 0;
+    } else {
+      sect_number = rng_1u64_array_bsearch(task->image_section_file_ranges, obj_sect_header->foff);
+      sect_off    = obj_sect_header->foff - task->image_section_file_ranges.v[sect_number].min;
+      data_crc    = update_crc32(0, sect_data.str, sect_data.size);
+    }
 
     // fill out SC
     PDB_DbiSectionContribNode *sc = sc_arr + sc_count++;
     sc->data.base.sec             = (U16)sect_number;
     sc->data.base.pad0            = 0;
     sc->data.base.sec_off         = sect_off;
-    sc->data.base.size            = obj_sect_header->foff;
+    sc->data.base.size            = obj_sect_header->vsize;
     sc->data.base.flags           = obj_sect_header->flags;
     sc->data.base.mod             = mod->imod;
     sc->data.base.pad1            = 0;
-    sc->data.data_crc             = update_crc32(0, sect_data.str, sect_data.size);
+    sc->data.data_crc             = 0;
     sc->data.reloc_crc            = 0; 
 
     dbi_sec_contrib_list_push_node(&task->sc_list[obj_idx], sc);

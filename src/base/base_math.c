@@ -750,7 +750,7 @@ rng1u64_array_from_list(Arena *arena, Rng1U64List *list)
 internal U64
 rng_1u64_array_bsearch(Rng1U64Array arr, U64 value)
 {
-  if(arr.count > 0 && arr.v[0].min <= value && value < arr.v[arr.count-1].max)
+  if(arr.count > 0 && arr.v[0].min < value && value < arr.v[arr.count-1].max)
   {
     U64 l = 0;
     U64 r = arr.count - 1;
