@@ -317,6 +317,7 @@ typedef struct
   PDB_DbiSectionContribList  *sc_list;
   String8                     image_data;
   Rng1U64Array                image_section_file_ranges;
+  Rng1U64Array                image_section_virt_ranges;
 } LNK_PushDbiSecContribTaskData;
 
 typedef struct
