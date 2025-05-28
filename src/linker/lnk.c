@@ -149,6 +149,10 @@
 
 ////////////////////////////////
 
+global read_only LNK_SectionContrib g_null_sc;
+
+////////////////////////////////
+
 internal LNK_Config *
 lnk_config_from_argcv(Arena *arena, int argc, char **argv)
 {
@@ -204,6 +208,7 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
 #else
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "%u", LNK_Error_InvalidTypeIndex);
 #endif
+
   // default section merges
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".xdata=.rdata");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".tls=.data");
@@ -211,6 +216,9 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".idata=.rdata");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".didat=.rdata");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINKER_DEBUG_DIR=.rdata");
+
+  // sections to remove from the image
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".debug");
 
   // set default max worker count 
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_SharedThreadPool)) {
@@ -1195,9 +1203,23 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   for (U64 sect_idx = 0; sect_idx < obj_header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *section_header = &section_table[sect_idx];
 
-    // was section discarded?
+    // was section removed?
     if (section_header->flags & COFF_SectionFlag_LnkRemove) {
       continue;
+    }
+    if (section_header->flags & COFF_SectionFlag_CntUninitializedData) {
+      continue;
+    }
+
+    // get section file range
+    Rng1U64 section_frange = rng_1u64(section_header->foff, section_header->foff + section_header->fsize);
+
+    // get section bytes
+    String8 section_data;
+    if (lnk_is_coff_section_debug(obj, sect_idx)) {
+      section_data = str8_substr(obj->data, section_frange);
+    } else {
+      section_data = str8_substr(task->image_data, section_frange);
     }
 
     // find section relocs
@@ -1217,8 +1239,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         NotImplemented;
       }
 
-      // compute relocation file/virtual offsets
-      U64 reloc_foff = section_header->foff + reloc->apply_off;
+      // compute virtual offsets
       U64 reloc_voff = section_header->voff + reloc->apply_off;
 
       // compute symbol location values
@@ -1267,16 +1288,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       }
 
       // read addend
-      Assert(reloc_foff + reloc_value.size <= task->image_data.size);
+      Assert(reloc_value.size <= section_data.size);
       U64 raw_addend = 0;
-      str8_deserial_read(task->image_data, reloc_foff, &raw_addend, reloc_value.size, 1);
+      str8_deserial_read(section_data, reloc->apply_off, &raw_addend, reloc_value.size, 1);
 
       // compute new reloc value
       S64 addend       = extend_sign64(raw_addend, reloc_value.size);
       U64 reloc_result = reloc_value.value + addend;
 
       // commit new reloc value
-      MemoryCopy(task->image_data.str + reloc_foff, &reloc_result, reloc_value.size);
+      MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
     }
   }
 }
@@ -2174,7 +2195,7 @@ lnk_pdata_is_before_x8664(void *raw_a, void *raw_b)
 }
 
 internal String8
-lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, LNK_ObjList obj_list)
+lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
   Temp scratch = scratch_begin(arena->v, arena->count);
 
@@ -2186,14 +2207,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
   lnk_section_table_push(sectab, str8_lit(".data"),  PE_DATA_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
 
-  // 
-  // obj list -> array
-  //
-  U64       objs_count = obj_list.count;
-  LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, obj_list);
-
-  ProfBegin("Remove Associatives");
   {
+    ProfBegin("Remove Associative Sections");
     for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
       LNK_Obj *obj = objs[obj_idx];
       String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
@@ -2227,8 +2242,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         }
       }
     }
+    ProfEnd();
   }
-  ProfEnd();
 
   {
     ProfBegin("Define And Count Sections");
@@ -2247,7 +2262,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
         COFF_SectionHeader *sect_header = &section_table[sect_idx];
 
-        // discard section
+        // remove section
         if (sect_header->flags & COFF_SectionFlag_LnkRemove) {
           continue;
         }
@@ -2257,19 +2272,13 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         String8 sect_name, sect_sort_idx;
         coff_parse_section_name(full_sect_name, &sect_name, &sect_sort_idx);
 
-        // remove debug sections
-        if (str8_match(sect_name, str8_lit(".debug"), 0)) {
-          sect_header->flags |= COFF_SectionFlag_LnkRemove;
-          continue;
-        }
-
-        // strip linker flags
-        COFF_SectionFlags sect_flags = sect_header->flags & ~COFF_SectionFlags_LnkFlags;
-
         // was section defined?
+        COFF_SectionFlags      sect_flags           = sect_header->flags & ~COFF_SectionFlags_LnkFlags;
         String8                sect_name_with_flags = lnk_make_name_with_flags(temp.arena, sect_name, sect_flags);
         LNK_SectionDefinition *sect_defn            = 0;
         hash_table_search_string_raw(sect_defn_ht, sect_name_with_flags, &sect_defn);
+
+        // create section definition
         if (sect_defn == 0) {
           sect_defn               = push_array(temp.arena, LNK_SectionDefinition, 1);
           sect_defn->name         = sect_name;
@@ -2314,20 +2323,30 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     for (U64 defn_idx = 0; defn_idx < sect_defns_count; defn_idx += 1) {
       LNK_SectionDefinition *sect_defn = sect_defns[defn_idx];
 
+      // do not create definitions for sections that are removed from the image
+      {
+        B32 skip = 0;
+        for (String8Node *name_n = config->remove_sections.first; name_n != 0; name_n = name_n->next) {
+          if (str8_match(sect_defn->name, name_n->string, 0)) {
+            skip = 1;
+            break;
+          }
+        }
+        if (skip) { continue; }
+      }
+
       // warn about conflicting section flags
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
         LNK_Section *sect = &sect_n->data;
         if (str8_match(sect->name, sect_defn->name, 0)) {
           if (sect->flags != sect_defn->flags) {
             LNK_Obj            *obj                = sect_defn->obj;
-            String8            string_table        = str8_substr(obj->data, obj->header.string_table_range);
-            COFF_SectionHeader *section_table      = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-            COFF_SectionHeader *sect_header        = &section_table[sect_defn->obj_sect_idx];
-            String8             full_sect_name     = coff_name_from_section_header(string_table, sect_header);
             U32                 sect_number        = sect_defn->obj_sect_idx + 1;
+            COFF_SectionHeader *sect_header        = lnk_coff_section_header_from_section_number(obj, sect_number);
+            String8             sect_name          = coff_name_from_section_header(str8_substr(obj->data, obj->header.string_table_range), sect_header);
             String8             expected_flags_str = coff_string_from_section_flags(temp.arena, sect->flags);
             String8             current_flags_str  = coff_string_from_section_flags(temp.arena, sect_defn->flags);
-            lnk_error_obj(LNK_Warning_SectionFlagsConflict, sect_defn->obj, "detected section flags conflict in %S(No. %X); expected {%S} but got {%S}", full_sect_name, sect_number, expected_flags_str, current_flags_str);
+            lnk_error_obj(LNK_Warning_SectionFlagsConflict, sect_defn->obj, "detected section flags conflict in %S(No. %X); expected {%S} but got {%S}", sect_name, sect_number, expected_flags_str, current_flags_str);
           }
         }
       }
@@ -2371,30 +2390,36 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
           String8 sect_name, sect_sort_idx;
           coff_parse_section_name(full_sect_name, &sect_name, &sect_sort_idx);
 
-          // extract section bytes
-          String8 sect_data = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
-
-          // extract align
-          U16 sc_align = coff_align_size_from_section_flags(sect_header->flags);
-          if (sc_align == 0) {
-            sc_align = default_align;
-          }
-
           // search for section to contribute
           COFF_SectionFlags  flags = sect_header->flags & ~COFF_SectionFlags_LnkFlags;
           LNK_Section       *sect  = lnk_section_table_search(sectab, sect_name, flags);
 
-          String8Node *data_n = push_array(sectab->arena, String8Node, 1);
-          data_n->string      = sect_data;
+          LNK_SectionContrib *sc;
+          if (sect) {
+            // extract align
+            U16 sc_align = coff_align_size_from_section_flags(sect_header->flags);
+            if (sc_align == 0) {
+              sc_align = default_align;
+            }
 
-          // fill out contrib
-          LNK_SectionContrib *sc = lnk_section_contrib_chunk_push(sect->contribs.first, 1);
-          sc->align              = sc_align;
-          sc->data_list          = data_n;
-          sc->u.obj_idx          = obj_idx;
-          sc->u.obj_sect_idx     = sect_idx;
-          sc->u.sort_idx_size    = (U16)sect_sort_idx.size;
-          sc->u.sort_idx         = sect_sort_idx.str;
+            // extract section bytes
+            String8 sect_data = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
+
+            String8Node *data_n = push_array(sectab->arena, String8Node, 1);
+            data_n->string      = sect_data;
+
+            // fill out contrib
+            sc = lnk_section_contrib_chunk_push(sect->contribs.first, 1);
+            sc->align              = sc_align;
+            sc->data_list          = data_n;
+            sc->u.obj_idx          = obj_idx;
+            sc->u.obj_sect_idx     = sect_idx;
+            sc->u.sort_idx_size    = (U16)sect_sort_idx.size;
+            sc->u.sort_idx         = sect_sort_idx.str;
+          } else {
+            // section was removed, fill slot with pointer to null contrib
+            sc = &g_null_sc;
+          }
 
           sect_map[obj_idx][sect_idx] = sc;
         }
@@ -2619,7 +2644,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
             U32 section_number = 0;
             U32 value = 0;
             {
-              COFF_SectionHeader *sect_header = lnk_section_header_from_section_number(obj, symbol.section_number);
+              COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
               if (~sect_header->flags & COFF_SectionFlag_LnkRemove) {
                 LNK_SectionContrib *sc = sect_map[obj_idx][symbol.section_number-1];
                 section_number = safe_cast_u32(sc->u.sect_idx + 1);
@@ -2933,7 +2958,9 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
       for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
         COFF_SectionHeader *sect_header = &section_table[sect_idx];
-        if (~sect_header->flags & COFF_SectionFlag_LnkRemove) {
+        B32 patch_section_header = (~sect_header->flags & COFF_SectionFlag_LnkRemove) &&
+                                   !lnk_is_coff_section_debug(obj, sect_idx);
+        if (patch_section_header) {
           LNK_SectionContrib *sc   = sect_map[obj_idx][sect_idx];
           LNK_Section        *sect = sects.v[sc->u.sect_idx];
           if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
@@ -4578,8 +4605,12 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         }
       } break;
       case State_BuildImage: {
+        // obj list -> array
+        U64       objs_count = obj_list.count;
+        LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, obj_list);
+
         // build image
-        image_data = lnk_build_win32_image(tp_arena, tp, config, symtab, obj_list);
+        image_data = lnk_build_win32_image(tp_arena, tp, config, symtab, objs_count, objs);
 
         // write image to disk in a background thread
         {

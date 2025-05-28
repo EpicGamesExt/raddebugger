@@ -130,8 +130,8 @@ typedef enum
   LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,
   LNK_CmdSwitch_Rad_ChunkMap,
   LNK_CmdSwitch_Rad_Debug,
-  LNK_CmdSwitch_Rad_DebugName,
   LNK_CmdSwitch_Rad_DebugAltPath,
+  LNK_CmdSwitch_Rad_DebugName,
   LNK_CmdSwitch_Rad_DelayBind,
   LNK_CmdSwitch_Rad_DoMerge,
   LNK_CmdSwitch_Rad_EnvLib,
@@ -145,22 +145,23 @@ typedef enum
   LNK_CmdSwitch_Rad_OsVer,
   LNK_CmdSwitch_Rad_PageSize,
   LNK_CmdSwitch_Rad_PathStyle,
-  LNK_CmdSwitch_Rad_PdbHashTypeNames,
-  LNK_CmdSwitch_Rad_PdbHashTypeNameMap,
   LNK_CmdSwitch_Rad_PdbHashTypeNameLength,
+  LNK_CmdSwitch_Rad_PdbHashTypeNameMap,
+  LNK_CmdSwitch_Rad_PdbHashTypeNames,
+  LNK_CmdSwitch_Rad_RemoveSection,
   LNK_CmdSwitch_Rad_SectVirtOff,
   LNK_CmdSwitch_Rad_SharedThreadPool,
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_SuppressError,
   LNK_CmdSwitch_Rad_SymbolTableCapDefined,
   LNK_CmdSwitch_Rad_SymbolTableCapInternal,
-  LNK_CmdSwitch_Rad_SymbolTableCapWeak,
   LNK_CmdSwitch_Rad_SymbolTableCapLib,
-  LNK_CmdSwitch_Rad_WriteTempFiles,
+  LNK_CmdSwitch_Rad_SymbolTableCapWeak,
   LNK_CmdSwitch_Rad_TargetOs,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_Version,
   LNK_CmdSwitch_Rad_Workers,
+  LNK_CmdSwitch_Rad_WriteTempFiles,
 
   LNK_CmdSwitch_Help,
 
@@ -380,6 +381,7 @@ typedef struct LNK_Config
   String8                     temp_pdb_name;
   String8                     temp_rad_debug_name;
   String8                     temp_rad_chunk_map_name;
+  String8List                 remove_sections;
 } LNK_Config;
 
 typedef enum
