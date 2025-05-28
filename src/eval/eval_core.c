@@ -1153,6 +1153,10 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
                   SLLQueuePush(first_wildcard_inst, last_wildcard_inst, inst);
                   inst->inst_expr = e_parse_from_string(wildcard_inst_string).expr;
                 }
+                if(done)
+                {
+                  break;
+                }
               }
             }
             
