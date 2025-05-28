@@ -663,6 +663,30 @@ struct E_String2TypeKeyMap
 ////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Type Views)
 
+typedef struct E_AutoHookWildcardInst E_AutoHookWildcardInst;
+struct E_AutoHookWildcardInst
+{
+  E_AutoHookWildcardInst *next;
+  E_Expr *inst_expr;
+};
+
+typedef struct E_AutoHookMatch E_AutoHookMatch;
+struct E_AutoHookMatch
+{
+  E_AutoHookMatch *next;
+  E_Expr *expr;
+  E_AutoHookWildcardInst *first_wildcard_inst;
+  E_AutoHookWildcardInst *last_wildcard_inst;
+};
+
+typedef struct E_AutoHookMatchList E_AutoHookMatchList;
+struct E_AutoHookMatchList
+{
+  E_AutoHookMatch *first;
+  E_AutoHookMatch *last;
+  U64 count;
+};
+
 typedef struct E_AutoHookNode E_AutoHookNode;
 struct E_AutoHookNode
 {
@@ -890,7 +914,7 @@ struct E_TypeAutoHookCacheNode
 {
   E_TypeAutoHookCacheNode *next;
   E_TypeKey key;
-  E_ExprList exprs;
+  E_AutoHookMatchList matches;
 };
 
 typedef struct E_TypeAutoHookCacheSlot E_TypeAutoHookCacheSlot;
@@ -1227,8 +1251,8 @@ internal E_Eval e_value_eval_from_eval(E_Eval eval);
 #define e_value_from_expr(expr) e_value_eval_from_eval(e_eval_from_expr(expr)).value
 
 //- rjf: type key -> auto hooks
-internal E_ExprList e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
-internal E_ExprList e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key);
+internal E_AutoHookMatchList e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key);
+internal E_AutoHookMatchList e_auto_hook_matches_from_type_key(E_TypeKey type_key);
 
 //- rjf: string IDs
 internal U64 e_id_from_string(String8 string);

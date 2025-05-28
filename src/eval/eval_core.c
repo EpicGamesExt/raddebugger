@@ -1053,11 +1053,11 @@ e_value_eval_from_eval(E_Eval eval)
 
 //- rjf: type key -> auto hooks
 
-internal E_ExprList
-e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
+internal E_AutoHookMatchList
+e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
 {
   ProfBeginFunction();
-  E_ExprList exprs = {0};
+  E_AutoHookMatchList matches = {0};
   if(e_ir_ctx != 0)
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -1075,8 +1075,10 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
       {
         if(str8_match(n->type_string, type_string, 0))
         {
-          E_Expr *expr = e_parse_from_string(n->expr_string).expr;
-          e_expr_list_push(arena, &exprs, expr);
+          E_AutoHookMatch *match = push_array(arena, E_AutoHookMatch, 1);
+          SLLQueuePush(matches.first, matches.last, match);
+          match->expr = e_parse_from_string(n->expr_string).expr;
+          matches.count += 1;
         }
       }
     }
@@ -1091,8 +1093,10 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
           auto_hook_node = auto_hook_node->pattern_order_next)
       {
         ////////////////////////
-        //- rjf: determine if this pattern fits this type's string
+        //- rjf: determine if this pattern fits this type's string; gather wildcard instances
         //
+        E_AutoHookWildcardInst *first_wildcard_inst = 0;
+        E_AutoHookWildcardInst *last_wildcard_inst = 0;
         B32 fits_this_type_string = 1;
         {
           U64 scan_pos = 0;
@@ -1121,7 +1125,8 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
               U64 paren_nest_depth = 0;
               U64 angle_nest_depth = 0;
               U64 brack_nest_depth = 0;
-              for(;scan_pos < type_string.size; scan_pos += 1)
+              U64 start_inst_off = scan_pos;
+              for(B32 done = 0; !done && scan_pos < type_string.size; scan_pos += 1)
               {
                 if(0){}
                 else if(type_string.str[scan_pos] == '{') { brace_nest_depth += 1; }
@@ -1134,7 +1139,19 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
                 else if(type_string.str[scan_pos] == ']' && brack_nest_depth > 0) { brack_nest_depth -= 1; }
                 else if(str8_match(terminator_pattern_string, str8_skip(type_string, scan_pos), StringMatchFlag_RightSideSloppy))
                 {
-                  break;
+                  done = 1;
+                }
+                if((type_string.str[scan_pos] == ',' || done) &&
+                   brace_nest_depth == 0 &&
+                   paren_nest_depth == 0 &&
+                   angle_nest_depth == 0 &&
+                   brack_nest_depth == 0)
+                {
+                  String8 wildcard_inst_string = str8_skip_chop_whitespace(str8_substr(type_string, r1u64(start_inst_off, scan_pos)));
+                  start_inst_off = scan_pos+1;
+                  E_AutoHookWildcardInst *inst = push_array(arena, E_AutoHookWildcardInst, 1);
+                  SLLQueuePush(first_wildcard_inst, last_wildcard_inst, inst);
+                  inst->inst_expr = e_parse_from_string(wildcard_inst_string).expr;
                 }
               }
             }
@@ -1159,12 +1176,16 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
         }
         
         ////////////////////////
-        //- rjf: push expression if this type fits
+        //- rjf: push match if this type fits
         //
         if(fits_this_type_string)
         {
-          E_Expr *expr = e_parse_from_string(auto_hook_node->expr_string).expr;
-          e_expr_list_push(arena, &exprs, expr);
+          E_AutoHookMatch *match = push_array(arena, E_AutoHookMatch, 1);
+          SLLQueuePush(matches.first, matches.last, match);
+          match->expr = e_parse_from_string(auto_hook_node->expr_string).expr;
+          match->first_wildcard_inst = first_wildcard_inst;
+          match->last_wildcard_inst = last_wildcard_inst;
+          matches.count += 1;
         }
       }
     }
@@ -1172,13 +1193,13 @@ e_auto_hook_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
     scratch_end(scratch);
   }
   ProfEnd();
-  return exprs;
+  return matches;
 }
 
-internal E_ExprList
-e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key)
+internal E_AutoHookMatchList
+e_auto_hook_matches_from_type_key(E_TypeKey type_key)
 {
-  E_ExprList exprs = {0};
+  E_AutoHookMatchList matches = {0};
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
     U64 slot_idx = hash%e_cache->type_auto_hook_cache_map->slots_count;
@@ -1197,11 +1218,11 @@ e_auto_hook_exprs_from_type_key__cached(E_TypeKey type_key)
       node = push_array(e_cache->arena, E_TypeAutoHookCacheNode, 1);
       SLLQueuePush(e_cache->type_auto_hook_cache_map->slots[slot_idx].first, e_cache->type_auto_hook_cache_map->slots[slot_idx].last, node);
       node->key = type_key;
-      node->exprs = e_auto_hook_exprs_from_type_key(e_cache->arena, type_key);
+      node->matches = e_push_auto_hook_matches_from_type_key(e_cache->arena, type_key);
     }
-    exprs = node->exprs;
+    matches = node->matches;
   }
-  return exprs;
+  return matches;
 }
 
 //- rjf: string IDs

@@ -2372,21 +2372,18 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     //- rjf: find any auto hooks according to this generation's type
     if(!disallow_autohooks && result.mode != E_Mode_Null)
     {
-      E_ExprList exprs = e_auto_hook_exprs_from_type_key__cached(result.type_key);
-      for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
+      E_AutoHookMatchList matches = e_auto_hook_matches_from_type_key(result.type_key);
+      for(E_AutoHookMatch *match = matches.first; match != 0; match = match->next)
       {
-        for(E_Expr *e = n->v; e != &e_expr_nil; e = e->next)
+        B32 e_is_poisoned = e_expr_is_poisoned(match->expr);
+        if(!e_is_poisoned)
         {
-          B32 e_is_poisoned = e_expr_is_poisoned(e);
-          if(!e_is_poisoned)
-          {
-            Task *task = push_array(scratch.arena, Task, 1);
-            SLLQueuePush(first_task, last_task, task);
-            task->expr = e;
-            task->overridden = push_array(scratch.arena, E_IRTreeAndType, 1);
-            task->overridden[0] = result;
-            goto end_autohook_find;
-          }
+          Task *task = push_array(scratch.arena, Task, 1);
+          SLLQueuePush(first_task, last_task, task);
+          task->expr = match->expr;
+          task->overridden = push_array(scratch.arena, E_IRTreeAndType, 1);
+          task->overridden[0] = result;
+          goto end_autohook_find;
         }
       }
       end_autohook_find:;
