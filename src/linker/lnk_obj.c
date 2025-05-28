@@ -420,6 +420,20 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
   return section_header;
 }
 
+internal B32
+lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx)
+{
+  String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
+  COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
+  
+  String8 full_name = coff_name_from_section_header(string_table, section_header);
+  String8 name, postfix;
+  coff_parse_section_name(full_name, &name, &postfix);
+
+  B32 is_debug = str8_match(name, str8_lit(".debug"), 0);
+  return is_debug;
+}
+
 internal COFF_ParsedSymbol
 lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
 {
@@ -434,16 +448,6 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   }
   
   return result;
-}
-
-internal COFF_SectionHeader *
-lnk_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
-{
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-  if (section_number > 0 && section_number <= obj->header.section_count_no_null) {
-    return &section_table[section_number-1];
-  }
-  return 0;
 }
 
 internal

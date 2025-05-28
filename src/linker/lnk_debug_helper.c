@@ -64,7 +64,7 @@ lnk_make_dll_import_debug_symbols(Arena *arena, COFF_MachineType machine, String
   cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_COMPILE3, comp3_data);
 
   // S_END
-  cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_END, str8_zero());
+  //cv_symbol_list_push_data(scratch.arena, &symbol_list, CV_SymKind_END, str8_zero());
 
   // TODO: add thunks
 
