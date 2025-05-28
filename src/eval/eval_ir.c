@@ -607,6 +607,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
   {
     Task *next;
     E_Expr *expr;
+    E_AutoHookWildcardInst *first_wildcard_inst;
+    E_AutoHookWildcardInst *last_wildcard_inst;
     E_IRTreeAndType *overridden;
   };
   Task start_task = {0, root_expr, 0};
@@ -619,6 +621,12 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     
     //- rjf: poison the expression we are about to use, so we don't recursively use it
     e_expr_poison(expr);
+    
+    //- rjf: push stack elements
+    E_AutoHookWildcardInst *first_wildcard_inst_restore = e_cache->first_wildcard_inst;
+    E_AutoHookWildcardInst *last_wildcard_inst_restore = e_cache->last_wildcard_inst;
+    if(t->first_wildcard_inst) { e_cache->first_wildcard_inst = t->first_wildcard_inst; }
+    if(t->last_wildcard_inst) { e_cache->last_wildcard_inst = t->last_wildcard_inst; }
     
     //- rjf: do expr -> irtree generation for this expression
     if(expr->kind == E_ExprKind_Ref)
@@ -1614,6 +1622,21 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           {
             default:{}break;
             
+            //- rjf: try to map name as a wildcard instance
+            case E_IdentifierResolutionPath_WildcardInst:
+            if(!generated && qualifier.size == 0 && !string_mapped && e_cache->first_wildcard_inst != 0)
+            {
+              for(E_AutoHookWildcardInst *inst = e_cache->first_wildcard_inst; inst != 0; inst = inst->next)
+              {
+                if(str8_match(inst->name, string, 0))
+                {
+                  generated = 1;
+                  result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, inst->inst_expr);
+                  break;
+                }
+              }
+            }break;
+            
             //- rjf: try to map name as parent expression signifier ('$')
             case E_IdentifierResolutionPath_ParentExpr:
             if(qualifier.size == 0 && !string_mapped && str8_match(string, str8_lit("$"), 0) && parent != 0 && (parent->root != &e_irnode_nil || parent->msgs.first != 0))
@@ -2369,6 +2392,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       result.auto_hook = 1;
     }
     
+    //- rjf: restore stack elements
+    e_cache->first_wildcard_inst = first_wildcard_inst_restore;
+    e_cache->last_wildcard_inst = last_wildcard_inst_restore;
+    
     //- rjf: find any auto hooks according to this generation's type
     if(!disallow_autohooks && result.mode != E_Mode_Null)
     {
@@ -2381,6 +2408,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           Task *task = push_array(scratch.arena, Task, 1);
           SLLQueuePush(first_task, last_task, task);
           task->expr = match->expr;
+          task->first_wildcard_inst = match->first_wildcard_inst;
+          task->last_wildcard_inst  = match->last_wildcard_inst;
           task->overridden = push_array(scratch.arena, E_IRTreeAndType, 1);
           task->overridden[0] = result;
           goto end_autohook_find;

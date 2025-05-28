@@ -463,13 +463,31 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
           p->string = new_part;
           pattern.count += 1;
         }
-        start_string_off = off+1;
       }
       if(byte == '?')
       {
         E_PatternPart *p = push_array(arena, E_PatternPart, 1);
         SLLQueuePush(pattern.first_part, pattern.last_part, p);
         pattern.count += 1;
+        if(off+1 < params->type_pattern.size && params->type_pattern.str[off+1] == '{')
+        {
+          off += 2;
+          String8 wildcard_inst_names_string = str8_skip(params->type_pattern, off);
+          wildcard_inst_names_string = str8_prefix(wildcard_inst_names_string, str8_find_needle(wildcard_inst_names_string, 0, str8_lit("}"), 0));
+          if(wildcard_inst_names_string.size != 0)
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            U8 wildcard_inst_name_split_char = ',';
+            String8List wildcard_inst_names = str8_split(scratch.arena, wildcard_inst_names_string, &wildcard_inst_name_split_char, 1, 0);
+            for(String8Node *n = wildcard_inst_names.first; n != 0; n = n->next)
+            {
+              str8_list_push(arena, &p->wildcard_inst_names, str8_skip_chop_whitespace(n->string));
+            }
+            scratch_end(scratch);
+            off += wildcard_inst_names_string.size;
+          }
+        }
+        start_string_off = off+1;
       }
     }
   }
@@ -1131,6 +1149,7 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
               U64 angle_nest_depth = 0;
               U64 brack_nest_depth = 0;
               U64 start_inst_off = scan_pos;
+              String8Node *wildcard_inst_name_node = part->wildcard_inst_names.first;
               for(B32 done = 0; !done && scan_pos < type_string.size; scan_pos += 1)
               {
                 if(0){}
@@ -1156,7 +1175,12 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
                   start_inst_off = scan_pos+1;
                   E_AutoHookWildcardInst *inst = push_array(arena, E_AutoHookWildcardInst, 1);
                   SLLQueuePush(first_wildcard_inst, last_wildcard_inst, inst);
+                  inst->name = wildcard_inst_name_node ? wildcard_inst_name_node->string : str8_zero();
                   inst->inst_expr = e_parse_from_string(wildcard_inst_string).expr;
+                  if(wildcard_inst_name_node)
+                  {
+                    wildcard_inst_name_node = wildcard_inst_name_node->next;
+                  }
                 }
                 if(done)
                 {

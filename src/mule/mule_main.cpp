@@ -173,7 +173,7 @@ struct OpaqueTemplatedDynamicArray
   void *v;
   int count;
 };
-raddbg_type_view(OpaqueTemplatedDynamicArray<?>, rows($, count, array(v, count)));
+raddbg_type_view(OpaqueTemplatedDynamicArray<?{type}>, array(cast(type *)v, count));
 
 struct Struct_With_Embedded_Arrays
 {

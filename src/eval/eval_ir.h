@@ -9,6 +9,7 @@
 
 typedef enum E_IdentifierResolutionPath
 {
+  E_IdentifierResolutionPath_WildcardInst,
   E_IdentifierResolutionPath_ParentExpr,
   E_IdentifierResolutionPath_ParentExprMember,
   E_IdentifierResolutionPath_ImplicitThisMember,
@@ -81,6 +82,7 @@ struct E_IRState
 
 E_IdentifierResolutionPath e_default_identifier_resolution_paths[] =
 {
+  E_IdentifierResolutionPath_WildcardInst,
   E_IdentifierResolutionPath_ParentExpr,
   E_IdentifierResolutionPath_ParentExprMember,
   E_IdentifierResolutionPath_ImplicitThisMember,
@@ -103,6 +105,7 @@ E_IdentifierResolutionRule e_default_identifier_resolution_rule =
 E_IdentifierResolutionPath e_callable_identifier_resolution_paths[] =
 {
   E_IdentifierResolutionPath_Macros,
+  E_IdentifierResolutionPath_WildcardInst,
   E_IdentifierResolutionPath_ParentExpr,
   E_IdentifierResolutionPath_ParentExprMember,
   E_IdentifierResolutionPath_ImplicitThisMember,

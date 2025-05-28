@@ -683,6 +683,7 @@ typedef struct E_AutoHookWildcardInst E_AutoHookWildcardInst;
 struct E_AutoHookWildcardInst
 {
   E_AutoHookWildcardInst *next;
+  String8 name;
   E_Expr *inst_expr;
 };
 
@@ -1082,6 +1083,8 @@ struct E_Cache
   //- rjf: [ir] ir gen options
   B32 disallow_autohooks;
   B32 disallow_chained_fastpaths;
+  E_AutoHookWildcardInst *first_wildcard_inst;
+  E_AutoHookWildcardInst *last_wildcard_inst;
   
   //- rjf: [ir] ir caches
   E_UsedExprMap *used_expr_map;
