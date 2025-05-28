@@ -79,6 +79,29 @@ lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
   return result;
 }
 
+internal U64
+lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
+  U64 voff = sect_header->voff + sc->u.off;
+  return voff;
+}
+
+internal U64
+lnk_foff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
+  U64 foff = sect_header->foff + sc->u.off;
+  return foff;
+}
+
+internal U64
+lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  U64 foff = lnk_foff_from_section_contrib(image_section_table, sc);
+  return foff + sc->u.size;
+}
+
 internal LNK_SectionContrib *
 lnk_get_first_section_contrib(LNK_Section *sect)
 {
@@ -99,6 +122,22 @@ lnk_get_last_section_contrib(LNK_Section *sect)
     }
   }
   return 0;
+}
+
+internal U64
+lnk_get_section_contrib_size(LNK_Section *sect)
+{
+  LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
+  LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(sect);
+  U64 size = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+  return size;
+}
+
+internal U64
+lnk_get_first_section_contrib_voff(COFF_SectionHeader **image_section_table, LNK_Section *sect)
+{
+  LNK_SectionContrib *sc = lnk_get_first_section_contrib(sect);
+  return lnk_voff_from_section_contrib(image_section_table, sc);
 }
 
 internal LNK_SectionTable *

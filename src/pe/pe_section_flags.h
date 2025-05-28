@@ -9,7 +9,7 @@
 #define PE_RDATA_SECTION_FLAGS     (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead)
 #define PE_BSS_SECTION_FLAGS       (COFF_SectionFlag_CntUninitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite)
 #define PE_IDATA_SECTION_FLAGS     PE_DATA_SECTION_FLAGS
-#define PE_DEBUG_DIR_SECTION_FLAGS PE_DATA_SECTION_FLAGS
+#define PE_DEBUG_DIR_SECTION_FLAGS PE_RDATA_SECTION_FLAGS
 #define PE_RSRC_SECTION_FLAGS      PE_DATA_SECTION_FLAGS
 #define PE_RSRC1_SECTION_FLAGS     (PE_DATA_SECTION_FLAGS | COFF_SectionFlag_Align4Bytes)
 #define PE_RSRC2_SECTION_FLAGS     (PE_DATA_SECTION_FLAGS | COFF_SectionFlag_Align4Bytes)

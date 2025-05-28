@@ -155,9 +155,6 @@ internal String8 lnk_manifest_from_inputs(Arena *arena, String8 mt_path, String8
 
 internal String8 lnk_make_res_obj(Arena *arena, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name);
 internal String8 lnk_make_linker_coff_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 cwd_path, String8 exe_path, String8 pdb_path, String8 cmd_line, String8 obj_name);
-internal String8 lnk_make_debug_directory_obj(Arena *arena, LNK_Config *config);
-internal String8 lnk_make_debug_directory_pdb_obj(Arena *arena, LNK_Config *config);
-internal String8 lnk_make_debug_directory_rdi_obj(Arena *arena, LNK_Config *config);
 
 // --- Symbol Resolver ---------------------------------------------------------
 
