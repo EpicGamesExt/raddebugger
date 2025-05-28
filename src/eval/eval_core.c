@@ -1161,6 +1161,11 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
                 else if(type_string.str[scan_pos] == ')' && paren_nest_depth > 0) { paren_nest_depth -= 1; }
                 else if(type_string.str[scan_pos] == '>' && angle_nest_depth > 0) { angle_nest_depth -= 1; }
                 else if(type_string.str[scan_pos] == ']' && brack_nest_depth > 0) { brack_nest_depth -= 1; }
+                else if(part->next == 0)
+                {
+                  done = 1;
+                  scan_pos = type_string.size;
+                }
                 else if(str8_match(terminator_pattern_string, str8_skip(type_string, scan_pos), StringMatchFlag_RightSideSloppy))
                 {
                   done = 1;
