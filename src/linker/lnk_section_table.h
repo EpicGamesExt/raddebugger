@@ -117,8 +117,14 @@ internal LNK_SectionArray lnk_section_array_from_list(Arena *arena, LNK_SectionL
 
 ////////////////////////////////
 
+internal U64 lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
+internal U64 lnk_foff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
+internal U64 lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
+
+internal LNK_SectionContrib * lnk_get_first_section_contrib(LNK_Section *sect);
 internal LNK_SectionContrib * lnk_get_last_section_contrib(LNK_Section *sect);
-internal LNK_SectionTable * lnk_section_table_alloc(void);
+internal U64                  lnk_get_section_contrib_size(LNK_Section *sect);
+internal U64                  lnk_get_first_section_contrib_voff(COFF_SectionHeader **image_section_table, LNK_Section *sect);
 
 ////////////////////////////////
 

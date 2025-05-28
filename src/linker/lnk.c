@@ -44,6 +44,7 @@
 #include "pe/pe_section_flags.h"
 #include "pe/pe_make_import_table.h"
 #include "pe/pe_make_export_table.h"
+#include "pe/pe_make_debug_dir.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
 #include "codeview/codeview_enum.h"
@@ -64,6 +65,7 @@
 #include "pe/pe.c"
 #include "pe/pe_make_import_table.c"
 #include "pe/pe_make_export_table.c"
+#include "pe/pe_make_debug_dir.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_enum.c"
 #include "codeview/codeview_parse.c"
@@ -215,7 +217,8 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".edata=.rdata");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".idata=.rdata");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".didat=.rdata");
-  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINKER_DEBUG_DIR=.rdata");
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINK_PE_DEBUG_DIR=.rdata");
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Merge, ".RAD_LINK_PE_DEBUG_DATA=.rdata");
 
   // sections to remove from the image
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_RemoveSection, ".debug");
@@ -865,61 +868,6 @@ lnk_make_linker_coff_obj(Arena            *arena,
   return obj;
 }
 
-internal void
-lnk_push_pe_debug_data_directory(COFF_ObjWriter        *obj_writer,
-                                 COFF_ObjSymbol        *data_symbol,
-                                 U64                    data_size,
-                                 String8                dir_name,
-                                 PE_DebugDirectoryType  type,
-                                 COFF_TimeStamp         time_stamp)
-{
-  // init directory
-  PE_DebugDirectory *dir = push_array(obj_writer->arena, PE_DebugDirectory, 1);
-  dir->time_stamp        = time_stamp;
-  dir->type              = type;
-  dir->size              = data_size;
-  //dir->voff            = 0; // relocated through 'data_symbol'
-  //dir->foff            = 0; // relocated through 'data_symbol'
-  COFF_ObjSection *debug_dir_sect = coff_obj_writer_push_section(obj_writer, dir_name, PE_DATA_SECTION_FLAGS, str8_struct(dir));
-  coff_obj_writer_section_push_reloc(obj_writer, debug_dir_sect, OffsetOf(PE_DebugDirectory, voff), data_symbol, COFF_Reloc_X64_Addr32Nb);
-  coff_obj_writer_section_push_reloc(obj_writer, debug_dir_sect, OffsetOf(PE_DebugDirectory, foff), data_symbol, COFF_Reloc_X64_Abs);
-}
-
-internal String8
-lnk_make_debug_directory_obj(Arena *arena, LNK_Config *config)
-{
-  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, config->machine);
-  COFF_ObjSection *sect_a = coff_obj_writer_push_section(obj_writer, str8_lit(".RAD_LINKER_DEBUG_DIR$a"), PE_DATA_SECTION_FLAGS, str8_zero());
-  COFF_ObjSection *sect_z = coff_obj_writer_push_section(obj_writer, str8_lit(".RAD_LINKER_DEBUG_DIR$z"), PE_DATA_SECTION_FLAGS, str8_zero());
-  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
-  coff_obj_writer_release(&obj_writer);
-  return obj;
-}
-
-internal String8
-lnk_make_debug_directory_pdb_obj(Arena *arena, LNK_Config *config)
-{
-  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, config->machine);
-  String8          debug_pdb_data   = pe_make_debug_header_pdb70(obj_writer->arena, config->guid, config->age, config->pdb_alt_path);
-  COFF_ObjSection *debug_pdb_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$z"), PE_DATA_SECTION_FLAGS, debug_pdb_data);
-  COFF_ObjSymbol  *debug_pdb_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("PDB_DEBUG_HEADER_70"), 0, debug_pdb_sect);
-  lnk_push_pe_debug_data_directory(obj_writer, debug_pdb_symbol, debug_pdb_data.size, str8_lit(".RAD_LINKER_DEBUG_DIR$PDB"), PE_DebugDirectoryType_CODEVIEW, config->time_stamp);
-  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
-  return obj;
-}
-
-internal String8
-lnk_make_debug_directory_rdi_obj(Arena *arena, LNK_Config *config)
-{
-  COFF_ObjWriter *obj_writer            = coff_obj_writer_alloc(COFF_TimeStamp_Max, COFF_MachineType_Unknown);
-  String8          debug_rdi_data   = pe_make_debug_header_rdi(obj_writer->arena, config->guid, config->rad_debug_alt_path);
-  COFF_ObjSection *debug_rdi_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$z"), PE_DATA_SECTION_FLAGS, debug_rdi_data);
-  COFF_ObjSymbol  *debug_rdi_symbol = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("RDI_DEBUG_HEADER"), 0, debug_rdi_sect);
-  lnk_push_pe_debug_data_directory(obj_writer, debug_rdi_symbol, debug_rdi_data.size, str8_lit("RAD_LINKER_DEBUG_DIR$RDI"), PE_DebugDirectoryType_CODEVIEW, config->time_stamp);
-  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
-  return obj;
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_load_thin_objs_task)
 {
@@ -1235,7 +1183,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         if (reloc->type > COFF_Reloc_X64_Last) {
           lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation 0x%x", reloc->type);
         }
-      } else if (obj->header.machine == COFF_MachineType_Unknown) {
+      } else if (obj->header.machine != COFF_MachineType_Unknown) {
         NotImplemented;
       }
 
@@ -2941,7 +2889,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         lnk_finalize_section_layout(sectab, reloc, config->file_align);
         lnk_assign_section_virtual_space(reloc, config->sect_align, &voff_cursor);
 
-        sects                      = sects = lnk_section_array_from_list(scratch.arena, sectab->list);
+        sects                      = lnk_section_array_from_list(scratch.arena, sectab->list);
         expected_image_header_size = lnk_compute_win32_image_header_size(config, sects.count);
       }
     }
@@ -3105,9 +3053,6 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       ProfEnd();
     }
 
-    LNK_Obj *debug_dir_obj = 0;
-    //hash_table_search_string_raw(loaded_obj_ht, str8_lit("* Debug Directory *"), &debug_dir_obj);
-
     // patch load config
     {
       LNK_Symbol *load_config_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit(LNK_LOAD_CONFIG_SYMBOL_NAME));
@@ -3147,8 +3092,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         ProfEnd();
 
         PE_DataDirectory *pdata_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, sizeof(PE_DataDirectory));
-        pdata_dir->virt_off  = pdata_sect->voff;
-        pdata_dir->virt_size = pdata_sect->vsize;
+        pdata_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, pdata_sect);
+        pdata_dir->virt_size = lnk_get_section_contrib_size(pdata_sect);
       }
     }
 
@@ -3159,8 +3104,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         PE_DataDirectory *export_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXPORT, sizeof(PE_DataDirectory));
         LNK_SectionContrib *edata_first_contrib = lnk_get_first_section_contrib(edata_sect);
         LNK_SectionContrib *edata_last_contrib = lnk_get_last_section_contrib(edata_sect);
-        export_dir->virt_off  = image_section_table[edata_first_contrib->u.sect_idx+1]->voff + edata_first_contrib->u.off;
-        export_dir->virt_size = (edata_last_contrib->u.off + edata_last_contrib->u.size) - edata_first_contrib->u.off;
+        export_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, edata_sect);
+        export_dir->virt_size = lnk_get_section_contrib_size(edata_sect);
       }
     }
 
@@ -3169,8 +3114,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       LNK_Section *reloc_sect = lnk_section_table_search(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
       if (reloc_sect) {
         PE_DataDirectory *reloc_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_BASE_RELOC, sizeof(PE_DataDirectory));
-        reloc_dir->virt_off  = reloc_sect->voff;
-        reloc_dir->virt_size = reloc_sect->vsize;
+        reloc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, reloc_sect);
+        reloc_dir->virt_size = lnk_get_section_contrib_size(reloc_sect);
       }
     }
 
@@ -3191,7 +3136,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         U64 first_import_foff = image_section_table[idata_first_contrib->u.sect_idx+1]->foff + idata_first_contrib->u.off;
         PE_ImportEntry *first_import = str8_deserial_get_raw_ptr(image_data, first_import_foff, sizeof(*first_import));
         PE_DataDirectory *import_addr_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_IMPORT_ADDR, sizeof(PE_DataDirectory));
-        import_addr_dir->virt_off = first_import->import_addr_table_voff;
+        import_addr_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, idata_sect);
         import_addr_dir->virt_size = null_thunk_data_voff - first_import->import_addr_table_voff /* null */ + coff_word_size_from_machine(config->machine);
       }
     }
@@ -3207,8 +3152,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DELAY_IMPORT, sizeof(PE_DataDirectory));
         Assert(null_import_desc_parsed.section_number == didat_first_contrib->u.sect_idx+1);
         Assert(null_import_desc_parsed.value >= didat_first_contrib->u.off);
-        import_dir->virt_off = image_section_table[didat_first_contrib->u.sect_idx+1]->voff + didat_first_contrib->u.off;
-        import_dir->virt_size = null_import_desc_parsed.value - didat_first_contrib->u.off;
+        import_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, didat_sect);
+        import_dir->virt_size = lnk_get_section_contrib_size(didat_sect);
       }
     }
 
@@ -3247,36 +3192,33 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       }
 
       PE_DataDirectory *tls_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, sizeof(PE_DataDirectory));
-      tls_dir->virt_off  = tls_sect->voff;
-      tls_dir->virt_size = tls_sect->vsize;
+      tls_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, tls_sect);
+      tls_dir->virt_size = lnk_get_section_contrib_size(tls_sect);
 
       ProfEnd();
     }
 
     // patch debug
     {
-      LNK_Section *debug_dir_sect = lnk_section_table_search(sectab, str8_lit(".RAD_LINKER_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
+      LNK_Section *debug_dir_sect = lnk_section_table_search(sectab, str8_lit(".RAD_LINK_PE_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
       if (debug_dir_sect) {
+        // patch directory
         PE_DataDirectory *debug_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, sizeof(PE_DataDirectory));
-        debug_dir->virt_off  = debug_dir_sect->voff;
-        debug_dir->virt_size = debug_dir_sect->vsize;
+        debug_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, debug_dir_sect);
+        debug_dir->virt_size = lnk_get_section_contrib_size(debug_dir_sect);
 
-        COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(debug_dir_obj->data, debug_dir_obj->header.section_table_range).str;
-        String8             string_table  = str8_substr(debug_dir_obj->data, debug_dir_obj->header.string_table_range);
-        for (U64 sect_idx = 0; sect_idx < debug_dir_obj->header.section_count_no_null; sect_idx += 1) {
-          COFF_SectionHeader *sect_header = &section_table[sect_idx];
-          COFF_RelocInfo      reloc_info  = coff_reloc_info_from_section_header(debug_dir_obj->data, sect_header);
-          COFF_Reloc         *relocs      = (COFF_Reloc *)(debug_dir_obj->data.str + reloc_info.array_off);
+        // find debug directory begin and end pair
+        LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(debug_dir_sect);
+        LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(debug_dir_sect);
+        U64 debug_begin_foff = lnk_foff_from_section_contrib(image_section_table, first_sc);
+        U64 debug_end_fopl = lnk_fopl_from_section_contrib(image_section_table, last_sc);
 
-          for (U64 reloc_idx = 0; reloc_idx < reloc_info.count; reloc_idx += 1) {
-            COFF_Reloc *r = &relocs[reloc_idx];
-            if (r->type == 0) {
-              COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(debug_dir_obj, r->isymbol);
-
-              // patch PE_DebugDirectory.foff
-              U32 *debug_directory_foff = (U32 *)(image_data.str + sect_header->foff + r->apply_off);
-              *debug_directory_foff = image_section_table[symbol.section_number]->foff + symbol.value;
-              break;
+        // patch file offsets to the debug directories
+        for (U64 cursor = debug_begin_foff; cursor + sizeof(PE_DebugDirectory) <= debug_end_fopl; cursor += sizeof(PE_DebugDirectory)) {
+          PE_DebugDirectory *dir = str8_deserial_get_raw_ptr(image_data, cursor, sizeof(PE_DebugDirectory));
+          for (U64 section_number = 1; section_number < pe.section_count+1; section_number += 1) {
+            if (image_section_table[section_number]->voff <= dir->voff && dir->voff < image_section_table[section_number]->voff + image_section_table[section_number]->vsize) {
+              dir->foff = image_section_table[section_number]->foff + (dir->voff - image_section_table[section_number]->voff);
             }
           }
         }
@@ -3288,8 +3230,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       LNK_Section *rsrc_sect = lnk_section_table_search(sectab, str8_lit(".rsrc"), PE_RSRC_SECTION_FLAGS);
       if (rsrc_sect) {
         PE_DataDirectory *rsrc_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_RESOURCES, sizeof(PE_DataDirectory));
-        rsrc_dir->virt_off  = rsrc_sect->voff;
-        rsrc_dir->virt_size = rsrc_sect->vsize;
+        rsrc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, rsrc_sect);
+        rsrc_dir->virt_size = lnk_get_section_contrib_size(rsrc_sect);
       }
     }
 
@@ -3302,8 +3244,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
     // compute image guid, and patch PDB and RDI guids
     {
-      LNK_Symbol *guid_pdb_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("RAD_LINKER_PDB_GUID"));
-      LNK_Symbol *guid_rdi_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("RAD_LINKER_RDI_GUID"));
+      LNK_Symbol *guid_pdb_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("RAD_LINK_PE_DEBUG_GUID_PDB"));
+      LNK_Symbol *guid_rdi_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("RAD_LINK_PE_DEBUG_GUID_RDI"));
 
       if (guid_pdb_symbol || guid_rdi_symbol) {
         switch (config->guid_type) {
@@ -3318,19 +3260,15 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       }
 
       if (guid_pdb_symbol) {
-        LNK_Obj            *obj            = guid_pdb_symbol->u.defined.obj;
-        COFF_ParsedSymbol   symbol         = lnk_parsed_symbol_from_coff_symbol_idx(obj, guid_pdb_symbol->u.defined.symbol_idx);
-        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-        Guid               *cv_guid_pdb    = str8_deserial_get_raw_ptr(image_data, section_header->foff, sizeof(*cv_guid_pdb));
-        *cv_guid_pdb = config->guid;
+        U64   cv_guid_foff = lnk_file_off_from_symbol(image_section_table, guid_pdb_symbol);
+        Guid *cv_guid  = str8_deserial_get_raw_ptr(image_data, cv_guid_foff, sizeof(*cv_guid));
+        *cv_guid = config->guid;
       }
 
       if (guid_rdi_symbol) {
-        LNK_Obj            *obj            = guid_rdi_symbol->u.defined.obj;
-        COFF_ParsedSymbol   symbol         = lnk_parsed_symbol_from_coff_symbol_idx(obj, guid_rdi_symbol->u.defined.symbol_idx);
-        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-        Guid               *cv_guid_rdi    = str8_deserial_get_raw_ptr(image_data, section_header->foff, sizeof(*cv_guid_rdi));
-        *cv_guid_rdi = config->guid;
+        U64   cv_guid_foff = lnk_file_off_from_symbol(image_section_table, guid_rdi_symbol);
+        Guid *cv_guid  = str8_deserial_get_raw_ptr(image_data, cv_guid_foff, sizeof(*cv_guid));
+        *cv_guid = config->guid;
       }
     }
     
@@ -4582,26 +4520,21 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
             ProfEnd();
           }
 
-          ProfBegin("Build Debug Directory");
           {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->path     = str8_lit("* Debug Directory *");
-            input->dedup_id = input->path;
-            input->data     = lnk_make_debug_directory_obj(scratch.arena, config);
+            if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
+              LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+              input->path     = str8_lit("* Debug Directory PDB *");
+              input->dedup_id = input->path;
+              input->data     = pe_make_debug_directory_pdb_obj(scratch.arena, config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
+            }
+            if (config->rad_debug == LNK_SwitchState_Yes) {
+              LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+              input->path     = str8_lit("* Debug Directory RDI *");
+              input->dedup_id = input->path;
+              input->data     = pe_make_debug_directory_rdi_obj(scratch.arena, config->machine, config->guid, config->age, config->time_stamp, config->rad_debug_alt_path);
+            }
+            ProfEnd();
           }
-          if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->path     = str8_lit("* Debug Directory PDB *");
-            input->dedup_id = input->path;
-            input->data     = lnk_make_debug_directory_pdb_obj(scratch.arena, config);
-          }
-          if (config->rad_debug == LNK_SwitchState_Yes) {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->path     = str8_lit("* Debug Directory RDI *");
-            input->dedup_id = input->path;
-            input->data     = lnk_make_debug_directory_rdi_obj(scratch.arena, config);
-          }
-          ProfEnd();
         }
       } break;
       case State_BuildImage: {

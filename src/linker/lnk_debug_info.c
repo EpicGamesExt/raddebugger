@@ -2984,6 +2984,9 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     if (obj_sect_header->flags & COFF_SectionFlag_LnkRemove) {
       continue;
     }
+    if (lnk_is_coff_section_debug(obj, sect_idx)) {
+      continue;
+    }
 
     U64     sect_number;
     String8 sect_data;
@@ -2991,11 +2994,13 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     U32     data_crc;
     if (obj_sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
       sect_number = rng_1u64_array_bsearch(task->image_section_virt_ranges, obj_sect_header->voff);
+      Assert(sect_number < task->image_section_virt_ranges.count);
       sect_data   = str8_zero();
       sect_off    = obj_sect_header->voff - task->image_section_virt_ranges.v[sect_number].min;
       data_crc    = 0;
     } else {
       sect_number = rng_1u64_array_bsearch(task->image_section_file_ranges, obj_sect_header->foff);
+      Assert(sect_number < task->image_section_file_ranges.count);
       sect_off    = obj_sect_header->foff - task->image_section_file_ranges.v[sect_number].min;
       data_crc    = update_crc32(0, sect_data.str, sect_data.size);
     }
