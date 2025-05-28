@@ -445,8 +445,8 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
     type_key = e_type_key_from_expr(parse.expr);
   }
   
-  // rjf: get type pattern parts
-  String8List pattern_parts = {0};
+  // rjf: extract type pattern
+  E_Pattern pattern = {0};
   if(e_type_key_match(e_type_key_zero(), type_key))
   {
     U64 start_string_off = 0;
@@ -458,13 +458,18 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
         String8 new_part = str8_substr(params->type_pattern, r1u64(start_string_off, off));
         if(new_part.size != 0)
         {
-          str8_list_push(arena, &pattern_parts, new_part);
+          E_PatternPart *p = push_array(arena, E_PatternPart, 1);
+          SLLQueuePush(pattern.first_part, pattern.last_part, p);
+          p->string = new_part;
+          pattern.count += 1;
         }
         start_string_off = off+1;
       }
       if(byte == '?')
       {
-        str8_list_push(arena, &pattern_parts, str8_zero());
+        E_PatternPart *p = push_array(arena, E_PatternPart, 1);
+        SLLQueuePush(pattern.first_part, pattern.last_part, p);
+        pattern.count += 1;
       }
     }
   }
@@ -472,11 +477,11 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   // rjf: if the type key is nonzero, *or* we have type patterns, then insert
   // into map accordingly
   if(!e_type_key_match(e_type_key_zero(), type_key) ||
-     pattern_parts.node_count != 0)
+     pattern.count != 0)
   {
     E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
     node->type_string = str8_skip_chop_whitespace(e_type_string_from_key(arena, type_key));
-    node->type_pattern_parts = pattern_parts;
+    node->type_pattern = pattern;
     node->expr_string = push_str8_copy(arena, params->tag_expr_string);
     if(!e_type_key_match(e_type_key_zero(), type_key))
     {
@@ -1100,9 +1105,9 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
         B32 fits_this_type_string = 1;
         {
           U64 scan_pos = 0;
-          for(String8Node *n = auto_hook_node->type_pattern_parts.first; n != 0 && fits_this_type_string; n = n->next)
+          for(E_PatternPart *part = auto_hook_node->type_pattern.first_part; part != 0 && fits_this_type_string; part = part->next)
           {
-            String8 pattern_string = n->string;
+            String8 pattern_string = part->string;
             
             //- rjf: skip whitespace
             for(;scan_pos < type_string.size;)
@@ -1120,7 +1125,7 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
             //- rjf: no pattern string -> wildcard. skip wildcard portion
             if(pattern_string.size == 0)
             {
-              String8 terminator_pattern_string = n->next ? n->next->string : str8_zero();
+              String8 terminator_pattern_string = part->next ? part->next->string : str8_zero();
               U64 brace_nest_depth = 0;
               U64 paren_nest_depth = 0;
               U64 angle_nest_depth = 0;

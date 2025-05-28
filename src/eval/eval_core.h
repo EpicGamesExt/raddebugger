@@ -663,6 +663,22 @@ struct E_String2TypeKeyMap
 ////////////////////////////////
 //~ rjf: Type Pattern -> Hook Key Data Structure (Type Views)
 
+typedef struct E_PatternPart E_PatternPart;
+struct E_PatternPart
+{
+  E_PatternPart *next;
+  String8 string;
+  String8List wildcard_inst_names;
+};
+
+typedef struct E_Pattern E_Pattern;
+struct E_Pattern
+{
+  E_PatternPart *first_part;
+  E_PatternPart *last_part;
+  U64 count;
+};
+
 typedef struct E_AutoHookWildcardInst E_AutoHookWildcardInst;
 struct E_AutoHookWildcardInst
 {
@@ -693,7 +709,7 @@ struct E_AutoHookNode
   E_AutoHookNode *hash_next;
   E_AutoHookNode *pattern_order_next;
   String8 type_string;
-  String8List type_pattern_parts;
+  E_Pattern type_pattern;
   String8 expr_string;
 };
 
