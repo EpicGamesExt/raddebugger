@@ -2350,6 +2350,19 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
         }
       }
     }break;
+    case RDI_NameMapKind_Constants:
+    {
+      map->slots_count = params->constants.total_count*2;
+      map->slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map->slots_count);
+      for(RDIM_SymbolChunkNode *n = params->constants.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 symbol_idx = (RDI_U32)rdim_idx_from_symbol(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, map, n->v[idx].name, symbol_idx);
+        }
+      }
+    }break;
     case RDI_NameMapKind_Procedures:
     {
       map->slots_count = params->procedures.total_count*2;

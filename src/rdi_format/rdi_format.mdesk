@@ -1404,11 +1404,12 @@ RDI_NameMapKindTable:
   {NULL               0}
   {GlobalVariables    1}
   {ThreadVariables    2}
-  {Procedures         3}
-  {Types              4}
-  {LinkNameProcedures 5}
-  {NormalSourcePaths  6}
-  {COUNT              7}
+  {Constants          3}
+  {Procedures         4}
+  {Types              5}
+  {LinkNameProcedures 6}
+  {NormalSourcePaths  7}
+  {COUNT              8}
 }
 
 @table(name type desc)
@@ -1483,12 +1484,12 @@ RDI_NameMapNodeMemberTable:
 @gen(functions)
 ```
 RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
+RDI_PROC RDI_U8 *rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out);
 RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
 RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
 RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
 RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
-RDI_PROC RDI_U8 *rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out);
 ```
 
 @gen(functions) @c_file
