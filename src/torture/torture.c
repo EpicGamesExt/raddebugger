@@ -3123,7 +3123,7 @@ t_delay_import_user32(void)
     COFF_ObjSymbol *text_symbol = coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
     COFF_ObjSymbol *message_box_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("__imp_MessageBoxA"));
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, 10, msg_symbol, COFF_Reloc_X64_Rel32);
-    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 16, caption_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 17, caption_symbol, COFF_Reloc_X64_Rel32);
     coff_obj_writer_section_push_reloc(obj_writer, text_sect, 25, message_box_symbol, COFF_Reloc_X64_Rel32);
 
     String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
@@ -3131,7 +3131,7 @@ t_delay_import_user32(void)
     if (!t_write_file(str8_lit("delay_import.obj"), obj)) { goto exit; }
   }
 
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /out:a.exe /entry:entry /fixed /delayload:user32.dll kernel32.lib user32.lib libcmt.lib delayimp.lib delay_import.obj");
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /out:a.exe /entry:entry /fixed /delayload:user32.dll kernel32.lib user32.lib libcmt.lib delayimp.lib delay_import.obj /debug:full");
   if (linker_exit_code != 0) { goto exit; }
 
   result = T_Result_Pass;
