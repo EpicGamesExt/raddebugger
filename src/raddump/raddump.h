@@ -49,20 +49,20 @@ typedef U64 RD_Option;
 #define RD_Option_DebugLineStr    (1ull << 29)
 #define RD_Option_DebugStrOffsets (1ull << 30)
 #define RD_Option_Dwarf                       \
-                   (RD_Option_DebugInfo     | \
-                    RD_Option_DebugAbbrev   | \
-                    RD_Option_DebugLine     | \
-                    RD_Option_DebugStr      | \
-                    RD_Option_DebugLoc      | \
-                    RD_Option_DebugRanges   | \
-                    RD_Option_DebugARanges  | \
-                    RD_Option_DebugAddr     | \
-                    RD_Option_DebugLocLists | \
-                    RD_Option_DebugRngLists | \
-                    RD_Option_DebugPubNames | \
-                    RD_Option_DebugPubTypes | \
-                    RD_Option_DebugLineStr  | \
-                    RD_Option_DebugStrOffsets)
+(RD_Option_DebugInfo     | \
+RD_Option_DebugAbbrev   | \
+RD_Option_DebugLine     | \
+RD_Option_DebugStr      | \
+RD_Option_DebugLoc      | \
+RD_Option_DebugRanges   | \
+RD_Option_DebugARanges  | \
+RD_Option_DebugAddr     | \
+RD_Option_DebugLocLists | \
+RD_Option_DebugRngLists | \
+RD_Option_DebugPubNames | \
+RD_Option_DebugPubTypes | \
+RD_Option_DebugLineStr  | \
+RD_Option_DebugStrOffsets)
 #define RD_Option_RelaxDwarfParser (1ull << 31ull)
 // RDI
 #define RD_Option_NoRdi               (1ull << 32ull)
@@ -80,6 +80,7 @@ typedef U64 RD_Option;
 #define RD_Option_RdiGlobalVars       (1ull << 44ull)
 #define RD_Option_RdiGlobalVarsVMap   (1ull << 45ull)
 #define RD_Option_RdiThreadVars       (1ull << 46ull)
+#define RD_Option_RdiConstants        (1ull << 47ull)
 #define RD_Option_RdiProcedures       (1ull << 48ull)
 #define RD_Option_RdiScopes           (1ull << 49ull)
 #define RD_Option_RdiScopeVMap        (1ull << 50ull)
@@ -87,25 +88,26 @@ typedef U64 RD_Option;
 #define RD_Option_RdiNameMaps         (1ull << 52ull)
 #define RD_Option_RdiStrings          (1ull << 53ull)
 #define RD_Option_RdiAll              (RD_Option_RdiDataSections     | \
-                                       RD_Option_RdiTopLevelInfo     | \
-                                       RD_Option_RdiBinarySections   | \
-                                       RD_Option_RdiFilePaths        | \
-                                       RD_Option_RdiSourceFiles      | \
-                                       RD_Option_RdiLineTables       | \
-                                       RD_Option_RdiSourceLineMaps   | \
-                                       RD_Option_RdiUnits            | \
-                                       RD_Option_RdiUnitVMap         | \
-                                       RD_Option_RdiTypeNodes        | \
-                                       RD_Option_RdiUserDefinedTypes | \
-                                       RD_Option_RdiGlobalVars       | \
-                                       RD_Option_RdiGlobalVarsVMap   | \
-                                       RD_Option_RdiThreadVars       | \
-                                       RD_Option_RdiProcedures       | \
-                                       RD_Option_RdiScopes           | \
-                                       RD_Option_RdiScopeVMap        | \
-                                       RD_Option_RdiInlineSites      | \
-                                       RD_Option_RdiNameMaps         | \
-                                       RD_Option_RdiStrings)
+RD_Option_RdiTopLevelInfo     | \
+RD_Option_RdiBinarySections   | \
+RD_Option_RdiFilePaths        | \
+RD_Option_RdiSourceFiles      | \
+RD_Option_RdiLineTables       | \
+RD_Option_RdiSourceLineMaps   | \
+RD_Option_RdiUnits            | \
+RD_Option_RdiUnitVMap         | \
+RD_Option_RdiTypeNodes        | \
+RD_Option_RdiUserDefinedTypes | \
+RD_Option_RdiGlobalVars       | \
+RD_Option_RdiGlobalVarsVMap   | \
+RD_Option_RdiThreadVars       | \
+RD_Option_RdiConstants        | \
+RD_Option_RdiProcedures       | \
+RD_Option_RdiScopes           | \
+RD_Option_RdiScopeVMap        | \
+RD_Option_RdiInlineSites      | \
+RD_Option_RdiNameMaps         | \
+RD_Option_RdiStrings)
 
 
 typedef struct RD_Marker
@@ -211,6 +213,7 @@ internal void rdi_print_type_node      (Arena *arena, String8List *out, String8 
 internal void rdi_print_udt            (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_UDT            *udt);
 internal void rdi_print_global_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_GlobalVariable *gvar);
 internal void rdi_print_thread_variable(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_ThreadVariable *tvar);
+internal void rdi_print_constant       (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Constant *constant);
 internal void rdi_print_procedure      (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure      *proc, RDI_Arch arch);
 internal void rdi_print_scope          (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Scope          *scope, RDI_Arch arch);
 internal void rdi_print_inline_site    (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, U64 idx, RDI_InlineSite     *inline_site);
