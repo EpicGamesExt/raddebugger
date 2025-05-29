@@ -10,7 +10,7 @@
 #ifndef RDI_FORMAT_C
 #define RDI_FORMAT_C
 
-RDI_U16 rdi_section_element_size_table[37] =
+RDI_U16 rdi_section_element_size_table[40] =
 {
 sizeof(RDI_U8),
 sizeof(RDI_TopLevelInfo),
@@ -37,6 +37,7 @@ sizeof(RDI_EnumMember),
 sizeof(RDI_GlobalVariable),
 sizeof(RDI_VMapEntry),
 sizeof(RDI_ThreadVariable),
+sizeof(RDI_Constant),
 sizeof(RDI_Procedure),
 sizeof(RDI_Scope),
 sizeof(RDI_U64),
@@ -45,19 +46,24 @@ sizeof(RDI_InlineSite),
 sizeof(RDI_Local),
 sizeof(RDI_LocationBlock),
 sizeof(RDI_U8),
+sizeof(RDI_U8),
+sizeof(RDI_U32),
 sizeof(RDI_NameMap),
 sizeof(RDI_NameMapBucket),
 sizeof(RDI_NameMapNode),
 sizeof(RDI_U8),
 };
 
-RDI_U8 rdi_section_is_required_table[37] =
+RDI_U8 rdi_section_is_required_table[40] =
 {
 0,
 0,
 1,
 1,
 1,
+0,
+0,
+0,
 0,
 0,
 0,

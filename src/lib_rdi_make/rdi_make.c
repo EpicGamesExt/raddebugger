@@ -294,7 +294,7 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
         
         // generate an ordered range node
         RDIM_OrderedRange *new_range = rdim_push_array(rdim_temp_arena(scratch), RDIM_OrderedRange, 1);
-        SLLQueuePush(ranges_first, ranges_last, new_range);
+        RDIM_SLLQueuePush(ranges_first, ranges_last, new_range);
         range_count += 1;
         new_range->first = first;
         new_range->opl = opl;
@@ -330,7 +330,7 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
           
           // get first range
           RDIM_OrderedRange *range1 = src_ranges;
-          SLLStackPop(src_ranges);
+          RDIM_SLLStackPop(src_ranges);
           
           // if this range is the whole array, we are done
           if(range1->first == 0 && range1->opl == count)
@@ -344,15 +344,16 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
           {
             RDI_U64 first = range1->first;
             rdim_memcpy(dst + first, src + first, sizeof(*src)*(range1->opl - first));
-            SLLQueuePush(dst_ranges, dst_ranges_last, range1);
+            RDIM_SLLQueuePush(dst_ranges, dst_ranges_last, range1);
             break;
           }
           
           // get second range
           RDIM_OrderedRange *range2 = src_ranges;
-          SLLStackPop(src_ranges);
-          
+          RDIM_SLLStackPop(src_ranges);
+#if 0
           rdim_assert(range1->opl == range2->first);
+#endif
           
           // merge these ranges
           RDI_U64 jd = range1->first;
@@ -419,7 +420,7 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
   }
 #endif
   
-  scratch_end(scratch);
+  rdim_scratch_end(scratch);
   return result;
 }
 
@@ -994,12 +995,20 @@ rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChu
     dst->last = to_push->last;
     dst->chunk_count += to_push->chunk_count;
     dst->total_count += to_push->total_count;
+    dst->total_value_data_size += to_push->total_value_data_size;
   }
   else if(dst->first == 0)
   {
     rdim_memcpy_struct(dst, to_push);
   }
   rdim_memzero_struct(to_push);
+}
+
+internal void
+rdim_symbol_push_value_data(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDIM_Symbol *symbol, RDIM_String8 data)
+{
+  symbol->value_data = rdim_str8_copy(arena, data);
+  list->total_value_data_size += data.size;
 }
 
 ////////////////////////////////
@@ -3497,6 +3506,39 @@ rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, 
   return result;
 }
 
+RDI_PROC RDIM_ConstantsBakeResult
+rdim_bake_constants(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
+{
+  RDI_Constant *constants = push_array(arena, RDI_Constant, src->total_count+1);
+  RDI_U32 *constant_values = push_array(arena, RDI_U32, src->total_count+1);
+  RDI_U8 *constant_value_data = push_array(arena, RDI_U8, src->total_value_data_size+1);
+  RDI_U32 dst_idx = 1;
+  RDI_U64 dst_constant_value_data_off = 1;
+  for(RDIM_SymbolChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    {
+      RDIM_Symbol *src = &n->v[chunk_idx];
+      RDI_Constant *dst = &constants[dst_idx];
+      RDI_U32 *dst_value_idx = &constant_values[dst_idx];
+      dst->name_string_idx    = rdim_bake_idx_from_string(strings, src->name);
+      dst->type_idx           = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+      dst->constant_value_idx = dst_idx;
+      dst_value_idx[0] = dst_constant_value_data_off;
+      rdim_memcpy(constant_value_data + dst_constant_value_data_off, src->value_data.str, src->value_data.size);
+      dst_constant_value_data_off += src->value_data.size;
+    }
+  }
+  RDIM_ConstantsBakeResult result = {0};
+  result.constants = constants;
+  result.constants_count = src->total_count+1;
+  result.constant_values = constant_values;
+  result.constant_values_count = src->total_count+1;
+  result.constant_value_data = constant_value_data;
+  result.constant_value_data_size = dst_constant_value_data_off;
+  return result;
+}
+
 RDI_PROC U64
 rdim_bake_location(RDIM_Arena *arena, RDIM_String8List *location_data_blobs, RDIM_Location *src_location)
 {
@@ -3970,6 +4012,7 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_GlobalVariables]      = rdim_serialized_section_make_unpacked_array(results->global_variables.global_variables, results->global_variables.global_variables_count);
   bundle.sections[RDI_SectionKind_GlobalVMap]           = rdim_serialized_section_make_unpacked_array(results->global_vmap.vmap.vmap, results->global_vmap.vmap.count+1);
   bundle.sections[RDI_SectionKind_ThreadVariables]      = rdim_serialized_section_make_unpacked_array(results->thread_variables.thread_variables, results->thread_variables.thread_variables_count);
+  bundle.sections[RDI_SectionKind_Constants]            = rdim_serialized_section_make_unpacked_array(results->constants.constants, results->constants.constants_count);
   bundle.sections[RDI_SectionKind_Procedures]           = rdim_serialized_section_make_unpacked_array(results->procedures.procedures, results->procedures.procedures_count);
   bundle.sections[RDI_SectionKind_Scopes]               = rdim_serialized_section_make_unpacked_array(results->scopes.scopes, results->scopes.scopes_count);
   bundle.sections[RDI_SectionKind_ScopeVOffData]        = rdim_serialized_section_make_unpacked_array(results->scopes.scope_voffs, results->scopes.scope_voffs_count);
@@ -3978,6 +4021,8 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_Locals]               = rdim_serialized_section_make_unpacked_array(results->scopes.locals, results->scopes.locals_count);
   bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->location_blocks.str, results->location_blocks.size);
   bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->location_data.str, results->location_data.size);
+  bundle.sections[RDI_SectionKind_ConstantValueData]    = rdim_serialized_section_make_unpacked_array(results->constants.constant_value_data, results->constants.constant_value_data_size);
+  bundle.sections[RDI_SectionKind_ConstantValueTable]   = rdim_serialized_section_make_unpacked_array(results->constants.constant_values, results->constants.constant_values_count);
   bundle.sections[RDI_SectionKind_NameMaps]             = rdim_serialized_section_make_unpacked_array(results->top_level_name_maps.name_maps, results->top_level_name_maps.name_maps_count);
   bundle.sections[RDI_SectionKind_NameMapBuckets]       = rdim_serialized_section_make_unpacked_array(results->name_maps.buckets, results->name_maps.buckets_count);
   bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);

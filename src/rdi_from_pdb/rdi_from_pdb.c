@@ -2112,6 +2112,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
   RDIM_SymbolChunkList sym_procedures = {0};
   RDIM_SymbolChunkList sym_global_variables = {0};
   RDIM_SymbolChunkList sym_thread_variables = {0};
+  RDIM_SymbolChunkList sym_constants = {0};
   RDIM_ScopeChunkList sym_scopes = {0};
   RDIM_InlineSiteChunkList sym_inline_sites = {0};
   RDIM_TypeChunkList typedefs = {0};
@@ -2962,6 +2963,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
     out->procedures       = sym_procedures;
     out->global_variables = sym_global_variables;
     out->thread_variables = sym_thread_variables;
+    out->constants        = sym_constants;
     out->scopes           = sym_scopes;
     out->inline_sites     = sym_inline_sites;
     out->typedefs         = typedefs;
@@ -4011,6 +4013,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_SymbolChunkList all_procedures = {0};
   RDIM_SymbolChunkList all_global_variables = {0};
   RDIM_SymbolChunkList all_thread_variables = {0};
+  RDIM_SymbolChunkList all_constants = {0};
   RDIM_ScopeChunkList all_scopes = {0};
   RDIM_InlineSiteChunkList all_inline_sites = {0};
   ProfScope("produce symbols from all streams")
@@ -4065,6 +4068,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         rdim_symbol_chunk_list_concat_in_place(&all_procedures,       &out->procedures);
         rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &out->global_variables);
         rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &out->thread_variables);
+        rdim_symbol_chunk_list_concat_in_place(&all_constants,        &out->constants);
         rdim_scope_chunk_list_concat_in_place(&all_scopes,            &out->scopes);
         rdim_inline_site_chunk_list_concat_in_place(&all_inline_sites,&out->inline_sites);
         rdim_type_chunk_list_concat_in_place(&all_types, &out->typedefs);
@@ -4096,6 +4100,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.line_tables      = all_line_tables;
     out->bake_params.global_variables = all_global_variables;
     out->bake_params.thread_variables = all_thread_variables;
+    out->bake_params.constants        = all_constants;
     out->bake_params.procedures       = all_procedures;
     out->bake_params.scopes           = all_scopes;
     out->bake_params.inline_sites     = all_inline_sites;

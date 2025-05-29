@@ -332,6 +332,17 @@ ASYNC_WORK_DEF(rdim_bake_thread_variables_work)
   return out;
 }
 
+ASYNC_WORK_DEF(rdim_bake_constants_work)
+{
+  ProfBeginFunction();
+  Arena *arena = rdim_local_state->work_thread_arenas[thread_idx];
+  RDIM_BakeConstantsIn *in = (RDIM_BakeConstantsIn *)input;
+  RDIM_ConstantsBakeResult *out = push_array(arena, RDIM_ConstantsBakeResult, 1);
+  ProfScope("bake constants") *out = rdim_bake_constants(arena, in->strings, in->constants);
+  ProfEnd();
+  return out;
+}
+
 ASYNC_WORK_DEF(rdim_bake_procedures_work)
 {
   ProfBeginFunction();
@@ -983,30 +994,53 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   ASYNC_Task *bake_file_paths_task = async_task_launch(scratch.arena, rdim_bake_file_paths_work, .input = &bake_file_paths_in);
   RDIM_BakeStringsIn bake_strings_in = {&bake_strings};
   ASYNC_Task *bake_strings_task = async_task_launch(scratch.arena, rdim_bake_strings_work, .input = &bake_strings_in);
+  RDIM_BakeConstantsIn bake_constants_in = {&bake_strings, &in_params->constants};
+  ASYNC_Task *bake_constants_task = async_task_launch(scratch.arena, rdim_bake_constants_work, .input = &bake_constants_in);
   
+  //////////////////////////////
+  //- rjf: (GIANT SERIAL DEPENDENCY CHAIN HACK OF LOCATION BLOCK BUILDING)
+  //
+  // TODO(rjf): // TODO(rjf): // TODO(rjf): {
+  //
+  // This needs to be majorly cleaned up. We are doing this giant
+  // serial-dependency chain of async tasks (thus removing all async
+  // properties) because each async task here is secretly mutating
+  // the same input parameter (something which breaks the rules &
+  // style used everywhere else in the converter).
+  //
+  // Location blocks for each category of symbol should be built
+  // & arranged in parallel, then joined via a very thin operation
+  // after the fact. We should not ever be secretly mutating input
+  // parameters to async tasks, we need to be only returning new
+  // stuff.
+  //
   RDIM_String8List location_blocks     = {0};
   RDIM_String8List location_data_blobs = {0};
-  
-  // reserve null location block for opl
-  rdim_location_block_chunk_list_push_array(state->arena, &location_blocks, 1);
-  
-  // TODO: export location instead of VOFF
-  RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables};
-  ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, rdim_bake_thread_variables_work, .input = &bake_thread_variables_in);
-  ProfScope("thread variables") out.thread_variables = *async_task_join_struct(bake_thread_variables_task, RDIM_ThreadVariableBakeResult);
-  
-  // TODO: export location instead of VOFF
-  RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables};
-  ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, rdim_bake_global_variables_work, .input = &bake_global_variables_in);
-  ProfScope("global variables") out.global_variables = *async_task_join_struct(bake_global_variables_task, RDIM_GlobalVariableBakeResult);
-  
-  RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, &location_blocks, &location_data_blobs};
-  ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, rdim_bake_scopes_work, .input = &bake_scopes_in);
-  ProfScope("scopes") out.scopes = *async_task_join_struct(bake_scopes_task, RDIM_ScopeBakeResult);
-  
-  RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, &location_blocks, &location_data_blobs};
-  ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, rdim_bake_procedures_work, .input = &bake_procedures_in);
-  ProfScope("procedures") out.procedures = *async_task_join_struct(bake_procedures_task, RDIM_ProcedureBakeResult);
+  {
+    // reserve null location block for opl
+    rdim_location_block_chunk_list_push_array(state->arena, &location_blocks, 1);
+    
+    // TODO: export location instead of VOFF
+    RDIM_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables};
+    ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, rdim_bake_global_variables_work, .input = &bake_global_variables_in);
+    ProfScope("global variables") out.global_variables = *async_task_join_struct(bake_global_variables_task, RDIM_GlobalVariableBakeResult);
+    
+    // TODO: export location instead of VOFF
+    RDIM_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables};
+    ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, rdim_bake_thread_variables_work, .input = &bake_thread_variables_in);
+    ProfScope("thread variables") out.thread_variables = *async_task_join_struct(bake_thread_variables_task, RDIM_ThreadVariableBakeResult);
+    
+    RDIM_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes, &location_blocks, &location_data_blobs};
+    ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, rdim_bake_scopes_work, .input = &bake_scopes_in);
+    ProfScope("scopes") out.scopes = *async_task_join_struct(bake_scopes_task, RDIM_ScopeBakeResult);
+    
+    RDIM_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures, &location_blocks, &location_data_blobs};
+    ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, rdim_bake_procedures_work, .input = &bake_procedures_in);
+    ProfScope("procedures") out.procedures = *async_task_join_struct(bake_procedures_task, RDIM_ProcedureBakeResult);
+  }
+  //
+  //- TODO(rjf): // TODO(rjf): // TODO(rjf): }
+  //////////////////////////////
   
   //////////////////////////////
   //- rjf: join name map building tasks
@@ -1074,6 +1108,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
   ProfScope("inline sites")         out.inline_sites     = *async_task_join_struct(bake_inline_sites_task,     RDIM_InlineSiteBakeResult);
   ProfScope("file paths")           out.file_paths       = *async_task_join_struct(bake_file_paths_task,       RDIM_FilePathBakeResult);
   ProfScope("strings")              out.strings          = *async_task_join_struct(bake_strings_task,          RDIM_StringBakeResult);
+  ProfScope("constants")            out.constants        = *async_task_join_struct(bake_constants_task,        RDIM_ConstantsBakeResult);
   ProfScope("type nodes")           out.type_nodes       = *async_task_join_struct(bake_type_nodes_task,       RDIM_TypeNodeBakeResult);
   ProfScope("idx runs")             out.idx_runs         = *async_task_join_struct(bake_idx_runs_task,         RDIM_IndexRunBakeResult);
   ProfScope("line tables")          out.line_tables      = *async_task_join_struct(bake_line_tables_task,      RDIM_LineTableBakeResult);

@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // "raddbg\0\0"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 11
+#define RDI_ENCODING_VERSION 12
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -85,18 +85,21 @@ RDI_SectionKind_EnumMembers          = 0x0015,
 RDI_SectionKind_GlobalVariables      = 0x0016,
 RDI_SectionKind_GlobalVMap           = 0x0017,
 RDI_SectionKind_ThreadVariables      = 0x0018,
-RDI_SectionKind_Procedures           = 0x0019,
-RDI_SectionKind_Scopes               = 0x001A,
-RDI_SectionKind_ScopeVOffData        = 0x001B,
-RDI_SectionKind_ScopeVMap            = 0x001C,
-RDI_SectionKind_InlineSites          = 0x001D,
-RDI_SectionKind_Locals               = 0x001E,
-RDI_SectionKind_LocationBlocks       = 0x001F,
-RDI_SectionKind_LocationData         = 0x0020,
-RDI_SectionKind_NameMaps             = 0x0021,
-RDI_SectionKind_NameMapBuckets       = 0x0022,
-RDI_SectionKind_NameMapNodes         = 0x0023,
-RDI_SectionKind_COUNT                = 0x0024,
+RDI_SectionKind_Constants            = 0x0019,
+RDI_SectionKind_Procedures           = 0x001A,
+RDI_SectionKind_Scopes               = 0x001B,
+RDI_SectionKind_ScopeVOffData        = 0x001C,
+RDI_SectionKind_ScopeVMap            = 0x001D,
+RDI_SectionKind_InlineSites          = 0x001E,
+RDI_SectionKind_Locals               = 0x001F,
+RDI_SectionKind_LocationBlocks       = 0x0020,
+RDI_SectionKind_LocationData         = 0x0021,
+RDI_SectionKind_ConstantValueData    = 0x0022,
+RDI_SectionKind_ConstantValueTable   = 0x0023,
+RDI_SectionKind_NameMaps             = 0x0024,
+RDI_SectionKind_NameMapBuckets       = 0x0025,
+RDI_SectionKind_NameMapNodes         = 0x0026,
+RDI_SectionKind_COUNT                = 0x0027,
 } RDI_SectionKindEnum;
 
 typedef RDI_U32 RDI_SectionEncoding;
@@ -561,6 +564,7 @@ X(EnumMembers, enum_members, RDI_EnumMember)\
 X(GlobalVariables, global_variables, RDI_GlobalVariable)\
 X(GlobalVMap, global_vmap, RDI_VMapEntry)\
 X(ThreadVariables, thread_variables, RDI_ThreadVariable)\
+X(Constants, constants, RDI_Constant)\
 X(Procedures, procedures, RDI_Procedure)\
 X(Scopes, scopes, RDI_Scope)\
 X(ScopeVOffData, scope_voff_data, RDI_U64)\
@@ -569,6 +573,8 @@ X(InlineSites, inline_sites, RDI_InlineSite)\
 X(Locals, locals, RDI_Local)\
 X(LocationBlocks, location_blocks, RDI_LocationBlock)\
 X(LocationData, location_data, RDI_U8)\
+X(ConstantValueData, constant_value_data, RDI_U8)\
+X(ConstantValueTable, constant_value_table, RDI_U32)\
 X(NameMaps, name_maps, RDI_NameMap)\
 X(NameMapBuckets, name_map_buckets, RDI_NameMapBucket)\
 X(NameMapNodes, name_map_nodes, RDI_NameMapNode)\
@@ -1132,6 +1138,7 @@ typedef struct RDI_U32_Members                     { RDI_U32 v; } RDI_U32_Member
 typedef struct RDI_U32_EnumMembers                 { RDI_U32 v; } RDI_U32_EnumMembers;
 typedef struct RDI_U32_GlobalVariables             { RDI_U32 v; } RDI_U32_GlobalVariables;
 typedef struct RDI_U32_ThreadVariables             { RDI_U32 v; } RDI_U32_ThreadVariables;
+typedef struct RDI_U32_Constants                   { RDI_U32 v; } RDI_U32_Constants;
 typedef struct RDI_U32_Procedures                  { RDI_U32 v; } RDI_U32_Procedures;
 typedef struct RDI_U32_Scopes                      { RDI_U32 v; } RDI_U32_Scopes;
 typedef struct RDI_U32_ScopeVOffData               { RDI_U32 v; } RDI_U32_ScopeVOffData;
@@ -1139,6 +1146,8 @@ typedef struct RDI_U32_InlineSites                 { RDI_U32 v; } RDI_U32_Inline
 typedef struct RDI_U32_Locals                      { RDI_U32 v; } RDI_U32_Locals;
 typedef struct RDI_U32_LocationBlocks              { RDI_U32 v; } RDI_U32_LocationBlocks;
 typedef struct RDI_U32_LocationData                { RDI_U32 v; } RDI_U32_LocationData;
+typedef struct RDI_U32_ConstantValueData           { RDI_U32 v; } RDI_U32_ConstantValueData;
+typedef struct RDI_U32_ConstantValueTable          { RDI_U32 v; } RDI_U32_ConstantValueTable;
 typedef struct RDI_U32_NameMaps                    { RDI_U32 v; } RDI_U32_NameMaps;
 typedef struct RDI_U32_NameMapBuckets              { RDI_U32 v; } RDI_U32_NameMapBuckets;
 typedef struct RDI_U32_NameMapNodes                { RDI_U32 v; } RDI_U32_NameMapNodes;
@@ -1165,6 +1174,7 @@ typedef RDI_U32_Table RDI_U32_Members;
 typedef RDI_U32_Table RDI_U32_EnumMembers;
 typedef RDI_U32_Table RDI_U32_GlobalVariables;
 typedef RDI_U32_Table RDI_U32_ThreadVariables;
+typedef RDI_U32_Table RDI_U32_Constants;
 typedef RDI_U32_Table RDI_U32_Procedures;
 typedef RDI_U32_Table RDI_U32_Scopes;
 typedef RDI_U32_Table RDI_U32_ScopeVOffData;
@@ -1172,6 +1182,8 @@ typedef RDI_U32_Table RDI_U32_InlineSites;
 typedef RDI_U32_Table RDI_U32_Locals;
 typedef RDI_U32_Table RDI_U32_LocationBlocks;
 typedef RDI_U32_Table RDI_U32_LocationData;
+typedef RDI_U32_Table RDI_U32_ConstantValueData;
+typedef RDI_U32_Table RDI_U32_ConstantValueTable;
 typedef RDI_U32_Table RDI_U32_NameMaps;
 typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
@@ -1396,6 +1408,14 @@ RDI_U32 type_idx;
 RDI_U32 container_idx;
 };
 
+typedef struct RDI_Constant RDI_Constant;
+struct RDI_Constant
+{
+RDI_U32 name_string_idx;
+RDI_U32 type_idx;
+RDI_U32 constant_value_idx;
+};
+
 typedef struct RDI_Procedure RDI_Procedure;
 struct RDI_Procedure
 {
@@ -1522,6 +1542,7 @@ typedef RDI_EnumMember                   RDI_SectionElementType_EnumMembers;
 typedef RDI_GlobalVariable               RDI_SectionElementType_GlobalVariables;
 typedef RDI_VMapEntry                    RDI_SectionElementType_GlobalVMap;
 typedef RDI_ThreadVariable               RDI_SectionElementType_ThreadVariables;
+typedef RDI_Constant                     RDI_SectionElementType_Constants;
 typedef RDI_Procedure                    RDI_SectionElementType_Procedures;
 typedef RDI_Scope                        RDI_SectionElementType_Scopes;
 typedef RDI_U64                          RDI_SectionElementType_ScopeVOffData;
@@ -1530,6 +1551,8 @@ typedef RDI_InlineSite                   RDI_SectionElementType_InlineSites;
 typedef RDI_Local                        RDI_SectionElementType_Locals;
 typedef RDI_LocationBlock                RDI_SectionElementType_LocationBlocks;
 typedef RDI_U8                           RDI_SectionElementType_LocationData;
+typedef RDI_U8                           RDI_SectionElementType_ConstantValueData;
+typedef RDI_U32                          RDI_SectionElementType_ConstantValueTable;
 typedef RDI_NameMap                      RDI_SectionElementType_NameMaps;
 typedef RDI_NameMapBucket                RDI_SectionElementType_NameMapBuckets;
 typedef RDI_NameMapNode                  RDI_SectionElementType_NameMapNodes;
@@ -1542,8 +1565,8 @@ RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTyp
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 RDI_PROC RDI_U8 *rdi_string_from_type_kind(RDI_TypeKind kind, RDI_U64 *size_out);
 
-extern RDI_U16 rdi_section_element_size_table[37];
-extern RDI_U8 rdi_section_is_required_table[37];
+extern RDI_U16 rdi_section_element_size_table[40];
+extern RDI_U8 rdi_section_is_required_table[40];
 extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
 
 #endif // RDI_FORMAT_H

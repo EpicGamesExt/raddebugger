@@ -436,6 +436,7 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
                                                           in_params->procedures.total_count*1 +
                                                           in_params->global_variables.total_count*1 +
                                                           in_params->thread_variables.total_count*1 +
+                                                          in_params->constants.total_count*1 +
                                                           in_params->types.total_count/2)};
   RDIM_BakeStringMapLoose **bake_string_maps__in_progress = push_array(scratch.arena, RDIM_BakeStringMapLoose *, async_thread_count());
   ASYNC_TaskList bake_string_map_build_tasks = {0};
@@ -531,6 +532,7 @@ rdim_bake(RDIM_HelpState *state, RDIM_BakeParams *in_params)
       {
         &in_params->global_variables,
         &in_params->thread_variables,
+        &in_params->constants,
         &in_params->procedures,
       };
       for(U64 list_idx = 0; list_idx < ArrayCount(symbol_lists); list_idx += 1)

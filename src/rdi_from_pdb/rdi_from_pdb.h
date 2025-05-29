@@ -270,6 +270,7 @@ struct P2R_SymbolStreamConvertOut
   RDIM_SymbolChunkList procedures;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
+  RDIM_SymbolChunkList constants;
   RDIM_ScopeChunkList scopes;
   RDIM_InlineSiteChunkList inline_sites;
   RDIM_TypeChunkList typedefs;

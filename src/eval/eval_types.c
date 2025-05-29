@@ -1309,6 +1309,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
             SLLQueuePush(members_list.first, members_list.last, n);
             members_list.count += 1;
             members_need_offset_sort = members_need_offset_sort || (type->members[member_idx].kind == E_MemberKind_DataField && n->v.off < last_member_off);
+            members_need_offset_sort = members_need_offset_sort || (type->members[member_idx].kind != E_MemberKind_DataField);
             last_member_off = n->v.off;
           }
           else if(type->members[member_idx].kind == E_MemberKind_Base)

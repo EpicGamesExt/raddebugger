@@ -238,6 +238,13 @@ struct RDIM_BakeGlobalVariablesIn
   RDIM_SymbolChunkList *global_variables;
 };
 
+typedef struct RDIM_BakeConstantsIn RDIM_BakeConstantsIn;
+struct RDIM_BakeConstantsIn
+{
+  RDIM_BakeStringMapTight *strings;
+  RDIM_SymbolChunkList *constants;
+};
+
 typedef struct RDIM_BakeGlobalVMapIn RDIM_BakeGlobalVMapIn;
 struct RDIM_BakeGlobalVMapIn
 {
@@ -351,6 +358,7 @@ ASYNC_WORK_DEF(rdim_bake_udts_work);
 ASYNC_WORK_DEF(rdim_bake_global_variables_work);
 ASYNC_WORK_DEF(rdim_bake_global_vmap_work);
 ASYNC_WORK_DEF(rdim_bake_thread_variables_work);
+ASYNC_WORK_DEF(rdim_bake_constants_work);
 ASYNC_WORK_DEF(rdim_bake_procedures_work);
 ASYNC_WORK_DEF(rdim_bake_scopes_work);
 ASYNC_WORK_DEF(rdim_bake_scope_vmap_work);
