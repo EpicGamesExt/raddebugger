@@ -12364,12 +12364,17 @@ rd_frame(void)
       }
       type_views[] =
       {
-        { 1, 0, str8_lit_comp("std::vector<?>"), str8_lit_comp("slice(_Mypair._Myval2)") },
-        { 1, 0, str8_lit_comp("std::unique_ptr<?>"), str8_lit_comp("_Mypair._Myval2") },
-        { 1, 0, str8_lit_comp("std::basic_string<?>"), str8_lit_comp("_Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : array(_Mypair._Myval2._Bx._Ptr, _Mypair._Myval2._Mysize)") },
-        { 1, 0, str8_lit_comp("std::basic_string_view<?>"), str8_lit_comp("array(_Mydata, _Mysize)") },
-        { 0, 1, str8_lit_comp("FString"),                 str8_lit_comp("(TCHAR *)Data.AllocatorInstance.Data, Data.ArrayNum") },
-        { 0, 1, str8_lit_comp("TArray<?{element_type}>"), str8_lit_comp("array(cast(element_type *)AllocatorInstance.Data, ArrayNum)") },
+        { 1, 0, str8_lit_comp("std::vector<?>"),             str8_lit_comp("slice(_Mypair._Myval2)") },
+        { 1, 0, str8_lit_comp("std::unique_ptr<?>"),         str8_lit_comp("_Mypair._Myval2") },
+        { 1, 0, str8_lit_comp("std::basic_string<?>"),       str8_lit_comp("_Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : array(_Mypair._Myval2._Bx._Ptr, _Mypair._Myval2._Mysize)") },
+        { 1, 0, str8_lit_comp("std::basic_string_view<?>"),  str8_lit_comp("array(_Mydata, _Mysize)") },
+        { 0, 1, str8_lit_comp("FString"),                    str8_lit_comp("(TCHAR *)Data.AllocatorInstance.Data, Data.ArrayNum") },
+        { 0, 1, str8_lit_comp("FAnsiString"),                str8_lit_comp("(ANSICHAR *)Data.AllocatorInstance.Data, Data.ArrayNum") },
+        { 0, 1, str8_lit_comp("FUtf8String"),                str8_lit_comp("(UTF8CHAR *)Data.AllocatorInstance.Data, Data.ArrayNum") },
+        { 0, 1, str8_lit_comp("TStringView<?>"),             str8_lit_comp("DataPtr, Size") },
+        { 0, 1, str8_lit_comp("TArray<?{element_type}>"),    str8_lit_comp("array(cast(element_type *)AllocatorInstance.Data, ArrayNum)") },
+        { 0, 1, str8_lit_comp("TSharedRef<?>"),              str8_lit_comp("Object") },
+        { 0, 1, str8_lit_comp("TRefCountPtr<?>"),            str8_lit_comp("Reference") },
       };
       if(rd_state->use_default_stl_type_views)
       {
