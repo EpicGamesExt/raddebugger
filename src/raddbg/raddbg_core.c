@@ -12368,6 +12368,8 @@ rd_frame(void)
         { 1, 0, str8_lit_comp("std::unique_ptr<?>"), str8_lit_comp("_Mypair._Myval2") },
         { 1, 0, str8_lit_comp("std::basic_string<?>"), str8_lit_comp("_Mypair._Myval2._Myres <= 15 ? _Mypair._Myval2._Bx._Buf : array(_Mypair._Myval2._Bx._Ptr, _Mypair._Myval2._Mysize)") },
         { 1, 0, str8_lit_comp("std::basic_string_view<?>"), str8_lit_comp("array(_Mydata, _Mysize)") },
+        { 0, 1, str8_lit_comp("FString"),                 str8_lit_comp("(TCHAR *)Data.AllocatorInstance.Data, Data.ArrayNum") },
+        { 0, 1, str8_lit_comp("TArray<?{element_type}>"), str8_lit_comp("array(cast(element_type *)AllocatorInstance.Data, ArrayNum)") },
       };
       if(rd_state->use_default_stl_type_views)
       {
@@ -12376,7 +12378,7 @@ rd_frame(void)
           if((type_views[idx].stl && rd_state->use_default_stl_type_views) ||
              (type_views[idx].ue  && rd_state->use_default_ue_type_views))
           {
-            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("default_stl_type_vis_%I64x", idx);
+            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("default_type_vis_%I64x", idx);
             RD_Cfg *type_view = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("type_view"));
             RD_Cfg *type = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("type"));
             RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(type_view, str8_lit("expr"));

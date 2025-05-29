@@ -158,31 +158,25 @@ dmn_rsp_from_thread(DMN_Handle thread)
 }
 
 ////////////////////////////////
-//~ Memory Helpers
+//~ rjf: Process Reading Helper Functions (Helpers, Implemented Once)
 
 internal String8
 dmn_process_read_cstring(Arena *arena, DMN_Handle process, U64 addr)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
   String8List block_list = {0};
-
   for(U64 cursor = addr, stride = 256; ; cursor += stride)
   {
     U8      *raw_block = push_array_no_zero(scratch.arena, U8, stride);
     U64      read_size = dmn_process_read(process, r1u64(cursor, cursor + stride), raw_block);
     String8  block     = str8_cstring_capped(raw_block, raw_block + read_size);
-
     str8_list_push(scratch.arena, &block_list, block);
-
     if(read_size != stride || (block.size+1 <= read_size && block.str[block.size] == 0))
     {
       break;
     }
   }
-
   String8 result = str8_list_join(arena, &block_list, 0);
-
   scratch_end(scratch);
   return result;
 }

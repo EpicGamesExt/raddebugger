@@ -2380,7 +2380,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     }
     
     //- rjf: equip previous task's irtree
-    if(parent != 0)
+    if(parent != 0 && (result.prev == 0 || result.prev->root == &e_irnode_nil))
     {
       result.prev = push_array(arena, E_IRTreeAndType, 1);
       result.prev[0] = *parent;
