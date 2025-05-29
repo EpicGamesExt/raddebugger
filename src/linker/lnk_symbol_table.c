@@ -181,6 +181,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 
   B32 can_replace = 0;
 
+
   // lib vs lib
   if (dst->type == LNK_Symbol_Lib && src->type == LNK_Symbol_Lib) {
     // link.exe picks symbol from lib that is discovered first
@@ -234,52 +235,60 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Weak) {
       can_replace = 0;
     }
-    // weak vs regular,common,abs
+    // weak vs (regular, common, abs)
     else if (dst_interp == COFF_SymbolValueInterp_Weak && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common || src_interp == COFF_SymbolValueInterp_Abs)) {
       can_replace = 1;
     }
-    // regular,common vs regular,common
+    // (regular, common) vs (regular, common)
     else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
-      B32 is_dst_single_defn = 0;
-      B32 is_src_single_defn = 0;
-
+      B32                   dst_is_comdat = 0;
       COFF_ComdatSelectType dst_select;
-      U32 dst_section_length;
-      U32 dst_check_sum;
+      U32                   dst_section_length;
+      U32                   dst_check_sum;
       if (dst_interp == COFF_SymbolValueInterp_Regular) {
         U32 dst_comdat_symbol_idx = dst_obj->comdats[dst_parsed.section_number-1];
         if (dst_comdat_symbol_idx != max_U32) {
           COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(dst_obj, dst_comdat_symbol_idx);
           coff_parse_secdef(secdef, dst_obj->header.is_big_obj, &dst_select, 0, &dst_section_length, &dst_check_sum);
-        } else {
-          is_dst_single_defn = 1;
+          dst_is_comdat = 1;
         }
       } else if (dst_interp == COFF_SymbolValueInterp_Common) {
-        dst_select = COFF_ComdatSelect_Largest;
+        dst_select         = COFF_ComdatSelect_Largest;
         dst_section_length = dst_parsed.value;
-        dst_check_sum = 0;
+        dst_check_sum      = 0;
+        dst_is_comdat      = 1;
       }
 
+      B32                   src_is_comdat = 0;
       COFF_ComdatSelectType src_select;
-      U32 src_section_length;
-      U32 src_check_sum;
+      U32                   src_section_length;
+      U32                   src_check_sum;
       if (src_interp == COFF_SymbolValueInterp_Regular) {
         U32 src_comdat_symbol_idx = src_obj->comdats[src_parsed.section_number-1];
         if (src_comdat_symbol_idx != max_U32) {
           COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(src_obj, src_comdat_symbol_idx);
           coff_parse_secdef(secdef, src_obj->header.is_big_obj, &src_select, 0, &src_section_length, &src_check_sum);
-        } else {
-          is_src_single_defn = 1;
+          src_is_comdat = 1;
         }
       } else if (src_interp == COFF_SymbolValueInterp_Common) {
-        src_select = COFF_ComdatSelect_Largest;
+        src_select         = COFF_ComdatSelect_Largest;
         src_section_length = src_parsed.value;
-        src_check_sum = 0;
+        src_check_sum      = 0;
+        src_is_comdat      = 1;
       }
 
-      if (is_dst_single_defn || is_src_single_defn) {
-        lnk_error_multiply_defined_symbol(dst, src);
-      } else {
+      // regular non-comdat vs communal
+      if (dst_interp == COFF_SymbolValueInterp_Regular && !dst_is_comdat &&
+          src_interp == COFF_SymbolValueInterp_Common) {
+        can_replace = 0;
+      }
+      // communal vs regular non-comdat
+      else if (dst_interp == COFF_SymbolValueInterp_Common && 
+               src_interp == COFF_SymbolValueInterp_Regular && !src_is_comdat) {
+        can_replace = 1;
+      }
+      // handle COMDATs
+      else if (dst_is_comdat && src_is_comdat) {
         // handle objs compiled with /GR- and /GR
         if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest)) {
           src_select = COFF_ComdatSelect_Largest;
@@ -331,14 +340,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
           } break;
           case COFF_ComdatSelect_Largest: {
             if (dst_section_length == src_section_length) {
-              if (dst_interp == COFF_SymbolValueInterp_Common) {
-                // handle communal variable
-                //
-                // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
-                can_replace = 1;
-              } else {
-                can_replace = src_obj->input_idx < dst_obj->input_idx;
-              }
+              can_replace = src_obj->input_idx < dst_obj->input_idx;
             } else {
               can_replace = dst_section_length < src_section_length;
             }
@@ -355,6 +357,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
                         "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
                         src->name, src_select_str, dst_select_str, dst_obj);
         }
+      } else {
+        lnk_error_multiply_defined_symbol(dst, src);
       }
     } else {
       lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
