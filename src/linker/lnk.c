@@ -921,7 +921,7 @@ lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path)
 {
   if (!hash_table_search_path(loaded_lib_ht, path)) {
     String8 path_copy = push_str8_copy(arena, path);
-    hash_table_push_string_u64(arena, loaded_lib_ht, path_copy, 0);
+    hash_table_push_path_u64(arena, loaded_lib_ht, path_copy, 0);
   }
 }
 
@@ -2386,8 +2386,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
           if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
             // replace contrib with leader
             LNK_Symbol *defn = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, symbol.name);
-            COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
-            sect_map[obj_idx][symbol.section_number - 1] = sect_map[defn->u.defined.obj->input_idx][symbol.section_number - 1];
+            COFF_ParsedSymbol defn_symbol = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
+            sect_map[obj_idx][symbol.section_number - 1] = sect_map[defn->u.defined.obj->input_idx][defn_symbol.section_number - 1];
           }
         }
       }
