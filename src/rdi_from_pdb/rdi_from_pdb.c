@@ -2107,6 +2107,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
   U64 sym_procedures_chunk_cap = 1024;
   U64 sym_global_variables_chunk_cap = 1024;
   U64 sym_thread_variables_chunk_cap = 1024;
+  U64 sym_constants_chunk_cap = 1024;
   U64 sym_scopes_chunk_cap = 1024;
   U64 sym_inline_sites_chunk_cap = 1024;
   RDIM_SymbolChunkList sym_procedures = {0};
@@ -2339,21 +2340,19 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           }
         }break;
         
+        //- rjf: UDT (typedefs)
         case CV_SymKind_UDT:
+        if(in->parsing_global_stream && top_scope_node == 0)
         {
-          if(in->parsing_global_stream && top_scope_node == 0)
+          CV_SymUDT *udt = (CV_SymUDT *)sym_header_struct_base;
+          String8 name = str8_cstring_capped(udt+1, sym_data_opl);
+          RDIM_Type *type   = rdim_type_chunk_list_push(arena, &typedefs, 4096);
+          type->kind        = RDI_TypeKind_Alias;
+          type->name        = name;
+          type->direct_type = p2r_type_ptr_from_itype(udt->itype);
+          if(type->direct_type != 0)
           {
-            CV_SymUDT *udt = (CV_SymUDT *)sym_header_struct_base;
-            String8 name = str8_cstring_capped(udt+1, sym_data_opl);
-            
-            RDIM_Type *type   = rdim_type_chunk_list_push(arena, &typedefs, 4096);
-            type->kind        = RDI_TypeKind_Alias;
-            type->name        = name;
-            type->direct_type = p2r_type_ptr_from_itype(udt->itype);
-            if(type->direct_type != 0)
-            {
-              type->byte_size = type->direct_type->byte_size;
-            }
+            type->byte_size = type->direct_type->byte_size;
           }
         }break;
         
@@ -2950,6 +2949,26 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           }
           defrange_target = 0;
           defrange_target_is_param = 0;
+        }break;
+        
+        //- rjf: CONSTANT
+        case CV_SymKind_CONSTANT:
+        {
+          // rjf: unpack
+          CV_SymConstant *sym = (CV_SymConstant *)sym_header_struct_base;
+          RDIM_Type *type = p2r_type_ptr_from_itype(sym->itype);
+          U8 *val_ptr = (U8 *)(sym+1);
+          CV_NumericParsed val = cv_numeric_from_data_range(val_ptr, sym_data_opl);
+          U64 val64 = cv_u64_from_numeric(&val);
+          U8 *name_ptr = val_ptr + val.encoded_size;
+          String8 name = str8_cstring_capped(name_ptr, sym_data_opl);
+          String8 val_data = str8_struct(&val64);
+          
+          // rjf: build constant symbol
+          RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &sym_constants, sym_constants_chunk_cap);
+          cnst->name = name;
+          cnst->type = type;
+          rdim_symbol_push_value_data(arena, &sym_constants, cnst, val_data);
         }break;
       }
     }
