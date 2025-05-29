@@ -1596,7 +1596,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       case E_ExprKind_LeafIdentifier:
       {
         Temp scratch = scratch_begin(&arena, 1);
-        B32 is_auto_hook = 0;
         String8 qualifier = expr->qualifier;
         String8 string = expr->string;
         String8 string__redirected = string;
@@ -1652,16 +1651,18 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   }
                 }
               }
-              E_OpList oplist = e_oplist_from_irtree(arena, parent_irtree->root);
               string_mapped = 1;
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = parent_irtree->mode;
-              mapped_type_key = parent_irtree->type_key;
-              mapped_user_data = parent_irtree->user_data;
-              is_auto_hook = parent_irtree->auto_hook;
+              generated = 1;
               disallow_autohooks = 1;
+              E_OpList oplist = e_oplist_from_irtree(scratch.arena, parent_irtree->root);
+              String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
+              result.root = e_irtree_bytecode_no_copy(arena, bytecode);
+              result.type_key = parent_irtree->type_key;
+              result.mode = parent_irtree->mode;
+              result.auto_hook = parent_irtree->auto_hook;
               E_MsgList msgs = e_msg_list_copy(arena, &parent_irtree->msgs);
               e_msg_list_concat_in_place(&result.msgs, &msgs);
+              result.prev = parent_irtree->prev;
             }
             break;
             
@@ -2096,10 +2097,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access); 
         }
         
-        //- rjf: mark if auto hook, equip user data
-        result.auto_hook = is_auto_hook;
-        result.user_data = mapped_user_data;
-        
         //- rjf: error on failure-to-generate
         if(!generated && !str8_match(string, str8_lit("$"), 0))
         {
@@ -2380,10 +2377,27 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
     }
     
     //- rjf: equip previous task's irtree
-    if(parent != 0 && (result.prev == 0 || result.prev->root == &e_irnode_nil))
+    if(parent != 0 && parent->root != &e_irnode_nil)
     {
-      result.prev = push_array(arena, E_IRTreeAndType, 1);
-      result.prev[0] = *parent;
+      E_IRTreeAndType *new_chain = push_array(arena, E_IRTreeAndType, 1);
+      MemoryCopyStruct(new_chain, parent);
+      E_IRTreeAndType *first_chain = 0;
+      E_IRTreeAndType *last_chain = 0;
+      if(result.prev)
+      {
+        for(E_IRTreeAndType *p = result.prev; p != 0; p = p->prev)
+        {
+          E_IRTreeAndType *p_copy = push_array(arena, E_IRTreeAndType, 1);
+          MemoryCopyStruct(p_copy, p);
+          SLLQueuePush_N(first_chain, last_chain, p_copy, prev);
+        }
+        SLLQueuePushFront_N(first_chain, last_chain, new_chain, prev);
+        result.prev = first_chain;
+      }
+      else
+      {
+        result.prev = new_chain;
+      }
     }
     
     //- rjf: mark this result as an auto-hook, if we have an override

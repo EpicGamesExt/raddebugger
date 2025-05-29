@@ -614,6 +614,12 @@ type_coverage_eval_tests(void)
   int_vector.push_back(6);
   int_vector.push_back(7);
   
+  std::vector<Dynamic_Array> dynamic_array_vector;
+  dynamic_array_vector.push_back(dynamic);
+  dynamic_array_vector.push_back(dynamic);
+  dynamic_array_vector.push_back(dynamic);
+  dynamic_array_vector.push_back(dynamic);
+  
   int x = (int)(Anonymous_D);
 }
 
