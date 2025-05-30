@@ -3062,7 +3062,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
         U32 load_config_size = 0;
         if (sizeof(load_config_size) <= load_config_data.size) {
-          PE_DataDirectory *load_config_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_LOAD_CONFIG, sizeof(PE_DataDirectory));
+          PE_DataDirectory *load_config_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_LOAD_CONFIG);
           load_config_dir->virt_off  = lnk_virt_off_from_symbol(image_section_table, load_config_symbol);
           load_config_dir->virt_size = load_config_size;
         } else {
@@ -3091,7 +3091,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
         }
         ProfEnd();
 
-        PE_DataDirectory *pdata_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, sizeof(PE_DataDirectory));
+        PE_DataDirectory *pdata_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_EXCEPTIONS);
         pdata_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, pdata_sect);
         pdata_dir->virt_size = lnk_get_section_contrib_size(pdata_sect);
       }
@@ -3101,9 +3101,9 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       LNK_Section *edata_sect = lnk_section_table_search(sectab, str8_lit(".edata"), PE_EDATA_SECTION_FLAGS);
       if (edata_sect) {
-        PE_DataDirectory *export_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXPORT, sizeof(PE_DataDirectory));
+        PE_DataDirectory   *export_dir          = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_EXPORT);
         LNK_SectionContrib *edata_first_contrib = lnk_get_first_section_contrib(edata_sect);
-        LNK_SectionContrib *edata_last_contrib = lnk_get_last_section_contrib(edata_sect);
+        LNK_SectionContrib *edata_last_contrib  = lnk_get_last_section_contrib(edata_sect);
         export_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, edata_sect);
         export_dir->virt_size = lnk_get_section_contrib_size(edata_sect);
       }
@@ -3113,7 +3113,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       LNK_Section *reloc_sect = lnk_section_table_search(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
       if (reloc_sect) {
-        PE_DataDirectory *reloc_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_BASE_RELOC, sizeof(PE_DataDirectory));
+        PE_DataDirectory *reloc_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_BASE_RELOC);
         reloc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, reloc_sect);
         reloc_dir->virt_size = lnk_get_section_contrib_size(reloc_sect);
       }
@@ -3121,81 +3121,74 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
     // patch import and import addr
     {
-      LNK_Section *idata_sect = lnk_section_table_search(sectab, str8_lit(".idata"), PE_IDATA_SECTION_FLAGS);
-      LNK_Symbol *null_import_desc = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "__NULL_IMPORT_DESCRIPTOR");
-      LNK_Symbol *null_thunk_data = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA", lnk_get_image_name(config));
+      LNK_Section *idata_sect       = lnk_section_table_search(sectab, str8_lit(".idata"), PE_IDATA_SECTION_FLAGS);
+      LNK_Symbol  *null_import_desc = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "__NULL_IMPORT_DESCRIPTOR");
+      LNK_Symbol  *null_thunk_data  = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA", lnk_get_image_name(config));
       if (idata_sect && null_import_desc && null_thunk_data) {
-        COFF_ParsedSymbol null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
-        LNK_SectionContrib *idata_first_contrib = lnk_get_first_section_contrib(idata_sect);
-        PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_IMPORT, sizeof(PE_DataDirectory));
-        import_dir->virt_off = image_section_table[idata_first_contrib->u.sect_idx + 1]->voff + idata_first_contrib->u.off;
+        COFF_ParsedSymbol   null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
+        LNK_SectionContrib *idata_first_contrib     = lnk_get_first_section_contrib(idata_sect);
+        PE_DataDirectory   *import_dir              = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_IMPORT);
+        import_dir->virt_off  = image_section_table[idata_first_contrib->u.sect_idx + 1]->voff + idata_first_contrib->u.off;
         import_dir->virt_size = null_import_desc_parsed.value - idata_first_contrib->u.off;
 
-        COFF_ParsedSymbol null_thunk_data_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_thunk_data->u.defined.obj, null_thunk_data->u.defined.symbol_idx);
-        U64 null_thunk_data_voff = image_section_table[null_thunk_data_parsed.section_number]->voff + null_thunk_data_parsed.value;
-        U64 first_import_foff = image_section_table[idata_first_contrib->u.sect_idx+1]->foff + idata_first_contrib->u.off;
-        PE_ImportEntry *first_import = str8_deserial_get_raw_ptr(image_data, first_import_foff, sizeof(*first_import));
-        PE_DataDirectory *import_addr_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_IMPORT_ADDR, sizeof(PE_DataDirectory));
-        import_addr_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, idata_sect);
+        COFF_ParsedSymbol  null_thunk_data_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_thunk_data->u.defined.obj, null_thunk_data->u.defined.symbol_idx);
+        U64                null_thunk_data_voff   = image_section_table[null_thunk_data_parsed.section_number]->voff + null_thunk_data_parsed.value;
+        U64                first_import_foff      = image_section_table[idata_first_contrib->u.sect_idx+1]->foff + idata_first_contrib->u.off;
+        PE_ImportEntry    *first_import           = str8_deserial_get_raw_ptr(image_data, first_import_foff, sizeof(*first_import));
+        PE_DataDirectory  *import_addr_dir        = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_IMPORT_ADDR);
+        import_addr_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, idata_sect);
         import_addr_dir->virt_size = null_thunk_data_voff - first_import->import_addr_table_voff /* null */ + coff_word_size_from_machine(config->machine);
       }
     }
 
     // patch delay imports
     {
-      LNK_Section *didat_sect = lnk_section_table_search(sectab, str8_lit(".didat"), PE_IDATA_SECTION_FLAGS);
-      LNK_Symbol *null_import_desc = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("__NULL_DELAY_IMPORT_DESCRIPTOR"));
-      LNK_Symbol *last_null_thunk = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA_DLA", lnk_get_image_name(config));
+      LNK_Section *didat_sect       = lnk_section_table_search(sectab, str8_lit(".didat"), PE_IDATA_SECTION_FLAGS);
+      LNK_Symbol  *null_import_desc = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit("__NULL_DELAY_IMPORT_DESCRIPTOR"));
+      LNK_Symbol  *last_null_thunk  = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, "\x7f%S_NULL_THUNK_DATA_DLA", lnk_get_image_name(config));
       if (didat_sect && null_import_desc && last_null_thunk) {
-        COFF_ParsedSymbol null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
-        LNK_SectionContrib *didat_first_contrib = lnk_get_first_section_contrib(didat_sect);
-        PE_DataDirectory *import_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DELAY_IMPORT, sizeof(PE_DataDirectory));
-        Assert(null_import_desc_parsed.section_number == didat_first_contrib->u.sect_idx+1);
-        Assert(null_import_desc_parsed.value >= didat_first_contrib->u.off);
-        import_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, didat_sect);
+        COFF_ParsedSymbol   null_import_desc_parsed = lnk_parsed_symbol_from_coff_symbol_idx(null_import_desc->u.defined.obj, null_import_desc->u.defined.symbol_idx);
+        LNK_SectionContrib *didat_first_contrib     = lnk_get_first_section_contrib(didat_sect);
+        PE_DataDirectory   *import_dir              = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_DELAY_IMPORT);
+        import_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, didat_sect);
         import_dir->virt_size = lnk_get_section_contrib_size(didat_sect);
       }
     }
 
     // patch TLS
-    LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, LNK_TLS_SYMBOL_NAME);
-    if (tls_used_symbol) {
-      ProfBegin("Patch TLS Align");
+    {
+      LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, LNK_TLS_SYMBOL_NAME);
+      if (tls_used_symbol) {
+        ProfBegin("Patch TLS");
 
-      // loop over .tls sections and extract max alignment
-      LNK_Section *tls_sect  = lnk_section_table_search(sectab, str8_lit(".tls"), PE_RDATA_SECTION_FLAGS);
-      U64          tls_align = 0;
-
-      for (LNK_SectionContribChunk *sc_chunk = tls_sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-        for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
-          LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
-          tls_align = Max(tls_align, sc->align);
+        // find max align in .tls
+        U64          tls_align = 0;
+        LNK_Section *tls_sect  = lnk_section_table_search(sectab, str8_lit(".tls"), PE_TLS_SECTION_FLAGS);
+        for (LNK_SectionContribChunk *sc_chunk = tls_sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
+          for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
+            Assert(IsPow2(sc_chunk->v[sc_idx]->align));
+            tls_align = Max(tls_align, sc_chunk->v[sc_idx]->align);
+          }
         }
-      }
 
-      if (IsPow2(tls_align)) {
-        // compute TLS header offset
+        // patch-in align
         U64 tls_header_foff = lnk_file_off_from_symbol(image_section_table, tls_used_symbol);
-
-        // patch TLS header
-        if (coff_word_size_from_machine(config->machine) == 8) {
-          String8 raw_tls_used = str8_substr(image_data, rng_1u64(tls_header_foff, tls_header_foff + sizeof(PE_TLSHeader64)));
-          PE_TLSHeader64 *tls_header = (PE_TLSHeader64 *) raw_tls_used.str;
+        B32 is_tls_header64 = coff_word_size_from_machine(config->machine) == 8;
+        if (is_tls_header64) {
+          PE_TLSHeader64 *tls_header = str8_deserial_get_raw_ptr(image_data, tls_header_foff, sizeof(*tls_header));
           tls_header->characteristics |= coff_section_flag_from_align_size(tls_align);
         } else {
-          String8 raw_tls_used = str8_substr(image_data, rng_1u64(tls_header_foff, tls_header_foff + sizeof(PE_TLSHeader32)));
-          PE_TLSHeader32 *tls_header = (PE_TLSHeader32 *) raw_tls_used.str;
+          PE_TLSHeader32 *tls_header = str8_deserial_get_raw_ptr(image_data, tls_header_foff, sizeof(*tls_header));
           tls_header->characteristics |= coff_section_flag_from_align_size(tls_align);
         }
-      } else {
-        lnk_error(LNK_Warning_TLSAlign, "unable to patch TLS Header characteristics, alignment must be power of two, align inferred from section flags: %llu", tls_align);
+
+        // patch directory
+        PE_DataDirectory *tls_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_TLS);
+        tls_dir->virt_off  = lnk_virt_off_from_symbol(image_section_table, tls_used_symbol);
+        tls_dir->virt_size = is_tls_header64 ? sizeof(PE_TLSHeader64) : sizeof(PE_TLSHeader32);
+
+        ProfEnd();
       }
-
-      PE_DataDirectory *tls_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, sizeof(PE_DataDirectory));
-      tls_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, tls_sect);
-      tls_dir->virt_size = lnk_get_section_contrib_size(tls_sect);
-
-      ProfEnd();
     }
 
     // patch debug
@@ -3203,15 +3196,15 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       LNK_Section *debug_dir_sect = lnk_section_table_search(sectab, str8_lit(".RAD_LINK_PE_DEBUG_DIR"), PE_RDATA_SECTION_FLAGS);
       if (debug_dir_sect) {
         // patch directory
-        PE_DataDirectory *debug_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, sizeof(PE_DataDirectory));
-        debug_dir->virt_off = lnk_get_first_section_contrib_voff(image_section_table, debug_dir_sect);
+        PE_DataDirectory *debug_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_DEBUG);
+        debug_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, debug_dir_sect);
         debug_dir->virt_size = lnk_get_section_contrib_size(debug_dir_sect);
 
         // find debug directory begin and end pair
         LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(debug_dir_sect);
-        LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(debug_dir_sect);
+        LNK_SectionContrib *last_sc  = lnk_get_last_section_contrib(debug_dir_sect);
         U64 debug_begin_foff = lnk_foff_from_section_contrib(image_section_table, first_sc);
-        U64 debug_end_fopl = lnk_fopl_from_section_contrib(image_section_table, last_sc);
+        U64 debug_end_fopl   = lnk_fopl_from_section_contrib(image_section_table, last_sc);
 
         // patch file offsets to the debug directories
         for (U64 cursor = debug_begin_foff; cursor + sizeof(PE_DebugDirectory) <= debug_end_fopl; cursor += sizeof(PE_DebugDirectory)) {
@@ -3229,7 +3222,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       LNK_Section *rsrc_sect = lnk_section_table_search(sectab, str8_lit(".rsrc"), PE_RSRC_SECTION_FLAGS);
       if (rsrc_sect) {
-        PE_DataDirectory *rsrc_dir = str8_deserial_get_raw_ptr(image_data, pe.data_dir_range.min + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_RESOURCES, sizeof(PE_DataDirectory));
+        PE_DataDirectory *rsrc_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_RESOURCES);
         rsrc_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, rsrc_sect);
         rsrc_dir->virt_size = lnk_get_section_contrib_size(rsrc_sect);
       }

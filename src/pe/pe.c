@@ -650,6 +650,16 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   return info;
 }
 
+internal PE_DataDirectory *
+pe_data_directory_from_idx(String8 file_data, PE_BinInfo pe, PE_DataDirectoryIndex dir_idx)
+{
+  PE_DataDirectory *result = 0;
+  if (dir_idx < pe.data_dir_count) {
+    result = str8_deserial_get_raw_ptr(file_data, pe.data_dir_range.min + sizeof(*result)*dir_idx, sizeof(*result));
+  }
+  return result;
+}
+
 internal PE_DebugInfoList
 pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 raw_debug_dir)
 {

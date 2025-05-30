@@ -1062,6 +1062,8 @@ internal String8 pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacte
 internal B32        pe_check_magic(String8 data);
 internal PE_BinInfo pe_bin_info_from_data(Arena *arena, String8 data);
 
+internal PE_DataDirectory *         pe_data_directory_from_idx(String8 file_data, PE_BinInfo pe, PE_DataDirectoryIndex dir_idx);
+internal PE_DebugInfoList           pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir);
 internal PE_DebugInfoList           pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 raw_debug_dir);
 internal PE_ParsedStaticImportTable pe_static_imports_from_data(Arena *arena, B32 is_pe32, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range);
 internal PE_ParsedDelayImportTable  pe_delay_imports_from_data(Arena *arena, B32 is_pe32, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range);
