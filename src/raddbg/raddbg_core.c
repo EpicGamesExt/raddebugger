@@ -9960,7 +9960,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       // rjf: calculate most general list expression, given the dst_eval space
       B32 force_allow = 0;
       B32 expr_based_replace = 1;
-      String8 list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types");
+      String8 list_expr = str8_lit("query:locals, query:globals, query:thread_locals, query:procedures, query:types, query:constants");
       {
         E_TypeKey maybe_enum_type = e_type_key_unwrap(dst_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
         if(dst_eval.space.kind == RD_EvalSpaceKind_MetaCfg)
@@ -12169,6 +12169,7 @@ rd_frame(void)
       {
         str8_lit_comp("procedures"),
         str8_lit_comp("thread_locals"),
+        str8_lit_comp("constants"),
         str8_lit_comp("globals"),
         str8_lit_comp("types"),
       };

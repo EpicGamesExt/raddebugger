@@ -1553,6 +1553,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
     else if(str8_match(lhs_type->name, str8_lit("globals"), 0))          {section = RDI_SectionKind_GlobalVariables;}
     else if(str8_match(lhs_type->name, str8_lit("thread_locals"), 0))    {section = RDI_SectionKind_ThreadVariables;}
+    else if(str8_match(lhs_type->name, str8_lit("constants"), 0))        {section = RDI_SectionKind_Constants;}
     else if(str8_match(lhs_type->name, str8_lit("types"), 0))            {section = RDI_SectionKind_UDTs;}
   }
   
@@ -1644,6 +1645,13 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
           String8 symbol_name = {0};
           symbol_name.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &symbol_name.size);
+          item_string = symbol_name;
+        }break;
+        case RDI_SectionKind_Constants:
+        {
+          RDI_Constant *cnst = rdi_element_from_name_idx(module->rdi, Constants, element_idx);
+          String8 symbol_name = {0};
+          symbol_name.str = rdi_string_from_idx(module->rdi, cnst->name_string_idx, &symbol_name.size);
           item_string = symbol_name;
         }break;
         case RDI_SectionKind_UDTs:

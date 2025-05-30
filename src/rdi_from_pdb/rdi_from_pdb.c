@@ -2971,10 +2971,13 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           }
           
           // rjf: build constant symbol
-          RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &sym_constants, sym_constants_chunk_cap);
-          cnst->name = name_qualified;
-          cnst->type = type;
-          rdim_symbol_push_value_data(arena, &sym_constants, cnst, val_data);
+          if(name_qualified.size != 0)
+          {
+            RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &sym_constants, sym_constants_chunk_cap);
+            cnst->name = name_qualified;
+            cnst->type = type;
+            rdim_symbol_push_value_data(arena, &sym_constants, cnst, val_data);
+          }
         }break;
       }
     }

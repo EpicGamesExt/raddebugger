@@ -768,6 +768,7 @@ rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in_params)
         &in_params->global_variables,
         &in_params->thread_variables,
         &in_params->procedures,
+        &in_params->constants,
       };
       for(U64 list_idx = 0; list_idx < ArrayCount(symbol_lists); list_idx += 1)
       {

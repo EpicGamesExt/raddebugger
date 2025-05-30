@@ -1683,7 +1683,9 @@ rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Op
     rd_indent();
     for (U64 i = 0; i < tvar_count; ++i) {
       rd_printf("thread_variable[%llu]:", i);
+      rd_indent();
       rdi_print_thread_variable(arena, out, indent, rdi, &tvar_array[i]);
+      rd_unindent();
     }
     rd_unindent();
     rd_newline();
@@ -1695,7 +1697,9 @@ rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Op
     rd_indent();
     for (U64 i = 0; i < constants_count; ++i) {
       rd_printf("constant[%llu]:", i);
+      rd_indent();
       rdi_print_constant(arena, out, indent, rdi, &constants_array[i]);
+      rd_unindent();
     }
     rd_unindent();
     rd_newline();

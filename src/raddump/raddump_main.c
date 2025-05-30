@@ -95,7 +95,7 @@
 #include "radcon/radcon_pdb.c"
 #include "radcon/radcon_dwarf.c"
 #include "radcon/radcon.c"
- 
+
 #include "linker/thread_pool/thread_pool.h"
 #include "linker/thread_pool/thread_pool.c"
 #include "linker/codeview_ext/codeview.h"
@@ -116,9 +116,9 @@ global read_only struct
 } g_rd_dump_option_map[] = {
   { RD_Option_Help,             "help",                "Print help and exit"    },
   { RD_Option_Version,          "version",             "Print version and exit" },
-
+  
   { RD_Option_NoRdi,            "nordi",               "Don't load RAD Debug Info" },
-
+  
   { RD_Option_Headers,          "headers",             "Dump DOS header, file header, optional header, and/or archive header" },
   { RD_Option_Sections,         "sections",            "Dump section headers as table"                                        },
   { RD_Option_Rawdata,          "rawdata",             "Dump raw section data"                                                },
@@ -134,7 +134,7 @@ global read_only struct
   { RD_Option_LoadConfig,       "loadconfig",          "Dump load config"                                                     },
   { RD_Option_Resources,        "resources",           "Dump resource directory"                                              },
   { RD_Option_LongNames,        "longnames",           "Dump archive long names"                                              },
-
+  
   { RD_Option_DebugInfo,        "debug_info",          "Dump .debug_info"                                            },
   { RD_Option_DebugAbbrev,      "debug_abbrev",        "Dump .debug_abbrev"                                          },
   { RD_Option_DebugLine,        "debug_line",          "Dump .debug_line"                                            },
@@ -151,7 +151,7 @@ global read_only struct
   { RD_Option_DebugStrOffsets,  "debug_stroffsets",    "Dump .debug_stroffsets"                                      },
   { RD_Option_Dwarf,            "dwarf",               "Dump all DWARF sections"                                     },
   { RD_Option_RelaxDwarfParser, "relax_dwarf_parser",  "Relaxes version requirement on attribute and form encodings" },
-
+  
   { RD_Option_RdiDataSections,     "rdi_data_sections",     "Dump data sections"      },
   { RD_Option_RdiTopLevelInfo,     "rdi_top_level_info",    "Dump top level info"     },
   { RD_Option_RdiBinarySections,   "rdi_binary_sections",   "Dump binary sections"    },
@@ -165,12 +165,13 @@ global read_only struct
   { RD_Option_RdiUserDefinedTypes, "rdi_udt",               "Dump user defined types" },
   { RD_Option_RdiGlobalVars,       "rdi_global_vars",       "Dump global variables"   },
   { RD_Option_RdiThreadVars,       "rdi_thread_vars",       "Dump thread variables"   },
+  { RD_Option_RdiConstants,        "rdi_constants",         "Dump constants"          },
   { RD_Option_RdiScopes,           "rdi_scopes",            "Dump scopes"             },
   { RD_Option_RdiScopeVMap,        "rdi_scope_virtual_map", "Dump scope virtual map"  },
   { RD_Option_RdiInlineSites,      "rdi_inline_sites",      "Dump inline sites"       },
   { RD_Option_RdiNameMaps,         "rdi_name_maps",         "Dump name maps"          },
   { RD_Option_RdiStrings,          "rdi_strings",           "Dump strings"            },
-
+  
   { RD_Option_Help,             "h",                   "Alias for -help"       },
   { RD_Option_Version,          "v",                   "Alias for -version"    },
   { RD_Option_Sections,         "s",                   "Alias for -sections"   },
@@ -186,7 +187,7 @@ internal void
 entry_point(CmdLine *cmdline)
 {
   Arena *arena = arena_alloc();
-
+  
   // make indent
   String8List *out = push_array(arena, String8List, 1);
   String8      indent;
@@ -196,7 +197,7 @@ entry_point(CmdLine *cmdline)
     MemorySet(indent_buffer, ' ', indent_buffer_size);
     indent = str8(indent_buffer, 0);
   }
-
+  
   // parse options
   RD_Option opts = 0;
   {
@@ -212,16 +213,16 @@ entry_point(CmdLine *cmdline)
           break;
         }
       }
-
+      
       if (opt == 0) {
         rd_errorf("Unknown argument: \"%S\"", cmd->string);
         goto exit;
       }
-
+      
       opts |= opt;
     }
   }
-
+  
   // print help
   if (opts & RD_Option_Help) {
     int longest_cmd_switch = 0;
@@ -241,14 +242,14 @@ entry_point(CmdLine *cmdline)
     rd_unindent();
     goto exit;
   }
-
+  
   // print version
   if (opts & RD_Option_Version) {
     rd_printf(BUILD_TITLE_STRING_LITERAL);
     rd_printf("\traddump <options> <inputs>");
     goto exit;
   }
-
+  
   // input check
   if (cmdline->inputs.node_count == 0) {
     rd_errorf("No input file specified");
@@ -257,35 +258,35 @@ entry_point(CmdLine *cmdline)
     rd_errorf("Too many inputs specified, expected one");
     goto exit;
   }
-
+  
   // read input
   String8 file_path = str8_list_first(&cmdline->inputs);
   String8 raw_data  = os_data_from_file_path(arena, file_path);
-
+  
   // is read ok?
   if (raw_data.size == 0) {
     rd_errorf("Unable to read input file \"%S\"", file_path);
     goto exit;
   }
-
+  
   // format input
   rd_format_preamble(arena, out, indent, file_path, raw_data);
   if (rd_is_rdi(raw_data)) {
     RDI_Parsed rdi = {0};
     RDI_ParseStatus parse_status = rdi_parse(raw_data.str, raw_data.size, &rdi);
     switch (parse_status) {
-    case RDI_ParseStatus_Good: {
-      RD_Option rdi_print_opts = opts;
-      if ((rdi_print_opts & RD_Option_RdiAll) == 0) {
-        rdi_print_opts |= RD_Option_RdiAll;
-      }
-      rdi_print(arena, out, indent, &rdi, rdi_print_opts); 
-    } break;
-    case RDI_ParseStatus_HeaderDoesNotMatch:       rd_errorf("RDI Parse: header does not match");                 break;
-    case RDI_ParseStatus_UnsupportedVersionNumber: rd_errorf("RDI Parse: unsupported version");                   break;
-    case RDI_ParseStatus_InvalidDataSecionLayout:  rd_errorf("RDI Parse: invalid data section layout");           break;
-    case RDI_ParseStatus_MissingRequiredSection:   rd_errorf("RDI Parse: missing required section");              break;
-    default:                                       rd_errorf("RDI Parse: unknown parse status %u", parse_status); break;
+      case RDI_ParseStatus_Good: {
+        RD_Option rdi_print_opts = opts;
+        if ((rdi_print_opts & RD_Option_RdiAll) == 0) {
+          rdi_print_opts |= RD_Option_RdiAll;
+        }
+        rdi_print(arena, out, indent, &rdi, rdi_print_opts); 
+      } break;
+      case RDI_ParseStatus_HeaderDoesNotMatch:       rd_errorf("RDI Parse: header does not match");                 break;
+      case RDI_ParseStatus_UnsupportedVersionNumber: rd_errorf("RDI Parse: unsupported version");                   break;
+      case RDI_ParseStatus_InvalidDataSecionLayout:  rd_errorf("RDI Parse: invalid data section layout");           break;
+      case RDI_ParseStatus_MissingRequiredSection:   rd_errorf("RDI Parse: missing required section");              break;
+      default:                                       rd_errorf("RDI Parse: unknown parse status %u", parse_status); break;
     }
   } else if (coff_is_regular_archive(raw_data) || coff_is_thin_archive(raw_data)) {
     coff_print_archive(arena, out, indent, raw_data, opts);
@@ -305,11 +306,11 @@ entry_point(CmdLine *cmdline)
     //elf_print_dwarf_expressions(arena, out, indent, raw_data);
   }
   
-exit:;
+  exit:;
   // print formatted string
   String8 out_string = str8_list_join(arena, out, &(StringJoin){ .sep = str8_lit("\n"),});
   fprintf(stdout, "%.*s", str8_varg(out_string));
-
+  
   arena_release(arena);
 }
 
