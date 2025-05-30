@@ -985,22 +985,22 @@ lnk_make_linker_obj(Arena *arena, LNK_Config *config)
   
   { // load config symbols
     if (config->machine == COFF_MachineType_X86) {
-      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
     }
     
     // TODO: investigate IMAGE_ENCLAVE_CONFIG 32/64
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_ENCLAVE_CONFIG_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_ENCLAVE_CONFIG_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
     
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_FLAGS_SYMBOL_NAME)        , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_FIDS_TABLE_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_FIDS_COUNT_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_IAT_TABLE_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_IAT_COUNT_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_LONGJMP_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_LONGJMP_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_EHCONT_TABLE_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(LNK_GUARD_EHCONT_COUNT_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME)        , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_COUNT_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_TABLE_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_COUNT_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
   }
 
   String8 obj = coff_obj_writer_serialize(arena, obj_writer);
@@ -1574,15 +1574,15 @@ lnk_build_guard_tables(TP_Context       *tp,
   lnk_section_push_chunk_data(gljmp_sect, gljmp_array_chunk, gljmp_data, str8_zero());
   lnk_section_push_chunk_data(gehcont_sect, gehcont_array_chunk, gehcont_data, str8_zero());
   
-  LNK_Symbol *gflags_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_FLAGS_SYMBOL_NAME));
-  LNK_Symbol *gfids_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_FIDS_TABLE_SYMBOL_NAME));
-  LNK_Symbol *gfids_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_FIDS_COUNT_SYMBOL_NAME));
-  LNK_Symbol *giats_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_IAT_TABLE_SYMBOL_NAME));
-  LNK_Symbol *giats_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_IAT_COUNT_SYMBOL_NAME));
-  LNK_Symbol *gljmp_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_LONGJMP_TABLE_SYMBOL_NAME));
-  LNK_Symbol *gljmp_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_LONGJMP_COUNT_SYMBOL_NAME));
-  LNK_Symbol *gehcont_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_EHCONT_TABLE_SYMBOL_NAME));
-  LNK_Symbol *gehcont_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(LNK_GUARD_EHCONT_COUNT_SYMBOL_NAME));
+  LNK_Symbol *gflags_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME));
+  LNK_Symbol *gfids_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME));
+  LNK_Symbol *gfids_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME));
+  LNK_Symbol *giats_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME));
+  LNK_Symbol *giats_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_IAT_COUNT_SYMBOL_NAME));
+  LNK_Symbol *gljmp_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_LONGJMP_TABLE_SYMBOL_NAME));
+  LNK_Symbol *gljmp_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_LONGJMP_COUNT_SYMBOL_NAME));
+  LNK_Symbol *gehcont_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_EHCONT_TABLE_SYMBOL_NAME));
+  LNK_Symbol *gehcont_count_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Main, str8_lit(MSCRT_GUARD_EHCONT_COUNT_SYMBOL_NAME));
   
   LNK_DefinedSymbol *gflags_def = &gflags_symbol->u.defined;
   LNK_DefinedSymbol *gfids_table_def = &gfids_table_symbol->u.defined;
@@ -3055,7 +3055,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
     // patch load config
     {
-      LNK_Symbol *load_config_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit(LNK_LOAD_CONFIG_SYMBOL_NAME));
+      LNK_Symbol *load_config_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME));
       if (load_config_symbol) {
         U64     load_config_foff   = lnk_file_off_from_symbol(image_section_table, load_config_symbol);
         String8 load_config_data   = str8_skip(image_data, load_config_foff);
@@ -3157,7 +3157,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
     // patch TLS
     {
-      LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, LNK_TLS_SYMBOL_NAME);
+      LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, MSCRT_TLS_SYMBOL_NAME);
       if (tls_used_symbol) {
         ProfBegin("Patch TLS");
 
@@ -4113,8 +4113,8 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         ProfBegin("Push Dll Helper Undef Symbol");
         
         switch (config->machine) {
-        case COFF_MachineType_X86: delay_load_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
-        case COFF_MachineType_X64: delay_load_helper_name = str8_cstring(LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
+        case COFF_MachineType_X86: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
+        case COFF_MachineType_X64: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
         default: { NotImplemented; } break;
         }
         
@@ -4123,7 +4123,7 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       } break;
       case State_PushLoadConfigUndefSymbol: {
         ProfBegin("Push Load Config Undef Symbol");
-        String8 load_config_name = str8_lit(LNK_LOAD_CONFIG_SYMBOL_NAME);
+        String8 load_config_name = str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME);
         str8_list_push(scratch.arena, &include_symbol_list, load_config_name);
         ProfEnd();
       } break;

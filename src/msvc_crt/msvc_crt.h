@@ -5,6 +5,35 @@
 #define MSVC_CRT
 
 ////////////////////////////////
+// CRT Symbols
+
+// _load_config_used points to PE_LoadConfig32/PE_LoadConfig64
+// and symbols below are used to patch patricual fields of the struct.
+#define MSCRT_LOAD_CONFIG_SYMBOL_NAME         "_load_config_used"
+#define MSCRT_ENCLAVE_CONFIG_SYMBOL_NAME      "__enclave_config"
+#define MSCRT_GUARD_FLAGS_SYMBOL_NAME         "__guard_flags"
+#define MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME    "__guard_fids_table"
+#define MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME    "__guard_fids_count"
+#define MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME     "__guard_iat_table"
+#define MSCRT_GUARD_IAT_COUNT_SYMBOL_NAME     "__guard_iat_count"
+#define MSCRT_GUARD_LONGJMP_TABLE_SYMBOL_NAME "__guard_longjmp_table"
+#define MSCRT_GUARD_LONGJMP_COUNT_SYMBOL_NAME "__guard_longjmp_count"
+#define MSCRT_GUARD_EHCONT_TABLE_SYMBOL_NAME  "__guard_eh_cont_table"
+#define MSCRT_GUARD_EHCONT_COUNT_SYMBOL_NAME  "__guard_eh_cont_count"
+
+// x86 load config fields
+#define MSCRT_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME "__safe_se_handler_table"
+#define MSCRT_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME "__safe_se_handler_count"
+
+// load symbols from delayimp.lib
+#define MSCRT_DELAY_LOAD_HELPER2_SYMBOL_NAME     "__delayLoadHelper2"
+#define MSCRT_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME "___delayLoadHelper2@8"
+
+// _tls_used is a special section in CRT which has format of 
+// PE_TLSHeader32 or PE_TLSHeader64, according to machine type.
+#define MSCRT_TLS_SYMBOL_NAME "_tls_used"
+
+////////////////////////////////
 
 // feature flags in absolute symbol @feat.00
 enum
