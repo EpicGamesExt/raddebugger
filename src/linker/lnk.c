@@ -504,6 +504,7 @@ lnk_res_number_id_is_before(void *raw_a, void *raw_b)
   return is_before;
 }
 
+
 internal void
 lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_dir)
 {
@@ -520,18 +521,18 @@ lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_
   struct Stack *stack = push_array(scratch.arena, struct Stack, 1);
   // init stack
   {
-    PE_Resource root_wrapper = {0};
-    root_wrapper.id.type     = COFF_ResourceIDType_Number;
-    root_wrapper.id.u.number = 0;
-    root_wrapper.kind        = PE_ResDataKind_DIR;
-    root_wrapper.u.dir       = root_dir;
+    PE_Resource *root_wrapper = push_array(scratch.arena, PE_Resource, 1);
+    root_wrapper->id.type     = COFF_ResourceIDType_Number;
+    root_wrapper->id.u.number = 0;
+    root_wrapper->kind        = PE_ResDataKind_DIR;
+    root_wrapper->u.dir       = root_dir;
 
-    COFF_ResourceDirEntry root_dir = {0};
+    COFF_ResourceDirEntry *root_dir = push_array(scratch.arena, COFF_ResourceDirEntry, 1);
 
     stack->res_arr[0].count = 1;
-    stack->res_arr[0].v     = &root_wrapper;
+    stack->res_arr[0].v     = root_wrapper;
 
-    stack->coff_entry_arr[0] = &root_dir;
+    stack->coff_entry_arr[0] = root_dir;
     stack->coff_entry_arr[1] = 0;
   }
 
