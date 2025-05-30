@@ -5,7 +5,7 @@ rdi_string_from_name_map_kind(RDI_NameMapKind kind)
   switch(kind)
   {
     default:{}break;
-#define X(name) case RDI_NameMapKind_##name:{result = str8_lit_comp(#name);}break;
+#define X(name) case RDI_NameMapKind_##name:{result = str8_lit(#name);}break;
     RDI_NameMapKind_XList
 #undef X
   }
