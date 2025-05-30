@@ -3284,14 +3284,16 @@ lnk_build_pdb(TP_Context               *tp,
   {
 
     Rng1U64Array image_section_file_ranges = {0};
-    image_section_file_ranges.count = image_section_table_count;
+    image_section_file_ranges.count = 0;
     image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
     Rng1U64Array image_section_virt_ranges = {0};
     image_section_virt_ranges.count = image_section_table_count;
     image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, image_section_table_count);
     for (U64 i = 0; i < image_section_table_count; i += 1) {
       COFF_SectionHeader *sect_header = image_section_table[i];
-      image_section_file_ranges.v[i] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+      if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+        image_section_file_ranges.v[image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+      }
       image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
     }
 

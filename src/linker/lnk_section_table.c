@@ -442,6 +442,20 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
   sect->vsize = cursor;
 }
 
+
+internal void
+lnk_assign_section_index(LNK_Section *sect, U64 sect_idx)
+{
+  sect->sect_idx = sect_idx;
+
+  // assign section indices to contribs
+  for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
+    for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
+      sc_chunk->v[sc_idx]->u.sect_idx = sect_idx;
+    }
+  }
+}
+
 internal void
 lnk_assign_section_virtual_space(LNK_Section *sect, U64 sect_align, U64 *voff_cursor)
 {
