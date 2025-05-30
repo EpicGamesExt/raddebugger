@@ -1739,10 +1739,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               }
             }break;
             
-            //- rjf: globals / procedures / types
+            //- rjf: globals / procedures / types / constants
             case E_IdentifierResolutionPath_Globals:
             case E_IdentifierResolutionPath_Procedures:
             case E_IdentifierResolutionPath_ThreadLocals:
+            case E_IdentifierResolutionPath_Constants:
             {
               //- rjf: form namespaceified fallback versions of this lookup string
               if(!string_mapped)
@@ -1899,7 +1900,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                     {
                       RDI_U64 constant_value_data_size = 0;
                       RDI_U8 *constant_value_data = rdi_table_from_name(rdi, ConstantValueData, &constant_value_data_size);
-                      if(0 <= constant_value_off && constant_value_off + constant_value_data_size <= constant_value_data_size)
+                      if(0 <= constant_value_off && constant_value_off + constant_value_size <= constant_value_data_size)
                       {
                         RDI_U64 value = 0;
                         MemoryCopy(&value, constant_value_data+constant_value_off, constant_value_size);
