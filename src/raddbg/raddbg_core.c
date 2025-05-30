@@ -12376,6 +12376,10 @@ rd_frame(void)
         { 0, 1, str8_lit_comp("TArray<?{element_type}>"),    str8_lit_comp("array(cast(element_type *)AllocatorInstance.Data, ArrayNum)") },
         { 0, 1, str8_lit_comp("TSharedRef<?>"),              str8_lit_comp("Object") },
         { 0, 1, str8_lit_comp("TRefCountPtr<?>"),            str8_lit_comp("Reference") },
+        { 0, 1, str8_lit_comp("FNameEntry"),                 str8_lit_comp("AnsiName, Header.Len") },
+        { 0, 1, str8_lit_comp("FNameEntryId"),               str8_lit_comp("*(cast(FNameEntry *)(&GNameBlocksDebug[Value >> FNameDebugVisualizer::OffsetBits][FNameDebugVisualizer::EntryStride * (Value & FNameDebugVisualizer::OffsetMask)]))") },
+        { 0, 1, str8_lit_comp("TObjectPtr<?>"),              str8_lit_comp("DebugPtr") },
+        { 0, 1, str8_lit_comp("FColor"),                     str8_lit_comp("hex(color(Bits))") },
       };
       if(rd_state->use_default_stl_type_views)
       {
