@@ -1843,19 +1843,22 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
       U64 total_entry_count = 0;
       total_entry_count += page->entries_addr32.count;
       total_entry_count += page->entries_addr64.count;
+
+      U32 *page_voff_ptr;
+      U32 *block_size_ptr;
+      U16 *reloc_arr_base;
       
       // push buffer
-      U64 buf_align = sizeof(U32);
-      U64 buf_size  = AlignPow2(sizeof(U32)*2 + sizeof(U16)*total_entry_count, buf_align);
-      U8 *buf       = push_array_no_zero(arena, U8, buf_size);
+      U64   buf_size = AlignPow2(sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + sizeof(*reloc_arr_base)*total_entry_count, sizeof(U32));
+      void *buf      = push_array_no_zero(arena, U8, buf_size);
       
       // setup pointers into buffer
-      U32 *page_voff_ptr  = (U32*)buf;
-      U32 *block_size_ptr = page_voff_ptr + 1;
-      U16 *reloc_arr_base = (U16*)(block_size_ptr + 1);
-      U16 *reloc_arr_ptr  = reloc_arr_base;
+      page_voff_ptr  = buf;
+      block_size_ptr = page_voff_ptr + 1;
+      reloc_arr_base = (U16*)(block_size_ptr + 1);
       
       // write 32-bit relocations
+      U16 *reloc_arr_ptr = reloc_arr_base;
       for (U64Node *i = page->entries_addr32.first; i != 0; i = i->next) {
         // was base reloc_entry made?
         if (hash_table_search_u64(voff_ht, i->data)) {
@@ -1898,7 +1901,7 @@ lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U6
       Assert(*block_size_ptr <= buf_size);
 
       // push page 
-      str8_list_push(arena, &result, str8(buf, block_size));
+      str8_list_push(arena, &result, str8(buf, buf_size));
       
       // purge voffs for next page
       hash_table_purge(voff_ht);
@@ -2431,21 +2434,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
       }
 
       // assign section indices to sections
-      {
-        U64 sect_idx = 0;
-        for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-          sect_n->data.sect_idx = sect_idx++;
-        }
-      }
-
-      // assign section indices to contribs
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        LNK_Section *sect = &sect_n->data;
-        for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-          for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
-            sc_chunk->v[sc_idx]->u.sect_idx = sect->sect_idx;
-          }
-        }
+        lnk_assign_section_index(&sect_n->data, sectab->next_sect_idx++);
       }
 
       // assing layout offsets and sizes to merged sections
@@ -2889,6 +2879,7 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
 
         lnk_finalize_section_layout(sectab, reloc, config->file_align);
         lnk_assign_section_virtual_space(reloc, config->sect_align, &voff_cursor);
+        lnk_assign_section_index(reloc, sectab->next_sect_idx++);
 
         sects                      = lnk_section_array_from_list(scratch.arena, sectab->list);
         expected_image_header_size = lnk_compute_win32_image_header_size(config, sects.count);

@@ -138,3 +138,8 @@ internal void                lnk_section_table_merge(LNK_SectionTable *sectab, L
 internal LNK_SectionArray    lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab);
 internal LNK_Section *       lnk_finalized_section_from_id(LNK_SectionTable *sectab, U64 id);
 
+internal LNK_SectionArray lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab);
+internal void lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 file_align);
+internal void lnk_assign_section_index(LNK_Section *sect, U64 sect_idx);
+internal void lnk_assign_section_virtual_space(LNK_Section *sect, U64 sect_align, U64 *voff_cursor);
+internal void lnk_assign_section_file_space(LNK_Section *sect, U64 *foff_cursor);
