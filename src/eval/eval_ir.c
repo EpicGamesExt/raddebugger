@@ -1848,6 +1848,75 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 }
               }
               
+              //- rjf: try constants
+              if(path == E_IdentifierResolutionPath_Constants && !string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("constant"), 0)))
+              {
+                if(str8_match(string, str8_lit("true"), 0))
+                {
+                  string_mapped = 1;
+                  E_OpList oplist = {0};
+                  e_oplist_push_uconst(arena, &oplist, 1);
+                  mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+                  mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  mapped_bytecode_mode = E_Mode_Value;
+                }
+                else if(str8_match(string, str8_lit("false"), 0))
+                {
+                  string_mapped = 1;
+                  E_OpList oplist = {0};
+                  e_oplist_push_uconst(arena, &oplist, 0);
+                  mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
+                  mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  mapped_bytecode_mode = E_Mode_Value;
+                }
+                else for(U64 module_idx = 0; module_idx < e_base_ctx->modules_count; module_idx += 1)
+                {
+                  E_Module *module = &e_base_ctx->modules[module_idx];
+                  RDI_Parsed *rdi = module->rdi;
+                  RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Constants);
+                  RDI_ParsedNameMap parsed_name_map = {0};
+                  rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, string.str, string.size);
+                  U32 matches_count = 0;
+                  U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                  for(String8Node *n = namespaceified_strings.first;
+                      n != 0 && matches_count == 0;
+                      n = n->next)
+                  {
+                    node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+                    matches_count = 0;
+                    matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                  }
+                  if(matches_count != 0)
+                  {
+                    U32 match_idx = matches[matches_count-1];
+                    RDI_Constant *constant = rdi_element_from_name_idx(rdi, Constants, match_idx);
+                    U32 type_idx = constant->type_idx;
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                    RDI_U32 constant_value_off = *rdi_element_from_name_idx(rdi, ConstantValueTable, constant->constant_value_idx);
+                    RDI_U32 constant_value_size = *rdi_element_from_name_idx(rdi, ConstantValueTable, constant->constant_value_idx+1) - constant_value_off;
+                    if(constant_value_size <= 8)
+                    {
+                      RDI_U64 constant_value_data_size = 0;
+                      RDI_U8 *constant_value_data = rdi_table_from_name(rdi, ConstantValueData, &constant_value_data_size);
+                      if(0 <= constant_value_off && constant_value_off + constant_value_data_size <= constant_value_data_size)
+                      {
+                        RDI_U64 value = 0;
+                        MemoryCopy(&value, constant_value_data+constant_value_off, constant_value_size);
+                        E_OpList oplist = {0};
+                        e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(value));
+                        string_mapped = 1;
+                        mapped_type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+                        mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                        mapped_bytecode_mode = E_Mode_Value;
+                        mapped_bytecode_space = module->space;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              
               //- rjf: try procedures
               if(path == E_IdentifierResolutionPath_Procedures && !string_mapped && (qualifier.size == 0 || str8_match(qualifier, str8_lit("procedure"), 0)))
               {
@@ -1937,27 +2006,6 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 mapped_bytecode_space = e_base_ctx->thread_reg_space;
                 mapped_type_key = e_type_key_reg_alias(e_base_ctx->primary_module->arch, alias_num);
               }
-            }break;
-            
-            //- rjf: try basic constants
-            case E_IdentifierResolutionPath_Constants:
-            if(!string_mapped && str8_match(string, str8_lit("true"), 0))
-            {
-              string_mapped = 1;
-              E_OpList oplist = {0};
-              e_oplist_push_uconst(arena, &oplist, 1);
-              mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = E_Mode_Value;
-            }
-            if(!string_mapped && str8_match(string, str8_lit("false"), 0))
-            {
-              string_mapped = 1;
-              E_OpList oplist = {0};
-              e_oplist_push_uconst(arena, &oplist, 0);
-              mapped_type_key = e_type_key_basic(E_TypeKind_Bool);
-              mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
-              mapped_bytecode_mode = E_Mode_Value;
             }break;
             
             //- rjf: try macros

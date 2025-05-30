@@ -3523,7 +3523,7 @@ RDI_PROC RDIM_ConstantsBakeResult
 rdim_bake_constants(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
 {
   RDI_Constant *constants = push_array(arena, RDI_Constant, src->total_count+1);
-  RDI_U32 *constant_values = push_array(arena, RDI_U32, src->total_count+1);
+  RDI_U32 *constant_values = push_array(arena, RDI_U32, src->total_count+2);
   RDI_U8 *constant_value_data = push_array(arena, RDI_U8, src->total_value_data_size+1);
   RDI_U32 dst_idx = 1;
   RDI_U64 dst_constant_value_data_off = 1;
@@ -3542,6 +3542,7 @@ rdim_bake_constants(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Sy
       dst_constant_value_data_off += src->value_data.size;
     }
   }
+  constant_values[dst_idx] = dst_constant_value_data_off;
   RDIM_ConstantsBakeResult result = {0};
   result.constants = constants;
   result.constants_count = src->total_count+1;

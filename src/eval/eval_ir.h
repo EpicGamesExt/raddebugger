@@ -16,11 +16,11 @@ typedef enum E_IdentifierResolutionPath
   E_IdentifierResolutionPath_Local,
   E_IdentifierResolutionPath_Globals,
   E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Constants,
   E_IdentifierResolutionPath_Procedures,
   E_IdentifierResolutionPath_Types,
   E_IdentifierResolutionPath_Registers,
   E_IdentifierResolutionPath_RegisterAliases,
-  E_IdentifierResolutionPath_Constants,
   E_IdentifierResolutionPath_Macros,
 }
 E_IdentifierResolutionPath;
@@ -89,11 +89,11 @@ E_IdentifierResolutionPath e_default_identifier_resolution_paths[] =
   E_IdentifierResolutionPath_Local,
   E_IdentifierResolutionPath_Globals,
   E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Constants,
   E_IdentifierResolutionPath_Procedures,
   E_IdentifierResolutionPath_Types,
   E_IdentifierResolutionPath_Registers,
   E_IdentifierResolutionPath_RegisterAliases,
-  E_IdentifierResolutionPath_Constants,
   E_IdentifierResolutionPath_Macros,
 };
 E_IdentifierResolutionRule e_default_identifier_resolution_rule =
@@ -112,11 +112,11 @@ E_IdentifierResolutionPath e_callable_identifier_resolution_paths[] =
   E_IdentifierResolutionPath_Local,
   E_IdentifierResolutionPath_Globals,
   E_IdentifierResolutionPath_ThreadLocals,
+  E_IdentifierResolutionPath_Constants,
   E_IdentifierResolutionPath_Procedures,
   E_IdentifierResolutionPath_Types,
   E_IdentifierResolutionPath_Registers,
   E_IdentifierResolutionPath_RegisterAliases,
-  E_IdentifierResolutionPath_Constants,
 };
 E_IdentifierResolutionRule e_callable_identifier_resolution_rule =
 {
