@@ -2963,10 +2963,16 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           U8 *name_ptr = val_ptr + val.encoded_size;
           String8 name = str8_cstring_capped(name_ptr, sym_data_opl);
           String8 val_data = str8_struct(&val64);
+          U64 container_name_opl = p2r_end_of_cplusplus_container_name(type->name);
+          String8 name_qualified = name;
+          if(container_name_opl != 0)
+          {
+            name_qualified = push_str8f(arena, "%S%S", str8_prefix(type->name, container_name_opl), name);
+          }
           
           // rjf: build constant symbol
           RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &sym_constants, sym_constants_chunk_cap);
-          cnst->name = name;
+          cnst->name = name_qualified;
           cnst->type = type;
           rdim_symbol_push_value_data(arena, &sym_constants, cnst, val_data);
         }break;
