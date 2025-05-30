@@ -310,6 +310,9 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
     }
   }
 
+  str8_list_push(obj_writer->arena, &ilt_sect->data, str8(0, coff_word_size_from_machine(machine)));
+  str8_list_push(obj_writer->arena, &iat_sect->data, str8(0, coff_word_size_from_machine(machine)));
+
   String8 dll_obj = coff_obj_writer_serialize(arena, obj_writer);
   coff_obj_writer_release(&obj_writer);
   return dll_obj;
