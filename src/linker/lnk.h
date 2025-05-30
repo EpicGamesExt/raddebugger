@@ -3,34 +3,6 @@
 
 #pragma once
 
-// --- CRT Symbols -------------------------------------------------------------
-
-// _load_config_used points to PE_LoadConfig32/PE_LoadConfig64
-// and symbols below are used to patch patricual fields of the struct.
-#define LNK_LOAD_CONFIG_SYMBOL_NAME         "_load_config_used"
-#define LNK_ENCLAVE_CONFIG_SYMBOL_NAME      "__enclave_config"
-#define LNK_GUARD_FLAGS_SYMBOL_NAME         "__guard_flags"
-#define LNK_GUARD_FIDS_TABLE_SYMBOL_NAME    "__guard_fids_table"
-#define LNK_GUARD_FIDS_COUNT_SYMBOL_NAME    "__guard_fids_count"
-#define LNK_GUARD_IAT_TABLE_SYMBOL_NAME     "__guard_iat_table"
-#define LNK_GUARD_IAT_COUNT_SYMBOL_NAME     "__guard_iat_count"
-#define LNK_GUARD_LONGJMP_TABLE_SYMBOL_NAME "__guard_longjmp_table"
-#define LNK_GUARD_LONGJMP_COUNT_SYMBOL_NAME "__guard_longjmp_count"
-#define LNK_GUARD_EHCONT_TABLE_SYMBOL_NAME  "__guard_eh_cont_table"
-#define LNK_GUARD_EHCONT_COUNT_SYMBOL_NAME  "__guard_eh_cont_count"
-
-// x86 load config fields
-#define LNK_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME "__safe_se_handler_table"
-#define LNK_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME "__safe_se_handler_count"
-
-// load symbols from delayimp.lib
-#define LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME     "__delayLoadHelper2"
-#define LNK_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME "___delayLoadHelper2@8"
-
-// _tls_used is a special section in CRT which has format of 
-// PE_TLSHeader32 or PE_TLSHeader64, according to machine type.
-#define LNK_TLS_SYMBOL_NAME "_tls_used"
-
 // --- Base Reloc --------------------------------------------------------------
 
 typedef struct LNK_BaseRelocPage
