@@ -95,6 +95,7 @@ global GFX_LinuxMonitorArray gfx_lnx_monitors;
 /// A list of any monitors actively being used or recorded by DF or GFX
 global GFX_LinuxMonitorArray gfx_lnx_monitors_active;
 global GFX_LinuxMonitor* gfx_lnx_primary_monitor;
+global GFX_LinuxMonitor gfx_lnx_monitor_stub;
 global void* gfx_lnx_icon;
 global Vec2S32 gfx_lnx_icon_size;
 global U32 gfx_lnx_icon_capacity;

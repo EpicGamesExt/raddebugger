@@ -46,9 +46,14 @@ x11_monitor_update_properties(GFX_LinuxMonitor* out_monitor)
   {
     x_info = XRRGetCrtcInfo(x11_server, resources, props->crtcs[i]);
     /* NOTE(mallchad): If output is set its probably means the output is using
-       this config but I'm not always be sure its *this* output usin this crtc
+       this config but I'm not always sure its *this* output usin this crtc
        mode so this should probably be investigated later*/
-    if (x_info->noutput > 0) { found_crtc = 1; break; }
+    if (x_info->noutput > 0)
+    {
+      B32 monitor_match = (x_info->outputs[0] == out_monitor->handle);
+      // Let another call later down free the CRTC Info
+      if (monitor_match) { found_crtc = 1; break; }
+    }
     XRRFreeCrtcInfo(x_info);
   }
   if (found_crtc)
@@ -145,7 +150,7 @@ x11_window_update_properties(GFX_LinuxWindow* out)
     if (horizontal_inside && vertical_inside) { found = 1; break; }
   }
   if (found == 0)
-  { out->monitor = NULL; }
+  { out->monitor = &gfx_lnx_monitor_stub; }
   else
   { out->monitor = x_monitor; }
 
