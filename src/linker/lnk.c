@@ -2013,7 +2013,10 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
     }
     sizeof_image = Max(sizeof_image, sects.v[sect_idx]->voff + sects.v[sect_idx]->vsize);
   }
-  sizeof_image = AlignPow2(sizeof_image, 4096);
+  sizeof_code          = AlignPow2(sizeof_code, config->file_align);
+  sizeof_inited_data   = AlignPow2(sizeof_inited_data, config->file_align);
+  sizeof_uninited_data = AlignPow2(sizeof_uninited_data, config->file_align);
+  sizeof_image         = AlignPow2(sizeof_image, 4096);
 
   //
   // compute image headers size
