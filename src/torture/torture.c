@@ -149,6 +149,10 @@ t_invoke_linker_with_time_out(U64 time_out, String8 cmdline)
     }
   }
 
+  if (g_redirect_stdout) {
+    os_file_close(output_redirect);
+  }
+
   scratch_end(scratch);
   return exit_code;
 }
@@ -192,6 +196,16 @@ t_make_file_path(Arena *arena, String8 name)
 }
 
 internal B32
+t_write_file_list(String8 name, String8List data)
+{
+  Temp scratch = scratch_begin(0,0);
+  String8 path = t_make_file_path(scratch.arena, name);
+  B32 is_written = os_write_data_list_to_file_path(path, data);
+  scratch_end(scratch);
+  return is_written;
+}
+
+internal B32
 t_write_file(String8 name, String8 data)
 {
   String8Node temp_node = {0};
@@ -201,16 +215,6 @@ t_write_file(String8 name, String8 data)
   str8_list_push_node(&temp_list, &temp_node);
 
   return t_write_file_list(name, temp_list);
-}
-
-internal B32
-t_write_file_list(String8 name, String8List data)
-{
-  Temp scratch = scratch_begin(0,0);
-  String8 path = t_make_file_path(scratch.arena, name);
-  B32 is_written = os_write_data_list_to_file_path(path, data);
-  scratch_end(scratch);
-  return is_written;
 }
 
 internal String8
@@ -3531,6 +3535,7 @@ entry_point(CmdLine *cmdline)
     fprintf(stdout, "  Crashed: %llu\n", crash_count);
 
     if (fail_count + crash_count != 0) {
+      fflush(stdout);
       os_abort(fail_count + crash_count);
     }
   }

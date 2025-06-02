@@ -315,7 +315,6 @@ CheckNil(nil,p) ? \
 #endif
 
 #if ASAN_ENABLED
-#pragma comment(lib, "clang_rt.asan-x86_64.lib")
 C_LINKAGE void __asan_poison_memory_region(void const volatile *addr, size_t size);
 C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 # define AsanPoisonMemoryRegion(addr, size)   __asan_poison_memory_region((addr), (size))

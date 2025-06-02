@@ -32,8 +32,21 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           call build ${{ matrix.target }} ${{ matrix.compiler }} ${{ matrix.mode }} || exit /b 1
-      - name: run_torture
-        shell: cmd
-        if: ${{ matrix.target == 'torture' }}
-        run: torture -l:radlink || exit /b 1
 
+  run-torture:
+    runs-on: windows-2022
+    steps:
+      # - name: Install ASAN
+      #   shell: cmd
+      #   run: |
+      #     "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" --quiet --force --norestart --add Microsoft.VisualStudio.Component.VC.ASAN
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run-torture
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          call build radlink asan debug no_meta || exit /b 1
+          call build torture debug no_meta || exit /b 1
+          cd build
+          torture -l:radlink || exit /b 1
