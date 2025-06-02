@@ -605,7 +605,7 @@ t_simple_link_test(void)
     COFF_ObjWriter  *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *text_sect  = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text_payload));
     coff_obj_writer_push_section(obj_writer, str8_lit(".data"), PE_DATA_SECTION_FLAGS, str8_lit("qwe"));
-    coff_obj_writer_push_section(obj_writer, str8_lit(".bss"), PE_BSS_SECTION_FLAGS, str8(0, 5));
+    coff_obj_writer_push_section(obj_writer, str8_lit(".zero"), PE_BSS_SECTION_FLAGS, str8(0, 5));
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("my_entry"), 0, text_sect);
     main_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -681,8 +681,8 @@ t_simple_link_test(void)
     goto exit;
   }
 
-  COFF_SectionHeader *bss_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".bss"));
-  if (bss_section == 0) {
+  COFF_SectionHeader *zero_section = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".zero"));
+  if (zero_section == 0) {
     goto exit;
   }
 
@@ -698,7 +698,7 @@ t_simple_link_test(void)
   if (opt->sizeof_inited_data != text_section->fsize + data_section->fsize) {
     goto exit;
   }
-  if (opt->sizeof_uninited_data != 0) {
+  if (opt->sizeof_uninited_data != 0x200) {
     goto exit;
   }
   if (opt->code_base != 0x1000) {
@@ -728,7 +728,7 @@ t_simple_link_test(void)
   if (opt->win32_version_value != 0) {
     goto exit;
   }
-  if (opt->sizeof_image != 0x3000) {
+  if (opt->sizeof_image != 0x4000) {
     goto exit;
   }
   if (opt->sizeof_headers != 0x200) {
