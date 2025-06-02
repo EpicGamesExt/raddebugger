@@ -184,7 +184,6 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
   sect->id           = sectab->id_max++;
   sect->name         = push_str8_copy(sectab->arena, name);
   sect->flags        = flags;
-  sect->has_layout   = 1;
 
   LNK_SectionList *sect_list = &sectab->list;
   SLLQueuePush(sect_list->first, sect_list->last, sect_node);
@@ -396,11 +395,9 @@ lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab)
   result.v                = push_array(arena, LNK_Section *, sectab->list.count);
 
   for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-    if (sect_node->data.has_layout) {
-      Assert(result.count < sectab->list.count);
-      result.v[result.count] = &sect_node->data;
-      result.count += 1;
-    }
+    Assert(result.count < sectab->list.count);
+    result.v[result.count] = &sect_node->data;
+    result.count += 1;
   }
 
   U64 unused_entry_count = sectab->list.count - result.count;

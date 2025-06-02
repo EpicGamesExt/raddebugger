@@ -1999,9 +1999,6 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   U64 sizeof_image         = 0;
   for (U64 sect_idx = 0; sect_idx < sects.count; sect_idx += 1) {
     LNK_Section *sect = sects.v[sect_idx];
-    if ( ! sect->has_layout) {
-      continue;
-    }
     if (code_base == 0 && sect->flags & COFF_SectionFlag_CntCode) {
       code_base = sect->voff;
     }
@@ -2091,9 +2088,6 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   {
     for (U64 sect_idx = 0; sect_idx < sects.count; sect_idx += 1) {
       LNK_Section *sect = sects.v[sect_idx];
-      if (!sect->has_layout) {
-        continue;
-      }
 
       COFF_SectionHeader *coff_section = &coff_section_table[sect_idx];
 
@@ -3423,69 +3417,68 @@ lnk_build_rad_chunk_map(Arena *arena, String8 image_data, U64 thread_count, LNK_
   str8_list_pushf(arena, &map, "# SECTIONS\n");
   for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
     LNK_Section *sect = &sect_n->data;
-    if (sect->has_layout) {
-      str8_list_pushf(arena, &map, "%S\n", sect->name);
-      str8_list_pushf(arena, &map, "%-8s %-8s %-8s %-8s %-16s %-8s %s\n", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "SC", "Source");
 
-      for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-        for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
-          Temp temp = temp_begin(scratch.arena);
-          LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
+    str8_list_pushf(arena, &map, "%S\n", sect->name);
+    str8_list_pushf(arena, &map, "%-8s %-8s %-8s %-8s %-16s %-8s %s\n", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "SC", "Source");
 
-          U64        file_off   = image_section_table[sc->u.sect_idx]->foff + sc->u.off;
-          U64        virt_off   = image_section_table[sc->u.sect_idx]->voff + sc->u.off;
-          U64        virt_size  = sc->u.size;
-          U64        file_size  = sc->u.size;
-          String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
+    for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
+      for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
+        Temp temp = temp_begin(scratch.arena);
+        LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
 
-          U128 sc_hash = {0};
-          if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-            blake3_hasher hasher; blake3_hasher_init(&hasher);
-            blake3_hasher_update(&hasher, sc_data.str, sc_data.size);
-            blake3_hasher_finalize(&hasher, (U8 *)&sc_hash, sizeof(sc_hash));
-          }
+        U64        file_off   = image_section_table[sc->u.sect_idx]->foff + sc->u.off;
+        U64        virt_off   = image_section_table[sc->u.sect_idx]->voff + sc->u.off;
+        U64        virt_size  = sc->u.size;
+        U64        file_size  = sc->u.size;
+        String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
 
-          String8 file_off_str  = push_str8f(temp.arena, "%08x",       file_off);
-          String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
-          String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
-          String8 file_size_str = push_str8f(temp.arena, "%08x",       file_size);
-          String8 sc_hash_str   = push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]);
-          String8 sc_idx_str    = push_str8f(temp.arena, "%llx",       sc_idx);
-          String8 source_str;
-          {
-            String8List source_list = {0};
+        U128 sc_hash = {0};
+        if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
+          blake3_hasher hasher; blake3_hasher_init(&hasher);
+          blake3_hasher_update(&hasher, sc_data.str, sc_data.size);
+          blake3_hasher_finalize(&hasher, (U8 *)&sc_hash, sizeof(sc_hash));
+        }
+
+        String8 file_off_str  = push_str8f(temp.arena, "%08x",       file_off);
+        String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
+        String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
+        String8 file_size_str = push_str8f(temp.arena, "%08x",       file_size);
+        String8 sc_hash_str   = push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]);
+        String8 sc_idx_str    = push_str8f(temp.arena, "%llx",       sc_idx);
+        String8 source_str;
+        {
+          String8List source_list = {0};
 
 #if 0
-            // location
-            if (chunk->obj) {
-              if (chunk->obj->lib_path.size) {
-                String8 lib_name = chunk->obj->lib_path;
-                lib_name         = str8_skip_last_slash(lib_name);
-                lib_name         = str8_chop_last_dot(lib_name);
+          // location
+          if (chunk->obj) {
+            if (chunk->obj->lib_path.size) {
+              String8 lib_name = chunk->obj->lib_path;
+              lib_name         = str8_skip_last_slash(lib_name);
+              lib_name         = str8_chop_last_dot(lib_name);
 
-                String8 obj_name = chunk->obj->path;
-                obj_name         = str8_skip_last_slash(obj_name);
+              String8 obj_name = chunk->obj->path;
+              obj_name         = str8_skip_last_slash(obj_name);
 
-                str8_list_pushf(temp.arena, &source_list, "%S:%S", lib_name, obj_name);
-              } else {
-                str8_list_push(temp.arena, &source_list, chunk->obj->path);
-              }
+              str8_list_pushf(temp.arena, &source_list, "%S:%S", lib_name, obj_name);
+            } else {
+              str8_list_push(temp.arena, &source_list, chunk->obj->path);
             }
+          }
 #else
-            str8_list_pushf(temp.arena, &source_list, "<no_loc>");
+          str8_list_pushf(temp.arena, &source_list, "<no_loc>");
 #endif
 
-            // string join
-            source_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
-          }
-
-          str8_list_pushf(arena, &map, "%-8S %-8S %-8S %-8S %-16S %-8S %S\n", file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash, sc_idx_str, source_str);
-
-          temp_end(temp);
+          // string join
+          source_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
         }
+
+        str8_list_pushf(arena, &map, "%-8S %-8S %-8S %-8S %-16S %-8S %S\n", file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash, sc_idx_str, source_str);
+
+        temp_end(temp);
       }
-      str8_list_pushf(arena, &map, "\n");
     }
+    str8_list_pushf(arena, &map, "\n");
   }
   ProfEnd();
 
