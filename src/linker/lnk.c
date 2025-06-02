@@ -1082,11 +1082,16 @@ lnk_section_contrib_ptr_is_before(void *raw_a, void *raw_b)
 
   int cmp;
 
-  // place sections without sort postfix first
-  if (a->u.sort_idx_size == 0 && b->u.sort_idx_size > 0) {
-    cmp = -1;
-  } else if (a->u.sort_idx_size > 0 && b->u.sort_idx_size == 0) {
-    cmp = +1;
+  if (a->u.sort_idx_size <= 1 && b->u.sort_idx_size <= 1) {
+    if (a->u.sort_idx_size == b->u.sort_idx_size) {
+      cmp = cmp = u32_compar(&a->u.obj_idx, &b->u.obj_idx);
+      if (cmp == 0) {
+        cmp = u32_compar(&a->u.obj_sect_idx, &b->u.obj_sect_idx);
+      }
+    } else {
+      // place sections without sort postfix first
+      cmp = a->u.sort_idx_size < b->u.sort_idx_size;
+    }
   } else {
     // sort on section postfix
     String8 a_sort_idx = str8(a->u.sort_idx, a->u.sort_idx_size);
