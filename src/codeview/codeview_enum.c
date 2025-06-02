@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
@@ -11,10 +11,10 @@ internal String8
 cv_string_from_type_index_source(CV_TypeIndexSource ti_source)
 {
   switch (ti_source) {
-  case CV_TypeIndexSource_NULL:  return str8_lit("");    break;
-  case CV_TypeIndexSource_TPI:   return str8_lit("TPI"); break;
-  case CV_TypeIndexSource_IPI:   return str8_lit("IPI"); break;
-  case CV_TypeIndexSource_COUNT: break;
+    case CV_TypeIndexSource_NULL:  return str8_lit("");    break;
+    case CV_TypeIndexSource_TPI:   return str8_lit("TPI"); break;
+    case CV_TypeIndexSource_IPI:   return str8_lit("IPI"); break;
+    case CV_TypeIndexSource_COUNT: break;
   }
   return str8_zero();
 }
@@ -23,9 +23,9 @@ internal String8
 cv_string_from_language(CV_Language x)
 {
   switch (x) {
-    #define X(_n,_i) case _i: return str8_lit(Stringify(_n));
-CV_LanguageXList(X)
-    #undef X
+#define X(_n,_i) case _i: return str8_lit(Stringify(_n));
+    CV_LanguageXList(X)
+#undef X
   }
   return str8_zero();
 }
@@ -57,21 +57,21 @@ cv_string_from_reg_id(Arena *arena, CV_Arch arch, U32 id)
 {
   String8 result = str8_zero();
   switch (arch) {
-  case CV_Arch_8086: {
+    case CV_Arch_8086: {
       switch (id) {
-      #define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
-      CV_Reg_X86_XList(X)
-      #undef X
+#define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
+        CV_Reg_X86_XList(X)
+#undef X
       }
-  } break;
-  case CV_Arch_X64: {
+    } break;
+    case CV_Arch_X64: {
       switch (id) {
-      #define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
-      CV_Reg_X64_XList(X)
-      #undef X
+#define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
+        CV_Reg_X64_XList(X)
+#undef X
       }
-  } break;
-  default: NotImplemented; break;
+    } break;
+    default: NotImplemented; break;
   }
   if (result.size == 0) {
     result = push_str8f(arena, "%x", id);
@@ -327,9 +327,9 @@ internal String8
 cv_string_from_c13_subsection_kind(CV_C13SubSectionKind x)
 {
   switch (x) {
-    #define X(_N, _ID) case CV_C13SubSectionKind_##_N: return str8_lit(Stringify(_N));
+#define X(_N, _ID) case CV_C13SubSectionKind_##_N: return str8_lit(Stringify(_N));
     CV_C13SubSectionKindXList(X)
-    #undef X
+#undef X
   }
   return str8_zero();
 }
@@ -357,7 +357,7 @@ internal String8
 cv_string_from_pointer_attribs(Arena *arena, CV_PointerAttribs x)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   String8List list = {0};
   if (x & CV_PointerAttrib_IsFlat) {
     x &= ~CV_PointerAttrib_IsFlat;
@@ -391,13 +391,13 @@ cv_string_from_pointer_attribs(Arena *arena, CV_PointerAttribs x)
     x &= ~CV_PointerAttrib_RRef;
     str8_list_pushf(scratch.arena, &list, "RRef");
   }
-
+  
   CV_PointerKind kind = CV_PointerAttribs_Extract_Kind(x);
   CV_PointerMode mode = CV_PointerAttribs_Extract_Mode(x);
   U64            size = CV_PointerAttribs_Extract_Size(x);
-
+  
   x &= ~(0x1f|(0x7<<5)|(0x3f<<13));
-
+  
   if (kind) {
     String8 kind_str = cv_string_from_pointer_kind(kind);
     str8_list_pushf(scratch.arena, &list, "Kind=%S", kind_str);
@@ -409,11 +409,11 @@ cv_string_from_pointer_attribs(Arena *arena, CV_PointerAttribs x)
   if (size) {
     str8_list_pushf(scratch.arena, &list, "Size=%llu", size);
   }
-
+  
   if (x != 0) {
     str8_list_pushf(scratch.arena, &list, "Unknown=%x", x);
   }
-
+  
   String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
   scratch_end(scratch);
   return result;
@@ -591,13 +591,13 @@ internal String8
 cv_string_from_type_props(Arena *arena, CV_TypeProps32 x)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   U32 hfa  = CV_TypeProps_Extract_HFA(x);
   U32 mcom = CV_TypeProps_Extract_MOCOM(x);
-
+  
   String8 hfa_str  = cv_string_from_hfa(hfa);
   String8 mcom_str = cv_string_from_mcom(mcom);
-
+  
   String8 flags_str;
   {
     String8List list = {0};
@@ -653,7 +653,7 @@ cv_string_from_type_props(Arena *arena, CV_TypeProps32 x)
       str8_list_pushf(scratch.arena, &list, "%x", x);
     }
     flags_str = str8_list_join(scratch.arena, &list, &(StringJoin){.sep=str8_lit(", ") });
-
+    
     if (hfa) {
       str8_list_pushf(scratch.arena, &list, "HFA = %S", hfa_str);
     }
@@ -663,7 +663,7 @@ cv_string_from_type_props(Arena *arena, CV_TypeProps32 x)
   }
   
   String8 result = push_str8f(arena, "%S", flags_str);
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -785,14 +785,14 @@ internal String8
 cv_string_from_field_attribs(Arena *arena, CV_FieldAttribs attribs)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   U32 access = CV_FieldAttribs_Extract_Access(attribs);
   U32 mprop  = CV_FieldAttribs_Extract_MethodProp(attribs);
   attribs &= ~(0x3 | 0x7);
-
+  
   String8 access_str = cv_string_from_member_access(access);
   String8 mprop_str  = cv_string_from_method_prop(mprop);
-
+  
   String8List list = {0};
   {
     if (attribs & CV_FieldAttrib_Pseudo) {
@@ -819,16 +819,16 @@ cv_string_from_field_attribs(Arena *arena, CV_FieldAttribs attribs)
       str8_list_pushf(scratch.arena, &list, "Unknown: %x", attribs);
     }
   }
-
+  
   if (access) {
     str8_list_pushf(scratch.arena, &list, "%S", access_str);
   }
   if (mprop) {
     str8_list_pushf(scratch.arena, &list, "%S", mprop_str);
   }
-
+  
   String8 result = str8_list_join(scratch.arena, &list, &(StringJoin){.sep=str8_lit(", ")});
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -841,7 +841,7 @@ cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype)
     String8 n = cv_type_name_from_basic_type((CV_BasicType)itype);
     if (n.size) {
       Temp scratch = scratch_begin(&arena, 1);
-
+      
       U64 type = CV_BasicTypeFromTypeId(itype);
       char *type_str = "???";
       switch (type) {
@@ -899,7 +899,7 @@ cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype)
         case CV_BasicType_CHAR8:      type_str = "CHAR8";      break;
         case CV_BasicType_PTR:        type_str = "PTR";        break;
       }
-
+      
       U64 ptr = CV_BasicPointerKindFromTypeId(itype);
       char *ptr_str = "";
       switch (ptr) {
@@ -910,7 +910,7 @@ cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype)
         case 0x5: ptr_str = "32PF"; break;
         case 0x6: ptr_str = "64P";  break;
       }
-
+      
       n = upper_from_str8(scratch.arena, n);
       result = push_str8f(arena, "T_%s%s(%x)", ptr_str, type_str, itype);
       scratch_end(scratch);

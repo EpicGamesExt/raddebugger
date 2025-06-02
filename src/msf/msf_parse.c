@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
@@ -8,7 +8,7 @@ internal MSF_RawStreamTable *
 msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   MSF_RawStreamTable *result = 0;
   
   //- determine msf type
@@ -25,7 +25,7 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
     U32 whole_file_page_count_raw = 0;
     U32 directory_size_raw        = 0;
     U32 directory_super_map_raw   = 0;
-
+    
     if (index_size == 2) {
       MSF_Header20 *header      = (MSF_Header20 *) msf_data.str;
       page_size_raw             = header->page_size;
@@ -231,7 +231,7 @@ internal String8
 msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
 {
   MSF_RawStream stream = st->streams[sn];
-
+  
   U8 *stream_buf     = push_array_no_zero(arena, U8, stream.size);
   U8 *stream_out_ptr = stream_buf;
   for (U32 i = 0; i < stream.page_count; ++i) {
@@ -241,12 +241,12 @@ msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *
     } else {
       page_idx = stream.u.page_indices_u16[i];
     }
-
+    
     U64 stream_page_off = (U64)page_idx * st->page_size;
     if (stream_page_off + st->page_size > msf_data.size) {
       break;
     }
-
+    
     U8 *stream_page_base = msf_data.str + stream_page_off;
     
     // clamp copy size by end of stream
@@ -258,12 +258,12 @@ msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *
     MemoryCopy(stream_out_ptr, stream_page_base, copy_size);
     stream_out_ptr += copy_size;
   }
-
+  
   U64 copy_size = (U64)(stream_out_ptr - stream_buf);
-
+  
   U64 unused_buf_size = stream.size - copy_size;
   arena_pop(arena, unused_buf_size);
-
+  
   String8 result = str8(stream_buf, copy_size);
   return result;
 }
@@ -272,16 +272,16 @@ internal MSF_Parsed *
 msf_parsed_from_data(Arena *arena, String8 msf_data)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   MSF_Parsed *result = 0;
-
+  
   MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
   if (st) {
     String8 *streams = push_array_no_zero(arena, String8, st->stream_count);
     for (MSF_StreamNumber sn = 0; sn < st->stream_count; ++sn) {
       streams[sn] = msf_data_from_stream_number(arena, msf_data, st, sn);
     }
-
+    
     result               = push_array_no_zero(arena, MSF_Parsed, 1);
     result->streams      = streams;
     result->stream_count = st->stream_count;

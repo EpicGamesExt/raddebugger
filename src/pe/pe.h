@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #ifndef PE_H
@@ -386,14 +386,14 @@ struct PE_LoadConfig32
   U32            security_cookie;
   U32            seh_handler_table;
   U32            seh_handler_count;
-
+  
   // msvc 2015
   U32 guard_cf_check_func_ptr;
   U32 guard_cf_dispatch_func_ptr;
   U32 guard_cf_func_table;
   U32 guard_cf_func_count;
   U32 guard_flags;
-
+  
   // msvc 2017
   PE_LoadConfigCodeIntegrity code_integrity;
   U32                        guard_address_taken_iat_entry_table;
@@ -409,7 +409,7 @@ struct PE_LoadConfig32
   U16                        reserved2;
   U32                        guard_rf_verify_stack_pointer_func_ptr;
   U32                        hot_patch_table_offset;
-
+  
   // msvc 2019
   U32 reserved3;
   U32 enclave_config_ptr;
@@ -445,14 +445,14 @@ struct PE_LoadConfig64
   U64            security_cookie;
   U64            seh_handler_table;
   U64            seh_handler_count;
-
+  
   // msvc 2015
   U64 guard_cf_check_func_ptr;
   U64 guard_cf_dispatch_func_ptr;
   U64 guard_cf_func_table;
   U64 guard_cf_func_count;
   U32 guard_flags;
-
+  
   // msvc 2017
   PE_LoadConfigCodeIntegrity code_integrity;
   U64                        guard_address_taken_iat_entry_table;
@@ -468,7 +468,7 @@ struct PE_LoadConfig64
   U16                        reserved2;
   U64                        guard_rf_verify_stack_pointer_func_ptr;
   U32                        hot_patch_table_offset;
-
+  
   // msvc 2019
   U32 reserved3;
   U64 enclave_config_ptr;

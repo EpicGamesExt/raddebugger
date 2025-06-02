@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
@@ -76,7 +76,7 @@ pdb_info_from_data(Arena *arena, String8 data){
       
       if (epilogue_base_off <= data.size){
         U64 record_off = epilogue_base_off;
-
+        
         // read table
         if (hash_table_count > 0) {
           PDB_InfoNode *first = 0;
@@ -103,17 +103,17 @@ pdb_info_from_data(Arena *arena, String8 data){
           result->last = last;
           result->auth_guid = *auth_guid;
         }
-
-		// read PDB features
+        
+        // read PDB features
         PDB_FeatureFlags features = 0;
         for (; record_off + sizeof(PDB_FeatureSig) <= data.size; ) {
           PDB_FeatureSig sig = 0;
           record_off += str8_deserial_read_struct(data, record_off, &sig);
           switch (sig) {
-          case PDB_FeatureSig_NULL: break;
-          case PDB_FeatureSig_VC140:              features |= PDB_FeatureFlag_HAS_ID_STREAM;    break;
-          case PDB_FeatureSig_NO_TYPE_MERGE:      features |= PDB_FeatureFlag_NO_TYPE_MERGE;    break;
-          case PDB_FeatureSig_MINIMAL_DEBUG_INFO: features |= PDB_FeatureFlag_MINIMAL_DBG_INFO; break;
+            case PDB_FeatureSig_NULL: break;
+            case PDB_FeatureSig_VC140:              features |= PDB_FeatureFlag_HAS_ID_STREAM;    break;
+            case PDB_FeatureSig_NO_TYPE_MERGE:      features |= PDB_FeatureFlag_NO_TYPE_MERGE;    break;
+            case PDB_FeatureSig_MINIMAL_DEBUG_INFO: features |= PDB_FeatureFlag_MINIMAL_DBG_INFO; break;
           }
         }
         result->features = features;
@@ -581,18 +581,18 @@ internal U64
 pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 string)
 {
   U64 result = max_U64;
-
+  
   U32           hash       = pdb_hash_v1(string);
   U32           bucket_idx = hash % ArrayCount(gsi->buckets);
   PDB_GsiBucket bucket     = gsi->buckets[bucket_idx];
-
+  
   for(U64 i = 0; i < bucket.count; ++i)
   {
     U32 off = bucket.offs[i];
     if(off + sizeof(CV_RecHeader) <= symbol_data.size)
     {
       CV_RecHeader *sym_header = (CV_RecHeader *)(symbol_data.str + off);
-
+      
       if(sym_header->size >= sizeof(sym_header->kind))
       {
         U64  opl_off = off + sizeof(sym_header->size) + sym_header->size;
@@ -605,7 +605,7 @@ pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 stri
         Rng1U64 raw_symbol_range = rng_1u64(off + sizeof(*sym_header), off + (sym_header->size - sizeof(sym_header->kind)));
         String8 raw_symbol       = str8_substr(symbol_data, raw_symbol_range);
         String8 sym_name         = cv_name_from_symbol(sym_header->kind, raw_symbol);
-
+        
         if(str8_match(sym_name, string, 0))
         {
           result = off;
@@ -614,8 +614,8 @@ pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 stri
       }
     }
   }
-
-exit:;
+  
+  exit:;
   return result;
 }
 
@@ -1042,28 +1042,28 @@ internal U32
 pdb_strtbl_off_from_string(PDB_Strtbl *strtbl, String8 string)
 {
   U32 result = max_U32;
-
+  
   U32 hash            = pdb_hash_v1(string);
   U32 best_bucket_idx = hash % strtbl->bucket_count;
   U32 bucket_idx      = best_bucket_idx;
-
+  
   do
   {
     String8 test_string = pdb_strtbl_string_from_index(strtbl, bucket_idx);
-
+    
     if(test_string.size == 0)
     {
       break;
     }
-
+    
     if(str8_match(test_string, string, 0))
     {
       result = bucket_idx;
       break;
     }
-
+    
     bucket_idx = (bucket_idx+1) % strtbl->buckets_max;
   } while (bucket_idx != best_bucket_idx);
-
+  
   return result;
 }

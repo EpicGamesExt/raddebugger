@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
@@ -523,7 +523,7 @@ date_time_from_unix_time(U64 unix_time)
   date.sec      = (U32)unix_time % 60;
   date.min      = (U32)(unix_time / 60) % 60;
   date.hour     = (U32)(unix_time / 3600) % 24;
-
+  
   for(;;)
   {
     for(date.month = 0; date.month < 12; ++date.month)
@@ -564,7 +564,7 @@ date_time_from_unix_time(U64 unix_time)
     ++date.year;
   }
   exit:;
-
+  
   return date;
 }
 

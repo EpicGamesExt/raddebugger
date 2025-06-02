@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
@@ -62,13 +62,13 @@ coff_string_from_comdat_select_type(COFF_ComdatSelectType type)
 {
   String8 result = str8_zero();
   switch (type) {
-  case COFF_ComdatSelect_Null:         result = str8_lit("Null");         break;
-  case COFF_ComdatSelect_NoDuplicates: result = str8_lit("NoDuplicates"); break;
-  case COFF_ComdatSelect_Any:          result = str8_lit("Any");          break;
-  case COFF_ComdatSelect_SameSize:     result = str8_lit("SameSize");     break;
-  case COFF_ComdatSelect_ExactMatch:   result = str8_lit("ExactMatch");   break;
-  case COFF_ComdatSelect_Associative:  result = str8_lit("Associative");  break;
-  case COFF_ComdatSelect_Largest:      result = str8_lit("Largest");      break;
+    case COFF_ComdatSelect_Null:         result = str8_lit("Null");         break;
+    case COFF_ComdatSelect_NoDuplicates: result = str8_lit("NoDuplicates"); break;
+    case COFF_ComdatSelect_Any:          result = str8_lit("Any");          break;
+    case COFF_ComdatSelect_SameSize:     result = str8_lit("SameSize");     break;
+    case COFF_ComdatSelect_ExactMatch:   result = str8_lit("ExactMatch");   break;
+    case COFF_ComdatSelect_Associative:  result = str8_lit("Associative");  break;
+    case COFF_ComdatSelect_Largest:      result = str8_lit("Largest");      break;
   }
   return result;
 }
@@ -89,7 +89,7 @@ coff_string_from_flags(Arena *arena, COFF_FileHeaderFlags flags)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = {0};
-
+  
   if (flags & COFF_FileHeaderFlag_RelocStripped) {
     str8_list_pushf(scratch.arena, &list, "Relocs Stripped");
   }
@@ -126,9 +126,9 @@ coff_string_from_flags(Arena *arena, COFF_FileHeaderFlags flags)
   if (flags & COFF_FileHeaderFlag_UpSystemOnly) {
     str8_list_pushf(scratch.arena, &list, "Up System Only");
   }
-
+  
   String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
-
+  
   scratch_end(scratch);
   return result;
 }
@@ -201,7 +201,7 @@ coff_string_from_section_flags(Arena *arena, COFF_SectionFlags flags)
   if (align) {
     str8_list_pushf(scratch.arena, &list, "Align=%u", align);
   }
-
+  
   if (!list.node_count) {
     str8_list_pushf(scratch.arena, &list, "None");
   }
@@ -218,9 +218,9 @@ internal String8
 coff_string_from_resource_memory_flags(Arena *arena, COFF_ResourceMemoryFlags flags)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   String8List list = {0};
-
+  
   if (flags & COFF_ResourceMemoryFlag_Moveable) {
     flags &= COFF_ResourceMemoryFlag_Moveable;
     str8_list_pushf(scratch.arena, &list, "Moveable");
@@ -236,9 +236,9 @@ coff_string_from_resource_memory_flags(Arena *arena, COFF_ResourceMemoryFlags fl
   if (flags != 0) {
     str8_list_pushf(scratch.arena, &list, "%#x", flags);
   }
-
+  
   String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
-
+  
   scratch_end(scratch);
   return result;
 }

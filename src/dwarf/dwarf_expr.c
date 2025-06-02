@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 //- analyzers
@@ -10,7 +10,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
   DW_SimpleLoc result = {DW_SimpleLocKind_Empty};
   
   String8 expr_data = str8((U8*)data+range.min, (U8*)data+range.max);
-
+  
   U8 op = 0;
   if (str8_deserial_read_struct(expr_data, 0, &op)) {
     // step params
@@ -52,11 +52,11 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       {
         U64 x = 0;
         step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &x);
-
+        
         if (is_signed) {
           x = extend_sign64(x, size_param);
         }
-
+        
         result.kind = DW_SimpleLocKind_Address;
         result.addr = x;
       } break;
@@ -180,7 +180,7 @@ internal DW_ExprAnalysis
 dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConfig *call_config)
 {
   Temp scratch = scratch_begin(0, 0);
-
+  
   DW_ExprAnalysis result = {0};
   
   // are we resolving calls?
@@ -560,7 +560,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
 {
 #if 0
   Temp scratch = scratch_begin(&arena_optional, 1);
-
+  
   DW_Location result = {0};
   
   // setup stack
@@ -655,7 +655,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         {
           U64 offset = 0;
           step_cursor += dw_based_range_read(base, range, step_cursor, 8, &offset);
-
+          
           // earlier versions of GCC emit TLS offset with DW_ExprOp_Addr.
           B32 is_text_relative;
           {
@@ -663,9 +663,9 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
             dw_based_range_read_struct(base, range, step_cursor, &next_op);
             is_text_relative = (next_op != DW_ExprOp_GNU_PushTlsAddress);
           }
-
+          
           U64 addr = offset;
-
+          
           if (is_text_relative) {
             if (config->text_section_base != 0) {
               addr += *config->text_section_base;
@@ -675,7 +675,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
               goto finish;
             }
           }
-
+          
           dw_expr__stack_push(scratch.arena, &stack, addr);
         } break;
         
@@ -748,7 +748,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
           U64 reg_idx = 0; S64 offset = 0;
           step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &reg_idx);
           step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
-
+          
           DW_RegsX64 *regs = config->regs;
           if (regs != 0) {
             if (reg_idx < ArrayCount(regs->r)) {
@@ -816,7 +816,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Deref:
         {
           U64 addr = dw_expr__stack_pop(&stack);
-
+          
           B32 read_success = 0;
           if (config->read_memory) {
             U64 x = 0;
@@ -825,7 +825,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
               read_success = 1;
             }
           }
-
+          
           if (!read_success) {
             stashed_loc.kind      = DW_SimpleLocKind_Fail;
             stashed_loc.fail_kind = DW_LocFailKind_MissingMemory;
@@ -838,10 +838,10 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         {
           U64 raw_size = 0;
           step_cursor += dw_based_range_read(base, range, step_cursor, 1, &raw_size);
-
+          
           U64 size = ClampTop(raw_size, 8);
           U64 addr = dw_expr__stack_pop(&stack);
-
+          
           B32 read_success = 0;
           if (config->read_memory) {
             U64 x = 0;
@@ -883,7 +883,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_FormTlsAddress:
         {
           S64 s = (S64)dw_expr__stack_pop(&stack);
-
+          
           if (config->tls_address != 0) {
             U64 x = *config->tls_address + s;
             dw_expr__stack_push(scratch.arena, &stack, x);

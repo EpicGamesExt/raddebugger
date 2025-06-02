@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal U64
@@ -32,20 +32,20 @@ coff_section_flag_from_align_size(U64 align)
 {
   COFF_SectionFlags flags = 0;
   switch (align) {
-  case 1:    flags = COFF_SectionAlign_1Bytes;    break;
-  case 2:    flags = COFF_SectionAlign_2Bytes;    break;
-  case 4:    flags = COFF_SectionAlign_4Bytes;    break;
-  case 8:    flags = COFF_SectionAlign_8Bytes;    break;
-  case 16:   flags = COFF_SectionAlign_16Bytes;   break;
-  case 32:   flags = COFF_SectionAlign_32Bytes;   break;
-  case 64:   flags = COFF_SectionAlign_64Bytes;   break;
-  case 128:  flags = COFF_SectionAlign_128Bytes;  break;
-  case 256:  flags = COFF_SectionAlign_256Bytes;  break;
-  case 512:  flags = COFF_SectionAlign_512Bytes;  break;
-  case 1024: flags = COFF_SectionAlign_1024Bytes; break;
-  case 2048: flags = COFF_SectionAlign_2048Bytes; break;
-  case 4096: flags = COFF_SectionAlign_4096Bytes; break;
-  case 8192: flags = COFF_SectionAlign_8192Bytes; break;
+    case 1:    flags = COFF_SectionAlign_1Bytes;    break;
+    case 2:    flags = COFF_SectionAlign_2Bytes;    break;
+    case 4:    flags = COFF_SectionAlign_4Bytes;    break;
+    case 8:    flags = COFF_SectionAlign_8Bytes;    break;
+    case 16:   flags = COFF_SectionAlign_16Bytes;   break;
+    case 32:   flags = COFF_SectionAlign_32Bytes;   break;
+    case 64:   flags = COFF_SectionAlign_64Bytes;   break;
+    case 128:  flags = COFF_SectionAlign_128Bytes;  break;
+    case 256:  flags = COFF_SectionAlign_256Bytes;  break;
+    case 512:  flags = COFF_SectionAlign_512Bytes;  break;
+    case 1024: flags = COFF_SectionAlign_1024Bytes; break;
+    case 2048: flags = COFF_SectionAlign_2048Bytes; break;
+    case 4096: flags = COFF_SectionAlign_4096Bytes; break;
+    case 8192: flags = COFF_SectionAlign_8192Bytes; break;
   }
   flags <<= COFF_SectionFlag_AlignShift;
   return flags;
@@ -127,12 +127,12 @@ coff_apply_size_from_reloc_x64(COFF_Reloc_X64 x)
     case COFF_Reloc_X64_Section:  return 2;
     case COFF_Reloc_X64_SecRel:   return 4;
     case COFF_Reloc_X64_SRel32:   return 4;
-
+    
     case COFF_Reloc_X64_SecRel7:
     case COFF_Reloc_X64_Token:
     case COFF_Reloc_X64_Pair:
     case COFF_Reloc_X64_SSpan32:
-      NotImplemented;
+    NotImplemented;
     break;
   }
   return 0;
@@ -153,7 +153,7 @@ coff_apply_size_from_reloc_x86(COFF_Reloc_X86 x)
     case COFF_Reloc_X86_Token:    return 4;
     case COFF_Reloc_X86_SecRel7:  return 1;
     case COFF_Reloc_X86_Rel32:    return 4;
-
+    
     case COFF_Reloc_X86_Unknown0:
     case COFF_Reloc_X86_Unknown2:
     case COFF_Reloc_X86_Unknown3:
@@ -162,7 +162,7 @@ coff_apply_size_from_reloc_x86(COFF_Reloc_X86 x)
     case COFF_Reloc_X86_Unknown7:
     case COFF_Reloc_X86_Unknown8:
     case COFF_Reloc_X86_Unknown9:
-      NotImplemented;
+    NotImplemented;
     break;
   }
   return 0;
@@ -217,7 +217,7 @@ coff_make_import_header_by_name(Arena            *arena,
   COFF_ImportHeaderFlags flags = 0;
   flags |= (type & COFF_ImportHeader_TypeMask) << COFF_ImportHeader_TypeShift;
   flags |= COFF_ImportBy_Name << COFF_ImportHeader_ImportByShift;
-
+  
   COFF_ImportHeader header = {0};
   header.sig1              = COFF_MachineType_Unknown;
   header.sig2              = max_U16;
@@ -260,7 +260,7 @@ coff_make_import_header_by_ordinal(Arena             *arena,
   COFF_ImportHeaderFlags flags = 0;
   flags |= (type & COFF_ImportHeader_TypeMask) << COFF_ImportHeader_TypeShift;
   flags |= COFF_ImportBy_Ordinal << COFF_ImportHeader_ImportByShift;
-
+  
   COFF_ImportHeader header = {0};
   header.sig1              = COFF_MachineType_Unknown;
   header.sig2              = max_U16;
@@ -296,8 +296,8 @@ coff_word_size_from_machine(COFF_MachineType machine)
 {
   U64 result = 0;
   switch (machine) {
-  case COFF_MachineType_X64: result = 8; break;
-  case COFF_MachineType_X86: result = 4; break;
+    case COFF_MachineType_X64: result = 8; break;
+    case COFF_MachineType_X86: result = 4; break;
   }
   return result;
 }
@@ -307,8 +307,8 @@ coff_default_exe_base_from_machine(COFF_MachineType machine)
 {
   U64 exe_base = 0;
   switch (coff_word_size_from_machine(machine)) {
-  case 4: exe_base = 0x400000;    break;
-  case 8: exe_base = 0x140000000; break;
+    case 4: exe_base = 0x400000;    break;
+    case 8: exe_base = 0x140000000; break;
   }
   return exe_base;
 }
@@ -318,8 +318,8 @@ coff_default_dll_base_from_machine(COFF_MachineType machine)
 {
   U64 dll_base = 0;
   switch (coff_word_size_from_machine(machine)) {
-  case 4: dll_base = 0x10000000;  break;
-  case 8: dll_base = 0x180000000; break;
+    case 4: dll_base = 0x10000000;  break;
+    case 8: dll_base = 0x180000000; break;
   }
   return dll_base;
 }

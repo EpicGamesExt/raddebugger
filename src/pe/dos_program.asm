@@ -1,4 +1,4 @@
-; Copyright (c) 2024 Epic Games Tools
+; Copyright (c) Epic Games Tools
 ; Licensed under the MIT license (https://opensource.org/license/mit/)
 ; $ c:\devel\projects\bin\win32\nasm src\pe\dos_program.asm -fbin -o dos_program.bin
 

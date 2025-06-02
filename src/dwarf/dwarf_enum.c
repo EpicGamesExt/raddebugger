@@ -1,18 +1,18 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
 dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
 {
   String8 result = {0};
-
-  #define X(_N,...) case DW_ExprOp_##_N: result = str8_lit(Stringify(_N)); goto exit;
+  
+#define X(_N,...) case DW_ExprOp_##_N: result = str8_lit(Stringify(_N)); goto exit;
   if (ext & DW_Ext_GNU) {
     switch (op) {
       DW_Expr_GNU_XList(X); 
     }
   }
-
+  
   switch (ver) {
     case DW_Version_5: {
       switch (op) {
@@ -32,13 +32,13 @@ dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
     case DW_Version_2:
     case DW_Version_1:
     case DW_Version_Null:
-      break;
+    break;
   }
-  #undef X
-
+#undef X
+  
   result = push_str8f(arena, "%x", op);
-
-exit:;
+  
+  exit:;
   return result;
 }
 
@@ -46,12 +46,12 @@ internal String8
 dw_string_from_tag_kind(Arena *arena, DW_TagKind kind)
 {
   switch (kind) {
-  case DW_Tag_Null: return str8_lit("Null");
-    #define X(_N,_ID) case DW_Tag_##_N: return str8_lit(Stringify(_N));
+    case DW_Tag_Null: return str8_lit("Null");
+#define X(_N,_ID) case DW_Tag_##_N: return str8_lit(Stringify(_N));
     DW_Tag_V3_XList(X)
-    DW_Tag_V5_XList(X)
-    DW_Tag_GNU_XList(X)
-    #undef X
+      DW_Tag_V5_XList(X)
+      DW_Tag_GNU_XList(X)
+#undef X
   }
   return push_str8f(arena, "%llx", kind);
 }
@@ -59,8 +59,8 @@ dw_string_from_tag_kind(Arena *arena, DW_TagKind kind)
 internal String8
 dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKind kind)
 {
-  #define X(_N,...) case DW_Attrib_##_N: return str8_lit(Stringify(_N));
-
+#define X(_N,...) case DW_Attrib_##_N: return str8_lit(Stringify(_N));
+  
   while (ext) {
     U64 z = 64-clz64(ext);
     if (z == 0) {
@@ -68,7 +68,7 @@ dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKi
     }
     U64 flag = 1 << (z-1);
     ext &= ~flag;
-
+    
     switch (flag) {
       case DW_Ext_Null: break;
       case DW_Ext_GNU:   switch (kind) { DW_AttribKind_GNU_XList(X)   } break;
@@ -78,7 +78,7 @@ dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKi
       default: InvalidPath; break;
     }
   }
-
+  
   switch (ver) {
     case DW_Version_5: {
       switch (kind) {
@@ -104,15 +104,15 @@ dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKi
     } // fall-through
     case DW_Version_Null: break;
   }
-  #undef X
-
+#undef X
+  
   return str8_zero();
 }
 
 internal String8
 dw_string_from_form_kind(Arena *arena, DW_Version ver, DW_FormKind kind)
 {
-  #define X(_N,...) case DW_Form_##_N: return str8_lit(Stringify(_N));
+#define X(_N,...) case DW_Form_##_N: return str8_lit(Stringify(_N));
   switch (ver) {
     case DW_Version_5: {
       switch (kind) {
@@ -132,7 +132,7 @@ dw_string_from_form_kind(Arena *arena, DW_Version ver, DW_FormKind kind)
     } // fall-through
     case DW_Version_Null: break;
   }
-  #undef X
+#undef X
   String8 result = push_str8f(arena, "%x", kind);
   return result;
 }
@@ -141,9 +141,9 @@ internal String8
 dw_string_from_language(Arena *arena, DW_Language kind)
 {
   switch (kind) {
-    #define X(_N,_ID) case DW_Language_##_N: return str8_lit(Stringify(_N));
+#define X(_N,_ID) case DW_Language_##_N: return str8_lit(Stringify(_N));
     DW_Language_XList(X)
-    #undef X
+#undef X
   }
   return push_str8f(arena, "%x", kind);
 }
@@ -196,9 +196,9 @@ internal String8
 dw_string_from_std_opcode(Arena *arena, DW_StdOpcode kind)
 {
   switch (kind) {
-    #define X(_N,_ID) case DW_StdOpcode_##_N: return str8_lit(Stringify(_N));
+#define X(_N,_ID) case DW_StdOpcode_##_N: return str8_lit(Stringify(_N));
     DW_StdOpcode_XList(X)
-    #undef X
+#undef X
   }
   return push_str8f(arena, "%x", kind);
 }
@@ -207,9 +207,9 @@ internal String8
 dw_string_from_ext_opcode(Arena *arena, DW_ExtOpcode kind)
 {
   switch (kind) {
-    #define X(_N,_ID) case DW_ExtOpcode_##_N: return str8_lit(Stringify(_N));
+#define X(_N,_ID) case DW_ExtOpcode_##_N: return str8_lit(Stringify(_N));
     DW_ExtOpcode_XList(X)
-    #undef X
+#undef X
     default: InvalidPath; break;
   }
   return push_str8f(arena, "%x", kind);
@@ -244,16 +244,16 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
     case Arch_Null: break;
     case Arch_x86: {
       switch (reg_id) {
-        #define X(_N, _ID, ...) case DW_RegX86_##_N: reg_str = str8_lit(Stringify(_N)); break;
+#define X(_N, _ID, ...) case DW_RegX86_##_N: reg_str = str8_lit(Stringify(_N)); break;
         DW_Regs_X86_XList(X)
-        #undef X
+#undef X
       }
     } break;
     case Arch_x64: {
       switch (reg_id) {
-        #define X(_N, _ID, ...) case DW_RegX64_##_N: reg_str = str8_lit(Stringify(_N)); break;
+#define X(_N, _ID, ...) case DW_RegX64_##_N: reg_str = str8_lit(Stringify(_N)); break;
         DW_Regs_X64_XList(X)
-        #undef X
+#undef X
       }
     } break;
     case Arch_arm32: NotImplemented; break;

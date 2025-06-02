@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 // TODO(rjf): eliminate redundant null checks, just always allocate
@@ -400,12 +400,12 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
             }
             
             // rjf: build line table, fill with parsed binary annotations
-
+            
             if(inlinee_lines_parsed != 0)
             {
               // rjf: grab checksums sub-section
               CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
-
+              
               // rjf: gathered lines
               typedef struct LineChunk LineChunk;
               struct LineChunk
@@ -423,12 +423,12 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
               U32              last_file_off               = max_U32;
               U32              curr_file_off               = max_U32;
               RDIM_LineTable*  line_table                  = 0;
-
+              
               CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_lines_parsed->file_off, inlinee_lines_parsed->first_source_ln, base_voff);
               for(;;)
               {
                 CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
-
+                
                 if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile)
                 {
                   last_file_off = curr_file_off;
@@ -442,7 +442,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                 if((last_file_off != max_U32 && last_file_off != curr_file_off))
                 {
                   String8 seq_file_name = {0};
-
+                  
                   if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                   {
                     CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
@@ -514,7 +514,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   first_line_chunk            = last_line_chunk = 0;
                   total_line_chunk_line_count = 0;
                 }
-
+                
                 if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine)
                 {
                   LineChunk *chunk = last_line_chunk;
@@ -532,7 +532,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   chunk->count                  += 1;
                   total_line_chunk_line_count   += 1;
                 }
-
+                
                 if(step.flags == 0)
                 {
                   break;
@@ -1479,7 +1479,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             {
               container_symbol = top_scope_node->scope->symbol;
             }
-
+            
             // form a VOFF location
 #if 0
             RDIM_LocationSet locset = {0};
@@ -1716,7 +1716,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           RDIM_Location *tls_off_loc = rdim_push_location_tls_off(arena, tls_off);
           rdim_location_set_push_case(arena, &locset, (RDIM_Rng1U64){0,max_U64}, tls_off_loc);
 #endif
-
+          
           // rjf: build symbol
           RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, &sym_thread_variables, sym_thread_variables_chunk_cap);
           tvar->name             = name;
@@ -2063,14 +2063,14 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             for(;;)
             {
               CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
-
+              
               if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange)
               {
                 // rjf: build new range & add to scope
                 RDIM_Rng1U64 voff_range = { step.range.min, step.range.max };
                 rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
               }
-
+              
               if(step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange)
               {
                 if(scope->voff_ranges.last != 0) 
@@ -2078,7 +2078,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
                   scope->voff_ranges.last->v.max = step.range.max;
                 }
               }
-
+              
               if(step.flags == 0)
               {
                 break;
@@ -2128,7 +2128,7 @@ internal RDIM_BakeParams *
 p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
-
+  
   g_p2r_local_state = local_state;
   
   //////////////////////////////////////////////////////////////
@@ -2153,7 +2153,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
     named_streams = pdb_named_stream_table_from_info(arena, info);
     MemoryCopyStruct(&auth_guid, &info->auth_guid);
     scratch_end(scratch);
-
+    
     if (info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO) {
       fprintf(stderr, "ERROR: PDB was linked with /DEBUG:FASTLINK (partial debug info is not supported). Please relink using /DEBUG:FULL.");
       os_abort(1);
@@ -2372,7 +2372,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   //- rjf: produce top-level-info
   //
   RDIM_TopLevelInfo top_level_info = rdim_make_top_level_info(in->image_name, arch_from_coff_machine(dbi->machine_type), exe_hash, binary_sections);
-
+  
   //////////////////////////////////////////////////////////////
   //- rjf: kick off unit conversion & source file collection
   //
@@ -2450,7 +2450,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   if(in->flags & RC_Flag_Types) ProfScope("types pass 1: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, tpi_leaf->itype_opl);
-
+    
     //////////////////////////
     //- build basic types
     //
@@ -2463,7 +2463,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
       RDI_TypeKind   ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
       RDI_TypeKind   ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
       RDI_TypeKind   ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
-
+      
       struct
       {
         char *       name;
@@ -2518,7 +2518,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
         { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     , 1, 1, 1 }, // always UTF-32
         { "__pointer"            , ptr_type                , CV_BasicType_PTR        , 0, 0, 0 }
       };
-
+      
       for(U64 i = 0; i < ArrayCount(table); i += 1)
       {
         RDIM_Type *type   = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
@@ -2526,7 +2526,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
         type->name        = str8_cstring(table[i].name);
         type->direct_type = rdim_builtin_type_from_kind(all_types, table[i].kind_rdi);
         itype_type_ptrs[table[i].kind_cv] = type;
-
+        
         if(table[i].make_pointer_near)
         {
           CV_TypeIndex near_ptr_itype = table[i].kind_cv | 0x100;
@@ -2556,7 +2556,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
         }
       }
     }
-
+    
     //////////////////////////
     //- rjf: build complex type
     //
@@ -2566,7 +2566,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
       CV_RecRange *range              = &tpi_leaf->leaf_ranges.ranges[itype-tpi_leaf->itype_first];
       CV_LeafKind  kind               = range->hdr.kind;
       U64          header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-
+      
       if(range->off+range->hdr.size <= tpi_leaf->data.size &&
          range->off+2+header_struct_size <= tpi_leaf->data.size &&
          range->hdr.size >= 2)
@@ -2823,7 +2823,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
             {
               dst_type->kind = (kind == CV_LeafKind_CLASS ? RDI_TypeKind_Class : RDI_TypeKind_Struct);
             }
-
+            
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -2831,7 +2831,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
               U8 *unique_name_ptr = name_ptr + name.size + 1;
               dst_type->link_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
             }
-
+            
             dst_type->name      = name;
             dst_type->byte_size = safe_cast_u32(size_u64);
           }break;
@@ -2863,7 +2863,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
               dst_type->byte_size = (U32)size_u64;
               dst_type->name      = name;
             }
-
+            
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -2899,7 +2899,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
               dst_type->byte_size = (U32)size_u64;
               dst_type->name      = name;
             }
-
+            
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)
@@ -2934,7 +2934,7 @@ p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
               dst_type->byte_size   = direct_type ? direct_type->byte_size : 0;
               dst_type->name        = name;
             }
-
+            
             B32 do_unique_name_lookup = (((lf->props & CV_TypeProp_Scoped) != 0) &&
                                          ((lf->props & CV_TypeProp_HasUniqueName) != 0));
             if(do_unique_name_lookup)

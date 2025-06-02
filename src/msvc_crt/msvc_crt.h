@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #ifndef MSVC_CRT
@@ -56,7 +56,7 @@ enum
   MSCRT_Magic1     = 0x19930520,
   MSCRT_Magic2     = 0x19930521,
   MSCRT_Magic3     = 0x19930522,
-
+  
   // pure magic indicates that exception cannot be caught in native or managed code.
   MSCRT_PureMagic1 = 0x1994000,
 };
@@ -224,7 +224,7 @@ enum
   MSCRT_EhHandlerV4Flag_DispType     = (1 << 1), // set if type descriptors are present
   MSCRT_EhHandlerV4Flag_DispCatchObj = (1 << 2), // set if catch object object is present
   MSCRT_EhHandlerV4Flag_ContIsVOff   = (1 << 3), // continuantion addresses are VOFF rather than function relative
-
+  
   MSCRT_EhHandlerV4Flag_ContVOffMask  = 0x30,
   MSCRT_EhHandlerV4Flag_ContVOffShift = 4,
 };

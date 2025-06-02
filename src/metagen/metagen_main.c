@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
@@ -536,7 +536,7 @@ entry_point(CmdLine *cmdline)
           }
           {
             FILE *h = fopen((char *)h_path.str, "w");
-            fprintf(h, "// Copyright (c) 2024 Epic Games Tools\n");
+            fprintf(h, "// Copyright (c) Epic Games Tools\n");
             fprintf(h, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             if(layer->h_header.first == 0)
             {
@@ -592,7 +592,7 @@ entry_point(CmdLine *cmdline)
           }
           {
             FILE *c = fopen((char *)c_path.str, "w");
-            fprintf(c, "// Copyright (c) 2024 Epic Games Tools\n");
+            fprintf(c, "// Copyright (c) Epic Games Tools\n");
             fprintf(c, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             if(layer->c_header.first == 0)
             {

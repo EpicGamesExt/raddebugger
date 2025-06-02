@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #ifndef RADCON_H
@@ -63,4 +63,4 @@ internal String8     rc_rdi_from_cmd_line(Arena *arena, CmdLine *cmdl);
 internal void        rc_main(CmdLine *cmdl);
 
 #endif // RADCON_H
- 
+

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Epic Games Tools
+// Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal U64 dw_based_range_read(void *base, Rng1U64 range, U64 off, U64 size, void *out) { return 0; }
@@ -25,9 +25,9 @@ dw_unwind_x64(String8           raw_text,
 {
   // TODO: What if ELF has two sections with instructions and pointer is ecnoded relative to .text2?
   Temp scratch = scratch_begin(0, 0);
-
+  
   DW_UnwindResult result = {0};
-
+  
   dw_unwind_init_x64();
   
   // rebase
@@ -46,7 +46,7 @@ dw_unwind_x64(String8           raw_text,
   //- get frame info range
   void    *frame_base  = raw_eh_frame.str;
   Rng1U64  frame_range = rng_1u64(0, raw_eh_frame.size);
-
+  
   //- section vaddrs
   U64 text_base_vaddr = text_vrange.min + rebase_voff_to_vaddr;
   U64 frame_base_voff = text_vrange.min;
@@ -113,7 +113,7 @@ dw_unwind_x64(String8           raw_text,
       result.is_invalid = 1;
     }
   }
-
+  
   // apply main row to modify the registers
   if (main_row != 0) {
     result = dw_unwind_x64__apply_frame_rules(raw_eh_frame, main_row, text_base_vaddr, read_memory, read_memory_ud, stack_pointer, regs);
@@ -133,7 +133,7 @@ dw_unwind_x64__apply_frame_rules(String8           raw_eh_frame,
                                  DW_RegsX64       *regs)
 {
   DW_UnwindResult result = {0};
-
+  
   U64 missed_read_addr = 0;
   
   //- setup a dwarf expression machine
@@ -375,7 +375,7 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
     case DW_EhPtrEnc_SLEB128:
     {
       U64 size = dw_based_range_read_sleb128(frame_base, frame_range, pointer_off,
-                                                    (S64*)&raw_pointer);
+                                             (S64*)&raw_pointer);
       after_pointer_off = pointer_off + size;
     } break;
   }
@@ -588,7 +588,7 @@ internal DW_CFIRecords
 dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_ctx, U64 ip_voff)
 {
   Temp scratch = scratch_begin(0, 0);
-
+  
   DW_CFIRecords result = {0};
   
   DW_CIEUnpackedNode *cie_first = 0;
@@ -622,7 +622,7 @@ dw_unwind_eh_frame_cfi_from_ip_slow_x64(String8 raw_eh_frame, DW_EhPtrCtx *ptr_c
     Rng1U64 rec_range = rng_1u64(rec_off, rec_opl);
     String8 raw_rec   = str8_substr(raw_eh_frame, rec_range);
     
-
+    
     // discriminator
     U64 discrim_off = after_rec_size_off;
     U32 discrim     = 0;
@@ -839,7 +839,7 @@ internal B32
 dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machine, U64 target_ip, DW_CFIRow *row)
 {
   Temp scratch = scratch_begin(0, 0);
-
+  
   B32 result = 0;
   
   // pull out machine's equipment
