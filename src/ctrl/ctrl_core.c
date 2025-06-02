@@ -1775,7 +1775,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
     {
       break;
     }
-    else if(!id_working && requested)
+    else if(!id_working)
     {
       break;
     }

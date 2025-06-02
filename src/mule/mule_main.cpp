@@ -2659,6 +2659,56 @@ recursion_stepping_tests(void){
 }
 
 ////////////////////////////////
+// NOTE(rjf): Thread Stepping
+
+#if _WIN32
+DWORD thread_step_thread(void *p)
+{
+  int x = 0;
+  for(int i = 0; i < 100000; i += 1)
+  {
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+    x += 1;
+  }
+  return 0;
+}
+#endif
+
+void thread_stepping_tests(void)
+{
+#if _WIN32
+  HANDLE h[64] = {0};
+  for(int i = 0; i < sizeof(h)/sizeof(h[0]); i += 1)
+  {
+    DWORD id = 0;
+    h[i] = CreateThread(0, 0, thread_step_thread, 0, CREATE_SUSPENDED, &id);
+    raddbg_thread_id_name(id, "thread_step_thread_%i", i);
+    raddbg_thread_id_color_u32(id, 0xff9f23ff);
+  }
+  for(int i = 0; i < sizeof(h)/sizeof(h[0]); i += 1)
+  {
+    ResumeThread(h[i]);
+  }
+  for(int i = 0; i < sizeof(h)/sizeof(h[0]); i += 1)
+  {
+    WaitForSingleObject(h[i], INFINITE);
+  }
+#endif
+}
+
+////////////////////////////////
 // NOTE(rjf): Debug Strings
 
 static void
@@ -3072,6 +3122,8 @@ mule_main(int argc, char** argv)
   long_jump_stepping_tests();
   
   recursion_stepping_tests();
+  
+  thread_stepping_tests();
   
   debug_string_tests();
   
