@@ -32,3 +32,8 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           call build ${{ matrix.target }} ${{ matrix.compiler }} ${{ matrix.mode }} || exit /b 1
+      - name: run_torture
+        shell: cmd
+        if: ${{ matrix.target == 'torture' }}
+        run: torture -l:radlink || exit /b 1
+
