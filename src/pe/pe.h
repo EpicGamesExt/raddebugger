@@ -1106,4 +1106,8 @@ internal String8 pe_make_debug_header_rdi(Arena *arena, Guid guid, String8 rdi_p
 
 internal U32 pe_compute_checksum(U8 *buffer, U64 buffer_size);
 
+////////////////////////////////
+
+internal void pe_pdata_sort(COFF_MachineType machine, String8 raw_pdata);
+
 #endif // PE_H

@@ -1790,3 +1790,28 @@ pe_has_plus_header(COFF_MachineType machine)
   }
   return has_plus_header;
 }
+
+////////////////////////////////
+
+internal int
+pe_pdata_is_before_x86_64(void *raw_a, void *raw_b)
+{
+  PE_IntelPdata *a = raw_a, *b = raw_b;
+  return a->voff_first < b->voff_first;
+}
+
+internal void
+pe_pdata_sort(COFF_MachineType machine, String8 raw_pdata)
+{
+  ProfBeginFunction();
+  switch (machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X86:
+  case COFF_MachineType_X64: {
+    U64 count = raw_pdata.size / sizeof(PE_IntelPdata);
+    radsort((PE_IntelPdata *)raw_pdata.str, count, pe_pdata_is_before_x86_64);
+  } break;
+  default: { NotImplemented; } break;
+  }
+  ProfEnd();
+}

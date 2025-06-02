@@ -2138,15 +2138,6 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   return result;
 }
 
-internal int
-lnk_pdata_is_before_x8664(void *raw_a, void *raw_b)
-{
-  PE_IntelPdata *a = raw_a;
-  PE_IntelPdata *b = raw_b;
-  int is_before = a->voff_first < b->voff_first;
-  return is_before;
-}
-
 internal String8
 lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
@@ -3068,21 +3059,8 @@ lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_S
     {
       LNK_Section *pdata_sect = lnk_section_table_search(sectab, str8_lit(".pdata"), PE_PDATA_SECTION_FLAGS);
       if (pdata_sect) {
-        String8 pdata = str8_substr(image_data, rng_1u64(pdata_sect->foff, pdata_sect->foff + pdata_sect->vsize));
-
-        ProfBegin("Sort Exception Info");
-        if (pdata_sect) {
-          switch (config->machine) {
-          case COFF_MachineType_Unknown: break;
-          case COFF_MachineType_X86:
-          case COFF_MachineType_X64: {
-            U64 count = pdata.size / sizeof(PE_IntelPdata);
-            radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
-          } break;
-          default: { NotImplemented; } break;
-          }
-        }
-        ProfEnd();
+        String8 raw_pdata = str8_substr(image_data, rng_1u64(pdata_sect->foff, pdata_sect->foff + pdata_sect->vsize));
+        pe_pdata_sort(config->machine, raw_pdata);
 
         PE_DataDirectory *pdata_dir = pe_data_directory_from_idx(image_data, pe, PE_DataDirectoryIndex_EXCEPTIONS);
         pdata_dir->virt_off  = lnk_get_first_section_contrib_voff(image_section_table, pdata_sect);
