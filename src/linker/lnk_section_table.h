@@ -64,7 +64,6 @@ typedef struct LNK_Section
   U64                         id;
   String8                     name;
   COFF_SectionFlags           flags;
-  B32                         has_layout;
   B32                         is_merged;
   U64                         merge_id;
   LNK_SectionContribChunkList contribs;
