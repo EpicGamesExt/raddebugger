@@ -1003,6 +1003,7 @@ struct PE_BinInfo
   U64                  file_section_align;
   U64                  section_count;
   U64                  symbol_count;
+  U64                  optional_header_off;
   Rng1U64              section_table_range;
   Rng1U64              symbol_table_range;
   Rng1U64              string_table_range;

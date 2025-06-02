@@ -637,6 +637,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.file_section_align  = file_section_align;
     info.section_count       = clamped_sec_count;
     info.symbol_count        = symbol_count;
+    info.optional_header_off = optional_range.min;
     info.section_table_range = rng_1u64(sec_array_off, sec_array_off + sizeof(COFF_SectionHeader) * clamped_sec_count);
     info.symbol_table_range  = rng_1u64(symbol_array_off, symbol_array_off + sizeof(COFF_Symbol16) * symbol_count);
     info.string_table_range  = rng_1u64(string_table_off, data.size);

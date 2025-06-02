@@ -2005,11 +2005,11 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
     if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
       sizeof_uninited_data += sect->vsize;
     }
-    if (sect->flags & COFF_SectionFlag_CntInitializedData) {
-      sizeof_inited_data += sect->vsize;
+    if ((sect->flags & COFF_SectionFlag_CntInitializedData) || (sect->flags & COFF_SectionFlag_CntCode)) {
+      sizeof_inited_data += sect->fsize;
     }
     if (sect->flags & COFF_SectionFlag_CntCode) { 
-      sizeof_code += sect->vsize;
+      sizeof_code += sect->fsize;
     }
     sizeof_image = Max(sizeof_image, sects.v[sect_idx]->voff + sects.v[sect_idx]->vsize);
   }
