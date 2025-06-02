@@ -346,7 +346,7 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 #else
 # error Missing pointer-to-integer cast for this architecture.
 #endif
-#define PtrFromInt(i) (void*)((U8*)0 + (i))
+#define PtrFromInt(i) (void*)(i)
 
 #define Compose64Bit(a,b)  ((((U64)a) << 32) | ((U64)b));
 #define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))

@@ -114,7 +114,7 @@ hs_root_alloc(void)
 {
   HS_Root root = {0};
   root.u64[0] = ins_atomic_u64_inc_eval(&hs_shared->root_id_gen);
-  U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
+  U64 slot_idx = root.u64[0]%hs_shared->root_slots_count;
   U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
   HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->root_stripes[stripe_idx];
@@ -140,7 +140,7 @@ internal void
 hs_root_release(HS_Root root)
 {
   //- rjf: unpack root
-  U64 slot_idx = root.u64[1]%hs_shared->root_slots_count;
+  U64 slot_idx = root.u64[0]%hs_shared->root_slots_count;
   U64 stripe_idx = slot_idx%hs_shared->root_stripes_count;
   HS_RootSlot *slot = &hs_shared->root_slots[slot_idx];
   HS_Stripe *stripe = &hs_shared->root_stripes[stripe_idx];
