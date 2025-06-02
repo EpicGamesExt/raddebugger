@@ -2000,13 +2000,14 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
       sizeof_uninited_data += sect->vsize;
     }
     if (sect->flags & COFF_SectionFlag_CntInitializedData) {
-      sizeof_inited_data += sect->fsize;
+      sizeof_inited_data += sect->vsize;
     }
     if (sect->flags & COFF_SectionFlag_CntCode) { 
-      sizeof_code += sect->fsize;
+      sizeof_code += sect->vsize;
     }
-    sizeof_image = AlignPow2(Max(sizeof_image, sects.v[sect_idx]->voff + sects.v[sect_idx]->vsize), 4096);
+    sizeof_image = Max(sizeof_image, sects.v[sect_idx]->voff + sects.v[sect_idx]->vsize);
   }
+  sizeof_image = AlignPow2(sizeof_image, 4096);
 
   //
   // compute image headers size
@@ -2016,6 +2017,7 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
   sizeof_image_headers += sizeof(COFF_FileHeader);
   sizeof_image_headers += has_pe_plus_header ? sizeof(PE_OptionalHeader32Plus) : sizeof(PE_OptionalHeader32);
   sizeof_image_headers += sizeof(PE_DataDirectory) * config->data_dir_count;
+  sizeof_image_headers += sizeof(COFF_SectionHeader) * sects.count;
   sizeof_image_headers = AlignPow2(sizeof_image_headers, config->file_align);
 
   //
