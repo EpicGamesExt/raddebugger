@@ -6745,7 +6745,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
         {
           if(hs_id_match(range_n->id, key.id))
           {
-            if(!u128_match(u128_zero(), hash))
+            if(pre_read_mem_gen == post_read_mem_gen)
             {
               range_n->mem_gen = post_read_mem_gen;
             }
