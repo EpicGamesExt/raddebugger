@@ -64,11 +64,13 @@ t_string_from_result(T_Result v)
   return 0;
 }
 
+global String8 g_stdout_file_name = str8_lit_comp("torture");
 global U64     g_linker_time_out;
 global String8 g_linker;
 global String8 g_wdir;
 global String8 g_out = str8_lit_comp("torture_out");
 global B32     g_verbose;
+global B32     g_redirect_stdout;
 
 #define T_LINKER_TIME_OUT_EXIT_CODE 999999
 
@@ -103,12 +105,19 @@ t_invoke_linker_with_time_out(U64 time_out, String8 cmdline)
 {
   Temp scratch = scratch_begin(0,0);
 
+  OS_Handle output_redirect = {0};
+  if (g_redirect_stdout) {
+    output_redirect = os_file_open(OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, g_stdout_file_name);
+  }
+
   //
   // Build Launch Options
   //
   OS_ProcessLaunchParams launch_opts = {0};
   launch_opts.path                   = g_wdir;
   launch_opts.inherit_env            = 1;
+  launch_opts.stdout_file            = output_redirect;
+  launch_opts.stderr_file            = output_redirect;
   str8_list_push(scratch.arena, &launch_opts.cmd_line, g_linker);
   str8_list_push(scratch.arena, &launch_opts.cmd_line, str8_lit("/nologo"));
   {
@@ -3268,7 +3277,7 @@ entry_point(CmdLine *cmdline)
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
                      cmd_line_has_flag(cmdline, str8_lit("h")) ||
                      cmdline->argc == 1;
-    if (print_help) {
+     if (print_help) {
       fprintf(stderr, "--- Help -----------------------------------------------------------------------\n");
       fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
       fprintf(stderr, " Usage: torture [Options] [Files]\n\n");
@@ -3278,6 +3287,7 @@ entry_point(CmdLine *cmdline)
       fprintf(stderr, "   -list                 Print available test targets and exit\n");
       fprintf(stderr, "   -out:{path}           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
       fprintf(stderr, "   -verbose              Enable verbose mode\n");
+      fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run");
       fprintf(stderr, "   -help                 Print help menu and exit\n");
       os_abort(0);
     }
@@ -3358,6 +3368,13 @@ entry_point(CmdLine *cmdline)
   }
 
   //
+  // Handle -print_stdout
+  //
+  {
+    g_redirect_stdout = !cmd_line_has_flag(cmdline, str8_lit("print_stdout"));
+  }
+
+  //
   // Make Output Directory
   //
   os_make_directory(g_out);
@@ -3365,6 +3382,11 @@ entry_point(CmdLine *cmdline)
     fprintf(stderr, "ERROR: unable to create output directory \"%.*s\"\n", str8_varg(g_out));
     os_abort(1);
   }
+
+  //
+  // Clean up output from previous run
+  //
+  os_delete_file_at_path(g_stdout_file_name);
 
   //
   // Run Test Targets
@@ -3438,6 +3460,10 @@ entry_point(CmdLine *cmdline)
     fprintf(stdout, "  Passed:  %llu\n", pass_count);
     fprintf(stdout, "  Failed:  %llu\n", fail_count);
     fprintf(stdout, "  Crashed: %llu\n", crash_count);
+
+    if (fail_count + crash_count != 0) {
+      os_abort(fail_count + crash_count);
+    }
   }
 
   scratch_end(scratch);
