@@ -3,6 +3,23 @@
 
 #pragma once
 
+// --- Link --------------------------------------------------------------------
+
+typedef struct LNK_LinkContext
+{
+  LNK_SymbolTable   *symtab;
+  U64                objs_count;
+  LNK_Obj          **objs;
+  PE_ExportParseList export_symbol_list;
+  LNK_LibList        lib_index[LNK_InputSource_Count];
+} LNK_LinkContext;
+
+typedef struct LNK_ImageContext
+{
+  String8           image_data;
+  LNK_SectionTable *sectab;
+} LNK_ImageContext;
+
 // --- Base Reloc --------------------------------------------------------------
 
 typedef struct LNK_BaseRelocPage
@@ -141,10 +158,11 @@ internal void             lnk_queue_lib_member_input(Arena *arena, PathStyle pat
 
 // --- Win32 Image -------------------------------------------------------------
 
-internal String8List lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
-internal String8List lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
-internal String8List lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sect_arr, U64 expected_image_header_size);
-internal String8     lnk_build_win32_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **objs);
+internal LNK_LinkContext  lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);
+internal String8List      lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *sectab, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
+internal String8List      lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_temp, LNK_Config *config, U64 objs_count, LNK_Obj **objs);
+internal String8List      lnk_build_win32_image_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config, LNK_SectionArray sect_arr, U64 expected_image_header_size);
+internal LNK_ImageContext lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **objs);
 
 // --- Logger ------------------------------------------------------------------
 
