@@ -43,6 +43,7 @@ struct OS_LNX_GfxState
   Atom wm_delete_window_atom;
   Atom wm_sync_request_atom;
   Atom wm_sync_request_counter_atom;
+  Atom wm_motif_hints_atom;
   Cursor cursors[OS_Cursor_COUNT];
   OS_Cursor last_set_cursor;
   OS_GfxInfo gfx_info;

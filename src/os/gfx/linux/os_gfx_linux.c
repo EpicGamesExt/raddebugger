@@ -35,7 +35,8 @@ os_gfx_init(void)
   os_lnx_gfx_state->wm_delete_window_atom        = XInternAtom(os_lnx_gfx_state->display, "WM_DELETE_WINDOW", 0);
   os_lnx_gfx_state->wm_sync_request_atom         = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST", 0);
   os_lnx_gfx_state->wm_sync_request_counter_atom = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
-  
+  os_lnx_gfx_state->wm_motif_hints_atom          = XInternAtom(os_lnx_gfx_state->display, "_MOTIF_WM_HINTS", 0);
+
   //- rjf: open im
   os_lnx_gfx_state->xim = XOpenIM(os_lnx_gfx_state->display, 0, 0, 0);
   
@@ -95,12 +96,27 @@ os_get_clipboard_text(Arena *arena)
   return result;
 }
 
+
+////////////////////////////////
+// Motif hints structure and constants for managing decorations 
+typedef struct {
+    unsigned long flags;
+    unsigned long functions;
+    unsigned long decorations;
+    long inputMode;
+    unsigned long status;
+} MotifWmHints;
+
+#define MWM_HINTS_DECORATIONS   (1L << 1)
+
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
 os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
 {
+  B32 custom_border = !!(flags & OS_WindowFlag_CustomBorder);
+
   Vec2F32 resolution = dim_2f32(rect);
   
   //- rjf: allocate window
@@ -146,6 +162,13 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
     w->counter_xid = XSyncCreateCounter(os_lnx_gfx_state->display, initial_value);
   }
   XChangeProperty(os_lnx_gfx_state->display, w->window, os_lnx_gfx_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (U8 *)&w->counter_xid, 1);
+  
+  if (custom_border) {
+    MotifWmHints hints;
+    hints.flags = MWM_HINTS_DECORATIONS;
+    hints.decorations = 0; // 0 means no decorations
+    XChangeProperty(os_lnx_gfx_state->display, w->window, os_lnx_gfx_state->wm_motif_hints_atom, os_lnx_gfx_state->wm_motif_hints_atom, 32, PropModeReplace, (U8 *)&hints, 5);
+  }
   
   //- rjf: create xic
   w->xic = XCreateIC(os_lnx_gfx_state->xim,
