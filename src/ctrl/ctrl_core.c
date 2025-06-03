@@ -1654,11 +1654,11 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
   B32 key_is_stale = 0;
   for(;;)
   {
-    //- rjf: step 1: [read-only] try to look for current results for key's ID
+    //- rjf: step 1: [read-only] try to look for current results for key's ID; wait if working & retry
     B32 id_exists = 0;
     B32 id_stale = 0;
     B32 id_working = 0;
-    OS_MutexScopeR(process_stripe->rw_mutex)
+    OS_MutexScopeR(process_stripe->rw_mutex) for(;;)
     {
       for(CTRL_ProcessMemoryCacheNode *process_n = process_slot->first; process_n != 0; process_n = process_n->next)
       {
@@ -1679,6 +1679,14 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
         }
       }
       end_fast_lookup:;
+      if(os_now_microseconds() >= endt_us || !id_working)
+      {
+        break;
+      }
+      else
+      {
+        os_condition_variable_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
+      }
     }
     key_is_stale = id_stale;
     
@@ -1694,6 +1702,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
     // need to build a node for it. if that, or if the ID is stale, then also
     // request that that range is streamed & wait for its result (for as long
     // as we have.)
+    B32 requested = 0;
     if(!id_exists || (id_exists && id_stale && !id_working))
     {
       B32 node_needs_stream = 0;
@@ -1737,15 +1746,14 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
           }
         }
       }
-      if(node_needs_stream) OS_MutexScopeR(process_stripe->rw_mutex)
+      if(node_needs_stream)
       {
         if(ctrl_u2ms_enqueue_req(key, process, vaddr_range, zero_terminated, endt_us))
         {
           async_push_work(ctrl_mem_stream_work, .working_counter = node_working_count);
-          os_condition_variable_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
-          id_working = 1;
+          requested = 1;
         }
-        else
+        else OS_MutexScopeR(process_stripe->rw_mutex)
         {
           for(CTRL_ProcessMemoryCacheNode *process_n = process_slot->first; process_n != 0; process_n = process_n->next)
           {
@@ -1768,8 +1776,8 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       }
     }
     
-    //- rjf: step 4: if we have no time to wait, or no results & no progress, then abort
-    if(os_now_microseconds() >= endt_us || !id_working)
+    //- rjf: step 4: if we didn't request, and if we aren't working, then exit
+    if(!requested && !id_working)
     {
       break;
     }
