@@ -4,7 +4,6 @@
 ////////////////////////////////
 //~ rjf: Helpers
 
-#include <X11/Xlib.h>
 internal OS_LNX_Window *
 os_lnx_window_from_x11window(Window window)
 {
