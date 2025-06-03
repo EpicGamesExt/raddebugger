@@ -2308,7 +2308,9 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(default)
     {
       E_TypeKind array_type_kind = e_type_kind_from_key(expand_type_key);
       if(array_type_kind == E_TypeKind_Array ||
-         array_type_kind == E_TypeKind_Ptr)
+         array_type_kind == E_TypeKind_Ptr ||
+         array_type_kind == E_TypeKind_RRef ||
+         array_type_kind == E_TypeKind_LRef)
       {
         E_Type *array_type = e_type_from_key(expand_type_key);
         result.expr_count = array_type->count;
@@ -2384,6 +2386,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(default)
     
     //- rjf: ptr case -> the lookup-range will return a range of dereferences
     else if(expand_type_kind == E_TypeKind_Ptr ||
+            expand_type_kind == E_TypeKind_LRef ||
+            expand_type_kind == E_TypeKind_RRef ||
             expand_type_kind == E_TypeKind_Array ||
             expand_type_kind == E_TypeKind_Set)
     {

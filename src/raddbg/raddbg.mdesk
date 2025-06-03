@@ -507,7 +507,7 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @description("An expression which refers to the data which should be viewed as memory.")
+      @description("An expression which refers to the base address of data which should be viewed as memory.")
         'expression': expr_string,
       @display_name("Address Range Size") @description("The number of bytes of the viewed memory range.")
         'size': expr_string,
@@ -525,7 +525,7 @@ RD_VocabTable:
     ```
       @inherit(tab) x:
     {
-      @description("An expression which refers to the data which should be viewed as a bitmap.")
+      @description("An expression which refers to the base address of data which should be viewed as a bitmap.")
         'expression': expr_string,
       @description("An expression describing the width of the bitmap, in pixels.") @order(0) 'w': u64,
       @description("An expression describing the height of the bitmap, in pixels.") @order(1) 'h': u64,
