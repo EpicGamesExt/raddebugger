@@ -43,16 +43,6 @@ os_lnx_check_x11window_atoms(Window window, Atom atoms[], U64 num_atoms)
   return num_found == num_atoms;
 }
 
-// Motif hints structure and constants for managing decorations 
-typedef struct {
-    unsigned long flags;
-    unsigned long functions;
-    unsigned long decorations;
-    long inputMode;
-    unsigned long status;
-} MotifWmHints;
-
-#define MWM_HINTS_DECORATIONS   (1L << 1)
 
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
@@ -193,8 +183,15 @@ os_window_open(Rng2F32 rect, OS_WindowFlags flags, String8 title)
   if (flags & OS_WindowFlag_CustomBorder) 
   {
     w->custom_border = 1;
-    MotifWmHints hints;
-    hints.flags = MWM_HINTS_DECORATIONS;
+
+    struct {
+      unsigned long flags;
+      unsigned long functions;
+      unsigned long decorations;
+      long inputMode;
+      unsigned long status;
+    } hints; // MotifWmHints
+    hints.flags = 3; // MWM_HINTS_DECORATIONS
     hints.decorations = 0; // no decorations
     XChangeProperty(os_lnx_gfx_state->display, w->window, os_lnx_gfx_state->wm_motif_hints_atom, os_lnx_gfx_state->wm_motif_hints_atom, 32, PropModeReplace, (U8 *)&hints, 5);
   }
