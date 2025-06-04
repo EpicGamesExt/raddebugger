@@ -337,6 +337,25 @@ struct RDIM_Rng1U64List
   RDI_U64 min;
 };
 
+typedef struct RDIM_Rng1U64ChunkNode RDIM_Rng1U64ChunkNode;
+struct RDIM_Rng1U64ChunkNode
+{
+  RDIM_Rng1U64ChunkNode *next;
+  RDIM_Rng1U64 *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+};
+
+typedef struct RDIM_Rng1U64ChunkList RDIM_Rng1U64ChunkList;
+struct RDIM_Rng1U64ChunkList
+{
+  RDIM_Rng1U64ChunkNode *first;
+  RDIM_Rng1U64ChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+  RDI_U64 min;
+};
+
 //- rjf: u64 -> pointer map
 
 typedef struct RDIM_U64ToPtrNode RDIM_U64ToPtrNode;
@@ -570,7 +589,7 @@ struct RDIM_Unit
   RDIM_String8 build_path;
   RDI_Language language;
   RDIM_LineTable *line_table;
-  RDIM_Rng1U64List voff_ranges;
+  RDIM_Rng1U64ChunkList voff_ranges;
 };
 
 typedef struct RDIM_UnitChunkNode RDIM_UnitChunkNode;
@@ -1362,8 +1381,9 @@ RDI_PROC RDIM_String8 rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *l
 //- rjf: sortable range sorting
 RDI_PROC RDIM_SortKey *rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count);
 
-//- rjf: rng1u64 list
+//- rjf: rng1u64 lists
 RDI_PROC void rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r);
+RDI_PROC void rdim_rng1u64_chunk_list_push(RDIM_Arena *arena, RDIM_Rng1U64ChunkList *list, RDI_U64 chunk_cap, RDIM_Rng1U64 r);
 
 ////////////////////////////////
 //~ Data Model

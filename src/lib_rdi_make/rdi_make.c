@@ -439,6 +439,27 @@ rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r
   }
 }
 
+RDI_PROC void
+rdim_rng1u64_chunk_list_push(RDIM_Arena *arena, RDIM_Rng1U64ChunkList *list, RDI_U64 chunk_cap, RDIM_Rng1U64 r)
+{
+  RDIM_Rng1U64ChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_Rng1U64ChunkNode, 1);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    n->cap = chunk_cap;
+    n->v = rdim_push_array_no_zero(arena, RDIM_Rng1U64, n->cap);
+    list->chunk_count += 1;
+  }
+  n->v[n->count] = r;
+  n->count += 1;
+  list->total_count += 1;
+  if(list->total_count == 1 || r.min < list->min)
+  {
+    list->min = r.min;
+  }
+}
+
 ////////////////////////////////
 //~ Data Model
 
@@ -2767,7 +2788,7 @@ rdim_bake_unit_vmap(RDIM_Arena *arena, RDIM_UnitChunkList *units)
       for(RDI_U64 idx = 0; idx < n->count; idx += 1)
       {
         RDIM_Unit *unit = &n->v[idx];
-        voff_range_count += unit->voff_ranges.count;
+        voff_range_count += unit->voff_ranges.total_count;
       }
     }
     
@@ -2788,24 +2809,27 @@ rdim_bake_unit_vmap(RDIM_Arena *arena, RDIM_UnitChunkList *units)
         for(RDI_U64 idx = 0; idx < unit_chunk_n->count; idx += 1)
         {
           RDIM_Unit *unit = &unit_chunk_n->v[idx];
-          for(RDIM_Rng1U64Node *n = unit->voff_ranges.first; n != 0; n = n->next)
+          for(RDIM_Rng1U64ChunkNode *n = unit->voff_ranges.first; n != 0; n = n->next)
           {
-            RDIM_Rng1U64 range = n->v;
-            if(range.min < range.max)
+            for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
             {
-              key_ptr->key = range.min;
-              key_ptr->val = marker_ptr;
-              marker_ptr->idx = unit_idx;
-              marker_ptr->begin_range = 1;
-              key_ptr += 1;
-              marker_ptr += 1;
-              
-              key_ptr->key = range.max;
-              key_ptr->val = marker_ptr;
-              marker_ptr->idx = unit_idx;
-              marker_ptr->begin_range = 0;
-              key_ptr += 1;
-              marker_ptr += 1;
+              RDIM_Rng1U64 range = n->v[chunk_idx];
+              if(range.min < range.max)
+              {
+                key_ptr->key = range.min;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = unit_idx;
+                marker_ptr->begin_range = 1;
+                key_ptr += 1;
+                marker_ptr += 1;
+                
+                key_ptr->key = range.max;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = unit_idx;
+                marker_ptr->begin_range = 0;
+                key_ptr += 1;
+                marker_ptr += 1;
+              }
             }
           }
           unit_idx += 1;

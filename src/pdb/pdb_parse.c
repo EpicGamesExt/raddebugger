@@ -704,8 +704,8 @@ pdb_comp_unit_array_from_data(Arena *arena, String8 data){
 }
 
 internal PDB_CompUnitContributionArray*
-pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data,
-                                           COFF_SectionHeaderArray sections){
+pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data, COFF_SectionHeaderArray sections)
+{
   PDB_CompUnitContribution *contributions = 0;
   U64 count = 0;
   if (data.size >= sizeof(PDB_DbiSectionContribVersion)){
