@@ -66,6 +66,6 @@ global OS_LNX_GfxState *os_lnx_gfx_state = 0;
 //~ rjf: Helpers
 
 internal OS_LNX_Window *os_lnx_window_from_x11window(Window window);
-internal B32 os_lnx_check_x11window_atoms(Window window, Atom properties[], U64 num_properties);
+internal B32 os_lnx_check_x11window_states(Window window, Atom properties[], U64 num_properties);
 
 #endif // OS_GFX_LINUX_H
