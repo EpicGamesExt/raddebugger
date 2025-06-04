@@ -26,6 +26,9 @@ struct OS_LNX_Window
   XIC xic;
   XID counter_xid;
   U64 counter_value;
+  B32 custom_border;
+  F32 custom_border_title_thickness;
+  F32 custom_border_edge_thickness;
 };
 
 ////////////////////////////////
