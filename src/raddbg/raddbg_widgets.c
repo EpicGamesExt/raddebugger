@@ -2119,7 +2119,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         params->line_pins[line_idx],
         immediate_pins,
       };
-      for EachElement(list_idx, pin_lists)
+      E_ParentKey(e_key_zero()) for EachElement(list_idx, pin_lists)
       {
         RD_CfgList pins = pin_lists[list_idx];
         if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])

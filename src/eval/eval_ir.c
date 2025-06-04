@@ -511,7 +511,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
       {
         break;
       }
-      else if(l_restype_kind != E_TypeKind_Ptr && l_restype_kind != E_TypeKind_Array)
+      else if(l_restype_kind != E_TypeKind_Ptr && l_restype_kind != E_TypeKind_Array && l_restype_kind != E_TypeKind_LRef && l_restype_kind != E_TypeKind_RRef)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->range, "Cannot index into this type.");
         break;
@@ -567,7 +567,7 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
           
           // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
           E_IRNode *base_tree = l.root;
-          if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
+          if(e_type_kind_is_pointer_or_ref(l_restype_kind) && l.mode != E_Mode_Value)
           {
             base_tree = e_irtree_resolve_to_value(arena, l.mode, base_tree, l_restype);
           }

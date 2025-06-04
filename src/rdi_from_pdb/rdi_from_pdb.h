@@ -169,10 +169,60 @@ struct P2R_SrcFileMap
   U64 slots_count;
 };
 
+//- rjf: per-unit source files conversion tasks
+
+typedef struct P2R_GatherUnitSrcFilesIn P2R_GatherUnitSrcFilesIn;
+struct P2R_GatherUnitSrcFilesIn
+{
+  PDB_Strtbl *pdb_strtbl;
+  COFF_SectionHeaderArray coff_sections;
+  PDB_CompUnit *comp_unit;
+  CV_SymParsed *comp_unit_syms;
+  CV_C13Parsed *comp_unit_c13s;
+};
+
+typedef struct P2R_GatherUnitSrcFilesOut P2R_GatherUnitSrcFilesOut;
+struct P2R_GatherUnitSrcFilesOut
+{
+  String8Array src_file_paths;
+};
+
 //- rjf: unit conversion tasks
 
 typedef struct P2R_UnitConvertIn P2R_UnitConvertIn;
 struct P2R_UnitConvertIn
+{
+  U64 comp_unit_idx;
+  PDB_Strtbl *pdb_strtbl;
+  COFF_SectionHeaderArray coff_sections;
+  PDB_CompUnit *comp_unit;
+  PDB_CompUnitContributionArray *comp_unit_contributions;
+  CV_SymParsed *comp_unit_syms;
+  CV_C13Parsed *comp_unit_c13s;
+  P2R_SrcFileMap *src_file_map;
+};
+
+typedef struct P2R_UnitConvertOut P2R_UnitConvertOut;
+struct P2R_UnitConvertOut
+{
+  RDIM_UnitChunkList units;
+  RDIM_LineTableChunkList line_tables;
+  RDIM_LineTable *unit_first_inline_site_line_table;
+};
+
+//- rjf: src file sequence equipping task
+
+typedef struct P2R_SrcFileSeqEquipIn P2R_SrcFileSeqEquipIn;
+struct P2R_SrcFileSeqEquipIn
+{
+  RDIM_SrcFileChunkList src_files;
+  RDIM_LineTableChunkList line_tables;
+};
+
+//- rjf: units conversion tasks
+
+typedef struct P2R_UnitsConvertIn P2R_UnitsConvertIn;
+struct P2R_UnitsConvertIn
 {
   PDB_Strtbl *pdb_strtbl;
   COFF_SectionHeaderArray coff_sections;
@@ -180,13 +230,13 @@ struct P2R_UnitConvertIn
   PDB_CompUnitContributionArray *comp_unit_contributions;
   CV_SymParsed **comp_unit_syms;
   CV_C13Parsed **comp_unit_c13s;
+  P2R_SrcFileMap *src_file_map;
 };
 
-typedef struct P2R_UnitConvertOut P2R_UnitConvertOut;
-struct P2R_UnitConvertOut
+typedef struct P2R_UnitsConvertOut P2R_UnitsConvertOut;
+struct P2R_UnitsConvertOut
 {
   RDIM_UnitChunkList units;
-  RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
   RDIM_LineTable **units_first_inline_site_line_tables;
 };
@@ -335,9 +385,24 @@ ASYNC_WORK_DEF(p2r_comp_unit_parse_work);
 ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work);
 
 ////////////////////////////////
+//~ rjf: Unit Source File Gathering Tasks
+
+ASYNC_WORK_DEF(p2r_gather_unit_src_file_work);
+
+////////////////////////////////
 //~ rjf: Unit Conversion Tasks
 
+ASYNC_WORK_DEF(p2r_unit_convert_work);
+
+////////////////////////////////
+//~ rjf: Units Conversion Tasks
+
 ASYNC_WORK_DEF(p2r_units_convert_work);
+
+////////////////////////////////
+//~ rjf: Source File Sequence Equipping Task
+
+ASYNC_WORK_DEF(p2r_src_file_seq_equip_work);
 
 ////////////////////////////////
 //~ rjf: Link Name Map Building Tasks

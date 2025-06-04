@@ -646,6 +646,8 @@ rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFil
     dst->last = to_push->last;
     dst->chunk_count += to_push->chunk_count;
     dst->total_count += to_push->total_count;
+    dst->source_line_map_count += to_push->source_line_map_count;
+    dst->total_line_count += to_push->total_line_count;
   }
   else if(dst->first == 0)
   {
@@ -714,7 +716,9 @@ rdim_line_table_chunk_list_concat_in_place(RDIM_LineTableChunkList *dst, RDIM_Li
     dst->last = to_push->last;
     dst->chunk_count += to_push->chunk_count;
     dst->total_count += to_push->total_count;
+    dst->total_seq_count += to_push->total_seq_count;
     dst->total_line_count += to_push->total_line_count;
+    dst->total_col_count += to_push->total_col_count;
   }
   else if(dst->first == 0)
   {
