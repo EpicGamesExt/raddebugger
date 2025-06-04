@@ -20,7 +20,7 @@ os_lnx_window_from_x11window(Window window)
 }
 
 internal B32
-os_lnx_check_x11window_atoms(Window window, Atom atoms[], U64 num_atoms)
+os_lnx_check_x11window_states(Window window, Atom states[], U64 num_states)
 {
   Atom actual_type, *props;
   int actual_format;
@@ -35,12 +35,12 @@ os_lnx_check_x11window_atoms(Window window, Atom atoms[], U64 num_atoms)
   if (props)
   {
     for (U64 i = 0; i < nitems; i++)
-      for (U64 j = 0; j < num_atoms; j++)
-        if (props[i] == atoms[j]) num_found++;
+      for (U64 j = 0; j < num_states; j++)
+        if (props[i] == states[j]) num_found++;
 
     XFree(props);
   }
-  return num_found == num_atoms;
+  return num_found == num_states;
 }
 
 
@@ -65,6 +65,7 @@ os_gfx_init(void)
   os_lnx_gfx_state->wm_state_hidden_atom         = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_STATE_HIDDEN", 0);
   os_lnx_gfx_state->wm_state_maximized_horz_atom = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_STATE_MAXIMIZED_HORZ", 0);
   os_lnx_gfx_state->wm_state_maximized_vert_atom = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
+  os_lnx_gfx_state->wm_state_fullscreen_atom     = XInternAtom(os_lnx_gfx_state->display, "_NET_WM_STATE_FULLSCREEN", 0);
   os_lnx_gfx_state->wm_motif_hints_atom          = XInternAtom(os_lnx_gfx_state->display, "_MOTIF_WM_HINTS", 0);
   //- rjf: open im
   os_lnx_gfx_state->xim = XOpenIM(os_lnx_gfx_state->display, 0, 0, 0);
@@ -265,15 +266,25 @@ internal B32
 os_window_is_fullscreen(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return 0;}
-  // TODO(rjf)
-  return 0;
+  OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
+  return os_lnx_check_x11window_states(w->window, &os_lnx_gfx_state->wm_state_fullscreen_atom, 1);
 }
 
 internal void
 os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}
-  // TODO(rjf)
+  OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
+  XEvent evt = {0};
+  evt.type = ClientMessage;
+  evt.xclient.window = w->window;
+  evt.xclient.message_type = os_lnx_gfx_state->wm_state_atom;
+  evt.xclient.format = 32;
+  evt.xclient.data.l[0] = (long) fullscreen;
+  evt.xclient.data.l[1] = os_lnx_gfx_state->wm_state_fullscreen_atom;
+  evt.xclient.data.l[2] = 0;
+  evt.xclient.data.l[3] = 1;
+  XSendEvent(os_lnx_gfx_state->display, XDefaultRootWindow(os_lnx_gfx_state->display), 0, SubstructureRedirectMask | SubstructureNotifyMask, &evt);
 }
 
 internal B32
@@ -282,7 +293,7 @@ os_window_is_maximized(OS_Handle handle)
   if(os_handle_match(handle, os_handle_zero())) {return 0;}
   OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
   Atom properties[] = {os_lnx_gfx_state->wm_state_maximized_horz_atom, os_lnx_gfx_state->wm_state_maximized_vert_atom}; 
-  return os_lnx_check_x11window_atoms(w->window, properties, ArrayCount(properties));
+  return os_lnx_check_x11window_states(w->window, properties, ArrayCount(properties));
 }
 
 internal void
@@ -307,7 +318,7 @@ os_window_is_minimized(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return 0;}
   OS_LNX_Window *w = (OS_LNX_Window *)handle.u64[0];
-  return os_lnx_check_x11window_atoms(w->window, &os_lnx_gfx_state->wm_state_hidden_atom, 1);;
+  return os_lnx_check_x11window_states(w->window, &os_lnx_gfx_state->wm_state_hidden_atom, 1);;
 }
 
 internal void

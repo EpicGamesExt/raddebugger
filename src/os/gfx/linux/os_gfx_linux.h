@@ -51,6 +51,7 @@ struct OS_LNX_GfxState
   Atom wm_state_atom;
   Atom wm_state_hidden_atom;
   Atom wm_state_maximized_vert_atom, wm_state_maximized_horz_atom;
+  Atom wm_state_fullscreen_atom;
   Cursor cursors[OS_Cursor_COUNT];
   OS_Cursor last_set_cursor;
   OS_GfxInfo gfx_info;
