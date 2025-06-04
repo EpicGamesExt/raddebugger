@@ -628,25 +628,23 @@ os_get_events(Arena *arena, B32 wait)
           F32 y = (F32)evt.xbutton.y;
           OS_Handle handle = {(U64)window};
           Rng2F32 rect = os_client_rect_from_window(handle);
-          F32 win_width = rect.x1 - rect.x0;
-          F32 win_height = rect.y1 - rect.y0;
           F32 edge_size = window->custom_border_edge_thickness;
           int detail = -1;
-          if (x < edge_size && y < edge_size)
+          if (x <= edge_size && y <= edge_size)
               detail = 0; // top-left
-          else if (y < edge_size && x >= (rect.x1 - edge_size))
+          else if (y <= edge_size && x >= (rect.x1 - edge_size))
               detail = 2; // top-right
-          else if (x < edge_size && y >= (rect.y1 - edge_size))
+          else if (x <= edge_size && y >= (rect.y1 - edge_size))
               detail = 6; // bottom-left
           else if (y >= (rect.y1 - edge_size) && x >= (rect.x1 - edge_size))
               detail = 4; // bottom-right
-          else if (y < edge_size)
+          else if (y <= edge_size)
               detail = 1; // top
           else if (x >= (rect.x1 - edge_size))
               detail = 2; // right
           else if (y >= (rect.y1 - edge_size))
               detail = 5; // bottom
-          else if (x < edge_size)
+          else if (x <= edge_size)
               detail = 7; // left
           else
               if (y <= window->custom_border_title_thickness) detail = 8; // move
@@ -701,20 +699,18 @@ os_get_events(Arena *arena, B32 wait)
           OS_Handle handle = {(U64)window};
           Rng2F32 rect = os_client_rect_from_window(handle);
           F32 edge_size = window->custom_border_edge_thickness;
-          B32 on_border_x = (x <= window->custom_border_edge_thickness || rect.x1-window->custom_border_edge_thickness <= x);
-          B32 on_border_y = (y <= window->custom_border_edge_thickness || rect.y1-window->custom_border_edge_thickness <= y);
           OS_Cursor cursor = OS_Cursor_Pointer;
-          if (x < edge_size && y < edge_size)
+          if (x <= edge_size && y <= edge_size)
             cursor = OS_Cursor_UpLeft;
-          else if (y < edge_size && x >= (rect.x1 - edge_size))
+          else if (y <= edge_size && x >= (rect.x1 - edge_size))
             cursor = OS_Cursor_UpRight;
-          else if (x < edge_size && y >= (rect.y1 - edge_size))
+          else if (x <= edge_size && y >= (rect.y1 - edge_size))
             cursor = OS_Cursor_DownLeft;
           else if (y >= (rect.y1 - edge_size) && x >= (rect.x1 - edge_size))
             cursor = OS_Cursor_DownRight;
-          else if (y < edge_size || y >= (rect.y1 - edge_size))
+          else if (y <= edge_size || y >= (rect.y1 - edge_size))
             cursor = OS_Cursor_UpDown;
-          else if (x < edge_size || x >= (rect.x1 - edge_size))
+          else if (x <= edge_size || x >= (rect.x1 - edge_size))
             cursor = OS_Cursor_LeftRight;
 
           os_set_cursor(cursor);
