@@ -12967,37 +12967,13 @@ rd_frame(void)
             //- rjf: record last-opened user in config directory
             if(file_is_okay && kind == RD_CmdKind_OpenUser)
             {
-              String8 last_user_path = push_str8f(scratch.arena, "%S/raddbg/last_user", os_get_process_info()->user_program_data_path);
-              os_write_data_to_file_path(last_user_path, file_path);
+              rd_cmd(RD_CmdKind_RecordUserAsLastOpened);
             }
             
             //- rjf: record recently-opened projects in the user
             if(file_is_okay && kind == RD_CmdKind_OpenProject)
             {
-              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-              RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
-              RD_Cfg *recent_project = &rd_nil_cfg;
-              for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
-              {
-                if(path_match_normalized(rd_path_from_cfg(n->v), file_path))
-                {
-                  recent_project = n->v;
-                  break;
-                }
-              }
-              if(recent_project == &rd_nil_cfg)
-              {
-                recent_project = rd_cfg_new(user, str8_lit("recent_project"));
-                RD_Cfg *path_root = rd_cfg_new(recent_project, str8_lit("path"));
-                rd_cfg_new(path_root, path_absolute_dst_from_relative_dst_src(scratch.arena, file_path, str8_chop_last_slash(rd_state->user_path)));
-              }
-              rd_cfg_unhook(user, recent_project);
-              rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
-              recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
-              if(recent_projects.count > 32)
-              {
-                rd_cfg_release(recent_projects.last->v);
-              }
+              rd_cmd(RD_CmdKind_RecordProjectInUser);
             }
             
             //- rjf: eliminate all project-filtered tab focuses
@@ -13112,14 +13088,50 @@ rd_frame(void)
                 arena_clear(rd_state->user_path_arena);
                 rd_state->user_path = push_str8_copy(rd_state->user_path_arena, new_path);
                 rd_cmd(RD_CmdKind_WriteUserData);
+                rd_cmd(RD_CmdKind_RecordUserAsLastOpened);
               }break;
               case RD_CmdKind_SaveProject:
               {
                 arena_clear(rd_state->project_path_arena);
                 rd_state->project_path = push_str8_copy(rd_state->project_path_arena, new_path);
                 rd_cmd(RD_CmdKind_WriteProjectData);
+                rd_cmd(RD_CmdKind_RecordProjectInUser);
               }break;
             }
+          }break;
+          case RD_CmdKind_RecordProjectInUser:
+          {
+            String8 file_path = rd_regs()->file_path;
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+            RD_Cfg *recent_project = &rd_nil_cfg;
+            for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
+            {
+              if(path_match_normalized(rd_path_from_cfg(n->v), file_path))
+              {
+                recent_project = n->v;
+                break;
+              }
+            }
+            if(recent_project == &rd_nil_cfg)
+            {
+              recent_project = rd_cfg_new(user, str8_lit("recent_project"));
+              RD_Cfg *path_root = rd_cfg_new(recent_project, str8_lit("path"));
+              rd_cfg_new(path_root, file_path);
+            }
+            rd_cfg_unhook(user, recent_project);
+            rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
+            recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+            if(recent_projects.count > 32)
+            {
+              rd_cfg_release(recent_projects.last->v);
+            }
+          }break;
+          case RD_CmdKind_RecordUserAsLastOpened:
+          {
+            String8 file_path = rd_regs()->file_path;
+            String8 last_user_path = push_str8f(scratch.arena, "%S/raddbg/last_user", os_get_process_info()->user_program_data_path);
+            os_write_data_to_file_path(last_user_path, file_path);
           }break;
           
           //- rjf: writing config changes

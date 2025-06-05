@@ -164,6 +164,8 @@ RD_CmdKind_OpenProject,
 RD_CmdKind_OpenRecentProject,
 RD_CmdKind_SaveUser,
 RD_CmdKind_SaveProject,
+RD_CmdKind_RecordUserAsLastOpened,
+RD_CmdKind_RecordProjectInUser,
 RD_CmdKind_WriteUserData,
 RD_CmdKind_WriteProjectData,
 RD_CmdKind_UserSettings,
@@ -576,7 +578,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[343];
+extern RD_VocabInfo rd_vocab_info_table[345];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern Rng1U64 rd_reg_slot_range_table[45];
 extern String8 rd_binding_version_remap_old_name_table[8];
