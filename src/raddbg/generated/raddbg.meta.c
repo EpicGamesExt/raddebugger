@@ -435,7 +435,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[24] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-Rng1U64 rd_reg_slot_range_table[44] =
+Rng1U64 rd_reg_slot_range_table[45] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -476,6 +476,7 @@ Rng1U64 rd_reg_slot_range_table[44] =
 {OffsetOf(RD_Regs, do_implicit_root), OffsetOf(RD_Regs, do_implicit_root) + sizeof(B32)},
 {OffsetOf(RD_Regs, do_lister), OffsetOf(RD_Regs, do_lister) + sizeof(B32)},
 {OffsetOf(RD_Regs, do_big_rows), OffsetOf(RD_Regs, do_big_rows) + sizeof(B32)},
+{OffsetOf(RD_Regs, all_windows), OffsetOf(RD_Regs, all_windows) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},
