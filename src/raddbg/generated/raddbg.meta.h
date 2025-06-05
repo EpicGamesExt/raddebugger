@@ -48,6 +48,7 @@ RD_RegSlot_DoImplicitRoot,
 RD_RegSlot_DoLister,
 RD_RegSlot_DoBigRows,
 RD_RegSlot_AllWindows,
+RD_RegSlot_NonGraphical,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
@@ -474,6 +475,7 @@ B32 do_implicit_root;
 B32 do_lister;
 B32 do_big_rows;
 B32 all_windows;
+B32 non_graphical;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
@@ -569,6 +571,7 @@ Z(getting_started)\
 .do_lister = rd_regs()->do_lister,\
 .do_big_rows = rd_regs()->do_big_rows,\
 .all_windows = rd_regs()->all_windows,\
+.non_graphical = rd_regs()->non_graphical,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\
@@ -580,7 +583,7 @@ extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
 extern RD_VocabInfo rd_vocab_info_table[345];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
-extern Rng1U64 rd_reg_slot_range_table[45];
+extern Rng1U64 rd_reg_slot_range_table[46];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];

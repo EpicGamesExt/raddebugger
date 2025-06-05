@@ -10588,6 +10588,13 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
         rd_regs()->cursor = pair.pt;
       }
     }break;
+    case RD_RegSlot_Cfg:
+    if(str8_match(str8_prefix(string, 1), str8_lit("$"), 0))
+    {
+      String8 numeric_part = str8_skip(string, 1);
+      RD_CfgID id = u64_from_str8(numeric_part, 16);
+      rd_regs()->cfg = id;
+    }break;
     case RD_RegSlot_Expr:
     {
       rd_regs()->expr = push_str8_copy(rd_frame_arena(), string);
@@ -10782,6 +10789,7 @@ rd_init(CmdLine *cmdln)
   {
     rd_state->cmds_arenas[idx] = arena_alloc();
   }
+  rd_state->cmd_output_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
   rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
   rd_state->drop_completion_key = ui_key_from_string(ui_key_zero(), str8_lit("drop_completion_ctx_menu"));
@@ -11086,6 +11094,11 @@ rd_frame(void)
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
+  if(rd_state->frame_depth == 1)
+  {
+    arena_clear(rd_state->cmd_output_arena);
+    MemoryZeroStruct(&rd_state->cmd_outputs);
+  }
   
   //////////////////////////////
   //- rjf: iterate all tabs, touch their view-states
@@ -15493,10 +15506,11 @@ rd_frame(void)
                 RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
                 RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
                 rd_cmd(RD_CmdKind_RelocateCfg, .cfg = bp->id);
-                if(rd_regs()->do_lister)
+                if(rd_regs()->do_lister && !rd_regs()->non_graphical)
                 {
                   rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x", bp->id), .do_lister = 0);
                 }
+                str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "$%I64x", bp->id);
               }
             }
           }break;
@@ -15798,7 +15812,11 @@ rd_frame(void)
               rd_cfg_newf(wdir, "%S/", working_directory);
             }
             rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
-            rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x", target->id));
+            if(!rd_regs()->non_graphical)
+            {
+              rd_cmd(RD_CmdKind_PushQuery, .expr = push_str8f(scratch.arena, "query:config.$%I64x", target->id));
+            }
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "$%I64x", target->id);
           }break;
           
           //- rjf: jit-debugger registration

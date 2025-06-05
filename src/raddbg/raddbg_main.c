@@ -295,9 +295,12 @@ struct IPCInfo
 //- rjf: IPC resources
 #define IPC_SHARED_MEMORY_BUFFER_SIZE MB(4)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
-global OS_Handle ipc_signal_semaphore = {0};
-global OS_Handle ipc_lock_semaphore = {0};
-global U8 *ipc_shared_memory_base = 0;
+global OS_Handle ipc_sender2main_signal_semaphore = {0};
+global OS_Handle ipc_sender2main_lock_semaphore = {0};
+global U8 *ipc_sender2main_shared_memory_base = 0;
+global OS_Handle ipc_main2sender_signal_semaphore = {0};
+global OS_Handle ipc_main2sender_lock_semaphore = {0};
+global U8 *ipc_main2sender_shared_memory_base = 0;
 global U8  ipc_s2m_ring_buffer[MB(4)] = {0};
 global U64 ipc_s2m_ring_write_pos = 0;
 global U64 ipc_s2m_ring_read_pos = 0;
@@ -313,11 +316,11 @@ ipc_signaler_thread__entry_point(void *p)
   ThreadNameF("[rd] ipc signaler thread");
   for(;;)
   {
-    if(os_semaphore_take(ipc_signal_semaphore, max_U64))
+    if(os_semaphore_take(ipc_sender2main_signal_semaphore, max_U64))
     {
-      if(os_semaphore_take(ipc_lock_semaphore, max_U64))
+      if(os_semaphore_take(ipc_sender2main_lock_semaphore, max_U64))
       {
-        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
         String8 msg = str8((U8 *)(ipc_info+1), ipc_info->msg_size);
         msg.size = Min(msg.size, IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo));
         OS_MutexScope(ipc_s2m_ring_mutex) for(;;)
@@ -335,7 +338,7 @@ ipc_signaler_thread__entry_point(void *p)
         os_condition_variable_broadcast(ipc_s2m_ring_cv);
         os_send_wakeup_event();
         ipc_info->msg_size = 0;
-        os_semaphore_drop(ipc_lock_semaphore);
+        os_semaphore_drop(ipc_sender2main_lock_semaphore);
       }
     }
   }
@@ -366,42 +369,6 @@ internal void
 entry_point(CmdLine *cmd_line)
 {
   Temp scratch = scratch_begin(0, 0);
-  
-  //- rjf: windows -> turn off output handles, as we need to control those for target processes
-#if OS_WINDOWS
-  HANDLE output_handles[3] =
-  {
-    GetStdHandle(STD_INPUT_HANDLE),
-    GetStdHandle(STD_OUTPUT_HANDLE),
-    GetStdHandle(STD_ERROR_HANDLE),
-  };
-  for(U64 idx = 0; idx < ArrayCount(output_handles); idx += 1)
-  {
-    B32 duplicate = 0;
-    for(U64 idx2 = 0; idx2 < idx; idx2 += 1)
-    {
-      if(output_handles[idx2] == output_handles[idx])
-      {
-        duplicate = 1;
-        break;
-      }
-    }
-    if(duplicate)
-    {
-      output_handles[idx] = 0;
-    }
-  }
-  for(U64 idx = 0; idx < ArrayCount(output_handles); idx += 1)
-  {
-    if(output_handles[idx] != 0)
-    {
-      CloseHandle(output_handles[idx]);
-    }
-  }
-  SetStdHandle(STD_INPUT_HANDLE, 0);
-  SetStdHandle(STD_OUTPUT_HANDLE, 0);
-  SetStdHandle(STD_ERROR_HANDLE, 0);
-#endif
   
   //- rjf: unpack command line arguments
   ExecMode exec_mode = ExecMode_Normal;
@@ -446,6 +413,42 @@ entry_point(CmdLine *cmd_line)
     default:
     case ExecMode_Normal:
     {
+      //- rjf: windows -> turn off output handles, as we need to control those for target processes
+#if OS_WINDOWS
+      HANDLE output_handles[3] =
+      {
+        GetStdHandle(STD_INPUT_HANDLE),
+        GetStdHandle(STD_OUTPUT_HANDLE),
+        GetStdHandle(STD_ERROR_HANDLE),
+      };
+      for(U64 idx = 0; idx < ArrayCount(output_handles); idx += 1)
+      {
+        B32 duplicate = 0;
+        for(U64 idx2 = 0; idx2 < idx; idx2 += 1)
+        {
+          if(output_handles[idx2] == output_handles[idx])
+          {
+            duplicate = 1;
+            break;
+          }
+        }
+        if(duplicate)
+        {
+          output_handles[idx] = 0;
+        }
+      }
+      for(U64 idx = 0; idx < ArrayCount(output_handles); idx += 1)
+      {
+        if(output_handles[idx] != 0)
+        {
+          CloseHandle(output_handles[idx]);
+        }
+      }
+      SetStdHandle(STD_INPUT_HANDLE, 0);
+      SetStdHandle(STD_OUTPUT_HANDLE, 0);
+      SetStdHandle(STD_ERROR_HANDLE, 0);
+#endif
+      
       //- rjf: manual layer initialization
       {
         r_init(cmd_line);
@@ -521,21 +524,35 @@ entry_point(CmdLine *cmd_line)
       {
         Temp scratch = scratch_begin(0, 0);
         U32 instance_pid = os_get_process_info()->pid;
-        String8 ipc_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_shared_memory_%i_", instance_pid);
-        String8 ipc_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_signal_semaphore_%i_", instance_pid);
-        String8 ipc_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_lock_semaphore_%i_", instance_pid);
-        OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
-        ipc_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
-        ipc_signal_semaphore = os_semaphore_alloc(0, 1, ipc_signal_semaphore_name);
-        ipc_lock_semaphore = os_semaphore_alloc(1, 1, ipc_lock_semaphore_name);
+        
+        // rjf: set up cross-process sender -> main ring buffer
+        String8 ipc_sender2main_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_shared_memory_%i_", instance_pid);
+        String8 ipc_sender2main_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_signal_semaphore_%i_", instance_pid);
+        String8 ipc_sender2main_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_lock_semaphore_%i_", instance_pid);
+        OS_Handle ipc_sender2main_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_sender2main_shared_memory_name);
+        ipc_sender2main_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_sender2main_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+        ipc_sender2main_signal_semaphore = os_semaphore_alloc(0, 1, ipc_sender2main_signal_semaphore_name);
+        ipc_sender2main_lock_semaphore = os_semaphore_alloc(1, 1, ipc_sender2main_lock_semaphore_name);
+        
+        // rjf: set up cross-process main -> sender ring buffer
+        String8 ipc_main2sender_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_shared_memory_%i_", instance_pid);
+        String8 ipc_main2sender_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_signal_semaphore_%i_", instance_pid);
+        String8 ipc_main2sender_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_lock_semaphore_%i_", instance_pid);
+        OS_Handle ipc_main2sender_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_main2sender_shared_memory_name);
+        ipc_main2sender_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_main2sender_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+        ipc_main2sender_signal_semaphore = os_semaphore_alloc(0, 1, ipc_main2sender_signal_semaphore_name);
+        ipc_main2sender_lock_semaphore = os_semaphore_alloc(1, 1, ipc_main2sender_lock_semaphore_name);
+        
+        // rjf: set up ipc-receiver -> main thread ring buffer; launch signaler thread
         ipc_s2m_ring_mutex = os_mutex_alloc();
         ipc_s2m_ring_cv = os_condition_variable_alloc();
-        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
-        if(ipc_shared_memory_base != 0)
+        IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
+        if(ipc_sender2main_shared_memory_base != 0)
         {
           MemoryZeroStruct(ipc_info);
           os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
         }
+        
         scratch_end(scratch);
       }
       
@@ -544,6 +561,7 @@ entry_point(CmdLine *cmd_line)
         for(B32 quit = 0; !quit;)
         {
           //- rjf: consume IPC messages, dispatch UI commands
+          B32 ipc_command_frame = 0;
           {
             Temp scratch = scratch_begin(0, 0);
             B32 consumed = 0;
@@ -554,6 +572,7 @@ entry_point(CmdLine *cmd_line)
               if(unconsumed_size >= sizeof(U64))
               {
                 consumed = 1;
+                ipc_command_frame = 1;
                 ipc_s2m_ring_read_pos += ring_read_struct(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_read_pos, &msg.size);
                 msg.size = Min(msg.size, unconsumed_size);
                 msg.str = push_array(scratch.arena, U8, msg.size);
@@ -632,6 +651,24 @@ entry_point(CmdLine *cmd_line)
             jit_attach = 0;
             rd_cmd(RD_CmdKind_Attach, .pid = jit_pid);
           }
+          
+          //- rjf: gather command outputs & write them
+          if(ipc_command_frame)
+          {
+            if(ipc_main2sender_shared_memory_base != 0 &&
+               os_semaphore_take(ipc_main2sender_lock_semaphore, os_now_microseconds()+5000000))
+            {
+              IPCInfo *ipc_info = (IPCInfo *)ipc_main2sender_shared_memory_base;
+              U8 *buffer = (U8 *)(ipc_info+1);
+              U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
+              StringJoin join = {str8_lit(""), str8_lit("\0"), str8_lit("")};
+              String8 msg = str8_list_join(scratch.arena, &rd_state->cmd_outputs, &join);
+              ipc_info->msg_size = Min(buffer_max, msg.size);
+              MemoryCopy(buffer, msg.str, ipc_info->msg_size);
+              os_semaphore_drop(ipc_main2sender_signal_semaphore);
+              os_semaphore_drop(ipc_main2sender_lock_semaphore);
+            }
+          }
         }
       }
       
@@ -674,28 +711,61 @@ entry_point(CmdLine *cmd_line)
       }
       
       //- rjf: grab destination instance's shared memory resources
-      String8 ipc_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_shared_memory_%i_", dst_pid);
-      String8 ipc_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_signal_semaphore_%i_", dst_pid);
-      String8 ipc_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_lock_semaphore_%i_", dst_pid);
-      OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
-      ipc_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
-      ipc_signal_semaphore = os_semaphore_alloc(0, 1, ipc_signal_semaphore_name);
-      ipc_lock_semaphore = os_semaphore_alloc(1, 1, ipc_lock_semaphore_name);
+      String8 ipc_sender2main_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_shared_memory_%i_", dst_pid);
+      String8 ipc_sender2main_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_signal_semaphore_%i_", dst_pid);
+      String8 ipc_sender2main_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_sender2main_lock_semaphore_%i_", dst_pid);
+      OS_Handle ipc_sender2main_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_sender2main_shared_memory_name);
+      ipc_sender2main_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_sender2main_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+      ipc_sender2main_signal_semaphore = os_semaphore_alloc(0, 1, ipc_sender2main_signal_semaphore_name);
+      ipc_sender2main_lock_semaphore = os_semaphore_alloc(1, 1, ipc_sender2main_lock_semaphore_name);
+      String8 ipc_main2sender_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_shared_memory_%i_", dst_pid);
+      String8 ipc_main2sender_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_signal_semaphore_%i_", dst_pid);
+      String8 ipc_main2sender_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_main2sender_lock_semaphore_%i_", dst_pid);
+      OS_Handle ipc_main2sender_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_main2sender_shared_memory_name);
+      ipc_main2sender_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_main2sender_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+      ipc_main2sender_signal_semaphore = os_semaphore_alloc(0, 1, ipc_main2sender_signal_semaphore_name);
+      ipc_main2sender_lock_semaphore = os_semaphore_alloc(1, 1, ipc_main2sender_lock_semaphore_name);
       
       //- rjf: got resources -> write message
-      if(ipc_shared_memory_base != 0 &&
-         os_semaphore_take(ipc_lock_semaphore, max_U64))
+      B32 wrote_message = 0;
+      if(ipc_sender2main_shared_memory_base != 0 &&
+         os_semaphore_take(ipc_sender2main_lock_semaphore, max_U64))
       {
-        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        wrote_message = 1;
+        IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
         U8 *buffer = (U8 *)(ipc_info+1);
         U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
         StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
         String8 msg = str8_list_join(scratch.arena, &cmd_line->inputs, &join);
         ipc_info->msg_size = Min(buffer_max, msg.size);
         MemoryCopy(buffer, msg.str, ipc_info->msg_size);
-        os_semaphore_drop(ipc_signal_semaphore);
-        os_semaphore_drop(ipc_lock_semaphore);
+        os_semaphore_drop(ipc_sender2main_signal_semaphore);
+        os_semaphore_drop(ipc_sender2main_lock_semaphore);
       }
+      
+      //- rjf: wrote message -> wait for outputs, read outputs
+      String8List outputs = {0};
+      if(wrote_message &&
+         ipc_main2sender_shared_memory_base != 0 &&
+         os_semaphore_take(ipc_main2sender_signal_semaphore, os_now_microseconds()+10000000))
+      {
+        if(os_semaphore_take(ipc_main2sender_lock_semaphore, max_U64))
+        {
+          IPCInfo *ipc_info = (IPCInfo *)ipc_main2sender_shared_memory_base;
+          String8 msg = str8((U8 *)(ipc_info+1), ipc_info->msg_size);
+          msg.size = Min(msg.size, IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo));
+          U8 split_char = 0;
+          outputs = str8_split(scratch.arena, msg, &split_char, 1, 0);
+          os_semaphore_drop(ipc_main2sender_lock_semaphore);
+        }
+      }
+      
+      //- rjf: write outputs to stdout
+      for(String8Node *n = outputs.first; n != 0; n = n->next)
+      {
+        fwrite(n->string.str, 1, n->string.size, stdout);
+      }
+      fflush(stdout);
       
       scratch_end(scratch);
     }break;

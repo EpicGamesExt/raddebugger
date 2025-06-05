@@ -840,7 +840,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
       override_n = override_n->next)
   {
     String8 file_path = override_n->string;
-    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
+    String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
     
     // rjf: binary -> rdi
     RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
