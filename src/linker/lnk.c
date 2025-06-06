@@ -3927,6 +3927,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   lnk_section_table_push(sectab, str8_lit(".text"),  PE_TEXT_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".data"),  PE_DATA_SECTION_FLAGS);
+  lnk_section_table_push(sectab, str8_lit(".bss"),   PE_BSS_SECTION_FLAGS);
 
   LNK_BuildImageTask task = {0};
   task.symtab        = symtab;
@@ -4166,11 +4167,8 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       if (common_block_contribs_count) {
         ProfBeginV("Assign Common Block Offsets [count %llu]", common_block_contribs_count);
 
-        // search/push .data
-        common_block_sect = lnk_section_table_search(sectab, str8_lit(".data"), PE_DATA_SECTION_FLAGS);
-        if (common_block_sect == 0) {
-          common_block_sect = lnk_section_table_push(sectab, str8_lit(".data"), PE_DATA_SECTION_FLAGS);
-        }
+        // grab .bss section
+        common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
 
         // sort common blocks from largest to smallest for tighter packing
         radsort(common_block_contribs, common_block_contribs_count, lnk_common_block_contrib_is_before);
