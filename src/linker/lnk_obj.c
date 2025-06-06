@@ -30,6 +30,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   LNK_Obj       *obj     = &task->objs.v[task_id].data;
   U64            obj_idx = task->obj_id_base + task_id;
 
+  ProfBeginV("Init Obj [%S%s%S]", input->lib_path, (input->lib_path.size ? ": " : 0), input->path);
+
   //
   // parse obj header
   //
@@ -230,6 +232,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->input_idx = obj_idx;
   obj->header    = header;
   obj->comdats   = comdats;
+
+  ProfEnd();
 }
 
 internal LNK_ObjNodeArray
