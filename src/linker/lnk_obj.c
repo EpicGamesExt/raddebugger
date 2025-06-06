@@ -305,7 +305,7 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
       U64         hash = lnk_symbol_hash(symbol.name);
       lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
 
-      lnk_symbol_list_push(arena, &task->weak_lists[task_id], defn);
+      lnk_symbol_list_push(arena, &task->weak_lists[worker_id], defn);
     } break;
     case COFF_SymbolValueInterp_Common: {
       LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
