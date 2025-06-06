@@ -189,6 +189,13 @@ e_space_make(E_SpaceKind kind)
   return space;
 }
 
+internal B32
+e_space_match(E_Space a, E_Space b)
+{
+  B32 result = MemoryMatchStruct(&a, &b);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Map Functions
 
@@ -1361,30 +1368,6 @@ e_range_size_from_eval(E_Eval eval)
     E_TypeKey type_core = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
     E_TypeKind type_core_kind = e_type_kind_from_key(type_core);
     B32 got_size = 0;
-    
-    // rjf: try getting size from expansions
-    if(!got_size)
-    {
-      E_TypeKey maybe_lens_type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
-      E_TypeKind maybe_lens_type_kind = e_type_kind_from_key(maybe_lens_type_key);
-      if(maybe_lens_type_kind == E_TypeKind_Lens)
-      {
-        E_TypeExpandRule *expand_rule = e_expand_rule_from_type_key(maybe_lens_type_key);
-        if(expand_rule->info != 0)
-        {
-          Temp scratch = scratch_begin(0, 0);
-          U64 element_size = e_type_byte_size_from_key(e_type_key_unwrap(type_core, E_TypeUnwrapFlag_All));
-          E_TypeExpandInfo expand_info = expand_rule->info(scratch.arena, eval, str8_zero());
-          U64 new_result_maybe = expand_info.expr_count * element_size;
-          if(new_result_maybe != 0)
-          {
-            result = new_result_maybe;
-            got_size = 1;
-          }
-          scratch_end(scratch);
-        }
-      }
-    }
     
     // rjf: try getting size from intrinsic type (e.g. arrays/etc.)
     if(!got_size)

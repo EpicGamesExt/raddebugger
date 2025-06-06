@@ -25,6 +25,7 @@
 #define UI_Tag(v) DeferLoop(ui_push_tag(v), ui_pop_tag())
 #define UI_BackgroundColor(v) DeferLoop(ui_push_background_color(v), ui_pop_background_color())
 #define UI_TextColor(v) DeferLoop(ui_push_text_color(v), ui_pop_text_color())
+#define UI_BorderColor(v) DeferLoop(ui_push_border_color(v), ui_pop_border_color())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
@@ -59,6 +60,7 @@ internal UI_Key ui_top_group_key(void) { UI_StackTopImpl(ui_state, GroupKey, gro
 internal F32 ui_top_transparency(void) { UI_StackTopImpl(ui_state, Transparency, transparency) }
 internal Vec4F32 ui_top_background_color(void) { UI_StackTopImpl(ui_state, BackgroundColor, background_color) }
 internal Vec4F32 ui_top_text_color(void) { UI_StackTopImpl(ui_state, TextColor, text_color) }
+internal Vec4F32 ui_top_border_color(void) { UI_StackTopImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_top_squish(void) { UI_StackTopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_top_hover_cursor(void) { UI_StackTopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_top_font(void) { UI_StackTopImpl(ui_state, Font, font) }
@@ -92,6 +94,7 @@ internal UI_Key ui_bottom_group_key(void) { UI_StackBottomImpl(ui_state, GroupKe
 internal F32 ui_bottom_transparency(void) { UI_StackBottomImpl(ui_state, Transparency, transparency) }
 internal Vec4F32 ui_bottom_background_color(void) { UI_StackBottomImpl(ui_state, BackgroundColor, background_color) }
 internal Vec4F32 ui_bottom_text_color(void) { UI_StackBottomImpl(ui_state, TextColor, text_color) }
+internal Vec4F32 ui_bottom_border_color(void) { UI_StackBottomImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_bottom_squish(void) { UI_StackBottomImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_bottom_hover_cursor(void) { UI_StackBottomImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_bottom_font(void) { UI_StackBottomImpl(ui_state, Font, font) }
@@ -125,6 +128,7 @@ internal UI_Key ui_push_group_key(UI_Key v) { UI_StackPushImpl(ui_state, GroupKe
 internal F32 ui_push_transparency(F32 v) { UI_StackPushImpl(ui_state, Transparency, transparency, F32, v) }
 internal Vec4F32 ui_push_background_color(Vec4F32 v) { UI_StackPushImpl(ui_state, BackgroundColor, background_color, Vec4F32, v) }
 internal Vec4F32 ui_push_text_color(Vec4F32 v) { UI_StackPushImpl(ui_state, TextColor, text_color, Vec4F32, v) }
+internal Vec4F32 ui_push_border_color(Vec4F32 v) { UI_StackPushImpl(ui_state, BorderColor, border_color, Vec4F32, v) }
 internal F32 ui_push_squish(F32 v) { UI_StackPushImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_push_hover_cursor(OS_Cursor v) { UI_StackPushImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_push_font(FNT_Tag v) { UI_StackPushImpl(ui_state, Font, font, FNT_Tag, v) }
@@ -158,6 +162,7 @@ internal UI_Key ui_pop_group_key(void) { UI_StackPopImpl(ui_state, GroupKey, gro
 internal F32 ui_pop_transparency(void) { UI_StackPopImpl(ui_state, Transparency, transparency) }
 internal Vec4F32 ui_pop_background_color(void) { UI_StackPopImpl(ui_state, BackgroundColor, background_color) }
 internal Vec4F32 ui_pop_text_color(void) { UI_StackPopImpl(ui_state, TextColor, text_color) }
+internal Vec4F32 ui_pop_border_color(void) { UI_StackPopImpl(ui_state, BorderColor, border_color) }
 internal F32 ui_pop_squish(void) { UI_StackPopImpl(ui_state, Squish, squish) }
 internal OS_Cursor ui_pop_hover_cursor(void) { UI_StackPopImpl(ui_state, HoverCursor, hover_cursor) }
 internal FNT_Tag ui_pop_font(void) { UI_StackPopImpl(ui_state, Font, font) }
@@ -191,6 +196,7 @@ internal UI_Key ui_set_next_group_key(UI_Key v) { UI_StackSetNextImpl(ui_state, 
 internal F32 ui_set_next_transparency(F32 v) { UI_StackSetNextImpl(ui_state, Transparency, transparency, F32, v) }
 internal Vec4F32 ui_set_next_background_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, BackgroundColor, background_color, Vec4F32, v) }
 internal Vec4F32 ui_set_next_text_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, TextColor, text_color, Vec4F32, v) }
+internal Vec4F32 ui_set_next_border_color(Vec4F32 v) { UI_StackSetNextImpl(ui_state, BorderColor, border_color, Vec4F32, v) }
 internal F32 ui_set_next_squish(F32 v) { UI_StackSetNextImpl(ui_state, Squish, squish, F32, v) }
 internal OS_Cursor ui_set_next_hover_cursor(OS_Cursor v) { UI_StackSetNextImpl(ui_state, HoverCursor, hover_cursor, OS_Cursor, v) }
 internal FNT_Tag ui_set_next_font(FNT_Tag v) { UI_StackSetNextImpl(ui_state, Font, font, FNT_Tag, v) }

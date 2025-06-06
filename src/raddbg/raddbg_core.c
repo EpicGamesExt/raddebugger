@@ -4439,6 +4439,7 @@ rd_view_ui(Rng2F32 rect)
               //
               ProfScope("build table")
               {
+                UI_Key watch_rich_hover_key = ui_key_from_string(ui_active_seed_key(), str8_lit("###rich_hover"));
                 F32 row_y_px = rect.y0;
                 U64 local_row_idx = 0;
                 U64 global_row_idx = rows.count_before_semantic;
@@ -4619,8 +4620,12 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: determine if cell evaluation's data is fresh and/or bad
                       //
                       ProfBegin("determine if cell evaluation's data is fresh and/or bad");
+                      B32 cell_is_rich_hovered = 0;
                       B32 cell_is_fresh = 0;
                       B32 cell_is_bad = 0;
+                      U64 cell_vaddr_rng_size = e_type_byte_size_from_key(cell->eval.irtree.type_key);
+                      cell_vaddr_rng_size = Min(cell_vaddr_rng_size, 64);
+                      Rng1U64 cell_vaddr_rng = r1u64(cell->eval.value.u64, cell->eval.value.u64+cell_vaddr_rng_size);
                       if(!(cell_info.flags & RD_WatchCellFlag_NoEval))
                       {
                         switch(cell->eval.irtree.mode)
@@ -4628,13 +4633,17 @@ rd_view_ui(Rng2F32 rect)
                           default:{}break;
                           case E_Mode_Offset:
                           {
+                            if(rd_state->hover_regs_slot == RD_RegSlot_VaddrRange &&
+                               e_space_match(cell->eval.space, rd_get_hover_regs()->eval_space) &&
+                               !ui_key_match(rd_get_hover_regs()->src_ui_key, watch_rich_hover_key))
+                            {
+                              Rng1U64 intersection = intersect_1u64(cell_vaddr_rng, rd_get_hover_regs()->vaddr_range);
+                              cell_is_rich_hovered = (intersection.max > intersection.min);
+                            }
                             CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(cell->eval.space);
                             if(cell->eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
                             {
-                              U64 size = e_type_byte_size_from_key(cell->eval.irtree.type_key);
-                              size = Min(size, 64);
-                              Rng1U64 vaddr_rng = r1u64(cell->eval.value.u64, cell->eval.value.u64+size);
-                              CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, rd_state->frame_eval_memread_endt_us);
+                              CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, space_entity->handle, cell_vaddr_rng, rd_state->frame_eval_memread_endt_us);
                               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                               {
                                 if(slice.byte_changed_flags[idx] != 0)
@@ -4722,6 +4731,13 @@ rd_view_ui(Rng2F32 rect)
                           }
                           rgba.w *= ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p", entity), 1.f, .rate = entity_hover_t_rate);
                           cell_background_color_override = rgba;
+                        }
+                        else if(cell_is_rich_hovered)
+                        {
+                          UI_TagF(".") UI_TagF("pop")
+                          {
+                            cell_background_color_override = ui_color_from_name(str8_lit("background"));
+                          }
                         }
                         else if(cell_is_fresh)
                         {
@@ -5064,15 +5080,21 @@ rd_view_ui(Rng2F32 rect)
                         }
                         
                         // rjf: hover -> rich hover entities
-                        if(ui_hovering(sig) && cell_info.entity != &ctrl_entity_nil)
+                        else if(ui_hovering(sig) && cell_info.entity != &ctrl_entity_nil)
                         {
                           RD_RegsScope(.ctrl_entity = cell_info.entity->handle, .no_rich_tooltip = 1) rd_set_hover_regs(RD_RegSlot_CtrlEntity);
                         }
                         
                         // rjf: hover -> rich hover commands (mini only)
-                        if(ui_hovering(sig) && cell_info.cmd_name.size != 0 && cell->px != 0)
+                        else if(ui_hovering(sig) && cell_info.cmd_name.size != 0 && cell->px != 0)
                         {
                           RD_RegsScope(.cmd_name = cell_info.cmd_name, .ui_key = sig.box->key) rd_set_hover_regs(RD_RegSlot_CmdName);
+                        }
+                        
+                        // rjf: hover -> rich hover address ranges
+                        else if(ui_hovering(sig) && !(cell_info.flags & RD_WatchCellFlag_Expr))
+                        {
+                          RD_RegsScope(.eval_space = cell->eval.space, .vaddr_range = cell_vaddr_rng, .src_ui_key = watch_rich_hover_key) rd_set_hover_regs(RD_RegSlot_VaddrRange);
                         }
                         
                         // rjf: dragging -> drag/drop
@@ -8539,6 +8561,7 @@ rd_window_frame(void)
                                       panel_rect_pct.x1*content_rect_dim.x,
                                       panel_rect_pct.y1*content_rect_dim.y);
           panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
+          panel_rect = r2f32p(round_f32(panel_rect.x0), round_f32(panel_rect.y0), round_f32(panel_rect.x1), round_f32(panel_rect.y1));
           F32 tab_bar_rheight = floor_f32(ui_top_font_size()*3.5f);
           F32 tab_bar_vheight = floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("tab_height")));
           F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
@@ -9706,7 +9729,7 @@ rd_window_frame(void)
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
-            Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
+            Vec4F32 border_color = b->border_color;
             Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
             R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, border_softness*1.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
@@ -9736,7 +9759,7 @@ rd_window_frame(void)
           // rjf: draw sides
           if(b->flags & (UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight))
           {
-            Vec4F32 border_color = ui_color_from_tags_key_name(box->tags_key, str8_lit("border"));
+            Vec4F32 border_color = b->border_color;
             Rng2F32 r = b->rect;
             F32 half_thickness = 1.f;
             F32 softness = 0.f;

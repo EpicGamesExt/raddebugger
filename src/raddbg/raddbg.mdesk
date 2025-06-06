@@ -710,6 +710,9 @@ RD_RegTable:
   {RD_CfgID          cfg              Cfg           }
   {RD_CfgIDList      cfg_list         CfgList       }
   
+  // rjf: evaluation space
+  {E_Space           eval_space       EvalSpace     }
+  
   // rjf: frame selection
   {U64               unwind_count     UnwindCount   }
   {U64               inline_depth     InlineDepth   }
@@ -732,6 +735,7 @@ RD_RegTable:
   
   // rjf: ui context
   {UI_Key            ui_key           UIKey         }
+  {UI_Key            src_ui_key       SrcUIKey      }
   {Vec2F32           off_px           OffPx         }
   {RD_RegSlot        reg_slot         RegSlot       }
   

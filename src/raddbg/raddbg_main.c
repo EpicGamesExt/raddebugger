@@ -4,6 +4,11 @@
 ////////////////////////////////
 //~ rjf: post-0.9.19 TODO notes
 //
+//- bug fixes
+// [ ] disassembly sometimes has a problem where source line annotations are
+//     periodically removed/inserted... maybe updating on fs change when we
+//     shouldn't, non-deterministic line annotation path?
+//
 //- watch improvements
 // [ ] *ALL* expressions in watch windows need to be editable.
 //

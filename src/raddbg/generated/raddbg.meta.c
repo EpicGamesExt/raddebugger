@@ -437,7 +437,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[24] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-Rng1U64 rd_reg_slot_range_table[46] =
+Rng1U64 rd_reg_slot_range_table[48] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -453,6 +453,7 @@ Rng1U64 rd_reg_slot_range_table[46] =
 {OffsetOf(RD_Regs, dst_panel), OffsetOf(RD_Regs, dst_panel) + sizeof(RD_CfgID)},
 {OffsetOf(RD_Regs, cfg), OffsetOf(RD_Regs, cfg) + sizeof(RD_CfgID)},
 {OffsetOf(RD_Regs, cfg_list), OffsetOf(RD_Regs, cfg_list) + sizeof(RD_CfgIDList)},
+{OffsetOf(RD_Regs, eval_space), OffsetOf(RD_Regs, eval_space) + sizeof(E_Space)},
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(RD_Regs, inline_depth), OffsetOf(RD_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},
@@ -468,6 +469,7 @@ Rng1U64 rd_reg_slot_range_table[46] =
 {OffsetOf(RD_Regs, voff_range), OffsetOf(RD_Regs, voff_range) + sizeof(Rng1U64)},
 {OffsetOf(RD_Regs, expr), OffsetOf(RD_Regs, expr) + sizeof(String8)},
 {OffsetOf(RD_Regs, ui_key), OffsetOf(RD_Regs, ui_key) + sizeof(UI_Key)},
+{OffsetOf(RD_Regs, src_ui_key), OffsetOf(RD_Regs, src_ui_key) + sizeof(UI_Key)},
 {OffsetOf(RD_Regs, off_px), OffsetOf(RD_Regs, off_px) + sizeof(Vec2F32)},
 {OffsetOf(RD_Regs, reg_slot), OffsetOf(RD_Regs, reg_slot) + sizeof(RD_RegSlot)},
 {OffsetOf(RD_Regs, pid), OffsetOf(RD_Regs, pid) + sizeof(U32)},

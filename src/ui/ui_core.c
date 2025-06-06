@@ -2606,6 +2606,21 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
         box->text_color = ui_color_from_name(str8_lit("text"));
       }
     }
+    if(box->flags & (UI_BoxFlag_DrawBorder|
+                     UI_BoxFlag_DrawSideRight|
+                     UI_BoxFlag_DrawSideLeft|
+                     UI_BoxFlag_DrawSideTop|
+                     UI_BoxFlag_DrawSideBottom))
+    {
+      if(ui_state->border_color_stack.top != &ui_state->border_color_nil_stack_top)
+      {
+        box->border_color = ui_state->border_color_stack.top->v;
+      }
+      else
+      {
+        box->border_color = ui_color_from_name(str8_lit("border"));
+      }
+    }
   }
   
   //- rjf: auto-pop all stacks

@@ -27,6 +27,7 @@ typedef struct UI_TransparencyNode UI_TransparencyNode; struct UI_TransparencyNo
 typedef struct UI_TagNode UI_TagNode; struct UI_TagNode{UI_TagNode *next; String8 v;};
 typedef struct UI_BackgroundColorNode UI_BackgroundColorNode; struct UI_BackgroundColorNode{UI_BackgroundColorNode *next; Vec4F32 v;};
 typedef struct UI_TextColorNode UI_TextColorNode; struct UI_TextColorNode{UI_TextColorNode *next; Vec4F32 v;};
+typedef struct UI_BorderColorNode UI_BorderColorNode; struct UI_BorderColorNode{UI_BorderColorNode *next; Vec4F32 v;};
 typedef struct UI_SquishNode UI_SquishNode; struct UI_SquishNode{UI_SquishNode *next; F32 v;};
 typedef struct UI_HoverCursorNode UI_HoverCursorNode; struct UI_HoverCursorNode{UI_HoverCursorNode *next; OS_Cursor v;};
 typedef struct UI_FontNode UI_FontNode; struct UI_FontNode{UI_FontNode *next; FNT_Tag v;};
@@ -64,6 +65,7 @@ UI_TransparencyNode transparency_nil_stack_top;\
 UI_TagNode tag_nil_stack_top;\
 UI_BackgroundColorNode background_color_nil_stack_top;\
 UI_TextColorNode text_color_nil_stack_top;\
+UI_BorderColorNode border_color_nil_stack_top;\
 UI_SquishNode squish_nil_stack_top;\
 UI_HoverCursorNode hover_cursor_nil_stack_top;\
 UI_FontNode font_nil_stack_top;\
@@ -100,6 +102,7 @@ state->transparency_nil_stack_top.v = 0;\
 state->tag_nil_stack_top.v = str8_lit("");\
 state->background_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
 state->text_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
+state->border_color_nil_stack_top.v = v4f32(0, 0, 0, 0);\
 state->squish_nil_stack_top.v = 0;\
 state->hover_cursor_nil_stack_top.v = OS_Cursor_Pointer;\
 state->font_nil_stack_top.v = fnt_tag_zero();\
@@ -138,6 +141,7 @@ struct { UI_TransparencyNode *top; F32 bottom_val; UI_TransparencyNode *free; U6
 struct { UI_TagNode *top; String8 bottom_val; UI_TagNode *free; U64 gen; B32 auto_pop; } tag_stack;\
 struct { UI_BackgroundColorNode *top; Vec4F32 bottom_val; UI_BackgroundColorNode *free; U64 gen; B32 auto_pop; } background_color_stack;\
 struct { UI_TextColorNode *top; Vec4F32 bottom_val; UI_TextColorNode *free; U64 gen; B32 auto_pop; } text_color_stack;\
+struct { UI_BorderColorNode *top; Vec4F32 bottom_val; UI_BorderColorNode *free; U64 gen; B32 auto_pop; } border_color_stack;\
 struct { UI_SquishNode *top; F32 bottom_val; UI_SquishNode *free; U64 gen; B32 auto_pop; } squish_stack;\
 struct { UI_HoverCursorNode *top; OS_Cursor bottom_val; UI_HoverCursorNode *free; U64 gen; B32 auto_pop; } hover_cursor_stack;\
 struct { UI_FontNode *top; FNT_Tag bottom_val; UI_FontNode *free; U64 gen; B32 auto_pop; } font_stack;\
@@ -174,6 +178,7 @@ state->transparency_stack.top = &state->transparency_nil_stack_top; state->trans
 state->tag_stack.top = &state->tag_nil_stack_top; state->tag_stack.bottom_val = str8_lit(""); state->tag_stack.free = 0; state->tag_stack.auto_pop = 0;\
 state->background_color_stack.top = &state->background_color_nil_stack_top; state->background_color_stack.bottom_val = v4f32(0, 0, 0, 0); state->background_color_stack.free = 0; state->background_color_stack.auto_pop = 0;\
 state->text_color_stack.top = &state->text_color_nil_stack_top; state->text_color_stack.bottom_val = v4f32(0, 0, 0, 0); state->text_color_stack.free = 0; state->text_color_stack.auto_pop = 0;\
+state->border_color_stack.top = &state->border_color_nil_stack_top; state->border_color_stack.bottom_val = v4f32(0, 0, 0, 0); state->border_color_stack.free = 0; state->border_color_stack.auto_pop = 0;\
 state->squish_stack.top = &state->squish_nil_stack_top; state->squish_stack.bottom_val = 0; state->squish_stack.free = 0; state->squish_stack.auto_pop = 0;\
 state->hover_cursor_stack.top = &state->hover_cursor_nil_stack_top; state->hover_cursor_stack.bottom_val = OS_Cursor_Pointer; state->hover_cursor_stack.free = 0; state->hover_cursor_stack.auto_pop = 0;\
 state->font_stack.top = &state->font_nil_stack_top; state->font_stack.bottom_val = fnt_tag_zero(); state->font_stack.free = 0; state->font_stack.auto_pop = 0;\
@@ -210,6 +215,7 @@ if(state->transparency_stack.auto_pop) { ui_pop_transparency(); state->transpare
 if(state->tag_stack.auto_pop) { ui_pop_tag(); state->tag_stack.auto_pop = 0; }\
 if(state->background_color_stack.auto_pop) { ui_pop_background_color(); state->background_color_stack.auto_pop = 0; }\
 if(state->text_color_stack.auto_pop) { ui_pop_text_color(); state->text_color_stack.auto_pop = 0; }\
+if(state->border_color_stack.auto_pop) { ui_pop_border_color(); state->border_color_stack.auto_pop = 0; }\
 if(state->squish_stack.auto_pop) { ui_pop_squish(); state->squish_stack.auto_pop = 0; }\
 if(state->hover_cursor_stack.auto_pop) { ui_pop_hover_cursor(); state->hover_cursor_stack.auto_pop = 0; }\
 if(state->font_stack.auto_pop) { ui_pop_font(); state->font_stack.auto_pop = 0; }\
@@ -245,6 +251,7 @@ internal F32                        ui_top_transparency(void);
 internal String8                    ui_top_tag(void);
 internal Vec4F32                    ui_top_background_color(void);
 internal Vec4F32                    ui_top_text_color(void);
+internal Vec4F32                    ui_top_border_color(void);
 internal F32                        ui_top_squish(void);
 internal OS_Cursor                  ui_top_hover_cursor(void);
 internal FNT_Tag                    ui_top_font(void);
@@ -279,6 +286,7 @@ internal F32                        ui_bottom_transparency(void);
 internal String8                    ui_bottom_tag(void);
 internal Vec4F32                    ui_bottom_background_color(void);
 internal Vec4F32                    ui_bottom_text_color(void);
+internal Vec4F32                    ui_bottom_border_color(void);
 internal F32                        ui_bottom_squish(void);
 internal OS_Cursor                  ui_bottom_hover_cursor(void);
 internal FNT_Tag                    ui_bottom_font(void);
@@ -313,6 +321,7 @@ internal F32                        ui_push_transparency(F32 v);
 internal String8                    ui_push_tag(String8 v);
 internal Vec4F32                    ui_push_background_color(Vec4F32 v);
 internal Vec4F32                    ui_push_text_color(Vec4F32 v);
+internal Vec4F32                    ui_push_border_color(Vec4F32 v);
 internal F32                        ui_push_squish(F32 v);
 internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
 internal FNT_Tag                    ui_push_font(FNT_Tag v);
@@ -347,6 +356,7 @@ internal F32                        ui_pop_transparency(void);
 internal String8                    ui_pop_tag(void);
 internal Vec4F32                    ui_pop_background_color(void);
 internal Vec4F32                    ui_pop_text_color(void);
+internal Vec4F32                    ui_pop_border_color(void);
 internal F32                        ui_pop_squish(void);
 internal OS_Cursor                  ui_pop_hover_cursor(void);
 internal FNT_Tag                    ui_pop_font(void);
@@ -381,6 +391,7 @@ internal F32                        ui_set_next_transparency(F32 v);
 internal String8                    ui_set_next_tag(String8 v);
 internal Vec4F32                    ui_set_next_background_color(Vec4F32 v);
 internal Vec4F32                    ui_set_next_text_color(Vec4F32 v);
+internal Vec4F32                    ui_set_next_border_color(Vec4F32 v);
 internal F32                        ui_set_next_squish(F32 v);
 internal OS_Cursor                  ui_set_next_hover_cursor(OS_Cursor v);
 internal FNT_Tag                    ui_set_next_font(FNT_Tag v);

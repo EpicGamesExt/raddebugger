@@ -22,6 +22,7 @@ RD_RegSlot_PrevTab,
 RD_RegSlot_DstPanel,
 RD_RegSlot_Cfg,
 RD_RegSlot_CfgList,
+RD_RegSlot_EvalSpace,
 RD_RegSlot_UnwindCount,
 RD_RegSlot_InlineDepth,
 RD_RegSlot_FilePath,
@@ -37,6 +38,7 @@ RD_RegSlot_VaddrRange,
 RD_RegSlot_VoffRange,
 RD_RegSlot_Expr,
 RD_RegSlot_UIKey,
+RD_RegSlot_SrcUIKey,
 RD_RegSlot_OffPx,
 RD_RegSlot_RegSlot,
 RD_RegSlot_PID,
@@ -449,6 +451,7 @@ RD_CfgID prev_tab;
 RD_CfgID dst_panel;
 RD_CfgID cfg;
 RD_CfgIDList cfg_list;
+E_Space eval_space;
 U64 unwind_count;
 U64 inline_depth;
 String8 file_path;
@@ -464,6 +467,7 @@ Rng1U64 vaddr_range;
 Rng1U64 voff_range;
 String8 expr;
 UI_Key ui_key;
+UI_Key src_ui_key;
 Vec2F32 off_px;
 RD_RegSlot reg_slot;
 U32 pid;
@@ -545,6 +549,7 @@ Z(getting_started)\
 .dst_panel = rd_regs()->dst_panel,\
 .cfg = rd_regs()->cfg,\
 .cfg_list = rd_regs()->cfg_list,\
+.eval_space = rd_regs()->eval_space,\
 .unwind_count = rd_regs()->unwind_count,\
 .inline_depth = rd_regs()->inline_depth,\
 .file_path = rd_regs()->file_path,\
@@ -560,6 +565,7 @@ Z(getting_started)\
 .voff_range = rd_regs()->voff_range,\
 .expr = rd_regs()->expr,\
 .ui_key = rd_regs()->ui_key,\
+.src_ui_key = rd_regs()->src_ui_key,\
 .off_px = rd_regs()->off_px,\
 .reg_slot = rd_regs()->reg_slot,\
 .pid = rd_regs()->pid,\
@@ -583,7 +589,7 @@ extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
 extern RD_VocabInfo rd_vocab_info_table[345];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
-extern Rng1U64 rd_reg_slot_range_table[46];
+extern Rng1U64 rd_reg_slot_range_table[48];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];

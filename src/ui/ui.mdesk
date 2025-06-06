@@ -38,6 +38,7 @@ UI_StackTable:
   { Tag                                tag                           String8              `str8_lit("")`                    1 }
   { BackgroundColor                    background_color              Vec4F32              `v4f32(0, 0, 0, 0)`                 }
   { TextColor                          text_color                    Vec4F32              `v4f32(0, 0, 0, 0)`                 }
+  { BorderColor                        border_color                  Vec4F32              `v4f32(0, 0, 0, 0)`                 }
   
   //- rjf: squish
   { Squish                             squish                        F32                   0                                  }

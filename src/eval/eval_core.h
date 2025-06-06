@@ -1151,6 +1151,7 @@ internal E_MsgList e_msg_list_copy(Arena *arena, E_MsgList *src);
 //~ rjf: Space Functions
 
 internal E_Space e_space_make(E_SpaceKind kind);
+internal B32 e_space_match(E_Space a, E_Space b);
 
 ////////////////////////////////
 //~ rjf: Map Functions
