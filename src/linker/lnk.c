@@ -2426,7 +2426,7 @@ lnk_section_contrib_ptr_is_before(void *raw_a, void *raw_b)
       }
     } else {
       // place sections without sort postfix first
-      cmp = a->u.sort_idx_size < b->u.sort_idx_size;
+      cmp = u16_compar(&a->u.sort_idx_size, &b->u.sort_idx_size);
     }
   } else {
     // sort on section postfix
