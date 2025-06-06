@@ -1740,7 +1740,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_PageSize: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->page_size, 0);
+    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->machine_page_size, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_PathStyle: {
@@ -1935,13 +1935,13 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 }
 
 internal LNK_Config *
-lnk_config_from_cmd_line(Arena *arena, LNK_CmdLine cmd_line)
+lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd_line)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
   LNK_Config *config                = push_array(arena, LNK_Config, 1);
-  config->raw_cmd_line              = str8_list_copy(arena, &cmd_line.raw_cmd_line);
+  config->raw_cmd_line              = str8_list_copy(arena, &raw_cmd_line);
   config->work_dir                  = os_get_current_path(arena);
   config->build_imp_lib             = 1;
   config->build_exp                 = 1;
