@@ -482,11 +482,9 @@ lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name)
     if (curr == 0) {
       break;
     }
-    if (curr->symbol) {
-      if (str8_match(curr->symbol->name, name, 0)) {
-        result = curr;
-        break;
-      }
+    if (curr->name && str8_match(*curr->name, name, 0)) {
+      result = curr;
+      break;
     }
     curr_ptr = curr->child + (h >> 62);
   }
