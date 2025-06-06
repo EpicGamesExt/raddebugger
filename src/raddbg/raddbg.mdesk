@@ -517,6 +517,8 @@ RD_VocabTable:
         'cursor_size': @range[1, 16] u64,
       @default(16) @description("The number of columns to build before building new rows.")
         'num_columns': @range[1, 64] u64,
+      @default(1) @display_name("Track Mark To Cursor") @description("Ensures that the mark always follows the cursor, if the cursor value is updated.")
+        'track_mark_to_cursor': bool,
     }
     ```
   }

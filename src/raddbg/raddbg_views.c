@@ -2536,6 +2536,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   U64 initial_cursor_base_vaddr  = cursor_base_vaddr;
   U64 initial_mark_base_vaddr    = mark_base_vaddr;
   U64 num_columns     = rd_view_setting_u64_from_name(str8_lit("num_columns"));
+  B32 track_mark_to_cursor = rd_view_setting_b32_from_name(str8_lit("track_mark_to_cursor"));
   if(num_columns == 0)
   {
     num_columns = 16;
@@ -2581,29 +2582,6 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   F32 cell_width_px = floor_f32(font_size*2.f);
   
   //////////////////////////////
-  //- rjf: determine legal scroll range
-  //
-  U64 view_range_last = view_range.max;
-  if(view_range_last != 0)
-  {
-    view_range_last -= 1;
-  }
-  Rng1S64 scroll_idx_rng = r1s64(0, (view_range_last - view_range.min) / num_columns);
-  
-  //////////////////////////////
-  //- rjf: determine visible range of rows (including occluded)
-  //
-  Rng1S64 viz_range_rows = {0};
-  S64 num_possible_visible_rows = 0;
-  {
-    num_possible_visible_rows = dim_2f32(rect).y/row_height_px;
-    viz_range_rows.min = scroll_pos.y.idx + (S64)scroll_pos.y.off - !!(scroll_pos.y.off<0);
-    viz_range_rows.max = scroll_pos.y.idx + (S64)scroll_pos.y.off + num_possible_visible_rows,
-    viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
-    viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
-  }
-  
-  //////////////////////////////
   //- rjf: calculate rectangles
   //
   F32 scroll_bar_dim = floor_f32(main_font_size*1.5f);
@@ -2614,189 +2592,220 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Rng2F32 content_rect = r2f32p(0, row_height_px, panel_dim.x-scroll_bar_dim, panel_dim.y);
   
   //////////////////////////////
-  //- rjf: determine visible range of rows (only non-occluded)
+  //- rjf: determine visible range of rows (occluded & non-occluded)
   //
-  Rng1S64 viz_range_nonoccluded_rows = {0};
-  S64 num_possible_nonoccluded_visible_rows = 0;
+  S64 num_possible_visible_rows = num_possible_visible_rows = dim_2f32(rect).y/row_height_px;;
+  S64 num_possible_nonoccluded_visible_rows = (dim_2f32(content_rect).y - dim_2f32(footer_rect).y) / row_height_px;
+  
+  //////////////////////////////
+  //- rjf: determine legal scroll range
+  //
+  U64 view_range_last = view_range.max;
+  if(view_range_last != 0)
   {
-    num_possible_nonoccluded_visible_rows = (dim_2f32(content_rect).y - dim_2f32(footer_rect).y) / row_height_px;
-    viz_range_nonoccluded_rows.min = viz_range_rows.min + (S64)(content_rect.y0 / row_height_px);
-    viz_range_nonoccluded_rows.max = viz_range_nonoccluded_rows.min + num_possible_nonoccluded_visible_rows;
-    viz_range_nonoccluded_rows.min = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.min);
-    viz_range_nonoccluded_rows.max = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.max);
+    view_range_last -= 1;
+  }
+  Rng1S64 scroll_idx_rng = r1s64(0, (view_range_last - view_range.min) / num_columns);
+  
+  //////////////////////////////
+  //- rjf: on cursor rugpull -> update mark if needed
+  //
+  {
+    Rng1U64 cursor_range = r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size);
+    if(mv->last_cursor_range.min != cursor_range.min ||
+       mv->last_cursor_range.max != cursor_range.max)
+    {
+      mv->contain_cursor = 1;
+      if(track_mark_to_cursor)
+      {
+        mark_base_vaddr = cursor_base_vaddr;
+      }
+    }
   }
   
   //////////////////////////////
+  //- rjf: loop: compute boundaries, take events, repeat
+  //
+  B32 need_update = 1;
+  Rng1U64 cursor_valid_rng = {0};
+  for(;;)
+  {
+    //- rjf: break if no further updates needed
+    if(!need_update)
+    {
+      break;
+    }
+    need_update = 0;
+    
+    //- rjf: take keyboard controls
+    UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
+    {
+      U64 next_cursor_base_vaddr = cursor_base_vaddr;
+      U64 next_mark_base_vaddr = mark_base_vaddr;
+      for(UI_Event *evt = 0; ui_next_event(&evt);)
+      {
+        Vec2S64 cell_delta = {0};
+        switch(evt->delta_unit)
+        {
+          default:{}break;
+          case UI_EventDeltaUnit_Char:
+          {
+            cell_delta.x = (S64)evt->delta_2s32.x;
+            cell_delta.y = (S64)evt->delta_2s32.y;
+          }break;
+          case UI_EventDeltaUnit_Word:
+          case UI_EventDeltaUnit_Page:
+          {
+            if(evt->delta_2s32.x < 0)
+            {
+              cell_delta.x = -(S64)(cursor_base_vaddr%num_columns);
+            }
+            else if(evt->delta_2s32.x > 0)
+            {
+              cell_delta.x = (num_columns-1) - (S64)(cursor_base_vaddr%num_columns);
+            }
+            if(evt->delta_2s32.y < 0)
+            {
+              cell_delta.y = -4;
+            }
+            else if(evt->delta_2s32.y > 0)
+            {
+              cell_delta.y = +4;
+            }
+          }break;
+        }
+        B32 good_action = 0;
+        if(evt->delta_2s32.x != 0 || evt->delta_2s32.y != 0)
+        {
+          good_action = 1;
+        }
+        if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor_base_vaddr != mark_base_vaddr)
+        {
+          MemoryZeroStruct(&cell_delta);
+        }
+        if(good_action)
+        {
+          cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor_base_vaddr);
+          cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor_base_vaddr/num_columns));
+          next_cursor_base_vaddr += cell_delta.x;
+          next_cursor_base_vaddr += cell_delta.y*num_columns;
+        }
+        if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
+        {
+          if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
+          {
+            next_cursor_base_vaddr = Min(cursor_base_vaddr, mark_base_vaddr);
+          }
+          else
+          {
+            next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
+          }
+        }
+        if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
+        {
+          next_mark_base_vaddr = next_cursor_base_vaddr;
+        }
+        if(good_action)
+        {
+          need_update = 1;
+          mv->contain_cursor = 1;
+          ui_eat_event(evt);
+        }
+      }
+      cursor_base_vaddr = next_cursor_base_vaddr;
+      mark_base_vaddr = next_mark_base_vaddr;
+    }
+    
+    //- rjf: clamp cursor
+    cursor_valid_rng = view_range;
+    if(cursor_valid_rng.max != 0)
+    {
+      cursor_valid_rng.max -= 1;
+    }
+    if(cursor_base_vaddr != initial_cursor_base_vaddr)
+    {
+      cursor_base_vaddr = clamp_1u64(cursor_valid_rng, cursor_base_vaddr);
+    }
+    if(mark_base_vaddr != initial_mark_base_vaddr)
+    {
+      mark_base_vaddr = clamp_1u64(cursor_valid_rng, mark_base_vaddr);
+    }
+    
+    //- rjf: center cursor if range has changed
+    if(mv->last_view_range.max != view_range.max ||
+       mv->last_view_range.min != view_range.min)
+    {
+      mv->center_cursor = 1;
+      mv->last_view_range = view_range;
+    }
+    
+    //- rjf: center cursor
+    if(mv->center_cursor)
+    {
+      mv->center_cursor = 0;
+      S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
+      S64 new_idx = (cursor_row_idx-num_possible_nonoccluded_visible_rows/2+1);
+      new_idx = clamp_1s64(scroll_idx_rng, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
+    }
+    
+    //- rjf: contain cursor
+    if(mv->contain_cursor)
+    {
+      mv->contain_cursor = 0;
+      Rng1S64 viz_range_nonoccluded_rows = {0};
+      viz_range_nonoccluded_rows.min = scroll_pos.y.idx + (S64)(content_rect.y0 / row_height_px);
+      viz_range_nonoccluded_rows.max = viz_range_nonoccluded_rows.min + num_possible_nonoccluded_visible_rows;
+      viz_range_nonoccluded_rows.min = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.min);
+      viz_range_nonoccluded_rows.max = clamp_1s64(scroll_idx_rng, viz_range_nonoccluded_rows.max);
+      S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
+      Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
+      S64 min_delta = Min(0, cursor_viz_range.min-viz_range_nonoccluded_rows.min);
+      S64 max_delta = Max(0, cursor_viz_range.max-viz_range_nonoccluded_rows.max);
+      S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
+      new_idx = clamp_1s64(scroll_idx_rng, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: determine selection
+  //
+  Rng1U64 selection = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size-1),
+                                 r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size-1));
+  
+  ////////////////////////////
+  //- rjf: determine visible range of rows (including occluded)
+  //
+  Rng1S64 viz_range_rows = {0};
+  {
+    viz_range_rows.min = scroll_pos.y.idx + (S64)scroll_pos.y.off - !!(scroll_pos.y.off<0);
+    viz_range_rows.max = scroll_pos.y.idx + (S64)scroll_pos.y.off + num_possible_visible_rows,
+    viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
+    viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
+  }
+  
+  ////////////////////////////
   //- rjf: bump backwards if we are past the first
+  //
   if(viz_range_rows.min > 0)
   {
     viz_range_rows.min -= 1;
     content_rect.y0 -= row_height_px;
   }
   
-  //////////////////////////////
+  ////////////////////////////
   //- rjf: determine visible range of bytes
   //
   Rng1U64 viz_range_bytes = {0};
-  viz_range_bytes.min = view_range.min + (viz_range_rows.min)*num_columns;
-  viz_range_bytes.max = view_range.min + (viz_range_rows.max+1)*num_columns+1;
-  if(viz_range_bytes.min > viz_range_bytes.max)
   {
-    Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
-  }
-  viz_range_bytes = intersect_1u64(view_range, viz_range_bytes);
-  
-  //////////////////////////////
-  //- rjf: take keyboard controls
-  //
-  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
-  {
-    U64 next_cursor_base_vaddr = cursor_base_vaddr;
-    U64 next_mark_base_vaddr = mark_base_vaddr;
-    for(UI_Event *evt = 0; ui_next_event(&evt);)
+    viz_range_bytes.min = view_range.min + (viz_range_rows.min)*num_columns;
+    viz_range_bytes.max = view_range.min + (viz_range_rows.max+1)*num_columns+1;
+    if(viz_range_bytes.min > viz_range_bytes.max)
     {
-      Vec2S64 cell_delta = {0};
-      switch(evt->delta_unit)
-      {
-        default:{}break;
-        case UI_EventDeltaUnit_Char:
-        {
-          cell_delta.x = (S64)evt->delta_2s32.x;
-          cell_delta.y = (S64)evt->delta_2s32.y;
-        }break;
-        case UI_EventDeltaUnit_Word:
-        case UI_EventDeltaUnit_Page:
-        {
-          if(evt->delta_2s32.x < 0)
-          {
-            cell_delta.x = -(S64)(cursor_base_vaddr%num_columns);
-          }
-          else if(evt->delta_2s32.x > 0)
-          {
-            cell_delta.x = (num_columns-1) - (S64)(cursor_base_vaddr%num_columns);
-          }
-          if(evt->delta_2s32.y < 0)
-          {
-            cell_delta.y = -4;
-          }
-          else if(evt->delta_2s32.y > 0)
-          {
-            cell_delta.y = +4;
-          }
-        }break;
-      }
-      B32 good_action = 0;
-      if(evt->delta_2s32.x != 0 || evt->delta_2s32.y != 0)
-      {
-        good_action = 1;
-      }
-      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor_base_vaddr != mark_base_vaddr)
-      {
-        MemoryZeroStruct(&cell_delta);
-      }
-      if(good_action)
-      {
-        cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor_base_vaddr);
-        cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor_base_vaddr/num_columns));
-        next_cursor_base_vaddr += cell_delta.x;
-        next_cursor_base_vaddr += cell_delta.y*num_columns;
-      }
-      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor_base_vaddr != mark_base_vaddr)
-      {
-        if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
-        {
-          next_cursor_base_vaddr = Min(cursor_base_vaddr, mark_base_vaddr);
-        }
-        else
-        {
-          next_cursor_base_vaddr = Max(cursor_base_vaddr, mark_base_vaddr);
-        }
-      }
-      if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
-      {
-        next_mark_base_vaddr = next_cursor_base_vaddr;
-      }
-      if(good_action)
-      {
-        mv->contain_cursor = 1;
-        ui_eat_event(evt);
-      }
+      Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
     }
-    cursor_base_vaddr = next_cursor_base_vaddr;
-    mark_base_vaddr = next_mark_base_vaddr;
-  }
-  
-  //////////////////////////////
-  //- rjf: clamp cursor
-  //
-  Rng1U64 cursor_valid_rng = view_range;
-  if(cursor_valid_rng.max != 0)
-  {
-    cursor_valid_rng.max -= 1;
-  }
-  if(cursor_base_vaddr != initial_cursor_base_vaddr)
-  {
-    cursor_base_vaddr = clamp_1u64(cursor_valid_rng, cursor_base_vaddr);
-  }
-  if(mark_base_vaddr != initial_mark_base_vaddr)
-  {
-    mark_base_vaddr = clamp_1u64(cursor_valid_rng, mark_base_vaddr);
-  }
-  
-  //////////////////////////////
-  //- rjf: unpack post-move cursor/mark info
-  //
-  Rng1U64 cursor_range = r1u64(cursor_base_vaddr, cursor_base_vaddr + cursor_size);
-  Rng1U64 mark_range   = r1u64(mark_base_vaddr, mark_base_vaddr + cursor_size);
-  Rng1U64 selection = union_1u64(r1u64(cursor_base_vaddr, cursor_base_vaddr+cursor_size-1),
-                                 r1u64(mark_base_vaddr, mark_base_vaddr+cursor_size-1));
-  
-  //////////////////////////////
-  //- rjf: center cursor if range has changed
-  //
-  if(mv->last_view_range.max != view_range.max ||
-     mv->last_view_range.min != view_range.min)
-  {
-    mv->center_cursor = 1;
-    mv->last_view_range = view_range;
-  }
-  
-  //////////////////////////////
-  //- rjf: match mark to cursor if cursor has changed
-  //
-  if(mv->last_cursor_range.min != cursor_range.min ||
-     mv->last_cursor_range.max != cursor_range.max)
-  {
-    mv->contain_cursor = 1;
-    mv->last_cursor_range = cursor_range;
-    mark_range = cursor_range;
-  }
-  
-  //////////////////////////////
-  //- rjf: center cursor
-  //
-  if(mv->center_cursor)
-  {
-    mv->center_cursor = 0;
-    S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
-    S64 new_idx = (cursor_row_idx-num_possible_nonoccluded_visible_rows/2+1);
-    new_idx = clamp_1s64(scroll_idx_rng, new_idx);
-    ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
-  }
-  
-  //////////////////////////////
-  //- rjf: contain cursor
-  //
-  if(mv->contain_cursor)
-  {
-    mv->contain_cursor = 0;
-    S64 cursor_row_idx = (cursor_base_vaddr - view_range.min) / num_columns;
-    Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
-    S64 min_delta = Min(0, cursor_viz_range.min-viz_range_nonoccluded_rows.min);
-    S64 max_delta = Max(0, cursor_viz_range.max-viz_range_nonoccluded_rows.max);
-    S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
-    new_idx = clamp_1s64(scroll_idx_rng, new_idx);
-    ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
+    viz_range_bytes = intersect_1u64(view_range, viz_range_bytes);
   }
   
   //////////////////////////////
@@ -3414,6 +3423,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: save parameters
   //
+  mv->last_cursor_range = r1u64(cursor_base_vaddr, cursor_base_vaddr + cursor_size);
   if(cursor_base_vaddr != initial_cursor_base_vaddr)
   {
     rd_store_view_param_u64(str8_lit("cursor"), cursor_base_vaddr);
