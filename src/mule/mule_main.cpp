@@ -2689,7 +2689,7 @@ DWORD thread_step_thread(void *p)
 void thread_stepping_tests(void)
 {
 #if _WIN32
-  HANDLE h[64] = {0};
+  HANDLE h[8] = {0};
   for(int i = 0; i < sizeof(h)/sizeof(h[0]); i += 1)
   {
     DWORD id = 0;

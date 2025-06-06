@@ -4,6 +4,15 @@
 ////////////////////////////////
 //~ rjf: post-0.9.19 TODO notes
 //
+//- memory view
+// [ ] have smaller visible range than entire memory
+// space, within some bounds (e.g. 64KB)
+// [ ] dynamically expand memory space, based on
+// scrolling
+// [ ] fix clicking through occluded panels etc.
+// [ ] disambiguate . character in ASCII columns
+// [ ] fix type intepretations of cursor in bottom pane
+//
 //- bug fixes
 // [ ] disassembly sometimes has a problem where source line annotations are
 //     periodically removed/inserted... maybe updating on fs change when we
