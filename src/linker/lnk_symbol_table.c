@@ -239,6 +239,10 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     else if (dst_interp == COFF_SymbolValueInterp_Weak && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common || src_interp == COFF_SymbolValueInterp_Abs)) {
       can_replace = 1;
     }
+    // regular vs weak
+    else if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Weak) {
+      can_replace = 0;
+    }
     // (regular, common) vs (regular, common)
     else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
       B32                   dst_is_comdat = 0;
