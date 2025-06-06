@@ -2989,12 +2989,18 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     U32     sect_off;
     U32     data_crc;
     if (obj_sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+      if (obj_sect_header->vsize == 0) {
+        continue;
+      }
       sect_number = rng_1u64_array_bsearch(task->image_section_virt_ranges, obj_sect_header->voff);
       Assert(sect_number < task->image_section_virt_ranges.count);
       sect_data   = str8_zero();
       sect_off    = obj_sect_header->voff - task->image_section_virt_ranges.v[sect_number].min;
       data_crc    = 0;
     } else {
+      if (obj_sect_header->fsize == 0) {
+        continue;
+      }
       sect_number = rng_1u64_array_bsearch(task->image_section_file_ranges, obj_sect_header->foff);
       Assert(sect_number < task->image_section_file_ranges.count);
       sect_data   = str8_substr(task->image_data, rng_1u64(obj_sect_header->foff, obj_sect_header->foff + obj_sect_header->fsize));
