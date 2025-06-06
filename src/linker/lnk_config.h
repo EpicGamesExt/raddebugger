@@ -319,7 +319,7 @@ typedef struct LNK_Config
   U64                         heap_commit;
   U64                         user_base_addr;
   U64                         max_image_size;
-  U64                         page_size;
+  U64                         machine_page_size;
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         max_worker_count;
@@ -582,7 +582,4 @@ internal B32 lnk_parse_merge_directive(String8 string, LNK_MergeDirective *parse
 ////////////////////////////////
 
 internal void lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 name, String8List value_list, String8 obj_path, String8 lib_path);
-
-internal LNK_Config * lnk_config_from_raw_cmd_line(Arena *arena, String8List raw_cmd_line);
-internal LNK_Config * lnk_build_config            (Arena *arena, int argc, char **argv);
 
