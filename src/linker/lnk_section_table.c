@@ -40,6 +40,15 @@ lnk_section_contrib_chunk_push(LNK_SectionContribChunk *chunk, U64 count)
   return result;
 }
 
+internal LNK_SectionContrib *
+lnk_section_contrib_chunk_push_atomic(LNK_SectionContribChunk *chunk, U64 count)
+{
+  U64 pos = ins_atomic_u64_add_eval(&chunk->count, count) - count;
+  Assert(pos + count <= chunk->cap);
+  LNK_SectionContrib *result = chunk->v[pos];
+  return result;
+}
+
 internal LNK_SectionContribChunk *
 lnk_section_contrib_chunk_list_push_chunk(Arena *arena, LNK_SectionContribChunkList *list, U64 cap)
 {
