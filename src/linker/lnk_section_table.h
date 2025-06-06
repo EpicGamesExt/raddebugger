@@ -6,10 +6,13 @@
 typedef struct LNK_SectionContrib
 {
   U16 align;
+
   union {
     String8Node *data_list;
     U64          bss_size;
   };
+  String8Node node;
+
   union {
     struct {
       U16  sort_idx_size;
