@@ -2570,17 +2570,17 @@ THREAD_POOL_TASK_FUNC(lnk_patch_common_block_symbols_task)
     if (interp == COFF_SymbolValueInterp_Common) {
       LNK_Symbol *defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
       COFF_ParsedSymbol defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
+      Assert(coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class) == COFF_SymbolValueInterp_Regular);
       if (defn) {
-        LNK_SectionContrib *sc = task->sect_map[defn->u.defined.obj->input_idx][defn_parsed.section_number-1];
         if (obj->header.is_big_obj) {
           COFF_Symbol32 *symbol32  = symbol.raw_symbol;
-          symbol32->section_number = safe_cast_u32(sc->u.sect_idx + 1);
-          symbol32->value          = safe_cast_u32(sc->u.off);
+          symbol32->section_number = defn_parsed.section_number;
+          symbol32->value          = safe_cast_u32(defn_parsed.value);
           symbol32->storage_class  = COFF_SymStorageClass_Static;
         } else {
           COFF_Symbol16 *symbol16  = symbol.raw_symbol;
-          symbol16->section_number = safe_cast_u16(sc->u.sect_idx + 1);
-          symbol16->value          = safe_cast_u32(sc->u.off);
+          symbol16->section_number = safe_cast_u16(defn_parsed.section_number);
+          symbol16->value          = safe_cast_u32(defn_parsed.value);
           symbol16->storage_class  = COFF_SymStorageClass_Static;
         }
       }
