@@ -57,6 +57,7 @@ e_token_array_from_chunk_list(Arena *arena, E_TokenChunkList *list)
   for(E_TokenChunkNode *node = list->first; node != 0; node = node->next)
   {
     MemoryCopy(array.v+idx, node->v, sizeof(E_Token)*node->count);
+    idx += node->count;
   }
   return array;
 }
