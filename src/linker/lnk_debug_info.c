@@ -3140,7 +3140,7 @@ lnk_build_pdb(TP_Context               *tp,
   U64                  image_section_table_count = pe.section_count+1;
 
   ProfBegin("Setup PDB Context");
-  PDB_Context *pdb = pdb_alloc(config->page_size, config->machine, config->time_stamp, config->age, config->guid);
+  PDB_Context *pdb = pdb_alloc(config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid);
   ProfEnd();
 
   // move patched type data
