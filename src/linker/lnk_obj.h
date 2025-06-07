@@ -10,7 +10,7 @@ typedef struct LNK_Obj
   String8             data;
   String8             path;
   String8             lib_path;
-  U64                 input_idx;
+  U32                 input_idx;
   COFF_FileHeaderInfo header;
   U32                *comdats;
 } LNK_Obj;
