@@ -50,13 +50,14 @@ lnk_section_contrib_chunk_push_atomic(LNK_SectionContribChunk *chunk, U64 count)
 }
 
 internal LNK_SectionContribChunk *
-lnk_section_contrib_chunk_list_push_chunk(Arena *arena, LNK_SectionContribChunkList *list, U64 cap)
+lnk_section_contrib_chunk_list_push_chunk(Arena *arena, LNK_SectionContribChunkList *list, U64 cap, String8 sort_idx)
 {
   LNK_SectionContribChunk *chunk = push_array(arena, LNK_SectionContribChunk, 1);
-  chunk->count = 0;
-  chunk->cap   = cap;
-  chunk->v     = push_array(arena, LNK_SectionContrib *, cap);
-  chunk->v2 = push_array(arena, LNK_SectionContrib, cap);
+  chunk->count    = 0;
+  chunk->cap      = cap;
+  chunk->v        = push_array(arena, LNK_SectionContrib *, cap);
+  chunk->v2       = push_array(arena, LNK_SectionContrib, cap);
+  chunk->sort_idx = sort_idx;
   for (U64 i = 0; i < cap; i += 1) { chunk->v[i] = &chunk->v2[i]; }
   SLLQueuePush(list->first, list->last, chunk);
   list->chunk_count += 1;
@@ -73,6 +74,17 @@ lnk_section_contrib_chunk_list_concat_in_place(LNK_SectionContribChunkList *list
     list->last         = to_concat->last;
     list->chunk_count += to_concat->chunk_count;
   }
+}
+
+internal LNK_SectionContribChunk **
+lnk_array_from_section_contrib_chunk_list(Arena *arena, LNK_SectionContribChunkList list)
+{
+  LNK_SectionContribChunk **result = push_array(arena, LNK_SectionContribChunk *, list.chunk_count);
+  U64 i = 0;
+  for (LNK_SectionContribChunk *chunk = list.first; chunk != 0; chunk = chunk->next, i += 1) {
+    result[i] = chunk;
+  }
+  return result;
 }
 
 internal LNK_SectionArray
@@ -415,9 +427,36 @@ lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab)
   return result;
 }
 
+internal int
+lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
+{
+  LNK_SectionContribChunk **a = raw_a, **b = raw_b;
+  return str8_is_before_case_sensitive(&(*a)->sort_idx, &(*b)->sort_idx);
+}
+
 internal void
 lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 file_align)
 {
+  Temp scratch = scratch_begin(0,0);
+
+  ProfBegin("Sort Section Contribs");
+  {
+    // Grouped Sections (PE Format)
+    //  "All contributions with the same object-section name are allocated contiguously in the image,
+    //  and the blocks of contributions are sorted in lexical order by object-section name." 
+    LNK_SectionContribChunk **chunks = lnk_array_from_section_contrib_chunk_list(scratch.arena, sect->contribs);
+    radsort(chunks, sect->contribs.chunk_count, lnk_section_contrib_chunk_is_before);
+
+    // repopulate chunk list in sorted order
+    sect->contribs.first = 0;
+    sect->contribs.last = 0;
+    for (U64 chunk_idx = 0; chunk_idx < sect->contribs.chunk_count; chunk_idx += 1) {
+      SLLQueuePush(sect->contribs.first, sect->contribs.last, chunks[chunk_idx]);
+    }
+  }
+  ProfEnd();
+
+  ProfBegin("Layout Contribs");
   U64 cursor = 0;
   for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
     for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
@@ -441,11 +480,14 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
       sc->u.size = sc_size;
     }
   }
+  ProfEnd();
 
   if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
     sect->fsize = AlignPow2(cursor, file_align);
   }
   sect->vsize = cursor;
+
+  scratch_end(scratch);
 }
 
 
