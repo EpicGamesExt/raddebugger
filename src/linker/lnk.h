@@ -58,6 +58,7 @@ typedef struct
   U64                   objs_count;
   LNK_Obj              **objs;
   LNK_SectionContrib ***sect_map;
+  HashTable            *contribs_ht;
   LNK_SectionArray      image_sects;
   union {
     struct {

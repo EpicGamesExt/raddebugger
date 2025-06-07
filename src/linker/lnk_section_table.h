@@ -5,27 +5,26 @@
 
 typedef struct LNK_SectionContrib
 {
+  union {
+    struct {
+      U32 obj_idx;
+      U32 obj_sect_idx;
+    };
+    struct {
+      U32 off;
+      U32 size;
+      U16 sect_idx;
+    };
+  } u;
+
   U16 align;
 
   union {
     String8Node *data_list;
     U64          bss_size;
   };
-  String8Node node;
 
-  union {
-    struct {
-      U16  sort_idx_size;
-      U32  obj_idx;
-      U32  obj_sect_idx;
-      U8  *sort_idx;
-    };
-    struct {
-      U16 sect_idx;
-      U32 off;
-      U32 size;
-    };
-  } u;
+  String8Node node;
 } LNK_SectionContrib;
 
 typedef struct LNK_CommonBlockContrib
@@ -42,6 +41,7 @@ typedef struct LNK_SectionContribChunk
   struct LNK_SectionContribChunk *next;
   U64                             count;
   U64                             cap;
+  String8                         sort_idx;
   LNK_SectionContrib            **v;
   LNK_SectionContrib             *v2;
 } LNK_SectionContribChunk;
