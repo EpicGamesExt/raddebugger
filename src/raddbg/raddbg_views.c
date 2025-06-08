@@ -2850,7 +2850,9 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: produce fancy strings for all possible byte values in all cells
   //
   DR_FStrList byte_fstrs[256] = {0};
+  DR_FStrList byte_fstrs_selected[256] = {0};
   {
+    Vec4F32 selected_color = ui_color_from_name(str8_lit("text"));
     Vec4F32 full_color = {0};
     UI_TagF("neutral") full_color = ui_color_from_name(str8_lit("text"));
     Vec4F32 zero_color = full_color;
@@ -2864,8 +2866,14 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       {
         text_color.w *= 0.5f;
       }
-      DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, text_color, font_size, 0, 0}};
-      dr_fstrs_push(scratch.arena, &byte_fstrs[idx], &fstr);
+      {
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, text_color, font_size, 0, 0}};
+        dr_fstrs_push(scratch.arena, &byte_fstrs[idx], &fstr);
+      }
+      {
+        DR_FStr fstr = {push_str8f(scratch.arena, "%02x", byte), {font, font_raster_flags, selected_color, font_size, 0, 0}};
+        dr_fstrs_push(scratch.arena, &byte_fstrs_selected[idx], &fstr);
+      }
     }
   }
   
@@ -2874,8 +2882,20 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //
   U64 visible_memory_size = dim_1u64(viz_range_bytes);
   U8 *visible_memory = push_array(scratch.arena, U8, visible_memory_size);
+  U64 *visible_memory_change_flags = push_array(scratch.arena, U64, (visible_memory_size+63)/64);
+  U64 *visible_memory_bad_flags = push_array(scratch.arena, U64, (visible_memory_size+63)/64);
   {
     e_space_read(eval.space, visible_memory, viz_range_bytes);
+  }
+  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+  {
+    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+    if(entity->kind == CTRL_EntityKind_Process)
+    {
+      CTRL_ProcessMemorySlice slice = ctrl_process_memory_slice_from_vaddr_range(scratch.arena, entity->handle, viz_range_bytes, 0);
+      visible_memory_change_flags = slice.byte_changed_flags;
+      visible_memory_bad_flags = slice.byte_bad_flags;
+    }
   }
   
   //////////////////////////////
@@ -2967,6 +2987,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     }
     
     //- rjf: fill local variable annotations
+    if(e_space_match(rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), eval.space))
     {
       DI_Scope *scope = di_scope_open();
       Vec4F32 local_color = ui_color_from_name(str8_lit("code_local"));
@@ -3007,6 +3028,116 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       }
       di_scope_close(scope);
     }
+    
+    //- rjf: fill procedures annotations
+    if(e_space_match(rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), eval.space))
+    {
+      Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
+      Vec4F32 color_gen_table[] =
+      {
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.2f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.4f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.6f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.8f),
+      };
+      for(U64 vaddr = viz_range_bytes.min, next_vaddr = 0;
+          viz_range_bytes.min <= vaddr && vaddr <= viz_range_bytes.max;
+          vaddr = next_vaddr)
+      {
+        next_vaddr = vaddr+1;
+        DI_Scope *scope = di_scope_open();
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+        if(module != &ctrl_entity_nil)
+        {
+          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+          RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+          RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+          if(procedure->root_scope_idx != 0)
+          {
+            Rng1U64 voff_range = r1u64(rdi_first_voff_from_scope(rdi, root_scope),
+                                       rdi_opl_voff_from_scope(rdi, root_scope));
+            Rng1U64 vaddr_range = ctrl_vaddr_range_from_voff_range(module, voff_range);
+            next_vaddr = vaddr_range.max;
+            next_vaddr = Max(next_vaddr, vaddr+1);
+            Rng1U64 vaddr_range_in_visible = intersect_1u64(vaddr_range, viz_range_bytes);
+            if(vaddr_range_in_visible.min < vaddr_range_in_visible.max)
+            {
+              String8 procedure_name = {0};
+              procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
+              Annotation *annotation = push_array(scratch.arena, Annotation, 1);
+              {
+                annotation->name_string = push_str8_copy(scratch.arena, procedure_name);
+                annotation->kind_string = str8_lit("Procedure");
+                annotation->color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->vaddr_range = vaddr_range;
+              }
+              for(U64 vaddr = vaddr_range_in_visible.min; vaddr < vaddr_range_in_visible.max; vaddr += 1)
+              {
+                SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, annotation);
+              }
+            }
+          }
+        }
+        di_scope_close(scope);
+      }
+    }
+    
+    //- rjf: fill globals annotations
+    if(e_space_match(rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), eval.space))
+    {
+      Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
+      Vec4F32 color_gen_table[] =
+      {
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.2f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.4f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.6f),
+        mix_4f32(symbol_color, v4f32(0, 0, 0, 1), 0.8f),
+      };
+      for(U64 vaddr = viz_range_bytes.min, next_vaddr = 0;
+          viz_range_bytes.min <= vaddr && vaddr <= viz_range_bytes.max;
+          vaddr = next_vaddr)
+      {
+        next_vaddr = vaddr+1;
+        DI_Scope *scope = di_scope_open();
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+        if(module != &ctrl_entity_nil)
+        {
+          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+          RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+          if(gvar->voff != 0)
+          {
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, gvar->type_idx);
+            Rng1U64 voff_range = r1u64(gvar->voff, gvar->voff + type_node->byte_size);
+            Rng1U64 vaddr_range = ctrl_vaddr_range_from_voff_range(module, voff_range);
+            next_vaddr = vaddr_range.max;
+            next_vaddr = Max(next_vaddr, vaddr+1);
+            Rng1U64 vaddr_range_in_visible = intersect_1u64(vaddr_range, viz_range_bytes);
+            if(vaddr_range_in_visible.min < vaddr_range_in_visible.max)
+            {
+              String8 gvar_name = {0};
+              gvar_name.str = rdi_string_from_idx(rdi, gvar->name_string_idx, &gvar_name.size);
+              Annotation *annotation = push_array(scratch.arena, Annotation, 1);
+              {
+                annotation->name_string = push_str8_copy(scratch.arena, gvar_name);
+                annotation->kind_string = str8_lit("Global");
+                annotation->color = color_gen_table[(vaddr_range.min/7)%ArrayCount(color_gen_table)];
+                annotation->vaddr_range = vaddr_range;
+              }
+              for(U64 vaddr = vaddr_range_in_visible.min; vaddr < vaddr_range_in_visible.max; vaddr += 1)
+              {
+                SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, annotation);
+              }
+            }
+          }
+        }
+        di_scope_close(scope);
+      }
+    }
+    
     ctrl_scope_close(ctrl_scope);
   }
   
@@ -3260,7 +3391,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           {
             ui_set_next_tag(str8_lit("weak"));
           }
-          ui_labelf("0x%016I64X", row_range_bytes.min);
+          ui_labelf("0x%016I64x", row_range_bytes.min);
         }
         UI_PrefWidth(ui_px(cell_width_px, 1.f))
           UI_TextAlignment(UI_TextAlign_Center)
@@ -3283,7 +3414,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
             else
             {
               // rjf: unpack byte info
+              B32 byte_is_selected = (selection.min <= global_byte_idx && global_byte_idx <= selection.max);
               U8 byte_value = visible_memory[visible_byte_idx];
+              B32 byte_is_bad = !!(visible_memory_bad_flags[visible_byte_idx/64] & (1ull<<(visible_byte_idx%64)));
+              B32 byte_is_changed = !!(visible_memory_change_flags[visible_byte_idx/64] & (1ull<<(visible_byte_idx%64)));
               Annotation *annotation = visible_memory_annotations[visible_byte_idx].first;
               
               // rjf: unpack visual cell info
@@ -3321,12 +3455,29 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
                 cell_flags |= UI_BoxFlag_DrawBackground;
                 cell_bg_rgba = ui_color_from_name(str8_lit("background"));
               }
+              if(byte_is_changed) UI_TagF("fresh")
+              {
+                cell_flags |= UI_BoxFlag_DrawBackground;
+                cell_bg_rgba = ui_color_from_name(str8_lit("background"));
+              }
+              if(byte_is_bad) UI_TagF("bad_pop")
+              {
+                cell_flags |= UI_BoxFlag_DrawBackground;
+                cell_bg_rgba = ui_color_from_name(str8_lit("background"));
+              }
               
               // rjf: build
-              ui_set_next_border_color(cell_bd_rgba);
-              ui_set_next_background_color(cell_bg_rgba);
+              if(cell_bd_rgba.w != 0) { ui_set_next_border_color(cell_bd_rgba); }
+              if(cell_bg_rgba.w != 0) { ui_set_next_background_color(cell_bg_rgba); }
               UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-              ui_box_equip_display_fstrs(cell_box, &byte_fstrs[byte_value]);
+              if(byte_is_selected || byte_is_changed)
+              {
+                ui_box_equip_display_fstrs(cell_box, &byte_fstrs_selected[byte_value]);
+              }
+              else
+              {
+                ui_box_equip_display_fstrs(cell_box, &byte_fstrs[byte_value]);
+              }
               {
                 for(Annotation *a = annotation; a != 0; a = a->next)
                 {

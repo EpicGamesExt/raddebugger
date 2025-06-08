@@ -5,6 +5,7 @@
 //~ rjf: post-0.9.19 TODO notes
 //
 //- memory view
+// [x] auto-annotations for non-locals
 // [ ] have smaller visible range than entire memory
 // space, within some bounds (e.g. 64KB)
 // [ ] dynamically expand memory space, based on
