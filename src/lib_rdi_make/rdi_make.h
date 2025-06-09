@@ -310,6 +310,46 @@ RDIM_CheckNil(nil,p) ? \
 #define rdim_noop ((void)0)
 
 ////////////////////////////////
+//~ rjf: RDI Subsets
+
+#define RDIM_Subset_XList \
+X(BinarySections,              binary_sections)\
+X(Units,                       units)\
+X(Procedures,                  procedures)\
+X(GlobalVariables,             global_variables)\
+X(ThreadVariables,             thread_variables)\
+X(Scopes,                      scopes)\
+X(Locals,                      locals)\
+X(Types,                       types)\
+X(UDTs,                        udts)\
+X(LineInfo,                    line_info)\
+X(InlineLineInfo,              inline_line_info)\
+X(GlobalVariableNameMap,       global_variable_name_map)\
+X(ThreadVariableNameMap,       thread_variable_name_map)\
+X(ProcedureNameMap,            procedure_name_map)\
+X(ConstantNameMap,             constant_name_map)\
+X(TypeNameMap,                 type_name_map)\
+X(LinkNameProcedureNameMap,    link_name_procedure_name_map)\
+X(NormalSourcePathNameMap,     normal_source_path_name_map)\
+
+typedef enum RDIM_Subset
+{
+#define X(name, name_lower) RDIM_Subset_##name,
+  RDIM_Subset_XList
+#undef X
+}
+RDIM_Subset;
+
+typedef U32 RDIM_SubsetFlags;
+enum
+{
+#define X(name, name_lower) RDIM_SubsetFlag_##name = (1<<RDIM_Subset_##name),
+  RDIM_Subset_XList
+#undef X
+  RDIM_SubsetFlag_All = 0xffffffffu,
+};
+
+////////////////////////////////
 //~ rjf: Auxiliary Data Structure Types
 
 //- rjf: 1-dimensional U64 ranges

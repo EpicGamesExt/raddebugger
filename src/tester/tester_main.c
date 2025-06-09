@@ -40,10 +40,10 @@ internal void
 entry_point(CmdLine *cmdline)
 {
   Arena *arena = arena_alloc();
-  E_TypeCtx *type_ctx = push_array(arena, E_TypeCtx, 1);
-  e_select_type_ctx(type_ctx);
-  E_ParseCtx *parse_ctx = push_array(arena, E_ParseCtx, 1);
-  e_select_parse_ctx(parse_ctx);
+  E_Cache *eval_cache = e_cache_alloc();
+  e_select_cache(eval_cache);
+  E_BaseCtx *base_ctx = push_array(arena, E_BaseCtx, 1);
+  e_select_base_ctx(base_ctx);
   E_IRCtx *ir_ctx = push_array(arena, E_IRCtx, 1);
   e_select_ir_ctx(ir_ctx);
   E_InterpretCtx *interpret_ctx = push_array(arena, E_InterpretCtx, 1);

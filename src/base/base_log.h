@@ -48,9 +48,9 @@ internal void log_select(Log *log);
 
 internal void log_msg(LogMsgKind kind, String8 string);
 internal void log_msgf(LogMsgKind kind, char *fmt, ...);
-#define log_info(s)               log_msg(LogMsgKind_Info, (s))
+#define log_info(s)          log_msg(LogMsgKind_Info, (s))
 #define log_infof(...)       log_msgf(LogMsgKind_Info, __VA_ARGS__)
-#define log_user_error(s)         log_msg(LogMsgKind_UserError, (s))
+#define log_user_error(s)    log_msg(LogMsgKind_UserError, (s))
 #define log_user_errorf(...) log_msgf(LogMsgKind_UserError, __VA_ARGS__)
 
 #define LogInfoNamedBlock(s) DeferLoop(log_infof("%S:\n{\n", (s)), log_infof("}\n"))

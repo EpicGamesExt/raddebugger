@@ -1,0 +1,28 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name   display_name)
+RB_FileFormatTable:
+{
+  { PDB              "PDB" }
+  { PE               "PE" }
+  { COFF_OBJ         "COFF (OBJ)" }
+  { COFF_BigOBJ      "COFF (Big OBJ)" }
+  { COFF_Archive     "COFF (Archive)" }
+  { COFF_ThinArchive "COFF (Thin Archive)" }
+  { ELF              "ELF" }
+  { RDI              "RDI" }
+}
+
+@enum RB_FileFormat:
+{
+  Null,
+  @expand(RB_FileFormatTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8) rb_file_format_display_name_table:
+{
+  `{0}`,
+  @expand(RB_FileFormatTable a) `str8_lit_comp("$(a.display_name)")`,
+}

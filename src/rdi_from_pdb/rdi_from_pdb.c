@@ -41,10 +41,11 @@ p2r_hash_from_voff(U64 voff)
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Inputs
 
-internal P2R_User2Convert *
+#if 0
+internal P2R_ConvertParams *
 p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
 {
-  P2R_User2Convert *result = push_array(arena, P2R_User2Convert, 1);
+  P2R_ConvertParams *result = push_array(arena, P2R_ConvertParams, 1);
   
   //- rjf: get input pdb
   {
@@ -153,6 +154,7 @@ Case("source_path_name_map",NormalSourcePathNameMap)\
 #undef FlagNameMapXList
   return result;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: COFF <-> RDI Canonical Conversions
@@ -503,7 +505,7 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 ASYNC_WORK_DEF(p2r_exe_hash_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_EXEHashIn *in = (P2R_EXEHashIn *)input;
   U64 *out = push_array(arena, U64, 1);
   ProfScope("hash exe") *out = rdi_hash(in->exe_data.str, in->exe_data.size);
@@ -514,7 +516,7 @@ ASYNC_WORK_DEF(p2r_exe_hash_work)
 ASYNC_WORK_DEF(p2r_tpi_hash_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_TPIHashParseIn *in = (P2R_TPIHashParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi hash") out = pdb_tpi_hash_from_data(arena, in->strtbl, in->tpi, in->hash_data, in->aux_data);
@@ -525,7 +527,7 @@ ASYNC_WORK_DEF(p2r_tpi_hash_parse_work)
 ASYNC_WORK_DEF(p2r_tpi_leaf_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_TPILeafParseIn *in = (P2R_TPILeafParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi leaf") out = cv_leaf_from_data(arena, in->leaf_data, in->itype_first);
@@ -536,7 +538,7 @@ ASYNC_WORK_DEF(p2r_tpi_leaf_parse_work)
 ASYNC_WORK_DEF(p2r_symbol_stream_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)input;
   void *out = 0;
   ProfScope("parse symbol stream") out = cv_sym_from_data(arena, in->data, 4);
@@ -547,7 +549,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_parse_work)
 ASYNC_WORK_DEF(p2r_c13_stream_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)input;
   void *out = 0;
   ProfScope("parse c13 stream") out = cv_c13_parsed_from_data(arena, in->data, in->strtbl, in->coff_sections);
@@ -558,7 +560,7 @@ ASYNC_WORK_DEF(p2r_c13_stream_parse_work)
 ASYNC_WORK_DEF(p2r_comp_unit_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_CompUnitParseIn *in = (P2R_CompUnitParseIn *)input;
   void *out = 0;
   ProfScope("parse comp units") out = pdb_comp_unit_array_from_data(arena, in->data);
@@ -569,7 +571,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_parse_work)
 ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_CompUnitContributionsParseIn *in = (P2R_CompUnitContributionsParseIn *)input;
   void *out = 0;
   ProfScope("parse comp unit contributions") out = pdb_comp_unit_contribution_array_from_data(arena, in->data, in->coff_sections);
@@ -580,7 +582,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 ASYNC_WORK_DEF(p2r_comp_unit_contributions_bucket_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_CompUnitContributionsBucketIn *in = (P2R_CompUnitContributionsBucketIn *)input;
   P2R_CompUnitContributionsBucketOut *out = push_array(arena, P2R_CompUnitContributionsBucketOut, 1);
   {
@@ -605,7 +607,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_contributions_bucket_work)
 ASYNC_WORK_DEF(p2r_gather_unit_src_file_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   Temp scratch = scratch_begin(&arena, 1);
   P2R_GatherUnitSrcFilesIn *in = (P2R_GatherUnitSrcFilesIn *)input;
   P2R_GatherUnitSrcFilesOut *out = push_array(arena, P2R_GatherUnitSrcFilesOut, 1);
@@ -856,7 +858,7 @@ ASYNC_WORK_DEF(p2r_gather_unit_src_file_work)
 ASYNC_WORK_DEF(p2r_unit_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)input;
   P2R_UnitConvertOut *out = push_array(arena, P2R_UnitConvertOut, 1);
@@ -1208,7 +1210,7 @@ ASYNC_WORK_DEF(p2r_unit_convert_work)
 ASYNC_WORK_DEF(p2r_src_file_seq_equip_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_SrcFileSeqEquipIn *in = (P2R_SrcFileSeqEquipIn *)input;
   for(RDIM_LineTableChunkNode *line_table_chunk_n = in->line_tables.first; line_table_chunk_n != 0; line_table_chunk_n = line_table_chunk_n->next)
   {
@@ -1231,7 +1233,7 @@ ASYNC_WORK_DEF(p2r_src_file_seq_equip_work)
 ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_LinkNameMapBuildIn *in = (P2R_LinkNameMapBuildIn *)input;
   CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
   CV_RecRange *rec_ranges_opl   = rec_ranges_first + in->sym->sym_ranges.count;
@@ -1289,7 +1291,7 @@ ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_ITypeFwdMapFillIn *in = (P2R_ITypeFwdMapFillIn *)input;
   ProfScope("fill itype fwd map") for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
   {
@@ -1419,7 +1421,7 @@ ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work)
 ASYNC_WORK_DEF(p2r_itype_chain_build_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   Temp scratch = scratch_begin(&arena, 1);
   P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)input;
   ProfScope("dependency itype chain build")
@@ -1722,7 +1724,7 @@ ASYNC_WORK_DEF(p2r_itype_chain_build_work)
 ASYNC_WORK_DEF(p2r_udt_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)input;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
   RDIM_UDTChunkList *udts = push_array(arena, RDIM_UDTChunkList, 1);
@@ -2359,7 +2361,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
 ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
 {
   ProfBeginFunction();
-  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  Arena *arena = async_root_thread_arena(p2r_async_root);
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)input;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -3226,7 +3228,11 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           U8 *name_ptr = val_ptr + val.encoded_size;
           String8 name = str8_cstring_capped(name_ptr, sym_data_opl);
           String8 val_data = str8_struct(&val64);
-          U64 container_name_opl = p2r_end_of_cplusplus_container_name(type->name);
+          U64 container_name_opl = 0;
+          if(type != 0)
+          {
+            container_name_opl = p2r_end_of_cplusplus_container_name(type->name);
+          }
           String8 name_qualified = name;
           if(container_name_opl != 0)
           {
@@ -3269,10 +3275,11 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal P2R_Convert2Bake *
-p2r_convert(Arena *arena, P2R_User2Convert *in)
+internal RDIM_BakeParams
+p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
+  p2r_async_root = async_root;
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse MSF structure
@@ -3569,7 +3576,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     top_level_info.exe_name      = str8_skip_last_slash(in->input_exe_name);
     top_level_info.exe_hash      = exe_hash;
     top_level_info.voff_max      = exe_voff_max;
-    if(!(in->flags & P2R_ConvertFlag_Deterministic))
+    if(in->deterministic)
     {
       top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
     }
@@ -3742,7 +3749,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   CV_TypeId *itype_fwd_map = 0;
   CV_TypeId itype_first = 0;
   CV_TypeId itype_opl = 0;
-  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
+  if(tpi_leaf != 0 && in->subset_flags & RDIM_SubsetFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
   {
     //- rjf: allocate forward resolution map
     itype_first = tpi_leaf->itype_first;
@@ -3783,7 +3790,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // as such, always show up *earlier* in the actually built types.
   //
   P2R_TypeIdChain **itype_chains = 0;
-  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
+  if(tpi_leaf != 0 && in->subset_flags & RDIM_SubsetFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
   {
     //- rjf: allocate itype chain table
     itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
@@ -3821,7 +3828,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_Type **itype_type_ptrs = 0;
   RDIM_TypeChunkList all_types = rdim_init_type_chunk_list(arena, top_level_info.arch);
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
-  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
+  if(in->subset_flags & RDIM_SubsetFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
     
@@ -4341,7 +4348,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   U64 udt_tasks_count = ((U64)itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
   P2R_UDTConvertIn *udt_tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, udt_tasks_count);
   ASYNC_Task **udt_tasks = push_array(scratch.arena, ASYNC_Task *, udt_tasks_count);
-  if(in->flags & P2R_ConvertFlag_UDTs) ProfScope("types pass 4: kick off UDT build")
+  if(in->subset_flags & RDIM_SubsetFlag_UDTs) ProfScope("types pass 4: kick off UDT build")
   {
     for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
     {
@@ -4475,68 +4482,24 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //////////////////////////////////////////////////////////////
   //- rjf: fill output
   //
-  P2R_Convert2Bake *out = push_array(arena, P2R_Convert2Bake, 1);
+  RDIM_BakeParams out = {0};
   {
-    out->bake_params.top_level_info   = top_level_info;
-    out->bake_params.binary_sections  = binary_sections;
-    out->bake_params.units            = all_units;
-    out->bake_params.types            = all_types;
-    out->bake_params.udts             = all_udts;
-    out->bake_params.src_files        = all_src_files;
-    out->bake_params.line_tables      = all_line_tables;
-    out->bake_params.global_variables = all_global_variables;
-    out->bake_params.thread_variables = all_thread_variables;
-    out->bake_params.constants        = all_constants;
-    out->bake_params.procedures       = all_procedures;
-    out->bake_params.scopes           = all_scopes;
-    out->bake_params.inline_sites     = all_inline_sites;
+    out.top_level_info   = top_level_info;
+    out.binary_sections  = binary_sections;
+    out.units            = all_units;
+    out.types            = all_types;
+    out.udts             = all_udts;
+    out.src_files        = all_src_files;
+    out.line_tables      = all_line_tables;
+    out.global_variables = all_global_variables;
+    out.thread_variables = all_thread_variables;
+    out.constants        = all_constants;
+    out.procedures       = all_procedures;
+    out.scopes           = all_scopes;
+    out.inline_sites     = all_inline_sites;
   }
   
   scratch_end(scratch);
-  return out;
-}
-
-////////////////////////////////
-//~ rjf: Top-Level Initialization
-
-internal void
-p2r_init(void)
-{
-  Arena *arena = arena_alloc();
-  p2r_state = push_array(arena, P2R_State, 1);
-  p2r_state->arena = arena;
-  p2r_state->work_thread_arenas_count = async_thread_count();
-  p2r_state->work_thread_arenas = push_array(arena, Arena *, p2r_state->work_thread_arenas_count);
-  for EachIndex(idx, p2r_state->work_thread_arenas_count)
-  {
-    p2r_state->work_thread_arenas[idx] = arena_alloc();
-  }
-}
-
-////////////////////////////////
-//~ rjf: Top-Level Baking Entry Point
-
-internal P2R_Bake2Serialize *
-p2r_bake(Arena *arena, P2R_Convert2Bake *in)
-{
-  RDIM_LocalState local_state          = {0};
-  local_state.arena                    = p2r_state->arena;
-  local_state.work_thread_arenas_count = p2r_state->work_thread_arenas_count;
-  local_state.work_thread_arenas       = p2r_state->work_thread_arenas;
-  
-  P2R_Bake2Serialize *result = push_array(arena, P2R_Bake2Serialize, 1);
-  result->bake_results = rdim_bake(&local_state, &in->bake_params);
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Top-Level Compression Entry Point
-
-internal P2R_Serialize2File *
-p2r_compress(Arena *arena, P2R_Serialize2File *in)
-{
-  P2R_Serialize2File *out = push_array(arena, P2R_Serialize2File, 1);
-  out->bundle = rdim_compress(arena, &in->bundle);
   return out;
 }
 

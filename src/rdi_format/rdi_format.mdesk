@@ -173,10 +173,10 @@ RDI_SectionEncodingTable:
 RDI_SectionMemberTable:
 {
   {encoding      RDI_SectionEncoding ""}
-  {pad           RDI_U32                 ""}
-  {off           RDI_U64                 ""}
-  {encoded_size  RDI_U64                 ""}
-  {unpacked_size RDI_U64                 ""}
+  {pad           RDI_U32             ""}
+  {off           RDI_U64             ""}
+  {encoded_size  RDI_U64             ""}
+  {unpacked_size RDI_U64             ""}
 }
 
 @enum(RDI_U32) RDI_SectionKind:

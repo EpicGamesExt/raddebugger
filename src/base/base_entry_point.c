@@ -41,9 +41,6 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
   async_init(&cmdline);
 #endif
-#if defined(RDI_FROM_PDB_H) && !defined(P2R_INIT_MANUAL)
-  p2r_init();
-#endif
 #if defined(HASH_STORE_H) && !defined(HS_INIT_MANUAL)
   hs_init();
 #endif

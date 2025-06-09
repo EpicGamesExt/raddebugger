@@ -1033,8 +1033,9 @@ ASYNC_WORK_DEF(di_parse_work)
           str8_list_pushf(scratch.arena, &params.cmd_line, "--compress");
         }
         // str8_list_pushf(scratch.arena, &params.cmd_line, "--capture");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--pdb:%S", og_path);
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--rdi");
         str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
+        str8_list_pushf(scratch.arena, &params.cmd_line, "%S", og_path);
         process = os_process_launch(&params);
       }
       

@@ -226,7 +226,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work);
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal RDIM_BakeParams *p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in);
+internal RDIM_BakeParams p2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in);
 
 ////////////////////////////////
 

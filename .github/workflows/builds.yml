@@ -17,9 +17,7 @@ jobs:
         target:
           - raddbg
           - radlink
-          - rdi_from_pdb
-          - raddump
-          - rdi_breakpad_from_pdb
+          - radbin
         compiler:
           - msvc
           - clang

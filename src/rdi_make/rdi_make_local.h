@@ -4,13 +4,13 @@
 #ifndef RDI_MAKE_LOCAL_H
 #define RDI_MAKE_LOCAL_H
 
-// rjf: base layer memory ops
+//- rjf: base layer memory ops
 #define RDIM_MEMSET_OVERRIDE
 #define RDIM_MEMCPY_OVERRIDE
 #define rdim_memset MemorySet
 #define rdim_memcpy MemoryCopy
 
-// rjf: base layer string overrides
+//- rjf: base layer string overrides
 #define RDI_STRING8_OVERRIDE
 #define RDIM_String8            String8
 #define RDIM_String8_BaseMember str
@@ -25,7 +25,7 @@
 #define RDIM_String8List_NodeCountMember node_count
 #define RDIM_String8List_TotalSizeMember total_size
 
-// rjf: base layer arena overrides
+//- rjf: base layer arena overrides
 #define RDIM_ARENA_OVERRIDE
 #define RDIM_Arena Arena
 #define rdim_arena_alloc     arena_alloc
@@ -34,20 +34,19 @@
 #define rdim_arena_push      arena_push
 #define rdim_arena_pop_to    arena_pop_to
 
-// rjf: base layer scratch arena overrides
+//- rjf: base layer scratch arena overrides
 #define RDIM_SCRATCH_OVERRIDE
 #define RDIM_Temp Temp
 #define rdim_temp_arena(t)   ((t).arena)
 #define rdim_scratch_begin   scratch_begin
 #define rdim_scratch_end     scratch_end
 
-// rjf: base layer profiling markup overrides
+//- rjf: base layer profiling markup overrides
 #define RDIM_ProfBegin(...) ProfBeginDynamic(__VA_ARGS__)
 #define RDIM_ProfEnd(...) ProfEnd()
 
+//- rjf: main library
 #include "lib_rdi_make/rdi_make.h"
-
-////////////////////////////////
 
 //- rjf: line table baking task types
 
@@ -370,17 +369,10 @@ ASYNC_WORK_DEF(rdim_bake_type_nodes_work);
 ASYNC_WORK_DEF(rdim_bake_name_map_work);
 ASYNC_WORK_DEF(rdim_bake_idx_runs_work);
 
-typedef struct RDIM_LocalState RDIM_LocalState;
-struct RDIM_LocalState
-{
-  Arena *arena;
-  U64 work_thread_arenas_count;
-  Arena **work_thread_arenas;
-};
-
 ////////////////////////////////
+//~ rjf: Globals
 
-global RDIM_LocalState *rdim_local_state = 0;
+global ASYNC_Root *rdim_local_async_root = 0;
 
 ////////////////////////////////
 
@@ -389,8 +381,7 @@ internal RDIM_TopLevelInfo rdim_make_top_level_info(String8 image_name, Arch arc
 
 ////////////////////////////////
 
-internal RDIM_LocalState *            rdim_local_init(void);
-internal RDIM_BakeResults             rdim_bake(RDIM_LocalState *state, RDIM_BakeParams *in);
+internal RDIM_BakeResults             rdim_bake(Arena *arena, ASYNC_Root *async_root, RDIM_BakeParams *in);
 internal RDIM_SerializedSectionBundle rdim_compress(Arena *arena, RDIM_SerializedSectionBundle *in);
 
 #endif // RDI_MAKE_LOCAL_H

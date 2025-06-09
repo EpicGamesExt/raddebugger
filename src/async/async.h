@@ -71,6 +71,15 @@ struct ASYNC_TaskList
 };
 
 ////////////////////////////////
+//~ rjf: Root (Per-Worker-Thread Arena Bundle)
+
+typedef struct ASYNC_Root ASYNC_Root;
+struct ASYNC_Root
+{
+  Arena **arenas;
+};
+
+////////////////////////////////
 //~ rjf: Shared State Bundle
 
 typedef struct ASYNC_Ring ASYNC_Ring;
@@ -137,6 +146,13 @@ internal void *async_task_join(ASYNC_Task *task);
 
 internal ASYNC_Work async_pop_work(void);
 internal void async_execute_work(ASYNC_Work work);
+
+////////////////////////////////
+//~ rjf: Root Allocation/Deallocation
+
+internal ASYNC_Root *async_root_alloc(void);
+internal void async_root_release(ASYNC_Root *root);
+internal Arena *async_root_thread_arena(ASYNC_Root *root);
 
 ////////////////////////////////
 //~ rjf: Work Thread Entry Point

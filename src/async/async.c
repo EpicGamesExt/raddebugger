@@ -235,6 +235,39 @@ async_execute_work(ASYNC_Work work)
 }
 
 ////////////////////////////////
+//~ rjf: Root Allocation/Deallocation
+
+internal ASYNC_Root *
+async_root_alloc(void)
+{
+  Arena *arena = arena_alloc();
+  ASYNC_Root *root = push_array(arena, ASYNC_Root, 1);
+  root->arenas = push_array(arena, Arena *, async_thread_count());
+  root->arenas[0] = arena;
+  for(U64 idx = 1; idx < async_thread_count(); idx += 1)
+  {
+    root->arenas[idx] = arena_alloc();
+  }
+  return root;
+}
+
+internal void
+async_root_release(ASYNC_Root *root)
+{
+  for(U64 idx = 1; idx < async_thread_count(); idx += 1)
+  {
+    arena_release(root->arenas[idx]);
+  }
+  arena_release(root->arenas[0]);
+}
+
+internal Arena *
+async_root_thread_arena(ASYNC_Root *root)
+{
+  return root->arenas[async_work_thread_idx];
+}
+
+////////////////////////////////
 //~ rjf: Work Thread Entry Point
 
 internal void

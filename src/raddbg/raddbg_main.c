@@ -193,7 +193,6 @@
 #define FNT_INIT_MANUAL 1
 #define D_INIT_MANUAL 1
 #define RD_INIT_MANUAL 1
-#define P2R_INIT_MANUAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -217,6 +216,8 @@
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
 #include "pe/pe.h"
+#include "elf/elf.h"
+#include "elf/elf_parse.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
 #include "msf/msf.h"
@@ -225,6 +226,8 @@
 #include "pdb/pdb_parse.h"
 #include "pdb/pdb_stringize.h"
 #include "rdi_from_pdb/rdi_from_pdb.h"
+#include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.h"
+#include "radbin/radbin.h"
 #include "regs/regs.h"
 #include "regs/rdi/regs_rdi.h"
 #include "dbgi/dbgi.h"
@@ -259,6 +262,8 @@
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
 #include "pe/pe.c"
+#include "elf/elf.c"
+#include "elf/elf_parse.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_parse.c"
 #include "msf/msf.c"
@@ -267,6 +272,8 @@
 #include "pdb/pdb_parse.c"
 #include "pdb/pdb_stringize.c"
 #include "rdi_from_pdb/rdi_from_pdb.c"
+#include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.c"
+#include "radbin/radbin.c"
 #include "regs/regs.c"
 #include "regs/rdi/regs_rdi.c"
 #include "dbgi/dbgi.c"
@@ -788,71 +795,7 @@ entry_point(CmdLine *cmd_line)
     //- rjf: built-in pdb/dwarf -> rdi converter mode
     case ExecMode_Converter:
     {
-      Temp scratch = scratch_begin(0, 0);
-      
-      //- rjf: initializer pdb -> rdi conversion layer
-      p2r_init();
-      
-      //- rjf: parse arguments
-      P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(scratch.arena, cmd_line);
-      
-      //- rjf: open output file
-      String8 output_name = push_str8_copy(scratch.arena, user2convert->output_name);
-      OS_Handle out_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, output_name);
-      B32 out_file_is_good = !os_handle_match(out_file, os_handle_zero());
-      
-      //- rjf: convert
-      P2R_Convert2Bake *convert2bake = 0;
-      if(out_file_is_good) ProfScope("convert")
-      {
-        convert2bake = p2r_convert(scratch.arena, user2convert);
-      }
-      
-      //- rjf: bake
-      P2R_Bake2Serialize *bake2srlz = 0;
-      if(out_file_is_good) ProfScope("bake")
-      {
-        bake2srlz = p2r_bake(scratch.arena, convert2bake);
-      }
-      
-      //- rjf: serialize
-      P2R_Serialize2File *srlz2file = 0;
-      if(out_file_is_good) ProfScope("serialize")
-      {
-        srlz2file = push_array(scratch.arena, P2R_Serialize2File, 1);
-        srlz2file->bundle = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
-      }
-      
-      //- rjf: compress
-      P2R_Serialize2File *srlz2file_compressed = srlz2file;
-      if(out_file_is_good) if(cmd_line_has_flag(cmd_line, str8_lit("compress"))) ProfScope("compress")
-      {
-        srlz2file_compressed = push_array(scratch.arena, P2R_Serialize2File, 1);
-        srlz2file_compressed = p2r_compress(scratch.arena, srlz2file);
-      }
-      
-      //- rjf: serialize
-      String8List blobs = {0};
-      if(out_file_is_good)
-      {
-        blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &srlz2file_compressed->bundle);
-      }
-      
-      //- rjf: write
-      if(out_file_is_good)
-      {
-        U64 off = 0;
-        for(String8Node *n = blobs.first; n != 0; n = n->next)
-        {
-          os_file_write(out_file, r1u64(off, off+n->string.size), n->string.str);
-          off += n->string.size;
-        }
-      }
-      
-      //- rjf: close output file
-      os_file_close(out_file);
-      
-      scratch_end(scratch);
+      rb_entry_point(cmd_line);
     }break;
     
     //- rjf: help message box

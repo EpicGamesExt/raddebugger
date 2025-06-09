@@ -313,4 +313,3 @@ entry_point(CmdLine *cmdline)
   
   arena_release(arena);
 }
-

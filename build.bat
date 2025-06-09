@@ -46,16 +46,16 @@ if "%opengl%"=="1"    set auto_compile_flags=%auto_compile_flags% -DR_BACKEND=R_
 
 :: --- Compile/Link Line Definitions ------------------------------------------
 set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7
-set clang_common=  -I..\src\ -I..\local\ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-unused-parameter -Wno-writable-strings -Wno-missing-field-initializers -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -ferror-limit=10000
 set cl_debug=      call cl /Od /Ob1 /DBUILD_DEBUG=1 %cl_common% %auto_compile_flags%
 set cl_release=    call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
+set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%% /NATVIS:"%~dp0\src\natvis\base.natvis" /noexp
+set cl_out=        /out:
+set cl_linker=     
+set clang_common=  -I..\src\ -I..\local\ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-unused-parameter -Wno-writable-strings -Wno-missing-field-initializers -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -ferror-limit=10000
 set clang_debug=   call clang -g -O0 -DBUILD_DEBUG=1 %clang_common% %auto_compile_flags%
 set clang_release= call clang -g -O2 -DBUILD_DEBUG=0 %clang_common% %auto_compile_flags%
-set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%% /NATVIS:"%~dp0\src\natvis\base.natvis" /noexp
 set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /pdbaltpath:%%%%_PDB%%%% -Xlinker /NATVIS:"%~dp0\src\natvis\base.natvis"
-set cl_out=        /out:
 set clang_out=     -o
-set cl_linker=     
 set clang_linker=  -Xlinker
 
 :: --- Per-Build Settings -----------------------------------------------------
@@ -110,11 +110,9 @@ if not "%no_meta%"=="1" (
 pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
 if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+if "%radbin%"=="1"                     set didbuild=1 && %compile% ..\src\radbin\radbin_main.c                               %compile_link% %out%radbin.exe || exit /b 1
 if "%radcon%"=="1"                     set didbuild=1 && %compile% ..\src\radcon\radcon_main.c                               %compile_link% %out%radcon.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
-if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
-if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf_main.c               %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
-if "%rdi_breakpad_from_pdb%"=="1"      set didbuild=1 && %compile% ..\src\rdi_breakpad_from_pdb\rdi_breakpad_from_pdb_main.c %compile_link% %out%rdi_breakpad_from_pdb.exe || exit /b 1
 if "%tester%"=="1"                     set didbuild=1 && %compile% ..\src\tester\tester_main.c                               %compile_link% %out%tester.exe || exit /b 1
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
 if "%eval_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\eval_scratch.c                             %compile_link% %out%eval_scratch.exe || exit /b 1
