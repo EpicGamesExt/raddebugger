@@ -617,6 +617,8 @@ internal String8 coff_make_import_header(Arena *arena, COFF_MachineType machine,
 ////////////////////////////////
 // Misc
 
+internal U16 coff_default_align_from_machine   (COFF_MachineType machine);
+internal U8  coff_code_align_byte_from_machine (COFF_MachineType machine);
 internal U64 coff_word_size_from_machine       (COFF_MachineType machine);
 internal U64 coff_default_exe_base_from_machine(COFF_MachineType machine);
 internal U64 coff_default_dll_base_from_machine(COFF_MachineType machine);
