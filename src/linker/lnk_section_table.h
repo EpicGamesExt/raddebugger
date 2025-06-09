@@ -5,26 +5,22 @@
 
 typedef struct LNK_SectionContrib
 {
+  String8Node  node;      // most contributions require at least one data node, so preallocate it here
+  String8Node *data_list; // list of data nodes that contribute to final section
   union {
+    // used before section layout is finalized
     struct {
-      U32 obj_idx;
-      U32 obj_sect_idx;
+      U32 obj_idx;      // index of the input obj that contributes to the image section
+      U32 obj_sect_idx; // index into contributing obj's section table
     };
+    // used after section layout is finalized
     struct {
-      U32 off;
-      U32 size;
-      U16 sect_idx;
+      U32 off;      // contribution offset within the image section
+      U16 sect_idx; // section index in the image
+      U8  unused[2];
     };
   } u;
-
-  U16 align;
-
-  union {
-    String8Node *data_list;
-    U64          bss_size;
-  };
-
-  String8Node node;
+  U16 align; // alignment of the contribution in the image
 } LNK_SectionContrib;
 
 typedef struct LNK_CommonBlockContrib
@@ -119,6 +115,7 @@ internal LNK_SectionArray lnk_section_array_from_list(Arena *arena, LNK_SectionL
 
 ////////////////////////////////
 
+internal U64 lnk_size_from_section_contrib(LNK_SectionContrib *sc);
 internal U64 lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
 internal U64 lnk_foff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
 internal U64 lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc);
