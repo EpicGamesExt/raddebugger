@@ -1880,6 +1880,11 @@ fancy_viz_eval_tests(void)
   raddbg_pin(text(code_string, lang=c));
   raddbg_pin(disasm(fancy_viz_eval_tests));
   
+  //- rjf: programmatic memory annotations
+  void *some_block_of_memory = malloc(256);
+  memset(some_block_of_memory, 0x27, 256);
+  raddbg_annotate_vaddr_range(some_block_of_memory, 256, "test memory annotation");
+  
   //- rjf: half-floats
   PackedF16 f16s[] =
   {

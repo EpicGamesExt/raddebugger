@@ -424,6 +424,7 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_ThreadColor,
   CTRL_EventKind_SetBreakpoint,
   CTRL_EventKind_UnsetBreakpoint,
+  CTRL_EventKind_SetVAddrRangeNote,
   
   //- rjf: memory
   CTRL_EventKind_MemReserve,

@@ -24,6 +24,7 @@ DMN_EventKindTable:
   {SetThreadColor}
   {SetBreakpoint}
   {UnsetBreakpoint}
+  {SetVAddrRangeNote}
 }
 
 @table(name)

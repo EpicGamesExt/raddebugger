@@ -1399,6 +1399,15 @@ ctrl_entity_store_apply_events(CTRL_EntityCtxRWStore *store, CTRL_EventList *lis
           }
         }
       }break;
+      
+      //- rjf: address range annotations
+      case CTRL_EventKind_SetVAddrRangeNote:
+      {
+        CTRL_Entity *process = ctrl_entity_from_handle(&store->ctx, event->parent);
+        CTRL_Entity *annotation = ctrl_entity_alloc(store, process, CTRL_EntityKind_AddressRangeAnnotation, Arch_Null, ctrl_handle_zero(), 0);
+        annotation->vaddr_range = event->vaddr_rng;
+        ctrl_entity_equip_string(store, annotation, event->string);
+      }break;
     }
   }
 }
@@ -4666,6 +4675,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity_id  = event->code;
       out_evt->rgba       = event->user_data;
     }break;
+    case DMN_EventKind_SetVAddrRangeNote:
+    {
+      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+      out_evt->kind       = CTRL_EventKind_SetVAddrRangeNote;
+      out_evt->parent     = ctrl_handle_make(CTRL_MachineID_Local, event->process);
+      out_evt->msg_id     = msg->msg_id;
+      out_evt->vaddr_rng  = r1u64(event->address, event->address + event->size);
+      out_evt->string     = event->string;
+    }
     case DMN_EventKind_SetBreakpoint:
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);

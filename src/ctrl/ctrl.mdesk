@@ -7,16 +7,17 @@
 @table(name  code_name  display_string)
 CTRL_EntityKindTable:
 {
-  {Root                      root                 "Root"                      }
-  {Machine                   machine              "Machine"                   }
-  {Process                   process              "Process"                   }
-  {Thread                    thread               "Thread"                    }
-  {Module                    module               "Module"                    }
-  {EntryPoint                entry_point          "Entry Point"               }
-  {DebugInfoPath             debug_info_path      "Debug Info Path"           }
-  {PendingThreadName         pending_thread_name  "Pending Thread Name"       }
-  {PendingThreadColor        pending_thread_color "Pending Thread Color"      }
-  {Breakpoint                breakpoint           "Breakpoint"                }
+  {Root                      root                      "Root"                      }
+  {Machine                   machine                   "Machine"                   }
+  {Process                   process                   "Process"                   }
+  {Thread                    thread                    "Thread"                    }
+  {Module                    module                    "Module"                    }
+  {EntryPoint                entry_point               "Entry Point"               }
+  {DebugInfoPath             debug_info_path           "Debug Info Path"           }
+  {PendingThreadName         pending_thread_name       "Pending Thread Name"       }
+  {PendingThreadColor        pending_thread_color      "Pending Thread Color"      }
+  {Breakpoint                breakpoint                "Breakpoint"                }
+  {AddressRangeAnnotation    address_range_annotation  "Address Range Annotation"  }
 }
 
 @enum CTRL_EntityKind:

@@ -37,6 +37,7 @@
 # define raddbg_type_view(type, ...)                  raddbg_exe_data char raddbg_gen_data_id()[] = ("type_view: {type: ```" #type "```, expr: ```" #__VA_ARGS__ "```}")
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
+# define raddbg_annotate_vaddr_range(ptr, size, ...)  raddbg_annotate_vaddr_range__impl((ptr), (size), __VA_ARGS__)
 #else
 # define raddbg_is_attached(...)                      (0)
 # define raddbg_thread_id(...)                        ((void)0)
@@ -55,6 +56,7 @@
 # define raddbg_type_view(type, ...)                  struct raddbg_gen_data_id(){int __unused__;}
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
+# define raddbg_annotate_vaddr_range(ptr, size, ...)  ((void)0)
 #endif
 
 ////////////////////////////////
@@ -391,6 +393,50 @@ raddbg_add_or_remove_breakpoint__impl(void *ptr, int set, int size, int r, int w
     __try
     {
       RaiseException(0x00524145u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except(1)
+    {
+    }
+#pragma warning(pop)
+  }
+}
+
+static inline void
+raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *fmt, ...)
+{
+  if(raddbg_is_attached())
+  {
+    // rjf: resolve variadic arguments
+    char buffer[4096];
+    int buffer_size = 0;
+    {
+      va_list args;
+      va_start(args, fmt);
+      buffer_size = RADDBG_MARKUP_VSNPRINTF(buffer, sizeof(buffer), fmt, args);
+      va_end(args);
+    }
+    
+    // rjf: send annotation info via exception
+#pragma pack(push, 8)
+    typedef struct RADDBG_VaddrRangeAnnotationInfo RADDBG_VaddrRangeAnnotationInfo;
+    struct RADDBG_VaddrRangeAnnotationInfo
+    {
+      unsigned __int64 vaddr;
+      unsigned __int64 size;
+      void *name;
+      unsigned __int64 name_size;
+    };
+#pragma pack(pop)
+    RADDBG_VaddrRangeAnnotationInfo info;
+    info.vaddr     = (unsigned __int64)ptr;
+    info.size      = size;
+    info.name      = buffer;
+    info.name_size = buffer_size;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x00524156u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
     }
     __except(1)
     {

@@ -58,6 +58,7 @@
 #define DMN_w32_EXCEPTION_CLR                            0xE0434352u
 #define DMN_W32_EXCEPTION_RADDBG_SET_THREAD_COLOR        0x00524144u
 #define DMN_W32_EXCEPTION_RADDBG_SET_BREAKPOINT          0x00524145u
+#define DMN_W32_EXCEPTION_RADDBG_SET_VADDR_RANGE_NOTE    0x00524156u
 
 ////////////////////////////////
 //~ rjf: Win32 Register Codes

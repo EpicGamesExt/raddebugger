@@ -37,6 +37,7 @@ arena_alloc_(ArenaParams *params)
       base = os_reserve(reserve_size);
       os_commit(base, commit_size);
     }
+    raddbg_annotate_vaddr_range(base, reserve_size, "arena %s:%i", params->allocation_site_file, params->allocation_site_line);
   }
   
   // rjf: panic on arena creation failure
@@ -58,6 +59,8 @@ arena_alloc_(ArenaParams *params)
   arena->pos = ARENA_HEADER_SIZE;
   arena->cmt = commit_size;
   arena->res = reserve_size;
+  arena->allocation_site_file = params->allocation_site_file;
+  arena->allocation_site_line = params->allocation_site_line;
 #if ARENA_FREE_LIST
   arena->free_size = 0;
   arena->free_last = 0;
@@ -123,7 +126,9 @@ arena_push(Arena *arena, U64 size, U64 align)
       }
       new_block = arena_alloc(.reserve_size = res_size,
                               .commit_size  = cmt_size,
-                              .flags        = current->flags);
+                              .flags        = current->flags,
+                              .allocation_site_file = current->allocation_site_file,
+                              .allocation_site_line = current->allocation_site_line);
     }
     
     new_block->base_pos = current->base_pos + current->res;

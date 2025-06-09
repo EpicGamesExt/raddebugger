@@ -26,6 +26,8 @@ struct ArenaParams
   U64 reserve_size;
   U64 commit_size;
   void *optional_backing_buffer;
+  char *allocation_site_file;
+  int allocation_site_line;
 };
 
 typedef struct Arena Arena;
@@ -40,6 +42,8 @@ struct Arena
   U64 pos;
   U64 cmt;
   U64 res;
+  char *allocation_site_file;
+  int allocation_site_line;
 #if ARENA_FREE_LIST
   U64 free_size;
   Arena *free_last;
@@ -66,7 +70,7 @@ global ArenaFlags arena_default_flags = 0;
 
 //- rjf: arena creation/destruction
 internal Arena *arena_alloc_(ArenaParams *params);
-#define arena_alloc(...) arena_alloc_(&(ArenaParams){.reserve_size = arena_default_reserve_size, .commit_size = arena_default_commit_size, .flags = arena_default_flags, __VA_ARGS__})
+#define arena_alloc(...) arena_alloc_(&(ArenaParams){.reserve_size = arena_default_reserve_size, .commit_size = arena_default_commit_size, .flags = arena_default_flags, .allocation_site_file = __FILE__, .allocation_site_line = __LINE__, __VA_ARGS__})
 internal void arena_release(Arena *arena);
 
 //- rjf: arena push/pop/pos core functions
