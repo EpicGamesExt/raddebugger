@@ -3399,7 +3399,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_virtual_offsets_and_sizes_in_obj_section_headers
     if (~sect_header->flags & COFF_SectionFlag_LnkRemove) {
       LNK_SectionContrib *sc   = task->sect_map[obj_idx][sect_idx];
       LNK_Section        *sect = task->image_sects.v[sc->u.sect_idx];
-      sect_header->vsize = sc->u.size;
+      sect_header->vsize = lnk_size_from_section_contribution(sc);
       sect_header->voff  = sect->voff + sc->u.off;
     }
   }
@@ -3423,7 +3423,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_file_offsets_and_sizes_in_obj_section_headers_ta
       LNK_SectionContrib *sc   = task->sect_map[obj_idx][sect_idx];
       LNK_Section        *sect = task->image_sects.v[sc->u.sect_idx];
       if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-        sect_header->fsize = sc->u.size;
+        sect_header->fsize = lnk_size_from_section_contribution(sc);
         sect_header->foff  = sect->foff + sc->u.off;
       }
     }
@@ -3880,6 +3880,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   lnk_section_table_push(sectab, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".data"),  PE_DATA_SECTION_FLAGS);
   lnk_section_table_push(sectab, str8_lit(".bss"),   PE_BSS_SECTION_FLAGS);
+  LNK_Section *common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
 
   LNK_BuildImageTask task = {0};
   task.symtab        = symtab;
@@ -4032,7 +4033,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     // TODO: build common block in .bss and merge with .data
     U64                     common_block_contribs_count;
     LNK_CommonBlockContrib *common_block_contribs;
-    LNK_Section            *common_block_sect;
     {
       ProfBegin("Build Common Block");
 
@@ -4078,23 +4078,35 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       ProfEnd();
 
       if (common_block_contribs_count) {
-        ProfBeginV("Assign Common Block Offsets [count %llu]", common_block_contribs_count);
+        ProfBeginV("Make Common Block [count %llu]", common_block_contribs_count);
 
-        // grab .bss section
-        common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
-
-        // sort common blocks from largest to smallest for tighter packing
+        // sort common blocks from for tighter packing
         radsort(common_block_contribs, common_block_contribs_count, lnk_common_block_contrib_is_before);
 
-        // compute common block offsets
+        // compute .bss virtual size - this marks start of the common block
+        lnk_finalize_section_layout(sectab, common_block_sect, config->file_align);
+        U64 common_block_cursor = common_block_sect->vsize;
+
+        // compute and assign offsets into the common block
         for (U64 contrib_idx = 0; contrib_idx < common_block_contribs_count; contrib_idx += 1) {
           LNK_CommonBlockContrib *contrib = &common_block_contribs[contrib_idx];
           U32 size = contrib->u.size;
           U32 align = Min(32, u64_up_to_pow2(size)); // link.exe caps align at 32 bytes
-          common_block_sect->vsize = AlignPow2(common_block_sect->vsize, align);
-          contrib->u.offset = common_block_sect->vsize;
-          common_block_sect->vsize += size;
+          common_block_cursor = AlignPow2(common_block_cursor, align);
+          contrib->u.offset = common_block_cursor;
+          common_block_cursor += size;
         }
+
+        // append common block's contribution
+        LNK_SectionContribChunk *common_block_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &common_block_sect->contribs, 1, str8(0,0));
+        LNK_SectionContrib      *common_block_sc    = lnk_section_contrib_chunk_push(common_block_chunk, 1);
+        common_block_sc->u.obj_idx      = max_U32;
+        common_block_sc->u.obj_sect_idx = max_U32;
+        common_block_sc->align          = 1;
+        common_block_sc->node.next      = 0;
+        common_block_sc->node.string    = str8(0, common_block_cursor - common_block_sect->vsize);
+        common_block_sc->data_list      = &common_block_sc->node;
+
         ProfEnd();
       }
 
@@ -4140,10 +4152,11 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         LNK_Section *final_sect = lnk_finalized_section_from_id(sectab, sect->merge_id);
         LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
         LNK_SectionContrib *last_sc  = lnk_get_last_section_contrib(sect);
+        U64 last_sc_size = lnk_size_from_section_contribution(last_sc);
         sect->voff     = final_sect->voff + first_sc->u.off;
-        sect->vsize    = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+        sect->vsize    = (last_sc->u.off - first_sc->u.off) + last_sc_size;
         sect->foff     = final_sect->foff + first_sc->u.off;
-        sect->fsize    = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+        sect->fsize    = (last_sc->u.off - first_sc->u.off) + last_sc_size;
         sect->sect_idx = final_sect->sect_idx;
       }
 
@@ -4259,7 +4272,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     image_header_sc->align     = config->file_align;
     image_header_sc->data_list = image_header_data.first;
-    image_header_sc->u.size    = safe_cast_u32(image_header_data.total_size);
 
     lnk_finalize_section_layout(sectab, image_header_sect, config->file_align);
   }
@@ -4302,7 +4314,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
             Assert(sc->u.off >= prev_sc_opl);
             U64 fill_size = sc->u.off - prev_sc_opl;
             MemorySet(image_data.str + sect->foff + prev_sc_opl, fill_byte, fill_size);
-            prev_sc_opl = sc->u.off + sc->u.size;
+            prev_sc_opl = sc->u.off + lnk_size_from_section_contribution(sc);
 
             // copy contrib contents
             {
@@ -4583,8 +4595,8 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
 
         U64        file_off   = image_section_table[sc->u.sect_idx]->foff + sc->u.off;
         U64        virt_off   = image_section_table[sc->u.sect_idx]->voff + sc->u.off;
-        U64        virt_size  = sc->u.size;
-        U64        file_size  = sc->u.size;
+        U64        virt_size  = lnk_size_from_section_contribution(sc);
+        U64        file_size  = lnk_size_from_section_contribution(sc);
         String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
 
         U128 sc_hash = {0};
