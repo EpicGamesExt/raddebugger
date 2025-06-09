@@ -1629,6 +1629,7 @@ t_common_block(void)
     COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_common(obj_writer, str8_lit("A"), 3);
     COFF_ObjSection *data_sect = t_push_data_section(obj_writer, str8_array_fixed(a_data));
     data_sect->flags |= COFF_SectionFlag_Align1Bytes;
+    coff_obj_writer_push_section(obj_writer, str8_lit(".bss"), PE_BSS_SECTION_FLAGS, str8(0, 1)); // shift common block's initial position
     coff_obj_writer_section_push_reloc(obj_writer, data_sect, 0, symbol, COFF_Reloc_X64_Addr32);
     String8 a_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
@@ -1672,14 +1673,14 @@ t_common_block(void)
   if (data_sect == 0) { goto exit; }
 
   // blocks must be sorted in descending order to reduce alignment padding
-  if (comm_sect->vsize != 0xB) { goto exit; }
+  if (comm_sect->vsize != 0x13) { goto exit; }
 
   // ensure linker correctly patched addresses for symbols pointing into common block
   String8             data      = str8_substr(exe, rng_1u64(data_sect->foff, data_sect->foff + data_sect->fsize));
   U32                *a_addr    = (U32 *)data.str;
   U64                *b_addr    = (U64 *)(data.str + sizeof(a_data));
-  if (*a_addr != (pe.image_base + comm_sect->voff + 0x8)) { goto exit; }
-  if (*b_addr != (pe.image_base + comm_sect->voff + 0x0)) { goto exit; }
+  if (*a_addr != (pe.image_base + comm_sect->voff + 0x10)) { goto exit; }
+  if (*b_addr != (pe.image_base + comm_sect->voff + 0x8)) { goto exit; }
   
   result = T_Result_Pass;
 exit:;

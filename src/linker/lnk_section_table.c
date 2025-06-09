@@ -101,6 +101,16 @@ lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
 }
 
 internal U64
+lnk_size_from_section_contribution(LNK_SectionContrib *sc)
+{
+  U64 size = 0;
+  for (String8Node *n = sc->data_list; n != 0; n = n->next) {
+    size += n->string.size;
+  }
+  return size;
+}
+
+internal U64
 lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
 {
   COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
@@ -120,7 +130,7 @@ internal U64
 lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
 {
   U64 foff = lnk_foff_from_section_contrib(image_section_table, sc);
-  return foff + sc->u.size;
+  return foff + lnk_size_from_section_contribution(sc);
 }
 
 internal LNK_SectionContrib *
@@ -150,7 +160,7 @@ lnk_get_section_contrib_size(LNK_Section *sect)
 {
   LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
   LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(sect);
-  U64 size = (last_sc->u.off - first_sc->u.off) + last_sc->u.size;
+  U64 size = (last_sc->u.off - first_sc->u.off) + lnk_size_from_section_contribution(last_sc);
   return size;
 }
 
@@ -468,16 +478,11 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
       U64 sc_off = cursor;
 
       // compute contrib size
-      U64 sc_size = 0;
-      for (String8Node *data_n = sc->data_list; data_n != 0; data_n = data_n->next) {
-        sc_size += data_n->string.size;
-      }
-
+      U64 sc_size = lnk_size_from_section_contribution(sc);
       cursor += sc_size;
 
       // assign offset and size
-      sc->u.off  = sc_off;
-      sc->u.size = sc_size;
+      sc->u.off = sc_off;
     }
   }
   ProfEnd();
