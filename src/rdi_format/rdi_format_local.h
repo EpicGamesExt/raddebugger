@@ -97,7 +97,6 @@ internal String8List rdi_strings_from_locations(Arena *arena, RDI_Parsed *rdi, R
 ////////////////////////////////
 //~ rjf: RDI Dumping
 
-internal void rdi_dump_scope          (Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Scope          *scope, RDI_Arch arch);
 internal String8List rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags flags);
 
 #endif // RDI_FORMAT_LOCAL_H

@@ -512,6 +512,7 @@ rb_entry_point(CmdLine *cmdline)
       RDIM_SubsetFlags subset_flags = 0xffffffff;
       switch(output_kind)
       {
+        default:{}break;
         case OutputKind_RDI:
         {
           String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
@@ -687,6 +688,8 @@ rb_entry_point(CmdLine *cmdline)
       //- rjf: convert done => generate output
       if(convert_done) switch(output_kind)
       {
+        default:{}break;
+        
         //- rjf: generate RDI blobs
         case OutputKind_RDI:
         {

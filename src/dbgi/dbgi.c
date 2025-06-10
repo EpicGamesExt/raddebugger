@@ -1026,7 +1026,7 @@ ASYNC_WORK_DEF(di_parse_work)
         params.inherit_env = 1;
         params.consoleless = 1;
         str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
-        str8_list_pushf(scratch.arena, &params.cmd_line, "--convert");
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--bin");
         str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
         if(should_compress)
         {

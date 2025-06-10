@@ -327,6 +327,8 @@ key_value_pairs_from_hash_table(Arena *arena, HashTable *ht)
   return pairs;
 }
 
+#include "third_party/radsort/radsort.h"
+
 internal void
 sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count)
 {

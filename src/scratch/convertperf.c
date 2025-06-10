@@ -53,7 +53,7 @@ entry_point(CmdLine *cmdline)
       String8 dll_name = str8_skip_last_slash(dll_path_no_ext);
       String8 pdb_path = push_str8f(arena, "%S.pdb", dll_path_no_ext);
       String8 rdi_path = push_str8f(arena, "dump/%S.rdi", dll_name);
-      OS_Handle handle = os_cmd_line_launchf("raddbg --convert --pdb:%S --out:%S", pdb_path, rdi_path);
+      OS_Handle handle = os_cmd_line_launchf("raddbg --bin %S --out:%S", pdb_path, rdi_path);
       os_handle_list_push(arena, &processes, handle);
       if(processes_first_path_n == 0)
       {

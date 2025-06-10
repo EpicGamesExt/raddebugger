@@ -316,7 +316,7 @@ typedef enum ExecMode
 {
   ExecMode_Normal,
   ExecMode_IPCSender,
-  ExecMode_Converter,
+  ExecMode_BinaryUtility,
   ExecMode_Help,
 }
 ExecMode;
@@ -421,9 +421,9 @@ entry_point(CmdLine *cmd_line)
     {
       exec_mode = ExecMode_IPCSender;
     }
-    else if(cmd_line_has_flag(cmd_line, str8_lit("convert")))
+    else if(cmd_line_has_flag(cmd_line, str8_lit("bin")))
     {
-      exec_mode = ExecMode_Converter;
+      exec_mode = ExecMode_BinaryUtility;
     }
     else if(cmd_line_has_flag(cmd_line, str8_lit("?")) ||
             cmd_line_has_flag(cmd_line, str8_lit("help")))
@@ -824,8 +824,8 @@ entry_point(CmdLine *cmd_line)
       scratch_end(scratch);
     }break;
     
-    //- rjf: built-in pdb/dwarf -> rdi converter mode
-    case ExecMode_Converter:
+    //- rjf: built-in binary utility mode
+    case ExecMode_BinaryUtility:
     {
       rb_entry_point(cmd_line);
     }break;
