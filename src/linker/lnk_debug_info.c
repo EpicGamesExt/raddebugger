@@ -4440,11 +4440,11 @@ lnk_type_from_itype(CV_TypeIndex itype, Rng1U64 tpi_itype_range, RDIB_Type **tpi
 }
 
 internal U64
-lnk_voff_from_sect_off(U64 sect_idx, U64 sect_off, LNK_SectionArray image_sects, LNK_Obj *obj, CV_SymKind symbol_kind, U64 symbol_offset)
+lnk_voff_from_sect_off(U64 sect_idx, U64 sect_off, COFF_SectionHeaderArray image_sects, LNK_Obj *obj, CV_SymKind symbol_kind, U64 symbol_offset)
 {
   U64 voff = 0;
   if (sect_idx < image_sects.count) {
-    voff = image_sects.v[sect_idx]->voff + sect_off;
+    voff = image_sects.v[sect_idx].voff + sect_off;
   } else {
     lnk_error_obj(LNK_Error_CvIllSymbolData, obj, "Out of bounds section index 0x%x in S_%S @ 0x%llx.",
                   sect_idx, cv_string_from_sym_kind(symbol_kind), symbol_offset);
@@ -4453,11 +4453,11 @@ lnk_voff_from_sect_off(U64 sect_idx, U64 sect_off, LNK_SectionArray image_sects,
 }
 
 internal Rng1U64
-lnk_virt_range_from_sect_off_size(U64 sect_idx, U64 sect_off, U64 size, LNK_SectionArray image_sects, LNK_Obj *obj, CV_SymKind symbol_kind, U64 symbol_offset)
+lnk_virt_range_from_sect_off_size(U64 sect_idx, U64 sect_off, U64 size, COFF_SectionHeaderArray image_sects, LNK_Obj *obj, CV_SymKind symbol_kind, U64 symbol_offset)
 {
   Rng1U64 virt_range = {0};
   if (sect_idx < image_sects.count) {
-    U64 voff = image_sects.v[sect_idx]->voff + sect_off;
+    U64 voff = image_sects.v[sect_idx].voff + sect_off;
     virt_range = rng_1u64(voff, voff + size);
   } else {
     lnk_error_obj(LNK_Error_CvIllSymbolData, obj, "Out of bounds section index 0x%x in S_%S @ 0x%llx.",
@@ -4590,8 +4590,8 @@ THREAD_POOL_TASK_FUNC(lnk_convert_line_tables_to_rdi_task)
         lnk_error_obj(LNK_Warning_IllData, obj, "Out of bounds section index (%u) in $$LINES; skip line info for \"%S\".", parsed_lines.sec_idx, file_path);
         continue;
       }
-      LNK_Section  *sect  = task->image_sects.v[parsed_lines.sec_idx];
-      CV_LineArray  lines = cv_c13_line_array_from_data(arena, raw_lines, sect->voff, parsed_lines);
+      COFF_SectionHeader *sect  = &task->image_sects.v[parsed_lines.sec_idx];
+      CV_LineArray        lines = cv_c13_line_array_from_data(arena, raw_lines, sect->voff, parsed_lines);
 
       // find source file for this line table
       String8               normal_path     = lnk_normalize_src_file_path(scratch.arena, file_path);
@@ -5362,7 +5362,6 @@ lnk_build_rad_debug_info(TP_Context               *tp,
                          RDI_Arch                  arch,
                          String8                   image_name,
                          String8                   image_data,
-                         LNK_SectionArray          image_sects,
                          U64                       obj_count,
                          LNK_Obj                  *obj_arr,
                          CV_DebugS                *debug_s_arr,
@@ -5372,15 +5371,24 @@ lnk_build_rad_debug_info(TP_Context               *tp,
                          CV_DebugT                 types[CV_TypeIndexSource_COUNT])
 {
   ProfBegin("RDI");
-  Temp scratch = scratch_begin(0,0);
+  Temp scratch = scratch_begin(tp_arena->v,tp_arena->count);
 
   RDIB_Input input = rdib_init_input(scratch.arena);
+
+  COFF_SectionHeaderArray image_sects;
+  String8                 image_strtab;
+  {
+    PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, image_data);
+    image_sects.count = pe.section_count;
+    image_sects.v = (COFF_SectionHeader *)str8_substr(image_data, pe.section_table_range).str;
+    image_strtab = str8_substr(image_data, pe.string_table_range);
+  }
 
   ProfBegin("Top Level Info");
   {
     U64 image_vsize = 0;
     for (U64 sect_idx = 0; sect_idx < image_sects.count; sect_idx++) {
-      LNK_Section *sect = image_sects.v[sect_idx];
+      COFF_SectionHeader *sect = &image_sects.v[sect_idx];
       image_vsize = Max(image_vsize, sect->voff + sect->vsize);
     }
 
@@ -5397,10 +5405,11 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     input.sect_count = image_sects.count;
     input.sections   = push_array(scratch.arena, RDIB_BinarySection, image_sects.count);
     for (U64 sect_idx = 0; sect_idx < image_sects.count; ++sect_idx) {
-      LNK_Section        *src = image_sects.v[sect_idx];
+      COFF_SectionHeader *src = &image_sects.v[sect_idx];
       RDIB_BinarySection *dst = &input.sections[sect_idx];
+      String8 sect_name = coff_name_from_section_header(image_strtab, src);
 
-      dst->name       = push_str8_copy(scratch.arena, src->name);
+      dst->name       = push_str8_copy(scratch.arena, sect_name);
       dst->flags      = rdi_binary_section_flags_from_coff_section_flags(src->flags);
       dst->voff_first = src->voff;
       dst->voff_opl   = src->voff + src->vsize;

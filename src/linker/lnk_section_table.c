@@ -1,36 +1,6 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal U8
-lnk_code_align_byte_from_machine(COFF_MachineType machine)
-{
-  U8 align_byte = 0;
-  switch (machine) {
-  case COFF_MachineType_X64:
-  case COFF_MachineType_X86: {
-    align_byte = 0xCC;
-  } break;
-  default: {
-    lnk_not_implemented("TODO: set align value for machine %S", coff_string_from_machine_type(machine));
-  } break;
-  }
-  return align_byte;
-}
-
-internal U16
-lnk_default_align_from_machine(COFF_MachineType machine)
-{
-  U16 align = 0;
-  switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X64: {
-    align = 16;
-  } break;
-  default: { NotImplemented; } break;
-  }
-  return align;
-}
-
 internal LNK_SectionContrib *
 lnk_section_contrib_chunk_push(LNK_SectionContribChunk *chunk, U64 count)
 {
@@ -100,75 +70,16 @@ lnk_section_array_from_list(Arena *arena, LNK_SectionList list)
   return result;
 }
 
-internal U64
-lnk_size_from_section_contribution(LNK_SectionContrib *sc)
+internal String8
+lnk_make_name_with_flags(Arena *arena, String8 name, COFF_SectionFlags flags)
 {
-  U64 size = 0;
-  for (String8Node *n = sc->data_list; n != 0; n = n->next) {
-    size += n->string.size;
-  }
-  return size;
-}
-
-internal U64
-lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
-{
-  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
-  U64 voff = sect_header->voff + sc->u.off;
-  return voff;
-}
-
-internal U64
-lnk_foff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
-{
-  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
-  U64 foff = sect_header->foff + sc->u.off;
-  return foff;
-}
-
-internal U64
-lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
-{
-  U64 foff = lnk_foff_from_section_contrib(image_section_table, sc);
-  return foff + lnk_size_from_section_contribution(sc);
-}
-
-internal LNK_SectionContrib *
-lnk_get_first_section_contrib(LNK_Section *sect)
-{
-  if (sect->contribs.chunk_count > 0) {
-    if (sect->contribs.first->count > 0) {
-      return sect->contribs.first->v[0];
-    }
-  }
-  return 0;
-}
-
-internal LNK_SectionContrib *
-lnk_get_last_section_contrib(LNK_Section *sect)
-{
-  if (sect->contribs.chunk_count > 0) {
-    if (sect->contribs.last->count > 0) {
-      return sect->contribs.last->v[sect->contribs.last->count-1];
-    }
-  }
-  return 0;
-}
-
-internal U64
-lnk_get_section_contrib_size(LNK_Section *sect)
-{
-  LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
-  LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(sect);
-  U64 size = (last_sc->u.off - first_sc->u.off) + lnk_size_from_section_contribution(last_sc);
-  return size;
-}
-
-internal U64
-lnk_get_first_section_contrib_voff(COFF_SectionHeader **image_section_table, LNK_Section *sect)
-{
-  LNK_SectionContrib *sc = lnk_get_first_section_contrib(sect);
-  return lnk_voff_from_section_contrib(image_section_table, sc);
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List l = {0};
+  str8_list_push(scratch.arena, &l, name);
+  str8_list_push(scratch.arena, &l, str8_struct(&flags));
+  String8 name_with_flags = str8_list_join(arena, &l, 0);
+  scratch_end(scratch);
+  return name_with_flags;
 }
 
 internal LNK_SectionTable *
@@ -184,25 +95,13 @@ lnk_section_table_alloc(void)
 }
 
 internal void
-lnk_section_table_release(LNK_SectionTable **st_ptr)
+lnk_section_table_release(LNK_SectionTable **sectab_ptr)
 {
   ProfBeginFunction();
-  LNK_SectionTable *sectab = *st_ptr;
+  LNK_SectionTable *sectab = *sectab_ptr;
   arena_release(sectab->arena);
-  *st_ptr = 0;
+  *sectab_ptr = 0;
   ProfEnd();
-}
-
-internal String8
-lnk_make_name_with_flags(Arena *arena, String8 name, COFF_SectionFlags flags)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List l = {0};
-  str8_list_push(scratch.arena, &l, name);
-  str8_list_push(scratch.arena, &l, str8_struct(&flags));
-  String8 name_with_flags = str8_list_join(arena, &l, 0);
-  scratch_end(scratch);
-  return name_with_flags;
 }
 
 internal LNK_Section *
@@ -212,9 +111,8 @@ lnk_section_table_push(LNK_SectionTable *sectab, String8 name, COFF_SectionFlags
 
   LNK_SectionNode *sect_node = push_array(sectab->arena, LNK_SectionNode, 1);
   LNK_Section     *sect      = &sect_node->data;
-  sect->id           = sectab->id_max++;
-  sect->name         = push_str8_copy(sectab->arena, name);
-  sect->flags        = flags;
+  sect->name  = push_str8_copy(sectab->arena, name);
+  sect->flags = flags;
 
   LNK_SectionList *sect_list = &sectab->list;
   SLLQueuePush(sect_list->first, sect_list->last, sect_node);
@@ -277,12 +175,12 @@ lnk_section_table_search(LNK_SectionTable *sectab, String8 full_or_partial_name,
 {
   Temp scratch = scratch_begin(0,0);
 
-  String8 name = {0};
+  String8 name    = {0};
   String8 postfix = {0};
   coff_parse_section_name(full_or_partial_name, &name, &postfix);
 
-  String8 name_with_flags = lnk_make_name_with_flags(scratch.arena, name, flags);
-  LNK_Section *section= 0;
+  String8      name_with_flags = lnk_make_name_with_flags(scratch.arena, name, flags);
+  LNK_Section *section         = 0;
   hash_table_search_string_raw(sectab->sect_ht, name_with_flags, &section);
 
   scratch_end(scratch);
@@ -292,7 +190,7 @@ lnk_section_table_search(LNK_SectionTable *sectab, String8 full_or_partial_name,
 internal LNK_SectionArray
 lnk_section_table_search_many(Arena *arena, LNK_SectionTable *sectab, String8 full_or_partial_name)
 {
-  String8 name = {0};
+  String8 name    = {0};
   String8 postfix = {0};
   coff_parse_section_name(full_or_partial_name, &name, &postfix);
 
@@ -325,7 +223,6 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
-  LNK_Section **src_dst = push_array(scratch.arena, LNK_Section *, sectab->id_max);
   for (LNK_MergeDirectiveNode *merge_node = merge_list.first; merge_node != 0; merge_node = merge_node->next) {
     LNK_MergeDirective *merge = &merge_node->data;
 
@@ -361,8 +258,8 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
     // are we trying to merge section that was already merged?
     LNK_Section *merge_sect = 0;
     hash_table_search_string_raw(sectab->sect_ht, merge->src, &merge_sect);
-    if (merge_sect && merge_sect->is_merged) {
-      LNK_Section *dst = src_dst[merge_sect->id];
+    if (merge_sect && merge_sect->merge_dst) {
+      LNK_Section *dst = merge_sect->merge_dst;
       B32 is_ambiguous_merge = !str8_match(dst->name, merge->dst, 0);
       if (is_ambiguous_merge) {
         lnk_error(LNK_Warning_AmbiguousMerge, "Detected ambiguous section merge:");
@@ -398,13 +295,9 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
     for (U64 src_idx = 0; src_idx < src_matches.count; src_idx += 1) {
       LNK_Section *src = src_matches.v[src_idx];
 
-      // update map
-      src_dst[src->id] = dst;
-
       // merge section with destination
       lnk_section_contrib_chunk_list_concat_in_place(&dst->contribs, &src->contribs);
-      src->is_merged = 1;
-      src->merge_id = dst->id;
+      src->merge_dst = dst;
 
       // remove from output section list
       LNK_SectionNode *merge_node = lnk_section_table_remove(sectab, src->name);
@@ -418,25 +311,6 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
   ProfEnd();
 }
 
-internal LNK_SectionArray
-lnk_section_table_get_output_sections(Arena *arena, LNK_SectionTable *sectab)
-{
-  LNK_SectionArray result = {0};
-  result.count            = 0;
-  result.v                = push_array(arena, LNK_Section *, sectab->list.count);
-
-  for (LNK_SectionNode *sect_node = sectab->list.first; sect_node != 0; sect_node = sect_node->next) {
-    Assert(result.count < sectab->list.count);
-    result.v[result.count] = &sect_node->data;
-    result.count += 1;
-  }
-
-  U64 unused_entry_count = sectab->list.count - result.count;
-  arena_pop(arena, unused_entry_count * sizeof(result.v[0]));
-
-  return result;
-}
-
 internal int
 lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 {
@@ -445,7 +319,7 @@ lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 }
 
 internal void
-lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 file_align)
+lnk_finalize_section_layout(LNK_Section *sect, U64 file_align)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -459,7 +333,7 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
 
     // repopulate chunk list in sorted order
     sect->contribs.first = 0;
-    sect->contribs.last = 0;
+    sect->contribs.last  = 0;
     for (U64 chunk_idx = 0; chunk_idx < sect->contribs.chunk_count; chunk_idx += 1) {
       SLLQueuePush(sect->contribs.first, sect->contribs.last, chunks[chunk_idx]);
     }
@@ -478,7 +352,7 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
       U64 sc_off = cursor;
 
       // compute contrib size
-      U64 sc_size = lnk_size_from_section_contribution(sc);
+      U64 sc_size = lnk_size_from_section_contrib(sc);
       cursor += sc_size;
 
       // assign offset and size
@@ -494,7 +368,6 @@ lnk_finalize_section_layout(LNK_SectionTable *sectab, LNK_Section *sect, U64 fil
 
   scratch_end(scratch);
 }
-
 
 internal void
 lnk_assign_section_index(LNK_Section *sect, U64 sect_idx)
@@ -526,22 +399,73 @@ lnk_assign_section_file_space(LNK_Section *sect, U64 *foff_cursor)
   }
 }
 
-internal LNK_Section *
-lnk_finalized_section_from_id(LNK_SectionTable *sectab, U64 id)
+internal U64
+lnk_size_from_section_contrib(LNK_SectionContrib *sc)
 {
-  for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-    if (sect_n->data.id == id) {
-      return &sect_n->data;
+  U64 size = 0;
+  for (String8Node *n = sc->data_list; n != 0; n = n->next) {
+    size += n->string.size;
+  }
+  return size;
+}
+
+internal U64
+lnk_voff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
+  U64 voff = sect_header->voff + sc->u.off;
+  return voff;
+}
+
+internal U64
+lnk_foff_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  COFF_SectionHeader *sect_header = image_section_table[sc->u.sect_idx+1];
+  U64 foff = sect_header->foff + sc->u.off;
+  return foff;
+}
+
+internal U64
+lnk_fopl_from_section_contrib(COFF_SectionHeader **image_section_table, LNK_SectionContrib *sc)
+{
+  U64 foff = lnk_foff_from_section_contrib(image_section_table, sc);
+  return foff + lnk_size_from_section_contrib(sc);
+}
+
+internal LNK_SectionContrib *
+lnk_get_first_section_contrib(LNK_Section *sect)
+{
+  if (sect->contribs.chunk_count > 0) {
+    if (sect->contribs.first->count > 0) {
+      return sect->contribs.first->v[0];
     }
   }
-
-  for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
-    if (sect_n->data.id == id) {
-      return lnk_finalized_section_from_id(sectab, sect_n->data.merge_id);
-    }
-  }
-
   return 0;
 }
 
+internal LNK_SectionContrib *
+lnk_get_last_section_contrib(LNK_Section *sect)
+{
+  if (sect->contribs.chunk_count > 0) {
+    if (sect->contribs.last->count > 0) {
+      return sect->contribs.last->v[sect->contribs.last->count-1];
+    }
+  }
+  return 0;
+}
 
+internal U64
+lnk_get_section_contrib_size(LNK_Section *sect)
+{
+  LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
+  LNK_SectionContrib *last_sc = lnk_get_last_section_contrib(sect);
+  U64 size = (last_sc->u.off - first_sc->u.off) + lnk_size_from_section_contrib(last_sc);
+  return size;
+}
+
+internal U64
+lnk_get_first_section_contrib_voff(COFF_SectionHeader **image_section_table, LNK_Section *sect)
+{
+  LNK_SectionContrib *sc = lnk_get_first_section_contrib(sect);
+  return lnk_voff_from_section_contrib(image_section_table, sc);
+}

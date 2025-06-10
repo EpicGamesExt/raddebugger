@@ -3399,7 +3399,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_virtual_offsets_and_sizes_in_obj_section_headers
     if (~sect_header->flags & COFF_SectionFlag_LnkRemove) {
       LNK_SectionContrib *sc   = task->sect_map[obj_idx][sect_idx];
       LNK_Section        *sect = task->image_sects.v[sc->u.sect_idx];
-      sect_header->vsize = lnk_size_from_section_contribution(sc);
+      sect_header->vsize = lnk_size_from_section_contrib(sc);
       sect_header->voff  = sect->voff + sc->u.off;
     }
   }
@@ -3423,7 +3423,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_file_offsets_and_sizes_in_obj_section_headers_ta
       LNK_SectionContrib *sc   = task->sect_map[obj_idx][sect_idx];
       LNK_Section        *sect = task->image_sects.v[sc->u.sect_idx];
       if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-        sect_header->fsize = lnk_size_from_section_contribution(sc);
+        sect_header->fsize = lnk_size_from_section_contrib(sc);
         sect_header->foff  = sect->foff + sc->u.off;
       }
     }
@@ -3885,7 +3885,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   LNK_BuildImageTask task = {0};
   task.symtab        = symtab;
   task.sectab        = sectab;
-  task.default_align = lnk_default_align_from_machine(config->machine);
+  task.default_align = coff_default_align_from_machine(config->machine);
   task.objs_count    = objs_count;
   task.objs          = objs;
   task.sect_map      = 0;
@@ -4084,13 +4084,13 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         radsort(common_block_contribs, common_block_contribs_count, lnk_common_block_contrib_is_before);
 
         // compute .bss virtual size - this marks start of the common block
-        lnk_finalize_section_layout(sectab, common_block_sect, config->file_align);
+        lnk_finalize_section_layout(common_block_sect, config->file_align);
         U64 common_block_cursor = common_block_sect->vsize;
 
         // compute and assign offsets into the common block
         for (U64 contrib_idx = 0; contrib_idx < common_block_contribs_count; contrib_idx += 1) {
           LNK_CommonBlockContrib *contrib = &common_block_contribs[contrib_idx];
-          U32 size = contrib->u.size;
+          U32 size  = contrib->u.size;
           U32 align = Min(32, u64_up_to_pow2(size)); // link.exe caps align at 32 bytes
           common_block_cursor = AlignPow2(common_block_cursor, align);
           contrib->u.offset = common_block_cursor;
@@ -4124,7 +4124,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
       // assign contribs offsets, sizes, and section indices
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        lnk_finalize_section_layout(sectab, &sect_n->data, config->file_align);
+        lnk_finalize_section_layout(&sect_n->data, config->file_align);
       }
 
       // remove empty sections
@@ -4149,10 +4149,10 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       // assing layout offsets and sizes to merged sections
       for (LNK_SectionNode *sect_n = sectab->merge_list.first; sect_n != 0; sect_n = sect_n->next) {
         LNK_Section *sect       = &sect_n->data;
-        LNK_Section *final_sect = lnk_finalized_section_from_id(sectab, sect->merge_id);
+        LNK_Section *final_sect = sect->merge_dst;
         LNK_SectionContrib *first_sc = lnk_get_first_section_contrib(sect);
         LNK_SectionContrib *last_sc  = lnk_get_last_section_contrib(sect);
-        U64 last_sc_size = lnk_size_from_section_contribution(last_sc);
+        U64 last_sc_size = lnk_size_from_section_contrib(last_sc);
         sect->voff     = final_sect->voff + first_sc->u.off;
         sect->vsize    = (last_sc->u.off - first_sc->u.off) + last_sc_size;
         sect->foff     = final_sect->foff + first_sc->u.off;
@@ -4242,7 +4242,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         sc->align           = 1;
         sc->u.obj_idx       = max_U32;
 
-        lnk_finalize_section_layout(sectab, reloc, config->file_align);
+        lnk_finalize_section_layout(reloc, config->file_align);
         lnk_assign_section_virtual_space(reloc, config->sect_align, &voff_cursor);
         lnk_assign_section_index(reloc, sectab->next_sect_idx++);
 
@@ -4273,7 +4273,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     image_header_sc->align     = config->file_align;
     image_header_sc->data_list = image_header_data.first;
 
-    lnk_finalize_section_layout(sectab, image_header_sect, config->file_align);
+    lnk_finalize_section_layout(image_header_sect, config->file_align);
   }
 
   ProfBegin("Patch Section Symbols");
@@ -4301,7 +4301,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         // pick fill pick
         U8 fill_byte = 0;
         if (sect->flags & COFF_SectionFlag_CntCode) {
-          fill_byte = lnk_code_align_byte_from_machine(config->machine);
+          fill_byte = coff_code_align_byte_from_machine(config->machine);
         }
 
         // copy section contribution
@@ -4314,7 +4314,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
             Assert(sc->u.off >= prev_sc_opl);
             U64 fill_size = sc->u.off - prev_sc_opl;
             MemorySet(image_data.str + sect->foff + prev_sc_opl, fill_byte, fill_size);
-            prev_sc_opl = sc->u.off + lnk_size_from_section_contribution(sc);
+            prev_sc_opl = sc->u.off + lnk_size_from_section_contrib(sc);
 
             // copy contrib contents
             {
@@ -4595,8 +4595,8 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
 
         U64        file_off   = image_section_table[sc->u.sect_idx]->foff + sc->u.off;
         U64        virt_off   = image_section_table[sc->u.sect_idx]->voff + sc->u.off;
-        U64        virt_size  = lnk_size_from_section_contribution(sc);
-        U64        file_size  = lnk_size_from_section_contribution(sc);
+        U64        virt_size  = lnk_size_from_section_contrib(sc);
+        U64        file_size  = lnk_size_from_section_contrib(sc);
         String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
 
         U128 sc_hash = {0};
@@ -4804,16 +4804,13 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     //
     if (config->rad_debug == LNK_SwitchState_Yes) {
       lnk_timer_begin(LNK_Timer_Rdi);
-      RDI_Arch         arch        = rdi_arch_from_coff_machine(config->machine);
-      LNK_SectionArray image_sects = lnk_section_table_get_output_sections(scratch.arena, image_ctx.sectab);
 
       String8List rdi_data = lnk_build_rad_debug_info(tp,
                                                       tp_arena,
                                                       config->target_os,
-                                                      arch,
+                                                      rdi_arch_from_coff_machine(config->machine),
                                                       config->image_name,
                                                       image_ctx.image_data,
-                                                      image_sects,
                                                       input.count,
                                                       input.obj_arr,
                                                       input.debug_s_arr,

@@ -14,11 +14,31 @@ typedef struct LNK_LinkContext
   LNK_LibList        lib_index[LNK_InputSource_Count];
 } LNK_LinkContext;
 
+// -- Image --------------------------------------------------------------------
+
 typedef struct LNK_ImageContext
 {
   String8           image_data;
   LNK_SectionTable *sectab;
 } LNK_ImageContext;
+
+typedef struct LNK_SectionDefinition
+{
+  String8           name;
+  COFF_SectionFlags flags;
+  U64               contribs_count;
+  struct LNK_Obj   *obj;
+  U64               obj_sect_idx;
+} LNK_SectionDefinition;
+
+typedef struct LNK_CommonBlockContrib
+{
+  struct LNK_Symbol *symbol;
+  union {
+    U32 size;
+    U32 offset;
+  } u;
+} LNK_CommonBlockContrib;
 
 // --- Base Reloc --------------------------------------------------------------
 
