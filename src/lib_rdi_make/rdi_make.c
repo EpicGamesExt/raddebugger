@@ -1313,7 +1313,7 @@ rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM
   scopes->location_count +=1;
 }
 
-//- location block chunk list
+//- rjf:location block chunk list
 
 RDI_PROC RDI_LocationBlock *
 rdim_location_block_chunk_list_push_array(RDIM_Arena *arena, RDIM_String8List *list, RDI_U32 count)

@@ -406,9 +406,8 @@ rb_entry_point(CmdLine *cmdline)
       fprintf(stderr, "%.*s Help\n", str8_varg(output_kind_info[output_kind].title));
       fprintf(stderr, "To see top-level options for radbin, run the binary with no arguments.\n\n");
     }
+    fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
   }
-  
-  fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
   
   //////////////////////////////
   //- rjf: perform operation based on output kind
@@ -820,6 +819,8 @@ rb_entry_point(CmdLine *cmdline)
     //
     case OutputKind_Dump:
     {
+      B32 deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
+      
       //- rjf: no inputs => help
       if(cmdline->inputs.node_count == 0)
       {
@@ -832,7 +833,31 @@ rb_entry_point(CmdLine *cmdline)
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
-        // TODO(rjf)
+        str8_list_pushf(arena, &output_blobs, "# %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, rb_file_format_display_name_table[f->format]);
+        switch(f->format)
+        {
+          default:{}break;
+          
+          //- rjf: RDI file
+          case RB_FileFormat_RDI:
+          {
+            RDI_Parsed rdi = {0};
+            RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, &rdi);
+            switch(rdi_status)
+            {
+              default:{}break;
+              case RDI_ParseStatus_HeaderDoesNotMatch:      {str8_list_pushf(arena, &output_blobs, "");}break;
+              case RDI_ParseStatus_UnsupportedVersionNumber:{str8_list_pushf(arena, &output_blobs, "");}break;
+              case RDI_ParseStatus_InvalidDataSecionLayout: {}break;
+              case RDI_ParseStatus_MissingRequiredSection:  {}break;
+              case RDI_ParseStatus_Good:
+              {
+                String8List dump = rdi_dump_list_from_parsed(arena, &rdi, RDI_DumpSubsetFlag_All);
+                str8_list_concat_in_place(&output_blobs, &dump);
+              }break;
+            }
+          }break;
+        }
       }
       
       //- rjf: join with output
@@ -845,14 +870,7 @@ rb_entry_point(CmdLine *cmdline)
   //
   if(output_path.size != 0) ProfScope("write outputs [file]")
   {
-    OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, output_path);
-    U64 off = 0;
-    for(String8Node *n = output_blobs.first; n != 0; n = n->next)
-    {
-      os_file_write(output_file, r1u64(off, off+n->string.size), n->string.str);
-      off += n->string.size;
-    }
-    os_file_close(output_file);
+    os_write_data_list_to_file_path(output_path, output_blobs);
     log_infof("Results written to %S", output_path);
   }
   else ProfScope("write outputs [stdout]")

@@ -588,7 +588,7 @@ CV_LeafKindTable:
   {MATRIX                        -                            0x151c}
   {VFTABLE                       -                            0x151d}
   {FUNC_ID                       FuncId                       0x1601}
-  {MFUNC_ID						 MFuncId                      0x1602}
+  {MFUNC_ID						          MFuncId                      0x1602}
   {BUILDINFO                     BuildInfo                    0x1603}
   {SUBSTR_LIST                   SubstrList                   0x1604}
   {STRING_ID                     StringId                     0x1605}

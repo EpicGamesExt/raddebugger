@@ -146,8 +146,8 @@ RDI_PROC RDI_ParseStatus rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out);
 RDI_PROC void *rdi_section_raw_data_from_kind(RDI_Parsed *rdi, RDI_SectionKind kind, RDI_SectionEncoding *encoding_out, RDI_U64 *size_out);
 RDI_PROC void *rdi_section_raw_table_from_kind(RDI_Parsed *rdi, RDI_SectionKind kind, RDI_U64 *count_out);
 RDI_PROC void *rdi_section_raw_element_from_kind_idx(RDI_Parsed *rdi, RDI_SectionKind kind, RDI_U64 idx);
-#define rdi_table_from_name(rdi, name, count_out) (RDI_SectionElementType_##name *)rdi_section_raw_table_from_kind((rdi), RDI_SectionKind_##name, (count_out))
-#define rdi_element_from_name_idx(rdi, name, idx) (RDI_SectionElementType_##name *)rdi_section_raw_element_from_kind_idx((rdi), RDI_SectionKind_##name, (idx))
+#define rdi_table_from_name(rdi, name, count_out) ((RDI_SectionElementType_##name *)rdi_section_raw_table_from_kind((rdi), RDI_SectionKind_##name, (count_out)))
+#define rdi_element_from_name_idx(rdi, name, idx) ((RDI_SectionElementType_##name *)rdi_section_raw_element_from_kind_idx((rdi), RDI_SectionKind_##name, (idx)))
 
 //- info about whole parse
 RDI_PROC RDI_U64 rdi_decompressed_size_from_parsed(RDI_Parsed *rdi);

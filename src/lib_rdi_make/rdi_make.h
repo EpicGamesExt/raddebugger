@@ -1519,9 +1519,8 @@ RDI_PROC RDIM_Location *rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg
 //- rjf: location sets
 RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location);
 
-//- location block chunk list
-
-RDI_PROC RDI_LocationBlock * rdim_location_block_chunk_list_push_array(RDIM_Arena *arena, RDIM_String8List *list, RDI_U32 count);
+//- rjf:location block chunk list
+RDI_PROC RDI_LocationBlock *rdim_location_block_chunk_list_push_array(RDIM_Arena *arena, RDIM_String8List *list, RDI_U32 count);
 RDI_PROC RDI_U32 rdim_count_from_location_block_chunk_list(RDIM_String8List *list);
 
 ////////////////////////////////
