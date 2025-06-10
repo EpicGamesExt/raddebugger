@@ -672,9 +672,17 @@ rb_entry_point(CmdLine *cmdline)
           ProfScope("convert") bake_params = p2r_convert(arena, async_root, &convert_params);
           
           // rjf: no output path? -> pick one based on PDB
-          if(output_path.size == 0)
+          if(output_path.size == 0) switch(output_kind)
           {
-            output_path = push_str8f(arena, "%S.rdi", str8_chop_last_dot(convert_params.input_pdb_name));
+            default:{}break;
+            case OutputKind_RDI:
+            {
+              output_path = push_str8f(arena, "%S.rdi", str8_chop_last_dot(convert_params.input_pdb_name));
+            }break;
+            case OutputKind_Breakpad:
+            {
+              output_path = push_str8f(arena, "%S.psym", str8_chop_last_dot(convert_params.input_pdb_name));
+            }break;
           }
         }
       }
