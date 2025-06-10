@@ -1,5 +1,8 @@
 // New radsort.
 
+#if !defined(RADSORT_H)
+#define RADSORT_H
+
 // To Use:
 //   Create a less_than function and then call radsort.
 //
@@ -49,7 +52,7 @@ typedef struct bytes8  { char b[8];  } bytes8;
 
 static RSFORCEINLINE void radsortswapper( void * a, void * b, size_t size )
 {
-  #define RSSWAPMEM(type) ( size >= sizeof(type) ) { type v = *(type const*)a; *(type*)a = *(type const*)b; *(type*)b = v; a=rsadd_ptr(a,sizeof(type)); b=rsadd_ptr(b,sizeof(type)); size -= sizeof(type); }
+#define RSSWAPMEM(type) ( size >= sizeof(type) ) { type v = *(type const*)a; *(type*)a = *(type const*)b; *(type*)b = v; a=rsadd_ptr(a,sizeof(type)); b=rsadd_ptr(b,sizeof(type)); size -= sizeof(type); }
   
   while RSSWAPMEM(bytes64);
   if RSSWAPMEM(bytes32);
@@ -59,13 +62,13 @@ static RSFORCEINLINE void radsortswapper( void * a, void * b, size_t size )
   if RSSWAPMEM(short);
   if RSSWAPMEM(char);
   
-  #undef RSSWAPMEM
+#undef RSSWAPMEM
 }
 
 // since size is always constant, this big function compiles down to 4 to 12 instructions (for normal structs 4-6)
 static RSFORCEINLINE void radsortmover( void * a, void * b, size_t size )  
 {
-  #define RSMOVEMEM(type) ( size >= sizeof(type) ) { *(type*)a = *(type const*)b; a=rsadd_ptr(a,sizeof(type)); b=rsadd_ptr(b,sizeof(type)); size -= sizeof(type); }
+#define RSMOVEMEM(type) ( size >= sizeof(type) ) { *(type*)a = *(type const*)b; a=rsadd_ptr(a,sizeof(type)); b=rsadd_ptr(b,sizeof(type)); size -= sizeof(type); }
   
   while RSMOVEMEM(bytes64);
   if RSMOVEMEM(bytes32);
@@ -75,7 +78,7 @@ static RSFORCEINLINE void radsortmover( void * a, void * b, size_t size )
   if RSMOVEMEM(short);
   if RSMOVEMEM(char);
   
-  #undef RSMOVEMEM
+#undef RSMOVEMEM
 }
 
 // these macros generate tiny move/swap routines that don't go through the generic function above  (mostly for debug build performance)
@@ -110,17 +113,17 @@ typedef void rs_small_sort_func( void * left, size_t n, size_t element_size, is_
 typedef struct RS_MAX_BUBBLE_BUF { char b[RS_SMALL_FLIP_TO_INSERTION_GT_SIZE]; } RS_MAX_BUBBLE_BUF; 
 
 #define radsort( start, len, is_before_func ) \
-  do { \
-    char __rs_tmp[ sizeof( (start)[0] ) ]; \
-    radsortinternal( start, len, sizeof( (start)[0] ), \
-                     is_before_func, \
-                     radsortswapsize( sizeof( (start)[0] ) ), \
-                     radsortmovesize( sizeof( (start)[0] ) ), \
-                     ( sizeof( (start)[0] ) > RS_SMALL_FLIP_TO_INSERTION_GT_SIZE ) ? radinsertionsort : radbubble2sort, \
-                     ( sizeof( (start)[0] ) > RS_SMALL_FLIP_TO_INSERTION_GT_SIZE ) ? RSS_FLIP_TO_SMALL_SORT_INSERTION : RSS_FLIP_TO_SMALL_SORT_BUBBLE2, \
-                     &__rs_tmp \
-                   ); \
-  } while (0)
+do { \
+char __rs_tmp[ sizeof( (start)[0] ) ]; \
+radsortinternal( start, len, sizeof( (start)[0] ), \
+is_before_func, \
+radsortswapsize( sizeof( (start)[0] ) ), \
+radsortmovesize( sizeof( (start)[0] ) ), \
+( sizeof( (start)[0] ) > RS_SMALL_FLIP_TO_INSERTION_GT_SIZE ) ? radinsertionsort : radbubble2sort, \
+( sizeof( (start)[0] ) > RS_SMALL_FLIP_TO_INSERTION_GT_SIZE ) ? RSS_FLIP_TO_SMALL_SORT_INSERTION : RSS_FLIP_TO_SMALL_SORT_BUBBLE2, \
+&__rs_tmp \
+); \
+} while (0)
 #define radheapsort( start, len, is_before_func )  do { radheapsortinteral( start, len, sizeof( ((start)[0]) ), is_before_func, radsortswapsize( sizeof( ((start)[0]) ) ) ); } while (0)
 
 
@@ -132,27 +135,27 @@ RSFORCEINLINE void radheapsortinteral( void * start, size_t len, size_t element_
   void * left;
   void * right;
   size_t length;
-
+  
   left = start;
   right = rsadd_ptr_elements( start, len - 1 );
   length = len;
-
+  
   if ( length > 1 )
   {
     // unusual small in-place heap sort
     void * i; void * ind; void * v; void * n;
     size_t s, k;
-
+    
     s = length >> 1;
     i = rsadd_ptr_elements( left, s );
-
+    
     for(;;)
     {
       --s;
       i = rsadd_ptr_elements( i, -1 );
       ind = i;
       k = ( s << 1 ) + 1;
-
+      
       for(;;)
       {
         v = rsadd_ptr_elements( left, k );
@@ -163,21 +166,21 @@ RSFORCEINLINE void radheapsortinteral( void * start, size_t len, size_t element_
           ++k;
           v = n;
         }
-
+        
         if ( is_before( ind, v ) )   
         {
           swapper( ind, v, element_size );
           ind = v;
           k = ( k << 1 ) + 1;
-
+          
           if ( k < length )
             continue;
         }
-
+        
         // if s is non-zero, we are still building the heap!
         if ( s ) 
           break;
-
+        
         swapper( left, right, element_size );
         right = rsadd_ptr_elements( right, -1 );
         ind = left;
@@ -199,18 +202,18 @@ RSFORCEINLINE void radheapsortinteral( void * start, size_t len, size_t element_
 static RSFORCEINLINE void radsortgetmedian5( void * output, void * left, void * right, size_t length, size_t element_size, is_before_func * is_before, swap_func * swapper, move_func * mover )
 {
   RS_MAX_SIMPLE_BUF mb0,mb1,mb2,mb3,mb4; 
-
+  
   mover( &mb0, left, element_size ); 
   mover( &mb1, rsadd_ptr_elements( left, length >> 2 ), element_size ); 
   mover( &mb2, rsadd_ptr_elements( left, length >> 1 ), element_size ); 
   mover( &mb3, rsadd_ptr_elements( left, length - (length >> 2) ), element_size ); 
   mover( &mb4, right, element_size ); 
-
+  
   // Basically, for simple compares, and for simple in-register types, this funcion 
   //   must turn info 7 compares and then 5-7 movs, and 12 cmovs.  Any 
   //   compiler *should* do this - if this doesn't happen, then the compiler is 
   //   hosing you. You can put int 3s at the start and end of this function to check.
-
+  
   rsswapsmaller( mb0, mb1 ); 
   rsswapsmaller( mb2, mb3 ); 
   rsswapsmaller( mb0, mb2 ); 
@@ -226,8 +229,8 @@ static RSFORCEINLINE void radsortgetmedian5( void * output, void * left, void * 
 static RSFORCEINLINE void radsortgetmedian9( void * output, void * left, void * right, size_t length, size_t element_size, is_before_func * is_before, swap_func * swapper, move_func * mover )
 {
   RS_MAX_SIMPLE_BUF mb0,mb1,mb2,mb3,mb4,mb5,mb6,mb7,mb8; // todo, temp mem!
-
-  #ifdef RS_PREFETCH
+  
+#ifdef RS_PREFETCH
   RS_PREFETCH( left ); 
   RS_PREFETCH( right ); 
   RS_PREFETCH( rsadd_ptr_elements( left, length >> 3 ) ); 
@@ -237,8 +240,8 @@ static RSFORCEINLINE void radsortgetmedian9( void * output, void * left, void * 
   RS_PREFETCH( rsadd_ptr_elements( left, (length >> 1) + (0 >> 3) ) ); 
   RS_PREFETCH( rsadd_ptr_elements( left, length - (length >> 2) ) ); 
   RS_PREFETCH( rsadd_ptr_elements( left, length - (length >> 3) ) ); 
-  #endif
-
+#endif
+  
   mover( &mb0, left, element_size ); 
   mover( &mb1, rsadd_ptr_elements( left, length >> 3 ), element_size ); 
   mover( &mb2, rsadd_ptr_elements( left, length >> 2 ), element_size ); 
@@ -248,7 +251,7 @@ static RSFORCEINLINE void radsortgetmedian9( void * output, void * left, void * 
   mover( &mb6, rsadd_ptr_elements( left, length - (length >> 2) ), element_size ); 
   mover( &mb7, rsadd_ptr_elements( left, length - (length >> 3) ), element_size ); 
   mover( &mb8, right, element_size ); 
-
+  
   // Basically, for simple compares, and for simple in-register types, this funcion 
   //   should turn info 19 compares and then 15-19 movs, and 36 cmovs. However,  
   //   most compilers can only so-so job at this, and you'll end up with 3-4 jumps.
@@ -272,7 +275,7 @@ static RSFORCEINLINE void radsortgetmedian9( void * output, void * left, void * 
   rsswapsmaller( mb4, mb6 ); 
   rsswapsmaller( mb2, mb3 ); 
   rsswapsmaller( mb4, mb5 ); 
- 
+  
   mover( output, &mb3, element_size ); 
   if ( is_before( &mb4, &mb3 ) ) mover( output, &mb4, element_size );
 }
@@ -301,13 +304,13 @@ static RSFORCEINLINE void radbubble2sort( void * left, size_t n, size_t element_
   void * i;  // todo - test with bigger blocks
   void * s = rsadd_ptr_elements( left, 2 );
   RS_MAX_BUBBLE_BUF x, y, z;
-
-  #define rsbubbleswap( X, Y ) { int cond; cond = is_before( &Y, &X); mover( tmp, &X, element_size ); if ( cond ) mover( &X, &Y, element_size ); if ( cond ) mover( &Y, tmp, element_size ); } 
-
+  
+#define rsbubbleswap( X, Y ) { int cond; cond = is_before( &Y, &X); mover( tmp, &X, element_size ); if ( cond ) mover( &X, &Y, element_size ); if ( cond ) mover( &Y, tmp, element_size ); } 
+  
   for ( i = rsadd_ptr_elements( left, (int)n - 1 ) ; i > left ; i = rsadd_ptr_elements( i, -2 ) )
   {
     void * j, * jm2;
-
+    
     // load x & y
     mover( &x, left, element_size );
     mover( &y, rsadd_ptr_elements( left, 1 ), element_size );
@@ -317,7 +320,7 @@ static RSFORCEINLINE void radbubble2sort( void * left, size_t n, size_t element_
     
     // for ints, this loop needs to be 4 cmps, 6 cmovs, and 5 movs
     //  anything else will kill performance
-
+    
     jm2 = left;
     for ( j = s ; j <= i ; j = rsadd_ptr_elements( j, 1 ) )
     {
@@ -329,7 +332,7 @@ static RSFORCEINLINE void radbubble2sort( void * left, size_t n, size_t element_
       mover( jm2, &z, element_size );
       jm2 = rsadd_ptr_elements( jm2, 1 );
     }
-
+    
     mover( rsadd_ptr_elements( i, -1 ), &x, element_size );
     mover( i, &y, element_size );
   }
@@ -340,7 +343,7 @@ static RSFORCEINLINE void radinsertionsort(void * start, size_t len, size_t elem
 {
   void * cur;
   void * prev;
-
+  
   cur = rsadd_ptr_elements( start, 1 );
   --len;
   prev = start;
@@ -424,25 +427,25 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
 {
   void * left;
   size_t length;
-
+  
   if ( len <= 1 )
     return;
-
-  #if _DEBUG
-    if ( element_size > sizeof( RS_MAX_SIMPLE_BUF ) )
-      __debugbreak();
-  #endif
-
+  
+#if _DEBUG
+  if ( element_size > sizeof( RS_MAX_SIMPLE_BUF ) )
+    __debugbreak();
+#endif
+  
   // stack for no recursion
   typedef struct stks
   {
     void * left;
     size_t len;
   } stks;
-
+  
   stks stk[ RSS_MAX_RECURSE ];
   stks * stk_ptr = stk + RSS_MAX_RECURSE;
-
+  
   // we use the stk_ptr to tell when to flip to heap.
   //   when we hit the end of the stack, we heap it, so
   //    back the start of the stack to log1.5 of len
@@ -453,10 +456,10 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
     length = ( length >> 1 ) + ( length >> 2 );
   } while ( length );
   stk_ptr[ -1 ].len = 0;
-
+  
   left = start;
   length = len;
-
+  
   do
   {
     for(;;)
@@ -484,11 +487,11 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
           void * rightequalpiv;
           size_t leftlen;
           void * scan, * piv, * rend, * right;
-
+          
           CompilerReset(left); // we reset the compiler before each major sort
-
+          
           right = rsadd_ptr_elements( left, length - 1 );
-
+          
           // check for and correct inverted blocks 
           scan = left;
           rend = right;
@@ -499,7 +502,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
             rend = rsadd_ptr_elements( rend, -1 );
             if ( scan >= rend ) break;
           }
-
+          
           // scan to see if the block is in order (or all the same)
           scan = left;
           do
@@ -511,12 +514,12 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
           } while ( scan < right );
           // if we get out of the loop cleanly, this block is already sorted, so just fall out and do next block
           break;
-
-         doqsort:
-
+          
+          doqsort:
+          
           // get the median into copy
           radsortgetmedian( tmp, left, right, length, element_size, is_before, swapper, mover );
-
+          
           // if scan != left, then we have a few in order, so we can skip them all if the final is under the copy
           if ( !is_before( scan, tmp ) )
             scan = left;
@@ -524,7 +527,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
           // skip values below the pivot at the start of the segment 
           while( is_before( scan, tmp ) ) // the pivot will stop this loop
             scan = rsadd_ptr( scan, element_size );
-
+          
           // skip values above and equal to the pivot at the end of the segment
           rend = right;
           if ( left == start )
@@ -545,7 +548,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
             while( is_before( tmp, rend ) ) // the pivot will stop this loop
               rend = rsadd_ptr_elements( rend, -1 );
           }
-
+          
           // finally, do actual partitioning nanosort style - 65-70% of the 
           //   total time will be in this loop, for ints, this should be
           //   4 movs, 2 cmps, 1 cmov, 2 add, 1 jmp - 10 instructions
@@ -560,7 +563,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
             if ( adv ) piv = rsadd_ptr( piv, element_size ); // needs to be a cmov
             scan = rsadd_ptr( scan, element_size );
           }
-
+          
           // now move the right side to skip over all of the equal values...
           // this loop should be 5 instructions
           rightequalpiv = piv;
@@ -570,11 +573,11 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
               break;
             rightequalpiv = rsadd_ptr_elements( rightequalpiv, 1 );
           }
-
+          
           // ok, now get the size of each half and prepare to descend
           leftlen = rsdiff_ptr_elements( piv, left );
           length -= rsdiff_ptr_elements( rightequalpiv, left ); 
-
+          
           // put the smaller segment on the stack
           if ( length < leftlen )
           {
@@ -605,3 +608,5 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
 #undef rsadd_ptr
 #undef rsadd_ptr_elements
 #undef rsdiff_ptr_elements
+
+#endif // RADSORT_H
