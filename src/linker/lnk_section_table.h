@@ -5,14 +5,15 @@
 
 typedef struct LNK_SectionContrib
 {
-  String8Node  node;      // most contributions require at least one data node, so preallocate it here
-  String8Node *data_list; // list of data nodes that contribute to final section
+  String8Node  first_data_node; // most contributions require at least one data node, so preallocate it here
+  String8Node *last_data_node;  // list of data nodes that contribute to final section
   union {
-    // used before section layout is finalized
+    // used to sort sections to get deterministic output
     struct {
       U32 obj_idx;      // index of the input obj that contributes to the image section
       U32 obj_sect_idx; // index into contributing obj's section table
     };
+
     // used after section layout is finalized
     struct {
       U32 off;      // contribution offset within the image section
@@ -110,7 +111,7 @@ internal void                lnk_section_table_merge(LNK_SectionTable *sectab, L
 
 // --- Section Finalization ----------------------------------------------------
 
-internal void lnk_finalize_section_layout     (LNK_Section *sect, U64 file_align);
+internal void lnk_finalize_section_layout     (LNK_Section *sect, U64 file_align, U64 function_pad_min);
 internal void lnk_assign_section_index        (LNK_Section *sect, U64 sect_idx);
 internal void lnk_assign_section_virtual_space(LNK_Section *sect, U64 sect_align, U64 *voff_cursor);
 internal void lnk_assign_section_file_space   (LNK_Section *sect, U64 *foff_cursor);

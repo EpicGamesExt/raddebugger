@@ -1202,12 +1202,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_FunctionPadMin: {
     if (value_strings.node_count == 0) {
-      config->function_pad_min = 0; // :function_pad_min
+      config->function_pad_min = 0;
     } else {
-      local_persist U64 function_pad_min;
-      lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &function_pad_min, LNK_ParseU64Flag_CheckUnder32bit);
-      config->function_pad_min = &function_pad_min;
+      config->function_pad_min = push_array(arena, U64, 1);
+      lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, config->function_pad_min, LNK_ParseU64Flag_CheckUnder32bit);
     }
+    config->do_function_pad_min = LNK_SwitchState_Yes;
   } break;
 
   case LNK_CmdSwitch_Heap: {

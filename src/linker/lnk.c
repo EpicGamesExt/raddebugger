@@ -1490,6 +1490,12 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; obj_idx += 1) {
             if (obj_node_arr.v[obj_idx].data.header.machine != COFF_MachineType_Unknown) {
               config->machine = obj_node_arr.v[obj_idx].data.header.machine;
+
+              if (config->do_function_pad_min == LNK_SwitchState_Yes && config->function_pad_min == 0) {
+                config->function_pad_min = push_array(tp_arena->v[0], U64, 1);
+                *config->function_pad_min = lnk_get_default_function_pad_min(config->machine);
+              }
+
               break;
             }
           }
@@ -2355,12 +2361,12 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
       if (sc_chunk) {
         U16 sc_align = coff_align_size_from_section_flags(sect_header->flags);
         sc = lnk_section_contrib_chunk_push_atomic(sc_chunk, 1);
-        sc->node.next       = 0;
-        sc->node.string     = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
-        sc->data_list       = &sc->node;
-        sc->align           = sc_align == 0 ? task->default_align : sc_align;
-        sc->u.obj_idx       = obj_idx;
-        sc->u.obj_sect_idx  = sect_idx;
+        sc->first_data_node.next   = 0;
+        sc->first_data_node.string = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
+        sc->last_data_node         = &sc->first_data_node;
+        sc->align                  = sc_align == 0 ? task->default_align : sc_align;
+        sc->u.obj_idx              = obj_idx;
+        sc->u.obj_sect_idx         = sect_idx;
       }
 
       temp_end(temp);
@@ -2394,6 +2400,122 @@ THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_task)
     }
   }
   ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_split_func_contribs_task)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  LNK_BuildImageTask *task         = raw_task;
+  U64                 obj_idx      = task_id;
+  LNK_Obj            *obj          = task->objs[obj_idx];
+  String8             string_table = str8_substr(obj->data, obj->header.string_table_range);
+
+  ProfBeginV("%S", obj->path);
+
+  COFF_ParsedSymbol symbol;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+
+    // is this a function symbol?
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
+      if (symbol.section_number == 0 || symbol.section_number > obj->header.section_count_no_null) {
+        lnk_error_obj(LNK_Error_IllData, obj, "out ouf bounds section index in symbol \"%S (%u)\"", symbol.name, symbol.section_number);
+      }
+
+      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+      if (symbol.value > section_header->fsize) {
+        lnk_error_obj(LNK_Error_IllData, obj, "out of bounds section offset in symbol \"%S (%u)\"", symbol.name, symbol.value);
+      }
+
+      if (~section_header->flags & COFF_SectionFlag_CntCode) {
+        String8 section_name = coff_name_from_section_header(string_table, section_header);
+        lnk_error_obj(LNK_Error_IllData, obj, "symbol %S (No. 0x%x) has a function type but points into section that is not declared as code %S (No. 0x%x)",
+                      symbol.name, symbol_idx, section_name, symbol.section_number);
+        continue;
+      }
+
+      if (symbol.value > 0) {
+        // find chunk that is near symbol
+        LNK_SectionContrib *sc            = task->sect_map[obj_idx][symbol.section_number-1];
+        String8Node        *current       = &sc->first_data_node;
+        U64                 offset_cursor = 0;
+        for (String8Node *c = current; c != 0; c = c->next) {
+          if (offset_cursor + c->string.size >= symbol.value) {
+            current = c;
+            break;
+          }
+          offset_cursor += c->string.size;
+        }
+
+        if (offset_cursor < symbol.value) {
+          // bifurcate chunk at symbol offset
+          U64     split_pos = symbol.value - offset_cursor;
+          String8 left      = str8_substr(current->string, rng_1u64(0, split_pos));
+          String8 right     = str8_substr(current->string, rng_1u64(split_pos, current->string.size));
+
+          // update split node data
+          current->string = left;
+
+          // create new data node
+          String8Node *split_node = push_array(arena, String8Node, 1);
+          split_node->string = right;
+
+          // insert split node after current node 
+          split_node->next = current->next;
+          current->next = split_node;
+          if (sc->last_data_node == current) {
+            sc->last_data_node = split_node;
+          }
+        }
+      }
+    }
+  }
+
+  for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+    COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
+    if (~section_header->flags & COFF_SectionFlag_CntCode) { continue; }
+    COFF_RelocInfo      reloc_info     = coff_reloc_info_from_section_header(obj->data, section_header);
+    COFF_Reloc         *relocs         = (COFF_Reloc *)(obj->data.str + reloc_info.array_off);
+    LNK_SectionContrib *sc             = task->sect_map[obj_idx][sect_idx];
+
+    U64 offset_map_count = 0;
+    for (String8Node *data_n = &sc->first_data_node; data_n != 0; data_n = data_n->next) {
+      offset_map_count += 1;
+    }
+    if (offset_map_count <= 1) { continue; }
+
+    Temp temp = temp_begin(scratch.arena);
+    PairU64 *offset_map         = push_array(temp.arena, PairU64, offset_map_count);
+    U64      data_node_idx      = 0;
+    U64      prev_cursor_offset = 0;
+    U64      new_cursor_offset  = 0;
+    for (String8Node *data_n = &sc->first_data_node; data_n != 0; data_n = data_n->next, data_node_idx += 1) {
+      offset_map[data_node_idx].v0 = prev_cursor_offset;
+      offset_map[data_node_idx].v1 = new_cursor_offset;
+      prev_cursor_offset += data_n->string.size;
+      new_cursor_offset += Max(task->function_pad_min, data_n->string.size);
+    }
+
+    for (U64 reloc_idx = 0; reloc_idx < reloc_info.count; reloc_idx += 1) {
+      COFF_Reloc *reloc = &relocs[reloc_idx];
+      U64 offset_idx = pair_u64_nearest_v0(offset_map, offset_map_count, reloc->apply_off);
+      if (offset_idx < offset_map_count) {
+        reloc->apply_off = offset_map[offset_idx].v1 + (reloc->apply_off - offset_map[offset_idx].v0);
+      } else {
+        InvalidPath;
+      }
+    }
+    temp_end(temp);
+  }
+
+  // TODO: update symbols with new offsets
+
+  ProfEnd();
+
+  scratch_end(scratch);
 }
 
 internal int
@@ -3883,12 +4005,13 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   LNK_Section *common_block_sect = lnk_section_table_search(sectab, str8_lit(".bss"), PE_BSS_SECTION_FLAGS);
 
   LNK_BuildImageTask task = {0};
-  task.symtab        = symtab;
-  task.sectab        = sectab;
-  task.default_align = coff_default_align_from_machine(config->machine);
-  task.objs_count    = objs_count;
-  task.objs          = objs;
-  task.sect_map      = 0;
+  task.symtab           = symtab;
+  task.sectab           = sectab;
+  task.function_pad_min = *config->function_pad_min;
+  task.default_align    = coff_default_align_from_machine(config->machine);
+  task.objs_count       = objs_count;
+  task.objs             = objs;
+  task.sect_map         = 0;
 
   ProfBegin("Remove Associative Sections");
   tp_for_parallel(tp, 0, objs_count, lnk_remove_associative_sections_task, &task);
@@ -3977,7 +4100,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         LNK_SectionContribChunk *contrib_chunk        = 0;
         hash_table_search_string_raw(task.contribs_ht, defn_name_with_flags, &contrib_chunk);
         if (!contrib_chunk) {
-          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &sect->contribs, sect_defn->contribs_count, sort_idx);
+          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(arena->v[0], &sect->contribs, sect_defn->contribs_count, sort_idx);
           hash_table_push_string_raw(sectab->arena, task.contribs_ht, defn_name_with_flags, contrib_chunk);
         }
         
@@ -4000,6 +4123,12 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     ProfBegin("Gather Section Contribs");
     tp_for_parallel(tp, 0, objs_count, lnk_gather_section_contribs_task, &task);
     ProfEnd();
+
+    if (config->do_function_pad_min == LNK_SwitchState_Yes) {
+      ProfBegin("Split Code Sections");
+      tp_for_parallel(tp, arena, objs_count, lnk_split_func_contribs_task, &task);
+      ProfEnd();
+    }
 
     // ensure determinism by sorting section contribs in chunks by input index
     {
@@ -4084,7 +4213,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         radsort(common_block_contribs, common_block_contribs_count, lnk_common_block_contrib_is_before);
 
         // compute .bss virtual size - this marks start of the common block
-        lnk_finalize_section_layout(common_block_sect, config->file_align);
+        lnk_finalize_section_layout(common_block_sect, config->file_align, *config->function_pad_min);
         U64 common_block_cursor = common_block_sect->vsize;
 
         // compute and assign offsets into the common block
@@ -4100,12 +4229,12 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         // append common block's contribution
         LNK_SectionContribChunk *common_block_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &common_block_sect->contribs, 1, str8(0,0));
         LNK_SectionContrib      *common_block_sc    = lnk_section_contrib_chunk_push(common_block_chunk, 1);
-        common_block_sc->u.obj_idx      = max_U32;
-        common_block_sc->u.obj_sect_idx = max_U32;
-        common_block_sc->align          = 1;
-        common_block_sc->node.next      = 0;
-        common_block_sc->node.string    = str8(0, common_block_cursor - common_block_sect->vsize);
-        common_block_sc->data_list      = &common_block_sc->node;
+        common_block_sc->u.obj_idx              = max_U32;
+        common_block_sc->u.obj_sect_idx         = max_U32;
+        common_block_sc->align                  = 1;
+        common_block_sc->first_data_node.next   = 0;
+        common_block_sc->first_data_node.string = str8(0, common_block_cursor - common_block_sect->vsize);
+        common_block_sc->last_data_node         = &common_block_sc->first_data_node;
 
         ProfEnd();
       }
@@ -4124,7 +4253,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
       // assign contribs offsets, sizes, and section indices
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        lnk_finalize_section_layout(&sect_n->data, config->file_align);
+        lnk_finalize_section_layout(&sect_n->data, config->file_align, *config->function_pad_min);
       }
 
       // remove empty sections
@@ -4238,11 +4367,12 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         LNK_Section             *reloc          = lnk_section_table_push(sectab, str8_lit(".reloc"), PE_RELOC_SECTION_FLAGS);
         LNK_SectionContribChunk *first_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &reloc->contribs, 1, str8_zero());
         LNK_SectionContrib      *sc             = lnk_section_contrib_chunk_push(first_sc_chunk, 1);
-        sc->data_list       = base_relocs_data.first;
-        sc->align           = 1;
-        sc->u.obj_idx       = max_U32;
+        sc->first_data_node = *base_relocs_data.first;
+        sc->last_data_node  = base_relocs_data.last;
+        sc->align          = 1;
+        sc->u.obj_idx      = max_U32;
 
-        lnk_finalize_section_layout(reloc, config->file_align);
+        lnk_finalize_section_layout(reloc, config->file_align, *config->function_pad_min);
         lnk_assign_section_virtual_space(reloc, config->sect_align, &voff_cursor);
         lnk_assign_section_index(reloc, sectab->next_sect_idx++);
 
@@ -4270,10 +4400,11 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     LNK_SectionContribChunk *image_header_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &image_header_sect->contribs, 1, str8_zero());
     LNK_SectionContrib      *image_header_sc       = lnk_section_contrib_chunk_push(image_header_sc_chunk, 1);
 
-    image_header_sc->align     = config->file_align;
-    image_header_sc->data_list = image_header_data.first;
+    image_header_sc->align           = config->file_align;
+    image_header_sc->first_data_node = *image_header_data.first;
+    image_header_sc->last_data_node  = image_header_data.last;
 
-    lnk_finalize_section_layout(image_header_sect, config->file_align);
+    lnk_finalize_section_layout(image_header_sect, config->file_align, *config->function_pad_min);
   }
 
   ProfBegin("Patch Section Symbols");
@@ -4319,7 +4450,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
             // copy contrib contents
             {
               U64 cursor = 0;
-              for (String8Node *data_n = sc->data_list; data_n != 0; data_n = data_n->next) {
+              for (String8Node *data_n = &sc->first_data_node; data_n != 0; data_n = data_n->next) {
                 Assert(sc->u.off + data_n->string.size <= sect->vsize);
                 MemoryCopy(image_data.str + sect->foff + sc->u.off + cursor, data_n->string.str, data_n->string.size);
                 cursor += data_n->string.size;
@@ -4876,9 +5007,9 @@ entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
   lnk_init_error_handler();
-  LNK_Config *config = lnk_config_from_argcv(scratch.arena, cmdline->argc, cmdline->argv);
-  TP_Context *tp = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
-  TP_Arena *tp_arena = tp_arena_alloc(tp);
+  LNK_Config *config   = lnk_config_from_argcv(scratch.arena, cmdline->argc, cmdline->argv);
+  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
+  TP_Arena   *tp_arena = tp_arena_alloc(tp);
   lnk_run(tp, tp_arena, config);
   scratch_end(scratch);
 }
