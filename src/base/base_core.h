@@ -487,14 +487,16 @@ typedef enum OperatingSystem
 }
 OperatingSystem;
 
-typedef enum ImageType
+typedef enum ExecutableImageKind
 {
-  Image_Null,
-  Image_CoffPe,
-  Image_Elf32,
-  Image_Elf64,
-  Image_Macho
-} ImageType;
+  ExecutableImageKind_Null,
+  ExecutableImageKind_CoffPe,
+  ExecutableImageKind_Elf32,
+  ExecutableImageKind_Elf64,
+  ExecutableImageKind_Macho,
+  ExecutableImageKind_COUNT
+}
+ExecutableImageKind;
 
 typedef enum Arch
 {

@@ -231,8 +231,8 @@ internal void dw_print_debug_info       (Arena *arena, String8List *out, String8
 internal void dw_print_debug_abbrev     (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_line       (Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, B32 relaxed);
 internal void dw_print_debug_str        (Arena *arena, String8List *out, String8 indent, DW_Input *input);
-internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed);
-internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed);
+internal void dw_print_debug_loc        (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
+internal void dw_print_debug_ranges     (Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed);
 internal void dw_print_debug_aranges    (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_addr       (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_loclists   (Arena *arena, String8List *out, String8 indent, DW_Input *input, Rng1U64Array segment_vranges, Arch arch);

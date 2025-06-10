@@ -1031,10 +1031,10 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
   return cm;
 }
 
-internal RDIM_Rng1U64List
+internal RDIM_Rng1U64ChunkList
 d2r_voff_ranges_from_cu_info_off(D2R_CompUnitContribMap map, U64 info_off)
 {
-  RDIM_Rng1U64List voff_ranges   = {0};
+  RDIM_Rng1U64ChunkList voff_ranges   = {0};
   U64              voff_list_idx = u64_array_bsearch(map.info_off_arr, map.count, info_off);
   if (voff_list_idx < map.count) {
     voff_ranges = map.voff_range_arr[voff_list_idx];
@@ -1073,7 +1073,7 @@ d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D
   return scope;
 }
 
-internal RDIM_BakeParams *
+internal RDIM_BakeParams
 d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -1091,7 +1091,7 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   RDIM_BinarySectionList binary_sections = {0};
   DW_Input               input           = {0};
   
-  if (in->image == Image_CoffPe) {
+  if (in->image == ExecutableImageKind_CoffPe) {
     PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, in->image_data);
     
     // get image arch
@@ -1111,7 +1111,7 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
     
     // make DWARF input
     input = dw_input_from_coff_section_table(scratch.arena, in->image_data, string_table, section_count, section_table);
-  } else if (in->image == Image_Elf32 || in->image == Image_Elf64) {
+  } else if (in->image == ExecutableImageKind_Elf32 || in->image == ExecutableImageKind_Elf64) {
     ELF_BinInfo elf = elf_bin_from_data(in->debug_data);
     
     // get image arch
@@ -2066,19 +2066,19 @@ d2r_convert(Arena *arena, RDIM_LocalState *local_state, RC_Context *in)
   
   //////////////////////////////// 
   
-  RDIM_BakeParams *bake_params  = push_array(arena, RDIM_BakeParams, 1);
-  bake_params->top_level_info   = top_level_info;
-  bake_params->binary_sections  = binary_sections;
-  bake_params->units            = units;
-  bake_params->types            = types;
-  bake_params->udts             = udts;
-  bake_params->src_files        = src_files;
-  bake_params->line_tables      = line_tables;
-  bake_params->global_variables = gvars;
-  bake_params->thread_variables = tvars;
-  bake_params->procedures       = procs;
-  bake_params->scopes           = scopes;
-  bake_params->inline_sites     = inline_sites;
+  RDIM_BakeParams bake_params  = {0};
+  bake_params.top_level_info   = top_level_info;
+  bake_params.binary_sections  = binary_sections;
+  bake_params.units            = units;
+  bake_params.types            = types;
+  bake_params.udts             = udts;
+  bake_params.src_files        = src_files;
+  bake_params.line_tables      = line_tables;
+  bake_params.global_variables = gvars;
+  bake_params.thread_variables = tvars;
+  bake_params.procedures       = procs;
+  bake_params.scopes           = scopes;
+  bake_params.inline_sites     = inline_sites;
   
   scratch_end(scratch);
   return bake_params;
@@ -2148,4 +2148,3 @@ rdi_reg_from_dw_reg(Arch arch, DW_Reg v, RDI_RegCode *code_out, U64 *off_out, U6
   }
   return 0;
 }
-

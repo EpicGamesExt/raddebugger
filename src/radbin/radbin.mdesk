@@ -10,7 +10,8 @@ RB_FileFormatTable:
   { COFF_BigOBJ      "COFF (Big OBJ)" }
   { COFF_Archive     "COFF (Archive)" }
   { COFF_ThinArchive "COFF (Thin Archive)" }
-  { ELF              "ELF" }
+  { ELF32            "ELF32" }
+  { ELF64            "ELF64" }
   { RDI              "RDI" }
 }
 

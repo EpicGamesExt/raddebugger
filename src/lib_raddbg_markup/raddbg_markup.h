@@ -83,17 +83,19 @@ void raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *f
 ////////////////////////////////
 //~ Win32 Implementations
 
-#if defined(RADDBG_MARKUP_IMPLEMENTATION) && !defined(RADDBG_MARKUP_STUBS)
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(RADDBG_MARKUP_STUBS)
+
+//- section allocating
+#pragma section(".raddbg", read, write)
+#define raddbg_exe_data __declspec(allocate(".raddbg"))
+
+//- one-time implementations
+#if defined(RADDBG_MARKUP_IMPLEMENTATION)
 
 //- default includes
 #if RADDBG_MARKUP_DEFAULT_VSNPRINTF
 #include <stdio.h>
 #endif
-
-//- section allocating
-#pragma section(".raddbg", read, write)
-#define raddbg_exe_data __declspec(allocate(".raddbg"))
 
 //- first byte of exe data section -> is attached
 static raddbg_exe_data unsigned char raddbg_is_attached_byte_marker[1];
@@ -459,8 +461,8 @@ raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *fmt, .
   }
 }
 
-#endif // defined(_WIN32)
 #endif // defined(RADDBG_MARKUP_IMPLEMENTATION)
+#endif // defined(_WIN32) && !defined(RADDBG_MARKUP_STUBS)
 
 ////////////////////////////////
 //~ Win32 STL Type Views

@@ -543,7 +543,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
     
     // rjf: convert PE directories to ranges
-    data_dir_franges = push_array(arena, Rng1U64, data_dir_count);
+    data_dir_franges = push_array(arena, Rng1U64, Max(data_dir_count, PE_DataDirectoryIndex_COUNT));
     for(U32 dir_idx = 0; dir_idx < data_dir_count; dir_idx += 1)
     {
       U64              dir_offset = optional_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*dir_idx;
@@ -620,87 +620,66 @@ pe_bin_info_from_data(Arena *arena, String8 data)
 }
 
 internal PE_DebugInfoList
-pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir)
+pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 raw_debug_dir)
 {
   PE_DebugInfoList result = {0};
-  
   PE_DebugDirectory *debug_entry     = str8_deserial_get_raw_ptr(raw_debug_dir, 0, sizeof(*debug_entry));
   PE_DebugDirectory *debug_entry_opl = debug_entry + raw_debug_dir.size/sizeof(*debug_entry_opl);
-  for (PE_DebugDirectory *entry = debug_entry; entry < debug_entry_opl; ++entry) {
-    switch (entry->type) {
-      default: {
-        PE_DebugInfoNode *n = push_array(arena, PE_DebugInfoNode, 1);
-        n->v.header         = *entry;
-        n->v.u.raw_data     = str8_substr(raw_image, rng_1u64(entry->foff, entry->foff + entry->size));
-        
-        SLLQueuePush(result.first, result.last, n);
-        ++result.count;
-      } break;
-      case PE_DebugDirectoryType_CODEVIEW: {
-        U32 cv_magic = 0;
-        str8_deserial_read_struct(raw_image, entry->foff, &cv_magic);
-        
-        switch (cv_magic) {
-          case PE_CODEVIEW_PDB20_MAGIC: {
+  for(PE_DebugDirectory *entry = debug_entry; entry < debug_entry_opl; entry += 1)
+  {
+    PE_DebugInfoNode *n = push_array(arena, PE_DebugInfoNode, 1);
+    SLLQueuePush(result.first, result.last, n);
+    result.count += 1;
+    n->v.header = *entry;
+    switch(entry->type)
+    {
+      default:{}break;
+      case PE_DebugDirectoryType_CODEVIEW:
+      {
+        str8_deserial_read_struct(raw_image, entry->foff, &n->v.cv_magic);
+        switch(n->v.cv_magic)
+        {
+          case PE_CODEVIEW_PDB20_MAGIC:
+          {
             PE_CvHeaderPDB20 cv = {0};
             U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
+            if(cv_read_size == sizeof(cv))
+            {
               String8 path = {0};
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
-              
-              PE_DebugInfoNode *n          = push_array(arena, PE_DebugInfoNode, 1);
-              n->v.header                  = *entry;
-              n->v.u.codeview.pdb20.header = cv;
-              n->v.u.codeview.pdb20.path   = path;
-              
-              SLLQueuePush(result.first, result.last, n);
-              ++result.count;
-            } else {
-              Assert(!"unable to read PE_CvHeaderPDB20");
+              n->v.cv_pdb20_header = cv;
+              n->v.path = path;
             }
-          } break;
-          case PE_CODEVIEW_PDB70_MAGIC: {
+          }break;
+          case PE_CODEVIEW_PDB70_MAGIC:
+          {
             PE_CvHeaderPDB70 cv = {0};
             U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
+            if(cv_read_size == sizeof(cv))
+            {
               String8 path = {0};
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
-              
-              PE_DebugInfoNode *n          = push_array(arena, PE_DebugInfoNode, 1);
-              n->v.header                  = *entry;
-              n->v.u.codeview.pdb70.header = cv;
-              n->v.u.codeview.pdb70.path   = path;
-              
-              SLLQueuePush(result.first, result.last, n);
-              ++result.count;
-            } else {
-              Assert(!"unable to read PE_CvHeaderPDB70");
+              n->v.cv_pdb70_header = cv;
+              n->v.path = path;
             }
-          } break;
-          case PE_CODEVIEW_RDI_MAGIC: {
+          }break;
+          case PE_CODEVIEW_RDI_MAGIC:
+          {
             PE_CvHeaderRDI cv = {0};
             U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
+            if(cv_read_size == sizeof(cv))
+            {
               String8 path = {0};
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
-              
-              PE_DebugInfoNode *n        = push_array(arena, PE_DebugInfoNode, 1);
-              n->v.header                = *entry;
-              n->v.u.codeview.rdi.header = cv;
-              n->v.u.codeview.rdi.path   = path;
-              
-              SLLQueuePush(result.first, result.last, n);
-              ++result.count;
-            } else {
-              Assert(!"unable to read PE_CvHeaderRDI");
+              n->v.cv_rdi_header = cv;
+              n->v.path = path;
             }
-          } break;
-          default: break;
+          }break;
+          default:{}break;
         }
-      } break;
+      }break;
     }
   }
-  
   return result;
 }
 

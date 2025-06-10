@@ -42,7 +42,7 @@ typedef enum
 
 typedef struct RC_Context
 {
-  ImageType        image;
+  ExecutableImageKind        image;
   RC_Driver        driver;
   String8          image_name;
   String8          image_data;

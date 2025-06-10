@@ -5,7 +5,6 @@
 //~ rjf: post-0.9.19 TODO notes
 //
 //- memory view
-// [x] auto-annotations for non-locals
 // [ ] have smaller visible range than entire memory
 // space, within some bounds (e.g. 64KB)
 // [ ] dynamically expand memory space, based on
@@ -180,6 +179,7 @@
 // [x] if a breakpoint matches the entry point's starting address, its hit count
 //     is not correctly incremented.
 // [x] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
+// [x] auto-annotations for non-locals
 
 ////////////////////////////////
 //~ rjf: Build Options
@@ -203,6 +203,7 @@
 
 //- rjf: [h]
 #include "base/base_inc.h"
+#include "linker/hash_table.h"
 #include "os/os_inc.h"
 #include "async/async.h"
 #include "rdi_format/rdi_format_local.h"
@@ -225,7 +226,14 @@
 #include "pdb/pdb.h"
 #include "pdb/pdb_parse.h"
 #include "pdb/pdb_stringize.h"
+#include "dwarf/dwarf.h"
+#include "dwarf/dwarf_parse.h"
+#include "dwarf/dwarf_coff.h"
+#include "dwarf/dwarf_elf.h"
+#include "rdi_from_coff/rdi_from_coff.h"
+#include "rdi_from_elf/rdi_from_elf.h"
 #include "rdi_from_pdb/rdi_from_pdb.h"
+#include "rdi_from_dwarf/rdi_from_dwarf.h"
 #include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.h"
 #include "radbin/radbin.h"
 #include "regs/regs.h"
@@ -249,6 +257,7 @@
 
 //- rjf: [c]
 #include "base/base_inc.c"
+#include "linker/hash_table.c"
 #include "os/os_inc.c"
 #include "async/async.c"
 #include "rdi_format/rdi_format_local.c"
@@ -271,7 +280,14 @@
 #include "pdb/pdb.c"
 #include "pdb/pdb_parse.c"
 #include "pdb/pdb_stringize.c"
+#include "dwarf/dwarf.c"
+#include "dwarf/dwarf_parse.c"
+#include "dwarf/dwarf_coff.c"
+#include "dwarf/dwarf_elf.c"
+#include "rdi_from_coff/rdi_from_coff.c"
+#include "rdi_from_elf/rdi_from_elf.c"
 #include "rdi_from_pdb/rdi_from_pdb.c"
+#include "rdi_from_dwarf/rdi_from_dwarf.c"
 #include "rdi_breakpad_from_pdb/rdi_breakpad_from_pdb.c"
 #include "radbin/radbin.c"
 #include "regs/regs.c"

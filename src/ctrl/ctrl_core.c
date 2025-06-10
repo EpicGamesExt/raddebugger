@@ -3989,13 +3989,8 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
                                       file_header_off + sizeof(COFF_FileHeader) + opt_ext_size);
     
     //- rjf: read optional header
-    U16 optional_magic = 0;
-    U64 image_base = 0;
     U64 entry_point = 0;
     U32 data_dir_count = 0;
-    U64 virt_section_align = 0;
-    U64 file_section_align = 0;
-    Rng1U64 *data_dir_franges = 0;
     if(opt_ext_size > 0)
     {
       // rjf: read magic number
@@ -4011,10 +4006,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         {
           PE_OptionalHeader32 pe_optional = {0};
           dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          image_base = pe_optional.image_base;
           entry_point = pe_optional.entry_point_va;
-          virt_section_align = pe_optional.section_alignment;
-          file_section_align = pe_optional.file_alignment;
           reported_data_dir_offset = sizeof(pe_optional);
           reported_data_dir_count = pe_optional.data_dir_count;
         }break;
@@ -4022,10 +4014,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         {
           PE_OptionalHeader32Plus pe_optional = {0};
           dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
-          image_base = pe_optional.image_base;
           entry_point = pe_optional.entry_point_va;
-          virt_section_align = pe_optional.section_alignment;
-          file_section_align = pe_optional.file_alignment;
           reported_data_dir_offset = sizeof(pe_optional);
           reported_data_dir_count = pe_optional.data_dir_count;
         }break;

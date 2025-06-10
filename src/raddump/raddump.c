@@ -3043,7 +3043,7 @@ dw_print_debug_str(Arena *arena, String8List *out, String8 indent, DW_Input *inp
 }
 
 internal void
-dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed)
+dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed)
 {
 #if 0
   DW_Section info = input->sec[DW_Section_Info];
@@ -3190,7 +3190,7 @@ dw_print_debug_loc(Arena *arena, String8List *out, String8 indent, DW_Input *inp
 }
 
 internal void
-dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ImageType image_type, B32 relaxed)
+dw_print_debug_ranges(Arena *arena, String8List *out, String8 indent, DW_Input *input, Arch arch, ExecutableImageKind image_type, B32 relaxed)
 {
   NotImplemented;
 #if 0
@@ -3956,7 +3956,7 @@ dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_In
 }
 
 internal void
-dw_format(Arena *arena, String8List *out, String8 indent, RD_Option opts, DW_Input *input, Arch arch, ImageType image_type)
+dw_format(Arena *arena, String8List *out, String8 indent, RD_Option opts, DW_Input *input, Arch arch, ExecutableImageKind image_type)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -6610,7 +6610,7 @@ coff_print_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data,
   
   if (opts & RD_Option_Dwarf) {
     DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, header->section_count, section_table);
-    dw_format(arena, out, indent, opts, &dwarf_input, arch, Image_CoffPe);
+    dw_format(arena, out, indent, opts, &dwarf_input, arch, ExecutableImageKind_CoffPe);
   }
   
   exit:;
@@ -7111,7 +7111,7 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
   rd_printf("# Debug Directory");
   rd_indent();
   
-  PE_DebugInfoList debug_info_list = pe_parse_debug_directory(scratch.arena, raw_data, raw_dir);
+  PE_DebugInfoList debug_info_list = pe_debug_info_list_from_raw_debug_dir(scratch.arena, raw_data, raw_dir);
   U64 i = 0;
   for (PE_DebugInfoNode *entry = debug_info_list.first; entry != 0; entry = entry->next, ++i) {
     PE_DebugInfo *de = &entry->v;
@@ -8300,7 +8300,7 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
   
   if (opts & RD_Option_Dwarf) {
     DW_Input dwarf_input = dw_input_from_coff_section_table(scratch.arena, raw_data, raw_string_table, file_header->section_count, sections);
-    dw_format(arena, out, indent, opts, &dwarf_input, arch, Image_CoffPe);
+    dw_format(arena, out, indent, opts, &dwarf_input, arch, ExecutableImageKind_CoffPe);
   }
   
   exit:;
@@ -8317,7 +8317,7 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
   Arch             arch        = arch_from_elf_machine(bin.hdr.e_machine);
   DW_Input         dwarf_input = dw_input_from_elf_section_table(scratch.arena, raw_data, &bin);
   ELF_Class        elf_class   = bin.hdr.e_ident[ELF_Identifier_Class];
-  ImageType        image_type  = elf_class == ELF_Class_32 ? Image_Elf32 : elf_class == ELF_Class_64 ? Image_Elf64 : ELF_Class_None;
+  ExecutableImageKind        image_type  = elf_class == ELF_Class_32 ? ExecutableImageKind_Elf32 : elf_class == ELF_Class_64 ? ExecutableImageKind_Elf64 : ELF_Class_None;
   B32              relaxed     = 1;
   Rng1U64List      cu_ranges   = dw_unit_ranges_from_data(scratch.arena, dwarf_input.sec[DW_Section_Info].data);
   DW_ListUnitInput lu_input    = dw_list_unit_input_from_input(scratch.arena, &dwarf_input);
