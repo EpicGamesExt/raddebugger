@@ -497,23 +497,9 @@ rb_entry_point(CmdLine *cmdline)
           fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
           
           fprintf(stderr, "RAD DEBUG INFO SUBSET NAMES\n\n");
-          fprintf(stderr, " - binary_sections                Sections in the executable image\n");
-          fprintf(stderr, " - units                          Compilation unit info\n");
-          fprintf(stderr, " - procedures                     Procedure info\n");
-          fprintf(stderr, " - global_variables               Global variable info\n");
-          fprintf(stderr, " - thread_variables               Thread-local variable info\n");
-          fprintf(stderr, " - scopes                         Scope info\n");
-          fprintf(stderr, " - locals                         Local variable info\n");
-          fprintf(stderr, " - types                          Type nodes\n");
-          fprintf(stderr, " - udts                           User-defined-type (UDT) info\n");
-          fprintf(stderr, " - line_info                      Source code line <-> virtual offset mapping\n");
-          fprintf(stderr, " - global_variable_name_map       The name -> global variable table\n");
-          fprintf(stderr, " - thread_variable_name_map       The name -> thread variable table\n");
-          fprintf(stderr, " - procedure_name_map             The name -> procedure table\n");
-          fprintf(stderr, " - constant_name_map              The name -> constant table\n");
-          fprintf(stderr, " - type_name_map                  The name -> user-defined-type table\n");
-          fprintf(stderr, " - link_name_procedure_name_map   The link_name -> procedure table\n");
-          fprintf(stderr, " - normal_source_path_name_map    The path -> source file table\n");
+#define X(name, name_lower) fprintf(stderr, " - " #name_lower "\n");
+          RDIM_Subset_XList
+#undef X
         }break;
         case OutputKind_Breakpad:
         {
@@ -824,8 +810,53 @@ rb_entry_point(CmdLine *cmdline)
       //- rjf: no inputs => help
       if(cmdline->inputs.node_count == 0)
       {
-        fprintf(stderr, "All input files specified on the command line will be dumped. The following\n");
-        fprintf(stderr, "formats are currently supported: PE, COFF, RDI, and ELF\n\n");
+        fprintf(stderr, "All input files specified on the command line will be dumped. Currently, only\n");
+        fprintf(stderr, "RDI files are supported.\n\n");
+        
+        fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+        
+        fprintf(stderr, "ARGUMENTS\n\n");
+        
+        fprintf(stderr, "--only:<comma delimited names>   Specifies that only the named subsets should\n");
+        fprintf(stderr, "                                 be dumped. See below for a list of valid\n");
+        fprintf(stderr, "                                 subset names.\n");
+        fprintf(stderr, "\n");
+        fprintf(stderr, "--omit:<comma delimited names>   Specifies that the named subsets should not\n");
+        fprintf(stderr, "                                 be dumped. See below for a list of valid\n");
+        fprintf(stderr, "                                 subset names.\n");
+        fprintf(stderr, "\n");
+        
+        fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+        
+        fprintf(stderr, "RAD DEBUG INFO SUBSET NAMES\n\n");
+#define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
+        RDI_DumpSubset_XList
+#undef X
+      }
+      
+      //- rjf: unpack dump subset flags
+      RDI_DumpSubsetFlags rdi_dump_subset_flags = 0;
+      {
+        String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
+        if(only_names.node_count != 0)
+        {
+          rdi_dump_subset_flags = 0;
+        }
+        for(String8Node *n = only_names.first; n != 0; n = n->next)
+        {
+          if(0){}
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags |= RDI_DumpSubsetFlag_##name; }
+          RDI_DumpSubset_XList
+#undef X
+        }
+        String8List omit_names = cmd_line_strings(cmdline, str8_lit("omit"));
+        for(String8Node *n = omit_names.first; n != 0; n = n->next)
+        {
+          if(0){}
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags &= ~RDI_DumpSubsetFlag_##name; }
+          RDI_DumpSubset_XList
+#undef X
+        }
       }
       
       //- rjf: dump input files in order
@@ -843,19 +874,45 @@ rb_entry_point(CmdLine *cmdline)
           {
             RDI_Parsed rdi = {0};
             RDI_ParseStatus rdi_status = rdi_parse(f->data.str, f->data.size, &rdi);
+            String8 error = {0};
             switch(rdi_status)
             {
               default:{}break;
-              case RDI_ParseStatus_HeaderDoesNotMatch:      {str8_list_pushf(arena, &output_blobs, "");}break;
-              case RDI_ParseStatus_UnsupportedVersionNumber:{str8_list_pushf(arena, &output_blobs, "");}break;
-              case RDI_ParseStatus_InvalidDataSecionLayout: {}break;
-              case RDI_ParseStatus_MissingRequiredSection:  {}break;
+              case RDI_ParseStatus_HeaderDoesNotMatch:      {log_user_errorf("RDI parse failure: header does not match\n");}break;
+              case RDI_ParseStatus_UnsupportedVersionNumber:{log_user_errorf("RDI parse failure: unsupported version\n");}break;
+              case RDI_ParseStatus_InvalidDataSecionLayout: {log_user_errorf("RDI parse failure: invalid data section layout\n");}break;
+              case RDI_ParseStatus_MissingRequiredSection:  {log_user_errorf("RDI parse failure: missing required section\n");}break;
               case RDI_ParseStatus_Good:
               {
-                String8List dump = rdi_dump_list_from_parsed(arena, &rdi, RDI_DumpSubsetFlag_All);
+                String8List dump = rdi_dump_list_from_parsed(arena, &rdi, rdi_dump_subset_flags);
                 str8_list_concat_in_place(&output_blobs, &dump);
               }break;
             }
+          }break;
+          
+          //- rjf: COFF archive
+          case RB_FileFormat_COFF_Archive:
+          case RB_FileFormat_COFF_ThinArchive:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: COFF big OBJ
+          case RB_FileFormat_COFF_BigOBJ:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: COFF OBJ
+          case RB_FileFormat_COFF_OBJ:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: PE
+          case RB_FileFormat_PE:
+          {
+            // TODO(rjf)
           }break;
         }
       }

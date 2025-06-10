@@ -187,8 +187,6 @@ internal void            rd_print_disasm           (Arena *arena, String8List *o
 internal String8 rd_format_hex_array(Arena *arena, U8 *ptr, U64 size);
 internal void    rd_print_raw_data  (Arena *arena, String8List *out, String8 indent, U64 bytes_per_row, U64 marker_count, RD_Marker *markers, String8 raw_data);
 
-// RDI
-
 // DWARF
 
 internal String8List dw_string_list_from_expression  (Arena *arena, String8 raw_data, U64 cu_base, U64 address_size, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
