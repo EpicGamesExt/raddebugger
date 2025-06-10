@@ -453,7 +453,7 @@ typedef struct
 
 typedef struct
 {
-  LNK_SectionArray          image_sects;
+  COFF_SectionHeaderArray   image_sects;
   LNK_Obj                  *obj_arr;
   CV_DebugS                *debug_s_arr;
   CV_DebugT                 ipi;
@@ -555,7 +555,6 @@ internal String8List lnk_build_rad_debug_info(TP_Context               *tp,
                                               RDI_Arch                  arch,
                                               String8                   image_name,
                                               String8                   image_data,
-                                              LNK_SectionArray          image_sects,
                                               U64                       obj_count,
                                               LNK_Obj                  *obj_arr,
                                               CV_DebugS                *debug_s_arr,
