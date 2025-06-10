@@ -324,6 +324,7 @@ typedef struct LNK_Config
   U64                         worker_count;
   U64                         max_worker_count;
   String8                     shared_thread_pool_name;
+  LNK_SwitchState             do_function_pad_min;
   U64                        *function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;

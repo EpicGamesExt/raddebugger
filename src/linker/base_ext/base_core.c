@@ -8,15 +8,11 @@ safe_cast_u16x(U64 x)
   return (U16)x;
 }
 
-////////////////////////////////
-
 internal U64
 u128_mod64(U128 a, U64 b)
 {
   return a.u64[1] % b;
 }
-
-////////////////////////////////
 
 internal Version
 make_version(U64 major, U64 minor)
@@ -45,16 +41,12 @@ version_compar(Version a, Version b)
   return cmp;
 }
 
-////////////////////////////////
-
 internal ISectOff
 isect_off(U32 isect, U32 off)
 {
   ISectOff result = { isect, off };
   return result;
 }
-
-////////////////////////////////
 
 internal int
 u16_compar(const void *raw_a, const void *raw_b)
@@ -122,7 +114,6 @@ u64_compar_is_before(void *raw_a, void *raw_b)
   int is_before = *a < *b;
   return is_before; 
 }
-
 
 internal int
 u8_is_before(void *raw_a, void *raw_b)
@@ -212,8 +203,33 @@ pair_u64_compar_v1(const void *raw_a, const void *raw_b)
   return u64_compar(&a->v1, &b->v1);
 }
 
+internal U64
+pair_u64_nearest_v0(PairU64 *arr, U64 count, U64 v)
+{
+  U64 result = max_U64;
 
-////////////////////////////////
+  if (count > 1 && arr[0].v0 <= v && v < arr[count-1].v0) {
+    U64 l = 0;
+    U64 r = count - 1;
+    for (; l <= r; ) {
+      U64 m = l + (r - l) / 2;
+      if (arr[m].v0 == v) {
+        return m;
+      } else if (arr[m].v0 < v) {
+        l = m + 1;
+      } else {
+        r = m - 1;
+      }
+    }
+    result = l;
+  } else if (count == 1 && arr[0].v0 == v) {
+    result = 0;
+  } else if (count > 0 && v >= arr[count-1].v0) {
+    result = count-1;
+  }
+
+  return result;
+}
 
 internal void
 str8_list_concat_in_place_array(String8List *list, String8List *arr, U64 count)

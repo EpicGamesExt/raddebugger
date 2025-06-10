@@ -319,7 +319,7 @@ lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 }
 
 internal void
-lnk_finalize_section_layout(LNK_Section *sect, U64 file_align)
+lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 function_pad_min)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -341,22 +341,19 @@ lnk_finalize_section_layout(LNK_Section *sect, U64 file_align)
   ProfEnd();
 
   ProfBegin("Layout Contribs");
-  U64 cursor = 0;
+  U64 min_sc_size = sect->flags & COFF_SectionFlag_CntCode ? function_pad_min : 0;
+  U64 cursor      = 0;
   for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
     for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
       LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
 
-      cursor = AlignPow2(cursor, sc->align);
-
-      // store section contribution start offset
-      U64 sc_off = cursor;
-
-      // compute contrib size
-      U64 sc_size = lnk_size_from_section_contrib(sc);
-      cursor += sc_size;
-
       // assign offset and size
-      sc->u.off = sc_off;
+      cursor = AlignPow2(cursor, sc->align);
+      sc->u.off = cursor;
+
+      // advance cursor
+      U64 sc_size = lnk_size_from_section_contrib(sc);
+      cursor += Max(min_sc_size, sc_size);
     }
   }
   ProfEnd();
@@ -403,7 +400,7 @@ internal U64
 lnk_size_from_section_contrib(LNK_SectionContrib *sc)
 {
   U64 size = 0;
-  for (String8Node *n = sc->data_list; n != 0; n = n->next) {
+  for (String8Node *n = &sc->first_data_node; n != 0; n = n->next) {
     size += n->string.size;
   }
   return size;
