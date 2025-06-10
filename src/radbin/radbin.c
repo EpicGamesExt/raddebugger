@@ -867,7 +867,7 @@ rb_entry_point(CmdLine *cmdline)
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
-        str8_list_pushf(arena, &output_blobs, "# %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, rb_file_format_display_name_table[f->format]);
+        str8_list_pushf(arena, &output_blobs, "# %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
         switch(f->format)
         {
           default:{}break;
