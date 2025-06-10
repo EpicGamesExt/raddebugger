@@ -499,20 +499,36 @@ entry_point(CmdLine *cmd_line)
       
       //- rjf: setup initial target from command line args
       {
-        String8List args = cmd_line->inputs;
-        if(args.node_count > 0 && args.first->string.size != 0)
+        Temp scratch = scratch_begin(0, 0);
+        String8List target_args = {0};
         {
-          Temp scratch = scratch_begin(0, 0);
-          
+          B32 after_first_non_flag = 0;
+          for(U64 idx = 1; idx < cmd_line->argc; idx += 1)
+          {
+            String8 arg = str8_cstring(cmd_line->argv[idx]);
+            if(!str8_match(str8_prefix(arg, 1), str8_lit("-"), 0) &&
+               !str8_match(str8_prefix(arg, 1), str8_lit("--"), 0) &&
+               !str8_match(str8_prefix(arg, 1), str8_lit("/"), 0))
+            {
+              after_first_non_flag = 1;
+            }
+            if(after_first_non_flag)
+            {
+              str8_list_push(scratch.arena, &target_args, arg);
+            }
+          }
+        }
+        if(target_args.node_count > 0 && target_args.first->string.size != 0)
+        {
           //- rjf: unpack command line inputs
           String8 executable_name_string = {0};
           String8 arguments_string = {0};
           String8 working_directory_string = {0};
           {
             // rjf: unpack full executable path
-            if(args.first->string.size != 0)
+            if(target_args.first->string.size != 0)
             {
-              String8 exe_name = args.first->string;
+              String8 exe_name = target_args.first->string;
               PathStyle style = path_style_from_str8(exe_name);
               if(style == PathStyle_Relative)
               {
@@ -524,9 +540,9 @@ entry_point(CmdLine *cmd_line)
             }
             
             // rjf: unpack working directory
-            if(args.first->string.size != 0)
+            if(target_args.first->string.size != 0)
             {
-              String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
+              String8 path_part_of_arg = str8_chop_last_slash(target_args.first->string);
               if(path_part_of_arg.size != 0)
               {
                 String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
@@ -536,7 +552,7 @@ entry_point(CmdLine *cmd_line)
             
             // rjf: unpack arguments
             String8List passthrough_args_list = {0};
-            for(String8Node *n = args.first->next; n != 0; n = n->next)
+            for(String8Node *n = target_args.first->next; n != 0; n = n->next)
             {
               str8_list_push(scratch.arena, &passthrough_args_list, n->string);
             }
@@ -553,9 +569,9 @@ entry_point(CmdLine *cmd_line)
           rd_cfg_new(exe, executable_name_string);
           rd_cfg_new(args, arguments_string);
           rd_cfg_new(wdir, working_directory_string);
-          
-          scratch_end(scratch);
+          rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
         }
+        scratch_end(scratch);
       }
       
       //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread

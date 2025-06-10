@@ -811,6 +811,7 @@ rb_entry_point(CmdLine *cmdline)
       String8List dump = {0};
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
+        RB_File *f = n->v;
         // TODO(rjf)
       }
       

@@ -752,7 +752,6 @@ struct UI_State
 ////////////////////////////////
 //~ rjf: Basic Type Functions
 
-internal U64     ui_hash_from_string(U64 seed, String8 string);
 internal String8 ui_hash_part_from_key_string(String8 string);
 internal String8 ui_display_part_from_key_string(String8 string);
 internal UI_Key  ui_key_zero(void);

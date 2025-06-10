@@ -15,13 +15,6 @@ thread_static UI_State *ui_state = 0;
 # include "third_party/xxHash/xxhash.h"
 #endif
 
-internal U64
-ui_hash_from_string(U64 seed, String8 string)
-{
-  U64 result = XXH3_64bits_withSeed(string.str, string.size, seed);
-  return result;
-}
-
 internal String8
 ui_hash_part_from_key_string(String8 string)
 {
@@ -68,7 +61,7 @@ ui_key_from_string(UI_Key seed_key, String8 string)
   if(string.size != 0)
   {
     String8 hash_part = ui_hash_part_from_key_string(string);
-    result.u64[0] = ui_hash_from_string(seed_key.u64[0], hash_part);
+    result.u64[0] = u64_hash_from_seed_str8(seed_key.u64[0], hash_part);
   }
   ProfEnd();
   return result;

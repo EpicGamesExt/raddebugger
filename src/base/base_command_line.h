@@ -39,9 +39,8 @@ struct CmdLine
 };
 
 ////////////////////////////////
-//~ NOTE(rjf): Command Line Option Parsing
+//~ rjf: Command Line Parsing Functions
 
-internal U64              cmd_line_hash_from_string(String8 string);
 internal CmdLineOpt**     cmd_line_slot_from_string(CmdLine *cmd_line, String8 string);
 internal CmdLineOpt*      cmd_line_opt_from_slot(CmdLineOpt **slot, String8 string);
 internal void             cmd_line_push_opt(CmdLineOptList *list, CmdLineOpt *var);
