@@ -3273,6 +3273,85 @@ exit:;
  return result;
 }
 
+internal T_Result
+t_empty_section(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    COFF_ObjSection *test = coff_obj_writer_push_section(obj_writer, str8_lit(".test"), PE_TEXT_SECTION_FLAGS, str8(0,0));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 0, test);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("empty_section.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    COFF_ObjSymbol *test_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, text_sect, 3, test_symbol); // relocation against removed section
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe empty_section.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_removed_section(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 test_text[] = { 0xc3 };
+    COFF_ObjSection *test_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".test"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_LnkRemove, str8_array_fixed(test_text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 0, test_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("test.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    COFF_ObjSymbol *test_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, text_sect, 3, test_symbol); // relocation against removed section
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.obj entry.obj");
+  if (linker_exit_code == 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -3324,6 +3403,8 @@ entry_point(CmdLine *cmdline)
     { "communal_var_vs_regular",          t_communal_var_vs_regular          },
     { "import_kernel32",                  t_import_kernel32                  },
     { "delay_import_user32",              t_delay_import_user32              },
+    { "empty_section",                    t_empty_section                    },
+    { "removed_section",                  t_removed_section                  },
     //{ "import_export",        t_import_export        },
   };
 
