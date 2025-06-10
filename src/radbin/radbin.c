@@ -399,14 +399,16 @@ rb_entry_point(CmdLine *cmdline)
   //
   if(output_kind == OutputKind_Null || cmdline->inputs.node_count == 0)
   {
-    fprintf(stderr, "-------------------------------------------------------------------------------\n");
-    fprintf(stderr, "%s\n\n", BUILD_TITLE);
+    fprintf(stderr, "%s\n", BUILD_TITLE);
+    fprintf(stderr, "%s\n\n", BUILD_VERSION_STRING_LITERAL);
     if(output_kind != OutputKind_Null)
     {
       fprintf(stderr, "%.*s Help\n", str8_varg(output_kind_info[output_kind].title));
       fprintf(stderr, "To see top-level options for radbin, run the binary with no arguments.\n\n");
     }
   }
+  
+  fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
   
   //////////////////////////////
   //- rjf: perform operation based on output kind
@@ -420,13 +422,29 @@ rb_entry_point(CmdLine *cmdline)
     default:
     case OutputKind_Null:
     {
+      fprintf(stderr, "USAGE EXAMPLES\n\n");
+      
+      fprintf(stderr, "radbin --rdi program.exe\n");
+      fprintf(stderr, "Find the debug info for `program.exe`, if any, and converts it to RDI.\n\n");
+      
+      fprintf(stderr, "radbin program.pdb --out:program.rdi\n");
+      fprintf(stderr, "Converts `program.pdb` to RDI, and stores it in `program.rdi`.\n\n");
+      
+      fprintf(stderr, "radbin --dump program.rdi\n");
+      fprintf(stderr, "Outputs the textual dump of the debug information stored in `program.rdi`.\n\n");
+      
+      fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+      
+      fprintf(stderr, "DESCRIPTION\n\n");
       fprintf(stderr, "This utility provides a number of operations relating to executable image and\n");
       fprintf(stderr, "debug information formats. It can convert debug information to the RAD Debug\n");
       fprintf(stderr, "Info (.rdi) format. It can also parse and dump textualized contents of several\n");
       fprintf(stderr, "formats, including PDB, PE, ELF, and RDI. It also supports converting debug\n");
       fprintf(stderr, "information to the textual Breakpad format.\n\n");
       
-      fprintf(stderr, "The following top-level arguments are accepted:\n\n");
+      fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+      
+      fprintf(stderr, "ARGUMENTS\n\n");
       
       fprintf(stderr, "--rdi            Specifies that the utility should convert debug information\n");
       fprintf(stderr, "                 data to the RAD Debug Info (.rdi) format.\n\n");
@@ -464,7 +482,7 @@ rb_entry_point(CmdLine *cmdline)
         default:
         case OutputKind_RDI:
         {
-          fprintf(stderr, "The following arguments are accepted:\n\n");
+          fprintf(stderr, "ARGUMENTS\n\n");
           
           fprintf(stderr, "--compress                       Compresses the RDI file's contents.\n");
           fprintf(stderr, "\n");
@@ -477,7 +495,9 @@ rb_entry_point(CmdLine *cmdline)
           fprintf(stderr, "                                 for a list of valid debug info subset names.\n");
           fprintf(stderr, "\n");
           
-          fprintf(stderr, "RAD Debug Info Subsets:\n");
+          fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+          
+          fprintf(stderr, "RAD DEBUG INFO SUBSET NAMES\n\n");
           fprintf(stderr, " - binary_sections                Sections in the executable image\n");
           fprintf(stderr, " - units                          Compilation unit info\n");
           fprintf(stderr, " - procedures                     Procedure info\n");
