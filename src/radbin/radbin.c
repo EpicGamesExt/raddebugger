@@ -838,7 +838,7 @@ rb_entry_point(CmdLine *cmdline)
       }
       
       //- rjf: unpack dump subset flags
-      RDI_DumpSubsetFlags rdi_dump_subset_flags = 0;
+      RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
       {
         String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
         if(only_names.node_count != 0)
