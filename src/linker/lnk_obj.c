@@ -229,7 +229,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // Extract obj features from compile symbol in .debug$S
   //
   B8 hotpatch = 0;
-  {
+  if (header.machine == COFF_MachineType_X64) {
+    hotpatch = 1;
+  } else {
     Temp scratch = scratch_begin(&arena, 1);
 
     CV_Symbol comp_symbol = {0};

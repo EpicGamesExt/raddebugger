@@ -319,7 +319,7 @@ lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 }
 
 internal void
-lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 function_pad_min)
+lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 pad_size)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -341,11 +341,15 @@ lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 function_pad_
   ProfEnd();
 
   ProfBegin("Layout Contribs");
-  U64 min_sc_size = sect->flags & COFF_SectionFlag_CntCode ? function_pad_min : 0;
-  U64 cursor      = 0;
+  U64 cursor = 0;
   for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
     for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
       LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
+
+      // add section pad bytes
+      if (sc->hotpatch) {
+        cursor += pad_size;
+      }
 
       // assign offset
       cursor = AlignPow2(cursor, sc->align);
@@ -353,7 +357,7 @@ lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 function_pad_
 
       // advance cursor
       U64 sc_size = lnk_size_from_section_contrib(sc);
-      cursor += Max(min_sc_size, sc_size);
+      cursor += sc_size;
     }
   }
   ProfEnd();

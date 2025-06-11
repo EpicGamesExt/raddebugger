@@ -309,7 +309,7 @@ typedef enum
 internal COFF_ObjSection *
 t_push_text_section(COFF_ObjWriter *obj_writer, String8 data)
 {
-  return coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, data);
+  return coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS | COFF_SectionFlag_Align1Bytes, data);
 }
 
 internal COFF_ObjSection *
@@ -3360,17 +3360,21 @@ t_function_pad_min(void)
 
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    U8 ret[] = { 0xc3, 0xc3, 0xc3 };
-    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(ret));
-    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("A"), 0, text_sect);
-    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("B"), 1, text_sect);
-    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("C"), 2, text_sect);
+    U8 ret[] = { 0xc3 };
+    COFF_ObjSection *text_sect_0 = t_push_text_section(obj_writer, str8_array_fixed(ret));
+    COFF_ObjSection *text_sect_1 = t_push_text_section(obj_writer, str8_array_fixed(ret));
+    COFF_ObjSection *text_sect_2 = t_push_text_section(obj_writer, str8_array_fixed(ret));
+    text_sect_0->flags |= COFF_SectionFlag_Align4Bytes;
+    text_sect_1->flags |= COFF_SectionFlag_Align2Bytes;
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("A"), 0, text_sect_0);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("B"), 0, text_sect_1);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("C"), 0, text_sect_2);
     String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
     if (!t_write_file(str8_lit("funcs.obj"), obj)) { goto exit; }
   }
 
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:A /functionpadmin:8 /out:a.exe funcs.obj");
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:A /functionpadmin:1 /out:a.exe funcs.obj");
   if (linker_exit_code != 0) { goto exit; }
 
   String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
@@ -3382,9 +3386,9 @@ t_function_pad_min(void)
   String8             text_data     = str8_substr(exe, rng_1u64(text_sect->foff, text_sect->foff + text_sect->vsize));
 
   U8 expected_text[] = {
-    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
-    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
-    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc
+    0xcc, 0xcc, 0xcc, 0xcc, 0xc3, 
+    0xcc, 0xcc, 0xcc, 0xc3, 
+    0xcc, 0xc3, 
   };
   if (!str8_match(text_data, str8_array_fixed(expected_text), 0)) { goto exit; }
 
