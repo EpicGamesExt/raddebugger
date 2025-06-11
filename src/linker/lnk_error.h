@@ -40,6 +40,7 @@ typedef enum
   LNK_Error_UnresolvedSymbol,
   LNK_Error_AssociativeLoop,
   LNK_Error_AlternateNameConflict,
+  LNK_Error_RelocationAgainstRemovedSection,
   LNK_Error_StopLast,
   
   LNK_Error_First,

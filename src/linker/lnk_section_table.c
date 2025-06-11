@@ -347,7 +347,7 @@ lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 function_pad_
     for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
       LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
 
-      // assign offset and size
+      // assign offset
       cursor = AlignPow2(cursor, sc->align);
       sc->u.off = cursor;
 

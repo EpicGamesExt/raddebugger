@@ -3352,6 +3352,48 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_function_pad_min(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 ret[] = { 0xc3, 0xc3, 0xc3 };
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(ret));
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("A"), 0, text_sect);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("B"), 1, text_sect);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("C"), 2, text_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("funcs.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:A /functionpadmin:8 /out:a.exe funcs.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *text_sect     = t_coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".text"));
+  if (text_sect == 0) { goto exit; }
+  String8             text_data     = str8_substr(exe, rng_1u64(text_sect->foff, text_sect->foff + text_sect->vsize));
+
+  U8 expected_text[] = {
+    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc,
+    0xc3, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc
+  };
+  if (!str8_match(text_data, str8_array_fixed(expected_text), 0)) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -3405,6 +3447,7 @@ entry_point(CmdLine *cmdline)
     { "delay_import_user32",              t_delay_import_user32              },
     { "empty_section",                    t_empty_section                    },
     { "removed_section",                  t_removed_section                  },
+    { "function_pad_min",                 t_function_pad_min                 },
     //{ "import_export",        t_import_export        },
   };
 
