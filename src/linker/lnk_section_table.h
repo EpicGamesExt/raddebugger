@@ -22,6 +22,7 @@ typedef struct LNK_SectionContrib
     };
   } u;
   U16 align; // contribution alignment in the image
+  B8 hotpatch;
 } LNK_SectionContrib;
 
 typedef struct LNK_SectionContribChunk
@@ -111,7 +112,7 @@ internal void                lnk_section_table_merge(LNK_SectionTable *sectab, L
 
 // --- Section Finalization ----------------------------------------------------
 
-internal void lnk_finalize_section_layout     (LNK_Section *sect, U64 file_align, U64 function_pad_min);
+internal void lnk_finalize_section_layout     (LNK_Section *sect, U64 file_align, U64 pad_size);
 internal void lnk_assign_section_index        (LNK_Section *sect, U64 sect_idx);
 internal void lnk_assign_section_virtual_space(LNK_Section *sect, U64 sect_align, U64 *voff_cursor);
 internal void lnk_assign_section_file_space   (LNK_Section *sect, U64 *foff_cursor);
