@@ -299,6 +299,10 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
     switch (interp) {
     case COFF_SymbolValueInterp_Regular: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
+        COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+        if (sect_header->flags & COFF_SectionFlag_LnkRemove) {
+          break;
+        }
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
         U64         hash = lnk_symbol_hash(symbol.name);
         lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, hash, defn);
