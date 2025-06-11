@@ -284,6 +284,15 @@ coff_obj_writer_push_symbol_extern(COFF_ObjWriter *obj_writer, String8 name, U32
 }
 
 internal COFF_ObjSymbol *
+coff_obj_writer_push_symbol_extern_func(COFF_ObjWriter *obj_writer, String8 name, U32 value, COFF_ObjSection *section)
+{
+  COFF_SymbolType      type = { .u.msb = COFF_SymDType_Func };
+  COFF_SymbolLocation  loc  = { .type = COFF_SymbolLocation_Section, .u.section = section };
+  COFF_ObjSymbol      *s    = coff_obj_writer_push_symbol(obj_writer, name, value, loc, type, COFF_SymStorageClass_External);
+  return s;
+}
+
+internal COFF_ObjSymbol *
 coff_obj_writer_push_symbol_static(COFF_ObjWriter *obj_writer, String8 name, U32 off, COFF_ObjSection *section)
 {
   COFF_SymbolLocation loc = {0};
