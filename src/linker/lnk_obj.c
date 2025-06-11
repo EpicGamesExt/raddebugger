@@ -224,6 +224,45 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
     scratch_end(scratch);
   }
+  
+  //
+  // Extract obj features from compile symbol in .debug$S
+  //
+  B8 hotpatch = 0;
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+
+    CV_Symbol comp_symbol = {0};
+    for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+      COFF_SectionHeader *sect_header = &coff_section_table[sect_idx];
+      String8 name = str8_cstring_capped_reverse(sect_header->name, sect_header->name+sizeof(sect_header->name));
+      if (str8_match(name, str8_lit(".debug$S"), 0)) {
+        Temp temp = temp_begin(scratch.arena);
+        String8 debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
+        CV_DebugS debug_s = cv_parse_debug_s(temp.arena, debug_s_data);
+        for (String8Node *symbols_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first; symbols_n != 0; symbols_n = symbols_n->next) {
+          CV_SymbolList symbol_list = {0};
+          cv_parse_symbol_sub_section_capped(scratch.arena, &symbol_list, 0, symbols_n->string, CV_SymbolAlign, 2);
+          if (symbol_list.first->data.kind == CV_SymKind_COMPILE3) {
+            comp_symbol = symbol_list.first->data;
+            goto found_comp_symbol;
+          } else if (symbol_list.last->data.kind == CV_SymKind_COMPILE3) {
+            comp_symbol = symbol_list.last->data;
+            goto found_comp_symbol;
+          }
+        }
+        temp_end(temp);
+      }
+    }
+    found_comp_symbol:;
+
+    if (comp_symbol.kind == CV_SymKind_COMPILE3 && comp_symbol.data.size >= sizeof(CV_SymCompile3)) {
+      CV_SymCompile3 *comp = (CV_SymCompile3 *)comp_symbol.data.str;
+      hotpatch = !!(comp->flags & CV_Compile3Flag_HotPatch);
+    }
+
+    scratch_end(scratch);
+  }
 
   // fill out obj
   obj->data      = input->data;
@@ -232,6 +271,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->input_idx = obj_idx;
   obj->header    = header;
   obj->comdats   = comdats;
+  obj->hotpatch  = hotpatch;
 
   ProfEnd();
 }
