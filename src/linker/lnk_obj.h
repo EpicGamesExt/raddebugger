@@ -13,6 +13,7 @@ typedef struct LNK_Obj
   U32                 input_idx;
   COFF_FileHeaderInfo header;
   U32                *comdats;
+  B8                  hotpatch;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode

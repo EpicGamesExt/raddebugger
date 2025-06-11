@@ -1213,9 +1213,10 @@ cv_str8_list_from_debug_t_parallel(TP_Context *tp, Arena *arena, CV_DebugT debug
 // $$Symbols
 
 internal void
-cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align)
+cv_parse_symbol_sub_section_capped(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align, U64 cap)
 {
-  for (U64 cursor = 0, opl = data.size; cursor < opl; ) {
+  U64 count = 0;
+  for (U64 cursor = 0, opl = data.size; cursor < opl && count < cap; count += 1) {
     // read symbol header
     CV_SymbolHeader header;
     cursor += str8_deserial_read_struct(data, cursor, &header);
@@ -1247,6 +1248,12 @@ cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, 
     cursor = symbol_opl;
     cursor = AlignPow2(cursor, align);
   }
+}
+
+internal void
+cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align)
+{
+  cv_parse_symbol_sub_section_capped(arena, list, offset_base, data, align, max_U64);
 }
 
 internal CV_SymbolList
