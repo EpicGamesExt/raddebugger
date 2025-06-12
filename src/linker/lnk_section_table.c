@@ -319,27 +319,28 @@ lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
 }
 
 internal void
-lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 pad_size)
+lnk_sort_section_contribs(LNK_Section *sect)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
 
-  ProfBegin("Sort Section Contribs");
-  {
-    // Grouped Sections (PE Format)
-    //  "All contributions with the same object-section name are allocated contiguously in the image,
-    //  and the blocks of contributions are sorted in lexical order by object-section name." 
-    LNK_SectionContribChunk **chunks = lnk_array_from_section_contrib_chunk_list(scratch.arena, sect->contribs);
-    radsort(chunks, sect->contribs.chunk_count, lnk_section_contrib_chunk_is_before);
+  LNK_SectionContribChunk **chunks = lnk_array_from_section_contrib_chunk_list(scratch.arena, sect->contribs);
+  radsort(chunks, sect->contribs.chunk_count, lnk_section_contrib_chunk_is_before);
 
-    // repopulate chunk list in sorted order
-    sect->contribs.first = 0;
-    sect->contribs.last  = 0;
-    for (U64 chunk_idx = 0; chunk_idx < sect->contribs.chunk_count; chunk_idx += 1) {
-      SLLQueuePush(sect->contribs.first, sect->contribs.last, chunks[chunk_idx]);
-    }
+  // repopulate chunk list in sorted order
+  sect->contribs.first = 0;
+  sect->contribs.last  = 0;
+  for (U64 chunk_idx = 0; chunk_idx < sect->contribs.chunk_count; chunk_idx += 1) {
+    SLLQueuePush(sect->contribs.first, sect->contribs.last, chunks[chunk_idx]);
   }
-  ProfEnd();
 
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
+lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 pad_size)
+{
   ProfBegin("Layout Contribs");
   U64 cursor = 0;
   for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
@@ -366,8 +367,6 @@ lnk_finalize_section_layout(LNK_Section *sect, U64 file_align, U64 pad_size)
     sect->fsize = AlignPow2(cursor, file_align);
   }
   sect->vsize = cursor;
-
-  scratch_end(scratch);
 }
 
 internal void
