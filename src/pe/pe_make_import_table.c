@@ -344,8 +344,8 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
   COFF_ObjSection *iat_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$5"), PE_IDATA_SECTION_FLAGS|import_align,                 str8_zero());
   COFF_ObjSection *int_sect      = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$6"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, str8_zero());
   COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".didat$7"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
-  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$i"),  PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_zero());
-  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$h"),  PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_array(handle, handle_size));
+  COFF_ObjSection *code_sect     = coff_obj_writer_push_section(obj_writer, str8_lit(".text$"),  PE_TEXT_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_zero());
+  COFF_ObjSection *handle_sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".data$"),  PE_DATA_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes,  str8_array(handle, handle_size));
   COFF_ObjSection *debug_sect    = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
   COFF_ObjSection *biat_sect     = 0;
   COFF_ObjSection *uiat_sect     = 0;
@@ -396,13 +396,11 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
       case COFF_MachineType_Unknown: {} break;
       case COFF_MachineType_X64: {
         String8 iat_symbol_name = push_str8f(obj_writer->arena, "__imp_%S", import_header.func_name);
-        coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_sect->data.total_size, iat_sect);
+        iat_symbol = coff_obj_writer_push_symbol_extern(obj_writer, iat_symbol_name, iat_sect->data.total_size, iat_sect);
 
-        // emit jmp thunk
-        jmp_thunk_symbol = pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
-
-        // emit load thunk
-        load_thunk_symbol  = pe_make_load_thunk_x64(obj_writer, code_sect, iat_symbol, tail_merge_symbol, import_header.func_name);
+        // emit thunks
+        jmp_thunk_symbol  = pe_make_indirect_jump_thunk_x64(obj_writer, code_sect, iat_symbol, import_header.func_name);
+        load_thunk_symbol = pe_make_load_thunk_x64(obj_writer, code_sect, iat_symbol, tail_merge_symbol, import_header.func_name);
       } break;
       default: { NotImplemented; } break;
       }
@@ -410,10 +408,15 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
 
     switch (import_header.import_by) {
     case COFF_ImportBy_Ordinal: {
-      U64     iat_offset   = iat_sect->data.total_size;
       String8 ordinal_data = coff_ordinal_data_from_hint(obj_writer->arena, import_header.machine, import_header.hint_or_ordinal);
       str8_list_push(obj_writer->arena, &ilt_sect->data, ordinal_data);
-      str8_list_push(obj_writer->arena, &iat_sect->data, ordinal_data);
+
+      // in the file IAT mirrors ILT, dynamic linker later overwrites it with imported function addresses.
+      U64 iat_offset = iat_sect->data.total_size;
+      str8_list_push(obj_writer->arena, &iat_sect->data, str8(0, import_size));
+
+      // patch-in thunk address
+      coff_obj_writer_section_push_reloc_addr(obj_writer, iat_sect, iat_offset, load_thunk_symbol);
 
       if (emit_biat) {
         U64 import_size = coff_word_size_from_machine(machine);
@@ -473,6 +476,15 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
     case COFF_ImportBy_Undecorate: { NotImplemented; } break;
     case COFF_ImportBy_NameNoPrefix: { NotImplemented; } break;
     }
+  }
+
+  str8_list_push(obj_writer->arena, &ilt_sect->data, str8(0, coff_word_size_from_machine(machine)));
+  str8_list_push(obj_writer->arena, &iat_sect->data, str8(0, coff_word_size_from_machine(machine)));
+  if (emit_biat) {
+    str8_list_push(obj_writer->arena, &biat_sect->data, str8(0, coff_word_size_from_machine(machine)));
+  }
+  if (emit_uiat) {
+    str8_list_push(obj_writer->arena, &uiat_sect->data, str8(0, coff_word_size_from_machine(machine)));
   }
 
   String8 obj = coff_obj_writer_serialize(arena, obj_writer);
