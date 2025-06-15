@@ -3226,6 +3226,164 @@ exit:;
 }
 
 internal T_Result
+t_delay_import(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 return_0[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00, // mov rax, 0
+      0xc3 // ret
+    };
+    U8 return_1[] = {
+      0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00, // mov rax, 1
+      0xc3 // ret
+    };
+    U8 return_2[] = {
+      0x48, 0xC7, 0xC0, 0x02, 0x00, 0x00, 0x00, // mov rax, 2
+      0xc3 // ret
+    };
+    COFF_ObjSection *return_0_sect = t_push_text_section(obj_writer, str8_array_fixed(return_0));
+    COFF_ObjSection *return_1_sect = t_push_text_section(obj_writer, str8_array_fixed(return_1));
+    COFF_ObjSection *return_2_sect = t_push_text_section(obj_writer, str8_array_fixed(return_2));
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("return_1"), 0, return_1_sect);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("return_2"), 0, return_2_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("a.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 return_0[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00, // mov rax, 0
+      0xc3 // ret
+    };
+    U8 return_123[] = {
+      0x48, 0xC7, 0xC0, 0x7B, 0x00, 0x00, 0x00, // mov rax, 123
+      0xc3 // ret
+    };
+    U8 return_321[] = {
+      0x48, 0xC7, 0xC0, 0x41, 0x01, 0x00, 0x00, // mov rax, 321 
+      0xc3 // ret
+    };
+    COFF_ObjSection *return_0_sect = t_push_text_section(obj_writer, str8_array_fixed(return_0));
+    COFF_ObjSection *return_123_sect = t_push_text_section(obj_writer, str8_array_fixed(return_123));
+    COFF_ObjSection *return_321_sect = t_push_text_section(obj_writer, str8_array_fixed(return_321));
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("return_123"), 0, return_123_sect);
+    coff_obj_writer_push_symbol_extern_func(obj_writer, str8_lit("return_321"), 0, return_321_sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("b.obj"), obj)) { goto exit; }
+  }
+
+  {
+    U8 text[] = {
+      0x56,                         // push  rsi
+      0x57,                         // push  rdi
+      0x48, 0x83, 0xEC, 0x28,       // sub   rsp,28h
+      0xE8, 0x00, 0x00, 0x00, 0x00, // call  return_1
+      0x89, 0xC6,                   // mov   esi,eax
+      0xE8, 0x00, 0x00, 0x00, 0x00, // call  return_2
+      0x89, 0xC7,                   // mov   edi,eax
+      0x01, 0xF7,                   // add   edi,esi
+      0xE8, 0x00, 0x00, 0x00, 0x00, // call  return_123
+      0x89, 0xC6,                   // mov   esi,eax
+      0xE8, 0x00, 0x00, 0x00, 0x00, // call  return_321
+      0x01, 0xF0,                   // add   eax,esi
+      0x01, 0xF8,                   // add   eax,edi
+      0x48, 0x83, 0xC4, 0x28,       // add   rsp,28h
+      0x5F,                         // pop   rdi
+      0x5E,                         // pop   rsi
+      0xC3,                         // ret
+    };
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
+    COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    COFF_ObjSymbol *return_1_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("return_1"));
+    COFF_ObjSymbol *return_2_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("return_2"));
+    COFF_ObjSymbol *return_123_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("return_123"));
+    COFF_ObjSymbol *return_321_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("return_321"));
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 7, return_1_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 14, return_2_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 23, return_123_symbol, COFF_Reloc_X64_Rel32);
+    coff_obj_writer_section_push_reloc(obj_writer, text_sect, 30, return_321_symbol, COFF_Reloc_X64_Rel32);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("main.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code;
+
+  linker_exit_code = t_invoke_linkerf("/dll /implib:a.lib /export:return_1 /export:return_2 a.obj libcmt.lib");
+  if (linker_exit_code != 0) { goto exit; }
+
+  linker_exit_code = t_invoke_linkerf("/dll /implib:b.lib /export:return_123 /export:return_321 b.obj libcmt.lib");
+  if (linker_exit_code != 0) { goto exit; }
+
+  linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /fixed /debug:full main.obj a.lib b.lib kernel32.lib delayimp.lib libcmt.lib /delayload:a.dll /delayload:b.dll");
+  if (linker_exit_code != 0) { goto exit; }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+
+  PE_ParsedDelayImportTable delay_import_table = pe_delay_imports_from_data(scratch.arena, pe.is_pe32, pe.section_count, section_table, exe, pe.data_dir_franges[PE_DataDirectoryIndex_DELAY_IMPORT]);
+
+  PE_ParsedDelayDLLImport *a_import = &delay_import_table.v[0];
+  if (a_import->attributes != 1)                         { goto exit; }
+  if (!str8_match(a_import->name, str8_lit("a.dll"), 0)) { goto exit; }
+  if (a_import->module_handle_voff == 0)                 { goto exit; }
+  if (a_import->name_table_voff == 0)                    { goto exit; }
+  if (a_import->bound_table_voff == 0)                   { goto exit; }
+  if (a_import->unload_table_voff != 0)                  { goto exit; }
+  if (a_import->time_stamp != 0)                         { goto exit; }
+  if (a_import->bound_table_count != 0)                  { goto exit; }
+  if (a_import->unload_table_count != 0)                 { goto exit; }
+  if (a_import->import_count != 2)                       { goto exit; }
+
+  PE_ParsedImport *return_1 = &a_import->imports[0];
+  if (return_1->type != PE_ParsedImport_Name)                        { goto exit; }
+  if (!str8_match(return_1->u.name.string, str8_lit("return_1"), 0)) { goto exit; }
+  if (return_1->u.name.hint != 0)                                    { goto exit; }
+
+  PE_ParsedImport *return_2 = &a_import->imports[1];
+  if (return_2->type != PE_ParsedImport_Name)                        { goto exit; }
+  if (!str8_match(return_2->u.name.string, str8_lit("return_2"), 0)) { goto exit; }
+  if (return_2->u.name.hint != 1)                                    { goto exit; }
+
+  PE_ParsedDelayDLLImport *b_import = &delay_import_table.v[1];
+  if (b_import->attributes != 1)                         { goto exit; }
+  if (!str8_match(b_import->name, str8_lit("b.dll"), 0)) { goto exit; }
+  if (b_import->module_handle_voff == 0)                 { goto exit; }
+  if (b_import->name_table_voff == 0)                    { goto exit; }
+  if (b_import->bound_table_voff == 0)                   { goto exit; }
+  if (b_import->unload_table_voff != 0)                  { goto exit; }
+  if (b_import->time_stamp != 0)                         { goto exit; }
+  if (b_import->bound_table_count != 0)                  { goto exit; }
+  if (b_import->unload_table_count != 0)                 { goto exit; }
+  if (b_import->import_count != 2)                       { goto exit; }
+
+  PE_ParsedImport *return_123 = &b_import->imports[0];
+  if (return_123->type != PE_ParsedImport_Name)                          { goto exit; }
+  if (!str8_match(return_123->u.name.string, str8_lit("return_123"), 0)) { goto exit; }
+  if (return_123->u.name.hint != 0)                                      { goto exit; }
+
+  PE_ParsedImport *return_321 = &b_import->imports[1];
+  if (return_321->type != PE_ParsedImport_Name)                          { goto exit; }
+  if (!str8_match(return_321->u.name.string, str8_lit("return_321"), 0)) { goto exit; }
+  if (return_321->u.name.hint != 1)                                      { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_delay_import_user32(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -3449,6 +3607,7 @@ entry_point(CmdLine *cmdline)
     { "communal_var_vs_regular",          t_communal_var_vs_regular          },
     { "import_kernel32",                  t_import_kernel32                  },
     { "delay_import_user32",              t_delay_import_user32              },
+    { "delay_import",                     t_delay_import                     },
     { "empty_section",                    t_empty_section                    },
     { "removed_section",                  t_removed_section                  },
     { "function_pad_min",                 t_function_pad_min                 },
