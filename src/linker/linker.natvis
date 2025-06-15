@@ -27,6 +27,7 @@
     </Expand>
   </Type>
   <Type Name="LNK_SymbolList">
+    <AlternativeType Name="LNK_LibList"/>
     <AlternativeType Name="LNK_SectionList"/>
     <AlternativeType Name="LNK_ChunkList"/>
     <AlternativeType Name="LNK_ExportParseList"/>
