@@ -2360,10 +2360,17 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
       }
 
       if (sc_chunk) {
+        String8 data;
+        if (sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+          data = str8(0, sect_header->fsize);
+        } else {
+          data = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
+        }
+
         U16 sc_align = coff_align_size_from_section_flags(sect_header->flags);
         sc = lnk_section_contrib_chunk_push_atomic(sc_chunk, 1);
         sc->first_data_node.next   = 0;
-        sc->first_data_node.string = str8_substr(obj->data, rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize));
+        sc->first_data_node.string = data;
         sc->last_data_node         = &sc->first_data_node;
         sc->align                  = sc_align == 0 ? task->default_align : sc_align;
         sc->u.obj_idx              = obj_idx;
