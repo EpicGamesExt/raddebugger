@@ -284,7 +284,7 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
         continue;
       }
 
-      // handle case where destination section doesn't exist
+      // push a new section if the destination section does not exist
       if (dst_matches.count == 0) {
         dst = lnk_section_table_push(sectab, merge->dst, src_matches.v[0]->flags);
       } else {
@@ -294,6 +294,11 @@ lnk_section_table_merge(LNK_SectionTable *sectab, LNK_MergeDirectiveList merge_l
 
     for (U64 src_idx = 0; src_idx < src_matches.count; src_idx += 1) {
       LNK_Section *src = src_matches.v[src_idx];
+
+      if (src->flags != dst->flags) {
+        lnk_error(LNK_Warning_AmbiguousMerge, "unable to merge %S=%S because of conflicting section flags", merge->src, merge->dst);
+        continue;
+      }
 
       // merge section with destination
       lnk_section_contrib_chunk_list_concat_in_place(&dst->contribs, &src->contribs);
