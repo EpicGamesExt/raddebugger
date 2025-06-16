@@ -126,7 +126,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] = {
   { LNK_CmdSwitch_Rad_Age,                        0, "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
   { LNK_CmdSwitch_Rad_BuildInfo,                  0, "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                    },
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                              },
-  { LNK_CmdSwitch_Rad_ChunkMap,                   0, "RAD_CHUNK_MAP",                      ":FILENAME", "Emit file with the output image's layout description."                         },
+  { LNK_CmdSwitch_Rad_Map,                        0, "RAD_MAP",                            ":FILENAME", "Emit file with the output image's layout description."                         },
   { LNK_CmdSwitch_Rad_Debug,                      0, "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                     },
   { LNK_CmdSwitch_Rad_DebugAltPath,               0, "RAD_DEBUGALTPATH",                   "", ""                                                                                       },
   { LNK_CmdSwitch_Rad_DebugName,                  0, "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                       },
@@ -528,6 +528,16 @@ internal B32
 lnk_is_thread_pool_shared(LNK_Config *config)
 {
   return config->shared_thread_pool_name.size > 0;
+}
+
+internal B32
+lnk_is_section_removed(LNK_Config *config, String8 section_name)
+{
+  B32 is_removed = 0;
+  for (String8Node *name_n = config->remove_sections.first; name_n != 0 && !is_removed; name_n = name_n->next) {
+    is_removed = str8_match(section_name, name_n->string, 0);
+  }
+  return is_removed;
 }
 
 ////////////////////////////////
@@ -1620,7 +1630,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_CheckUnusedDelayLoadDll);
   } break;
 
-  case LNK_CmdSwitch_Rad_ChunkMap: {
+  case LNK_CmdSwitch_Rad_Map: {
     lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_chunk_map_name);
     config->rad_chunk_map = LNK_SwitchState_Yes;
   } break;

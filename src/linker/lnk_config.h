@@ -128,7 +128,7 @@ typedef enum
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_BuildInfo,
   LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,
-  LNK_CmdSwitch_Rad_ChunkMap,
+  LNK_CmdSwitch_Rad_Map,
   LNK_CmdSwitch_Rad_Debug,
   LNK_CmdSwitch_Rad_DebugAltPath,
   LNK_CmdSwitch_Rad_DebugName,
@@ -554,6 +554,8 @@ internal Version lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, CO
 
 internal B32 lnk_do_debug_info        (LNK_Config *config);
 internal B32 lnk_is_thread_pool_shared(LNK_Config *config);
+
+internal B32 lnk_is_section_removed(LNK_Config *config, String8 section_name);
 
 ////////////////////////////////
 // Specialized Parsers
