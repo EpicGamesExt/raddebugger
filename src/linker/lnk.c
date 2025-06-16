@@ -4902,7 +4902,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
     LNK_Section *sect = &sect_n->data;
 
     str8_list_pushf(arena, &map, "%S\n", sect->name);
-    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %s\n", "No.", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "SC");
+    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %-4s %s\n", "No.", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "Algn", "SC");
 
     U64      obj_sect_idxs_count = 0;
     PairU32 *obj_sect_idxs       = lnk_obj_sect_idx_from_section(scratch.arena, objs_count, objs, sect, config, &obj_sect_idxs_count);
@@ -4942,16 +4942,20 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
         String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
         String8 file_size_str = push_str8f(temp.arena, "%08x",       file_size);
         String8 sc_hash_str   = push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]);
+        String8 align_str     = push_str8f(temp.arena, "%4x",        sc->align);
         String8 contrib_str;
         {
           String8List source_list = {0};
           if (obj) {
+            COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
+            String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
+            String8 section_name = coff_name_from_section_header(string_table, section_header);
             if (obj->lib_path.size) {
               String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(obj->lib_path));
               String8 obj_name = str8_skip_last_slash(obj->path);
-              str8_list_pushf(temp.arena, &source_list, "%S(%S) SECT%X", lib_name, obj_name, sect_idx+1);
+              str8_list_pushf(temp.arena, &source_list, "%S(%S) SECT%X (%S)", lib_name, obj_name, sect_idx+1, section_name);
             } else {
-              str8_list_pushf(temp.arena, &source_list, "%S SECT%X", obj->path, sect_idx+1);
+              str8_list_pushf(temp.arena, &source_list, "%S SECT%X (%S)", obj->path, sect_idx+1, section_name);
             }
           } else {
             str8_list_pushf(temp.arena, &source_list, "<no_loc>");
@@ -4959,7 +4963,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
           contrib_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
         }
 
-        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S\n", sc_idx_str, file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash_str, contrib_str);
+        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S %S\n", sc_idx_str, file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash_str, align_str, contrib_str);
 
         temp_end(temp);
       }
@@ -4967,6 +4971,27 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
     str8_list_pushf(arena, &map, "\n");
   }
   ProfEnd();
+
+  str8_list_pushf(arena, &map, "# DEBUG\n");
+  for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
+    LNK_Obj            *obj           = objs[obj_idx];
+    COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(obj->data, obj->header.section_table_range.min, 0);
+    for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+      if (lnk_is_coff_section_debug(obj, sect_idx)) {
+        COFF_SectionHeader *section_header = &section_table[sect_idx];
+        if (~section_header->flags & COFF_SectionFlag_LnkRemove) {
+          if (obj->lib_path.size) {
+            String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(obj->lib_path));
+            String8 obj_name = str8_skip_last_slash(obj->path);
+            str8_list_pushf(arena, &map, "%S(%S) SECT%X\n", lib_name, obj_name, sect_idx+1);
+          } else {
+            str8_list_pushf(arena, &map, "%S SECT%X\n", obj->path, sect_idx+1);
+          }
+        }
+      }
+    }
+  }
+  str8_list_pushf(arena, &map, "\n");
 
 
 #if 0
