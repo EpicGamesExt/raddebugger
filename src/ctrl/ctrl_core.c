@@ -1790,6 +1790,12 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
     {
       break;
     }
+    
+    //- rjf: step 5: exit if out of time
+    if(os_now_microseconds() >= endt_us)
+    {
+      break;
+    }
   }
   if(out_is_stale)
   {
