@@ -615,7 +615,8 @@ cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data)
     case CV_SymKind_UDT: {
       cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymUDT, itype));
     } break;
-    case CV_SymKind_GTHREAD32: {
+    case CV_SymKind_GTHREAD32:
+    case CV_SymKind_LTHREAD32: {
       cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymThread32, itype));
     } break;
     case CV_SymKind_FILESTATIC: {
