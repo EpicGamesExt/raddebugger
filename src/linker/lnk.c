@@ -2301,7 +2301,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_definitions_task)
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *sect_header = &section_table[sect_idx];
 
-    if (~sect_header->flags & COFF_SectionFlag_LnkRemove) {
+    if (~sect_header->flags & COFF_SectionFlag_LnkRemove && sect_header->fsize > 0) {
       Temp temp = temp_begin(scratch.arena);
 
       // was section defined?
@@ -3991,6 +3991,8 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
 
       COFF_SectionHeader *coff_section = &coff_section_table[sect_idx];
 
+      if (coff_section->flags & COFF_SectionFlag_LnkRemove) { continue; }
+
       // TODO: for objs we can store long name in string table and write here /offset
       if (sect->name.size > sizeof(coff_section->name)) {
         lnk_error(LNK_Warning_LongSectionName, "not enough space in COFF section header to store entire name \"%S\"", sect->name);
@@ -4130,13 +4132,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       coff_parse_section_name(sect_defn->name, &sect_name, &sort_idx);
 
       // do not create definitions for sections that are removed from the image
-      {
-        B32 skip = 0;
-        for (String8Node *name_n = config->remove_sections.first; name_n != 0 && !skip; name_n = name_n->next) {
-          skip = str8_match(sect_name, name_n->string, 0);
-        }
-        if (skip) { continue; }
-      }
+      if (lnk_is_section_removed(config, sect_name)) { continue; }
 
       // warn about conflicting section flags
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
@@ -4186,6 +4182,14 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     ProfBegin("Gather Section Contribs");
     tp_for_parallel(tp, 0, objs_count, lnk_gather_section_contribs_task, &task);
     ProfEnd();
+
+#if BUILD_DEBUG
+    for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+      for (LNK_SectionContribChunk *chunk = sect_n->data.contribs.first; chunk != 0; chunk = chunk->next) {
+        AssertAlways(chunk->count == chunk->cap);
+      }
+    }
+#endif
 
     // ensure determinism by sorting section contribs in chunks by input index
     {
@@ -4478,7 +4482,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
   // build win32 image header
   {
-    String8List image_header_data = lnk_build_win32_header(scratch.arena, symtab, config, task.image_sects, AlignPow2(expected_image_header_size, config->file_align));
+    String8List image_header_data = lnk_build_win32_header(sectab->arena, symtab, config, task.image_sects, AlignPow2(expected_image_header_size, config->file_align));
 
     LNK_Section             *image_header_sect     = lnk_section_table_push(sectab, str8_lit(".rad_linker_image_header_section"), 0);
     LNK_SectionContribChunk *image_header_sc_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &image_header_sect->contribs, 1, str8_zero());
@@ -4784,8 +4788,105 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   return image_ctx;
 }
 
+internal PairU32 *
+lnk_obj_sect_idx_from_section(Arena *arena, U64 objs_count, LNK_Obj **objs, LNK_Section *sect, LNK_Config *config, U64 *obj_sect_idxs_count_out)
+{
+  U64 max_contribs = 0;
+  for (LNK_SectionContribChunk *chunk = sect->contribs.first; chunk != 0; chunk = chunk->next) {
+    max_contribs += chunk->count;
+  }
+
+  U64      obj_sect_idxs_count = 0;
+  PairU32 *obj_sect_idxs       = push_array(arena, PairU32, max_contribs);
+  for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
+    LNK_Obj *obj = objs[obj_idx];
+    COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(obj->data, obj->header.section_table_range.min, 0);
+    String8             string_table  = str8_substr(obj->data, obj->header.string_table_range);
+    for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+      COFF_SectionHeader *section_header    = &section_table[sect_idx];
+      String8             full_section_name = coff_name_from_section_header(string_table, section_header);
+      String8             section_name, section_postfix;
+      coff_parse_section_name(full_section_name, &section_name, &section_postfix);
+
+      if (section_header->flags & COFF_SectionFlag_LnkRemove) { continue; }
+      if (section_header->fsize == 0)                         { continue; }
+      if (lnk_is_section_removed(config, section_name))       { continue; }
+
+      if (sect->voff <= section_header->voff && section_header->voff < sect->voff + sect->vsize) {
+        Assert(obj_sect_idxs_count < max_contribs);
+        obj_sect_idxs[obj_sect_idxs_count].v0 = obj_idx;
+        obj_sect_idxs[obj_sect_idxs_count].v1 = sect_idx;
+        obj_sect_idxs_count += 1;
+      }
+    }
+  }
+
+  U64 pop_size = (max_contribs - obj_sect_idxs_count) * sizeof(obj_sect_idxs[0]);
+  arena_pop(arena, pop_size);
+
+  *obj_sect_idxs_count_out = obj_sect_idxs_count;
+
+  return obj_sect_idxs;
+}
+
+internal COFF_SectionHeader *
+lnk_coff_section_header_from_obj_sect_idx_pair(LNK_Obj **objs, PairU32 p)
+{
+  LNK_Obj            *obj           = objs[p.v0];
+  COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(obj->data, obj->header.section_table_range.min, 0);
+  return &section_table[p.v1];
+}
+
+global LNK_Obj **g_rad_map_objs;
+
+internal int
+lnk_obj_sect_idx_is_before(void *raw_a, void *raw_b)
+{
+  PairU32 *a = raw_a, *b = raw_b;
+  COFF_SectionHeader *section_header_a = lnk_coff_section_header_from_obj_sect_idx_pair(g_rad_map_objs, *a);
+  COFF_SectionHeader *section_header_b = lnk_coff_section_header_from_obj_sect_idx_pair(g_rad_map_objs, *b);
+  return section_header_a->voff < section_header_b->voff;
+}
+
+internal U64
+lnk_pair_u32_nearest_section(PairU32 *arr, U64 count, LNK_Obj **objs, U32 voff)
+{
+  U64 result = max_U64;
+
+  if (count > 0) {
+    COFF_SectionHeader *first = lnk_coff_section_header_from_obj_sect_idx_pair(objs, arr[0]);
+    if (first->voff == voff) {
+      return 0;
+    }
+
+    COFF_SectionHeader *last = lnk_coff_section_header_from_obj_sect_idx_pair(objs, arr[count-1]);
+    if (last->voff <= voff) {
+      return count - 1;
+    }
+
+    if (first->voff <= voff && voff < last->voff + last->vsize) {
+      U64 l = 0;
+      U64 r = count - 1;
+      for (; l <= r; ) {
+        U64 m = l + (r - l) / 2;
+        COFF_SectionHeader *s = lnk_coff_section_header_from_obj_sect_idx_pair(objs, arr[m]);
+        if (s->voff == voff) {
+          return m;
+        } else if (s->voff < voff) {
+          l = m + 1;
+        } else {
+          r = m - 1;
+        }
+      }
+      result = l;
+    }
+  }
+
+  return result;
+}
+
 internal String8List
-lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_count, LNK_Obj **objs, LNK_LibList lib_index[LNK_InputSource_Count], LNK_SectionTable *sectab)
+lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs_count, LNK_Obj **objs, LNK_LibList lib_index[LNK_InputSource_Count], LNK_SectionTable *sectab)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -4801,18 +4902,32 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
     LNK_Section *sect = &sect_n->data;
 
     str8_list_pushf(arena, &map, "%S\n", sect->name);
-    str8_list_pushf(arena, &map, "%-8s %-8s %-8s %-8s %-16s %-8s %s\n", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "SC", "Source");
+    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %s\n", "No.", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "SC");
 
+    U64      obj_sect_idxs_count = 0;
+    PairU32 *obj_sect_idxs       = lnk_obj_sect_idx_from_section(scratch.arena, objs_count, objs, sect, config, &obj_sect_idxs_count);
+    g_rad_map_objs = objs;
+    radsort(obj_sect_idxs, obj_sect_idxs_count, lnk_obj_sect_idx_is_before);
+
+    U64 global_sc_idx = 0;
     for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-      for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1) {
+      for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1, global_sc_idx += 1) {
         Temp temp = temp_begin(scratch.arena);
         LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
 
-        U64        file_off   = image_section_table[sc->u.sect_idx]->foff + sc->u.off;
-        U64        virt_off   = image_section_table[sc->u.sect_idx]->voff + sc->u.off;
+        U64        file_off   = image_section_table[sc->u.sect_idx+1]->foff + sc->u.off;
+        U64        virt_off   = image_section_table[sc->u.sect_idx+1]->voff + sc->u.off;
         U64        virt_size  = lnk_size_from_section_contrib(sc);
         U64        file_size  = lnk_size_from_section_contrib(sc);
         String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
+
+        LNK_Obj *obj      = 0;
+        U32      sect_idx = 0;
+        U64 obj_sect_idx_idx = lnk_pair_u32_nearest_section(obj_sect_idxs, obj_sect_idxs_count, objs, virt_off);
+        if (obj_sect_idx_idx < obj_sect_idxs_count) {
+          obj      = objs[obj_sect_idxs[obj_sect_idx_idx].v0];
+          sect_idx = obj_sect_idxs[obj_sect_idx_idx].v1;
+        }
 
         U128 sc_hash = {0};
         if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
@@ -4821,41 +4936,30 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
           blake3_hasher_finalize(&hasher, (U8 *)&sc_hash, sizeof(sc_hash));
         }
 
+        String8 sc_idx_str    = push_str8f(temp.arena, "%4llx",      global_sc_idx);
         String8 file_off_str  = push_str8f(temp.arena, "%08x",       file_off);
         String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
         String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
         String8 file_size_str = push_str8f(temp.arena, "%08x",       file_size);
         String8 sc_hash_str   = push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]);
-        String8 sc_idx_str    = push_str8f(temp.arena, "%llx",       sc_idx);
-        String8 source_str;
+        String8 contrib_str;
         {
           String8List source_list = {0};
-
-#if 0
-          // location
-          if (chunk->obj) {
-            if (chunk->obj->lib_path.size) {
-              String8 lib_name = chunk->obj->lib_path;
-              lib_name         = str8_skip_last_slash(lib_name);
-              lib_name         = str8_chop_last_dot(lib_name);
-
-              String8 obj_name = chunk->obj->path;
-              obj_name         = str8_skip_last_slash(obj_name);
-
-              str8_list_pushf(temp.arena, &source_list, "%S:%S", lib_name, obj_name);
+          if (obj) {
+            if (obj->lib_path.size) {
+              String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(obj->lib_path));
+              String8 obj_name = str8_skip_last_slash(obj->path);
+              str8_list_pushf(temp.arena, &source_list, "%S(%S) SECT%X", lib_name, obj_name, sect_idx+1);
             } else {
-              str8_list_push(temp.arena, &source_list, chunk->obj->path);
+              str8_list_pushf(temp.arena, &source_list, "%S SECT%X", obj->path, sect_idx+1);
             }
+          } else {
+            str8_list_pushf(temp.arena, &source_list, "<no_loc>");
           }
-#else
-          str8_list_pushf(temp.arena, &source_list, "<no_loc>");
-#endif
-
-          // string join
-          source_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
+          contrib_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
         }
 
-        str8_list_pushf(arena, &map, "%-8S %-8S %-8S %-8S %-16S %-8S %S\n", file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash, sc_idx_str, source_str);
+        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S\n", sc_idx_str, file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash_str, contrib_str);
 
         temp_end(temp);
       }
@@ -4865,6 +4969,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
   ProfEnd();
 
 
+#if 0
   ProfBegin("SYMBOLS");
   str8_list_pushf(arena, &map, "# SYMBOLS\n");
   str8_list_pushf(arena, &map, "%-8s %s\n", "Sect:Idx", "Symbol");
@@ -4895,6 +5000,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, U64 thread_count, U64 objs_c
   }
   str8_list_pushf(arena, &map, "\n");
   ProfEnd();
+#endif
 
 
   ProfBegin("LIBS");
@@ -4984,7 +5090,7 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   // RAD Map
   //
   if (config->rad_chunk_map == LNK_SwitchState_Yes) {
-    String8List rad_map = lnk_build_rad_map(scratch.arena, image_ctx.image_data, config->worker_count, link_ctx.objs_count, link_ctx.objs, link_ctx.lib_index, image_ctx.sectab);
+    String8List rad_map = lnk_build_rad_map(scratch.arena, image_ctx.image_data, config, link_ctx.objs_count, link_ctx.objs, link_ctx.lib_index, image_ctx.sectab);
     lnk_write_data_list_to_file_path(config->rad_chunk_map_name, config->temp_rad_chunk_map_name, rad_map);
   }
 
