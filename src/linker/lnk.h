@@ -16,7 +16,8 @@ typedef struct LNK_LinkContext
 
 // -- Image --------------------------------------------------------------------
 
-#define LNK_REMOVED_SECTION_NUMBER (U16)-3
+#define LNK_REMOVED_SECTION_NUMBER_32 (U32)-3
+#define LNK_REMOVED_SECTION_NUMBER_16 (U16)-3
 
 typedef struct LNK_ImageContext
 {

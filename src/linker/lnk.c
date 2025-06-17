@@ -2405,70 +2405,6 @@ THREAD_POOL_TASK_FUNC(lnk_flag_debug_symbols_task)
 internal
 THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_task)
 {
-  LNK_BuildImageTask *task    = raw_task;
-  U64                 obj_idx = task_id;
-  LNK_Obj            *obj     = task->objs[obj_idx];
-
-  ProfBeginV("Set COMDAT Leaders [%S]", obj->path);
-  COFF_ParsedSymbol symbol;
-  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_External) {
-      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-      if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-        LNK_Symbol *defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
-        COFF_ParsedSymbol defn_symbol = lnk_parsed_symbol_from_coff_symbol_idx(defn->u.defined.obj, defn->u.defined.symbol_idx);
-        task->sect_map[obj_idx][symbol.section_number - 1] = task->sect_map[defn->u.defined.obj->input_idx][defn_symbol.section_number - 1];
-      }
-    }
-  }
-  ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
-{
-  LNK_BuildImageTask *task    = raw_task;
-  U64                 obj_idx = task_id;
-  LNK_Obj            *obj     = task->objs[obj_idx];
-
-  ProfBeginV("Patch COMDAT Leaders [%S]", obj->path);
-  COFF_ParsedSymbol symbol;
-  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-
-    if (task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx]) { continue; }
-
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_External) {
-      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-      if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-        LNK_Symbol *defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol.name);
-
-        if (defn->u.defined.obj == obj && defn->u.defined.symbol_idx == symbol_idx) {
-          LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
-          if (obj->header.is_big_obj) {
-            COFF_Symbol32 *symbol32 = symbol.raw_symbol;
-            symbol32->section_number = sc->u.sect_idx+1;
-            symbol32->value = safe_cast_u32(sc->u.off + symbol.value);
-          } else {
-            COFF_Symbol16 *symbol16 = symbol.raw_symbol;
-            symbol16->section_number = safe_cast_u16(sc->u.sect_idx+1);
-            symbol16->value = safe_cast_u32(sc->u.off + symbol.value);
-          }
-
-          task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx] = 1;
-        }
-      }
-    }
-  }
-  ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_patch_replaced_comdats_task)
-{
   Temp scratch = scratch_begin(&arena, 1);
 
   LNK_BuildImageTask *task    = raw_task;
@@ -2477,9 +2413,8 @@ THREAD_POOL_TASK_FUNC(lnk_patch_replaced_comdats_task)
 
   ProfBeginV("%S", obj->path);
 
-  LNK_Symbol **symlinks = push_array(scratch.arena, LNK_Symbol *, obj->header.section_count_no_null+1);
-
   ProfBegin("Build Symlinks");
+  LNK_Symbol **symlinks = push_array(scratch.arena, LNK_Symbol *, obj->header.section_count_no_null+1);
   {
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
@@ -2497,54 +2432,59 @@ THREAD_POOL_TASK_FUNC(lnk_patch_replaced_comdats_task)
   }
   ProfEnd();
 
-  ProfBegin("Patch");
-  {
-    COFF_ParsedSymbol symbol;
-    for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+  ProfBeginV("Set COMDAT Section Contribs");
+  for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+    COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
+    if (section_header->flags & COFF_SectionFlag_LnkCOMDAT) {
+      LNK_Symbol *sym = symlinks[sect_idx+1];
+      if (sym) {
+        COFF_ParsedSymbol parsed_sym = lnk_parsed_symbol_from_coff_symbol_idx(sym->u.defined.obj, sym->u.defined.symbol_idx);
+        task->sect_map[obj_idx][sect_idx] = task->sect_map[sym->u.defined.obj->input_idx][parsed_sym.section_number - 1];
+      }
+    }
+  }
+  ProfEnd();
 
-      if (task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx]) { continue; }
+  ProfBegin("Patch COMDAT Offsets");
+  COFF_ParsedSymbol symbol;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
-      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-      if (interp == COFF_SymbolValueInterp_Regular) {
-        COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-        if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-
-
-          LNK_Symbol         *comdat_leader = symlinks[symbol.section_number];
-          COFF_ParsedSymbol   comdat_leader_parsed;
-          LNK_SectionContrib *comdat_leader_sc;
-          if (comdat_leader) {
-            B32 is_this_leader_symbol = comdat_leader->u.defined.obj == obj && comdat_leader->u.defined.symbol_idx == symbol_idx;
-            if (is_this_leader_symbol) continue;
-
-            comdat_leader_parsed = lnk_parsed_symbol_from_coff_symbol_idx(comdat_leader->u.defined.obj, comdat_leader->u.defined.symbol_idx);
-            comdat_leader_sc     = task->sect_map[comdat_leader->u.defined.obj->input_idx][comdat_leader_parsed.section_number-1];
-          } else {
-            Assert(symbol.storage_class != COFF_SymStorageClass_External);
-            comdat_leader_sc = task->sect_map[obj_idx][symbol.section_number-1];
-          }
-
-          if (obj->header.is_big_obj) {
-            COFF_Symbol32 *symbol32 = symbol.raw_symbol;
-            symbol32->section_number = comdat_leader_sc->u.sect_idx+1;
-            symbol32->value          = safe_cast_u32(comdat_leader_sc->u.off + symbol.value);
-          } else {
-            COFF_Symbol16 *symbol16 = symbol.raw_symbol;
-            symbol16->section_number = safe_cast_u16(comdat_leader_sc->u.sect_idx+1);
-            symbol16->value          = safe_cast_u32(comdat_leader_sc->u.off + symbol.value);
-          }
-
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    if (interp == COFF_SymbolValueInterp_Regular) {
+      LNK_Symbol *symlink = symlinks[symbol.section_number];
+      if (symlink && symlink->u.defined.obj != obj) {
+        U32 section_number;
+        U32 value;
+        if (symbol.storage_class == COFF_SymStorageClass_External) {
+          // COMDAT leader may be at a different offset, so update this symbol with leader's offset
+          COFF_ParsedSymbol parsed_symlink = lnk_parsed_symbol_from_coff_symbol_idx(symlink->u.defined.obj, symlink->u.defined.symbol_idx);
+          section_number = symbol.section_number;
+          value          = parsed_symlink.value;
+        } else {
+          // COMDAT section may have static symbols which are now invalid to relocate against
+          section_number = LNK_REMOVED_SECTION_NUMBER_32;
+          value          = max_U32;
           task->u.patch_symtabs.was_symbol_patched[obj_idx][symbol_idx] = 1;
+        }
+
+        if (obj->header.is_big_obj) {
+          COFF_Symbol32 *symbol32  = symbol.raw_symbol;
+          symbol32->section_number = section_number;
+          symbol32->value          = value;
+        } else {
+          COFF_Symbol16 *symbol16  = symbol.raw_symbol;
+          symbol16->section_number = (U16)section_number;
+          symbol16->value          = value;
         }
       }
     }
   }
   ProfEnd();
 
-  scratch_end(scratch);
-
   ProfEnd();
+
+  scratch_end(scratch);
 }
 
 internal int
@@ -2638,14 +2578,12 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Regular) {
       COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-      Assert(~sect_header->flags & COFF_SectionFlag_LnkCOMDAT);
 
       LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
-
-      U16 section_number;
-      U32 value;
+      U16                 section_number;
+      U32                 value;
       if (sc == &g_null_sc) {
-        section_number = LNK_REMOVED_SECTION_NUMBER;
+        section_number = LNK_REMOVED_SECTION_NUMBER_16;
         value          = max_U32;
       } else {
         section_number = safe_cast_u32(sc->u.sect_idx + 1);
@@ -3049,7 +2987,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, reloc->isymbol);
         COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
         if (interp == COFF_SymbolValueInterp_Regular) {
-          if (symbol.section_number == LNK_REMOVED_SECTION_NUMBER) {
+          if (symbol.section_number == LNK_REMOVED_SECTION_NUMBER_16 || symbol.section_number == LNK_REMOVED_SECTION_NUMBER_32) {
             if (!lnk_is_coff_section_debug(obj, sect_idx)) {
               String8 sect_name = coff_name_from_section_header(string_table, &section_table[sect_idx]);
               lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc: 0x%llx)", symbol.name, sect_name, sect_idx+1, reloc_idx);
@@ -4387,14 +4325,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
       ProfBegin("Set COMDAT Leaders");
       tp_for_parallel(tp, 0, objs_count, lnk_set_comdat_leaders_task, &task);
-      ProfEnd();
-
-      ProfBegin("Patch replaced COMDATs");
-      tp_for_parallel(tp, 0, objs_count, lnk_patch_replaced_comdats_task, &task);
-      ProfEnd();
-
-      ProfBegin("Patch COMDAT Leaders");
-      tp_for_parallel(tp, 0, objs_count, lnk_patch_comdat_leaders_task, &task);
       ProfEnd();
 
       ProfBegin("Patch Common Block Leaders");
