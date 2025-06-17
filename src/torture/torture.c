@@ -2739,6 +2739,57 @@ exit:;
 }
 
 internal T_Result
+t_comdat_test(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 a[] = "1Hello, World!";
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT, str8_array_fixed(a));
+    coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Largest);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 1, sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("a.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 a[] = "Hello, World!";
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".rdata"), PE_RDATA_SECTION_FLAGS|COFF_SectionFlag_LnkCOMDAT, str8_array_fixed(a));
+    coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Largest);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("TEST"), 1, sect);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("b.obj"), obj)) { goto exit; }
+  }
+
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("TEST"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 3, symbol);
+    String8 obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+    if (!t_write_file(str8_lit("entry.obj"), obj)) { goto exit; }
+  }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
+
+exit:;
+  result = T_Result_Pass;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_sect_align(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -3601,6 +3652,7 @@ entry_point(CmdLine *cmdline)
     { "comdat_associative_loop",          t_comdat_associative_loop          },
     { "comdat_associative_non_comdat",    t_comdat_associative_non_comdat    },
     { "comdat_associative_out_of_bounds", t_comdat_associative_out_of_bounds },
+    { "comdat_test",                      t_comdat_test                      },
     { "alt_name",                         t_alt_name                         },
     { "include",                          t_include                          },
     { "communal_var_vs_regular_comdat",   t_communal_var_vs_regular_comdat   },
