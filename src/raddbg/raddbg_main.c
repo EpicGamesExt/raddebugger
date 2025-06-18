@@ -31,6 +31,8 @@
 //     a way we can defer to the underlying shell in a non-horrible way...?
 //
 //- stepping or breakpoint oddness/fixes
+// [ ] halting during a spoof-ridden step leaves the spoofs in place!!!
+//     (repro via LOTS of code on one line & halting)
 // [ ] stepping-onto a line with a conditional breakpoint, which fails, causes a
 // single step over the first instruction of that line, even if the thread
 // would've stopped at the first instruction due to the step, were that bp not
