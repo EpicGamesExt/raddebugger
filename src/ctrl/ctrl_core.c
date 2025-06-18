@@ -4879,15 +4879,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         }
       }
       
-      //- rjf: for each pre-emptively loaded key, try to grab RDI - kicking off parse
-      for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-      {
-        DI_Scope *di_scope = di_scope_open();
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, 0, 0);
-        di_scope_close(di_scope);
-      }
-      
-      //- rjf: close all pre-emptively loaded keys
+      //- rjf: close each pre-emptively loaded key
       for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
       {
         di_close(&n->v);

@@ -22,6 +22,7 @@ rb_entry_point(CmdLine *cmdline)
   //- rjf: analyze & load command line input files
   //
   RB_FileList input_files = {0};
+  ProfScope("analyze & load command line input files")
   {
     String8List input_file_path_tasks = str8_list_copy(arena, &cmdline->inputs);
     for(String8Node *n = input_file_path_tasks.first; n != 0; n = n->next)
@@ -31,6 +32,7 @@ rb_entry_point(CmdLine *cmdline)
       //
       RB_FileFormat file_format = RB_FileFormat_Null;
       RB_FileFormatFlags file_format_flags = 0;
+      ProfScope("do thin analysis of file")
       {
         OS_Handle file = os_file_open(OS_AccessFlag_Read, n->string);
         FileProperties props = os_properties_from_file(file);
@@ -232,7 +234,7 @@ rb_entry_point(CmdLine *cmdline)
       //- rjf: load recognized files
       //
       String8 file_data = {0};
-      if(file_format != RB_FileFormat_Null)
+      if(file_format != RB_FileFormat_Null) ProfScope("load recognized file")
       {
         file_data = os_data_from_file_path(arena, n->string);
       }
@@ -240,7 +242,7 @@ rb_entry_point(CmdLine *cmdline)
       //////////////////////////
       //- rjf: PE format => generate new implicit path tasks for PDBs
       //
-      if(file_format == RB_FileFormat_PE)
+      if(file_format == RB_FileFormat_PE) ProfScope("PE file => generate task for PDB")
       {
         Temp scratch = scratch_begin(&arena, 1);
         PE_BinInfo pe_bin_info = pe_bin_info_from_data(scratch.arena, file_data);
@@ -656,8 +658,8 @@ rb_entry_point(CmdLine *cmdline)
           RB_File *pdb_file = rb_file_list_first(&input_files_from_format_table[RB_FileFormat_PDB]);
           String8 exe_path  = exe_file->path;
           String8 pdb_path  = pdb_file->path;
-          String8 exe_data  = os_data_from_file_path(arena, exe_path);
-          String8 pdb_data  = os_data_from_file_path(arena, pdb_path);
+          String8 exe_data  = exe_file->data;
+          String8 pdb_data  = pdb_file->data;
           
           // rjf: convert
           P2R_ConvertParams convert_params = {0};

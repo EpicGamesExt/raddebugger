@@ -15121,10 +15121,10 @@ rd_frame(void)
                   vs->last_frame_index_built = 0;
                   RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("expression"));
                   rd_cfg_new_replace(expr, rd_eval_string_from_file_path(scratch.arena, file_path));
-                  rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("cursor_line")), str8_lit("1"));
-                  rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("cursor_column")), str8_lit("1"));
-                  rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("mark_line")), str8_lit("1"));
-                  rd_cfg_new_replace(rd_cfg_child_from_string(dst_tab, str8_lit("mark_column")), str8_lit("1"));
+                  rd_cfg_new_replace(rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("cursor_line")), str8_lit("1"));
+                  rd_cfg_new_replace(rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("cursor_column")), str8_lit("1"));
+                  rd_cfg_new_replace(rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("mark_line")), str8_lit("1"));
+                  rd_cfg_new_replace(rd_cfg_child_from_string_or_alloc(dst_tab, str8_lit("mark_column")), str8_lit("1"));
                 }
                 else if(dst_panel != &rd_nil_panel_node && dst_tab == &rd_nil_cfg)
                 {

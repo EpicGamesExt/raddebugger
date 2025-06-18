@@ -531,7 +531,6 @@ di_close(DI_Key *key)
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
     log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
-    B32 closed = 0;
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
@@ -544,7 +543,8 @@ di_close(DI_Key *key)
         if(node->ref_count == 0) for(;;)
         {
           //- rjf: release
-          if(ins_atomic_u64_eval(&node->touch_count) == 0)
+          if(ins_atomic_u64_eval(&node->touch_count) == 0 &&
+             ins_atomic_u64_eval(&node->is_working) == 0)
           {
             di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
             if(node->file_base != 0)
@@ -568,7 +568,7 @@ di_close(DI_Key *key)
             break;
           }
           
-          //- rjf: wait for touch count to go to 0
+          //- rjf: wait for touch count / working marker to go to 0
           os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
         }
       }

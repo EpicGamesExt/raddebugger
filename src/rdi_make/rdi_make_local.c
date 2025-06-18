@@ -917,7 +917,7 @@ rdim_bake(Arena *arena, ASYNC_Root *async_root, RDIM_BakeParams *in_params)
   ASYNC_TaskList sort_bake_string_map_tasks = {0};
   RDIM_BakeStringMapLoose *sorted_bake_string_map__in_progress = rdim_bake_string_map_loose_make(arena, &bake_string_map_topology);
   {
-    U64 slots_per_task = 4096;
+    U64 slots_per_task = 256;
     U64 num_tasks = (bake_string_map_topology.slots_count+slots_per_task-1)/slots_per_task;
     for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
     {
