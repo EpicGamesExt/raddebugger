@@ -2884,7 +2884,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_with_fallback_definition_task)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_with_undefined_tag_task)
+THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_with_defined_tags_task)
 {
   LNK_BuildImageTask *task    = raw_task;
   U64                 obj_idx = task_id;
@@ -4349,8 +4349,8 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       tp_for_parallel(tp, 0, task.objs_count, lnk_patch_weak_symbols_with_fallback_definition_task, &task);
       ProfEnd();
 
-      ProfBegin("Patch Weak Symbols With Undefined Tag");
-      tp_for_parallel(tp, 0, task.objs_count, lnk_patch_weak_symbols_with_undefined_tag_task, &task);
+      ProfBegin("Patch Weak Symbols With Defined Tag");
+      tp_for_parallel(tp, 0, task.objs_count, lnk_patch_weak_symbols_with_defined_tags_task, &task);
       ProfEnd();
 
       temp_end(temp);
