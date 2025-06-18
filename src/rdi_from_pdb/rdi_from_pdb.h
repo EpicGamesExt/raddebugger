@@ -284,13 +284,6 @@ internal U64 p2r_end_of_cplusplus_container_name(String8 str);
 internal U64 p2r_hash_from_voff(U64 voff);
 
 ////////////////////////////////
-//~ rjf: Command Line -> Conversion Inputs
-
-#if 0
-internal P2R_ConvertParams *p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline);
-#endif
-
-////////////////////////////////
 //~ rjf: COFF => RDI Canonical Conversions
 
 internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);

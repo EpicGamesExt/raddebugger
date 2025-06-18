@@ -2956,7 +2956,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           CTRL_Entity *module = ctrl_module_from_process_vaddr(selected_process, f_rip_vaddr);
           U64 f_rip_voff = ctrl_voff_from_vaddr(module, f_rip_vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
           RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, f_rip_voff);
           String8 procedure_name = {0};
           procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
@@ -3071,7 +3071,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         {
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
           RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
           RDI_Scope *root_scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
           if(procedure->root_scope_idx != 0)
@@ -3128,7 +3128,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         {
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+          RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
           RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
           if(gvar->voff != 0)
           {

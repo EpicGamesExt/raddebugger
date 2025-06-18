@@ -555,7 +555,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
       DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
       if(rdi != &rdi_parsed_nil)
       {
         RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
@@ -585,7 +585,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_e
   {
     DI_Scope *di_scope = di_scope_open();
     DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
-    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
     if(rdi->raw_data_size == 0)
     {
       dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));

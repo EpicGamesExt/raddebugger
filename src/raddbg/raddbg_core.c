@@ -3279,7 +3279,7 @@ rd_view_ui(Rng2F32 rect)
                       U64 voff = ctrl_voff_from_vaddr(module, vaddr);
                       {
                         DI_Scope *scope = di_scope_open();
-                        RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+                        RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
                         String8 name = {0};
                         if(name.size == 0)
                         {
@@ -3366,7 +3366,7 @@ rd_view_ui(Rng2F32 rect)
                           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
                           {
                             DI_Scope *scope = di_scope_open();
-                            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+                            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
                             if(name.size == 0)
                             {
                               RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
@@ -6417,7 +6417,7 @@ rd_window_frame(void)
           {
             DI_Scope *di_scope = di_scope_open();
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
-            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
             if(rdi->raw_data_size != 0)
             {
               ui_labelf("Symbols successfully loaded from %S", dbgi_key.path);
@@ -11691,7 +11691,7 @@ rd_frame(void)
         CTRL_Entity *m = all_modules.v[eval_module_idx];
         DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
         eval_modules[eval_module_idx].arch        = m->arch;
-        eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_key, 0);
+        eval_modules[eval_module_idx].rdi         = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_key, 1, 0);
         eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
         eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), RD_EvalSpaceKind_CtrlEntity);
         if(module == m)
@@ -14403,7 +14403,7 @@ rd_frame(void)
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
             U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
             D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
             D_Line line = {0};

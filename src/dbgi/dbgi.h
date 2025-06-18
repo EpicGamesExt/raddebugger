@@ -435,7 +435,7 @@ internal void di_close(DI_Key *key);
 ////////////////////////////////
 //~ rjf: Debug Info Cache Lookups
 
-internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us);
+internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Search Cache Lookups

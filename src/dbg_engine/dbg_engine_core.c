@@ -475,7 +475,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
   }
   
   // rjf: push trap for natural linear flow
-  if(good_line_info)
+  if(good_line_info && good_machine_code)
   {
     CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
     ctrl_trap_list_push(arena, &result, &trap);
@@ -631,7 +631,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   }
   
   // rjf: push trap for natural linear flow
-  if(good_line_info)
+  if(good_line_info && good_machine_code)
   {
     CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
     ctrl_trap_list_push(arena, &result, &trap);
@@ -654,7 +654,7 @@ d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
   DI_Scope *scope = di_scope_open();
   U64 result = 0;
   {
-    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
     RDI_NameMapKind name_map_kinds[] =
     {
       RDI_NameMapKind_GlobalVariables,
@@ -734,7 +734,7 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *scope = di_scope_open();
-  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
   D_LineList result = {0};
   {
     //- rjf: gather line tables
@@ -843,7 +843,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
     String8 file_path_normalized = lower_from_str8(scratch.arena, path_normalized_from_string(scratch.arena, file_path));
     
     // rjf: binary -> rdi
-    RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+    RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 1, 0);
     
     // rjf: file_path_normalized * rdi -> src_id
     B32 good_src_id = 0;
@@ -941,7 +941,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
     {
       // rjf: binary -> rdi
       DI_Key key = dbgi_key_n->v;
-      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 1, 0);
       
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
@@ -1302,7 +1302,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_locals_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
@@ -1356,7 +1356,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 1, 0);
       E_String2NumMap *map = e_push_member_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {

@@ -582,7 +582,7 @@ di_close(DI_Key *key)
 //~ rjf: Debug Info Cache Lookups
 
 internal RDI_Parsed *
-di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
+di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
 {
   ProfBeginFunction();
   RDI_Parsed *result = &rdi_parsed_nil;
@@ -631,7 +631,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
           ins_atomic_u64_eval_assign(&node->is_working, 1);
           DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
           {
-            async_push_work(di_parse_work);
+            async_push_work(di_parse_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
           }
         }
       }
@@ -1392,7 +1392,7 @@ di_search_thread__entry_point(void *p)
     RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
     for EachIndex(idx, rdis_count)
     {
-      rdis[idx] = di_rdi_from_key(di_scope, &params.dbgi_keys.v[idx], max_U64);
+      rdis[idx] = di_rdi_from_key(di_scope, &params.dbgi_keys.v[idx], 1, max_U64);
     }
     
     //- rjf: kick off search tasks
@@ -1798,7 +1798,7 @@ ASYNC_WORK_DEF(di_match_work)
       {
         DI_Scope *di_scope = di_scope_open();
         DI_Key key = params_keys.v[dbgi_idx];
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, os_now_microseconds()+1000);
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, 1, os_now_microseconds()+1000);
         for EachElement(name_map_kind_idx, name_map_kinds)
         {
           RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);

@@ -3293,7 +3293,7 @@ ctrl_call_stack_from_unwind(Arena *arena, CTRL_Entity *process, CTRL_Unwind *bas
       CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
       DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
       RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
       
       // rjf: build inline frames (minus parent & inline depth)
@@ -3816,7 +3816,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
   CTRL_Entity *module_entity = ctrl_entity_from_handle(entity_ctx, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
   DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
-  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
@@ -4390,7 +4390,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 B32 asan_shadow_variable_exists_but_is_zero = 0;
                 CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
                 DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-                RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+                RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
                 RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
                 {
                   RDI_ParsedNameMap map = {0};
@@ -4728,8 +4728,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
      (entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
       entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] == 1))
   {
-    U64 endt_us = os_now_microseconds() + 1000000;
-    
     //- rjf: unpack event
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
     CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
@@ -4881,13 +4879,17 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         }
       }
       
-      //- rjf: for each pre-emptively loaded key, wait for the initial
-      // load task to be done
+      //- rjf: for each pre-emptively loaded key, try to grab RDI - kicking off parse
       for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
       {
         DI_Scope *di_scope = di_scope_open();
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, endt_us);
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, 0, 0);
         di_scope_close(di_scope);
+      }
+      
+      //- rjf: close all pre-emptively loaded keys
+      for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
+      {
         di_close(&n->v);
       }
     }
@@ -5019,7 +5021,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
           CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
           DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
           eval_modules[eval_module_idx].arch        = arch;
-          eval_modules[eval_module_idx].rdi         = di_rdi_from_key(scope->di_scope, &dbgi_key, max_U64);
+          eval_modules[eval_module_idx].rdi         = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, max_U64);
           eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
           eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
           eval_modules[eval_module_idx].space.u64_0 = (U64)process;
@@ -5829,7 +5831,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         U64 module_base_vaddr = module->vaddr_range.min;
         CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
         DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
         RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
         RDI_ParsedNameMap map = {0};
         rdi_parsed_from_name_map(rdi, unparsed_map, &map);

@@ -533,7 +533,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
   RDI_Parsed *rdi = &rdi_parsed_nil;
   if(params.dbgi_key.path.size != 0)
   {
-    rdi = di_rdi_from_key(di_scope, &params.dbgi_key, max_U64);
+    rdi = di_rdi_from_key(di_scope, &params.dbgi_key, 1, max_U64);
   }
   
   //- rjf: hash -> data

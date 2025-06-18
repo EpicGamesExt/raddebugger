@@ -1570,7 +1570,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     RDI_Parsed **rdis = push_array(arena, RDI_Parsed *, rdis_count);
     for(U64 idx = 0; idx < rdis_count; idx += 1)
     {
-      rdis[idx] = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_keys.v[idx], endt_us);
+      rdis[idx] = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_keys.v[idx], 1, endt_us);
     }
     
     //- rjf: query all filtered items from dbgi searching system
