@@ -62,6 +62,8 @@ internal LNK_InputObj *   lnk_input_obj_list_push(Arena *arena, LNK_InputObjList
 internal void             lnk_input_obj_list_concat_in_place(LNK_InputObjList *list, LNK_InputObjList *to_concat);
 
 internal LNK_InputObj **  lnk_array_from_input_obj_list(Arena *arena, LNK_InputObjList list);
+internal LNK_InputObj **  lnk_thin_array_from_input_obj_list(Arena *arena, LNK_InputObjList list, U64 *count_out);
+internal String8Array     lnk_path_array_from_input_obj_array(Arena *arena, LNK_InputObj **arr, U64 count);
 internal LNK_InputObjList lnk_list_from_input_obj_arr(LNK_InputObj **arr, U64 count);
 internal LNK_InputObjList lnk_input_obj_list_from_string_list(Arena *arena, String8List list);
 
