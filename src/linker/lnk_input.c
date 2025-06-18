@@ -47,6 +47,32 @@ lnk_array_from_input_obj_list(Arena *arena, LNK_InputObjList list)
   return result;
 }
 
+internal LNK_InputObj **
+lnk_thin_array_from_input_obj_list(Arena *arena, LNK_InputObjList list, U64 *count_out)
+{
+  for (LNK_InputObj *input = list.first; input != 0; input = input->next) {
+    if (input->is_thin) { *count_out += 1; }
+  }
+  LNK_InputObj **thin_inputs = push_array(arena, LNK_InputObj *, *count_out);
+  U64            input_idx   = 0;
+  for (LNK_InputObj *input = list.first; input != 0; input = input->next) {
+    if (input->is_thin) { thin_inputs[input_idx++] = input; }
+  }
+  return thin_inputs;
+}
+
+internal String8Array
+lnk_path_array_from_input_obj_array(Arena *arena, LNK_InputObj **arr, U64 count)
+{
+  String8Array paths = {0};
+  paths.count = count;
+  paths.v     = push_array(arena, String8, count);
+  for (U64 i = 0; i < count; i += 1) {
+    paths.v[i] = arr[i]->path;
+  }
+  return paths;
+}
+
 internal int
 lnk_input_obj_compar(const void *raw_a, const void *raw_b)
 {

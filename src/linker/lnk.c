@@ -873,16 +873,6 @@ lnk_make_linker_coff_obj(Arena            *arena,
   return obj;
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_load_thin_objs_task)
-{
-  LNK_InputObj *input = ((LNK_InputObj **)raw_task)[task_id];
-  if (input->is_thin) {
-    input->data = lnk_read_data_from_file_path(arena, input->path);
-    input->has_disk_read_failed = (input->data.size == 0);
-  }
-}
-
 internal String8
 lnk_get_lib_name(String8 path)
 {
@@ -1461,12 +1451,19 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         }
         ProfEnd();
         
-        ProfBegin("Load Objs From Disk");
-        LNK_InputObj **input_obj_arr = lnk_array_from_input_obj_list(scratch.arena, unique_obj_input_list);
-        tp_for_parallel(tp, tp_arena, unique_obj_input_list.count, lnk_load_thin_objs_task, input_obj_arr);
+        ProfBegin("Load Objs From Disk"); 
+        U64            thin_inputs_count = 0;
+        LNK_InputObj **thin_inputs       = lnk_thin_array_from_input_obj_list(scratch.arena, unique_obj_input_list, &thin_inputs_count);
+        String8Array   thin_input_paths  = lnk_path_array_from_input_obj_array(scratch.arena, thin_inputs, thin_inputs_count);
+        String8Array   thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], thin_input_paths);
+        for (U64 thin_input_idx = 0; thin_input_idx < thin_inputs_count; thin_input_idx += 1) {
+          thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
+          thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
+        }
         ProfEnd();
-        
+
         ProfBegin("Disk Read Check");
+        LNK_InputObj **input_obj_arr = lnk_array_from_input_obj_list(scratch.arena, unique_obj_input_list);
         for (U64 input_idx = 0; input_idx < unique_obj_input_list.count; ++input_idx) {
           if (input_obj_arr[input_idx]->has_disk_read_failed) {
             lnk_error(LNK_Error_InvalidPath, "unable to find obj \"%S\"", input_obj_arr[input_idx]->path);
