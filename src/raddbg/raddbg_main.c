@@ -17,6 +17,9 @@
 // [ ] disassembly sometimes has a problem where source line annotations are
 //     periodically removed/inserted... maybe updating on fs change when we
 //     shouldn't, non-deterministic line annotation path?
+// [ ] process memory cache sometimes is not correctly updating - best repro
+//     case so far is (for some reason?) only hover evaluation - only spotted
+//     on laptop in debug builds. g0 ctrl_bindings.bindings initialization.
 //
 //- watch improvements
 // [ ] *ALL* expressions in watch windows need to be editable.
