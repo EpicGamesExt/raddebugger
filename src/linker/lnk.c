@@ -2987,7 +2987,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
           if (symbol.section_number == LNK_REMOVED_SECTION_NUMBER_16 || symbol.section_number == LNK_REMOVED_SECTION_NUMBER_32) {
             if (!lnk_is_coff_section_debug(obj, sect_idx)) {
               String8 sect_name = coff_name_from_section_header(string_table, &section_table[sect_idx]);
-              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc: 0x%llx)", symbol.name, sect_name, sect_idx+1, reloc_idx);
+              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S %llxh, reloc-index: %llxh)", symbol.name, sect_name, sect_idx+1, reloc_idx);
             }
             continue;
           }
