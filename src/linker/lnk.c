@@ -2894,14 +2894,11 @@ THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_with_undefined_tag_task)
   COFF_ParsedSymbol symbol;
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Weak) {
-      COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol, obj->header.is_big_obj);
-      AssertAlways(weak_ext->tag_index < symbol_idx);
-
-      COFF_ParsedSymbol          defn_symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, weak_ext->tag_index);
-      COFF_SymbolValueInterpType defn_interp = coff_interp_symbol(defn_symbol.section_number, defn_symbol.value, defn_symbol.storage_class);
+      COFF_SymbolWeakExt         *weak_ext    = coff_parse_weak_tag(symbol, obj->header.is_big_obj);
+      COFF_ParsedSymbol           defn_symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, weak_ext->tag_index);
+      COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_symbol.section_number, defn_symbol.value, defn_symbol.storage_class);
       if (defn_interp != COFF_SymbolValueInterp_Undefined) {
         lnk_patch_weak_external_symbol(obj->header.is_big_obj, symbol.raw_symbol, defn_symbol);
       }
