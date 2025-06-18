@@ -3413,7 +3413,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   B32 can_request = !ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
   for(;;)
   {
-    //- rjf: step 1: [read-only] try to look for current call stack; wait if working
+    //- rjf: [read-only] try to look for current call stack; wait if working
     B32 node_exists = 0;
     B32 node_stale = 1;
     B32 node_working = 0;
@@ -3431,7 +3431,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
           break;
         }
       }
-      if(node_exists && (!node_stale || os_now_microseconds() >= endt_us))
+      if(node_exists && (!can_request || !node_stale || os_now_microseconds() >= endt_us))
       {
         call_stack = node->call_stack;
         ctrl_scope_touch_call_stack_node__stripe_r_guarded(scope, stripe, node);
@@ -3447,9 +3447,10 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       }
     }
     
-    //- rjf: step 2: [write] node does not exist => create; request if new or stale
+    //- rjf: [write] node does not exist => create; request if new or stale
+    B32 need_request = (!node_exists || node_stale);
     CTRL_CallStackCacheNode *node_to_request = 0;
-    if(!node_exists || node_stale) OS_MutexScopeW(stripe->rw_mutex)
+    if(can_request && need_request) OS_MutexScopeW(stripe->rw_mutex)
     {
       CTRL_CallStackCacheNode *node = 0;
       for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
@@ -3466,14 +3467,14 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
         DLLPushBack(slot->first, slot->last, node);
         node->thread = thread->handle;
       }
-      if(can_request && node->working_count == 0)
+      if(node->working_count == 0)
       {
         node->working_count += 1;
         node_to_request = node;
       }
     }
     
-    //- rjf: step 3: request if needed
+    //- rjf: request if needed
     if(node_to_request != 0)
     {
       if(ctrl_u2csb_enqueue_req(thread->handle, endt_us))
@@ -3486,7 +3487,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       }
     }
     
-    //- rjf: step 4: out of time => exit
+    //- rjf: out of time => exit
     if(os_now_microseconds() >= endt_us)
     {
       break;
