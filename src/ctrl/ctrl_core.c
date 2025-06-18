@@ -3472,7 +3472,10 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
           did_request = 1;
           is_working = 1;
           ins_atomic_u64_inc_eval(&node->working_count);
-          async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
+          DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
+          {
+            async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
+          }
         }
       }
       
