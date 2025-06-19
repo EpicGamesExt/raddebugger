@@ -146,7 +146,6 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] = {
   { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         0, "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                             },
   { LNK_CmdSwitch_Rad_PdbHashTypeNames,           0, "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
   { LNK_CmdSwitch_Rad_RemoveSection,              0, "RAD_REMOVE_SECTION",                 ":NAME",     "Removes a section from output image."                                          },
-  { LNK_CmdSwitch_Rad_SectVirtOff,                0, "RAD_SECT_VIRT_OFF",                  ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
   { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
   { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                              },
   { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                              },
@@ -1795,17 +1794,6 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &sect_name)) {
       sect_name = push_str8_copy(arena, sect_name);
       str8_list_push(arena, &config->remove_sections, sect_name);
-    }
-  } break;
-
-  case LNK_CmdSwitch_Rad_SectVirtOff: {
-    U64 sect_virt_off;
-    if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &sect_virt_off, LNK_ParseU64Flag_CheckUnder32bit)) {
-      if (sect_virt_off >= 0x1000) {
-        config->section_virt_off = sect_virt_off;
-      } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "section virtual offset must be >= 0x1000");
-      }
     }
   } break;
 
