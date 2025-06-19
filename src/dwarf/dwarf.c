@@ -447,54 +447,60 @@ dw_string_from_tag_kind(Arena *arena, DW_TagKind kind)
 internal String8
 dw_string_from_attrib_kind(Arena *arena, DW_Version ver, DW_Ext ext, DW_AttribKind kind)
 {
-#define X(_N,...) case DW_AttribKind_##_N: return str8_lit(Stringify(_N));
+#define X(_N,...) case DW_AttribKind_##_N:{result = str8_lit(Stringify(_N));}break;
+  String8 result = {0};
   
-  while (ext) {
-    U64 z = 64-clz64(ext);
-    if (z == 0) {
-      break;
-    }
-    U64 flag = 1 << (z-1);
-    ext &= ~flag;
-    
-    switch (flag) {
-      case DW_Ext_Null: break;
-      case DW_Ext_GNU:   switch (kind) { DW_AttribKind_GNU_XList(X)   } break;
-      case DW_Ext_LLVM:  switch (kind) { DW_AttribKind_LLVM_XList(X)  } break;
-      case DW_Ext_APPLE: switch (kind) { DW_AttribKind_APPLE_XList(X) } break;
-      case DW_Ext_MIPS:  switch (kind) { DW_AttribKind_MIPS_XList(X)  } break;
-      default: InvalidPath; break;
+  //- rjf: try extensions
+  if(result.size != 0)
+  {
+    while(ext)
+    {
+      U64 z = 64-clz64(ext);
+      if(z == 0)
+      {
+        break;
+      }
+      U64 flag = 1 << (z-1);
+      ext &= ~flag;
+      switch(flag)
+      {
+        default:{}break;
+        case DW_Ext_Null:  break;
+        case DW_Ext_GNU:   switch (kind) { DW_AttribKind_GNU_XList(X)   } break;
+        case DW_Ext_LLVM:  switch (kind) { DW_AttribKind_LLVM_XList(X)  } break;
+        case DW_Ext_APPLE: switch (kind) { DW_AttribKind_APPLE_XList(X) } break;
+        case DW_Ext_MIPS:  switch (kind) { DW_AttribKind_MIPS_XList(X)  } break;
+      }
     }
   }
   
-  switch (ver) {
-    case DW_Version_5: {
-      switch (kind) {
-        DW_AttribKind_V5_XList(X)
+  //- rjf: try version
+  if(result.size == 0)
+  {
+    for(U64 retry = 0; retry < 2; retry += 1)
+    {
+      DW_Version version = retry ? DW_Version_5 : ver;
+      switch(version)
+      {
+        case DW_Version_5: { switch(kind) { DW_AttribKind_V5_XList(X) } } // fall-through
+        case DW_Version_4: { switch(kind) { DW_AttribKind_V4_XList(X) } } // fall-through
+        case DW_Version_3: { switch(kind) { DW_AttribKind_V3_XList(X) } } // fall-through
+        case DW_Version_2: { switch(kind) { DW_AttribKind_V2_XList(X) } } // fall-through
+        case DW_Version_1: {}break;
+        case DW_Version_Null:{}break;
+        default:{}break;
       }
-    } // fall-through
-    case DW_Version_4: {
-      switch (kind) {
-        DW_AttribKind_V4_XList(X)
-      }
-    } // fall-through
-    case DW_Version_3: {
-      switch (kind) {
-        DW_AttribKind_V3_XList(X)
-      }
-    } // fall-through
-    case DW_Version_2: {
-      switch (kind) {
-        DW_AttribKind_V2_XList(X)
-      }
-    } // fall-through
-    case DW_Version_1: {
-    } // fall-through
-    case DW_Version_Null: break;
+    }
   }
+  
+  //- rjf: fallback
+  if(result.size == 0)
+  {
+    result = push_str8f(arena, "#%u", kind);
+  }
+  
 #undef X
-  
-  return str8_zero();
+  return result;
 }
 
 internal String8

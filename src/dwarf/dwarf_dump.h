@@ -58,7 +58,6 @@ internal String8     dw_format_eh_ptr_enc            (Arena *arena, DW_EhPtrEnc 
 internal void        dw_print_cfi_program            (Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format);
 
 internal void dw_print_eh_frame         (Arena *arena, String8List *out, String8 indent, String8 raw_eh_frame, Arch arch, DW_Version ver, DW_Ext ext, DW_EhPtrCtx *ptr_ctx);
-internal void dw_print_debug_info       (Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, Arch arch, B32 relaxed);
 internal void dw_print_debug_abbrev     (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_line       (Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, B32 relaxed);
 internal void dw_print_debug_str        (Arena *arena, String8List *out, String8 indent, DW_Input *input);
