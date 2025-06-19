@@ -1545,7 +1545,7 @@ dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_In
 //~ rjf: Dump Entry Point
 
 internal String8List
-dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableImageKind image_type, DW_DumpSubsetFlags subset_flags)
+dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, DW_DumpSubsetFlags subset_flags)
 {
   String8List strings = {0};
   String8 indent = str8_lit("                                                                                                                                ");
@@ -1805,7 +1805,7 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
         if(attrib_id == 0) { break; }
         String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
         String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
-        rd_printf("  attrib: { offset: 0x%I64x, kind: %S, form_kind: %S }\n", attrib_off, attrib_str, form_str);
+        dumpf("  attrib: { offset: 0x%I64x, kind: %S, form_kind: %S }\n", attrib_off, attrib_str, form_str);
       }
       dumpf("}\n");
       temp_end(temp);

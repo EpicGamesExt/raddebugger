@@ -845,6 +845,7 @@ rb_entry_point(CmdLine *cmdline)
 #define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
         RDI_DumpSubset_XList
 #undef X
+        fprintf(stderr, "\n");
         
         fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
         
@@ -852,6 +853,7 @@ rb_entry_point(CmdLine *cmdline)
 #define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
         DW_DumpSubset_XList
 #undef X
+        fprintf(stderr, "\n");
       }
       
       //- rjf: unpack dump subset flags
@@ -888,11 +890,45 @@ rb_entry_point(CmdLine *cmdline)
       }
       
       //- rjf: dump input files in order
-      String8List dump = {0};
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
         str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+        
+        //- rjf: unpack file parses
+        Arch arch = Arch_Null;
+        PE_BinInfo pe = {0};
+        ELF_BinInfo elf = {0};
+        DW_Input dw = {0};
+        {
+          if(f->format == RB_FileFormat_PE)
+          {
+            pe = pe_bin_info_from_data(arena, f->data);
+            arch = pe.arch;
+          }
+          if(f->format == RB_FileFormat_ELF32 ||
+             f->format == RB_FileFormat_ELF64)
+          {
+            elf = elf_bin_from_data(f->data);
+            arch = arch_from_elf_machine(elf.hdr.e_machine);
+          }
+          if(f->format_flags & RB_FileFormatFlag_HasDWARF)
+          {
+            if(f->format == RB_FileFormat_PE)
+            {
+              String8             raw_sections  = str8_substr(f->data, pe.section_table_range);
+              U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
+              COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_sections.str;
+              String8 string_table = str8_substr(f->data, pe.string_table_range);
+              dw = dw_input_from_coff_section_table(arena, f->data, string_table, section_count, section_table);
+            }
+            else if(f->format == RB_FileFormat_ELF32 ||
+                    f->format == RB_FileFormat_ELF64)
+            {
+              dw = dw_input_from_elf_section_table(arena, f->data, &elf);
+            }
+          }
+        }
         
         //- rjf: dump file info based on format
         switch(f->format)
@@ -964,14 +1000,11 @@ rb_entry_point(CmdLine *cmdline)
         {
           str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
           {
-            
-            String8List dump = dw_dump_list_from_sections();
+            String8List dump = dw_dump_list_from_sections(arena, &dw, arch, dw_dump_subset_flags);
+            str8_list_concat_in_place(&output_blobs, &dump);
           }
         }
       }
-      
-      //- rjf: join with output
-      str8_list_concat_in_place(&output_blobs, &dump);
     }break;
   }
   

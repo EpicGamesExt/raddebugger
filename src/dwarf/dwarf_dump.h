@@ -78,6 +78,6 @@ internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8
 ////////////////////////////////
 //~ rjf: Dump Entry Point
 
-internal String8List dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableImageKind image_type, DW_DumpSubsetFlags subset_flags);
+internal String8List dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, DW_DumpSubsetFlags subset_flags);
 
 #endif // DWARF_DUMP_H
