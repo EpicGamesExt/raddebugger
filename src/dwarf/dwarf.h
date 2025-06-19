@@ -188,7 +188,7 @@ typedef enum DW_IDCaseKindEnum
 #undef X
 } DW_IDCaseKindEnum;
 
-#define DW_Tag_V3_XList(X)        \
+#define DW_TagKind_V3_XList(X)        \
 X(ArrayType,              0x01) \
 X(ClassType,              0x02) \
 X(EntryPoint,             0x03) \
@@ -247,7 +247,7 @@ X(ImportedUnit,           0x3d) \
 X(Condition,              0x3f) \
 X(SharedType,             0x40)
 
-#define DW_Tag_V5_XList(X)     \
+#define DW_TagKind_V5_XList(X)     \
 X(TypeUnit,            0x41) \
 X(RValueReferenceType, 0x42) \
 X(TemplateAlias,       0x43) \
@@ -260,21 +260,21 @@ X(CallSiteParameter,   0x49) \
 X(SkeletonUnit,        0x4A) \
 X(ImmutableType,       0x4B)
 
-#define DW_Tag_GNU_XList(X)        \
+#define DW_TagKind_GNU_XList(X)        \
 X(GNU_CallSite,          0x4109) \
 X(GNU_CallSiteParameter, 0x410a)
 
 typedef U64 DW_TagKind;
 typedef enum DW_TagKindEnum
 {
-  DW_Tag_Null,
-#define X(_N,_ID) DW_Tag_##_N = _ID,
-  DW_Tag_V3_XList(X)
-    DW_Tag_V5_XList(X)
-    DW_Tag_GNU_XList(X)
+  DW_TagKind_Null,
+#define X(_N,_ID) DW_TagKind_##_N = _ID,
+  DW_TagKind_V3_XList(X)
+    DW_TagKind_V5_XList(X)
+    DW_TagKind_GNU_XList(X)
 #undef X
-  DW_Tag_UserLo = 0x4080,
-  DW_Tag_UserHi = 0xffff
+  DW_TagKind_UserLo = 0x4080,
+  DW_TagKind_UserHi = 0xffff
 } DW_TagKindEnum;
 
 //- Attrib Class Encodings
@@ -581,7 +581,7 @@ X(Producer,           DW_AttribClass_String)                                    
 X(Prototyped,         DW_AttribClass_Flag)                                             \
 X(ReturnAddr,         DW_AttribClass_Block|DW_AttribClass_Const)                       \
 X(StartScope,         DW_AttribClass_Const)                                            \
-X(BitStride,          DW_AttribClass_Const) /* dwarf-v1 DW_Attrib_stride_size*/        \
+X(BitStride,          DW_AttribClass_Const) /* dwarf-v1 DW_AttribKind_stride_size*/        \
 X(UpperBound,         DW_AttribClass_Const|DW_AttribClass_Reference)                   \
 X(AbstractOrigin,     DW_AttribClass_Reference)                                        \
 X(Accessibility,      DW_AttribClass_Const)                                            \
@@ -1159,8 +1159,8 @@ X(MIPS_AssumedSize,           DW_AttribClass_Reference)
 typedef U32 DW_AttribKind;
 typedef enum DW_AttribKindEnum
 {
-  DW_Attrib_Null,
-#define X(_N,_ID,...) DW_Attrib_##_N = _ID,
+  DW_AttribKind_Null,
+#define X(_N,_ID,...) DW_AttribKind_##_N = _ID,
   DW_AttribKind_V2_XList(X)
     DW_AttribKind_V3_XList(X)
     DW_AttribKind_V4_XList(X)
@@ -1170,8 +1170,8 @@ typedef enum DW_AttribKindEnum
     DW_AttribKind_APPLE_XList(X)
     DW_AttribKind_MIPS_XList(X)
 #undef X
-  DW_Attrib_UserLo = 0x2000,
-  DW_Attrib_UserHi = 0x3fff
+  DW_AttribKind_UserLo = 0x2000,
+  DW_AttribKind_UserHi = 0x3fff
 } DW_AttribKindEnum;
 
 #define DW_ATE_XList(X)   \
@@ -1744,18 +1744,18 @@ internal U64 dw_reg_pos_from_code(Arch arch, DW_Reg reg_code);
 //- Attrib Class Encodings
 
 // Speced Encodings
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_v2(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_v3(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_v4(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_v5(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v2(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v3(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v4(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_v5(DW_AttribKind k);
 
 // Extensions
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_gnu  (DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_llvm (DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_apple(DW_AttribKind k);
-internal DW_AttribClass dw_attrib_class_from_attrib_kind_mips (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_gnu  (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_llvm (DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_apple(DW_AttribKind k);
+internal DW_AttribClass dw_attrib_class_from_attrib_mips (DW_AttribKind k);
 
-internal DW_AttribClass dw_attrib_class_from_attrib_kind(DW_Version ver, DW_Ext ext, DW_AttribKind v);
+internal DW_AttribClass dw_attrib_class_from_attrib(DW_Version ver, DW_Ext ext, DW_AttribKind v);
 
 //- Form Class Encodings
 

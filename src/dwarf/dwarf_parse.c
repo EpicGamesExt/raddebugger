@@ -1837,10 +1837,10 @@ dw_attrib_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
 {
   DW_Attrib *attrib = dw_attrib_from_tag_(tag, kind);
   
-  if (attrib->attrib_kind == DW_Attrib_Null) {
+  if (attrib->attrib_kind == DW_AttribKind_Null) {
     if (cu && cu->tag_ht) {
-      DW_Attrib *ao_attrib = dw_attrib_from_tag_(tag, DW_Attrib_AbstractOrigin);
-      if (ao_attrib->attrib_kind == DW_Attrib_AbstractOrigin) {
+      DW_Attrib *ao_attrib = dw_attrib_from_tag_(tag, DW_AttribKind_AbstractOrigin);
+      if (ao_attrib->attrib_kind == DW_AttribKind_AbstractOrigin) {
         DW_Reference  ref     = dw_interp_ref(input, cu, ao_attrib->form_kind, ao_attrib->form);
         DW_TagNode   *ref_tag = dw_tag_node_from_info_off(ref.cu, ref.info_off);
         attrib = dw_attrib_from_tag_(ref_tag->tag, kind);
@@ -1855,7 +1855,7 @@ internal B32
 dw_tag_has_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind)
 {
   DW_Attrib *attrib = dw_attrib_from_tag(input, cu, tag, kind);
-  B32 has_attrib = attrib->attrib_kind != DW_Attrib_Null;
+  B32 has_attrib = attrib->attrib_kind != DW_AttribKind_Null;
   return has_attrib;
 }
 
@@ -1940,18 +1940,18 @@ dw_file_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, 
 internal B32
 dw_try_byte_size_from_tag(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, U64 *byte_size_out)
 {
-  B32 has_byte_size = dw_tag_has_attrib(input, cu, tag, DW_Attrib_ByteSize);
-  B32 has_bit_size  = dw_tag_has_attrib(input, cu, tag, DW_Attrib_BitSize );
+  B32 has_byte_size = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_ByteSize);
+  B32 has_bit_size  = dw_tag_has_attrib(input, cu, tag, DW_AttribKind_BitSize );
   
   if (has_byte_size && has_bit_size) {
     Assert(!"ill formated byte size");
   }
   
   if (has_byte_size) {
-    *byte_size_out = dw_const_u64_from_attrib(input, cu, tag, DW_Attrib_ByteSize); 
+    *byte_size_out = dw_const_u64_from_attrib(input, cu, tag, DW_AttribKind_ByteSize); 
     return 1;
   } else if (has_bit_size) {
-    U64 bit_size = dw_const_u64_from_attrib(input, cu, tag, DW_Attrib_BitSize);
+    U64 bit_size = dw_const_u64_from_attrib(input, cu, tag, DW_AttribKind_BitSize);
     *byte_size_out = bit_size / 8;
     return 1;
   }
@@ -1985,13 +1985,13 @@ dw_u64_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind k
   DW_Attrib      *attrib       = dw_attrib_from_tag(input, cu, tag, kind);
   DW_AttribClass  attrib_class = dw_value_class_from_attrib(cu, attrib);
   if (attrib_class == DW_AttribClass_Const || attrib_class == DW_AttribClass_Block) {
-    if (dw_tag_has_attrib(input, cu, tag, DW_Attrib_Type)) {
+    if (dw_tag_has_attrib(input, cu, tag, DW_AttribKind_Type)) {
       Temp scratch = scratch_begin(0,0);
-      DW_Reference type_ref       = dw_ref_from_attrib(input, cu, tag, DW_Attrib_Type);
+      DW_Reference type_ref       = dw_ref_from_attrib(input, cu, tag, DW_AttribKind_Type);
       DW_Tag type_tag = {0};
       dw_read_tag_cu(scratch.arena, input, type_ref.cu, type_ref.info_off, &type_tag);
       U64          type_byte_size = dw_byte_size_from_tag(input, cu, type_tag);
-      DW_ATE       type_encoding  = dw_const_u64_from_attrib(input, type_ref.cu, type_tag, DW_Attrib_Encoding);
+      DW_ATE       type_encoding  = dw_const_u64_from_attrib(input, type_ref.cu, type_tag, DW_AttribKind_Encoding);
       if (type_encoding == DW_ATE_Unsigned || type_encoding == DW_ATE_UnsignedChar) {
         result = dw_interp_const64(type_byte_size, type_encoding, attrib->form_kind, attrib->form);
       }
@@ -2121,15 +2121,15 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
         dw_read_tag(arena, data, cursor, range.min, abbrev_table, abbrev_data, version, format, address_size, &cu_tag);
         
         // TODO: handle these unit types
-        Assert(cu_tag.kind != DW_Tag_SkeletonUnit);
-        Assert(cu_tag.kind != DW_Tag_TypeUnit);
+        Assert(cu_tag.kind != DW_TagKind_SkeletonUnit);
+        Assert(cu_tag.kind != DW_TagKind_TypeUnit);
         
-        if (cu_tag.kind == DW_Tag_CompileUnit || cu_tag.kind == DW_Tag_PartialUnit) {
+        if (cu_tag.kind == DW_TagKind_CompileUnit || cu_tag.kind == DW_TagKind_PartialUnit) {
           // fetch attribs for list sections
-          DW_Attrib *addr_base_attrib        = dw_attrib_from_tag(0, 0, cu_tag, DW_Attrib_AddrBase      );
-          DW_Attrib *str_offsets_base_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_Attrib_StrOffsetsBase);
-          DW_Attrib *rnglists_base_attrib    = dw_attrib_from_tag(0, 0, cu_tag, DW_Attrib_RngListsBase  );
-          DW_Attrib *loclists_base_attrib    = dw_attrib_from_tag(0, 0, cu_tag, DW_Attrib_LocListsBase  );
+          DW_Attrib *addr_base_attrib        = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_AddrBase      );
+          DW_Attrib *str_offsets_base_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_StrOffsetsBase);
+          DW_Attrib *rnglists_base_attrib    = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_RngListsBase  );
+          DW_Attrib *loclists_base_attrib    = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_LocListsBase  );
           
           // interp attribs as section offsets
           U64 addr_sec_off        = dw_interp_sec_offset(addr_base_attrib->form_kind,        addr_base_attrib->form       );
@@ -2150,7 +2150,7 @@ dw_cu_from_info_off(Arena *arena, DW_Input *input, DW_ListUnitInput lu_input, U6
           DW_ListUnit *loclists_lu    = loclists_lu_idx    < lu_input.loclist_count    ? &lu_input.loclists[loclists_lu_idx]       : 0;
           
           // find compile unit base address
-          DW_Attrib *low_pc_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_Attrib_LowPc);
+          DW_Attrib *low_pc_attrib = dw_attrib_from_tag(0, 0, cu_tag, DW_AttribKind_LowPc);
           U64        low_pc        = dw_interp_address(address_size, max_U64, addr_lu, low_pc_attrib->form_kind, low_pc_attrib->form);
           
           // fill out compile unit
@@ -2195,7 +2195,7 @@ dw_tag_tree_from_data(Arena *arena, String8 info_data, String8 abbrev_data, DW_C
     *cursor += tag_size;
     
     // is this sentinel tag?
-    if (tag.kind == DW_Tag_Null) {
+    if (tag.kind == DW_TagKind_Null) {
       break;
     }
     

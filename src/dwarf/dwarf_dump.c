@@ -628,260 +628,7 @@ dw_print_eh_frame(Arena *arena, String8List *out, String8 indent, String8 raw_eh
 internal void
 dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, Arch arch, B32 relaxed)
 {
-  Temp scratch = scratch_begin(&arena, 1);
   
-  Rng1U64List      cu_ranges = dw_unit_ranges_from_data(scratch.arena, input->sec[DW_Section_Info].data);
-  
-  if (cu_ranges.count > 0) {
-    rd_printf("# %S", input->sec[DW_Section_Info].name);
-    rd_indent();
-  }
-  
-  U64 comp_idx = 0;
-  for (Rng1U64Node *cu_range_n = cu_ranges.first; cu_range_n != 0; cu_range_n = cu_range_n->next, ++comp_idx) {
-    Temp comp_temp = temp_begin(scratch.arena);
-    
-    U64         cu_base  = cu_range_n->v.min;
-    Rng1U64     cu_range = cu_range_n->v;
-    DW_CompUnit cu       = dw_cu_from_info_off(comp_temp.arena, input, lu_input, cu_range.min, relaxed);
-    
-    String8 cu_dir    = dw_string_from_attrib  (input, &cu, cu.tag, DW_Attrib_CompDir );
-    String8 cu_name   = dw_string_from_attrib  (input, &cu, cu.tag, DW_Attrib_Name    );
-    String8 stmt_list = dw_line_ptr_from_attrib(input, &cu, cu.tag, DW_Attrib_StmtList);
-    
-    DW_LineVMHeader line_vm   = {0};
-    dw_read_line_vm_header(comp_temp.arena, stmt_list, 0, input, cu_dir, cu_name, cu.address_size, cu.str_offsets_lu, &line_vm);
-    
-    // print comp info
-    rd_printf("Compilation Unit #%u", comp_idx);
-    rd_indent();
-    rd_printf("Version:       %u",               cu.version);
-    rd_printf("Address Size:  %llu",             cu.address_size);
-    rd_printf("Abbrev Offset: %#llx",            cu.abbrev_off);
-    rd_printf("Info Range:    %#llx-%#llx (%M)", cu.info_range.min, cu.info_range.max, dim_1u64(cu.info_range));
-    rd_newline();
-    
-    // prase tags
-    U32 tag_depth = 0;
-    for (U64 info_off = cu.first_tag_info_off; info_off < cu.info_range.max; ) {
-      Temp tag_temp = temp_begin(scratch.arena);
-      
-      U64    tag_info_off = info_off;
-      DW_Tag tag          = {0};
-      info_off += dw_read_tag_cu(tag_temp.arena, input, &cu, tag_info_off, &tag);
-      
-      String8 tag_str = dw_string_from_tag_kind(tag_temp.arena, tag.kind);
-      rd_printf("<%x><%llx> DW_Tag_%S (Abbrev Number: %llu)", tag_depth, tag_info_off, tag_str, tag.abbrev_id);
-      rd_indent();
-      
-      // parse attributes
-      for (DW_AttribNode *attrib_n = tag.attribs.first; attrib_n != 0; attrib_n = attrib_n->next) {
-        Temp attrib_temp = temp_begin(tag_temp.arena);
-        
-        DW_Attrib *attrib = &attrib_n->v;
-        
-        String8List attrib_list = {0};
-        
-        // attribute .debug_info offset
-        str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx> ", attrib->info_off);
-        
-        // attribute kind
-        String8 attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, cu.version, cu.ext, attrib->attrib_kind);
-        if (attrib_kind_str.size == 0) {
-          if (relaxed) {
-            attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, DW_Version_Last, cu.ext, attrib->attrib_kind);
-          }
-        }
-        if (attrib_kind_str.size == 0) {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "Unknown(%#x) ", attrib->attrib_kind);
-        } else {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "DW_Attrib_%-20S ", attrib_kind_str);
-        }
-        
-        // form kind
-        String8 form_kind_str = dw_string_from_form_kind(scratch.arena, cu.version, attrib->form_kind);
-        str8_list_pushf(attrib_temp.arena, &attrib_list, "DW_Form_%-15S", form_kind_str);
-        
-        DW_AttribClass value_class = dw_value_class_from_attrib(&cu, attrib);
-        switch (value_class) {
-          default: {
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unknown value class");
-          } break;
-          case DW_AttribClass_Undefined: {
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: undefined value class");
-          } break;
-          case DW_AttribClass_Address: {
-            U64 address = dw_address_from_attrib_ptr(input, &cu, attrib);
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", address);
-          } break;
-          case DW_AttribClass_Block: {
-            String8 block = dw_block_from_attrib_ptr(input, &cu, attrib);
-            String8List block_strs = numeric_str8_list_from_data(attrib_temp.arena, 16, block, 1);
-            String8 block_str = str8_list_join(attrib_temp.arena, &block_strs, &(StringJoin){.sep = str8_lit(", ")});
-            str8_list_push(attrib_temp.arena, &attrib_list, block_str);
-          } break;
-          case DW_AttribClass_Const: {
-            U64 constant = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", constant);
-          } break;
-          case DW_AttribClass_ExprLoc: {
-            String8 exprloc     = dw_exprloc_from_attrib_ptr(input, &cu, attrib);
-            String8 exprloc_str = dw_format_expression_single_line(attrib_temp.arena, exprloc, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
-            str8_list_push(attrib_temp.arena, &attrib_list, exprloc_str);
-          } break;
-          case DW_AttribClass_Flag: {
-            B32 flag = dw_flag_from_attrib_ptr(input, &cu, attrib);
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu (%s)", flag, flag == 0 ? "false" : "true");
-          } break;
-          case DW_AttribClass_LinePtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
-            }
-          } break;
-          case DW_AttribClass_LocListPtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
-            }
-          } break;
-          case DW_AttribClass_MacPtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
-            }
-          } break;
-          case DW_AttribClass_RngListPtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
-            }
-          } break;
-          case DW_AttribClass_RngList: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
-            }
-          } break;
-          case DW_AttribClass_Reference: {
-            if (attrib->form_kind == DW_Form_Ref1 ||
-                attrib->form_kind == DW_Form_Ref2 ||
-                attrib->form_kind == DW_Form_Ref4 ||
-                attrib->form_kind == DW_Form_Ref8 ||
-                attrib->form_kind == DW_Form_RefUData) {
-              U64 info_off = cu.info_range.min + attrib->form.ref;
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx>", info_off);
-              if (!contains_1u64(cu.info_range, attrib->form.ref)) {
-                str8_list_pushf(attrib_temp.arena, &attrib_list, "(ERROR: out of bounds reference)");
-              }
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.ref);
-            }
-          } break;
-          case DW_AttribClass_String: {
-            if (attrib->form_kind == DW_Form_Strp) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            }
-            String8 string = dw_string_from_attrib_ptr(input, &cu, attrib);
-            str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", string);
-          } break;
-          case DW_AttribClass_StrOffsetsPtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
-            }
-          } break;
-          case DW_AttribClass_AddrPtr: {
-            if (attrib->form_kind == DW_Form_SecOffset) {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
-            } else {
-              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, cu.version, attrib->form_kind));
-            }
-          } break;
-        }
-        
-        String8 attrib_str = {0};
-        switch (attrib->attrib_kind) {
-          case DW_Attrib_Language: {
-            DW_Language lang = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = dw_string_from_language(attrib_temp.arena, lang);
-          } break;
-          case DW_Attrib_DeclFile: {
-            U64          file_idx = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            DW_LineFile *file     = dw_file_from_attrib_ptr(&cu, &line_vm, attrib);
-            attrib_str = str8_lit("\?\?\?");
-            if (file) {
-              attrib_str = dw_path_from_file(attrib_temp.arena, &line_vm, file);
-            }
-          } break;
-          case DW_Attrib_DeclLine: {
-            U64 line = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = push_str8f(attrib_temp.arena, "%llu", line);
-          } break;
-          case DW_Attrib_Inline: {
-            DW_InlKind inl = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = dw_string_from_inl(attrib_temp.arena, inl);
-          } break;
-          case DW_Attrib_Accessibility: {
-            DW_AccessKind access = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = dw_string_from_access_kind(attrib_temp.arena, access);
-          } break;
-          case DW_Attrib_CallingConvention: {
-            DW_CallingConventionKind calling_convetion = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = dw_string_from_calling_convetion(attrib_temp.arena, calling_convetion);
-          } break;
-          case DW_Attrib_Encoding: {
-            DW_ATE encoding = dw_const_u64_from_attrib_ptr(input, &cu, attrib);
-            attrib_str = dw_string_from_attrib_type_encoding(attrib_temp.arena, encoding);
-          } break;
-        }
-        
-        if (attrib_str.size) {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", attrib_str);
-        }
-        String8 print = str8_list_join(attrib_temp.arena, &attrib_list, &(StringJoin){.sep=str8_lit(" ")});
-        rd_printf("%S", print);
-        
-        temp_end(attrib_temp);
-      }
-      
-      B32 is_ender_tag = tag.abbrev_id == 0;
-      if (tag.has_children) {
-        if (is_ender_tag) {
-          rd_errorf("null-tag cannot have children");
-        }
-        rd_indent();
-        tag_depth += 1;
-      }
-      if (is_ender_tag) {
-        if (tag_depth == 0) {
-          rd_errorf("malformed data detected, too many null tags");
-        } else {
-          rd_unindent();
-          tag_depth -= 1;
-        }
-      }
-      
-      rd_unindent();
-      temp_end(tag_temp);
-    }
-    temp_end(comp_temp);
-    
-    rd_unindent();
-    rd_newline();
-  }
-  
-  if (cu_ranges.count > 0) {
-    rd_unindent();
-  }
-  
-  scratch_end(scratch);
 }
 
 internal void
@@ -914,7 +661,7 @@ dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Input *
     cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &tag);
     cursor += str8_deserial_read_struct(raw_abbrev, cursor, &has_children);
     
-    rd_printf("<%llx> %llu DW_Tag_%S %s", id_off, id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "[has children]" : "[no children]");
+    rd_printf("<%llx> %llu DW_TagKind_%S %s", id_off, id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "[has children]" : "[no children]");
     rd_indent();
     for (;;) {
       U64 attrib_off = cursor;
@@ -927,7 +674,7 @@ dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Input *
       }
       String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
       String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
-      rd_printf("<%llx> DW_Attrib_%-20S DW_Form_%S", attrib_off, attrib_str, form_str);
+      rd_printf("<%llx> DW_AttribKind_%-20S DW_Form_%S", attrib_off, attrib_str, form_str);
     }
     rd_unindent();
     
@@ -2146,58 +1893,369 @@ dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_In
 #endif
 }
 
-internal void
-dw_format(Arena *arena, String8List *out, String8 indent, DW_DumpSubsetFlags subset_flags, DW_Input *input, Arch arch, ExecutableImageKind image_type)
+internal String8List
+dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableImageKind image_type, DW_DumpSubsetFlags subset_flags)
 {
+  String8List strings = {0};
+  String8 indent = str8_lit("                                                                                                                                ");
+#define dump(str)  str8_list_push(arena, &strings, (str))
+#define dumpf(...) str8_list_pushf(arena, &strings, __VA_ARGS__)
+#define DumpSubset(name) if(subset_flags & DW_DumpSubsetFlag_##name) DeferLoop(dumpf("# %S\n\n", dw_name_title_from_dump_subset_table[DW_DumpSubset_##name]), dump(str8_lit("\n")))
   Temp scratch = scratch_begin(&arena, 1);
-  
   Rng1U64Array segment_vranges = {0};
-  
   DW_ListUnitInput lu_input = dw_list_unit_input_from_input(scratch.arena, input);
+  Rng1U64List unit_ranges_list = dw_unit_ranges_from_data(scratch.arena, input->sec[DW_Section_Info].data);
+  Rng1U64Array unit_ranges = rng1u64_array_from_list(scratch.arena, &unit_ranges_list);
   B32 relaxed  = 1;
   
-  if (subset_flags & DW_DumpSubsetFlag_DebugInfo) {
-    dw_print_debug_info(arena, out, indent, input, lu_input, arch, relaxed);
+  //////////////////////////////
+  //- rjf: dump .debug_info
+  //
+  DumpSubset(DebugInfo)
+  {
+    for EachIndex(unit_idx, unit_ranges.count)
+    {
+      Temp unit_temp = temp_begin(scratch.arena);
+      
+      //- rjf: unpack unit
+      Rng1U64 unit_range = unit_ranges.v[unit_idx];
+      DW_CompUnit unit  = dw_cu_from_info_off(unit_temp.arena, input, lu_input, unit_range.min, relaxed);
+      String8 unit_dir  = dw_string_from_attrib(input, &unit, unit.tag, DW_AttribKind_CompDir );
+      String8 unit_name = dw_string_from_attrib(input, &unit, unit.tag, DW_AttribKind_Name    );
+      String8 stmt_list = dw_line_ptr_from_attrib(input, &unit, unit.tag, DW_AttribKind_StmtList);
+      DW_LineVMHeader line_vm   = {0};
+      dw_read_line_vm_header(unit_temp.arena, stmt_list, 0, input, unit_dir, unit_name, unit.address_size, unit.str_offsets_lu, &line_vm);
+      
+      //- rjf: log top-level unit info
+      dumpf("unit: // compile_unit[%u]\n{\n", unit_idx);
+      dumpf("  version:         %u\n",        unit.version);
+      dumpf("  address_size:    %I64u\n",     unit.address_size);
+      dumpf("  abbrev_off:      0x%I64x\n",   unit.abbrev_off);
+      dumpf("  info_range:      [0x%I64x, 0x%I64x) // (%M)\n", unit.info_range.min, unit.info_range.max, dim_1u64(unit.info_range));
+      
+      //- rjf: log tags
+      S64 tag_depth = 0;
+      for(U64 info_off = unit.first_tag_info_off; info_off < unit.info_range.max;)
+      {
+        // rjf: unpack tag
+        Temp tag_temp = temp_begin(scratch.arena);
+        U64 tag_info_off = info_off;
+        DW_Tag tag = {0};
+        info_off += dw_read_tag_cu(tag_temp.arena, input, &unit, tag_info_off, &tag);
+        
+        String8 tag_str = dw_string_from_tag_kind(tag_temp.arena, tag.kind);
+        rd_printf("<%x><%llx> DW_TagKind_%S (Abbrev Number: %llu)", tag_depth, tag_info_off, tag_str, tag.abbrev_id);
+        rd_indent();
+        
+        // parse attributes
+        for (DW_AttribNode *attrib_n = tag.attribs.first; attrib_n != 0; attrib_n = attrib_n->next) {
+          Temp attrib_temp = temp_begin(tag_temp.arena);
+          
+          DW_Attrib *attrib = &attrib_n->v;
+          
+          String8List attrib_list = {0};
+          
+          // attribute .debug_info offset
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx> ", attrib->info_off);
+          
+          // attribute kind
+          String8 attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, unit.version, unit.ext, attrib->attrib_kind);
+          if (attrib_kind_str.size == 0) {
+            if (relaxed) {
+              attrib_kind_str = dw_string_from_attrib_kind(attrib_temp.arena, DW_Version_Last, unit.ext, attrib->attrib_kind);
+            }
+          }
+          if (attrib_kind_str.size == 0) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "Unknown(%#x) ", attrib->attrib_kind);
+          } else {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "DW_AttribKind_%-20S ", attrib_kind_str);
+          }
+          
+          // form kind
+          String8 form_kind_str = dw_string_from_form_kind(scratch.arena, unit.version, attrib->form_kind);
+          str8_list_pushf(attrib_temp.arena, &attrib_list, "DW_Form_%-15S", form_kind_str);
+          
+          DW_AttribClass value_class = dw_value_class_from_attrib(&unit, attrib);
+          switch (value_class) {
+            default: {
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unknown value class");
+            } break;
+            case DW_AttribClass_Undefined: {
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: undefined value class");
+            } break;
+            case DW_AttribClass_Address: {
+              U64 address = dw_address_from_attrib_ptr(input, &unit, attrib);
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", address);
+            } break;
+            case DW_AttribClass_Block: {
+              String8 block = dw_block_from_attrib_ptr(input, &unit, attrib);
+              String8List block_strs = numeric_str8_list_from_data(attrib_temp.arena, 16, block, 1);
+              String8 block_str = str8_list_join(attrib_temp.arena, &block_strs, &(StringJoin){.sep = str8_lit(", ")});
+              str8_list_push(attrib_temp.arena, &attrib_list, block_str);
+            } break;
+            case DW_AttribClass_Const: {
+              U64 constant = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", constant);
+            } break;
+            case DW_AttribClass_ExprLoc: {
+              String8 exprloc     = dw_exprloc_from_attrib_ptr(input, &unit, attrib);
+              String8 exprloc_str = dw_format_expression_single_line(attrib_temp.arena, exprloc, unit_range.min, unit.address_size, arch, unit.version, unit.ext, unit.format);
+              str8_list_push(attrib_temp.arena, &attrib_list, exprloc_str);
+            } break;
+            case DW_AttribClass_Flag: {
+              B32 flag = dw_flag_from_attrib_ptr(input, &unit, attrib);
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu (%s)", flag, flag == 0 ? "false" : "true");
+            } break;
+            case DW_AttribClass_LinePtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, unit.version, attrib->form_kind));
+              }
+            } break;
+            case DW_AttribClass_LocListPtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, unit.version, attrib->form_kind));
+              }
+            } break;
+            case DW_AttribClass_MacPtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+              }
+            } break;
+            case DW_AttribClass_RngListPtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+              }
+            } break;
+            case DW_AttribClass_RngList: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "\?\?\?");
+              }
+            } break;
+            case DW_AttribClass_Reference: {
+              if (attrib->form_kind == DW_Form_Ref1 ||
+                  attrib->form_kind == DW_Form_Ref2 ||
+                  attrib->form_kind == DW_Form_Ref4 ||
+                  attrib->form_kind == DW_Form_Ref8 ||
+                  attrib->form_kind == DW_Form_RefUData) {
+                U64 info_off = unit.info_range.min + attrib->form.ref;
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "<%llx>", info_off);
+                if (!contains_1u64(unit.info_range, attrib->form.ref)) {
+                  str8_list_pushf(attrib_temp.arena, &attrib_list, "(ERROR: out of bounds reference)");
+                }
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.ref);
+              }
+            } break;
+            case DW_AttribClass_String: {
+              if (attrib->form_kind == DW_Form_Strp) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              }
+              String8 string = dw_string_from_attrib_ptr(input, &unit, attrib);
+              str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", string);
+            } break;
+            case DW_AttribClass_StrOffsetsPtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, unit.version, attrib->form_kind));
+              }
+            } break;
+            case DW_AttribClass_AddrPtr: {
+              if (attrib->form_kind == DW_Form_SecOffset) {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
+              } else {
+                str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: unexpected form %S", dw_string_from_form_kind(attrib_temp.arena, unit.version, attrib->form_kind));
+              }
+            } break;
+          }
+          
+          String8 attrib_str = {0};
+          switch (attrib->attrib_kind) {
+            case DW_AttribKind_Language: {
+              DW_Language lang = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = dw_string_from_language(attrib_temp.arena, lang);
+            } break;
+            case DW_AttribKind_DeclFile: {
+              U64          file_idx = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_LineFile *file     = dw_file_from_attrib_ptr(&unit, &line_vm, attrib);
+              attrib_str = str8_lit("\?\?\?");
+              if (file) {
+                attrib_str = dw_path_from_file(attrib_temp.arena, &line_vm, file);
+              }
+            } break;
+            case DW_AttribKind_DeclLine: {
+              U64 line = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = push_str8f(attrib_temp.arena, "%llu", line);
+            } break;
+            case DW_AttribKind_Inline: {
+              DW_InlKind inl = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = dw_string_from_inl(attrib_temp.arena, inl);
+            } break;
+            case DW_AttribKind_Accessibility: {
+              DW_AccessKind access = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = dw_string_from_access_kind(attrib_temp.arena, access);
+            } break;
+            case DW_AttribKind_CallingConvention: {
+              DW_CallingConventionKind calling_convetion = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = dw_string_from_calling_convetion(attrib_temp.arena, calling_convetion);
+            } break;
+            case DW_AttribKind_Encoding: {
+              DW_ATE encoding = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              attrib_str = dw_string_from_attrib_type_encoding(attrib_temp.arena, encoding);
+            } break;
+          }
+          
+          if (attrib_str.size) {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", attrib_str);
+          }
+          String8 print = str8_list_join(attrib_temp.arena, &attrib_list, &(StringJoin){.sep=str8_lit(" ")});
+          rd_printf("%S", print);
+          
+          temp_end(attrib_temp);
+        }
+        
+        B32 is_ender_tag = tag.abbrev_id == 0;
+        if (tag.has_children) {
+          if (is_ender_tag) {
+            rd_errorf("null-tag cannot have children");
+          }
+          rd_indent();
+          tag_depth += 1;
+        }
+        if (is_ender_tag) {
+          if (tag_depth == 0) {
+            rd_errorf("malformed data detected, too many null tags");
+          } else {
+            rd_unindent();
+            tag_depth -= 1;
+          }
+        }
+        
+        rd_unindent();
+        temp_end(tag_temp);
+      }
+      temp_end(unit_temp);
+      dumpf("} // compile_unit[/%u]\n\n", unit_idx);
+    }
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugAbbrev) {
-    dw_print_debug_abbrev(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_abbrev
+  //
+  DumpSubset(DebugAbbrev)
+  {
+    // dw_print_debug_abbrev(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugLine) {
-    dw_print_debug_line(arena, out, indent, input, lu_input, relaxed);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_line
+  //
+  DumpSubset(DebugLine)
+  {
+    // dw_print_debug_line(arena, out, indent, input, lu_input, relaxed);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugStr) {
-    dw_print_debug_str(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_str
+  //
+  DumpSubset(DebugStr)
+  {
+    // dw_print_debug_str(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugLoc) {
-    dw_print_debug_loc(arena, out, indent, input, arch, image_type, relaxed);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_loc
+  //
+  DumpSubset(DebugLoc)
+  {
+    // dw_print_debug_loc(arena, out, indent, input, arch, image_type, relaxed);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugRanges) {
-    dw_print_debug_ranges(arena, out, indent, input, arch, image_type, relaxed);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_ranges
+  //
+  DumpSubset(DebugRanges)
+  {
+    // dw_print_debug_ranges(arena, out, indent, input, arch, image_type, relaxed);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugARanges) {
-    dw_print_debug_aranges(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_aranges
+  //
+  DumpSubset(DebugARanges)
+  {
+    // dw_print_debug_aranges(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugAddr) {
-    dw_print_debug_addr(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_addr
+  //
+  DumpSubset(DebugAddr)
+  {
+    // dw_print_debug_addr(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugLocLists) {
-    dw_print_debug_loclists(arena, out, indent, input, segment_vranges, arch);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_loclists
+  //
+  DumpSubset(DebugLocLists)
+  {
+    // dw_print_debug_loclists(arena, out, indent, input, segment_vranges, arch);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugRngLists) {
-    dw_print_debug_rnglists(arena, out, indent, input, segment_vranges);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_rnglists
+  //
+  DumpSubset(DebugRngLists)
+  {
+    // dw_print_debug_rnglists(arena, out, indent, input, segment_vranges);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugPubNames) {
-    dw_print_debug_pubnames(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_pubnames
+  //
+  DumpSubset(DebugPubNames)
+  {
+    // dw_print_debug_pubnames(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugPubTypes) {
-    dw_print_debug_pubtypes(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_pubtypes
+  //
+  DumpSubset(DebugPubTypes)
+  {
+    // dw_print_debug_pubtypes(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugLineStr) {
-    dw_print_debug_line_str(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_linestr
+  //
+  DumpSubset(DebugLineStr)
+  {
+    // dw_print_debug_line_str(arena, out, indent, input);
   }
-  if (subset_flags & DW_DumpSubsetFlag_DebugStrOffsets) {
-    dw_print_debug_str_offsets(arena, out, indent, input);
+  
+  //////////////////////////////
+  //- rjf: dump .debug_stroffs
+  //
+  DumpSubset(DebugStrOffsets)
+  {
+    // dw_print_debug_str_offsets(arena, out, indent, input);
   }
   
   scratch_end(scratch);
+#undef DumpSubset
+#undef dumpf
+#undef dump
+  return strings;
 }

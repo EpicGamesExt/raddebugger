@@ -72,6 +72,6 @@ internal void dw_print_debug_pubnames   (Arena *arena, String8List *out, String8
 internal void dw_print_debug_pubtypes   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_line_str   (Arena *arena, String8List *out, String8 indent, DW_Input *input);
 internal void dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_Input *input);
-internal void dw_format(Arena *arena, String8List *out, String8 indent, DW_DumpSubsetFlags subset_flags, DW_Input *input, Arch arch, ExecutableImageKind image_type);
+internal String8List dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableImageKind image_type, DW_DumpSubsetFlags subset_flags);
 
 #endif // DWARF_DUMP_H
