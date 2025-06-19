@@ -1,8 +1,6 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-
 internal LNK_Symbol *
 lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx)
 {
@@ -44,8 +42,6 @@ lnk_make_import_symbol(Arena *arena, String8 name, String8 import_header)
   symbol->u.import.import_header = import_header;
   return symbol;
 }
-
-////////////////////////////////
 
 internal void
 lnk_symbol_list_push_node(LNK_SymbolList *list, LNK_SymbolNode *node)
@@ -106,50 +102,6 @@ lnk_symbol_array_from_list(Arena *arena, LNK_SymbolList list)
   }
   return arr;
 }
-
-////////////////////////////////
-
-internal ISectOff
-lnk_sc_from_symbol(LNK_Symbol *symbol)
-{
-  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-
-  ISectOff sc = {0};
-  sc.isect    = parsed_symbol.section_number;
-  sc.off      = parsed_symbol.value;
-
-  return sc;
-}
-
-internal U64
-lnk_isect_from_symbol(LNK_Symbol *symbol)
-{
-  return lnk_sc_from_symbol(symbol).isect;
-}
-
-internal U64
-lnk_sect_off_from_symbol(LNK_Symbol *symbol)
-{
-  return lnk_sc_from_symbol(symbol).off;
-}
-
-internal U64
-lnk_virt_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
-{
-  ISectOff sc   = lnk_sc_from_symbol(symbol);
-  U64      voff = section_table[sc.isect]->voff + sc.off;
-  return voff;
-}
-
-internal U64
-lnk_file_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
-{
-  ISectOff sc   = lnk_sc_from_symbol(symbol);
-  U64      foff = section_table[sc.isect]->foff + sc.off;
-  return foff;
-}
-
-////////////////////////////////
 
 internal LNK_SymbolHashTrie *
 lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *list, U64 cap)
@@ -498,8 +450,6 @@ lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie)
   ins_atomic_ptr_eval_assign(&trie->symbol, 0);
 }
 
-////////////////////////////////
-
 internal U64
 lnk_symbol_hash(String8 string)
 {
@@ -606,4 +556,45 @@ lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, LNK_Obj *obj, String8 fr
     hash_table_push_string_string(symtab->arena->v[0], symtab->alt_names, from, to);
   }
 }
+
+internal ISectOff
+lnk_sc_from_symbol(LNK_Symbol *symbol)
+{
+  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+
+  ISectOff sc = {0};
+  sc.isect    = parsed_symbol.section_number;
+  sc.off      = parsed_symbol.value;
+
+  return sc;
+}
+
+internal U64
+lnk_isect_from_symbol(LNK_Symbol *symbol)
+{
+  return lnk_sc_from_symbol(symbol).isect;
+}
+
+internal U64
+lnk_sect_off_from_symbol(LNK_Symbol *symbol)
+{
+  return lnk_sc_from_symbol(symbol).off;
+}
+
+internal U64
+lnk_virt_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
+{
+  ISectOff sc   = lnk_sc_from_symbol(symbol);
+  U64      voff = section_table[sc.isect]->voff + sc.off;
+  return voff;
+}
+
+internal U64
+lnk_file_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
+{
+  ISectOff sc   = lnk_sc_from_symbol(symbol);
+  U64      foff = section_table[sc.isect]->foff + sc.off;
+  return foff;
+}
+
 
