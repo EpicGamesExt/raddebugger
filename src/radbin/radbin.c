@@ -845,21 +845,33 @@ rb_entry_point(CmdLine *cmdline)
 #define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
         RDI_DumpSubset_XList
 #undef X
+        
+        fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
+        
+        fprintf(stderr, "DWARF INFO SUBSET NAMES\n\n");
+#define X(name, name_lower, title) fprintf(stderr, " - " #name_lower "\n");
+        DW_DumpSubset_XList
+#undef X
       }
       
       //- rjf: unpack dump subset flags
       RDI_DumpSubsetFlags rdi_dump_subset_flags = RDI_DumpSubsetFlag_All;
+      DW_DumpSubsetFlags dw_dump_subset_flags = DW_DumpSubsetFlag_All;
       {
         String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
         if(only_names.node_count != 0)
         {
           rdi_dump_subset_flags = 0;
+          dw_dump_subset_flags = 0;
         }
         for(String8Node *n = only_names.first; n != 0; n = n->next)
         {
           if(0){}
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags |= RDI_DumpSubsetFlag_##name; }
           RDI_DumpSubset_XList
+#undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags |= DW_DumpSubsetFlag_##name; }
+          DW_DumpSubset_XList
 #undef X
         }
         String8List omit_names = cmd_line_strings(cmdline, str8_lit("omit"));
@@ -869,6 +881,9 @@ rb_entry_point(CmdLine *cmdline)
 #define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { rdi_dump_subset_flags &= ~RDI_DumpSubsetFlag_##name; }
           RDI_DumpSubset_XList
 #undef X
+#define X(name, name_lower, title) else if(str8_match(n->string, str8_lit(#name_lower), 0)) { dw_dump_subset_flags &= ~DW_DumpSubsetFlag_##name; }
+          DW_DumpSubset_XList
+#undef X
         }
       }
       
@@ -877,10 +892,50 @@ rb_entry_point(CmdLine *cmdline)
       for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
       {
         RB_File *f = n->v;
-        str8_list_pushf(arena, &output_blobs, "# %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+        str8_list_pushf(arena, &output_blobs, "// %S (%S)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
+        
+        //- rjf: dump file info based on format
         switch(f->format)
         {
           default:{}break;
+          
+          //- rjf: PDB
+          case RB_FileFormat_PDB:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: PE
+          case RB_FileFormat_PE:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: COFF OBJ
+          case RB_FileFormat_COFF_OBJ:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: COFF big OBJ
+          case RB_FileFormat_COFF_BigOBJ:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: COFF archive
+          case RB_FileFormat_COFF_Archive:
+          case RB_FileFormat_COFF_ThinArchive:
+          {
+            // TODO(rjf)
+          }break;
+          
+          //- rjf: ELF
+          case RB_FileFormat_ELF32:
+          case RB_FileFormat_ELF64:
+          {
+            // TODO(rjf)
+          }break;
           
           //- rjf: RDI file
           case RB_FileFormat_RDI:
@@ -902,31 +957,16 @@ rb_entry_point(CmdLine *cmdline)
               }break;
             }
           }break;
-          
-          //- rjf: COFF archive
-          case RB_FileFormat_COFF_Archive:
-          case RB_FileFormat_COFF_ThinArchive:
+        }
+        
+        //- rjf: dump file extension info
+        if(f->format_flags & RB_FileFormatFlag_HasDWARF)
+        {
+          str8_list_pushf(arena, &output_blobs, "// %S (%S) (DWARF)\n\n", deterministic ? str8_skip_last_slash(f->path) : f->path, f->format ? rb_file_format_display_name_table[f->format] : str8_lit("Unsupported format"));
           {
-            // TODO(rjf)
-          }break;
-          
-          //- rjf: COFF big OBJ
-          case RB_FileFormat_COFF_BigOBJ:
-          {
-            // TODO(rjf)
-          }break;
-          
-          //- rjf: COFF OBJ
-          case RB_FileFormat_COFF_OBJ:
-          {
-            // TODO(rjf)
-          }break;
-          
-          //- rjf: PE
-          case RB_FileFormat_PE:
-          {
-            // TODO(rjf)
-          }break;
+            
+            String8List dump = dw_dump_list_from_sections();
+          }
         }
       }
       
