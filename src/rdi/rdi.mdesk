@@ -5,20 +5,20 @@
 //~ rjf: Generated File Format
 
 @option library
-@gen_folder "lib_rdi_format"
-@h_name "rdi_format.h"
-@c_name "rdi_format.c"
+@gen_folder "lib_rdi"
+@h_name "rdi.h"
+@c_name "rdi.c"
 
 @h_header
 {
   "////////////////////////////////////////////////////////////////";
-  "//~ RAD Debug Info, (R)AD(D)BG(I) Format Library";
+  "//~ (R)AD (D)ebug (I)nfo Format Library";
   "//";
   "// Defines standard RDI debug information format types and";
   "// functions.";
   "";
-  "#ifndef RDI_FORMAT_H";
-  "#define RDI_FORMAT_H";
+  "#ifndef RDI_H";
+  "#define RDI_H";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Overridable Procedure Decoration";
@@ -71,25 +71,25 @@
 
 @h_footer
 {
-  "#endif // RDI_FORMAT_H";
+  "#endif // RDI_H";
 }
 
 @c_header
 {
   "////////////////////////////////////////////////////////////////";
-  "//~ RAD Debug Info, (R)AD(D)BG(I) Format Library";
+  "//~ (R)AD (D)ebug (I)nfo Format Library";
   "//";
   "// Defines standard RDI debug information format types and";
   "// functions.";
   "";
-  "#ifndef RDI_FORMAT_C";
-  "#define RDI_FORMAT_C";
+  "#ifndef RDI_C";
+  "#define RDI_C";
   "";
 }
 
 @c_footer
 {
-  "#endif // RDI_FORMAT_C";
+  "#endif // RDI_C";
 }
 
 ////////////////////////////////

@@ -63,10 +63,8 @@
 // RDI
 
 #include "rdi/rdi_overrides.h"
-#include "lib_rdi_format/rdi_format.h"
-#include "rdi/rdi.h"
-#include "lib_rdi_format/rdi_format.c"
-#include "rdi/rdi.c"
+#include "lib_rdi/rdi.h"
+#include "lib_rdi/rdi.c"
 
 ////////////////////////////////
 // Code Base Extensions
