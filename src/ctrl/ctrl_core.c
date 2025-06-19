@@ -5050,7 +5050,53 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
                 // rjf: gather breakpoint-referenced symbols
                 String8List symbols = {0};
                 {
-                  // TODO(rjf)
+                  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
+                  {
+                    if(n->v.kind != CTRL_UserBreakpointKind_Expression)
+                    {
+                      continue;
+                    }
+                    E_Parse addr_parse = e_parse_from_string(n->v.string);
+                    E_Parse cnd_parse = e_parse_from_string(n->v.condition);
+                    E_Expr *exprs[] = {addr_parse.expr, cnd_parse.expr};
+                    for EachElement(idx, exprs)
+                    {
+                      typedef struct ExprWalkTask ExprWalkTask;
+                      struct ExprWalkTask
+                      {
+                        ExprWalkTask *next;
+                        E_Expr *expr;
+                      };
+                      ExprWalkTask start_task = {0, exprs[idx]};
+                      ExprWalkTask *first_task = &start_task;
+                      for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+                      {
+                        E_Expr *expr = t->expr;
+                        if(expr->ref != &e_expr_nil)
+                        {
+                          expr = expr->ref;
+                        }
+                        if(expr->kind == E_ExprKind_LeafIdentifier)
+                        {
+                          str8_list_push(scratch.arena, &symbols, expr->string);
+                        }
+                        if(expr->next != &e_expr_nil)
+                        {
+                          ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                          task->expr = expr->next;
+                          task->next = t->next;
+                          t->next = task;
+                        }
+                        if(expr->first != &e_expr_nil)
+                        {
+                          ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                          task->expr = expr->first;
+                          task->next = t->next;
+                          t->next = task;
+                        }
+                      }
+                    }
+                  }
                 }
                 
                 // rjf: gather breakpoint-referenced file paths
