@@ -14,7 +14,6 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "path/path.h"
 #include "hash_store/hash_store.h"
 #include "rdi_format/rdi_format_local.h"
 #include "regs/regs.h"
@@ -24,7 +23,6 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "path/path.c"
 #include "hash_store/hash_store.c"
 #include "rdi_format/rdi_format_local.c"
 #include "regs/regs.c"

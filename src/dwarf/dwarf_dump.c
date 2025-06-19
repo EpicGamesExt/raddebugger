@@ -6,7 +6,7 @@ dw_string_from_reg_off(Arena *arena, Arch arch, U64 reg_idx, S64 reg_off)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8 reg_str = dw_string_from_register(scratch.arena, arch, reg_idx);
-  String8 result = rd_string_from_reg_off(arena, reg_str, reg_off);
+  String8 result = push_str8f(arena, "%S%+lld", reg_str, reg_off);
   scratch_end(scratch);
   return result;
 }
