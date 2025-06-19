@@ -356,10 +356,4 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work);
 
 internal RDIM_BakeParams p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in);
 
-////////////////////////////////
-
-internal B32 p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable *st);
-internal B32 p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st);
-internal B32 p2r_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8List file_list);
-
 #endif // RDI_FROM_PDB_H

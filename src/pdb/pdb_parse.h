@@ -242,6 +242,11 @@ internal String8              pdb_strtbl_string_from_index(PDB_Strtbl *strtbl,
                                                            PDB_StringIndex idx);
 internal U32                  pdb_strtbl_off_from_string(PDB_Strtbl *strtbl, String8 string);
 
+////////////////////////////////
+//~ rjf: Thin Lookup Fast Paths
+
+internal B32 pdb_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable *st);
+internal B32 pdb_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st);
+internal B32 pdb_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8List file_list);
 
 #endif // PDB_PARSE_H
-

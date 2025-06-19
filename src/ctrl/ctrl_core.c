@@ -3803,13 +3803,14 @@ internal void
 ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *eval_scope, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
   if(user_bps->first == 0) { return; }
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *di_scope = eval_scope->di_scope;
   CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_Entity *module_entity = ctrl_entity_from_handle(entity_ctx, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
   DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
-  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, max_U64);
+  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 1, 0);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
@@ -3885,6 +3886,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
     }
   }
   scratch_end(scratch);
+  ProfEnd();
 }
 
 internal void
@@ -4717,7 +4719,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   // modules (a very bad heuristic that may or may not inform us that we are
   // dealing with insane-town projects)
   //
-  if(event->kind == DMN_EventKind_LoadModule &&
+  if(0 &&
+     event->kind == DMN_EventKind_LoadModule &&
      (entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
       entity_ctx->entity_kind_counts[CTRL_EntityKind_Module] == 1))
   {
@@ -4864,18 +4867,20 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 DI_Key key = {push_str8f(scratch.arena, "%S/%S", t->path, info.name), info.props.modified};
                 di_open(&key);
                 di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
+                if(preemptively_loaded_keys.count >= Max(1, async_thread_count()/2))
+                {
+                  for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
+                  {
+                    di_close(&n->v);
+                  }
+                  MemoryZeroStruct(&preemptively_loaded_keys);
+                }
               }
             }
             os_file_iter_end(it);
             ProfEnd();
           }
         }
-      }
-      
-      //- rjf: close each pre-emptively loaded key
-      for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-      {
-        di_close(&n->v);
       }
     }
   }
@@ -4963,7 +4968,7 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 //- rjf: control thread eval scopes
 
 internal CTRL_EvalScope *
-ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
+ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, CTRL_Entity *thread)
 {
   CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
   CTRL_EvalScope *scope = push_array(arena, CTRL_EvalScope, 1);
@@ -5005,8 +5010,90 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_Entity *thread)
           if(mod->kind != CTRL_EntityKind_Module) { continue; }
           CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
           DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+          
+          //- rjf: try to obtain this module's RDI
+          RDI_Parsed *rdi = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, 0);
+          
+          //- rjf: if this RDI is not yet ready => determine if we need to wait for it
+          B32 rdi_is_necessary = 1;
+          if(rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
+          {
+            OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, dbgi_key.path);
+            {
+              //- rjf: determine if file is PDB
+              B32 file_is_pdb = 0;
+              if(!file_is_pdb)
+              {
+                U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
+                os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
+                if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
+                {
+                  file_is_pdb = 1;
+                }
+              }
+              if(!file_is_pdb)
+              {
+                U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
+                os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
+                if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
+                {
+                  file_is_pdb = 1;
+                }
+              }
+              
+              //- rjf: file is PDB -> do thin parse & lookup of all breakpoint files/symbols.
+              // if any are found in the PDB, then this RDI is necessary.
+              if(file_is_pdb)
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                
+                // rjf: gather breakpoint-referenced symbols
+                String8List symbols = {0};
+                {
+                  // TODO(rjf)
+                }
+                
+                // rjf: gather breakpoint-referenced file paths
+                String8List files = {0};
+                {
+                  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
+                  {
+                    if(n->v.kind != CTRL_UserBreakpointKind_FileNameAndLineColNumber)
+                    {
+                      continue;
+                    }
+                    str8_list_push(scratch.arena, &files, n->v.string);
+                  }
+                }
+                
+                // rjf: check file
+                {
+                  FileProperties props = os_properties_from_file(file);
+                  OS_Handle map = os_file_map_open(OS_AccessFlag_Read, file);
+                  void *file_base = os_file_map_view_open(map, OS_AccessFlag_Read, r1u64(0, props.size));
+                  String8 file_data = str8(file_base, props.size);
+                  {
+                    rdi_is_necessary = pdb_has_symbol_or_file_ref(file_data, symbols, files);
+                  }
+                  os_file_map_view_close(map, file_base, r1u64(0, props.size));
+                  os_file_map_close(map);
+                }
+                
+                scratch_end(scratch);
+              }
+            }
+            os_file_close(file);
+          }
+          
+          //- rjf: if this RDI is necessary, but we do not have it => wait for it forever
+          if(rdi == &rdi_parsed_nil && rdi_is_necessary)
+          {
+            rdi = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, max_U64);
+          }
+          
+          //- rjf: fill evaluation module info
           eval_modules[eval_module_idx].arch        = arch;
-          eval_modules[eval_module_idx].rdi         = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, max_U64);
+          eval_modules[eval_module_idx].rdi         = rdi;
           eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
           eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
           eval_modules[eval_module_idx].space.u64_0 = (U64)process;
@@ -5440,7 +5527,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   DMN_TrapChunkList user_traps = {0};
   {
     CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, target_thread);
-    CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
+    CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, &msg->user_bps, thread);
     for(CTRL_Entity *machine = entity_ctx->root->first;
         machine != &ctrl_entity_nil;
         machine = machine->next)
@@ -5732,7 +5819,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }break;
         case DMN_EventKind_CreateProcess:
         {
-          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, &ctrl_entity_nil);
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, &msg->user_bps, &ctrl_entity_nil);
           {
             DMN_TrapChunkList new_traps = {0};
             ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, ctrl_handle_make(CTRL_MachineID_Local, event->process), &msg->user_bps, &new_traps);
@@ -5755,7 +5842,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         case DMN_EventKind_LoadModule:
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(entity_ctx, ctrl_handle_make(CTRL_MachineID_Local, event->thread));
-          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, thread);
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(scratch.arena, &msg->user_bps, thread);
           {
             DMN_TrapChunkList new_traps = {0};
             ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, ctrl_handle_make(CTRL_MachineID_Local, event->process), ctrl_handle_make(CTRL_MachineID_Local, event->module), &msg->user_bps, &new_traps);
@@ -6152,7 +6239,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         // rjf: evaluate hit stop conditions
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
-          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(temp.arena, thread);
+          CTRL_EvalScope *eval_scope = ctrl_thread__eval_scope_begin(temp.arena, &msg->user_bps, thread);
           for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
           {
             // rjf: evaluate
