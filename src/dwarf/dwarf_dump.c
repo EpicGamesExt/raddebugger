@@ -1920,9 +1920,9 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
       //- rjf: unpack unit
       Rng1U64 unit_range = unit_ranges.v[unit_idx];
       DW_CompUnit unit  = dw_cu_from_info_off(unit_temp.arena, input, lu_input, unit_range.min, relaxed);
-      String8 unit_dir  = dw_string_from_attrib(input, &unit, unit.tag, DW_AttribKind_CompDir );
-      String8 unit_name = dw_string_from_attrib(input, &unit, unit.tag, DW_AttribKind_Name    );
-      String8 stmt_list = dw_line_ptr_from_attrib(input, &unit, unit.tag, DW_AttribKind_StmtList);
+      String8 unit_dir  = dw_string_from_tag_attrib_kind(input, &unit, unit.tag, DW_AttribKind_CompDir );
+      String8 unit_name = dw_string_from_tag_attrib_kind(input, &unit, unit.tag, DW_AttribKind_Name    );
+      String8 stmt_list = dw_line_ptr_from_tag_attrib_kind(input, &unit, unit.tag, DW_AttribKind_StmtList);
       DW_LineVMHeader line_vm   = {0};
       dw_read_line_vm_header(unit_temp.arena, stmt_list, 0, input, unit_dir, unit_name, unit.address_size, unit.str_offsets_lu, &line_vm);
       
@@ -1984,26 +1984,26 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
               str8_list_pushf(attrib_temp.arena, &attrib_list, "ERROR: undefined value class");
             } break;
             case DW_AttribClass_Address: {
-              U64 address = dw_address_from_attrib_ptr(input, &unit, attrib);
+              U64 address = dw_address_from_attrib(input, &unit, attrib);
               str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", address);
             } break;
             case DW_AttribClass_Block: {
-              String8 block = dw_block_from_attrib_ptr(input, &unit, attrib);
+              String8 block = dw_block_from_attrib(input, &unit, attrib);
               String8List block_strs = numeric_str8_list_from_data(attrib_temp.arena, 16, block, 1);
               String8 block_str = str8_list_join(attrib_temp.arena, &block_strs, &(StringJoin){.sep = str8_lit(", ")});
               str8_list_push(attrib_temp.arena, &attrib_list, block_str);
             } break;
             case DW_AttribClass_Const: {
-              U64 constant = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              U64 constant = dw_const_u64_from_attrib(input, &unit, attrib);
               str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", constant);
             } break;
             case DW_AttribClass_ExprLoc: {
-              String8 exprloc     = dw_exprloc_from_attrib_ptr(input, &unit, attrib);
+              String8 exprloc     = dw_exprloc_from_attrib(input, &unit, attrib);
               String8 exprloc_str = dw_format_expression_single_line(attrib_temp.arena, exprloc, unit_range.min, unit.address_size, arch, unit.version, unit.ext, unit.format);
               str8_list_push(attrib_temp.arena, &attrib_list, exprloc_str);
             } break;
             case DW_AttribClass_Flag: {
-              B32 flag = dw_flag_from_attrib_ptr(input, &unit, attrib);
+              B32 flag = dw_flag_from_attrib(input, &unit, attrib);
               str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu (%s)", flag, flag == 0 ? "false" : "true");
             } break;
             case DW_AttribClass_LinePtr: {
@@ -2060,7 +2060,7 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
               if (attrib->form_kind == DW_Form_Strp) {
                 str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib->form.sec_offset);
               }
-              String8 string = dw_string_from_attrib_ptr(input, &unit, attrib);
+              String8 string = dw_string_from_attrib(input, &unit, attrib);
               str8_list_pushf(attrib_temp.arena, &attrib_list, "(%S)", string);
             } break;
             case DW_AttribClass_StrOffsetsPtr: {
@@ -2082,35 +2082,35 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
           String8 attrib_str = {0};
           switch (attrib->attrib_kind) {
             case DW_AttribKind_Language: {
-              DW_Language lang = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_Language lang = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = dw_string_from_language(attrib_temp.arena, lang);
             } break;
             case DW_AttribKind_DeclFile: {
-              U64          file_idx = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
-              DW_LineFile *file     = dw_file_from_attrib_ptr(&unit, &line_vm, attrib);
+              U64          file_idx = dw_const_u64_from_attrib(input, &unit, attrib);
+              DW_LineFile *file     = dw_file_from_attrib(&unit, &line_vm, attrib);
               attrib_str = str8_lit("\?\?\?");
               if (file) {
                 attrib_str = dw_path_from_file(attrib_temp.arena, &line_vm, file);
               }
             } break;
             case DW_AttribKind_DeclLine: {
-              U64 line = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              U64 line = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = push_str8f(attrib_temp.arena, "%llu", line);
             } break;
             case DW_AttribKind_Inline: {
-              DW_InlKind inl = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_InlKind inl = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = dw_string_from_inl(attrib_temp.arena, inl);
             } break;
             case DW_AttribKind_Accessibility: {
-              DW_AccessKind access = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_AccessKind access = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = dw_string_from_access_kind(attrib_temp.arena, access);
             } break;
             case DW_AttribKind_CallingConvention: {
-              DW_CallingConventionKind calling_convetion = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_CallingConventionKind calling_convetion = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = dw_string_from_calling_convetion(attrib_temp.arena, calling_convetion);
             } break;
             case DW_AttribKind_Encoding: {
-              DW_ATE encoding = dw_const_u64_from_attrib_ptr(input, &unit, attrib);
+              DW_ATE encoding = dw_const_u64_from_attrib(input, &unit, attrib);
               attrib_str = dw_string_from_attrib_type_encoding(attrib_temp.arena, encoding);
             } break;
           }

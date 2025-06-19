@@ -376,36 +376,36 @@ internal DW_Reference  dw_interp_ref       (DW_Input *input, DW_CompUnit *cu, DW
 internal DW_LocList    dw_interp_loclist   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form);
 internal Rng1U64List   dw_interp_rnglist   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_FormKind form_kind, DW_Form form);
 
-internal String8       dw_exprloc_from_attrib_ptr   (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal U128          dw_const_u128_from_attrib_ptr(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal U64           dw_const_u64_from_attrib_ptr (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal U32           dw_const_u32_from_attrib_ptr (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal S64           dw_const_s64_from_attrib_ptr (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal S32           dw_const_s32_from_attrib_ptr (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal B32           dw_flag_from_attrib_ptr      (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal U64           dw_address_from_attrib_ptr   (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal String8       dw_block_from_attrib_ptr     (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal String8       dw_string_from_attrib_ptr    (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal String8       dw_line_ptr_from_attrib_ptr  (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal DW_LineFile * dw_file_from_attrib_ptr      (DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Attrib *attrib);
-internal DW_Reference  dw_ref_from_attrib_ptr       (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal DW_LocList    dw_loclist_from_attrib_ptr   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
-internal Rng1U64List   dw_rnglist_from_attrib_ptr   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal String8       dw_exprloc_from_attrib   (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal U128          dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal U64           dw_const_u64_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal U32           dw_const_u32_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal S64           dw_const_s64_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal S32           dw_const_s32_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal B32           dw_flag_from_attrib      (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal U64           dw_address_from_attrib   (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal String8       dw_block_from_attrib     (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal String8       dw_string_from_attrib    (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal String8       dw_line_ptr_from_attrib  (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal DW_LineFile * dw_file_from_attrib      (DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Attrib *attrib);
+internal DW_Reference  dw_ref_from_attrib       (DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal DW_LocList    dw_loclist_from_attrib   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
+internal Rng1U64List   dw_rnglist_from_attrib   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Attrib *attrib);
 
-internal String8       dw_exprloc_from_attrib   (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal U128          dw_const_u128_from_attrib(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal U64           dw_const_u64_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal U32           dw_const_u32_from_attrib (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal B32           dw_flag_from_attrib      (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal U64           dw_address_from_attrib   (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal String8       dw_block_from_attrib     (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal String8       dw_string_from_attrib    (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal String8       dw_line_ptr_from_attrib  (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal String8       dw_line_ptr_from_attrib  (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal DW_LineFile * dw_file_from_attrib      (DW_Input *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Tag tag, DW_AttribKind kind);
-internal DW_Reference  dw_ref_from_attrib       (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal DW_LocList    dw_loclist_from_attrib   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
-internal Rng1U64List   dw_rnglist_from_attrib   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal String8       dw_exprloc_from_tag_attrib_kind   (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal U128          dw_const_u128_from_tag_attrib_kind(DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal U64           dw_const_u64_from_tag_attrib_kind (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal U32           dw_const_u32_from_tag_attrib_kind (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal B32           dw_flag_from_tag_attrib_kind      (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal U64           dw_address_from_tag_attrib_kind   (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal String8       dw_block_from_tag_attrib_kind     (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal String8       dw_string_from_tag_attrib_kind    (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal String8       dw_line_ptr_from_tag_attrib_kind  (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal String8       dw_line_ptr_from_tag_attrib_kind  (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal DW_LineFile * dw_file_from_tag_attrib_kind      (DW_Input *input, DW_CompUnit *cu, DW_LineVMHeader *line_vm, DW_Tag tag, DW_AttribKind kind);
+internal DW_Reference  dw_ref_from_tag_attrib_kind       (DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal DW_LocList    dw_loclist_from_tag_attrib_kind   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
+internal Rng1U64List   dw_rnglist_from_tag_attrib_kind   (Arena *arena, DW_Input *input, DW_CompUnit *cu, DW_Tag tag, DW_AttribKind kind);
 
 // compile unit
 

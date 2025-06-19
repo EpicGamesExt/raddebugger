@@ -4947,7 +4947,7 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
         } else if (tag.kind == DW_TagKind_LexicalBlock || tag.kind == DW_TagKind_SubProgram) {
           ++lexical_block_depth;
           if (tag.kind == DW_TagKind_SubProgram) {
-            String8 expr = dw_exprloc_from_attrib(&dwarf_input, &cu, tag, DW_AttribKind_FrameBase);
+            String8 expr = dw_exprloc_from_tag_attrib_kind(&dwarf_input, &cu, tag, DW_AttribKind_FrameBase);
             if (expr.size > 0) {
               String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
             }
@@ -4955,7 +4955,7 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
         } else if (tag.kind == DW_Tag_VariaKindble || tag.kind == DW_Tag_FormalParameter) {
 #if 0
           local_persist B32 is_global_var = 0;
-          String8         name            = dw_string_from_attrib(&dwarf_input, &cu, tag, DW_AttribKind_Name);
+          String8         name            = dw_string_from_tag_attrib_kind(&dwarf_input, &cu, tag, DW_AttribKind_Name);
           DW_Attrib      *location_attrib = dw_attrib_from_tag(&dwarf_input, &cu, tag, DW_AttribKind_Location);
           DW_AttribClass  value_class     = dw_value_class_from_attrib(&cu, location_attrib);
           if (value_class != DW_AttribClass_Null) {
@@ -4969,13 +4969,13 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
             
             rd_indent();
             if (value_class == DW_AttribClass_LocListPtr || value_class == DW_AttribClass_LocList) {
-              DW_LocList location = dw_loclist_from_attrib(comp_temp.arena, &dwarf_input, &cu, location_attrib);
+              DW_LocList location = dw_loclist_from_tag_attrib_kind(comp_temp.arena, &dwarf_input, &cu, location_attrib);
               for (DW_LocNode *loc_n = location.first; loc_n != 0; loc_n = loc_n->next) {
                 String8 expr_str = dw_format_expression_single_line(comp_temp.arena, loc_n->v.expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
                 rd_printf("[%llx-%llx] %S", loc_n->v.range.min, loc_n->v.range.max, expr_str);
               }
             } else if (value_class == DW_AttribClass_ExprLoc) {
-              String8 expr = dw_exprloc_from_attrib(&dwarf_input, &cu, location_attrib);
+              String8 expr = dw_exprloc_from_tag_attrib_kind(&dwarf_input, &cu, location_attrib);
               String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
               rd_printf("%S", expr_str);
             }
@@ -4989,7 +4989,7 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
           Temp temp = temp_begin(comp_temp.arena);
           DW_Attrib *ranges_attrib = dw_attrib_from_tag(&dwarf_input, &cu, tag, DW_AttribKind_Ranges);
           if (ranges_attrib->attrib_kind == DW_AttribKind_Ranges) {
-            Rng1U64List ranges = dw_rnglist_from_attrib(temp.arena, &dwarf_input, &cu, ranges_attrib);
+            Rng1U64List ranges = dw_rnglist_from_tag_attrib_kind(temp.arena, &dwarf_input, &cu, ranges_attrib);
           }
           temp_end(temp);
         }
