@@ -1,10 +1,8 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-// Enum <-> String
-
-global read_only LNK_CmdSwitch g_cmd_switch_map[] = {
+global read_only LNK_CmdSwitch g_cmd_switch_map[] =
+{
   { LNK_CmdSwitch_Null,               0, "",                     "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     0, "NOT_IMPLEMENTED",      "", ""                                                                                                      },
   { LNK_CmdSwitch_Align,              0, "ALIGN",                ":#", ""                                                                                                    },
@@ -123,40 +121,42 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] = {
   { LNK_CmdSwitch_NotImplemented,     0, "WX",                   "", ""                                                                                                      },
 
   //- internal switches
-  { LNK_CmdSwitch_Rad_Age,                        0, "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
-  { LNK_CmdSwitch_Rad_BuildInfo,                  0, "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                    },
-  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                              },
-  { LNK_CmdSwitch_Rad_Map,                        0, "RAD_MAP",                            ":FILENAME", "Emit file with the output image's layout description."                         },
-  { LNK_CmdSwitch_Rad_Debug,                      0, "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                     },
-  { LNK_CmdSwitch_Rad_DebugAltPath,               0, "RAD_DEBUGALTPATH",                   "", ""                                                                                       },
-  { LNK_CmdSwitch_Rad_DebugName,                  0, "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                       },
-  { LNK_CmdSwitch_Rad_DelayBind,                  0, "RAD_DELAY_BIND",                     "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_DoMerge,                    0, "RAD_DO_MERGE",                       "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_EnvLib,                     0, "RAD_ENV_LIB",                        "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Exe,                        0, "RAD_EXE",                            "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Guid,                       0, "RAD_GUID",                           ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                },
-  { LNK_CmdSwitch_Rad_LargePages,                 0, "RAD_LARGE_PAGES",                    "[:NO]",     "Disabled by default on Windows."                                               },
-  { LNK_CmdSwitch_Rad_LinkVer,                    0, "RAD_LINK_VER",                       ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_Log,                        0, "RAD_LOG",                            ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
-  { LNK_CmdSwitch_Rad_MtPath,                     0, "RAD_MT_PATH",                        ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
-  { LNK_CmdSwitch_Rad_OsVer,                      0, "RAD_OS_VER",                         ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_PageSize,                   0, "RAD_PAGE_SIZE",                      ":#",        "Must be power of two."                                                         },
-  { LNK_CmdSwitch_Rad_PathStyle,                  0, "RAD_PATH_STYLE",                     ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,      0, "RAD_PDB_HASH_TYPE_NAME_LENGTH",      ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         0, "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                             },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNames,           0, "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
-  { LNK_CmdSwitch_Rad_RemoveSection,              0, "RAD_REMOVE_SECTION",                 ":NAME",     "Removes a section from output image."                                          },
-  { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
-  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                              },
-  { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                              },
-  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      0, "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     0, "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
-  { LNK_CmdSwitch_Rad_SymbolTableCapLib,          0, "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         0, "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
-  { LNK_CmdSwitch_Rad_TargetOs,                   0, "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                       },
+  { LNK_CmdSwitch_Rad_Age,                        0, "RAD_AGE",                            ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
+  { LNK_CmdSwitch_Rad_BuildInfo,                  0, "RAD_BUILD_INFO",                     "",          "Print build info and exit."                                                       },
+  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,    0, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",    "[:NO]",     ""                                                                                 },
+  { LNK_CmdSwitch_Rad_Map,                        0, "RAD_MAP",                            ":FILENAME", "Emit file with the output image's layout description."                            },
+  { LNK_CmdSwitch_Rad_MemoryMapFiles,             0, "RAD_MEMORY_MAP_FILES",               "[:NO]",     "When enabled, files are memory-mapped instead of being read entirely on request." },
+  { LNK_CmdSwitch_Rad_Debug,                      0, "RAD_DEBUG",                          "[:NO]",     "Emit RAD debug info file."                                                        },
+  { LNK_CmdSwitch_Rad_DebugAltPath,               0, "RAD_DEBUGALTPATH",                   "", ""                                                                                          },
+  { LNK_CmdSwitch_Rad_DebugName,                  0, "RAD_DEBUG_NAME",                     ":FILENAME", "Sets file name for RAD debug info file."                                          },
+  { LNK_CmdSwitch_Rad_DelayBind,                  0, "RAD_DELAY_BIND",                     "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_DoMerge,                    0, "RAD_DO_MERGE",                       "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_EnvLib,                     0, "RAD_ENV_LIB",                        "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_Exe,                        0, "RAD_EXE",                            "[:NO]", ""                                                                                     },
+  { LNK_CmdSwitch_Rad_Guid,                       0, "RAD_GUID",                           ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                   },
+  { LNK_CmdSwitch_Rad_LargePages,                 0, "RAD_LARGE_PAGES",                    "[:NO]",     "Disabled by default on Windows."                                                  },
+  { LNK_CmdSwitch_Rad_LinkVer,                    0, "RAD_LINK_VER",                       ":##,##", ""                                                                                    },
+  { LNK_CmdSwitch_Rad_Log,                        0, "RAD_LOG",                            ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                           },
+  { LNK_CmdSwitch_Rad_MtPath,                     0, "RAD_MT_PATH",                        ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME                },
+  { LNK_CmdSwitch_Rad_OsVer,                      0, "RAD_OS_VER",                         ":##,##", ""                                                                                    },
+  { LNK_CmdSwitch_Rad_PageSize,                   0, "RAD_PAGE_SIZE",                      ":#",        "Must be power of two."                                                            },
+  { LNK_CmdSwitch_Rad_PathStyle,                  0, "RAD_PATH_STYLE",                     ":{WindowsAbsolute|UnixAbsolute}", ""                                                           },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,      0, "RAD_PDB_HASH_TYPE_NAME_LENGTH",      ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."      },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,         0, "RAD_PDB_HASH_TYPE_NAME_MAP",         ":FILENAME", "Produce map file with hash -> type name mappings."                                },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNames,           0, "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."          },
+  { LNK_CmdSwitch_Rad_RemoveSection,              0, "RAD_REMOVE_SECTION",                 ":NAME",     "Removes a section from output image."                                             },
+  { LNK_CmdSwitch_Rad_SectVirtOff,                0, "RAD_SECT_VIRT_OFF",                  ":#",        "Set RVA where section data is placed in memory. For internal use only."           },
+  { LNK_CmdSwitch_Rad_SharedThreadPool,           0, "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
+  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, 0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                                 },
+  { LNK_CmdSwitch_Rad_SuppressError,              0, "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                                 },
+  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      0, "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."             },
+  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     0, "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."            },
+  { LNK_CmdSwitch_Rad_SymbolTableCapLib,          0, "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."             },
+  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         0, "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."                },
+  { LNK_CmdSwitch_Rad_TargetOs,                   0, "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                          },
   { LNK_CmdSwitch_Rad_WriteTempFiles,             0, "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
-  { LNK_CmdSwitch_Rad_TimeStamp,                  0, "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                            },
-  { LNK_CmdSwitch_Rad_Version,                    0, "RAD_VERSION",                        "",          "Print version and exit."                                                       },
+  { LNK_CmdSwitch_Rad_TimeStamp,                  0, "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                               },
+  { LNK_CmdSwitch_Rad_Version,                    0, "RAD_VERSION",                        "",          "Print version and exit."                                                          },
   { LNK_CmdSwitch_Rad_Workers,                    0, "RAD_WORKERS",                        ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
 
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
@@ -270,8 +270,6 @@ lnk_type_name_hash_mode_from_string(String8 name)
   return LNK_TypeNameHashMode_Null;
 }
 
-////////////////////////////////
-
 internal LNK_CmdOption *
 lnk_cmd_line_push_option_if_not_presentf(Arena *arena, LNK_CmdLine *cmd_line, LNK_CmdSwitchType cmd_switch_type, char *param_fmt, ...)
 {
@@ -306,8 +304,6 @@ lnk_cmd_line_has_switch(LNK_CmdLine cmd_line, LNK_CmdSwitchType cmd_switch)
   String8 cmd_switch_name = lnk_string_from_cmd_switch_type(cmd_switch);
   return lnk_cmd_line_has_option_string(cmd_line, cmd_switch_name);
 }
-
-////////////////////////////////
 
 internal void
 lnk_error_cmd_switch(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, char *fmt, ...)
@@ -361,185 +357,6 @@ lnk_error_invalid_uac_ui_access_param(LNK_ErrorCode error_code, String8 obj_path
 {
   lnk_error_cmd_switch(error_code, obj_path, lib_path, cmd_switch, "invalid param format, expected \"uiAccess={'true'|'false'}\" but got \"%S\"", input);
 }
-
-////////////////////////////////
-
-internal String8
-lnk_get_image_name(LNK_Config *config)
-{
-  String8 image_name = config->image_name;
-  image_name = str8_skip_last_slash(image_name);
-  image_name = str8_chop_last_dot(image_name);
-  return image_name;
-}
-
-internal U64
-lnk_get_default_function_pad_min(COFF_MachineType machine)
-{
-  U64 function_pad_min = 0;
-  switch (machine) {
-    case COFF_MachineType_Unknown: break;
-    case COFF_MachineType_X86: {
-      function_pad_min = 5;
-    } break;
-    case COFF_MachineType_X64: {
-      function_pad_min = 6;
-    } break;
-    default: {
-      lnk_error_cmd_switch(LNK_Error_Cmdl,
-                           str8_zero(),
-                           str8_zero(),
-                           LNK_CmdSwitch_FunctionPadMin,
-                           "default paramter is not defined for: %S",
-                           coff_string_from_machine_type(machine));
-    } break;
-  }
-  return function_pad_min;
-}
-
-internal U64
-lnk_get_base_addr(LNK_Config *config)
-{
-  U64 base_addr = config->user_base_addr;
-  if (base_addr == 0) {
-    if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
-      base_addr = coff_default_dll_base_from_machine(config->machine);
-    } else if (config->file_characteristics & PE_ImageFileCharacteristic_EXE) {
-      if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && config->machine == COFF_MachineType_X64) {
-        base_addr = coff_default_exe_base_from_machine(COFF_MachineType_X86);
-      } else {
-        base_addr = coff_default_exe_base_from_machine(config->machine);
-      }
-    } else {
-      lnk_error(LNK_Error_Cmdl, "image type is not specified.");
-    }
-  }
-  return base_addr;
-}
-
-internal Version
-lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine)
-{
-  Version ver = make_version(0,0);
-  switch (subsystem) {
-  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
-
-  case PE_WindowsSubsystem_WINDOWS_CUI: {
-    switch (machine) {
-    case COFF_MachineType_X64: 
-    case COFF_MachineType_X86: ver = make_version(6,0); break;
-
-    case COFF_MachineType_ArmNt:
-    case COFF_MachineType_Arm64:
-    case COFF_MachineType_Arm: ver = make_version(6,2); break;
-
-    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
-    }
-  } break;
-
-  case PE_WindowsSubsystem_WINDOWS_GUI: {
-    switch (machine) {
-    case COFF_MachineType_X64:
-    case COFF_MachineType_X86: ver = make_version(6,0); break;
-
-    case COFF_MachineType_ArmNt:
-    case COFF_MachineType_Arm64:
-    case COFF_MachineType_Arm: ver = make_version(6,2); break;
-
-    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
-    }
-  } break;
-
-  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(19,90); break;
-
-  case PE_WindowsSubsystem_EFI_APPLICATION: 
-  case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
-  case PE_WindowsSubsystem_EFI_ROM: 
-  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
-
-  case PE_WindowsSubsystem_NATIVE_WINDOWS:
-  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
-
-  default: lnk_not_implemented("unknown subsystem kind %u", subsystem); break;
-  }
-  return ver;
-}
-
-internal Version
-lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine)
-{
-  Version ver = make_version(0,0);
-  switch (subsystem) {
-  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
-
-  case PE_WindowsSubsystem_WINDOWS_CUI: {
-    switch (machine) {
-    case COFF_MachineType_X86: ver = make_version(5,1); break;
-
-    case COFF_MachineType_X64: ver = make_version(5,2); break;
-
-    case COFF_MachineType_ArmNt:
-    case COFF_MachineType_Arm64:
-    case COFF_MachineType_Arm: ver = make_version(6,2); break;
-
-    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
-    }
-  } break;
-
-  case PE_WindowsSubsystem_WINDOWS_GUI: {
-    switch (machine) {
-    case COFF_MachineType_X86: ver = make_version(5,1); break;
-
-    case COFF_MachineType_X64: ver = make_version(5,2); break;
-
-    case COFF_MachineType_ArmNt:
-    case COFF_MachineType_Arm64:
-    case COFF_MachineType_Arm: ver = make_version(6,2); break;
-
-    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
-    }
-  } break;
-
-  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(1,0); break;
-
-  case PE_WindowsSubsystem_EFI_APPLICATION: 
-  case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
-  case PE_WindowsSubsystem_EFI_ROM: 
-  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
-
-  case PE_WindowsSubsystem_NATIVE_WINDOWS:
-  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
-  
-  default: lnk_not_implemented("unknown subsystem kind %u", subsystem);
-  }
-  return ver;
-}
-
-internal B32
-lnk_do_debug_info(LNK_Config *config)
-{
-  B32 do_debug_info = config->rad_debug == LNK_SwitchState_Yes ||
-    (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null);
-  return do_debug_info;
-}
-
-internal B32
-lnk_is_thread_pool_shared(LNK_Config *config)
-{
-  return config->shared_thread_pool_name.size > 0;
-}
-
-internal B32
-lnk_is_section_removed(LNK_Config *config, String8 section_name)
-{
-  B32 is_removed = 0;
-  for (String8Node *name_n = config->remove_sections.first; name_n != 0 && !is_removed; name_n = name_n->next) {
-    is_removed = str8_match(section_name, name_n->string, 0);
-  }
-  return is_removed;
-}
-
-////////////////////////////////
 
 internal B32
 lnk_cmd_switch_parse_version(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, Version *ver_out)
@@ -784,8 +601,6 @@ lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_pat
   }
 }
 
-////////////////////////////////
-
 internal B32
 lnk_parse_alt_name_directive(String8 input, LNK_AltName *alt_out)
 {
@@ -947,7 +762,180 @@ lnk_parse_merge_directive(String8 string, LNK_MergeDirective *out)
   return is_parse_ok;
 }
 
-////////////////////////////////
+internal String8
+lnk_get_image_name(LNK_Config *config)
+{
+  String8 image_name = config->image_name;
+  image_name = str8_skip_last_slash(image_name);
+  image_name = str8_chop_last_dot(image_name);
+  return image_name;
+}
+
+internal U64
+lnk_get_default_function_pad_min(COFF_MachineType machine)
+{
+  U64 function_pad_min = 0;
+  switch (machine) {
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X86: {
+      function_pad_min = 5;
+    } break;
+    case COFF_MachineType_X64: {
+      function_pad_min = 6;
+    } break;
+    default: {
+      lnk_error_cmd_switch(LNK_Error_Cmdl,
+                           str8_zero(),
+                           str8_zero(),
+                           LNK_CmdSwitch_FunctionPadMin,
+                           "default paramter is not defined for: %S",
+                           coff_string_from_machine_type(machine));
+    } break;
+  }
+  return function_pad_min;
+}
+
+internal U64
+lnk_get_base_addr(LNK_Config *config)
+{
+  U64 base_addr = config->user_base_addr;
+  if (base_addr == 0) {
+    if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+      base_addr = coff_default_dll_base_from_machine(config->machine);
+    } else if (config->file_characteristics & PE_ImageFileCharacteristic_EXE) {
+      if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && config->machine == COFF_MachineType_X64) {
+        base_addr = coff_default_exe_base_from_machine(COFF_MachineType_X86);
+      } else {
+        base_addr = coff_default_exe_base_from_machine(config->machine);
+      }
+    } else {
+      lnk_error(LNK_Error_Cmdl, "image type is not specified.");
+    }
+  }
+  return base_addr;
+}
+
+internal Version
+lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine)
+{
+  Version ver = make_version(0,0);
+  switch (subsystem) {
+  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
+
+  case PE_WindowsSubsystem_WINDOWS_CUI: {
+    switch (machine) {
+    case COFF_MachineType_X64: 
+    case COFF_MachineType_X86: ver = make_version(6,0); break;
+
+    case COFF_MachineType_ArmNt:
+    case COFF_MachineType_Arm64:
+    case COFF_MachineType_Arm: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
+    }
+  } break;
+
+  case PE_WindowsSubsystem_WINDOWS_GUI: {
+    switch (machine) {
+    case COFF_MachineType_X64:
+    case COFF_MachineType_X86: ver = make_version(6,0); break;
+
+    case COFF_MachineType_ArmNt:
+    case COFF_MachineType_Arm64:
+    case COFF_MachineType_Arm: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
+    }
+  } break;
+
+  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(19,90); break;
+
+  case PE_WindowsSubsystem_EFI_APPLICATION: 
+  case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
+  case PE_WindowsSubsystem_EFI_ROM: 
+  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
+
+  case PE_WindowsSubsystem_NATIVE_WINDOWS:
+  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
+
+  default: lnk_not_implemented("unknown subsystem kind %u", subsystem); break;
+  }
+  return ver;
+}
+
+internal Version
+lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine)
+{
+  Version ver = make_version(0,0);
+  switch (subsystem) {
+  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
+
+  case PE_WindowsSubsystem_WINDOWS_CUI: {
+    switch (machine) {
+    case COFF_MachineType_X86: ver = make_version(5,1); break;
+
+    case COFF_MachineType_X64: ver = make_version(5,2); break;
+
+    case COFF_MachineType_ArmNt:
+    case COFF_MachineType_Arm64:
+    case COFF_MachineType_Arm: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
+    }
+  } break;
+
+  case PE_WindowsSubsystem_WINDOWS_GUI: {
+    switch (machine) {
+    case COFF_MachineType_X86: ver = make_version(5,1); break;
+
+    case COFF_MachineType_X64: ver = make_version(5,2); break;
+
+    case COFF_MachineType_ArmNt:
+    case COFF_MachineType_Arm64:
+    case COFF_MachineType_Arm: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
+    }
+  } break;
+
+  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(1,0); break;
+
+  case PE_WindowsSubsystem_EFI_APPLICATION: 
+  case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
+  case PE_WindowsSubsystem_EFI_ROM: 
+  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
+
+  case PE_WindowsSubsystem_NATIVE_WINDOWS:
+  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
+  
+  default: lnk_not_implemented("unknown subsystem kind %u", subsystem);
+  }
+  return ver;
+}
+
+internal B32
+lnk_do_debug_info(LNK_Config *config)
+{
+  B32 do_debug_info = config->rad_debug == LNK_SwitchState_Yes ||
+    (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null);
+  return do_debug_info;
+}
+
+internal B32
+lnk_is_thread_pool_shared(LNK_Config *config)
+{
+  return config->shared_thread_pool_name.size > 0;
+}
+
+internal B32
+lnk_is_section_removed(LNK_Config *config, String8 section_name)
+{
+  B32 is_removed = 0;
+  for (String8Node *name_n = config->remove_sections.first; name_n != 0 && !is_removed; name_n = name_n->next) {
+    is_removed = str8_match(section_name, name_n->string, 0);
+  }
+  return is_removed;
+}
 
 internal void
 lnk_print_build_info()
@@ -999,8 +987,6 @@ lnk_print_help(void)
   scratch_end(scratch);
 }
 
-////////////////////////////////
-
 internal String8
 lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
 {
@@ -1030,6 +1016,46 @@ lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
 
   String8 result = str8_list_join(arena, &list, 0);
 
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8List
+lnk_unwrap_rsp(Arena *arena, String8List arg_list)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List result = {0};
+
+  for (String8Node *curr = arg_list.first; curr != 0; curr = curr->next) {
+    B32 is_rsp = str8_match_lit("@", curr->string, StringMatchFlag_RightSideSloppy);
+    if (is_rsp) {
+      // remove "@"
+      String8 name = str8_skip(curr->string, 1);
+
+      if (os_file_path_exists(name)) {
+        // read rsp from disk
+        String8 file = lnk_read_data_from_file_path(scratch.arena, 0, name);
+        
+        // parse rsp
+        String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);
+        
+        // handle case where rsp references another rsp
+        String8List list = lnk_unwrap_rsp(arena, rsp_args);
+
+        // push arguments from rsp
+        list = str8_list_copy(arena, &list);
+        str8_list_concat_in_place(&result, &list);
+       } else {
+        lnk_error(LNK_Error_Cmdl, "unable to find rsp: %S", name);
+      }
+    } else {
+      // push regular argument
+      String8 str = push_str8_copy(arena, curr->string);
+      str8_list_push(arena, &result, str);
+    }
+  }
+  
   scratch_end(scratch);
   return result;
 }
@@ -1634,9 +1660,14 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     config->rad_chunk_map = LNK_SwitchState_Yes;
   } break;
 
+  case LNK_CmdSwitch_Rad_MemoryMapFiles: {
+    lnk_cmd_switch_set_flag_32(obj_path, lib_path, cmd_switch, value_strings, &config->io_flags, LNK_IO_Flags_MemoryMapFiles);
+  } break;
+
   case LNK_CmdSwitch_Rad_Debug: {
     lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug);
   } break;
+
   case LNK_CmdSwitch_Rad_DebugName: {
     // :Rad_DebugAltPath
     lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug_name);
@@ -1797,6 +1828,17 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_SectVirtOff: {
+    U64 sect_virt_off;
+    if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &sect_virt_off, LNK_ParseU64Flag_CheckUnder32bit)) {
+      if (sect_virt_off >= 0x1000) {
+        config->section_virt_off = sect_virt_off;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "section virtual offset must be >= 0x1000");
+      }
+    }
+  } break;
+
   case LNK_CmdSwitch_Rad_SharedThreadPool: {
     if (value_strings.node_count == 0) {
       config->shared_thread_pool_name = str8_lit(LNK_DEFAULT_THREAD_POOL_NAME);
@@ -1890,46 +1932,6 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   }
 
   scratch_end(scratch);
-}
-
-internal String8List
-lnk_unwrap_rsp(Arena *arena, String8List arg_list)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8List result = {0};
-
-  for (String8Node *curr = arg_list.first; curr != 0; curr = curr->next) {
-    B32 is_rsp = str8_match_lit("@", curr->string, StringMatchFlag_RightSideSloppy);
-    if (is_rsp) {
-      // remove "@"
-      String8 name = str8_skip(curr->string, 1);
-
-      if (os_file_path_exists(name)) {
-        // read rsp from disk
-        String8 file = lnk_read_data_from_file_path(scratch.arena, name);
-        
-        // parse rsp
-        String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);
-        
-        // handle case where rsp references another rsp
-        String8List list = lnk_unwrap_rsp(arena, rsp_args);
-
-        // push arguments from rsp
-        list = str8_list_copy(arena, &list);
-        str8_list_concat_in_place(&result, &list);
-       } else {
-        lnk_error(LNK_Error_Cmdl, "unable to find rsp: %S", name);
-      }
-    } else {
-      // push regular argument
-      String8 str = push_str8_copy(arena, curr->string);
-      str8_list_push(arena, &result, str);
-    }
-  }
-  
-  scratch_end(scratch);
-  return result;
 }
 
 internal LNK_Config *
