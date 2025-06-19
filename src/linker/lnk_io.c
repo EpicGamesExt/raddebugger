@@ -172,31 +172,13 @@ lnk_log_read(String8 path, U64 size)
 }
 
 internal String8
-lnk_read_data_from_file_path(Arena *arena, String8 path)
+lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path)
 {
-  String8 data = str8_zero();
-  OS_Handle handle = {0};
-  int is_open = lnk_open_file_read((char*)path.str, path.size, &handle, sizeof(handle));
-  if (is_open) {
-    U64  buffer_size = lnk_size_from_file(&handle);
-    U8  *buffer      = push_array_no_zero(arena, U8, buffer_size);
-    U64  read_size   = lnk_read_file(&handle, buffer, buffer_size);
-
-    data = str8(buffer, read_size);
-	
-    lnk_close_file(&handle);
-
-    if (read_size != buffer_size) {
-      lnk_error(LNK_Warning_IllData, "incomplete file read occurred, read %u bytes, expected %u bytes, file %S", path);
-    }
-
-    if (lnk_get_log_status(LNK_Log_IO_Read)) {
-      lnk_log_read(path, data.size);
-    }
-  } else {
-    lnk_error(LNK_Error_FileNotFound, "unable to open file %S", path);
-  }
-  return data;
+  Temp scratch = scratch_begin(&arena, 1);
+  TP_Context *single_thread_ctx = tp_alloc(scratch.arena, 1, 1, str8_zero());
+  String8Array data_arr = lnk_read_data_from_file_path_parallel(single_thread_ctx, arena, io_flags, (String8Array){ .count = 1, .v = &path });
+  scratch_end(scratch);
+  return data_arr.v[0];
 }
 
 internal
@@ -232,33 +214,72 @@ THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
   task->data_arr.v[task_id] = str8(buffer, read_size);
 }
 
-internal String8Array
-lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array path_arr)
+internal
+THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
-  Temp scratch = scratch_begin(&arena,1);
+  LNK_DiskReader *task = raw_task;
+#if _WIN32
+  Temp scratch = scratch_begin(&arena, 1);
+  String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
+  HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  if (file_handle != INVALID_HANDLE_VALUE) {
+    HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
+    if (mapping_handle != INVALID_HANDLE_VALUE) {
+      LARGE_INTEGER file_size = {0};
+      GetFileSizeEx(file_handle, &file_size);
+      void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
+      if (file_data) {
+        task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+      }
+      CloseHandle(mapping_handle);
+    }
+    CloseHandle(file_handle);
+  }
+  scratch_end(scratch);
+#else
+# error "memory mapping files is not supported on this platform"
+#endif
+}
 
+internal String8Array
+lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr)
+{
   LNK_DiskReader reader = {0};
-  reader.path_arr       = path_arr;
-  reader.handle_arr     = push_array_no_zero(scratch.arena, OS_Handle, path_arr.count);
-  reader.size_arr       = push_array_no_zero(scratch.arena, U64, path_arr.count);
 
-  // open handles and get sizes
-  tp_for_parallel(tp, 0, path_arr.count, lnk_data_size_from_file_path_task, &reader);
+  if (io_flags & LNK_IO_Flags_MemoryMapFiles) {
+    reader.io_flags       = io_flags;
+    reader.path_arr       = path_arr;
+    reader.data_arr.count = path_arr.count;
+    reader.data_arr.v     = push_array(arena, String8, path_arr.count);
+    tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
+  } else {
+    Temp scratch = scratch_begin(&arena,1);
 
-  // compute file buffer size
-  U64 total_data_size = sum_array_u64(path_arr.count, reader.size_arr);
+    reader.path_arr       = path_arr;
+    reader.handle_arr     = push_array_no_zero(scratch.arena, OS_Handle, path_arr.count);
+    reader.size_arr       = push_array_no_zero(scratch.arena, U64, path_arr.count);
 
-  // assign offsets into file buffer
-  U64 *off_arr = push_array_no_zero(scratch.arena, U64, path_arr.count);
-  MemoryCopyTyped(off_arr, reader.size_arr, path_arr.count);
-  counts_to_offsets_array_u64(path_arr.count, off_arr);
+    // open handles and get sizes
+    tp_for_parallel(tp, 0, path_arr.count, lnk_data_size_from_file_path_task, &reader);
 
-  reader.data_arr = str8_array_reserve(arena, path_arr.count);
-  reader.off_arr  = off_arr;
-  reader.buffer   = push_array_no_zero(arena, U8, total_data_size);
+    // compute file buffer size
+    U64 total_data_size = sum_array_u64(path_arr.count, reader.size_arr);
 
-  // read files and close handles
-  tp_for_parallel(tp, 0, path_arr.count, lnk_data_from_file_path_task, &reader);
+    // assign offsets into file buffer
+    U64 *off_arr = push_array_no_zero(scratch.arena, U64, path_arr.count);
+    MemoryCopyTyped(off_arr, reader.size_arr, path_arr.count);
+    counts_to_offsets_array_u64(path_arr.count, off_arr);
+
+    reader.io_flags = io_flags;
+    reader.data_arr = str8_array_reserve(arena, path_arr.count);
+    reader.off_arr  = off_arr;
+    reader.buffer   = push_array_no_zero(arena, U8, total_data_size);
+
+    // read files and close handles
+    tp_for_parallel(tp, 0, path_arr.count, lnk_data_from_file_path_task, &reader);
+
+    scratch_end(scratch);
+  }
   
   String8Array result = {0};
   result.count        = path_arr.count;
@@ -270,7 +291,6 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array
     }
   }
 
-  scratch_end(scratch);
   return result;
 }
 

@@ -360,7 +360,7 @@ lnk_merge_debug_t_and_debug_p(Arena *arena, U64 obj_count, CV_DebugT *debug_t_ar
 }
 
 internal LNK_CodeViewInput
-lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir_list, U64 obj_count, LNK_Obj **obj_arr)
+lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, U64 obj_count, LNK_Obj **obj_arr)
 {
   ProfBegin("Extract CodeView");
   Temp scratch = scratch_begin(0,0);
@@ -675,7 +675,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
     // read type servers from disk in parallel
     {
       ProfBegin("Read External Type Servers");
-      String8Array msf_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, ts_path_arr);
+      String8Array msf_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, 0, ts_path_arr);
       ProfEnd();
 
       MSF_Parsed **msf_parse_arr = lnk_msf_parsed_from_data_parallel(tp_arena, tp, msf_data_arr);
@@ -3315,7 +3315,7 @@ lnk_build_pdb(TP_Context               *tp,
   ProfBegin("Build NatVis");
   {
     String8Array natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
-    String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, natvis_file_path_arr);
+    String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr);
 
     for (U64 i = 0; i < natvis_file_data_arr.count; ++i) {
       String8 natvis_file_path = natvis_file_path_arr.v[i];

@@ -203,6 +203,7 @@ lnk_config_from_argcv(Arena *arena, int argc, char **argv)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak,        "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib,         "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,              "%%_RAD_RDI_PATH%%");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MemoryMapFiles,            "");
 #if BUILD_DEBUG
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
@@ -435,6 +436,7 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
 
 internal String8
 lnk_manifest_from_inputs(Arena       *arena,
+                         LNK_IO_Flags io_flags,
                          String8      mt_path,
                          String8      manifest_name,
                          B32          manifest_uac,
@@ -468,7 +470,7 @@ lnk_manifest_from_inputs(Arena       *arena,
     lnk_merge_manifest_files(mt_path, merged_manifest_path, unique_input_manifest_paths);
 
     // read mt.exe output from disk
-    manifest_data = lnk_read_data_from_file_path(arena, merged_manifest_path);
+    manifest_data = lnk_read_data_from_file_path(arena, io_flags, merged_manifest_path);
     if (manifest_data.size == 0) {
       lnk_error(LNK_Error_Mt, "unable to find mt.exe output manifest on disk, expected path \"%S\"", merged_manifest_path);
     }
@@ -1455,7 +1457,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         U64            thin_inputs_count = 0;
         LNK_InputObj **thin_inputs       = lnk_thin_array_from_input_obj_list(scratch.arena, unique_obj_input_list, &thin_inputs_count);
         String8Array   thin_input_paths  = lnk_path_array_from_input_obj_array(scratch.arena, thin_inputs, thin_inputs_count);
-        String8Array   thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], thin_input_paths);
+        String8Array   thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], config->io_flags, thin_input_paths);
         for (U64 thin_input_idx = 0; thin_input_idx < thin_inputs_count; thin_input_idx += 1) {
           thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
           thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
@@ -1696,7 +1698,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           
           ProfBegin("Disk Read Libs");
           String8Array paths = str8_array_from_list(temp.arena, &unique_input_lib_list);
-          String8Array datas = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], paths);
+          String8Array datas = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], config->io_flags, paths);
           ProfEnd();
           
           ProfBegin("Lib Init");
@@ -2047,7 +2049,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
             ProfBegin("Embed Manifest");
             // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
             // resource to the tree directly
-            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
             String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
             str8_list_push(scratch.arena, &res_data_list, manifest_res);
             str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
@@ -2056,7 +2058,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           case LNK_ManifestOpt_WriteToFile: {
             ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
             Temp temp = temp_begin(scratch.arena);
-            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
             lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
             temp_end(temp);
             ProfEnd();
@@ -2072,7 +2074,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           
           ProfBegin("Load .res files from disk");
           for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
-            String8 res_data = lnk_read_data_from_file_path(scratch.arena, node->string);
+            String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string);
             if (res_data.size > 0) {
               if (pe_is_res(res_data)) {
                 str8_list_push(scratch.arena, &res_data_list, res_data);
@@ -5066,7 +5068,7 @@ lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     //
     // CodeView
     //
-    LNK_CodeViewInput input = lnk_make_code_view_input(tp, tp_arena, config->lib_dir_list, link_ctx.objs_count, link_ctx.objs);
+    LNK_CodeViewInput input = lnk_make_code_view_input(tp, tp_arena, config->io_flags, config->lib_dir_list, link_ctx.objs_count, link_ctx.objs);
     CV_DebugT        *types = lnk_import_types(tp, tp_arena, &input);
 
     //

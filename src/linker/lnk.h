@@ -188,7 +188,7 @@ internal U128 lnk_blake3_hash_parallel(TP_Context *tp, U64 chunk_count, String8 
 
 internal String8 lnk_make_linker_manifest(Arena *arena, B32 manifest_uac, String8 manifest_level, String8 manifest_ui_access, String8List manifest_dependency_list);
 internal void    lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest_path_list);
-internal String8 lnk_manifest_from_inputs(Arena *arena, String8 mt_path, String8 manifest_name, B32 manifest_uac, String8 manifest_level, String8 manifest_ui_access, String8List input_manifest_path_list, String8List deps_list);
+internal String8 lnk_manifest_from_inputs(Arena *arena, LNK_IO_Flags io_flags, String8 mt_path, String8 manifest_name, B32 manifest_uac, String8 manifest_level, String8 manifest_ui_access, String8List input_manifest_path_list, String8List deps_list);
 
 // --- Internal Objs -----------------------------------------------------------
 
