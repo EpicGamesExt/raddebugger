@@ -173,7 +173,6 @@ typedef enum
   LNK_CmdSwitch_Rad_PdbHashTypeNameMap,
   LNK_CmdSwitch_Rad_PdbHashTypeNames,
   LNK_CmdSwitch_Rad_RemoveSection,
-  LNK_CmdSwitch_Rad_SectVirtOff,
   LNK_CmdSwitch_Rad_SharedThreadPool,
   LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,
   LNK_CmdSwitch_Rad_SuppressError,
