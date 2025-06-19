@@ -4949,7 +4949,7 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
           if (tag.kind == DW_TagKind_SubProgram) {
             String8 expr = dw_exprloc_from_tag_attrib_kind(&dwarf_input, &cu, tag, DW_AttribKind_FrameBase);
             if (expr.size > 0) {
-              String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+              String8 expr_str = dw_single_line_string_from_expression(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
             }
           }
         } else if (tag.kind == DW_Tag_VariaKindble || tag.kind == DW_Tag_FormalParameter) {
@@ -4971,12 +4971,12 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
             if (value_class == DW_AttribClass_LocListPtr || value_class == DW_AttribClass_LocList) {
               DW_LocList location = dw_loclist_from_tag_attrib_kind(comp_temp.arena, &dwarf_input, &cu, location_attrib);
               for (DW_LocNode *loc_n = location.first; loc_n != 0; loc_n = loc_n->next) {
-                String8 expr_str = dw_format_expression_single_line(comp_temp.arena, loc_n->v.expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+                String8 expr_str = dw_single_line_string_from_expression(comp_temp.arena, loc_n->v.expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
                 rd_printf("[%llx-%llx] %S", loc_n->v.range.min, loc_n->v.range.max, expr_str);
               }
             } else if (value_class == DW_AttribClass_ExprLoc) {
               String8 expr = dw_exprloc_from_tag_attrib_kind(&dwarf_input, &cu, location_attrib);
-              String8 expr_str = dw_format_expression_single_line(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
+              String8 expr_str = dw_single_line_string_from_expression(comp_temp.arena, expr, cu_base, cu.address_size, arch, cu.version, cu.ext, cu.format);
               rd_printf("%S", expr_str);
             }
             rd_unindent();
