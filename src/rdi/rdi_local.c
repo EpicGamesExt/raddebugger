@@ -516,12 +516,12 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   String8 indent = str8_lit("                                                                                                                                ");
 #define dump(str)  str8_list_push(arena, &strings, (str))
 #define dumpf(...) str8_list_pushf(arena, &strings, __VA_ARGS__)
-#define DumpSubset(name) if(flags & RDI_DumpSubsetFlag_##name) DeferLoop(dumpf("# %S\n\n", rdi_name_title_from_dump_subset_table[RDI_DumpSubset_##name]), dump(str8_lit("\n")))
+#define DumpSubset(name) if(flags & RDI_DumpSubsetFlag_##name) DeferLoop(dumpf("////////////////////////////////\n//~ %S\n\n", rdi_name_title_from_dump_subset_table[RDI_DumpSubset_##name]), dump(str8_lit("\n")))
   
   //////////////////////////////
   //- rjf: dump data sections
   //
-  DumpSubset(DataSections)
+  DumpSubset(DataSections) DeferLoop(dumpf("data_sections:\n{\n"), dumpf("}\n"))
   {
     for EachIndex(idx, rdi->sections_count)
     {
@@ -529,7 +529,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
       RDI_SectionKind  kind     = (RDI_SectionKind)idx;
       RDI_Section     *section  = &rdi->sections[idx];
       String8          kind_str = rdi_string_from_data_section_kind(scratch.arena, kind);
-      dumpf("data_section[%5llu] = {%#08llx, %7u, %7u}, %S\n", idx, section->off, section->encoded_size, section->unpacked_size, kind_str);
+      dumpf("  {%#08llx  %7u  %7u  %*s} // data_section[%I64u]\n", section->off, section->encoded_size, section->unpacked_size, 24, kind_str.str, idx);
       scratch_end(scratch);
     }
   }
@@ -537,35 +537,39 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //////////////////////////////
   //- rjf: dump top-level-info
   //
-  DumpSubset(TopLevelInfo)
+  DumpSubset(TopLevelInfo) DeferLoop(dumpf("top_level_info:\n{\n"), dumpf("}\n"))
   {
     RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
     Temp scratch = scratch_begin(&arena, 1);
-    dumpf("arch         =%S\n",      rdi_string_from_arch(scratch.arena, tli->arch));
-    dumpf("exe_name     ='%S'\n",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
-    dumpf("voff_max     =%#08llx\n", tli->voff_max);
-    dumpf("producer_name='%S'\n",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
+    dumpf("  arch:          %S\n",      rdi_string_from_arch(scratch.arena, tli->arch));
+    dumpf("  exe_name:      '%S'\n",    str8_from_rdi_string_idx(rdi, tli->exe_name_string_idx));
+    dumpf("  voff_max:      %#08llx\n", tli->voff_max);
+    dumpf("  producer_name: '%S'\n",    str8_from_rdi_string_idx(rdi, tli->producer_name_string_idx));
     scratch_end(scratch);
   }
   
   //////////////////////////////
   //- rjf: dump binary sections
   //
-  DumpSubset(BinarySections)
+  DumpSubset(BinarySections) DeferLoop(dumpf("binary_sections:\n{\n"), dumpf("}\n"))
   {
     U64 count = 0;
     RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
+    dumpf("  // %-16s %-16s %-12s %-12s %-12s %-12s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
     for EachIndex(idx, count)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_BinarySection *bin_section = &v[idx];
-      dumpf("binary_section[%I64u]:\n", idx);
-      dumpf("  name      ='%S'\n",  str8_from_rdi_string_idx(rdi, bin_section->name_string_idx));
-      dumpf("  flags     =%S\n",    rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags));
-      dumpf("  voff_first=%#08x\n", bin_section->voff_first);
-      dumpf("  voff_opl  =%#08x\n", bin_section->voff_opl);
-      dumpf("  foff_first=%#08x\n", bin_section->foff_first);
-      dumpf("  foff_opl  =%#08x\n", bin_section->foff_opl);
+      String8 name = str8_from_rdi_string_idx(rdi, bin_section->name_string_idx);
+      String8 flags = rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags);
+      dumpf("  {  %-16.*s %-16.*s 0x%-10I64x 0x%-10I64x 0x%-10I64x 0x%-10I64x  } // binary_section[%I64u]\n", 
+            str8_varg(name),
+            str8_varg(flags),
+            bin_section->voff_first,
+            bin_section->voff_opl,
+            bin_section->foff_first,
+            bin_section->foff_opl,
+            idx);
       scratch_end(scratch);
     }
   }
