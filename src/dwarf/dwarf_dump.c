@@ -325,6 +325,8 @@ dw_single_line_string_from_expression(Arena *arena, String8 raw_data, U64 cu_bas
   return expression;
 }
 
+#if 0
+
 internal void
 dw_string_from_cfi_program(Arena *arena, String8List *out, String8 indent, String8 raw_data, DW_CIEUnpacked *cie, DW_EhPtrCtx *ptr_ctx, Arch arch, DW_Version ver, DW_Ext ext, DW_Format format)
 {
@@ -1540,6 +1542,8 @@ dw_print_debug_str_offsets(Arena *arena, String8List *out, String8 indent, DW_In
   scratch_end(scratch);
 #endif
 }
+
+#endif
 
 ////////////////////////////////
 //~ rjf: Dump Entry Point
