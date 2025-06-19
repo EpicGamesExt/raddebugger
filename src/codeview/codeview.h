@@ -2978,7 +2978,6 @@ internal U32                   cv_map_encoded_base_pointer(CV_Arch arch, U32 enc
 internal String8 cv_string_from_inline_range_kind(CV_InlineRangeKind kind);
 internal String8 cv_string_from_type_index_source(CV_TypeIndexSource ti_source);
 internal String8 cv_string_from_language(CV_Language x);
-internal String8 cv_string_from_numeric(Arena *arena, CV_NumericParsed num);
 internal String8 cv_string_from_reg_id(Arena *arena, CV_Arch arch, U32 id);
 internal String8 cv_string_from_member_access(CV_MemberAccess x);
 internal String8 cv_string_from_method_prop(CV_MethodProp x);
