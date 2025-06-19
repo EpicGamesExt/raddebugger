@@ -1,6 +1,3 @@
-////////////////////////////////
-// Shared File API
-
 shared_function int
 lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
 {
@@ -50,8 +47,6 @@ lnk_write_file(void *raw_handle, uint64_t offset, void *buffer, uint64_t buffer_
   U64 write_size = os_file_write(handle, r1u64(offset, offset + buffer_size), buffer);
   return write_size;
 }
-
-////////////////////////////////
 
 internal String8List
 lnk_file_search(Arena *arena, String8List dir_list, String8 file_path)
@@ -104,7 +99,7 @@ internal OS_Handle
 lnk_file_open_with_rename_permissions(String8 path)
 {
   OS_Handle file_handle = os_handle_zero();
-#if _WIN32
+#if OS_WINDOWS
   Temp scratch = scratch_begin(0,0);
 
   // open file with permissions to rename
@@ -123,7 +118,7 @@ lnk_file_open_with_rename_permissions(String8 path)
 
   scratch_end(scratch);
 #else
-#error "TODO: file rename"
+# error "TODO: file rename"
 #endif
   return file_handle;
 }
@@ -131,12 +126,12 @@ lnk_file_open_with_rename_permissions(String8 path)
 internal B32
 lnk_file_set_delete_on_close(OS_Handle handle, B32 delete_file)
 {
-#if _WIN32
+#if OS_WINDOWS
   FILE_DISPOSITION_INFO file_disposition = {0};
   file_disposition.DeleteFile            = (BOOL)delete_file;
   B32 is_set = SetFileInformationByHandle((HANDLE)handle.u64[0], FileDispositionInfo, &file_disposition, sizeof(file_disposition));
 #else
-#error "TODO: file rename"
+# error "TODO: file rename"
 #endif
   return is_set;
 }
@@ -145,7 +140,7 @@ internal B32
 lnk_file_rename(OS_Handle handle, String8 new_name)
 {
   Temp scratch = scratch_begin(0,0);
-#if _WIN32
+#if OS_WINDOWS
   String16 new_name16 = str16_from_8(scratch.arena, new_name);
 
   U64 file_rename_info_size = sizeof(FILE_RENAME_INFO);
@@ -218,7 +213,7 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
   LNK_DiskReader *task = raw_task;
-#if _WIN32
+#if OS_WINDOWS
   Temp scratch = scratch_begin(&arena, 1);
   String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
   HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -375,5 +370,4 @@ lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data)
   lnk_write_data_list_to_file_path(path, temp_path, data_list);
   scratch_end(scratch);
 }
-
 

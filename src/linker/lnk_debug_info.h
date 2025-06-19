@@ -3,7 +3,7 @@
 
 #pragma once
 
-////////////////////////////////
+// --- Code View Input ---------------------------------------------------------
 
 typedef struct LNK_PchInfo
 {
@@ -60,7 +60,7 @@ typedef struct LNK_CodeViewInput
   Rng1U64                    external_obj_range;
 } LNK_CodeViewInput;
 
-////////////////////////////////
+// --- Leaf Ref ----------------------------------------------------------------
 
 typedef enum
 {
@@ -118,7 +118,7 @@ typedef union
   U128Array **v[CV_TypeIndexSource_COUNT];
 } LNK_LeafHashes;
 
-////////////////////////////////
+// --- Symbol Parsing Tasks ----------------------------------------------------
 
 typedef struct
 {
@@ -155,7 +155,7 @@ typedef struct
   B8                 *is_corrupted;
 } LNK_GetExternalLeavesTask;
 
-////////////////////////////////
+// --- Leaf Deduping Tasks -----------------------------------------------------
 
 typedef struct
 {
@@ -261,7 +261,7 @@ typedef struct
   Arena             **fixed_arena_arr;
 } LNK_PatchLeavesTask;
 
-////////////////////////////////
+// --- Code View Processing Trasks ---------------------------------------------
 
 typedef struct
 {
@@ -378,8 +378,7 @@ typedef struct
   String8List *maps;
 } LNK_TypeNameReplacer;
 
-////////////////////////////////
-// RAD Debug Info
+// --- RAD Debug Info ----------------------------------------------------------
 
 typedef struct
 {
@@ -405,7 +404,7 @@ typedef struct
   CV_TypeIndex       *fwdmap;
 } LNK_BuildUDTFwdMapTask;
 
-////////////////////////////////
+// --- RDI Conversion Tasks ----------------------------------------------------
 
 typedef struct
 {
@@ -492,8 +491,7 @@ typedef struct
   RDIB_LineTableChunkList  *line_tables;
 } LNK_ConvertUnitToRDITask;
 
-////////////////////////////////
-// CodeView
+// --- CodeView ----------------------------------------------------------------
 
 internal CV_DebugS *       lnk_parse_debug_s_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *sect_list_arr);
 internal CV_DebugT *       lnk_parse_debug_t_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *debug_t_list_arr);
@@ -536,8 +534,7 @@ internal CV_DebugT *         lnk_import_types(TP_Context *tp, TP_Arena *tp_temp,
 
 internal void lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
-////////////////////////////////
-// RAD Debug info
+// --- RAD Debug info ----------------------------------------------------------
 
 internal U64                  lnk_udt_name_hash_table_hash(String8 string);
 internal LNK_UDTNameBucket ** lnk_udt_name_hash_table_from_debug_t(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, U64 *buckets_cap_out);
@@ -563,8 +560,7 @@ internal String8List lnk_build_rad_debug_info(TP_Context               *tp,
                                               CV_SymbolListArray       *parsed_symbols,
                                               CV_DebugT                 types[CV_TypeIndexSource_COUNT]);
 
-////////////////////////////////
-// PDB
+// --- PDB ---------------------------------------------------------------------
 
 internal LNK_ProcessedCodeViewC11Data lnk_process_c11_data(TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr, U64 string_data_base_offset, CV_StringHashTable string_ht, MSF_Context *msf, PDB_DbiModule **mod_arr);
 internal LNK_ProcessedCodeViewC13Data lnk_process_c13_data(TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr, U64 string_data_base_offset, CV_StringHashTable string_ht, MSF_Context *msf, PDB_DbiModule **mod_arr);
@@ -586,8 +582,7 @@ internal String8List lnk_build_pdb(TP_Context               *tp,
                                    CV_SymbolListArray       *parsed_symbols,
                                    CV_DebugT                 types[CV_TypeIndexSource_COUNT]);
 
-////////////////////////////////
-// RAD Debug Info
+// --- RAD Debug Info ----------------------------------------------------------
 
 internal U64                  lnk_udt_name_hash_table_hash(String8 string);
 internal LNK_UDTNameBucket ** lnk_udt_name_hash_table_from_debug_t(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, U64 *buckets_cap_out);

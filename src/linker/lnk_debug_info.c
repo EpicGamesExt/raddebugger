@@ -1,8 +1,6 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 {
@@ -802,10 +800,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   return cv;
 }
 
-////////////////////////////////
-// Leaf Deduper
-
-
 internal LNK_LeafRef
 lnk_leaf_ref(U32 enc_loc_idx, U32 enc_leaf_idx)
 {
@@ -1450,8 +1444,6 @@ lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_
 
   return match;
 }
-
-////////////////////////////////
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_count_per_source_leaf_task)
@@ -2674,9 +2666,6 @@ lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT de
   ProfEnd();
 }
 
-////////////////////////////////
-// PDB Builder
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_filter_out_gsi_symbols_task)
 {
@@ -3034,8 +3023,6 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   }
 }
 
-////////////////////////////////
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
 {
@@ -3368,9 +3355,6 @@ lnk_build_pdb(TP_Context               *tp,
   ProfEnd();
   return page_data_list;
 }
-
-////////////////////////////////
-// RAD Debug Info
 
 internal U64
 lnk_udt_name_hash_table_hash(String8 string)
