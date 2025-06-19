@@ -626,63 +626,6 @@ dw_print_eh_frame(Arena *arena, String8List *out, String8 indent, String8 raw_eh
 }
 
 internal void
-dw_print_debug_abbrev(Arena *arena, String8List *out, String8 indent, DW_Input *input)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  DW_Section abbrev     = input->sec[DW_Section_Abbrev];
-  String8    raw_abbrev = abbrev.data;
-  
-  if (raw_abbrev.size) {
-    rd_printf("# %S", input->sec[DW_Section_Abbrev].name);
-    rd_indent();
-  }
-  
-  for (U64 cursor = 0; cursor < raw_abbrev.size; ) {
-    U64 id_off = cursor;
-    
-    U64 id = 0;
-    cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &id);
-    
-    if (id == 0) {
-      continue; // end of abbrev data for CU
-    }
-    
-    Temp temp = temp_begin(scratch.arena);
-    
-    U64 tag          = 0;
-    U8  has_children = 0;
-    cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &tag);
-    cursor += str8_deserial_read_struct(raw_abbrev, cursor, &has_children);
-    
-    rd_printf("<%llx> %llu DW_TagKind_%S %s", id_off, id, dw_string_from_tag_kind(temp.arena, tag), has_children ? "[has children]" : "[no children]");
-    rd_indent();
-    for (;;) {
-      U64 attrib_off = cursor;
-      
-      U64 attrib_id = 0, form_id = 0;
-      cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &attrib_id);
-      cursor += str8_deserial_read_uleb128(raw_abbrev, cursor, &form_id);
-      if (attrib_id == 0) {
-        break;
-      }
-      String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
-      String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
-      rd_printf("<%llx> DW_AttribKind_%-20S DW_Form_%S", attrib_off, attrib_str, form_str);
-    }
-    rd_unindent();
-    
-    temp_end(temp);
-  }
-  
-  if (raw_abbrev.size) {
-    rd_unindent();
-  }
-  
-  scratch_end(scratch);
-}
-
-internal void
 dw_print_debug_line(Arena *arena, String8List *out, String8 indent, DW_Input *input, DW_ListUnitInput lu_input, B32 relaxed)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -2114,7 +2057,46 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, ExecutableI
   //
   DumpSubset(DebugAbbrev)
   {
-    // dw_print_debug_abbrev(arena, out, indent, input);
+    Temp scratch = scratch_begin(&arena, 1);
+    DW_Section abbrev = input->sec[DW_Section_Abbrev];
+    S64 depth = 0;
+    U64 idx = 0;
+    for(U64 cursor = 0; cursor < abbrev.data.size; idx += 1)
+    {
+      // rjf: read id & advance
+      U64 id_off = cursor;
+      U64 id = 0;
+      cursor += str8_deserial_read_uleb128(abbrev.data, cursor, &id);
+      if(id == 0) { continue; }
+      
+      // rjf: unpack abbrev
+      U64 tag = 0;
+      U8 has_children = 0;
+      cursor += str8_deserial_read_uleb128(abbrev.data, cursor, &tag);
+      cursor += str8_deserial_read_struct(abbrev.data, cursor, &has_children);
+      
+      // rjf: log abbrev
+      Temp temp = temp_begin(scratch.arena);
+      dumpf("abbrev: // abbrev[%I64u]\n{\n", idx);
+      dumpf("  offset:       0x%I64x\n", id_off);
+      dumpf("  id:           %I64u\n", id);
+      dumpf("  tag_kind:     %S\n", dw_string_from_tag_kind(temp.arena, tag));
+      dumpf("  has_children: %s\n", has_children ? "true" : "false");
+      for(;;)
+      {
+        U64 attrib_off = cursor;
+        U64 attrib_id = 0, form_id = 0;
+        cursor += str8_deserial_read_uleb128(abbrev.data, cursor, &attrib_id);
+        cursor += str8_deserial_read_uleb128(abbrev.data, cursor, &form_id);
+        if(attrib_id == 0) { break; }
+        String8 attrib_str = dw_string_from_attrib_kind(temp.arena, DW_Version_Last, DW_Ext_All, attrib_id);
+        String8 form_str   = dw_string_from_form_kind(temp.arena, DW_Version_Last, form_id);
+        rd_printf("  attrib: { offset: 0x%I64x, kind: %S, form_kind: %S }\n", attrib_off, attrib_str, form_str);
+      }
+      dumpf("}\n");
+      temp_end(temp);
+    }
+    scratch_end(scratch);
   }
   
   //////////////////////////////
