@@ -34,8 +34,6 @@ typedef struct LNK_LibList
   struct LNK_LibNode *last;
 } LNK_LibList;
 
-////////////////////////////////
-
 typedef struct
 {
   LNK_LibNode     *node_arr;
@@ -43,8 +41,6 @@ typedef struct
   String8         *path_arr;
   U64              base_input_idx;
 } LNK_LibIniter;
-
-////////////////////////////////
 
 internal LNK_Lib          lnk_lib_from_data(Arena *arena, String8 data, String8 path);
 internal LNK_LibNodeArray lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, String8Array data_arr, String8Array path_arr);

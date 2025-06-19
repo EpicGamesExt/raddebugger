@@ -1,18 +1,16 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-// Build Options
+// --- Build Options -----------------------------------------------------------
 
 #define BUILD_CONSOLE_INTERFACE 1
 #define BUILD_TITLE "Epic Games Tools (R) RAD PE/COFF Linker"
 
-////////////////////////////////
+// --- Arena -------------------------------------------------------------------
 
 #define ARENA_FREE_LIST 1
 
-////////////////////////////////
-// Third Party
+// --- Third Party -------------------------------------------------------------
 
 #include "base_ext/base_blake3.h"
 #include "base_ext/base_blake3.c"
@@ -22,8 +20,7 @@
 #include "third_party/xxHash/xxhash.h"
 #include "third_party/radsort/radsort.h"
 
-////////////////////////////////
-// Code Base
+// --- Code Base ---------------------------------------------------------------
 
 #if defined(__clang__)
 # pragma clang diagnostic push
@@ -78,8 +75,7 @@
 # pragma clang diagnostic pop
 #endif
 
-////////////////////////////////
-// RDI
+// --- RDI ---------------------------------------------------------------------
 
 #include "rdi/rdi_overrides.h"
 #include "lib_rdi_format/rdi_format.h"
@@ -87,8 +83,7 @@
 #include "lib_rdi_format/rdi_format.c"
 #include "rdi/rdi.c"
 
-////////////////////////////////
-// Code Base Extensions
+// --- Code Base Extensions ----------------------------------------------------
 
 #include "base_ext/base_inc.h"
 #include "thread_pool/thread_pool.h"
@@ -106,8 +101,7 @@
 #include "pdb_ext/pdb_helpers.c"
 #include "pdb_ext/pdb_builder.c"
 
-////////////////////////////////
-// RDI Builder
+// --- RDI Builder -------------------------------------------------------------
 
 #include "rdi/rdi_builder.h"
 #include "rdi/rdi_coff.h" 
@@ -117,8 +111,7 @@
 #include "rdi/rdi_coff.c"
 #include "rdi/rdi_cv.c"
 
-////////////////////////////////
-// Linker
+// --- Linker ------------------------------------------------------------------
 
 #include "lnk_error.h"
 #include "lnk_log.h"
@@ -149,11 +142,7 @@
 #include "lnk_lib.c"
 #include "lnk_debug_info.c"
 
-////////////////////////////////
-
 global read_only LNK_SectionContrib g_null_sc;
-
-////////////////////////////////
 
 internal LNK_Config *
 lnk_config_from_argcv(Arena *arena, int argc, char **argv)
