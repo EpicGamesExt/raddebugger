@@ -310,7 +310,6 @@ typedef struct LNK_Config
   Guid                        guid;
   COFF_TimeStamp              time_stamp;
   U32                         age;
-  U64                         section_virt_off;
   U64                         file_align;
   U64                         sect_align;
   U64                         stack_reserve;
