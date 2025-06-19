@@ -152,6 +152,9 @@ RDI_PROC void *rdi_section_raw_element_from_kind_idx(RDI_Parsed *rdi, RDI_Sectio
 //- info about whole parse
 RDI_PROC RDI_U64 rdi_decompressed_size_from_parsed(RDI_Parsed *rdi);
 
+//- decompression
+internal void rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size, RDI_Parsed *og_rdi);
+
 //- strings
 RDI_PROC RDI_U8 *rdi_string_from_idx(RDI_Parsed *rdi, RDI_U32 idx, RDI_U64 *len_out);
 

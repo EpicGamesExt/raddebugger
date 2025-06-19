@@ -2,6 +2,159 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ Compression/Decompression Forward-Declares
+
+#ifndef _RAD_LZB_SIMPLE_H_
+#define _RAD_LZB_SIMPLE_H_
+
+/*======================================================
+
+To encode :
+
+	Set up an rr_lzb_simple_context
+	
+	fill out m_tableSizeBits (14-16 is typical)
+	
+	allocate m_hashTable
+
+	rr_lzb_simple_context c;
+	c.m_tableSizeBits = 14;
+	c.m_hashTable = OODLE_MALLOC_ARRAY(U16,RR_ONE_SA<<c.m_tableSizeBits);
+	
+	then call _encode
+
+NOTE :
+	compressed & raw size are not included in the encoded bytes.  You must send
+	them separately.
+	
+NOTE :
+	lzb will never expand.  comp_len is <= raw_len strictly.
+	if comp_len = raw_len it indicates that the compressed bytes are just a memcpy
+	of the raw bytes.  In that case you do not need to decode.
+	
+To decode :
+
+	if comp_len is == raw_len, then the compressed bytes are just a copy of the 
+	raw bytes and you could use them directly without calling decode.
+	
+	if you call rr_lzb_simple_decode in that case, then the compressed buffer will
+	be memcpy'd to the raw buffer
+
+===============================================================*/
+
+//~ TODO(rjf): temporary glue for building this without the shared rad code:
+
+#define __RAD64REGS__
+
+#include <stdint.h>
+typedef uint8_t  U8;
+typedef uint16_t U16;
+typedef uint32_t U32;
+typedef uint64_t U64;
+typedef int8_t   S8;
+typedef int16_t  S16;
+typedef int32_t  S32;
+typedef int64_t  S64;
+
+typedef S64 SINTa;
+typedef U64 RAD_U64;
+typedef S64 RAD_S64;
+typedef U32 RAD_U32;
+typedef S32 RAD_S32;
+
+#define RADINLINE __inline
+
+#if defined(_MSC_VER)
+# define RADFORCEINLINE __forceinline
+#elif defined(__clang__) || defined(__GNUC__)
+# define RADFORCEINLINE __attribute__((always_inline))
+#else
+# error need force inline for this compiler
+#endif
+
+#if _MSC_VER
+# define RADLZB_TRAP() __debugbreak()
+#elif __clang__ || __GNUC__
+# define RADLZB_TRAP() __builtin_trap()
+#else
+# error Unknown trap intrinsic for this compiler.
+#endif
+
+#define RR_STRING_JOIN(arg1, arg2)              RR_STRING_JOIN_DELAY(arg1, arg2)
+#define RR_STRING_JOIN_DELAY(arg1, arg2)        RR_STRING_JOIN_IMMEDIATE(arg1, arg2)
+#define RR_STRING_JOIN_IMMEDIATE(arg1, arg2)    arg1 ## arg2
+
+#ifdef _MSC_VER
+#define RR_NUMBERNAME(name) RR_STRING_JOIN(name,__COUNTER__)
+#else
+#define RR_NUMBERNAME(name) RR_STRING_JOIN(name,__LINE__)
+#endif
+
+#define RR_COMPILER_ASSERT(exp)   typedef char RR_NUMBERNAME(_dummy_array) [ (exp) ? 1 : -1 ]
+
+#if defined(__clang__)
+# define Expect(expr, val) __builtin_expect((expr), (val))
+#else
+# define Expect(expr, val) (expr)
+#endif
+
+#define RAD_LIKELY(expr)            Expect(expr,1)
+#define RAD_UNLIKELY(expr)          Expect(expr,0)
+
+#define __RADLITTLEENDIAN__ 1
+#define RAD_PTRBYTES 8
+#define RR_MIN(a,b)    ( (a) < (b) ? (a) : (b) )
+#define RR_MAX(a,b)    ( (a) > (b) ? (a) : (b) )
+#define RR_ASSERT_ALWAYS(c) do{if(!(c)) {RADLZB_TRAP();}}while(0)
+#define RR_ASSERT(c) RR_ASSERT_ALWAYS(c)
+
+#define RR_PUT16_LE(ptr,val)       *((U16 *)(ptr)) = (U16)(val)
+#define RR_GET16_LE_UNALIGNED(ptr) *((const U16 *)(ptr))
+
+static RADINLINE U32
+rrCtzBytes32(U32 val)
+{
+  // Don't get fancy here. Assumes val != 0.
+  if (val & 0x000000ffu) return 0;
+  if (val & 0x0000ff00u) return 1;
+  if (val & 0x00ff0000u) return 2;
+  return 3;
+}
+
+static RADINLINE U32
+rrCtzBytes64(U64 val)
+{
+  U32 lo = (U32) val;
+  return lo ? rrCtzBytes32(lo) : 4 + rrCtzBytes32((U32) (val >> 32));
+}
+
+//~
+
+//---------------------
+
+typedef struct rr_lzb_simple_context rr_lzb_simple_context;
+struct rr_lzb_simple_context
+{
+	U16	*	m_hashTable;	// must be allocated to sizeof(U16)*(1<<m_tableSizeBits)
+	S32		m_tableSizeBits;
+};
+
+SINTa rr_lzb_simple_encode_fast(rr_lzb_simple_context * ctx,
+                                const void * raw, SINTa rawLen, void * comp);
+
+SINTa rr_lzb_simple_encode_veryfast(rr_lzb_simple_context * ctx,
+                                    const void * raw, SINTa rawLen, void * comp);
+
+//---------------------
+
+// rr_lzb_simple_decode returns the number of compressed bytes consumed ( == compLen)
+SINTa rr_lzb_simple_decode(const void * comp, SINTa compLen, void * raw, SINTa rawLen);
+
+//---------------------
+
+#endif // _RAD_LZB_SIMPLE_H_
+
+////////////////////////////////
 //~ Top-Level Parsing API
 
 RDI_PROC RDI_ParseStatus
@@ -150,6 +303,54 @@ rdi_decompressed_size_from_parsed(RDI_Parsed *rdi)
     decompressed_size += (rdi->sections[section_idx].unpacked_size - rdi->sections[section_idx].encoded_size);
   }
   return decompressed_size;
+}
+
+//- decompression
+
+internal void
+rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size, RDI_Parsed *og_rdi)
+{
+  // rjf: copy header
+  RDI_Header *src_header = (RDI_Header *)og_rdi->raw_data;
+  RDI_Header *dst_header = (RDI_Header *)decompressed_data;
+  {
+    MemoryCopy(dst_header, src_header, sizeof(RDI_Header));
+  }
+  
+  // rjf: copy & adjust sections for decompressed version
+  if(og_rdi->sections_count != 0)
+  {
+    RDI_Section *dsec_base = (RDI_Section *)(decompressed_data + dst_header->data_section_off);
+    MemoryCopy(dsec_base, (U8 *)og_rdi->raw_data + src_header->data_section_off, sizeof(RDI_Section) * og_rdi->sections_count);
+    U64 off = dst_header->data_section_off + sizeof(RDI_Section) * og_rdi->sections_count;
+    off += 7;
+    off -= off%8;
+    for(U64 idx = 0; idx < og_rdi->sections_count; idx += 1)
+    {
+      dsec_base[idx].encoding = RDI_SectionEncoding_Unpacked;
+      dsec_base[idx].off = off;
+      dsec_base[idx].encoded_size = dsec_base[idx].unpacked_size;
+      off += dsec_base[idx].unpacked_size;
+      off += 7;
+      off -= off%8;
+    }
+  }
+  
+  // rjf: decompress sections into new decompressed file buffer
+  if(og_rdi->sections_count != 0)
+  {
+    RDI_Section *src_first = og_rdi->sections;
+    RDI_Section *dst_first = (RDI_Section *)(decompressed_data + dst_header->data_section_off);
+    RDI_Section *src_opl = src_first + og_rdi->sections_count;
+    RDI_Section *dst_opl = dst_first + og_rdi->sections_count;
+    for(RDI_Section *src = src_first, *dst = dst_first;
+        src < src_opl && dst < dst_opl;
+        src += 1, dst += 1)
+    {
+      rr_lzb_simple_decode((U8*)og_rdi->raw_data + src->off, src->encoded_size,
+                           decompressed_data     + dst->off, dst->unpacked_size);
+    }
+  }
 }
 
 //- strings
@@ -866,155 +1067,6 @@ rdi_size_from_bytecode_stream(RDI_U8 *ptr, RDI_U8 *opl)
 ////////////////////////////////
 //~ Compression/Decompression Implementation
 
-#ifndef _RAD_LZB_SIMPLE_H_
-#define _RAD_LZB_SIMPLE_H_
-
-/*======================================================
-
-To encode :
-
-	Set up an rr_lzb_simple_context
-	
-	fill out m_tableSizeBits (14-16 is typical)
-	
-	allocate m_hashTable
-
-	rr_lzb_simple_context c;
-	c.m_tableSizeBits = 14;
-	c.m_hashTable = OODLE_MALLOC_ARRAY(U16,RR_ONE_SA<<c.m_tableSizeBits);
-	
-	then call _encode
-
-NOTE :
-	compressed & raw size are not included in the encoded bytes.  You must send
-	them separately.
-	
-NOTE :
-	lzb will never expand.  comp_len is <= raw_len strictly.
-	if comp_len = raw_len it indicates that the compressed bytes are just a memcpy
-	of the raw bytes.  In that case you do not need to decode.
-	
-To decode :
-
-	if comp_len is == raw_len, then the compressed bytes are just a copy of the 
-	raw bytes and you could use them directly without calling decode.
-	
-	if you call rr_lzb_simple_decode in that case, then the compressed buffer will
-	be memcpy'd to the raw buffer
-
-===============================================================*/
-
-//~ TODO(rjf): temporary glue for building this without the shared rad code:
-
-#define __RAD64REGS__
-
-#include <stdint.h>
-typedef uint8_t  U8;
-typedef uint16_t U16;
-typedef uint32_t U32;
-typedef uint64_t U64;
-typedef int8_t   S8;
-typedef int16_t  S16;
-typedef int32_t  S32;
-typedef int64_t  S64;
-
-typedef S64 SINTa;
-typedef U64 RAD_U64;
-typedef S64 RAD_S64;
-typedef U32 RAD_U32;
-typedef S32 RAD_S32;
-
-#define RADINLINE __inline
-
-#if defined(_MSC_VER)
-# define RADFORCEINLINE __forceinline
-#elif defined(__clang__) || defined(__GNUC__)
-# define RADFORCEINLINE __attribute__((always_inline))
-#else
-# error need force inline for this compiler
-#endif
-
-#if _MSC_VER
-# define RADLZB_TRAP() __debugbreak()
-#elif __clang__ || __GNUC__
-# define RADLZB_TRAP() __builtin_trap()
-#else
-# error Unknown trap intrinsic for this compiler.
-#endif
-
-#define RR_STRING_JOIN(arg1, arg2)              RR_STRING_JOIN_DELAY(arg1, arg2)
-#define RR_STRING_JOIN_DELAY(arg1, arg2)        RR_STRING_JOIN_IMMEDIATE(arg1, arg2)
-#define RR_STRING_JOIN_IMMEDIATE(arg1, arg2)    arg1 ## arg2
-
-#ifdef _MSC_VER
-#define RR_NUMBERNAME(name) RR_STRING_JOIN(name,__COUNTER__)
-#else
-#define RR_NUMBERNAME(name) RR_STRING_JOIN(name,__LINE__)
-#endif
-
-#define RR_COMPILER_ASSERT(exp)   typedef char RR_NUMBERNAME(_dummy_array) [ (exp) ? 1 : -1 ]
-
-#if defined(__clang__)
-# define Expect(expr, val) __builtin_expect((expr), (val))
-#else
-# define Expect(expr, val) (expr)
-#endif
-
-#define RAD_LIKELY(expr)            Expect(expr,1)
-#define RAD_UNLIKELY(expr)          Expect(expr,0)
-
-#define __RADLITTLEENDIAN__ 1
-#define RAD_PTRBYTES 8
-#define RR_MIN(a,b)    ( (a) < (b) ? (a) : (b) )
-#define RR_MAX(a,b)    ( (a) > (b) ? (a) : (b) )
-#define RR_ASSERT_ALWAYS(c) do{if(!(c)) {RADLZB_TRAP();}}while(0)
-#define RR_ASSERT(c) RR_ASSERT_ALWAYS(c)
-
-#define RR_PUT16_LE(ptr,val)       *((U16 *)(ptr)) = (U16)(val)
-#define RR_GET16_LE_UNALIGNED(ptr) *((const U16 *)(ptr))
-
-static RADINLINE U32
-rrCtzBytes32(U32 val)
-{
-  // Don't get fancy here. Assumes val != 0.
-  if (val & 0x000000ffu) return 0;
-  if (val & 0x0000ff00u) return 1;
-  if (val & 0x00ff0000u) return 2;
-  return 3;
-}
-
-static RADINLINE U32
-rrCtzBytes64(U64 val)
-{
-  U32 lo = (U32) val;
-  return lo ? rrCtzBytes32(lo) : 4 + rrCtzBytes32((U32) (val >> 32));
-}
-
-//~
-
-//---------------------
-
-typedef struct rr_lzb_simple_context rr_lzb_simple_context;
-struct rr_lzb_simple_context
-{
-	U16	*	m_hashTable;	// must be allocated to sizeof(U16)*(1<<m_tableSizeBits)
-	S32		m_tableSizeBits;
-};
-
-SINTa rr_lzb_simple_encode_fast(rr_lzb_simple_context * ctx,
-                                const void * raw, SINTa rawLen, void * comp);
-
-SINTa rr_lzb_simple_encode_veryfast(rr_lzb_simple_context * ctx,
-                                    const void * raw, SINTa rawLen, void * comp);
-
-//---------------------
-
-// rr_lzb_simple_decode returns the number of compressed bytes consumed ( == compLen)
-SINTa rr_lzb_simple_decode(const void * comp, SINTa compLen, void * raw, SINTa rawLen);
-
-//---------------------
-
-#endif // _RAD_LZB_SIMPLE_H_
 #include <string.h>
 
 //-------------------------------------------------
