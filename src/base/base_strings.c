@@ -1148,6 +1148,23 @@ str8_list_from_flags(Arena *arena, String8List *list,
 }
 
 ////////////////////////////////
+//~ rjf: Basic Data Structure Stringification Helpers
+
+internal String8List
+numeric_str8_list_from_data(Arena *arena, U32 radix, String8 data, U64 stride)
+{
+  String8List strs = {0};
+  U64 count = data.size/stride;
+  for EachIndex(idx, count)
+  {
+    U64 val = 0;
+    MemoryCopy(&val, data.str + idx*stride, stride);
+    str8_list_push(arena, &strs, str8_from_u64(arena, val, radix, 0, 0));
+  }
+  return strs;
+}
+
+////////////////////////////////
 //~ rjf; String Arrays
 
 internal String8Array

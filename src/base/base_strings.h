@@ -286,6 +286,11 @@ internal String8      str8_list_join(Arena *arena, String8List *list, StringJoin
 internal void         str8_list_from_flags(Arena *arena, String8List *list, U32 flags, String8 *flag_string_table, U32 flag_string_count);
 
 ////////////////////////////////
+//~ rjf: Basic Data Stringification Helpers
+
+internal String8List numeric_str8_list_from_data(Arena *arena, U32 radix, String8 data, U64 stride);
+
+////////////////////////////////
 //~ rjf; String Arrays
 
 internal String8Array str8_array_zero(void);
