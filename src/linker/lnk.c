@@ -142,8 +142,6 @@
 #include "lnk_lib.c"
 #include "lnk_debug_info.c"
 
-global read_only LNK_SectionContrib g_null_sc;
-
 internal LNK_Config *
 lnk_config_from_argcv(Arena *arena, int argc, char **argv)
 {
@@ -2333,7 +2331,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_section_contribs_task)
 
   ProfBeginV("Gather Section Contribs [%S]", obj->path);
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
-    LNK_SectionContrib *sc          = &g_null_sc;
+    LNK_SectionContrib *sc          = task->null_sc;
     COFF_SectionHeader *sect_header = &section_table[sect_idx];
     if (~sect_header->flags & COFF_SectionFlag_LnkRemove && sect_header->fsize > 0) {
       LNK_SectionContribChunk *sc_chunk = 0;
@@ -2569,7 +2567,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
       LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
       U16                 section_number;
       U32                 value;
-      if (sc == &g_null_sc) {
+      if (sc == task->null_sc) {
         section_number = LNK_REMOVED_SECTION_NUMBER_16;
         value          = max_U32;
       } else {
@@ -3048,7 +3046,7 @@ THREAD_POOL_TASK_FUNC(lnk_flag_hotpatch_contribs_task)
     if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
       COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
       LNK_SectionContrib *sc = task->sect_map[obj_idx][symbol.section_number-1];
-      if (sc != &g_null_sc) {
+      if (sc != task->null_sc) {
         sc->hotpatch = !!(section_header->flags & COFF_SectionFlag_CntCode);
       }
     }
@@ -3986,6 +3984,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   LNK_BuildImageTask task = {0};
   task.symtab           = symtab;
   task.sectab           = sectab;
+  task.null_sc          = push_array(arena->v[0], LNK_SectionContrib, 1);
   task.function_pad_min = config->function_pad_min;
   task.default_align    = coff_default_align_from_machine(config->machine);
   task.objs_count       = objs_count;

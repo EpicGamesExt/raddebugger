@@ -77,6 +77,7 @@ typedef struct
 {
   LNK_SymbolTable      *symtab;
   LNK_SectionTable     *sectab;
+  LNK_SectionContrib   *null_sc;
   U64                   function_pad_min;
   U64                   default_align;
   U64                   objs_count;
