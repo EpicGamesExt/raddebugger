@@ -64,5 +64,3 @@ dw_input_from_coff_section_table(Arena              *arena,
   
   return input;
 }
-
-
