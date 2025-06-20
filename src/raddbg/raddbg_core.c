@@ -10785,10 +10785,10 @@ rd_init(CmdLine *cmdln)
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
   rd_state->theme_path_arena = arena_alloc();
-  rd_state->user_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_user_data_string_key"));
-  rd_state->project_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_project_data_string_key"));
-  rd_state->cmdln_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_cmdln_data_string_key"));
-  rd_state->transient_cfg_string_key = hs_hash_from_data(str8_lit("raddbg_transient_data_string_key"));
+  rd_state->user_cfg_string_key      = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
+  rd_state->project_cfg_string_key   = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
+  rd_state->cmdln_cfg_string_key     = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
+  rd_state->transient_cfg_string_key = hs_key_make(hs_root_alloc(), hs_id_make(0, 0));
   for(U64 idx = 0; idx < ArrayCount(rd_state->frame_arenas); idx += 1)
   {
     rd_state->frame_arenas[idx] = arena_alloc();
@@ -11079,7 +11079,7 @@ rd_frame(void)
   {
     struct
     {
-      U128 key;
+      HS_Key key;
       String8 name;
     }
     table[] =
@@ -11092,7 +11092,9 @@ rd_frame(void)
     for EachElement(idx, table)
     {
       Arena *arena = arena_alloc();
-      String8 data = rd_string_from_cfg_tree(arena, rd_cfg_child_from_string(rd_state->root_cfg, table[idx].name));
+      String8 data = rd_string_from_cfg_tree(arena,
+                                             str8_zero(),
+                                             rd_cfg_child_from_string(rd_state->root_cfg, table[idx].name));
       hs_submit_data(table[idx].key, &arena, data);
     }
   }
@@ -12249,7 +12251,7 @@ rd_frame(void)
       {
         struct
         {
-          U128 key;
+          HS_Key key;
           String8 name;
         }
         table[] =
@@ -12262,12 +12264,13 @@ rd_frame(void)
         for EachElement(idx, table)
         {
           HS_Scope *hs_scope = hs_scope_open();
-          U128 key = table[idx].key;
+          HS_Key key = table[idx].key;
           U128 hash = hs_hash_from_key(key, 0);
           String8 data = hs_data_from_hash(hs_scope, hash);
           E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          space.u128 = key;
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
+          space.u64_0 = key.root.u64[0];
+          space.u128 = key.id.u128[0];
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size, 0);

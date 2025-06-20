@@ -570,10 +570,10 @@ struct RD_State
   F32 tooltip_animation_rate;
   
   // rjf: serialized config debug string keys
-  U128 user_cfg_string_key;
-  U128 project_cfg_string_key;
-  U128 cmdln_cfg_string_key;
-  U128 transient_cfg_string_key;
+  HS_Key user_cfg_string_key;
+  HS_Key project_cfg_string_key;
+  HS_Key cmdln_cfg_string_key;
+  HS_Key transient_cfg_string_key;
   
   // rjf: schema table
   MD_NodePtrList *schemas;
