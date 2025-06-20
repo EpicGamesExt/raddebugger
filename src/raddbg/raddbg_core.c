@@ -11294,7 +11294,7 @@ rd_frame(void)
   OS_EventList events = {0};
   if(rd_state->frame_depth == 1)
   {
-    events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0);
+    events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0 && !DEV_always_refresh);
   }
   
   //////////////////////////////
@@ -11333,7 +11333,7 @@ rd_frame(void)
   F32 target_hz = os_get_gfx_info()->default_refresh_rate;
   if(rd_state->frame_index > 32)
   {
-    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
+    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 75.f, 120.f, 144.f, 165.f, 240.f, 360.f};
     F32 best_target_hz = target_hz;
     S64 best_target_hz_frame_time_us_diff = max_S64;
     for(U64 idx = 0; idx < ArrayCount(possible_alternate_hz_targets); idx += 1)

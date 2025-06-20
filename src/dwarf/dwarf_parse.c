@@ -2324,7 +2324,7 @@ dw_read_line_file(String8       data,
     DW_LNCT     lnct      = enc_arr[enc_idx*2 + 0];
     DW_FormKind form_kind = enc_arr[enc_idx*2 + 1];
     DW_Form     form      = {0};
-    U64         bytes_read;
+    U64         bytes_read = 0;
     switch (lnct) {
       case DW_LNCT_Path: {
         bytes_read = dw_read_form(data, cursor, version, format, address_size, form_kind, max_U64, &form);

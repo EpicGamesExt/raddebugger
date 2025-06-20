@@ -44,6 +44,7 @@ D_CmdKind_Attach,
 D_CmdKind_COUNT,
 } D_CmdKind;
 
+global B32 DEV_always_refresh = 0;
 global B32 DEV_simulate_lag = 0;
 global B32 DEV_draw_ui_text_pos = 0;
 global B32 DEV_draw_ui_focus_debug = 0;
@@ -54,6 +55,7 @@ global B32 DEV_cmd_context_tooltips = 0;
 global B32 DEV_updating_indicator = 0;
 struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {
+{&DEV_always_refresh, str8_lit_comp("always_refresh")},
 {&DEV_simulate_lag, str8_lit_comp("simulate_lag")},
 {&DEV_draw_ui_text_pos, str8_lit_comp("draw_ui_text_pos")},
 {&DEV_draw_ui_focus_debug, str8_lit_comp("draw_ui_focus_debug")},

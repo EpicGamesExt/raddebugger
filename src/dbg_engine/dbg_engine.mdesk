@@ -65,6 +65,7 @@ D_CmdTable:     //               |        |              |                |     
 @table(name)
 D_DevToggleTable:
 {
+  {always_refresh}
   {simulate_lag}
   {draw_ui_text_pos}
   {draw_ui_focus_debug}
