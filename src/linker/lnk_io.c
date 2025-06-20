@@ -216,7 +216,7 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 #if OS_WINDOWS
   Temp scratch = scratch_begin(&arena, 1);
   String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
-  HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  HANDLE   file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
   if (file_handle != INVALID_HANDLE_VALUE) {
     HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
     if (mapping_handle != INVALID_HANDLE_VALUE) {
