@@ -90,6 +90,11 @@ typedef struct
       HashTable **defns;
     } gather_sects;
     struct {
+      U64                    *counts;
+      U64                    *offsets;
+      LNK_CommonBlockContrib *contribs;
+    } common_block;
+    struct {
       LNK_SectionContribChunk **chunks;
     } sort_contribs;
     struct {
