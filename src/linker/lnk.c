@@ -3033,6 +3033,45 @@ lnk_section_definition_is_before(void *raw_a, void *raw_b)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_count_common_block_contribs_task)
+{
+  LNK_BuildImageTask *task   = raw_task;
+  LNK_SymbolTable    *symtab = task->symtab;
+
+  for (LNK_SymbolHashTrieChunk *chunk = symtab->chunk_lists[LNK_SymbolScope_Defined][task_id].first; chunk != 0; chunk = chunk->next) {
+    for (U64 i = 0; i < chunk->count; i += 1) {
+      LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+      COFF_ParsedSymbol           parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+      COFF_SymbolValueInterpType  parsed_interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
+      if (parsed_interp == COFF_SymbolValueInterp_Common) {
+        task->u.common_block.counts[task_id] += 1;
+      }
+    }
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_fill_out_common_block_contribs_task)
+{
+  LNK_BuildImageTask *task   = raw_task;
+  LNK_SymbolTable    *symtab = task->symtab;
+  U64                 cursor = task->u.common_block.offsets[task_id];
+
+  for (LNK_SymbolHashTrieChunk *chunk = symtab->chunk_lists[LNK_SymbolScope_Defined][task_id].first; chunk != 0; chunk = chunk->next) {
+    for (U64 i = 0; i < chunk->count; i += 1) {
+      LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+      COFF_ParsedSymbol           parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+      COFF_SymbolValueInterpType  parsed_interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
+      if (parsed_interp == COFF_SymbolValueInterp_Common) {
+        LNK_CommonBlockContrib *contrib = &task->u.common_block.contribs[cursor++];
+        contrib->symbol                 = chunk->v[i].symbol;
+        contrib->u.size                 = parsed_symbol.value;
+      }
+    }
+  }
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_flag_hotpatch_contribs_task)
 {
   LNK_BuildImageTask *task    = raw_task;
@@ -4144,44 +4183,19 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       ProfBegin("Build Common Block");
 
       ProfBegin("Count Contribs");
-      common_block_contribs_count = 0;
-      for (U64 worker_id = 0; worker_id < tp->worker_count; worker_id += 1) {
-        for (LNK_SymbolHashTrieChunk *chunk = symtab->chunk_lists[LNK_SymbolScope_Defined][worker_id].first;
-            chunk != 0;
-            chunk = chunk->next) {
-          for (U64 i = 0; i < chunk->count; i += 1) {
-            LNK_Symbol *symbol = chunk->v[i].symbol;
-            COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-            COFF_SymbolValueInterpType parsed_interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
-            if (parsed_interp == COFF_SymbolValueInterp_Common) {
-              common_block_contribs_count += 1;
-            }
-          }
-        }
-      }
+      task.u.common_block.counts = push_array(scratch.arena, U64, tp->worker_count);
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_count_common_block_contribs_task, &task);
       ProfEnd();
 
-      ProfBegin("Gather Contribs");
-      common_block_contribs = push_array(scratch.arena, LNK_CommonBlockContrib, common_block_contribs_count);
-      {
-        U64 cursor = 0;
-        for (U64 worker_id = 0; worker_id < tp->worker_count; worker_id += 1) {
-          for (LNK_SymbolHashTrieChunk *chunk = symtab->chunk_lists[LNK_SymbolScope_Defined][worker_id].first;
-              chunk != 0;
-              chunk = chunk->next) {
-            for (U64 i = 0; i < chunk->count; i += 1) {
-              LNK_Symbol *symbol = chunk->v[i].symbol;
-              COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-              COFF_SymbolValueInterpType parsed_interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
-              if (parsed_interp == COFF_SymbolValueInterp_Common) {
-                LNK_CommonBlockContrib *contrib = &common_block_contribs[cursor++];
-                contrib->symbol = chunk->v[i].symbol;
-                contrib->u.size = parsed_symbol.value;
-              }
-            }
-          }
-        }
-      }
+      ProfBegin("Push Contribs");
+      common_block_contribs_count = sum_array_u64(tp->worker_count, task.u.common_block.counts);
+      common_block_contribs       = push_array(scratch.arena, LNK_CommonBlockContrib, common_block_contribs_count);
+      ProfEnd();
+
+      ProfBegin("Fill Out Contribs [%Iu64]", common_block_contribs_count);
+      task.u.common_block.offsets  = offsets_from_counts_array_u64(scratch.arena, task.u.common_block.counts, tp->worker_count);
+      task.u.common_block.contribs = common_block_contribs;
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_out_common_block_contribs_task, &task);
       ProfEnd();
 
       if (common_block_contribs_count) {
