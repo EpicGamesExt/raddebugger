@@ -224,6 +224,8 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
       GetFileSizeEx(file_handle, &file_size);
       void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
       if (file_data) {
+        // asan crashes for an unknown reason on memory-mapped files, even though the allocation is perfectly fine
+        AsanUnpoisonMemoryRegion(file_data, file_size.QuadPart);
         task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
       }
       CloseHandle(mapping_handle);
