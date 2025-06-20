@@ -517,14 +517,14 @@ r_window_equip(OS_Handle handle)
     {
       swapchain_desc.Width              = 0; // NOTE(rjf): use window width
       swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
       swapchain_desc.Stereo             = FALSE;
       swapchain_desc.SampleDesc.Count   = 1;
       swapchain_desc.SampleDesc.Quality = 0;
       swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       swapchain_desc.BufferCount        = 2;
       swapchain_desc.Scaling            = DXGI_SCALING_STRETCH;
-      swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_DISCARD;
+      swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
       swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
       swapchain_desc.Flags              = 0;
     }
@@ -540,8 +540,11 @@ r_window_equip(OS_Handle handle)
     r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
     
     //- rjf: create framebuffer & view
+    D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
+    framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
     window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
-    r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, 0, &window->framebuffer_rtv);
+    r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
     
     result = r_d3d11_handle_from_window(window);
   }
@@ -886,7 +889,10 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
       wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);
       wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
       wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
-      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, 0, &wnd->framebuffer_rtv);
+      D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
+      framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+      framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, &framebuffer_rtv_desc, &wnd->framebuffer_rtv);
       
       // rjf: create stage color targets
       {
