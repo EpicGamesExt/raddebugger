@@ -757,6 +757,17 @@ struct CTRL_TCTX
 };
 
 ////////////////////////////////
+//~ rjf: Module Requirement Cache Types
+
+typedef struct CTRL_ModuleReqCacheNode CTRL_ModuleReqCacheNode;
+struct CTRL_ModuleReqCacheNode
+{
+  CTRL_ModuleReqCacheNode *next;
+  CTRL_Handle module;
+  B32 required;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -806,6 +817,7 @@ struct CTRL_State
   OS_Handle ctrl_thread_entity_ctx_rw_mutex;
   CTRL_EntityCtxRWStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
+  Arena *ctrl_thread_msg_process_arena;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
   DMN_EventNode *last_dmn_event_node;
@@ -816,6 +828,10 @@ struct CTRL_State
   U64 process_counter;
   Arena *dbg_dir_arena;
   CTRL_DbgDirNode *dbg_dir_root;
+  U64 module_req_cache_slots_count;
+  CTRL_ModuleReqCacheNode **module_req_cache_slots;
+  String8List msg_user_bp_touched_files;
+  String8List msg_user_bp_touched_symbols;
   
   // rjf: user -> memstream ring buffer
   U64 u2ms_ring_size;

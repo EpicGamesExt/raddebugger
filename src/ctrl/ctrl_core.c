@@ -1552,6 +1552,7 @@ ctrl_init(void)
   ctrl_state->ctrl_thread_entity_ctx_rw_mutex = os_rw_mutex_alloc();
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_ctx_rw_store_alloc();
   ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
+  ctrl_state->ctrl_thread_msg_process_arena = arena_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
   ctrl_state->dbg_dir_arena = arena_alloc();
@@ -3708,9 +3709,75 @@ ctrl_thread__entry_point(void *p)
           log_infof("user2ctrl_msg:{kind:\"%S\"}\n", ctrl_string_from_msg_kind(msg->kind));
         }
         
-        //- rjf: unpack per-message parameterizations & store
+        //- rjf: reset per-message state
+        arena_clear(ctrl_state->ctrl_thread_msg_process_arena);
+        ctrl_state->module_req_cache_slots_count = 1024;
+        ctrl_state->module_req_cache_slots = push_array(ctrl_state->ctrl_thread_msg_process_arena, CTRL_ModuleReqCacheNode *, ctrl_state->module_req_cache_slots_count);
+        MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_files);
+        MemoryZeroStruct(&ctrl_state->msg_user_bp_touched_symbols);
+        MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+        
+        //- rjf: gather all touched symbols by user breakpoints
         {
-          MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+          Temp scratch = scratch_begin(0, 0);
+          for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
+          {
+            if(n->v.kind != CTRL_UserBreakpointKind_Expression)
+            {
+              continue;
+            }
+            E_Parse addr_parse = e_parse_from_string(n->v.string);
+            E_Parse cnd_parse = e_parse_from_string(n->v.condition);
+            E_Expr *exprs[] = {addr_parse.expr, cnd_parse.expr};
+            for EachElement(idx, exprs)
+            {
+              typedef struct ExprWalkTask ExprWalkTask;
+              struct ExprWalkTask
+              {
+                ExprWalkTask *next;
+                E_Expr *expr;
+              };
+              ExprWalkTask start_task = {0, exprs[idx]};
+              ExprWalkTask *first_task = &start_task;
+              for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+              {
+                E_Expr *expr = t->expr;
+                if(expr->ref != &e_expr_nil)
+                {
+                  expr = expr->ref;
+                }
+                if(expr->kind == E_ExprKind_LeafIdentifier)
+                {
+                  str8_list_push(ctrl_state->ctrl_thread_msg_process_arena, &ctrl_state->msg_user_bp_touched_symbols, expr->string);
+                }
+                if(expr->next != &e_expr_nil)
+                {
+                  ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                  task->expr = expr->next;
+                  task->next = t->next;
+                  t->next = task;
+                }
+                if(expr->first != &e_expr_nil)
+                {
+                  ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+                  task->expr = expr->first;
+                  task->next = t->next;
+                  t->next = task;
+                }
+              }
+            }
+          }
+          scratch_end(scratch);
+        }
+        
+        //- rjf: gather all touched files by user breakpoints
+        for(CTRL_UserBreakpointNode *n = msg->user_bps.first; n != 0; n = n->next)
+        {
+          if(n->v.kind != CTRL_UserBreakpointKind_FileNameAndLineColNumber)
+          {
+            continue;
+          }
+          str8_list_push(ctrl_state->ctrl_thread_msg_process_arena, &ctrl_state->msg_user_bp_touched_files, n->v.string);
         }
         
         //- rjf: process message
@@ -5018,117 +5085,74 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           B32 rdi_is_necessary = 1;
           if(rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
           {
-            OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, dbgi_key.path);
+            // rjf: find cached result
+            U64 hash = ctrl_hash_from_handle(mod->handle);
+            U64 slot_idx = hash%ctrl_state->module_req_cache_slots_count;
+            CTRL_ModuleReqCacheNode *slot = ctrl_state->module_req_cache_slots[slot_idx];
+            CTRL_ModuleReqCacheNode *node = 0;
+            for(CTRL_ModuleReqCacheNode *n = slot; slot != 0; slot = slot->next)
             {
-              //- rjf: determine if file is PDB
-              B32 file_is_pdb = 0;
-              if(!file_is_pdb)
+              if(ctrl_handle_match(n->module, mod->handle))
               {
-                U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
-                os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
-                if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
-                {
-                  file_is_pdb = 1;
-                }
+                node = n;
+                break;
               }
-              if(!file_is_pdb)
+            }
+            
+            // rjf: cached? -> take cached result
+            if(node != 0)
+            {
+              rdi_is_necessary = node->required;
+            }
+            
+            // rjf: not cached -> compute & store
+            else ProfScope("cache miss")
+            {
+              OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, dbgi_key.path);
               {
-                U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
-                os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
-                if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
+                //- rjf: determine if file is PDB
+                B32 file_is_pdb = 0;
+                if(!file_is_pdb)
                 {
-                  file_is_pdb = 1;
-                }
-              }
-              
-              //- rjf: file is PDB -> do thin parse & lookup of all breakpoint files/symbols.
-              // if any are found in the PDB, then this RDI is necessary.
-              if(file_is_pdb)
-              {
-                Temp scratch = scratch_begin(&arena, 1);
-                
-                // rjf: gather breakpoint-referenced symbols
-                String8List symbols = {0};
-                {
-                  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
+                  U8 msf70_magic_maybe[sizeof(msf_msf70_magic)] = {0};
+                  os_file_read(file, r1u64(0, sizeof(msf70_magic_maybe)), msf70_magic_maybe);
+                  if(MemoryMatch(msf70_magic_maybe, msf_msf70_magic, sizeof(msf70_magic_maybe)))
                   {
-                    if(n->v.kind != CTRL_UserBreakpointKind_Expression)
-                    {
-                      continue;
-                    }
-                    E_Parse addr_parse = e_parse_from_string(n->v.string);
-                    E_Parse cnd_parse = e_parse_from_string(n->v.condition);
-                    E_Expr *exprs[] = {addr_parse.expr, cnd_parse.expr};
-                    for EachElement(idx, exprs)
-                    {
-                      typedef struct ExprWalkTask ExprWalkTask;
-                      struct ExprWalkTask
-                      {
-                        ExprWalkTask *next;
-                        E_Expr *expr;
-                      };
-                      ExprWalkTask start_task = {0, exprs[idx]};
-                      ExprWalkTask *first_task = &start_task;
-                      for(ExprWalkTask *t = first_task; t != 0; t = t->next)
-                      {
-                        E_Expr *expr = t->expr;
-                        if(expr->ref != &e_expr_nil)
-                        {
-                          expr = expr->ref;
-                        }
-                        if(expr->kind == E_ExprKind_LeafIdentifier)
-                        {
-                          str8_list_push(scratch.arena, &symbols, expr->string);
-                        }
-                        if(expr->next != &e_expr_nil)
-                        {
-                          ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
-                          task->expr = expr->next;
-                          task->next = t->next;
-                          t->next = task;
-                        }
-                        if(expr->first != &e_expr_nil)
-                        {
-                          ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
-                          task->expr = expr->first;
-                          task->next = t->next;
-                          t->next = task;
-                        }
-                      }
-                    }
+                    file_is_pdb = 1;
+                  }
+                }
+                if(!file_is_pdb)
+                {
+                  U8 msf20_magic_maybe[sizeof(msf_msf20_magic)] = {0};
+                  os_file_read(file, r1u64(0, sizeof(msf20_magic_maybe)), msf20_magic_maybe);
+                  if(MemoryMatch(msf20_magic_maybe, msf_msf20_magic, sizeof(msf20_magic_maybe)))
+                  {
+                    file_is_pdb = 1;
                   }
                 }
                 
-                // rjf: gather breakpoint-referenced file paths
-                String8List files = {0};
-                {
-                  for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
-                  {
-                    if(n->v.kind != CTRL_UserBreakpointKind_FileNameAndLineColNumber)
-                    {
-                      continue;
-                    }
-                    str8_list_push(scratch.arena, &files, n->v.string);
-                  }
-                }
-                
-                // rjf: check file
+                //- rjf: file is PDB -> do thin parse & lookup of all breakpoint files/symbols.
+                // if any are found in the PDB, then this RDI is necessary.
+                if(file_is_pdb)
                 {
                   FileProperties props = os_properties_from_file(file);
                   OS_Handle map = os_file_map_open(OS_AccessFlag_Read, file);
                   void *file_base = os_file_map_view_open(map, OS_AccessFlag_Read, r1u64(0, props.size));
                   String8 file_data = str8(file_base, props.size);
                   {
-                    rdi_is_necessary = pdb_has_symbol_or_file_ref(file_data, symbols, files);
+                    rdi_is_necessary = pdb_has_symbol_or_file_ref(file_data, ctrl_state->msg_user_bp_touched_symbols, ctrl_state->msg_user_bp_touched_files);
                   }
                   os_file_map_view_close(map, file_base, r1u64(0, props.size));
                   os_file_map_close(map);
                 }
-                
-                scratch_end(scratch);
               }
+              os_file_close(file);
+              node = push_array(ctrl_state->ctrl_thread_msg_process_arena, CTRL_ModuleReqCacheNode, 1);
+              node->next = slot;
+              ctrl_state->module_req_cache_slots[slot_idx] = node;
+              node->module = mod->handle;
+              node->required = rdi_is_necessary;
             }
-            os_file_close(file);
           }
           
           //- rjf: if this RDI is necessary, but we do not have it => wait for it forever
