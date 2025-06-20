@@ -523,7 +523,7 @@ r_window_equip(OS_Handle handle)
       swapchain_desc.SampleDesc.Quality = 0;
       swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       swapchain_desc.BufferCount        = 2;
-      swapchain_desc.Scaling            = DXGI_SCALING_STRETCH;
+      swapchain_desc.Scaling            = DXGI_SCALING_NONE;
       swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
       swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
       swapchain_desc.Flags              = 0;
