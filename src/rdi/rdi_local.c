@@ -555,16 +555,16 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   {
     U64 count = 0;
     RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
-    dumpf("  // %-16s %-16s %-12s %-12s %-12s %-12s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
+    dumpf("  // %-16s %-16s %-12s %-12s %-12s %s\n", "name", "flags", "voff_first", "voff_opl", "foff_first", "foff_opl");
     for EachIndex(idx, count)
     {
       Temp scratch = scratch_begin(&arena, 1);
       RDI_BinarySection *bin_section = &v[idx];
       String8 name = str8_from_rdi_string_idx(rdi, bin_section->name_string_idx);
       String8 flags = rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags);
-      dumpf("  {  %-16.*s %-16.*s 0x%-10I64x 0x%-10I64x 0x%-10I64x 0x%-10I64x  } // binary_section[%I64u]\n", 
-            str8_varg(name),
-            str8_varg(flags),
+      dumpf("  {  %-16S %-16S 0x%-10I64x 0x%-10I64x 0x%-10I64x 0x%-10I64x  } // binary_section[%I64u]\n", 
+            push_str8f(scratch.arena, "'%S'", name),
+            push_str8f(scratch.arena, "`%S`", flags),
             bin_section->voff_first,
             bin_section->voff_opl,
             bin_section->foff_first,
@@ -577,7 +577,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //////////////////////////////
   //- rjf: dump file paths
   //
-  DumpSubset(FilePaths)
+  DumpSubset(FilePaths) DeferLoop(dumpf("file_path_tree:\n{\n"), dumpf("}\n"))
   {
     U64 count = 0;
     RDI_FilePathNode *v = rdi_table_from_name(rdi, FilePathNodes, &count);
@@ -586,23 +586,28 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     {
       RDI_FilePathNode *root = &v[idx];
       if(root->parent_path_node != 0) { continue; }
-      S64 depth = 0;
+      S64 depth = 1;
       for(RDI_FilePathNode *n = root, *rec_next = nil; n != nil; n = rec_next)
       {
         // rjf: dump
         if(n->source_file_idx == 0)
         {
-          dumpf("%.*s[%I64u] '%S'\n", depth*2, indent.str, (U64)(n - v), str8_from_rdi_string_idx(rdi, n->name_string_idx));
+          dumpf("%.*s'%S'%s // file_path_node[%I64u]\n",
+                depth*2, indent.str,
+                str8_from_rdi_string_idx(rdi, n->name_string_idx),
+                n->first_child ? ":" : "",
+                (U64)(n - v));
         }
         else
         {
-          dumpf("%.*s[%I64u] '%S': source_file=%u\n", depth*2, indent.str, (U64)(n - v), str8_from_rdi_string_idx(rdi, n->name_string_idx), n->source_file_idx);
+          dumpf("%.*s'%S': source_file: %u // file_path_node[%I64u]\n", depth*2, indent.str, str8_from_rdi_string_idx(rdi, n->name_string_idx), n->source_file_idx, (U64)(n - v));
         }
         
         // rjf: find next node
         rec_next = nil;
         if(n->first_child)
         {
+          dumpf("%.*s{\n", depth*2, indent.str);
           rec_next = rdi_element_from_name_idx(rdi, FilePathNodes, n->first_child);
           depth += 1;
         }
@@ -615,6 +620,7 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
             rec_next = rdi_element_from_name_idx(rdi, FilePathNodes, p->next_sibling);
             break;
           }
+          dumpf("%.*s}\n", (depth-1)*2, indent.str);
         }
       }
     }
@@ -623,25 +629,25 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //////////////////////////////
   //- rjf: dump source files
   //
-  DumpSubset(SourceFiles)
+  DumpSubset(SourceFiles) DeferLoop(dumpf("source_files:\n{\n"), dumpf("}\n"))
   {
-    U64             source_file_count = 0;
-    RDI_SourceFile *source_file_array = rdi_table_from_name(rdi, SourceFiles, &source_file_count);
-    for(U64 i = 0; i < source_file_count; ++i)
+    U64 count = 0;
+    RDI_SourceFile *v = rdi_table_from_name(rdi, SourceFiles, &count);
+    for EachIndex(idx, count)
     {
-      RDI_SourceFile *source_file = &source_file_array[i];
-      dumpf("source_file[%4llu] = { file_path_node_idx = %4u, source_line_map = %4u, path = '%S' }\n",
-            i,
+      RDI_SourceFile *source_file = &v[idx];
+      dumpf("  { file_path_node_idx: %4u, source_line_map: %4u, path: %-192S } // source_file[%I64u]\n",
             source_file->file_path_node_idx,
             source_file->source_line_map_idx,
-            str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
+            push_str8f(arena, "'%S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx)),
+            idx);
     }
   }
   
   //////////////////////////////
   //- rjf: dump units
   //
-  DumpSubset(Units)
+  DumpSubset(Units) DeferLoop(dumpf("units:\n{"), dumpf("}\n"))
   {
     U64 count = 0;
     RDI_Unit *v = rdi_table_from_name(rdi, Units, &count);
@@ -649,15 +655,16 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
     {
       RDI_Unit *unit = &v[idx];
       Temp scratch = scratch_begin(&arena, 1);
-      dumpf("unit[%I64u]:\n", idx);
-      dumpf("  unit_name        ='%S'\n", str8_from_rdi_string_idx(rdi, unit->unit_name_string_idx));
-      dumpf("  compiler_name    ='%S'\n", str8_from_rdi_string_idx(rdi, unit->compiler_name_string_idx));
-      dumpf("  source_file_path =%u\n",   unit->source_file_path_node);
-      dumpf("  object_file_path =%u\n",   unit->object_file_path_node);
-      dumpf("  archive_file_path=%u\n",   unit->archive_file_path_node);
-      dumpf("  build_path       =%u\n",   unit->build_path_node);
-      dumpf("  language         =%S\n",   rdi_string_from_language(scratch.arena, unit->language));
-      dumpf("  line_table_idx   =%u\n",   unit->line_table_idx);
+      dumpf("\n  // unit[%I64u]\n  {\n", idx);
+      dumpf("    unit_name:         '%S'\n", str8_from_rdi_string_idx(rdi, unit->unit_name_string_idx));
+      dumpf("    compiler_name:     '%S'\n", str8_from_rdi_string_idx(rdi, unit->compiler_name_string_idx));
+      dumpf("    source_file_path:  %u\n",   unit->source_file_path_node);
+      dumpf("    object_file_path:  %u\n",   unit->object_file_path_node);
+      dumpf("    archive_file_path: %u\n",   unit->archive_file_path_node);
+      dumpf("    build_path:        %u\n",   unit->build_path_node);
+      dumpf("    language:          %S\n",   rdi_string_from_language(scratch.arena, unit->language));
+      dumpf("    line_table_idx:    %u\n",   unit->line_table_idx);
+      dumpf("  }\n");
       scratch_end(scratch);
     }
   }
@@ -665,13 +672,13 @@ rdi_dump_list_from_parsed(Arena *arena, RDI_Parsed *rdi, RDI_DumpSubsetFlags fla
   //////////////////////////////
   //- rjf: dump unit vmap
   //
-  DumpSubset(UnitVMap)
+  DumpSubset(UnitVMap) DeferLoop(dumpf("unit_vmap:\n{\n"), dumpf("}\n"))
   {
     U64 count = 0;
     RDI_VMapEntry *v = rdi_table_from_name(rdi, UnitVMap, &count);
     for EachIndex(idx, count)
     {
-      dumpf("%I64x -> #%I64u\n", v[idx].voff, v[idx].idx);
+      dumpf("  {0x%I64x => %I64u}\n", v[idx].voff, v[idx].idx);
     }
   }
   

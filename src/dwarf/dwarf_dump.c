@@ -1874,11 +1874,11 @@ dw_dump_list_from_sections(Arena *arena, DW_Input *input, Arch arch, DW_DumpSubs
       // rjf: log file table
       DeferLoop(dumpf("  file_table:\n  {\n"), dumpf("  }\n\n"))
       {
-        dumpf("// %-4s %-8s %-8s %-33s %-8s %-8s\n", "no.", "dir_idx", "time", "md5", "size", "name");
+        dumpf("  // %-4s %-8s %-8s %-33s %-8s %-8s\n", "no.", "dir_idx", "time", "md5", "size", "name");
         for EachIndex(file_idx, line_vm.file_table.count)
         {
           DW_LineFile *file = &line_vm.file_table.v[file_idx];
-          dumpf("{  %-4llu %-8llu %-8llu %016llx-%016llx %-8llu %S  }\n",
+          dumpf("  {  %-4llu %-8llu %-8llu %016llx-%016llx %-8llu %S  }\n",
                 file_idx,
                 file->dir_idx,
                 file->modify_time,
