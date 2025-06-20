@@ -18,7 +18,7 @@ pe_name_from_export_parse(PE_ExportParse *exp)
 internal U16
 pe_hint_or_ordinal_from_export_parse(PE_ExportParse *exp)
 {
-  U16 hint_or_ordinal;
+  U16 hint_or_ordinal = max_U16;
   if (exp->import_by == COFF_ImportBy_Ordinal) {
     hint_or_ordinal = exp->ordinal;
   } else if (exp->import_by == COFF_ImportBy_Name) {
