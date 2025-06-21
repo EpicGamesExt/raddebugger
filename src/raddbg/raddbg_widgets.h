@@ -135,7 +135,7 @@ struct RD_CodeSliceSignal
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Title Strings
 
-internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal DR_FStrList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, B32 include_extras);
 internal DR_FStrList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, B32 include_extras);
 internal DR_FStrList rd_title_fstrs_from_code_name(Arena *arena, String8 code_name);
 internal DR_FStrList rd_title_fstrs_from_file_path(Arena *arena, String8 file_path);

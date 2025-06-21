@@ -6366,7 +6366,7 @@ rd_window_frame(void)
         {
           // rjf: unpack
           RD_Cfg *cfg = rd_cfg_from_id(regs->cfg);
-          DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg);
+          DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg, 0);
           
           // rjf: title
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(5, 1))
@@ -6534,7 +6534,7 @@ rd_window_frame(void)
             {
               UI_Row UI_PrefWidth(ui_text_dim(10, 1))
               {
-                DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, view);
+                DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, view, 0);
                 UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
                 ui_box_equip_display_fstrs(name_box, &fstrs);
               }
@@ -8956,7 +8956,7 @@ rd_window_frame(void)
               {
                 TabTask *t = push_array(scratch.arena, TabTask, 1);
                 t->tab = tab;
-                t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab);
+                t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab, 0);
                 F32 tab_width_target = dr_dim_from_fstrs(ui_top_tab_size(), &t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
                 tab_width_target = Min(max_tab_width_px, tab_width_target);
                 t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
@@ -15500,6 +15500,8 @@ rd_frame(void)
             rd_cfg_new_replacef(enabled_root, "0");
           }break;
           case RD_CmdKind_RemoveCfg:
+          case RD_CmdKind_RemoveBreakpoint:
+          case RD_CmdKind_RemoveTarget:
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
             rd_cfg_release(cfg);
