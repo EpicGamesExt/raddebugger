@@ -765,7 +765,8 @@ entry_point(CmdLine *cmd_line)
       
       //- rjf: got resources -> write message
       B32 wrote_message = 0;
-      if(ipc_sender2main_shared_memory_base != 0 &&
+      if(dst_pid != 0 &&
+         ipc_sender2main_shared_memory_base != 0 &&
          os_semaphore_take(ipc_sender2main_lock_semaphore, max_U64))
       {
         wrote_message = 1;

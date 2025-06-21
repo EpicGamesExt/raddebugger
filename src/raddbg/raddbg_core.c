@@ -10596,18 +10596,12 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
   {
     //- rjf: basic string cases
     default:
-    {
-      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
-    }break;
     case RD_RegSlot_String:
     case RD_RegSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(string);
-      if(pair.pt.line == 0 || slot == RD_RegSlot_String)
-      {
-        rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
-      }
-      else
+      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
+      if(pair.pt.line != 0)
       {
         rd_regs()->file_path = push_str8_copy(rd_frame_arena(), pair.string);
         rd_regs()->cursor = pair.pt;
@@ -15640,6 +15634,15 @@ rd_frame(void)
             for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
             {
               rd_cfg_release(n->v);
+            }
+          }break;
+          case RD_CmdKind_ListBreakpoints:
+          {
+            RD_CfgList list = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+            for(RD_CfgNode *n = list.first; n != 0; n = n->next)
+            {
+              String8 string = rd_string_from_cfg_tree(rd_state->cmd_output_arena, str8_zero(), n->v);
+              str8_list_push(rd_state->cmd_output_arena, &rd_state->cmd_outputs, string);
             }
           }break;
           
