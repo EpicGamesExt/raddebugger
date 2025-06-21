@@ -5,7 +5,7 @@
 //~ rjf: UI Widgets: Fancy Title Strings
 
 internal DR_FStrList
-rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
+rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, B32 include_extras)
 {
   DR_FStrList result = {0};
   {
@@ -288,7 +288,12 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg)
     //- rjf: push text location
     if(loc.file_path.size != 0)
     {
-      String8 location_string = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc.file_path), loc.pt.line, loc.pt.column);
+      String8 path = loc.file_path;
+      if(!include_extras)
+      {
+        path = str8_skip_last_slash(loc.file_path);
+      }
+      String8 location_string = push_str8f(arena, "%S:%I64d:%I64d", path, loc.pt.line, loc.pt.column);
       dr_fstrs_push_new(arena, &result, &params, location_string);
       dr_fstrs_push_new(arena, &result, &params, str8_lit("  "));
       start_secondary();

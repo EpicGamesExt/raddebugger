@@ -783,7 +783,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice)
       for EachIndex(idx, ext->cfgs.count)
       {
         RD_Cfg *cfg = ext->cfgs.v[idx];
-        DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg);
+        DR_FStrList fstrs = rd_title_fstrs_from_cfg(scratch.arena, cfg, 1);
         String8 string = dr_string_from_fstrs(scratch.arena, &fstrs);
         FuzzyMatchRangeList fuzzy_matches = fuzzy_match_find(scratch.arena, filter, string);
         if(fuzzy_matches.count == fuzzy_matches.needle_part_count)
@@ -839,7 +839,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_query)
       MemoryZeroStruct(&children__filtered);
       for(RD_CfgNode *n = children.first; n != 0; n = n->next)
       {
-        DR_FStrList cfg_fstrs = rd_title_fstrs_from_cfg(scratch.arena, n->v);
+        DR_FStrList cfg_fstrs = rd_title_fstrs_from_cfg(scratch.arena, n->v, 1);
         String8 cfg_string = dr_string_from_fstrs(scratch.arena, &cfg_fstrs);
         FuzzyMatchRangeList ranges = fuzzy_match_find(scratch.arena, filter, cfg_string);
         if(ranges.count == ranges.needle_part_count)

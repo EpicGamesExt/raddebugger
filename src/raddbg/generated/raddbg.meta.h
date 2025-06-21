@@ -244,6 +244,7 @@ RD_CmdKind_AddBreakpoint,
 RD_CmdKind_AddAddressBreakpoint,
 RD_CmdKind_AddFunctionBreakpoint,
 RD_CmdKind_ToggleBreakpoint,
+RD_CmdKind_RemoveBreakpoint,
 RD_CmdKind_EnableBreakpoint,
 RD_CmdKind_DisableBreakpoint,
 RD_CmdKind_ClearBreakpoints,
@@ -262,6 +263,7 @@ RD_CmdKind_AddTarget,
 RD_CmdKind_SelectTarget,
 RD_CmdKind_EnableTarget,
 RD_CmdKind_DisableTarget,
+RD_CmdKind_RemoveTarget,
 RD_CmdKind_RegisterAsJITDebugger,
 RD_CmdKind_FindCodeLocation,
 RD_CmdKind_Search,
@@ -585,7 +587,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[346];
+extern RD_VocabInfo rd_vocab_info_table[348];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern String8 rd_reg_slot_code_name_table[47];
 extern Rng1U64 rd_reg_slot_range_table[47];

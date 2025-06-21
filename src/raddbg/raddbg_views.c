@@ -1642,7 +1642,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       //- rjf: cfg evaluation -> button for cfg
       else if(result.cfg != &rd_nil_cfg)
       {
-        result.expr_fstrs = rd_title_fstrs_from_cfg(arena, result.cfg);
+        result.expr_fstrs = rd_title_fstrs_from_cfg(arena, result.cfg, 0);
         result.flags |= RD_WatchCellFlag_Button;
       }
       
