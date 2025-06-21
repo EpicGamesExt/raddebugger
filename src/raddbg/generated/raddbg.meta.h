@@ -276,6 +276,8 @@ RD_CmdKind_PushQuery,
 RD_CmdKind_CompleteQuery,
 RD_CmdKind_CancelQuery,
 RD_CmdKind_UpdateQuery,
+RD_CmdKind_OpenEventBuffer,
+RD_CmdKind_CloseEventBuffer,
 RD_CmdKind_ToggleDevMenu,
 RD_CmdKind_LogMarker,
 RD_CmdKind_OpenWatch,
@@ -588,7 +590,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[349];
+extern RD_VocabInfo rd_vocab_info_table[351];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
 extern String8 rd_reg_slot_code_name_table[47];
 extern Rng1U64 rd_reg_slot_range_table[47];

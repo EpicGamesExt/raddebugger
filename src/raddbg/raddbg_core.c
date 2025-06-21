@@ -15453,6 +15453,14 @@ rd_frame(void)
             MemoryCopy(vs->query_buffer, rd_regs()->string.str, vs->query_string_size);
           }break;
           
+          //- rjf: event buffers
+          case RD_CmdKind_OpenEventBuffer:
+          {
+            RD_Cfg *transient = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
+            RD_Cfg *buffer = rd_cfg_new(transient, str8_lit("event_buffer"));
+            str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "$%I64x", buffer->id);
+          }break;
+          
           //- rjf: developer commands
           case RD_CmdKind_ToggleDevMenu:
           {
@@ -15496,6 +15504,7 @@ rd_frame(void)
           case RD_CmdKind_RemoveCfg:
           case RD_CmdKind_RemoveBreakpoint:
           case RD_CmdKind_RemoveTarget:
+          case RD_CmdKind_CloseEventBuffer:
           {
             RD_Cfg *cfg = rd_cfg_from_id(rd_regs()->cfg);
             rd_cfg_release(cfg);
