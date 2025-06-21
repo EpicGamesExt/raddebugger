@@ -60,7 +60,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[345] =
+RD_VocabInfo rd_vocab_info_table[346] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -205,6 +205,7 @@ RD_VocabInfo rd_vocab_info_table[345] =
 {str8_lit_comp("exit"), str8_lit_comp(""), str8_lit_comp("Exit"), str8_lit_comp(""), RD_IconKind_X},
 {str8_lit_comp("open_palette"), str8_lit_comp(""), str8_lit_comp("Open Palette"), str8_lit_comp(""), RD_IconKind_List},
 {str8_lit_comp("run_command"), str8_lit_comp(""), str8_lit_comp("Run Command"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("run_ext_driver_text_command"), str8_lit_comp(""), str8_lit_comp("Run External Driver Text Command"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("os_event"), str8_lit_comp(""), str8_lit_comp("OS Event"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("select_thread"), str8_lit_comp(""), str8_lit_comp("Select Thread"), str8_lit_comp(""), RD_IconKind_Thread},
 {str8_lit_comp("select_unwind"), str8_lit_comp(""), str8_lit_comp("Select Unwind"), str8_lit_comp(""), RD_IconKind_Null},
@@ -437,7 +438,58 @@ RD_NameSchemaInfo rd_name_schema_info_table[24] =
 {str8_lit_comp("thread"), str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':query}")},
 };
 
-Rng1U64 rd_reg_slot_range_table[48] =
+String8 rd_reg_slot_code_name_table[47] =
+{
+{0},
+str8_lit_comp("machine"),
+str8_lit_comp("module"),
+str8_lit_comp("process"),
+str8_lit_comp("thread"),
+str8_lit_comp("ctrl_entity"),
+str8_lit_comp("window"),
+str8_lit_comp("panel"),
+str8_lit_comp("tab"),
+str8_lit_comp("view"),
+str8_lit_comp("prev_tab"),
+str8_lit_comp("dst_panel"),
+str8_lit_comp("cfg"),
+str8_lit_comp("cfg_list"),
+str8_lit_comp("eval_space"),
+str8_lit_comp("unwind_count"),
+str8_lit_comp("inline_depth"),
+str8_lit_comp("file_path"),
+str8_lit_comp("cursor"),
+str8_lit_comp("mark"),
+str8_lit_comp("text_key"),
+str8_lit_comp("lang_kind"),
+str8_lit_comp("lines"),
+str8_lit_comp("dbgi_key"),
+str8_lit_comp("vaddr"),
+str8_lit_comp("voff"),
+str8_lit_comp("vaddr_range"),
+str8_lit_comp("voff_range"),
+str8_lit_comp("expr"),
+str8_lit_comp("ui_key"),
+str8_lit_comp("src_ui_key"),
+str8_lit_comp("off_px"),
+str8_lit_comp("reg_slot"),
+str8_lit_comp("pid"),
+str8_lit_comp("force_confirm"),
+str8_lit_comp("force_focus"),
+str8_lit_comp("prefer_disasm"),
+str8_lit_comp("no_rich_tooltip"),
+str8_lit_comp("do_implicit_root"),
+str8_lit_comp("do_lister"),
+str8_lit_comp("do_big_rows"),
+str8_lit_comp("all_windows"),
+str8_lit_comp("non_graphical"),
+str8_lit_comp("dir2"),
+str8_lit_comp("string"),
+str8_lit_comp("cmd_name"),
+str8_lit_comp("os_event"),
+};
+
+Rng1U64 rd_reg_slot_range_table[47] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -485,11 +537,10 @@ Rng1U64 rd_reg_slot_range_table[48] =
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},
-{OffsetOf(RD_Regs, params_tree), OffsetOf(RD_Regs, params_tree) + sizeof(MD_Node *)},
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[238] =
+RD_CmdKindInfo rd_cmd_kind_info_table[239] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets"), str8_lit_comp(""), CTRL_EntityKind_Null}},
@@ -527,6 +578,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[238] =
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("open_palette"), str8_lit_comp("Opens the palette."), str8_lit_comp("help,cmd,lister"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("run_command"), str8_lit_comp("Runs a command from the command palette."), str8_lit_comp("help,cmd"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_CmdName, str8_lit_comp("query:commands"), str8_lit_comp("commands"), CTRL_EntityKind_Null}},
+{ str8_lit_comp("run_ext_driver_text_command"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("os_event"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), str8_lit_comp(""), CTRL_EntityKind_Null}},
 { str8_lit_comp("select_thread"), str8_lit_comp("Selects a thread."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Thread, str8_lit_comp("query:threads"), str8_lit_comp(""), CTRL_EntityKind_Thread}},
 { str8_lit_comp("select_unwind"), str8_lit_comp("Selects an unwind frame number for the selected thread."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1)|(RD_CmdKindFlag_ListInTextPt*0)|(RD_CmdKindFlag_ListInTextRng*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("query:call_stack"), str8_lit_comp(""), CTRL_EntityKind_Null}},

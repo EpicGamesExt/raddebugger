@@ -46,7 +46,6 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
   dst->expr        = push_str8_copy(arena, src->expr);
   dst->string      = push_str8_copy(arena, src->string);
   dst->cmd_name    = push_str8_copy(arena, src->cmd_name);
-  dst->params_tree = md_tree_copy(arena, src->params_tree);
   if(dst->cfg_list.count == 0 && dst->cfg != 0)
   {
     rd_cfg_id_list_push(arena, &dst->cfg_list, dst->cfg);
@@ -5518,7 +5517,7 @@ rd_view_ui(Rng2F32 rect)
       RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_name);
       RD_RegsScope()
       {
-        rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, input);
+        rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, str8_zero(), input);
         rd_cmd(RD_CmdKind_CompleteQuery);
       }
     }
@@ -10591,12 +10590,15 @@ rd_pop_regs(void)
 }
 
 internal void
-rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
+rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 string)
 {
-  String8 error = {0};
   switch(slot)
   {
+    //- rjf: basic string cases
     default:
+    {
+      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
+    }break;
     case RD_RegSlot_String:
     case RD_RegSlot_FilePath:
     {
@@ -10611,28 +10613,95 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
         rd_regs()->cursor = pair.pt;
       }
     }break;
-    case RD_RegSlot_Cfg:
-    if(str8_match(str8_prefix(string, 1), str8_lit("$"), 0))
-    {
-      String8 numeric_part = str8_skip(string, 1);
-      RD_CfgID id = u64_from_str8(numeric_part, 16);
-      rd_regs()->cfg = id;
-    }break;
     case RD_RegSlot_Expr:
     {
       rd_regs()->expr = push_str8_copy(rd_frame_arena(), string);
     }break;
+    case RD_RegSlot_CmdName:
+    {
+      rd_regs()->cmd_name = push_str8_copy(rd_frame_arena(), string);
+    }break;
+    
+    //- rjf: ctrl entities
+    case RD_RegSlot_Machine:
+    case RD_RegSlot_Module:
+    case RD_RegSlot_Process:
+    case RD_RegSlot_Thread:
+    case RD_RegSlot_CtrlEntity:
+    {
+      
+    }break;
+    
+    //- rjf: cfgs
+    case RD_RegSlot_Cfg:
+    case RD_RegSlot_Window:
+    case RD_RegSlot_Panel:
+    case RD_RegSlot_Tab:
+    case RD_RegSlot_View:
+    case RD_RegSlot_PrevTab:
+    case RD_RegSlot_DstPanel:
+    {
+      B32 good = 0;
+      if(!good && str8_match(str8_prefix(string, 1), str8_lit("$"), 0))
+      {
+        String8 numeric_part = str8_skip(string, 1);
+        RD_CfgID id = u64_from_str8(numeric_part, 16);
+        rd_regs()->cfg = id;
+        good = 1;
+      }
+      if(!good && query_expr.size != 0)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        RD_Cfg *immediate = rd_immediate_cfg_from_keyf("###regs_fill_slot_view");
+        RD_Cfg *view = rd_cfg_newf(immediate, "watch");
+        rd_cfg_newf(view, "lister");
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
+        EV_View *eval_view = vs->ev_view;
+        {
+          ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
+          E_Eval eval = e_eval_from_string(query_expr);
+          EV_BlockTree block_tree = {0};
+          EV_BlockRangeList block_ranges = {0};
+          // TODO(rjf): @cleanup we only need to do this because we implicitly use
+          // view info in the block tree build via raddbg-layer eval hooks, but we
+          // should really keep all parameterization info in eval views themselves,
+          // to not couple block tree building with frontend state...
+          RD_RegsScope(.window = 0, .panel = 0, .view = view->id)
+          {
+            block_tree = ev_block_tree_from_eval(scratch.arena, eval_view, string, eval);
+            block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
+            if(block_ranges.first != 0)
+            {
+              block_ranges.count -= 1;
+              block_ranges.first = block_ranges.first->next;
+            }
+          }
+          EV_Row *row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, 1);
+          rd_regs()->cfg = rd_cfg_from_eval_space(row->eval.space)->id;
+          good = (rd_regs()->cfg != 0);
+        }
+        scratch_end(scratch);
+      }
+      if(!good)
+      {
+        E_Eval eval = e_eval_from_string(string);
+        rd_regs()->cfg = rd_cfg_from_eval_space(eval.space)->id;
+        good = (rd_regs()->cfg != 0);
+      }
+    }break;
+    
+    //- rjf: line numbers
     case RD_RegSlot_Cursor:
     {
-      U64 v = 0;
-      if(try_u64_from_str8_c_rules(string, &v))
+      E_Eval eval = e_value_eval_from_eval(e_eval_from_string(string));
+      if(eval.msgs.max_kind == E_MsgKind_Null)
       {
         rd_regs()->cursor.column = 1;
-        rd_regs()->cursor.line = v;
+        rd_regs()->cursor.line   = (S64)eval.value.u64;
       }
       else
       {
-        log_user_error(str8_lit("Couldn't interpret as a line number."));
+        log_user_errorf("Couldn't interpret \"`%S`\" as a line number.", string);
       }
     }break;
     case RD_RegSlot_Vaddr: goto use_numeric_eval;
@@ -10653,30 +10722,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
           eval = e_value_eval_from_eval(eval);
         }
         U64 u64 = eval.value.u64;
-        switch(slot)
-        {
-          default:{}break;
-          case RD_RegSlot_Vaddr:
-          {
-            rd_regs()->vaddr = u64;
-          }break;
-          case RD_RegSlot_Voff:
-          {
-            rd_regs()->voff = u64;
-          }break;
-          case RD_RegSlot_UnwindCount:
-          {
-            rd_regs()->unwind_count = u64;
-          }break;
-          case RD_RegSlot_InlineDepth:
-          {
-            rd_regs()->inline_depth = u64;
-          }break;
-          case RD_RegSlot_PID:
-          {
-            rd_regs()->pid = u64;
-          }break;
-        }
+        MemoryCopy((U8 *)(rd_regs()) + rd_reg_slot_range_table[slot].min, &u64, dim_1u64(rd_reg_slot_range_table[slot]));
       }
       else
       {
@@ -12718,6 +12764,46 @@ rd_frame(void)
               rd_cmd(RD_CmdKind_PushQuery,
                      .do_implicit_root = 1,
                      .do_lister = info->query.expr.size != 0);
+            }
+          }break;
+          
+          //- rjf: external driver textual commands
+          case RD_CmdKind_RunExternalDriverTextCommand:
+          {
+            String8 msg = rd_regs()->string;
+            String8List msg_parts = str8_split(scratch.arena, msg, (U8 *)" ", 1, 0);
+            CmdLine msg_cmd_line = cmd_line_from_string_list(scratch.arena, msg_parts);
+            String8 cmd_kind_name = str8_list_first(&msg_cmd_line.inputs);
+            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name);
+            if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
+            {
+              for EachNonZeroEnumVal(RD_RegSlot, s)
+              {
+                String8 reg_slot_name = rd_reg_slot_code_name_table[s];
+                String8 value = cmd_line_string(&msg_cmd_line, reg_slot_name);
+                if(value.size != 0)
+                {
+                  rd_regs_fill_slot_from_string(s, cmd_kind_info->query.expr, value);
+                }
+              }
+              String8 primary_args_string = {0};
+              if(msg_cmd_line.inputs.first != 0)
+              {
+                String8List primary_args_strings = {0};
+                for(String8Node *n = msg_cmd_line.inputs.first->next; n != 0; n = n->next)
+                {
+                  str8_list_push(scratch.arena, &primary_args_strings, n->string);
+                }
+                primary_args_string = str8_list_join(scratch.arena, &primary_args_strings, &(StringJoin){.sep = str8_lit(" ")});
+              }
+              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
+              rd_push_cmd(cmd_kind_name, rd_regs());
+              rd_request_frame();
+            }
+            else
+            {
+              log_user_errorf("`%S` is not a command.", cmd_kind_name);
+              rd_request_frame();
             }
           }break;
           

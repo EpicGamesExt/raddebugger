@@ -795,6 +795,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(cfgs_slice)
     }
     
     //- rjf: fill
+    // TODO(rjf): @cleanup don't smuggle this through like this...
     if(rd_cfg_child_from_string(rd_cfg_from_id(rd_regs()->view), str8_lit("lister")) == &rd_nil_cfg)
     {
       accel->cmds = ext->cmds;

@@ -753,7 +753,6 @@ RD_RegTable:
   {Dir2              dir2             Dir2          }
   {String8           string           String        }
   {String8           cmd_name         CmdName       }
-  {`MD_Node *`       params_tree      ParamsTree    }
   {`OS_Event *`      os_event         OSEvent       }
 }
 
@@ -767,6 +766,12 @@ RD_RegTable:
 @struct RD_Regs:
 {
   @expand(RD_RegTable a) `$(a.c_type) $(a.name_lower)`
+}
+
+@data(String8) rd_reg_slot_code_name_table:
+{
+  `{0}`,
+  @expand(RD_RegTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
 @data(Rng1U64) rd_reg_slot_range_table:
@@ -796,8 +801,9 @@ RD_CmdTable:    //               |        |              |                |     
   //- rjf: palette
   {OpenPalette                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           List                  "open_palette"                "Open Palette"                                "Opens the palette."                                                                                               "help,cmd,lister"                ""                                                               }
   
-  //- rjf: command runner
+  //- rjf: command runners
   {RunCommand                     1        1              0                0               "query:commands"                                 CmdName            commands          Nil                     Null       0  0  0  0  0  1  1                                                           Null                  "run_command"                 "Run Command"                                 "Runs a command from the command palette."                                                                         "help,cmd"                       ""                                                               }
+  {RunExternalDriverTextCommand   0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  1  1                                                           Null                  "run_ext_driver_text_command" "Run External Driver Text Command"            ""                                                                                                                 ""                               ""                                                               }
   
   //- rjf: os event passthrough
   {OSEvent                        0        0              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "os_event"                    "OS Event"                                    ""                                                                                                                 ""                               ""                                                               }

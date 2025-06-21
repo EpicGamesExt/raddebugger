@@ -54,7 +54,6 @@ RD_RegSlot_NonGraphical,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
-RD_RegSlot_ParamsTree,
 RD_RegSlot_OSEvent,
 RD_RegSlot_COUNT,
 } RD_RegSlot;
@@ -97,6 +96,7 @@ RD_CmdKind_Attach,
 RD_CmdKind_Exit,
 RD_CmdKind_OpenPalette,
 RD_CmdKind_RunCommand,
+RD_CmdKind_RunExternalDriverTextCommand,
 RD_CmdKind_OSEvent,
 RD_CmdKind_SelectThread,
 RD_CmdKind_SelectUnwind,
@@ -483,7 +483,6 @@ B32 non_graphical;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
-MD_Node * params_tree;
 OS_Event * os_event;
 };
 
@@ -581,15 +580,15 @@ Z(getting_started)\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\
-.params_tree = rd_regs()->params_tree,\
 .os_event = rd_regs()->os_event,\
 
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[24];
 extern String8 rd_tab_fast_path_query_name_table[24];
-extern RD_VocabInfo rd_vocab_info_table[345];
+extern RD_VocabInfo rd_vocab_info_table[346];
 extern RD_NameSchemaInfo rd_name_schema_info_table[24];
-extern Rng1U64 rd_reg_slot_range_table[48];
+extern String8 rd_reg_slot_code_name_table[47];
+extern Rng1U64 rd_reg_slot_range_table[47];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[75];

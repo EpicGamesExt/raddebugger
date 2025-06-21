@@ -1028,7 +1028,7 @@ internal RD_Regs *rd_push_regs_(RD_Regs *regs);
 #define rd_push_regs(...) rd_push_regs_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 internal RD_Regs *rd_pop_regs(void);
 #define RD_RegsScope(...) DeferLoop(rd_push_regs(__VA_ARGS__), rd_pop_regs())
-internal void rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string);
+internal void rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 string);
 
 ////////////////////////////////
 //~ rjf: Commands
