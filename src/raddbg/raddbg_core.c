@@ -12798,12 +12798,10 @@ rd_frame(void)
               }
               rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
               rd_push_cmd(cmd_kind_name, rd_regs());
-              rd_request_frame();
             }
             else
             {
               log_user_errorf("`%S` is not a command.", cmd_kind_name);
-              rd_request_frame();
             }
           }break;
           

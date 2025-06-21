@@ -658,6 +658,7 @@ entry_point(CmdLine *cmd_line)
                     scratch_end(scratch);
                   }
                   rd_cmd(RD_CmdKind_RunExternalDriverTextCommand, .string = msg);
+                  rd_request_frame();
                 }
               }
             }
