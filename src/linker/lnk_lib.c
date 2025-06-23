@@ -2,41 +2,77 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_LibNode *
-lnk_lib_list_reserve(Arena *arena, LNK_LibList *list, U64 count)
+lnk_lib_list_pop_node_atomic(LNK_LibList *list)
 {
-  LNK_LibNode *arr = 0;
-  if (count) {
-    arr = push_array(arena, LNK_LibNode, count);
-    for (LNK_LibNode *ptr = arr, *opl = arr + count; ptr < opl; ++ptr) {
-      SLLQueuePush(list->first, list->last, ptr);
+  for (;;) {
+    LNK_LibNode *expected = list->first;
+    LNK_LibNode *current  = ins_atomic_ptr_eval_cond_assign(&list->first, expected->next, expected);
+    if (expected == current) { 
+      ins_atomic_u64_dec_eval(&list->count);
+      return expected;
     }
-    list->count += count;
   }
-  return arr;
 }
 
-internal LNK_Lib
-lnk_lib_from_data(Arena *arena, String8 data, String8 path)
+internal void
+lnk_lib_list_push_node_atomic(LNK_LibList *list, LNK_LibNode *node)
+{
+  for (;;) {
+    LNK_LibNode *expected = list->first;
+    LNK_LibNode *current  = ins_atomic_ptr_eval_cond_assign(&list->first, node, expected);
+    if (current == expected) {
+      node->next = expected;
+      ins_atomic_u64_inc_eval(&list->count);
+      return;
+    }
+  }
+}
+
+internal void
+lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node)
+{
+  SLLStackPush(list->first, node);
+  list->count += 1;
+}
+
+internal LNK_LibList
+lnk_lib_list_reserve(Arena *arena, U64 count)
+{
+  LNK_LibList result = {0};
+  LNK_LibNode *nodes = push_array(arena, LNK_LibNode, count);
+  for (U64 i = 0; i < count; i += 1) { lnk_lib_list_push_node(&result, &nodes[i]); }
+  return result;
+}
+
+internal LNK_LibNodeArray
+lnk_array_from_lib_list(Arena *arena, LNK_LibList list)
+{
+  LNK_LibNodeArray result = {0};
+  result.v = push_array(arena, LNK_LibNode, list.count);
+  for (LNK_LibNode *n = list.first; n != 0; n = n->next) { result.v[result.count++] = *n; }
+  return result;
+}
+
+internal B32
+lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
 {
   ProfBeginFunction();
+
+  // is data archive?
+  COFF_ArchiveType type = coff_archive_type_from_data(data);
+  if (type == COFF_Archive_Null) {
+    return 0;
+  }
+
+  COFF_ArchiveParse parse = coff_archive_parse_from_data(data);
+  if (parse.error.size) {
+    return 0;
+  }
 
   U64     symbol_count;
   String8 string_table;
   U32    *member_off_arr;
 
-  // is data archive?
-  COFF_ArchiveType type = coff_archive_type_from_data(data);
-  if (type == COFF_Archive_Null) {
-    lnk_not_implemented("TODO: data is not archive");
-  }
-
-  COFF_ArchiveParse parse = coff_archive_parse_from_data(data);
-
-  // report archive parser errors
-  if (parse.error.size) {
-    lnk_error(LNK_Error_IllData, "%S: %S", path, parse.error);
-  }
-  
   // try to init library from optional second member
   if (parse.second_member.member_count) {
     COFF_ArchiveSecondMember second_member = parse.second_member;
@@ -84,49 +120,73 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path)
   symbol_count = Min(symbol_count, symbol_name_list.node_count);
   
   // init lib
-  LNK_Lib lib = {0};
-  lib.path             = push_str8_copy(arena, path);
-  lib.data             = data;
-  lib.type             = type;
-  lib.symbol_count     = symbol_count;
-  lib.member_off_arr   = member_off_arr;
-  lib.symbol_name_list = symbol_name_list;
-  lib.long_names       = parse.long_names;
+  lib_out->path             = push_str8_copy(arena, path);
+  lib_out->data             = data;
+  lib_out->type             = type;
+  lib_out->symbol_count     = symbol_count;
+  lib_out->member_off_arr   = member_off_arr;
+  lib_out->symbol_name_list = symbol_name_list;
+  lib_out->long_names       = parse.long_names;
   
   ProfEnd();
-  return lib;
+  return 1;
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_lib_initer)
 {
-  LNK_LibIniter *task       = raw_task;
-  LNK_LibNode   *lib_node   = task->node_arr + task_id;
-  LNK_Lib       *lib        = &lib_node->data;
-  String8        data       = task->data_arr[task_id];
-  String8        path       = task->path_arr[task_id];
-  
-  *lib = lnk_lib_from_data(arena, data, path);
-  lib->input_idx = task->base_input_idx + task_id;
+  LNK_LibIniter *task = raw_task;
+
+  LNK_LibNode *lib_node = lnk_lib_list_pop_node_atomic(&task->free_libs);
+  lib_node->data.input_idx = task_id;
+
+  B32 is_valid_lib = lnk_lib_from_data(arena, task->data_arr[task_id], task->path_arr[task_id], &lib_node->data);
+  if (is_valid_lib) {
+    lnk_lib_list_push_node_atomic(&task->valid_libs, lib_node);
+  } else {
+    lnk_lib_list_push_node_atomic(&task->invalid_libs, lib_node);
+  }
+}
+
+internal int
+lnk_lib_node_is_before(void *a, void *b)
+{
+  return ((LNK_LibNode*)a)->data.input_idx < ((LNK_LibNode*)b)->data.input_idx;
 }
 
 internal LNK_LibNodeArray
 lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, String8Array data_arr, String8Array path_arr)
 {
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
   Assert(data_arr.count == path_arr.count);
   U64 lib_count = data_arr.count;
-  
-  LNK_LibIniter task  = {0};
-  task.node_arr       = lnk_lib_list_reserve(arena->v[0], list, lib_count);
-  task.data_arr       = data_arr.v;
-  task.path_arr       = path_arr.v;
-  task.base_input_idx = list->count;
+
+  // parse libs in parallel
+  LNK_LibIniter task = {0};
+  task.free_libs     = lnk_lib_list_reserve(scratch.arena, lib_count);
+  task.data_arr      = data_arr.v;
+  task.path_arr      = path_arr.v;
   tp_for_parallel(tp, arena, lib_count, lnk_lib_initer, &task);
 
-  LNK_LibNodeArray arr = {0};
-  arr.count            = lib_count;
-  arr.v                = task.node_arr;
-  return arr;
+  // report invalid libs
+  LNK_LibNodeArray invalid_libs = lnk_array_from_lib_list(scratch.arena, task.invalid_libs);
+  radsort(invalid_libs.v, invalid_libs.count, lnk_lib_node_is_before);
+  for (U64 i = 0; i < task.invalid_libs.count; i += 1) {
+    U64 input_idx = invalid_libs.v[i].data.input_idx;
+    lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", path_arr.v[input_idx]);
+  }
+
+  // push parsed libs
+  LNK_LibNodeArray result = lnk_array_from_lib_list(arena->v[0], task.valid_libs);
+  radsort(result.v, result.count, lnk_lib_node_is_before);
+  for (U64 i = result.count; i > 0; i -= 1) {
+    result.v[i-1].data.input_idx = list->count;
+    lnk_lib_list_push_node(list, &result.v[i-1]);
+  }
+
+  scratch_end(scratch);
+  return result;
 }
 
 internal

@@ -33,7 +33,7 @@
     <AlternativeType Name="LNK_ExportParseList"/>
     <AlternativeType Name="LNK_InputImportList"/>
     <AlternativeType Name="CV_SymbolList"/>
-    <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
+    <DisplayString>{{count={count} first={first} }}</DisplayString>
     <Expand>
 			<LinkedListItems>
 				<Size>count</Size>

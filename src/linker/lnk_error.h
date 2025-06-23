@@ -54,6 +54,7 @@ typedef enum
   LNK_Error_InvalidTypeIndex,
   LNK_Error_UndefinedIsWeak,
   LNK_Error_WeakCycle,
+  LNK_Error_InvalidLib,
   LNK_Error_Last,
   
   LNK_Warning_First,
