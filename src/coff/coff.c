@@ -247,6 +247,31 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
 }
 
 internal String8
+coff_make_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stamp, U16 user_id, U16 group_id, U16 mode, U32 size)
+{
+  Assert(name.size < 16);
+  Assert(user_id < 10000);
+  Assert(group_id < 10000);
+  Assert(mode < 10000);
+  Assert(size < 1000000000);
+  
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  str8_list_pushf(scratch.arena, &list, "%-16.*s", str8_varg(name));
+  str8_list_pushf(scratch.arena, &list, "%-12u", time_stamp);
+  str8_list_pushf(scratch.arena, &list, "%-6u", user_id);
+  str8_list_pushf(scratch.arena, &list, "%-6u", group_id);
+  str8_list_pushf(scratch.arena, &list, "%-8u", mode);
+  str8_list_pushf(scratch.arena, &list, "%-10u", size);
+  str8_list_pushf(scratch.arena, &list, "`\n");
+  String8 result = str8_list_join(arena, &list, 0);
+
+  Assert(result.size == sizeof(COFF_ArchiveMemberHeader));
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
 coff_make_import_lookup(Arena *arena, U16 hint, String8 name)
 {
   U64 buffer_size = sizeof(hint) + (name.size + 1);
@@ -314,6 +339,7 @@ coff_make_import_header(Arena            *arena,
   header.machine           = machine;
   header.time_stamp        = time_stamp;
   header.data_size         = safe_cast_u32(name.size + dll_name.size + 2);
+  header.hint_or_ordinal   = hint_or_ordinal;
   header.flags             = flags;
   
   // alloc memory
@@ -910,27 +936,4 @@ coff_import_header_type_from_string(String8 name)
   }
   return COFF_ImportType_Invalid;
 }
-internal String8
-coff_make_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stamp, U16 user_id, U16 group_id, U16 mode, U32 size)
-{
-  Assert(name.size < 16);
-  Assert(user_id < 10000);
-  Assert(group_id < 10000);
-  Assert(mode < 10000);
-  Assert(size < 1000000000);
-  
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List list = {0};
-  str8_list_pushf(scratch.arena, &list, "%-16.*s", str8_varg(name));
-  str8_list_pushf(scratch.arena, &list, "%-12u", time_stamp);
-  str8_list_pushf(scratch.arena, &list, "%-6u", user_id);
-  str8_list_pushf(scratch.arena, &list, "%-6u", group_id);
-  str8_list_pushf(scratch.arena, &list, "%-8u", mode);
-  str8_list_pushf(scratch.arena, &list, "%-10u", size);
-  str8_list_pushf(scratch.arena, &list, "`\n");
-  String8 result = str8_list_join(arena, &list, 0);
 
-  Assert(result.size == sizeof(COFF_ArchiveMemberHeader));
-  scratch_end(scratch);
-  return result;
-}

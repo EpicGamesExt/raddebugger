@@ -611,6 +611,7 @@ internal U32 coff_make_ordinal32(U16 hint);
 internal U64 coff_make_ordinal64(U16 hint);
 internal String8 coff_ordinal_data_from_hint(Arena *arena, COFF_MachineType machine, U16 hint);
 
+internal String8 coff_make_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stamp, U16 user_id, U16 group_id, U16 mode, U32 size);
 internal String8 coff_make_import_lookup(Arena *arena, U16 hint, String8 name);
 internal String8 coff_make_import_header(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportByType import_by, String8 name, U16 hint_or_ordinal, COFF_ImportType type);
 
@@ -648,6 +649,5 @@ internal String8 coff_string_from_reloc(COFF_MachineType machine, COFF_RelocType
 
 internal COFF_MachineType coff_machine_from_string(String8 string);
 internal COFF_ImportType  coff_import_header_type_from_string(String8 name);
-internal String8 coff_make_lib_member_header(Arena *arena, String8 name, COFF_TimeStamp time_stamp, U16 user_id, U16 group_id, U16 mode, U32 size);
 
 #endif // COFF_H
