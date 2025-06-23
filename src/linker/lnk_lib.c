@@ -199,8 +199,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_lib_symbols_task)
   String8Node *name_node = lib->symbol_name_list.first;
   for (U64 symbol_idx = 0; symbol_idx < lib->symbol_count; ++symbol_idx, name_node = name_node->next) {
     LNK_Symbol *symbol = lnk_make_lib_symbol(arena, name_node->string, lib, lib->member_off_arr[symbol_idx]);
-    U64 hash = lnk_symbol_hash(symbol->name);
-    lnk_symbol_table_push_(symtab, arena, worker_id, LNK_SymbolScope_Lib, hash, symbol);
+    lnk_symbol_table_push_(symtab, arena, worker_id, LNK_SymbolScope_Lib, symbol);
   }
 }
 

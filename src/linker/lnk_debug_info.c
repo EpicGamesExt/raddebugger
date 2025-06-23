@@ -3037,7 +3037,6 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
 
     for (U64 i = 0, node_idx = 0; i < chunk->count; ++i) {
       LNK_Symbol *symbol = chunk->v[i].symbol;
-      Assert(symbol->type == LNK_Symbol_Defined);
 
       COFF_ParsedSymbol          parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
       COFF_SymbolValueInterpType interp        = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
