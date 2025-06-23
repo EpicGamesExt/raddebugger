@@ -5,14 +5,13 @@
 
 // --- Symbol ------------------------------------------------------------------
 
-typedef enum 
+typedef enum
 {
-  LNK_Symbol_Null,
-  LNK_Symbol_Defined,
-  LNK_Symbol_Import,
-  LNK_Symbol_Lib,
-  LNK_Symbol_Undefined,
-} LNK_SymbolType;
+  LNK_SymbolScope_Defined,
+  LNK_SymbolScope_Import,
+  LNK_SymbolScope_Lib,
+  LNK_SymbolScope_Count
+} LNK_SymbolScope;
 
 typedef struct LNK_SymbolDefined
 {
@@ -38,8 +37,7 @@ typedef struct LNK_SymbolImport
 
 typedef struct LNK_Symbol
 {
-  String8        name;
-  LNK_SymbolType type;
+  String8 name;
   union {
     LNK_SymbolDefined   defined;
     LNK_SymbolLib       lib;
@@ -101,14 +99,6 @@ typedef struct LNK_SymbolHashTrieChunkList
 
 // --- Symbol Table ------------------------------------------------------------
 
-typedef enum
-{
-  LNK_SymbolScope_Defined,
-  LNK_SymbolScope_Import,
-  LNK_SymbolScope_Lib,
-  LNK_SymbolScope_Count
-} LNK_SymbolScope;
-
 typedef struct LNK_SymbolTable
 {
   TP_Arena                    *arena;
@@ -135,7 +125,7 @@ internal LNK_SymbolArray     lnk_symbol_array_from_list(Arena *arena, LNK_Symbol
 
 // --- Symbol Hash Trie --------------------------------------------------------
 
-internal void                 lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunks, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *symbol);
+internal void                 lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunks, LNK_SymbolHashTrie **trie, U64 hash, LNK_SymbolScope scope, LNK_Symbol *symbol);
 internal LNK_SymbolHashTrie * lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name);
 internal void                 lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie);
 
@@ -144,7 +134,7 @@ internal void                 lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *tr
 internal U64 lnk_symbol_hash(String8 string);
 
 internal LNK_SymbolTable * lnk_symbol_table_init(TP_Arena *arena);
-internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Symbol *symbol);
+internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol *symbol);
 internal LNK_Symbol *      lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name);
 internal LNK_Symbol *      lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *fmt, ...);
 

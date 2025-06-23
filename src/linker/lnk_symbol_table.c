@@ -6,7 +6,6 @@ lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 sym
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
   symbol->name                 = name;
-  symbol->type                 = LNK_Symbol_Defined;
   symbol->u.defined.obj        = obj;
   symbol->u.defined.symbol_idx = symbol_idx;
   return symbol;
@@ -17,19 +16,8 @@ lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
   symbol->name                = name;
-  symbol->type                = LNK_Symbol_Lib;
   symbol->u.lib.lib           = lib;
   symbol->u.lib.member_offset = member_offset;
-  return symbol;
-}
-
-internal LNK_Symbol *
-lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj)
-{
-  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name        = name;
-  symbol->type        = LNK_Symbol_Undefined;
-  symbol->u.undef.obj = obj;
   return symbol;
 }
 
@@ -38,8 +26,16 @@ lnk_make_import_symbol(Arena *arena, String8 name, String8 import_header)
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
   symbol->name                = name;
-  symbol->type                = LNK_Symbol_Import;
   symbol->u.imp.import_header = import_header;
+  return symbol;
+}
+
+internal LNK_Symbol *
+lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj)
+{
+  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
+  symbol->name        = name;
+  symbol->u.undef.obj = obj;
   return symbol;
 }
 
@@ -125,26 +121,23 @@ lnk_error_multiply_defined_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 }
 
 internal B32
-lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
+lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 {
-  Assert(src->type != LNK_Symbol_Undefined);
+  //Assert(src->type != LNK_Symbol_Undefined);
   Assert(dst != src);
   Assert(str8_match(dst->name, src->name, 0));
 
   B32 can_replace = 0;
 
-
-  // lib vs lib
-  if (dst->type == LNK_Symbol_Lib && src->type == LNK_Symbol_Lib) {
+  switch (scope) {
+  case LNK_SymbolScope_Lib: {
     // link.exe picks symbol from lib that is discovered first
     can_replace = src->u.lib.lib->input_idx < dst->u.lib.lib->input_idx;
-  }
-  else if (dst->type == LNK_Symbol_Import) { 
-    AssertAlways(src->type != LNK_Symbol_Import);
+  } break;
+  case LNK_SymbolScope_Import: {
     can_replace = 1;
-  }
-  // defined vs defined
-  else if (dst->type == LNK_Symbol_Defined && src->type == LNK_Symbol_Defined) {
+  } break;
+  case LNK_SymbolScope_Defined: {
     LNK_Obj *dst_obj = dst->u.defined.obj;
     LNK_Obj *src_obj = src->u.defined.obj;
 
@@ -319,20 +312,20 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     } else {
       lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
     }
-  } else {
-    lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
+  } break;
+  default: { InvalidPath; }
   }
 
   return can_replace;
 }
 
 internal void
-lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
+lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 {
   Assert(dst != src);
-  if (dst->type == LNK_Symbol_Lib && src->type == LNK_Symbol_Lib) {
+  if (scope == LNK_SymbolScope_Lib) {
     dst->u.lib = src->u.lib;
-  } else if (dst->type == LNK_Symbol_Defined && src->type == LNK_Symbol_Defined) {
+  } else if (scope == LNK_SymbolScope_Defined) {
     COFF_ParsedSymbol dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
     COFF_ParsedSymbol src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
     COFF_SymbolValueInterpType dst_interp = coff_interp_symbol(dst_parsed.section_number, dst_parsed.value, dst_parsed.storage_class);
@@ -346,8 +339,6 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
       COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
       AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
     }
-  } else {
-    InvalidPath;
   }
 }
 
@@ -356,6 +347,7 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
                                        LNK_SymbolHashTrieChunkList  *chunks,
                                        LNK_SymbolHashTrie          **trie,
                                        U64                           hash,
+                                       LNK_SymbolScope               scope,
                                        LNK_Symbol                   *symbol)
 {
   LNK_SymbolHashTrie **curr_trie_ptr = trie;
@@ -395,13 +387,13 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
 
         // apply replacement
         if (leader) {
-          if (lnk_can_replace_symbol(leader, src)) {
+          if (lnk_can_replace_symbol(scope, leader, src)) {
             // discard leader
-            lnk_on_symbol_replace(leader, src);
+            lnk_on_symbol_replace(scope, leader, src);
             leader = src;
           } else {
             // discard source
-            lnk_on_symbol_replace(src, leader);
+            lnk_on_symbol_replace(scope, src, leader);
             src = leader;
           }
         } else {
@@ -473,22 +465,16 @@ lnk_symbol_table_init(TP_Arena *arena)
 }
 
 internal void
-lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK_SymbolScope scope, U64 hash, LNK_Symbol *symbol)
+lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK_SymbolScope scope, LNK_Symbol *symbol)
 {
-  lnk_symbol_hash_trie_insert_or_replace(arena, &symtab->chunk_lists[scope][worker_id], &symtab->scopes[scope], hash, symbol);
+  U64 hash = lnk_symbol_hash(symbol->name);
+  lnk_symbol_hash_trie_insert_or_replace(arena, &symtab->chunk_lists[scope][worker_id], &symtab->scopes[scope], hash, scope, symbol);
 }
 
 internal void
-lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Symbol *symbol)
+lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol *symbol)
 {
-  U64 hash = lnk_symbol_hash(symbol->name);
-  switch (symbol->type) {
-  case LNK_Symbol_Null: break;
-  case LNK_Symbol_Defined: { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Defined, hash, symbol); } break;
-  case LNK_Symbol_Import:  { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Import,  hash, symbol); } break;
-  case LNK_Symbol_Lib:     { lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, LNK_SymbolScope_Lib,     hash, symbol); } break;
-  default: { InvalidPath; } break;
-  }
+  lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, scope, symbol);
 }
 
 internal LNK_Symbol *
