@@ -616,36 +616,35 @@ s32_from_str8(String8 string, U32 radix)
 internal B32
 try_u64_from_str8_c_rules(String8 string, U64 *x)
 {
-  B32 is_integer = 0;
-  if(str8_is_integer(string, 10) && !str8_match(str8_prefix(string, 1), str8_lit("0"), 0))
+  U64 radix, prefix_size;
+  // hex
+  if(str8_match(str8_prefix(string, 2), str8_lit("0x"), StringMatchFlag_CaseInsensitive))
   {
-    is_integer = 1;
-    *x = u64_from_str8(string, 10);
+    radix = 0x10, prefix_size = 2;
   }
+  // binary
+  else if(str8_match(str8_prefix(string, 2), str8_lit("0b"), StringMatchFlag_CaseInsensitive))
+  {
+    radix = 2, prefix_size = 2;
+  }
+  // octal
+  else if(str8_match(str8_prefix(string, 1), str8_lit("0"), StringMatchFlag_CaseInsensitive) && string.size > 1)
+  {
+    radix = 010, prefix_size = 1;
+  }
+  // decimal
   else
   {
-    String8 hex_string = str8_skip(string, 2);
-    if(str8_match(str8_prefix(string, 2), str8_lit("0x"), 0) &&
-       str8_is_integer(hex_string, 0x10))
-    {
-      is_integer = 1;
-      *x = u64_from_str8(hex_string, 0x10);
-    }
-    else if(str8_match(str8_prefix(string, 2), str8_lit("0b"), 0) && str8_is_integer(hex_string, 2))
-    {
-      is_integer = 1;
-      *x = u64_from_str8(hex_string, 2);
-    }
-    else
-    {
-      String8 oct_string = str8_skip(string, 1);
-      if(str8_match(str8_prefix(string, 1), str8_lit("0"), 0) && str8_is_integer(hex_string, 010))
-      {
-        is_integer = 1;
-        *x = u64_from_str8(oct_string, 010);
-      }
-    }
+    radix = 10, prefix_size = 0;
   }
+
+  String8 integer    = str8_skip(string, prefix_size);
+  B32     is_integer = str8_is_integer(integer, radix);
+  if(is_integer)
+  {
+    *x = u64_from_str8(integer, radix);
+  }
+
   return is_integer;
 }
 
