@@ -25,6 +25,32 @@ typedef struct LNK_ImageContext
   LNK_SectionTable *sectab;
 } LNK_ImageContext;
 
+typedef struct LNK_SymbolTableFixup
+{
+  U32 idx;
+  U32 obj_idx;
+  U32 obj_symbol_idx;
+} LNK_SymbolTableFixup;
+
+typedef struct LNK_SymbolTableFixupNode
+{
+  LNK_SymbolTableFixup data;
+  struct LNK_SymbolTableFixupNode *next;
+} LNK_SymbolTableFixupNode;
+
+typedef struct LNK_SymbolTableFixupList
+{
+  U64                       count;
+  LNK_SymbolTableFixupNode *first;
+  LNK_SymbolTableFixupNode *last;
+} LNK_SymbolTableFixupList;
+
+typedef struct LNK_SymbolTableFixupArray
+{
+  U64                   count;
+  LNK_SymbolTableFixup *v;
+} LNK_SymbolTableFixupArray;
+
 typedef struct LNK_SectionDefinition
 {
   String8           name;
@@ -75,16 +101,17 @@ typedef struct LNK_BaseRelocPageArray
 
 typedef struct
 {
-  LNK_SymbolTable      *symtab;
-  LNK_SectionTable     *sectab;
-  LNK_SectionContrib   *null_sc;
-  U64                   function_pad_min;
-  U64                   default_align;
-  U64                   objs_count;
-  LNK_Obj             **objs;
-  LNK_SectionContrib ***sect_map;
-  HashTable            *contribs_ht;
-  LNK_SectionArray      image_sects;
+  LNK_SymbolTable           *symtab;
+  LNK_SectionTable          *sectab;
+  LNK_SectionContrib        *null_sc;
+  LNK_SymbolTableFixupArray *obj_symtab_fixups;
+  U64                        function_pad_min;
+  U64                        default_align;
+  U64                        objs_count;
+  LNK_Obj                  **objs;
+  LNK_SectionContrib      ***sect_map;
+  HashTable                 *contribs_ht;
+  LNK_SectionArray           image_sects;
   union {
     struct {
       HashTable **defns;
