@@ -4820,7 +4820,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
     LNK_Section *sect = &sect_n->data;
 
     str8_list_pushf(arena, &map, "%S\n", sect->name);
-    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %-4s %s\n", "No.", "FileOff", "VirtOff", "VirtSize", "FileSize", "Blake3", "Algn", "SC");
+    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %-4s %s\n", "No.", "VirtOff", "VirtSize", "FileOff", "FileSize", "Blake3", "Algn", "SC");
 
     U64      obj_sect_idxs_count = 0;
     PairU32 *obj_sect_idxs       = lnk_obj_sect_idx_from_section(scratch.arena, objs_count, objs, sect, config, &obj_sect_idxs_count);
@@ -4855,11 +4855,11 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
         }
 
         String8 sc_idx_str    = push_str8f(temp.arena, "%4llx",      global_sc_idx);
-        String8 file_off_str  = push_str8f(temp.arena, "%08x",       file_off);
-        String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
         String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
-        String8 file_size_str = push_str8f(temp.arena, "%08x",       file_size);
-        String8 sc_hash_str   = push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]);
+        String8 sc_hash_str   = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]) : str8_lit("--------");
+        String8 file_off_str  = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x", file_off)  : str8_lit("--------");
+        String8 file_size_str = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x", file_size) : str8_lit("--------");
+        String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
         String8 align_str     = push_str8f(temp.arena, "%4x",        sc->align);
         String8 contrib_str;
         {
@@ -4881,7 +4881,7 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
           contrib_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
         }
 
-        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S %S\n", sc_idx_str, file_off_str, virt_off_str, virt_size_str, file_size_str, sc_hash_str, align_str, contrib_str);
+        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S %S\n", sc_idx_str, virt_off_str, virt_size_str, file_off_str, file_size_str, sc_hash_str, align_str, contrib_str);
 
         temp_end(temp);
       }
@@ -4911,41 +4911,6 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
   }
   str8_list_pushf(arena, &map, "\n");
 
-
-#if 0
-  ProfBegin("SYMBOLS");
-  str8_list_pushf(arena, &map, "# SYMBOLS\n");
-  str8_list_pushf(arena, &map, "%-8s %s\n", "Sect:Idx", "Symbol");
-  for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
-    LNK_Obj *obj = objs[obj_idx];
-    
-    COFF_ParsedSymbol symbol;
-    for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-
-      COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-      if (interp == COFF_SymbolValueInterp_Regular) {
-        String8 sc = push_str8f(scratch.arena, "%x:%x", symbol.section_number, symbol.value);
-
-        String8 lib_name = obj->lib_path;
-        lib_name = str8_skip_last_slash(lib_name);
-        lib_name = str8_chop_last_dot(lib_name);
-
-        String8 obj_name = obj->path;
-        obj_name = str8_skip_last_slash(obj_name);
-
-        str8_list_pushf(arena, &map, "%-8S (%S%s%S) %S\n",
-            sc,
-            lib_name, lib_name.size ? ":" : "", obj_name,
-            symbol.name);
-      }
-    }
-  }
-  str8_list_pushf(arena, &map, "\n");
-  ProfEnd();
-#endif
-
-
   ProfBegin("LIBS");
   for (U64 input_source = 0; input_source < LNK_InputSource_Count; ++input_source) {
     if (lib_index[input_source].count) {
@@ -4956,7 +4921,6 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
     }
   }
   ProfEnd();
-
  
   scratch_end(scratch);
   ProfEnd();
