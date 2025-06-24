@@ -3726,8 +3726,7 @@ entry_point(CmdLine *cmdline)
   //
   {
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
-                     cmd_line_has_flag(cmdline, str8_lit("h")) ||
-                     cmdline->argc == 1;
+                     cmd_line_has_flag(cmdline, str8_lit("h"));
      if (print_help) {
       fprintf(stderr, "--- Help -----------------------------------------------------------------------\n");
       fprintf(stderr, " %s\n\n", BUILD_TITLE_STRING_LITERAL);
@@ -3738,7 +3737,7 @@ entry_point(CmdLine *cmdline)
       fprintf(stderr, "   -list                 Print available test targets and exit\n");
       fprintf(stderr, "   -out:{path}           Directory path for test outputs (default \"%.*s\")\n", str8_varg(g_out));
       fprintf(stderr, "   -verbose              Enable verbose mode\n");
-      fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run");
+      fprintf(stderr, "   -print_stdout         Print to console stdout and stderr of a run\n");
       fprintf(stderr, "   -help                 Print help menu and exit\n");
       os_abort(0);
     }
@@ -3774,8 +3773,8 @@ entry_point(CmdLine *cmdline)
         os_abort(1);
       }
     } else {
-      fprintf(stderr, "ERROR: missing -linker option\n");
-      os_abort(1);
+      // assume default linker
+      g_linker = str8_lit("radlink");
     }
   }
 
@@ -3894,6 +3893,9 @@ entry_point(CmdLine *cmdline)
 
       U64 dots_count = (max_label_size - cstring8_length(target_array[target_idx].label)) + dots_min;
       String8 msg = push_str8f(scratch.arena, "%s%.*s%s", target_array[target_idx].label, dots_count, dots, t_string_from_result(result));
+
+      // run progress
+      fprintf(stdout, "[%2llu/%2llu] ", i+1, target_indices_count);
 
       if (result == T_Result_Pass) {
         fprintf(stdout, "\x1b[32m" "%.*s" "\x1b[0m" "\n", str8_varg(msg));
