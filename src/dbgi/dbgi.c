@@ -462,25 +462,24 @@ di_open(DI_Key *key)
   Temp scratch = scratch_begin(0, 0);
   if(key->path.size != 0)
   {
-    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
-    U64 hash = di_hash_from_key(&key_normalized);
+    U64 hash = di_hash_from_key(key);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("open_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
+    log_infof("open_debug_info: {\"%S\", 0x%I64x}\n", key->path, key->min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
       
       //- rjf: allocate node if none exists; insert into slot
       if(node == 0)
       {
-        U64 current_timestamp = os_properties_from_file_path(key_normalized.path).modified;
+        U64 current_timestamp = os_properties_from_file_path(key->path).modified;
         if(current_timestamp == 0)
         {
-          current_timestamp = key_normalized.min_timestamp;
+          current_timestamp = key->min_timestamp;
         }
         node = stripe->free_node;
         if(node != 0)
@@ -493,7 +492,7 @@ di_open(DI_Key *key)
         }
         MemoryZeroStruct(node);
         DLLPushBack(slot->first, slot->last, node);
-        String8 path_stored = di_string_alloc__stripe_mutex_w_guarded(stripe, key_normalized.path);
+        String8 path_stored = di_string_alloc__stripe_mutex_w_guarded(stripe, key->path);
         node->key.path = path_stored;
         node->key.min_timestamp = current_timestamp;
       }
@@ -504,7 +503,7 @@ di_open(DI_Key *key)
         node->ref_count += 1;
         if(node->ref_count == 1)
         {
-          di_u2p_enqueue_key(&key_normalized, max_U64);
+          di_u2p_enqueue_key(key, max_U64);
           ins_atomic_u64_eval_assign(&node->is_working, 1);
           DeferLoop(os_rw_mutex_drop_w(stripe->rw_mutex), os_rw_mutex_take_w(stripe->rw_mutex))
           {
@@ -524,17 +523,16 @@ di_close(DI_Key *key)
   Temp scratch = scratch_begin(0, 0);
   if(key->path.size != 0)
   {
-    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
-    U64 hash = di_hash_from_key(&key_normalized);
+    U64 hash = di_hash_from_key(key);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
+    log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key->path, key->min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
       
       //- rjf: node exists -> decrement reference count; release
       if(node != 0)
@@ -588,8 +586,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
   if(key->path.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
-    U64 hash = di_hash_from_key(&key_normalized);
+    U64 hash = di_hash_from_key(key);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
@@ -597,7 +594,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
     ProfScope("grab node") OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, key);
       
       //- rjf: no node? this path is not opened
       if(node == 0)
@@ -623,7 +620,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
       if(node != 0 &&
          !node->parse_done &&
          !ins_atomic_u64_eval(&node->is_working) &&
-         di_u2p_enqueue_key(&key_normalized, endt_us))
+         di_u2p_enqueue_key(key, endt_us))
       {
         ProfScope("ask for parse")
         {

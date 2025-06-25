@@ -1617,7 +1617,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         {
           //- rjf: try to map identifier via this path
           E_IdentifierResolutionPath path = identifier_resolution_rule->paths[path_idx];
-          switch(path)
+          ProfScope("identifier resolution %i", path) switch(path)
           {
             default:{}break;
             

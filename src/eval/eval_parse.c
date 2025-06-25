@@ -528,6 +528,7 @@ e_string_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string)
 internal E_TypeKey
 e_leaf_type_from_name(String8 name)
 {
+  ProfBeginFunction();
   E_TypeKey key = zero_struct;
   B32 found = 0;
   if(!found)
@@ -674,6 +675,7 @@ e_leaf_type_from_name(String8 name)
       }
     }
   }
+  ProfEnd();
   return key;
 }
 

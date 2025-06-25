@@ -11787,6 +11787,7 @@ rd_frame(void)
     rd_state->meta_name2type_map[0] = e_string2typekey_map_make(rd_frame_arena(), 256);
     EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
     rd_state->view_ui_rule_map = rd_view_ui_rule_map_make(scratch.arena, 512);
+    ProfScope("build extra types & maps")
     {
       //- rjf: add macros for command groups
       {
