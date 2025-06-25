@@ -5070,6 +5070,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           process = process->next)
       {
         if(process->kind != CTRL_EntityKind_Process) { continue; }
+        U64 process_mod_idx = 0;
         for(CTRL_Entity *mod = process->first;
             mod != &ctrl_entity_nil;
             mod = mod->next)
@@ -5082,8 +5083,11 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
           RDI_Parsed *rdi = di_rdi_from_key(scope->di_scope, &dbgi_key, 1, 0);
           
           //- rjf: if this RDI is not yet ready => determine if we need to wait for it
+          //
+          // (we *always* wait for the initial module)
+          //
           B32 rdi_is_necessary = 1;
-          if(rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
+          if(process_mod_idx > 0 && rdi == &rdi_parsed_nil) ProfScope("determine if RDI is necessary")
           {
             // rjf: find cached result
             U64 hash = ctrl_hash_from_handle(mod->handle);
@@ -5172,6 +5176,7 @@ ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBreakpointList *user_bps, C
             eval_modules_primary = &eval_modules[eval_module_idx];
           }
           eval_module_idx += 1;
+          process_mod_idx += 1;
         }
       }
     }
