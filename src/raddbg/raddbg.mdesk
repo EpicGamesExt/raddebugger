@@ -5,10 +5,15 @@
 //~ rjf: Embedded Data
 
 @embed_file rd_icon_font_bytes:         "../data/icons.ttf"
-@embed_file rd_default_main_font_bytes: "../data/Roboto-Regular.ttf"
+
+//@embed_file rd_default_main_font_bytes: "../data/Roboto-Regular.ttf"
+@embed_file rd_default_main_font_bytes: "../data/segoeui.ttf"
+
 //@embed_file rd_default_main_font_bytes: "../data/seguisb.ttf"
-@embed_file rd_default_code_font_bytes: "../data/liberation-mono.ttf"
+//@embed_file rd_default_code_font_bytes: "../data/liberation-.ttf"
 //@embed_file rd_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
+@embed_file rd_default_code_font_bytes: "../data/JetBrainsMono-Regular.ttf"
+
 @embed_file rd_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////

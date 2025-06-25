@@ -2781,11 +2781,7 @@ ui_box_text_position(UI_Box *box)
   FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   FNT_Metrics font_metrics = fnt_metrics_from_tag_size(font, font_size);
-  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f) + font_metrics.ascent/2.f - 2.f;
-  if(!fnt_tag_match(font, ui_icon_font()))
-  {
-    result.y += font_metrics.descent/2;
-  }
+  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f + font_metrics.ascent/2.f - font_metrics.descent/2.f);
   switch(box->text_align)
   {
     default:
