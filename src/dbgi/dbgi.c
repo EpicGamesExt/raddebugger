@@ -543,8 +543,7 @@ di_close(DI_Key *key)
         if(node->ref_count == 0) for(;;)
         {
           //- rjf: release
-          if(ins_atomic_u64_eval(&node->touch_count) == 0 &&
-             ins_atomic_u64_eval(&node->is_working) == 0)
+          if(ins_atomic_u64_eval(&node->touch_count) == 0)
           {
             di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
             if(node->file_base != 0)
@@ -1128,6 +1127,16 @@ ASYNC_WORK_DEF(di_parse_work)
       node->arena = rdi_parsed_arena;
       node->rdi = rdi_parsed;
       node->parse_done = 1;
+    }
+    else
+    {
+      if(rdi_parsed_arena != 0)
+      {
+        arena_release(rdi_parsed_arena);
+      }
+      os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+      os_file_map_close(file_map);
+      os_file_close(file);
     }
   }
   os_condition_variable_broadcast(stripe->cv);

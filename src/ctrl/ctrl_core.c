@@ -4681,6 +4681,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity_id  = event->code;
     }break;
     case DMN_EventKind_UnloadModule:
+    ProfScope("unload module %.*s", str8_varg(event->string))
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       CTRL_Handle module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
