@@ -70,6 +70,7 @@
 //~ Global Symbols
 
 #if !defined(RADDBG_MARKUP_STUBS)
+extern unsigned char raddbg_is_attached_byte_marker[1];
 int raddbg_is_attached__impl(void);
 int raddbg_thread_id__impl(void);
 void raddbg_thread_name__impl(int id, char *fmt, ...);
@@ -98,7 +99,7 @@ void raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *f
 #endif
 
 //- first byte of exe data section -> is attached
-static raddbg_exe_data unsigned char raddbg_is_attached_byte_marker[1];
+raddbg_exe_data unsigned char raddbg_is_attached_byte_marker[1] = {0};
 
 //- types
 
