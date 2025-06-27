@@ -1657,6 +1657,7 @@ internal DI_Match
 di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
 {
   DI_Match result = {0};
+  if(name.size != 0)
   {
     // rjf: unpack name
     U64 hash = di_hash_from_string(name, 0);
@@ -1802,6 +1803,7 @@ ASYNC_WORK_DEF(di_match_work)
     {
       RDI_NameMapKind_GlobalVariables,
       RDI_NameMapKind_ThreadVariables,
+      RDI_NameMapKind_Constants,
       RDI_NameMapKind_Procedures,
       RDI_NameMapKind_Types,
     };
@@ -1809,6 +1811,7 @@ ASYNC_WORK_DEF(di_match_work)
     {
       RDI_SectionKind_GlobalVariables,
       RDI_SectionKind_ThreadVariables,
+      RDI_SectionKind_Constants,
       RDI_SectionKind_Procedures,
       RDI_SectionKind_TypeNodes,
     };

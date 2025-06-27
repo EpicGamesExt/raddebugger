@@ -11701,6 +11701,15 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: set name matching parameters; begin matching
+  //
+  {
+    DI_KeyList keys_list = d_push_active_dbgi_key_list(scratch.arena);
+    DI_KeyArray keys = di_key_array_from_list(scratch.arena, &keys_list);
+    di_match_store_begin(rd_state->match_store, keys);
+  }
+  
+  //////////////////////////////
   //- rjf: loop - consume events in core, tick engine, and repeat
   //
   CTRL_Handle find_thread_retry = {0};
@@ -11765,9 +11774,10 @@ rd_frame(void)
       ctx->thread_unwind_count = unwind_count;
       
       //- rjf: fill modules
-      ctx->modules        = eval_modules;
-      ctx->modules_count  = eval_modules_count;
-      ctx->primary_module = eval_modules_primary;
+      ctx->modules          = eval_modules;
+      ctx->modules_count    = eval_modules_count;
+      ctx->primary_module   = eval_modules_primary;
+      ctx->dbgi_match_store = rd_state->match_store;
       
       //- rjf: fill space hooks
       ctx->space_gen   = rd_eval_space_gen;
@@ -16989,15 +16999,6 @@ rd_frame(void)
       }
     }
     scratch_end(scratch);
-  }
-  
-  //////////////////////////////
-  //- rjf: set name matching parameters; begin matching
-  //
-  {
-    DI_KeyList keys_list = d_push_active_dbgi_key_list(scratch.arena);
-    DI_KeyArray keys = di_key_array_from_list(scratch.arena, &keys_list);
-    di_match_store_begin(rd_state->match_store, keys);
   }
   
   //////////////////////////////
