@@ -230,41 +230,44 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
 internal String8
 msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
 {
-  MSF_RawStream stream = st->streams[sn];
-  
-  U8 *stream_buf     = push_array_no_zero(arena, U8, stream.size);
-  U8 *stream_out_ptr = stream_buf;
-  for (U32 i = 0; i < stream.page_count; ++i) {
-    U64 page_idx;
-    if (st->index_size == 4) {
-      page_idx = stream.u.page_indices_u32[i];
-    } else {
-      page_idx = stream.u.page_indices_u16[i];
+  String8 result = {0};
+  if(sn < st->stream_count)
+  {
+    MSF_RawStream stream = st->streams[sn];
+    U8 *stream_buf     = push_array_no_zero(arena, U8, stream.size);
+    U8 *stream_out_ptr = stream_buf;
+    for (U32 i = 0; i < stream.page_count; ++i) {
+      U64 page_idx;
+      if (st->index_size == 4) {
+        page_idx = stream.u.page_indices_u32[i];
+      } else {
+        page_idx = stream.u.page_indices_u16[i];
+      }
+      
+      U64 stream_page_off = (U64)page_idx * st->page_size;
+      if (stream_page_off + st->page_size > msf_data.size) {
+        break;
+      }
+      
+      U8 *stream_page_base = msf_data.str + stream_page_off;
+      
+      // clamp copy size by end of stream
+      U32 stream_pos     = (U32) (stream_out_ptr - stream_buf);
+      U32 remaining_size = stream.size - stream_pos;
+      U32 copy_size      = ClampTop(st->page_size, remaining_size);
+      
+      // copy page data
+      MemoryCopy(stream_out_ptr, stream_page_base, copy_size);
+      stream_out_ptr += copy_size;
     }
     
-    U64 stream_page_off = (U64)page_idx * st->page_size;
-    if (stream_page_off + st->page_size > msf_data.size) {
-      break;
-    }
+    U64 copy_size = (U64)(stream_out_ptr - stream_buf);
     
-    U8 *stream_page_base = msf_data.str + stream_page_off;
+    U64 unused_buf_size = stream.size - copy_size;
+    arena_pop(arena, unused_buf_size);
     
-    // clamp copy size by end of stream
-    U32 stream_pos     = (U32) (stream_out_ptr - stream_buf);
-    U32 remaining_size = stream.size - stream_pos;
-    U32 copy_size      = ClampTop(st->page_size, remaining_size);
-    
-    // copy page data
-    MemoryCopy(stream_out_ptr, stream_page_base, copy_size);
-    stream_out_ptr += copy_size;
+    result = str8(stream_buf, copy_size);
   }
-  
-  U64 copy_size = (U64)(stream_out_ptr - stream_buf);
-  
-  U64 unused_buf_size = stream.size - copy_size;
-  arena_pop(arena, unused_buf_size);
-  
-  String8 result = str8(stream_buf, copy_size);
   return result;
 }
 
