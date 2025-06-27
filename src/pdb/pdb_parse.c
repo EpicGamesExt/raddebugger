@@ -1121,7 +1121,7 @@ pdb_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
       MSF_StreamNumber  strtbl_sn   = named_streams->sn[PDB_NamedStream_StringTable];
       String8           strtbl_data = msf_data_from_stream_number(scratch.arena, msf_data, st, strtbl_sn);
       PDB_Strtbl       *strtbl      = pdb_strtbl_from_data(scratch.arena, strtbl_data);
-      if(strtbl)
+      if(strtbl->bucket_count != 0)
       {
         for(String8Node *file_n = file_list.first; file_n != 0; file_n = file_n->next)
         {
