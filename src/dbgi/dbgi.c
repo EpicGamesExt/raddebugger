@@ -1757,6 +1757,11 @@ di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
     
     // rjf: return node present info
     result = node->primary_match;
+    if(node->cmp_params_hash != store->params_hash)
+    {
+      result.dbgi_idx = 0;
+      result.idx = 0;
+    }
   }
   return result;
 }
