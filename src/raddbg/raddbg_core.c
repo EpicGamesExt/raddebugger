@@ -10287,7 +10287,7 @@ rd_code_color_slot_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8
     // rjf: try to map using asynchronous matching system
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      RDI_SectionKind section_kind = di_match_store_section_kind_from_name(rd_state->match_store, string, 0);
+      RDI_SectionKind section_kind = di_match_from_name(rd_state->match_store, string, 0).section;
       mapped = 1;
       switch(section_kind)
       {

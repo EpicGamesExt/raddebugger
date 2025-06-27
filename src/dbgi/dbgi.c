@@ -1590,6 +1590,10 @@ di_match_store_alloc(void)
   store->u2m_ring_mutex         = os_mutex_alloc();
   store->u2m_ring_size          = KB(2);
   store->u2m_ring_base          = push_array_no_zero(arena, U8, store->u2m_ring_size);
+  store->m2u_ring_cv            = os_condition_variable_alloc();
+  store->m2u_ring_mutex         = os_mutex_alloc();
+  store->m2u_ring_size          = KB(2);
+  store->m2u_ring_base          = push_array_no_zero(arena, U8, store->m2u_ring_size);
   return store;
 }
 
@@ -1638,13 +1642,21 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
     }
   }
   
+  // rjf: pop new matches
+#if 0
+  for(;;)
+  {
+    U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
+  }
+#endif
+  
   ProfEnd();
 }
 
-internal RDI_SectionKind
-di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
+internal DI_Match
+di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
 {
-  RDI_SectionKind result = 0;
+  DI_Match result = {0};
   {
     // rjf: unpack name
     U64 hash = di_hash_from_string(name, 0);
@@ -1743,7 +1755,7 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
     }
     
     // rjf: return node present info
-    result = node->section_kind;
+    result = node->primary_match;
   }
   return result;
 }
@@ -1783,7 +1795,9 @@ ASYNC_WORK_DEF(di_match_work)
       params_hash = store->params_hash;
     }
     
-    //- rjf: do match
+    //- rjf: gather matches
+    DI_MatchNode *first_match = 0;
+    DI_MatchNode *last_match = 0;
     RDI_NameMapKind name_map_kinds[] =
     {
       RDI_NameMapKind_GlobalVariables,
@@ -1815,7 +1829,20 @@ ASYNC_WORK_DEF(di_match_work)
           U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
           if(num != 0)
           {
-            ins_atomic_u32_eval_assign(&node->section_kind, name_map_section_kinds[name_map_kind_idx]);
+            // rjf: atomically update the node's primary match
+            ins_atomic_u64_eval_assign(&node->primary_match.dbgi_idx, dbgi_idx);
+            ins_atomic_u32_eval_assign(&node->primary_match.section, name_map_section_kinds[name_map_kind_idx]);
+            ins_atomic_u32_eval_assign(&node->primary_match.idx, run[0]);
+            
+            // rjf: gather all alternate matches
+            for(U32 match_idx = 1; match_idx < num; match_idx += 1)
+            {
+              DI_MatchNode *m = push_array(scratch.arena, DI_MatchNode, 1);
+              SLLQueuePush(first_match, last_match, m);
+              m->v.dbgi_idx = dbgi_idx;
+              m->v.section  = name_map_section_kinds[name_map_kind_idx];
+              m->v.idx      = run[match_idx];
+            }
           }
         }
         di_scope_close(di_scope);
