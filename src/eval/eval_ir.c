@@ -1738,8 +1738,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               }
             }break;
             
-            //- rjf: built-ins
-            case E_IdentifierResolutionPath_BuiltIns:
+            //- rjf: built-in constants
+            case E_IdentifierResolutionPath_BuiltInConstants:
             {
               // rjf: "true"
               if(!string_mapped && str8_match(string, str8_lit("true"), 0))
@@ -1762,56 +1762,13 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 mapped_bytecode_mode = E_Mode_Value;
               }
-              
-              // rjf: built-in type names
-              if(0){}
-#define BuiltInType_XList \
-BasicCase("uint8", U8)\
-BasicCase("uint8_t", U8)\
-BasicCase("uchar", UChar8)\
-BasicCase("uchar8", UChar8)\
-BasicCase("uint16", U16)\
-BasicCase("uint16_t", U16)\
-BasicCase("uchar16", UChar16)\
-BasicCase("uint32", U32)\
-BasicCase("uint32_t", U32)\
-BasicCase("uchar32", UChar32)\
-BasicCase("uint64", U64)\
-BasicCase("uint64_t", U64)\
-BasicCase("uint128", U128)\
-BasicCase("uint128_t", U128)\
-BasicCase("uint256", U256)\
-BasicCase("uint256_t", U256)\
-BasicCase("uint512", U512)\
-BasicCase("uint512_t", U512)\
-BasicCase("int8", S8)\
-BasicCase("int8_t", S8)\
-BasicCase("char", Char8)\
-BasicCase("char8", Char8)\
-BasicCase("int16", S16)\
-BasicCase("int16_t", S16)\
-BasicCase("char16", Char16)\
-BasicCase("int32", S32)\
-BasicCase("int32_t", S32)\
-BasicCase("char32", Char32)\
-BasicCase("int64", S64)\
-BasicCase("int64_t", S64)\
-BasicCase("int128", S128)\
-BasicCase("int128_t", S128)\
-BasicCase("int256", S256)\
-BasicCase("int256_t", S256)\
-BasicCase("int512", S512)\
-BasicCase("int512_t", S512)\
-BasicCase("void", Void)\
-BasicCase("bool", Bool)\
-BasicCase("float", F32)\
-BasicCase("float32", F32)\
-BasicCase("double", F64)\
-BasicCase("float64", F64)\
-              
-#define BasicCase(str, kind) else if(str8_match(string, str8_lit(str), 0)) {string_mapped = 1; mapped_type_key = e_type_key_basic(E_TypeKind_##kind);}
-              BuiltInType_XList
-#undef BasicCase
+            }break;
+            
+            //- rjf: built-in types
+            case E_IdentifierResolutionPath_BuiltInTypes:
+            {
+              mapped_type_key = e_leaf_builtin_type_key_from_name(string);
+              string_mapped = !e_type_key_match(mapped_type_key, e_type_key_zero());
             }break;
             
             //- rjf: debug info matches

@@ -12420,24 +12420,27 @@ rd_frame(void)
     //
     RD_CfgList immediate_type_views = {0};
     CTRL_EntityArray modules = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Module);
-    for EachIndex(idx, modules.count)
+    ProfScope("gather config from loaded modules")
     {
-      CTRL_Entity *module = modules.v[idx];
-      String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
-      U8 split_char = 0;
-      String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
-      U64 cfg_idx = 0;
-      for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
+      for EachIndex(idx, modules.count)
       {
-        String8 text = text_n->string;
-        RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, str8_zero(), text);
-        String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
-        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
+        CTRL_Entity *module = modules.v[idx];
+        String8 raddbg_data = ctrl_raddbg_data_from_module(scratch.arena, module->handle);
+        U8 split_char = 0;
+        String8List raddbg_data_text_parts = str8_split(scratch.arena, raddbg_data, &split_char, 1, 0);
+        U64 cfg_idx = 0;
+        for(String8Node *text_n = raddbg_data_text_parts.first; text_n != 0; text_n = text_n->next)
         {
-          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
-          rd_cfg_release_all_children(immediate_root);
-          rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
-          rd_cfg_list_push(scratch.arena, &immediate_type_views, n->v);
+          String8 text = text_n->string;
+          RD_CfgList cfgs = rd_cfg_tree_list_from_string(scratch.arena, str8_zero(), text);
+          String8 module_name = ctrl_string_from_handle(scratch.arena, module->handle);
+          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next, cfg_idx += 1)
+          {
+            RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("module_%S_cfg_%I64x", module_name, cfg_idx);
+            rd_cfg_release_all_children(immediate_root);
+            rd_cfg_insert_child(immediate_root, immediate_root->last, n->v);
+            rd_cfg_list_push(scratch.arena, &immediate_type_views, n->v);
+          }
         }
       }
     }
@@ -12445,6 +12448,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: construct default immediate-mode configs based on loaded modules
     //
+    ProfScope("construct default immediate-mode configs based on loaded modules")
     {
       local_persist read_only struct
       {
@@ -12571,7 +12575,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: process top-level graphical commands
     //
-    if(rd_state->frame_depth == 1)
+    if(rd_state->frame_depth == 1) ProfScope("process top-level graphical commands")
     {
       for(;rd_next_cmd(&cmd);) RD_RegsScope()
       {
@@ -17112,6 +17116,10 @@ rd_frame(void)
   
   //////////////////////////////
   //- rjf: close frame scopes
+  //
+  // NOTE(rjf): this always must happen before the refresh, since that
+  // will sleep for vsync, and we do not want to hold handles for long,
+  // since eviction threads may be waiting to get rid of stuff.
   //
   di_scope_close(rd_state->frame_di_scope);
   ctrl_scope_close(rd_state->frame_ctrl_scope);

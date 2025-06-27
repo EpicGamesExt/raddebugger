@@ -526,156 +526,75 @@ e_string_from_expr(Arena *arena, E_Expr *expr, String8 parent_expr_string)
 //~ rjf: Parsing Functions
 
 internal E_TypeKey
-e_leaf_type_from_name(String8 name)
+e_leaf_builtin_type_key_from_name(String8 name)
 {
-  ProfBeginFunction();
-  E_TypeKey key = zero_struct;
-  B32 found = 0;
-  if(!found)
+  E_TypeKey result = {0};
+  if(0){}
+#define BuiltInType_XList \
+BasicCase("uint8", U8)\
+BasicCase("uint8_t", U8)\
+BasicCase("uchar", UChar8)\
+BasicCase("uchar8", UChar8)\
+BasicCase("uint16", U16)\
+BasicCase("uint16_t", U16)\
+BasicCase("uchar16", UChar16)\
+BasicCase("uint32", U32)\
+BasicCase("uint32_t", U32)\
+BasicCase("uchar32", UChar32)\
+BasicCase("uint64", U64)\
+BasicCase("uint64_t", U64)\
+BasicCase("uint128", U128)\
+BasicCase("uint128_t", U128)\
+BasicCase("uint256", U256)\
+BasicCase("uint256_t", U256)\
+BasicCase("uint512", U512)\
+BasicCase("uint512_t", U512)\
+BasicCase("int8", S8)\
+BasicCase("int8_t", S8)\
+BasicCase("char", Char8)\
+BasicCase("char8", Char8)\
+BasicCase("int16", S16)\
+BasicCase("int16_t", S16)\
+BasicCase("char16", Char16)\
+BasicCase("int32", S32)\
+BasicCase("int32_t", S32)\
+BasicCase("char32", Char32)\
+BasicCase("int64", S64)\
+BasicCase("int64_t", S64)\
+BasicCase("int128", S128)\
+BasicCase("int128_t", S128)\
+BasicCase("int256", S256)\
+BasicCase("int256_t", S256)\
+BasicCase("int512", S512)\
+BasicCase("int512_t", S512)\
+BasicCase("void", Void)\
+BasicCase("bool", Bool)\
+BasicCase("float", F32)\
+BasicCase("float32", F32)\
+BasicCase("double", F64)\
+BasicCase("float64", F64)
+#define BasicCase(str, kind) else if(str8_match(name, str8_lit(str), 0)) {result = e_type_key_basic(E_TypeKind_##kind);}
+  BuiltInType_XList
+#undef BasicCase
+  return result;
+}
+
+internal E_TypeKey
+e_leaf_type_key_from_name(String8 name)
+{
+  E_TypeKey key = e_leaf_builtin_type_key_from_name(name);
+  if(!e_type_key_match(e_type_key_zero(), key))
   {
-#define Case(str) (str8_match(name, str8_lit(str), 0))
-    if(0){}
-    else if(Case("uint8") || Case("uint8_t"))
+    DI_Match match = di_match_from_name(e_base_ctx->dbgi_match_store, name, 0);
+    if(match.section == RDI_SectionKind_TypeNodes)
     {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U8);
-    }
-    else if(Case("uchar8") || Case("uchar"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_UChar8);
-    }
-    else if(Case("uint16") || Case("uint16_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U16);
-    }
-    else if(Case("uchar16"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_UChar16);
-    }
-    else if(Case("uint32") || Case("uint32_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U32);
-    }
-    else if(Case("uchar32"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_UChar32);
-    }
-    else if(Case("uint64") || Case("uint64_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U64);
-    }
-    else if(Case("uint128") || Case("uint128_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U128);
-    }
-    else if(Case("uint256") || Case("uint256_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U256);
-    }
-    else if(Case("uint512") || Case("uint512_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_U512);
-    }
-    else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S8);
-    }
-    else if(Case("char8") || Case("char"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_Char8);
-    }
-    else if(Case("int16") || Case("int16_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S16);
-    }
-    else if(Case("char16"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_Char16);
-    }
-    else if(Case("int32") || Case("int32_t") || Case("char32"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S32);
-    }
-    else if(Case("char32"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_Char32);
-    }
-    else if(Case("int64") || Case("int64_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S64);
-    }
-    else if(Case("int256") || Case("int256_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S256);
-    }
-    else if(Case("int512") || Case("int512_t"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_S512);
-    }
-    else if(Case("void"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_Void);
-    }
-    else if(Case("bool"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_Bool);
-    }
-    else if(Case("float") || Case("float32"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_F32);
-    }
-    else if(Case("double") || Case("float64"))
-    {
-      found = 1;
-      key = e_type_key_basic(E_TypeKind_F64);
-    }
-#undef Case
-  }
-  if(!found)
-  {
-    for(U64 module_idx = 0; module_idx < e_base_ctx->modules_count; module_idx += 1)
-    {
-      RDI_Parsed *rdi = e_base_ctx->modules[module_idx].rdi;
-      RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
-      RDI_ParsedNameMap parsed_name_map = {0};
-      rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-      RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
-      if(node != 0)
-      {
-        U32 match_count = 0;
-        U32 *matches = rdi_matches_from_map_node(rdi, node, &match_count);
-        if(match_count != 0)
-        {
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, matches[0]);
-          found = (type_node->kind != RDI_TypeKind_NULL);
-          key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), matches[0], module_idx);
-          break;
-        }
-      }
+      E_Module *module = &e_base_ctx->modules[match.dbgi_idx];
+      RDI_Parsed *rdi = module->rdi;
+      U32 type_idx = match.idx;
+      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+      key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)match.dbgi_idx);
     }
   }
-  ProfEnd();
   return key;
 }
 
@@ -690,7 +609,7 @@ e_type_key_from_expr(E_Expr *expr)
     default:{}break;
     case E_ExprKind_LeafIdentifier:
     {
-      result = e_leaf_type_from_name(expr->string);
+      result = e_leaf_type_key_from_name(expr->string);
     }break;
     case E_ExprKind_TypeIdent:
     {
@@ -744,7 +663,7 @@ e_push_type_parse_from_text_tokens(Arena *arena, String8 text, E_TokenArray toke
       {
         token_string = str8_substr(token_string, r1u64(1, token_string.size-1));
       }
-      E_TypeKey type_key = e_leaf_type_from_name(token_string);
+      E_TypeKey type_key = e_leaf_type_key_from_name(token_string);
       if(!e_type_key_match(e_type_key_zero(), type_key))
       {
         token_it += 1;
