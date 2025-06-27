@@ -1801,6 +1801,10 @@ ASYNC_WORK_DEF(di_match_work)
       params_hash = store->params_hash;
     }
     
+    //- rjf: zero match info
+    ins_atomic_u64_eval_assign(&node->primary_match.dbgi_idx, 0);
+    ins_atomic_u32_eval_assign(&node->primary_match.idx, 0);
+    
     //- rjf: gather matches
     DI_MatchNode *first_match = 0;
     DI_MatchNode *last_match = 0;
