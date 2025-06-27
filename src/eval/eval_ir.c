@@ -1812,7 +1812,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                     }
                   }
                 }
-                if(match.idx != 0)
+                if(match.idx != 0 && match.dbgi_idx < e_base_ctx->modules_count)
                 {
                   E_Module *module = &e_base_ctx->modules[match.dbgi_idx];
                   RDI_Parsed *rdi = module->rdi;
