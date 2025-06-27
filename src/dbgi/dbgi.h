@@ -263,11 +263,16 @@ struct DI_SearchThread
 typedef struct DI_Match DI_Match;
 struct DI_Match
 {
-  DI_Match *next;
-  DI_Match *prev;
   U64 dbgi_idx;
   RDI_SectionKind section;
   U32 idx;
+};
+
+typedef struct DI_MatchNode DI_MatchNode;
+struct DI_MatchNode
+{
+  DI_MatchNode *next;
+  DI_Match v;
 };
 
 typedef struct DI_MatchNameNode DI_MatchNameNode;
@@ -289,9 +294,9 @@ struct DI_MatchNameNode
   // rjf: atomically written by match work
   U64 cmp_count;
   U64 cmp_params_hash;
-  RDI_SectionKind section_kind;
-  // DI_Match *first_match;
-  // DI_Match *last_match;
+  DI_Match primary_match;
+  // DI_MatchNode *first_alt_match;
+  // DI_MatchNode *last_alt_match;
 };
 
 typedef struct DI_MatchNameSlot DI_MatchNameSlot;
@@ -332,6 +337,14 @@ struct DI_MatchStore
   U8 *u2m_ring_base;
   U64 u2m_ring_write_pos;
   U64 u2m_ring_read_pos;
+  
+  // rjf: match -> user work ring buffer
+  OS_Handle m2u_ring_cv;
+  OS_Handle m2u_ring_mutex;
+  U64 m2u_ring_size;
+  U8 *m2u_ring_base;
+  U64 m2u_ring_write_pos;
+  U64 m2u_ring_read_pos;
 };
 
 ////////////////////////////////
@@ -470,7 +483,7 @@ internal void di_search_evictor_thread__entry_point(void *p);
 
 internal DI_MatchStore *di_match_store_alloc(void);
 internal void di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys);
-internal RDI_SectionKind di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 endt_us);
+internal DI_Match di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us);
 ASYNC_WORK_DEF(di_match_work);
 
 #endif // DBGI_H
