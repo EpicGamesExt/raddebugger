@@ -8,6 +8,7 @@
 // [ ] process memory cache not correctly invalidating - race in lookup
 // [ ] hardware breakpoints regression
 // [ ] process memory waiting regression
+// [ ] "evict module image info from cache" crash, on module close sometimes
 //
 //- memory view
 // [ ] have smaller visible range than entire memory
