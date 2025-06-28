@@ -2,7 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: post-0.9.19 TODO notes
+//~ rjf: post-0.9.20 TODO notes
+//
+//- urgent fixes
+// [ ] process memory cache not correctly invalidating - race in lookup
+// [ ] hardware breakpoints regression
+// [ ] process memory waiting regression
 //
 //- memory view
 // [ ] have smaller visible range than entire memory

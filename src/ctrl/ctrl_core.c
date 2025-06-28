@@ -1691,7 +1691,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
         }
       }
       end_fast_lookup:;
-      if(os_now_microseconds() >= endt_us || !id_working)
+      if(!id_stale || !id_working || os_now_microseconds() >= endt_us)
       {
         break;
       }
@@ -1747,7 +1747,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
             }
             else
             {
-              node_needs_stream = (range_n->mem_gen < mem_gen);
+              node_needs_stream = (range_n->mem_gen < mem_gen && range_n->working_count == 0);
             }
             if(node_needs_stream)
             {
@@ -1762,34 +1762,14 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       {
         if(ctrl_u2ms_enqueue_req(key, process, vaddr_range, zero_terminated, endt_us))
         {
-          async_push_work(ctrl_mem_stream_work, .working_counter = node_working_count);
+          async_push_work(ctrl_mem_stream_work);
           requested = 1;
-        }
-        else OS_MutexScopeR(process_stripe->rw_mutex)
-        {
-          for(CTRL_ProcessMemoryCacheNode *process_n = process_slot->first; process_n != 0; process_n = process_n->next)
-          {
-            if(ctrl_handle_match(process_n->handle, process))
-            {
-              U64 range_slot_idx = range_hash%process_n->range_hash_slots_count;
-              CTRL_ProcessMemoryRangeHashSlot *range_slot = &process_n->range_hash_slots[range_slot_idx];
-              for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
-              {
-                if(hs_id_match(n->id, id))
-                {
-                  ins_atomic_u64_dec_eval(&n->working_count);
-                  goto end_fail_work;
-                }
-              }
-            }
-          }
-          end_fail_work:;
         }
       }
     }
     
     //- rjf: step 4: if we didn't request, and if we aren't working, then exit
-    if(!requested && !id_working)
+    if(!requested)
     {
       break;
     }
@@ -6832,7 +6812,6 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   void *range_base = 0;
   U64 zero_terminated_size = 0;
   U64 pre_read_mem_gen = ctrl_mem_gen();
-  U64 post_read_mem_gen = 0;
   {
     range_size = dim_1u64(vaddr_range_clamped);
     U64 page_size = os_get_system_info()->page_size;
@@ -6845,29 +6824,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
     else
     {
       range_base = push_array_no_zero(range_arena, U8, range_size);
-      U64 bytes_read = 0;
-      U64 retry_count = 0;
-      U64 retry_limit = range_size > page_size ? 64 : 0;
-      for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
-          retry_count <= retry_limit;
-          retry_count += 1)
-      {
-        bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
-        if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
-        {
-          U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
-          vaddr_range_clamped_retry.max -= diff;
-          vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
-          if(diff == 0)
-          {
-            break;
-          }
-        }
-        else
-        {
-          break;
-        }
-      }
+      U64 bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped, range_base);
       if(bytes_read == 0)
       {
         arena_release(range_arena);
@@ -6892,8 +6849,8 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
         }
       }
     }
-    post_read_mem_gen = dmn_mem_gen();
   }
+  U64 post_read_mem_gen = ctrl_mem_gen();
   
   //- rjf: read successful -> submit to hash store
   U128 hash = {0};
@@ -6923,6 +6880,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
             {
               range_n->mem_gen = post_read_mem_gen;
             }
+            ins_atomic_u64_dec_eval(&range_n->working_count);
             goto commit__break_all;
           }
         }
