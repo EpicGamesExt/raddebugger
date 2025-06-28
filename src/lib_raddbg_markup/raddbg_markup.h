@@ -317,7 +317,7 @@ raddbg_thread_name__impl(int id, char *fmt, ...)
 #pragma warning(disable: 6320 6322)
     __try
     {
-      RaiseException(0x406D1388, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+      RaiseException(0x406D1388u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
     }
     __except(1)
     {

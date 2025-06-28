@@ -3941,6 +3941,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
         }
         
         // rjf: src_id * pt -> push
+        if(src_id != 0)
         {
           RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
           RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
@@ -3986,7 +3987,7 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_EvalScope 
     {
       String8 expr = bp->string;
       E_Value value = e_value_from_string(expr);
-      if(value.u64 != 0)
+      if(value.u64 != 0 || bp->flags != 0)
       {
         DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
         trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
@@ -4761,7 +4762,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->msg_id     = msg->msg_id;
       out_evt->vaddr_rng  = r1u64(event->address, event->address + event->size);
       out_evt->string     = event->string;
-    }
+    }break;
     case DMN_EventKind_SetBreakpoint:
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
