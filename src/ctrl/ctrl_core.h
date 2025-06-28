@@ -792,6 +792,11 @@ struct CTRL_State
   CTRL_CallStackCache call_stack_cache;
   CTRL_ModuleImageInfoCache module_image_info_cache;
   
+  // rjf: generations
+  U64 run_gen;
+  U64 mem_gen;
+  U64 reg_gen;
+  
   // rjf: user -> ctrl msg ring buffer
   U64 u2c_ring_size;
   U8 *u2c_ring_base;

@@ -200,11 +200,6 @@ struct DMN_W32_Shared
   OS_Handle access_mutex;
   B32 access_run_state;
   
-  // rjf: run/mem/reg gens
-  U64 run_gen;
-  U64 mem_gen;
-  U64 reg_gen;
-  
   // rjf: detaching info
   Arena *detach_arena;
   DMN_HandleList detach_processes;

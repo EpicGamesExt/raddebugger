@@ -71,26 +71,6 @@ dmn_halt(U64 code, U64 user_data)
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
 
-//- rjf: run/memory/register counters
-
-internal U64
-dmn_run_gen(void)
-{
-  return 0;
-}
-
-internal U64
-dmn_mem_gen(void)
-{
-  return 0;
-}
-
-internal U64
-dmn_reg_gen(void)
-{
-  return 0;
-}
-
 //- rjf: non-blocking-control-thread access barriers
 
 internal B32
