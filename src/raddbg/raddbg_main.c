@@ -9,6 +9,11 @@
 // [ ] hardware breakpoints regression
 // [ ] process memory waiting regression
 // [ ] "evict module image info from cache" crash, on module close sometimes
+//   - reproduction steps:
+//     - raddbg debugging raddbg
+//     - [parent] breakpoint on memory read failure case
+//     - [child] breakpoint on ctrl_bindings init in g0
+//     - f5x3
 //
 //- memory view
 // [ ] have smaller visible range than entire memory

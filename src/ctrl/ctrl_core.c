@@ -1684,7 +1684,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
             {
               id_exists = 1;
               id_stale = (n->mem_gen < mem_gen);
-              id_working = (ins_atomic_u64_eval(&n->working_count) != 0);
+              id_working = (n->working_count != 0);
               goto end_fast_lookup;
             }
           }
@@ -1718,7 +1718,6 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
     if(!id_exists || (id_exists && id_stale && !id_working))
     {
       B32 node_needs_stream = 0;
-      U64 *node_working_count = 0;
       OS_MutexScopeW(process_stripe->rw_mutex)
       {
         for(CTRL_ProcessMemoryCacheNode *process_n = process_slot->first; process_n != 0; process_n = process_n->next)
@@ -1751,9 +1750,8 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
             }
             if(node_needs_stream)
             {
-              ins_atomic_u64_inc_eval(&range_n->working_count);
+              range_n->working_count += 1;
             }
-            node_working_count = &range_n->working_count;
             break;
           }
         }
@@ -1762,8 +1760,32 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       {
         if(ctrl_u2ms_enqueue_req(key, process, vaddr_range, zero_terminated, endt_us))
         {
+          // NOTE(rjf): debugging
+#if 0
+          raddbg_log("[0x%I64x, 0x%I64x) push: (gen: %I64u)\n", vaddr_range.min, vaddr_range.max, mem_gen);
+#endif
           async_push_work(ctrl_mem_stream_work);
           requested = 1;
+        }
+        else OS_MutexScopeW(process_stripe->rw_mutex)
+        {
+          for(CTRL_ProcessMemoryCacheNode *process_n = process_slot->first; process_n != 0; process_n = process_n->next)
+          {
+            if(ctrl_handle_match(process_n->handle, process))
+            {
+              U64 range_slot_idx = range_hash%process_n->range_hash_slots_count;
+              CTRL_ProcessMemoryRangeHashSlot *range_slot = &process_n->range_hash_slots[range_slot_idx];
+              CTRL_ProcessMemoryRangeHashNode *range_n = 0;
+              for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
+              {
+                if(hs_id_match(n->id, id))
+                {
+                  n->working_count -= 1;
+                  break;
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1960,6 +1982,12 @@ ctrl_process_write(CTRL_Handle process, Rng1U64 range, void *src)
   ProfBeginFunction();
   B32 result = dmn_process_write(process.dmn_handle, range, src);
   
+  //- rjf: success -> bump generation
+  if(result)
+  {
+    ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
+  }
+  
   //- rjf: success -> wait for cache updates, for small regions - prefer relatively seamless
   // writes within calling frame's "view" of the memory, at the expense of a small amount of
   // time.
@@ -2066,7 +2094,7 @@ ctrl_reg_block_from_thread(Arena *arena, CTRL_EntityCtx *ctx, CTRL_Handle handle
     // rjf: copy from node
     if(node)
     {
-      U64 current_reg_gen = dmn_reg_gen();
+      U64 current_reg_gen = ctrl_reg_gen();
       B32 need_stale = 1;
       if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(handle.dmn_handle, result))
       {
@@ -2124,6 +2152,10 @@ ctrl_thread_write_reg_block(CTRL_Handle thread, void *block)
 {
   // TODO(rjf): @callstacks immediately reflect this in the call stack cache
   B32 good = dmn_thread_write_reg_block(thread.dmn_handle, block);
+  if(good)
+  {
+    ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
+  }
   return good;
 }
 
@@ -3492,26 +3524,26 @@ ctrl_halt(void)
 ////////////////////////////////
 //~ rjf: Shared Accessor Functions
 
-//- rjf: run generation counter
+//- rjf: generation counters
 
 internal U64
 ctrl_run_gen(void)
 {
-  U64 result = dmn_run_gen();
+  U64 result = ins_atomic_u64_eval(&ctrl_state->run_gen);
   return result;
 }
 
 internal U64
 ctrl_mem_gen(void)
 {
-  U64 result = dmn_mem_gen();
+  U64 result = ins_atomic_u64_eval(&ctrl_state->mem_gen);
   return result;
 }
 
 internal U64
 ctrl_reg_gen(void)
 {
-  U64 result = dmn_reg_gen();
+  U64 result = ins_atomic_u64_eval(&ctrl_state->reg_gen);
   return result;
 }
 
@@ -3831,6 +3863,9 @@ ctrl_thread__entry_point(void *p)
       }
       ins_atomic_u64_eval_assign(&ctrl_state->ctrl_thread_run_state, 0);
     }
+    ins_atomic_u64_inc_eval(&ctrl_state->run_gen);
+    ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
+    ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
     
     //- rjf: gather & output logs
     LogScopeResult log = log_scope_end(scratch.arena);
@@ -6777,6 +6812,7 @@ ctrl_u2ms_dequeue_req(HS_Key *out_key, CTRL_Handle *out_process, Rng1U64 *out_va
 
 ASYNC_WORK_DEF(ctrl_mem_stream_work)
 {
+#define CTRL_MEM_STREAM_WORK_DEBUG 0
   ProfBeginFunction();
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
   
@@ -6812,6 +6848,12 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   void *range_base = 0;
   U64 zero_terminated_size = 0;
   U64 pre_read_mem_gen = ctrl_mem_gen();
+  B32 pre_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+#if CTRL_MEM_STREAM_WORK_DEBUG
+  Log *log = log_alloc();
+  log_select(log);
+  log_scope_begin();
+#endif
   {
     range_size = dim_1u64(vaddr_range_clamped);
     U64 page_size = os_get_system_info()->page_size;
@@ -6873,6 +6915,23 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
     }
   }
   U64 post_read_mem_gen = ctrl_mem_gen();
+  B32 post_run_state = ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
+  // NOTE(rjf): debugging
+#if CTRL_MEM_STREAM_WORK_DEBUG
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 sample_data_str = str8_lit("no data");
+    if(range_base != 0)
+    {
+      String8 sample_data = str8((U8*)range_base + 0x100, 16);
+      String8List sample_data_strs = numeric_str8_list_from_data(scratch.arena, 16, sample_data, 1);
+      sample_data_str = str8_list_join(scratch.arena, &sample_data_strs, &(StringJoin){.sep = str8_lit(", ")});
+    }
+    LogScopeResult log = log_scope_end(scratch.arena);
+    raddbg_log("[0x%I64x, 0x%I64x) { pre_gen: %I64u, post_gen: %I64u, pre_run: %i, post_run: %i, bytes: [%S], info:```%S``` }\n", vaddr_range.min, vaddr_range.max, pre_read_mem_gen, post_read_mem_gen, pre_run_state, post_run_state, sample_data_str, log.strings[LogMsgKind_Info]);
+    scratch_end(scratch);
+  }
+#endif
   
   //- rjf: read successful -> submit to hash store
   U128 hash = {0};
@@ -6902,7 +6961,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
             {
               range_n->mem_gen = post_read_mem_gen;
             }
-            ins_atomic_u64_dec_eval(&range_n->working_count);
+            range_n->working_count -= 1;
             goto commit__break_all;
           }
         }

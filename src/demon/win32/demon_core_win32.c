@@ -320,7 +320,10 @@ dmn_w32_process_read(HANDLE process, Rng1U64 range, void *dst)
     SIZE_T actual_read = 0;
     if(!ReadProcessMemory(process, (LPCVOID)cursor, ptr, to_read, &actual_read))
     {
+      DWORD error = GetLastError();
+      log_infof("'Win32 ReadProcessMemory failure': { [0x%I64x, 0x%I64x), code: %i }\n", range.min, range.max, error);
       bytes_read += actual_read;
+      (void)error;
       break;
     }
     ptr += actual_read;
@@ -349,7 +352,6 @@ dmn_w32_process_write(HANDLE process, Rng1U64 range, void *src)
     ptr += actual_write;
     cursor += actual_write;
   }
-  ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
   return result;
 }
 
@@ -1112,7 +1114,6 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       scratch_end(scratch);
     }break;
   }
-  ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
   ProfEnd();
   return result;
 }
@@ -1541,7 +1542,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               U64 new_rflags = rflags | 0x100;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
-              ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
             }
           }break;
         }
@@ -1891,9 +1891,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               (void)err;
               keep_going = 1;
             }
-            ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
-            ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
-            ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
           }
         }
         
@@ -2327,7 +2324,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       U64 new_rip = instruction_pointer;
                       ctx->Rip = new_rip;
                       SetThreadContext(thread->handle, ctx);
-                      ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
                     }
                   }break;
                 }
@@ -2841,7 +2837,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               U64 new_rflags = rflags & ~0x100;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
-              ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
             }
           }break;
         }
@@ -2937,29 +2932,6 @@ dmn_halt(U64 code, U64 user_data)
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
-
-//- rjf: run/memory/register counters
-
-internal U64
-dmn_run_gen(void)
-{
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->run_gen);
-  return result;
-}
-
-internal U64
-dmn_mem_gen(void)
-{
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->mem_gen);
-  return result;
-}
-
-internal U64
-dmn_reg_gen(void)
-{
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->reg_gen);
-  return result;
-}
 
 //- rjf: non-blocking-control-thread access barriers
 

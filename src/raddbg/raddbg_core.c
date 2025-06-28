@@ -17193,10 +17193,13 @@ rd_frame(void)
     os_append_data_to_file_path(rd_state->log_path, log.strings[LogMsgKind_Info]);
     if(log.strings[LogMsgKind_UserError].size != 0)
     {
+      String8 error_log = log.strings[LogMsgKind_UserError];
+      String8List error_log_lines = str8_split(scratch.arena, error_log, (U8 *)"\n", 1, 0);
+      String8 error_log_string = str8_list_join(scratch.arena, &error_log_lines, &(StringJoin){.sep = str8_lit(" ")});
       for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
       {
-        ws->error_string_size = Min(sizeof(ws->error_buffer), log.strings[LogMsgKind_UserError].size);
-        MemoryCopy(ws->error_buffer, log.strings[LogMsgKind_UserError].str, ws->error_string_size);
+        ws->error_string_size = Min(sizeof(ws->error_buffer), error_log_string.size);
+        MemoryCopy(ws->error_buffer, error_log_string.str, ws->error_string_size);
         ws->error_t = 1.f;
       }
     }
