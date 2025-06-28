@@ -3708,8 +3708,8 @@ ctrl_thread__entry_point(void *p)
             {
               continue;
             }
-            E_Parse addr_parse = e_parse_from_string(n->v.string);
-            E_Parse cnd_parse = e_parse_from_string(n->v.condition);
+            E_Parse addr_parse = e_push_parse_from_string(scratch.arena, n->v.string);
+            E_Parse cnd_parse = e_push_parse_from_string(scratch.arena, n->v.condition);
             E_Expr *exprs[] = {addr_parse.expr, cnd_parse.expr};
             for EachElement(idx, exprs)
             {
@@ -6824,7 +6824,29 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
     else
     {
       range_base = push_array_no_zero(range_arena, U8, range_size);
-      U64 bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped, range_base);
+      U64 bytes_read = 0;
+      U64 retry_count = 0;
+      U64 retry_limit = range_size > page_size ? 64 : 0;
+      for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
+          retry_count <= retry_limit;
+          retry_count += 1)
+      {
+        bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
+        if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
+        {
+          U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+          vaddr_range_clamped_retry.max -= diff;
+          vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
+          if(diff == 0)
+          {
+            break;
+          }
+        }
+        else
+        {
+          break;
+        }
+      }
       if(bytes_read == 0)
       {
         arena_release(range_arena);
