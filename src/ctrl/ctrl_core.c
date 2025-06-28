@@ -4583,6 +4583,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           }
         }
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
+        ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
+        ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
+        ins_atomic_u64_inc_eval(&ctrl_state->run_gen);
         for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
         {
           DMN_EventNode *dst_n = ctrl_state->free_dmn_event_node;
