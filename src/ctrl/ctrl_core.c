@@ -3927,7 +3927,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_EvalScope *
       {
         String8 expr = bp->string;
         E_Value value = e_value_from_string(expr);
-        if(value.u64 != 0)
+        if(value.u64 != 0 || bp->flags != 0)
         {
           DMN_Trap trap = {process.dmn_handle, value.u64, (U64)bp};
           trap.flags = ctrl_dmn_trap_flags_from_user_breakpoint_flags(bp->flags);
