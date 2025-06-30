@@ -1776,6 +1776,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
           B32 ptee_has_content;
           B32 ptee_has_string;
           B32 did_prefix_content;
+          B32 did_prefix_string;
           B32 did_redirect;
         };
         EV_StringPtrData *ptr_data = it->top_task->user_data;
@@ -1862,6 +1863,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               // rjf: report
               *out_string = push_str8_copy(arena, string__escaped_and_quoted);
               ptr_data->did_prefix_content = 1;
+              ptr_data->did_prefix_string = 1;
               
               scratch_end(scratch);
             }
@@ -2043,7 +2045,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             //
             
             // rjf: [read only] if we did prefix content, do a parenthesized pointer value
-            if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->did_prefix_content)
+            if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules && ptr_data->did_prefix_content && !ptr_data->did_prefix_string)
             {
               *out_string = push_str8f(arena, " (%S)", ptr_value_string);
             }

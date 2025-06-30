@@ -686,10 +686,16 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           }
           
           // rjf: call into hook to do access
-          result = lhs_access(arena, parent, expr, lhs_irtree_try);
+          E_IRTreeAndType new_result_maybe = lhs_access(arena, parent, expr, lhs_irtree_try);
           
-          // rjf: end chain if we found a result
-          if(result.root != &e_irnode_nil)
+          // rjf: if we got a valid result -> store
+          if(new_result_maybe.root != &e_irnode_nil && (result.root == &e_irnode_nil || lhs_irtree_try->auto_hook == 0))
+          {
+            result = new_result_maybe;
+          }
+          
+          // rjf: end chain if we found a result that is not an autohook
+          if(new_result_maybe.root != &e_irnode_nil && lhs_irtree_try->auto_hook == 0)
           {
             break;
           }
@@ -1672,7 +1678,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
               for(E_IRTreeAndType *prev = parent; prev != 0; prev = prev->prev)
               {
                 E_Expr *access = e_expr_irext_member_access(scratch.arena, &e_expr_nil, prev, string);
-                E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, root_parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, access);
+                E_IRTreeAndType access_parent = {&e_irnode_nil};
+                E_IRTreeAndType access_irtree = e_push_irtree_and_type_from_expr(scratch.arena, prev->prev ? prev->prev : &access_parent, &e_default_identifier_resolution_rule, 1, 1, access);
                 if(access_irtree.root != &e_irnode_nil)
                 {
                   string_mapped = 1;
@@ -1681,7 +1688,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                   mapped_bytecode = e_bytecode_from_oplist(arena, &oplist);
                   mapped_bytecode_mode = access_irtree.mode;
                   e_msg_list_concat_in_place(&result.msgs, &access_irtree.msgs);
-                  break;
+                  if(!prev->auto_hook)
+                  {
+                    break;
+                  }
                 }
               }
             }break;
