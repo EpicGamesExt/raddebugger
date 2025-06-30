@@ -6,6 +6,7 @@
 //
 //- urgent fixes
 // [ ] hardware breakpoints regression (global eval in ctrl)
+// [ ] []string being sized by [0], due to `.` applying to first ^string
 //
 //- memory view
 // [ ] have smaller visible range than entire memory
