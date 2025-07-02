@@ -7717,6 +7717,7 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[D_CmdKind_StepOver].string,
                     rd_cmd_kind_info_table[D_CmdKind_StepOut].string,
                     rd_cmd_kind_info_table[D_CmdKind_Attach].string,
+                    rd_cmd_kind_info_table[D_CmdKind_Detach].string,
                   };
                   U32 codepoints[] =
                   {
@@ -7728,6 +7729,7 @@ rd_window_frame(void)
                     'o',
                     't',
                     'a',
+                    'd',
                   };
                   Assert(ArrayCount(codepoints) == ArrayCount(cmds));
                   rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
