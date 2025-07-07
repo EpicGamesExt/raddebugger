@@ -103,12 +103,12 @@ typedef struct
 {
   LNK_SymbolTable           *symtab;
   LNK_SectionTable          *sectab;
-  LNK_SectionContrib        *null_sc;
-  LNK_SymbolTableFixupArray *obj_symtab_fixups;
-  U64                        function_pad_min;
-  U64                        default_align;
   U64                        objs_count;
   LNK_Obj                  **objs;
+  U64                        function_pad_min;
+  U64                        default_align;
+  LNK_SectionContrib        *null_sc;
+  LNK_SymbolTableFixupArray *obj_symtab_fixups;
   LNK_SectionContrib      ***sect_map;
   HashTable                 *contribs_ht;
   LNK_SectionArray           image_sects;
@@ -125,10 +125,11 @@ typedef struct
       LNK_SectionContribChunk **chunks;
     } sort_contribs;
     struct {
-      B8                    **was_symbol_patched;
-      LNK_Section            *common_block_sect;
-      Rng1U64                *ranges;
-      LNK_CommonBlockContrib *common_block_contribs;
+      B8                        **was_symbol_patched;
+      LNK_Section                *common_block_sect;
+      Rng1U64                    *ranges;
+      LNK_CommonBlockContrib     *common_block_contribs;
+      COFF_SymbolValueInterpType  fixup_type;
     } patch_symtabs;
   } u;
 } LNK_BuildImageTask;

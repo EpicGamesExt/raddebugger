@@ -171,6 +171,7 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
     }
     // weak vs weak
     else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
+      can_replace = src->u.defined.obj->input_idx < dst->u.defined.obj->input_idx;
     }
     // weak vs abs
     else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Abs) {
@@ -518,6 +519,12 @@ lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, LNK_Obj *obj, String8 fr
   } else {
     hash_table_push_string_string(symtab->arena->v[0], symtab->alt_names, from, to);
   }
+}
+
+internal COFF_ParsedSymbol
+lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
+{
+  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
 }
 
 internal ISectOff

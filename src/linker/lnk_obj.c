@@ -226,7 +226,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
   
   //
-  // Extract obj features from compile symbol in .debug$S
+  // extract obj features from compile symbol in .debug$S
   //
   B8 hotpatch = 0;
   if (header.machine == COFF_MachineType_X64) {
