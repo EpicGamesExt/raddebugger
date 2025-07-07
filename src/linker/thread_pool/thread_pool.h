@@ -49,6 +49,7 @@ internal TP_Arena *   tp_arena_alloc(TP_Context *pool);
 internal void         tp_arena_release(TP_Arena **arena_ptr);
 internal TP_Temp      tp_temp_begin(TP_Arena *arena);
 internal void         tp_temp_end(TP_Temp temp);
+#define tp_for_parallel_prof(pool, arena, task_count, task_func, task_data, zone_name) ProfBegin(zone_name); tp_for_parallel(pool, arena, task_count, task_func, task_data); ProfEnd();
 internal void         tp_for_parallel(TP_Context *pool, TP_Arena *arena, U64 task_count, TP_TaskFunc *task_func, void *task_data);
 internal Rng1U64 *    tp_divide_work(Arena *arena, U64 item_count, U32 worker_count);
 
