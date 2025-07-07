@@ -64,7 +64,7 @@ global String8 g_stdout_file_name = str8_lit_comp("torture");
 global U64     g_linker_time_out;
 global String8 g_linker;
 global String8 g_wdir;
-global String8 g_out = str8_lit_comp("torture_out");
+global String8 g_out = str8_lit_comp("torture");
 global B32     g_verbose;
 global B32     g_redirect_stdout;
 
