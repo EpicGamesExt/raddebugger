@@ -109,6 +109,7 @@ internal U32 lnk_obj_get_vol_md(LNK_Obj *obj);
 internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff(LNK_Obj *obj, void *coff_symbol);
 internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
+internal B32                  lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_length_out, U32 *check_sum_out);
 internal B32                  lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx);
 
 // --- Helpers ----------------------------------------------------------------- 

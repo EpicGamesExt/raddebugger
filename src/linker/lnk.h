@@ -25,32 +25,6 @@ typedef struct LNK_ImageContext
   LNK_SectionTable *sectab;
 } LNK_ImageContext;
 
-typedef struct LNK_SymbolTableFixup
-{
-  U32 idx;
-  U32 obj_idx;
-  U32 obj_symbol_idx;
-} LNK_SymbolTableFixup;
-
-typedef struct LNK_SymbolTableFixupNode
-{
-  LNK_SymbolTableFixup data;
-  struct LNK_SymbolTableFixupNode *next;
-} LNK_SymbolTableFixupNode;
-
-typedef struct LNK_SymbolTableFixupList
-{
-  U64                       count;
-  LNK_SymbolTableFixupNode *first;
-  LNK_SymbolTableFixupNode *last;
-} LNK_SymbolTableFixupList;
-
-typedef struct LNK_SymbolTableFixupArray
-{
-  U64                   count;
-  LNK_SymbolTableFixup *v;
-} LNK_SymbolTableFixupArray;
-
 typedef struct LNK_SectionDefinition
 {
   String8           name;
@@ -108,7 +82,6 @@ typedef struct
   U64                        function_pad_min;
   U64                        default_align;
   LNK_SectionContrib        *null_sc;
-  LNK_SymbolTableFixupArray *obj_symtab_fixups;
   LNK_SectionContrib      ***sect_map;
   HashTable                 *contribs_ht;
   LNK_SectionArray           image_sects;
@@ -127,7 +100,7 @@ typedef struct
     struct {
       B8                        **was_symbol_patched;
       LNK_Section                *common_block_sect;
-      Rng1U64                    *ranges;
+      Rng1U64                    *common_block_ranges;
       LNK_CommonBlockContrib     *common_block_contribs;
       COFF_SymbolValueInterpType  fixup_type;
     } patch_symtabs;

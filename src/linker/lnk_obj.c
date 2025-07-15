@@ -352,7 +352,6 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
     case COFF_SymbolValueInterp_Weak: {
       LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
       lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
-
       lnk_symbol_list_push(arena, &task->weak_lists[worker_id], defn);
     } break;
     case COFF_SymbolValueInterp_Common: {
@@ -467,6 +466,19 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 }
 
 internal B32
+lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_length_out, U32 *check_sum_out)
+{
+  Assert(section_number > 0);
+  U32 symbol_idx = obj->comdats[section_number-1];
+  if (symbol_idx != max_U32) {
+    COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    coff_parse_secdef(secdef, obj->header.is_big_obj, select_out, 0, section_length_out, check_sum_out);
+    return 1;
+  }
+  return 0;
+}
+
+internal B32
 lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_idx)
 {
   String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
@@ -531,6 +543,13 @@ lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Ob
   task.out_lists         = push_array(arena->v[0], String8List, objs_count);
   tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_chunks_task, &task);
   return task.out_lists;
+}
+
+internal B32
+lnk_obj_is_before(void *raw_a, void *raw_b)
+{
+  LNK_Obj *a = raw_a, *b = raw_b;
+  return a->input_idx < b->input_idx;
 }
 
 internal void
