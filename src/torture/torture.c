@@ -1004,9 +1004,7 @@ t_abs_vs_regular(void)
 internal T_Result
 t_abs_vs_common(void)
 {
-
   Temp scratch = scratch_begin(0,0);
-
   T_Result result = T_Result_Fail;
 
   String8 shared_symbol_name = str8_lit("foo");
@@ -1061,6 +1059,41 @@ t_abs_vs_common(void)
     }
   }
 
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_abs_vs_abs(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 a_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("foo"), 'a', COFF_SymStorageClass_External);
+    a_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 b_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("foo"), 'b', COFF_SymStorageClass_External);
+    b_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  if (!t_write_file(str8_lit("a.obj"), a_obj)) { goto exit; }
+  if (!t_write_file(str8_lit("b.obj"), b_obj)) { goto exit; }
+  t_write_entry_obj();
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe a.obj b.obj entry.obj");
+  if (linker_exit_code != LNK_Error_MultiplyDefinedSymbol) { goto exit; }
+
+  result = T_Result_Pass;
 exit:;
   scratch_end(scratch);
   return result;
@@ -3783,6 +3816,7 @@ entry_point(CmdLine *cmdline)
     { "abs_vs_weak",                      t_abs_vs_weak                      },
     { "abs_vs_regular",                   t_abs_vs_regular                   },
     { "abs_vs_common",                    t_abs_vs_common                    },
+    { "abs_vs_abs",                       t_abs_vs_abs                       },
     { "undef_weak",                       t_undef_weak                       },
     { "sect_symbol",                      t_sect_symbol                      },
     { "weak_cycle",                       t_weak_cycle                       },
