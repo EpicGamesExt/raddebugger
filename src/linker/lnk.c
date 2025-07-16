@@ -4053,8 +4053,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
     .null_sc          = push_array(arena->v[0], LNK_SectionContrib, 1),
   };
 
-  tp_for_parallel(tp, 0, objs_count, lnk_remove_associative_sections_task, &task);
-
   {
     ProfBegin("Define And Count Sections");
     TP_Temp temp = tp_temp_begin(arena);

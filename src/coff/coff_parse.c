@@ -296,7 +296,7 @@ coff_parse_secdef(COFF_ParsedSymbol symbol, B32 is_big_obj, COFF_ComdatSelectTyp
     if (selection_out) *selection_out = sd->selection;
     if (length_out)    *length_out    = sd->length;
     if (check_sum_out) *check_sum_out = sd->check_sum;
-    if (number_out)    *number_out    = sd->number_lo | ((U32)sd->number_hi << 16);
+    if (number_out)    *number_out    = Compose32Bit(sd->number_hi, sd->number_lo);
   } else {
     COFF_SymbolSecDef *sd = (COFF_SymbolSecDef *)((COFF_Symbol16 *)symbol.raw_symbol + 1);
     if (selection_out) *selection_out = sd->selection;

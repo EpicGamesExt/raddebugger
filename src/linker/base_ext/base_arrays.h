@@ -3,6 +3,12 @@
 
 #pragma once
 
+typedef struct U32Node
+{
+  struct U32Node *next;
+  U32             data;
+} U32Node;
+
 typedef struct U64Node
 {
   struct U64Node *next;

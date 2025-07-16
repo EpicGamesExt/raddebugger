@@ -348,7 +348,8 @@ C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t s
 #endif
 #define PtrFromInt(i) (void*)(i)
 
-#define Compose64Bit(a,b)  ((((U64)a) << 32) | ((U64)b));
+#define Compose64Bit(a,b)  ((((U64)a) << 32) | ((U64)b))
+#define Compose32Bit(a,b)  ((((U32)a) << 16) | ((U32)b))
 #define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))
 #define AlignDownPow2(x,b) ((x)&(~((b) - 1)))
 #define AlignPadPow2(x,b)  ((0-(x)) & ((b) - 1))

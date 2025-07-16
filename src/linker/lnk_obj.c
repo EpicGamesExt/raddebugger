@@ -224,6 +224,31 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
     scratch_end(scratch);
   }
+
+  //
+  // collect sections associations
+  //
+  U32Node **associated_sections = push_array(arena, U32Node *, header.section_count_no_null + 1);
+  {
+    String8 string_table = str8_substr(input->data, header.string_table_range);
+    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
+
+    COFF_ParsedSymbol symbol;
+    for (U32 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+      COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
+      if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
+        COFF_ComdatSelectType selection      = COFF_ComdatSelect_Null;
+        U32                   section_number = 0;
+        coff_parse_secdef(symbol, header.is_big_obj, &selection, &section_number, 0, 0);
+        if (selection != COFF_ComdatSelect_Associative) { continue; }
+
+        U32Node *associated_node = push_array(arena, U32Node, 1);
+        associated_node->data    = symbol.section_number;
+        SLLStackPush(associated_sections[section_number], associated_node);
+      }
+    }
+  }
   
   //
   // extract obj features from compile symbol in .debug$S
@@ -267,13 +292,14 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   // fill out obj
-  obj->data      = input->data;
-  obj->path      = push_str8_copy(arena, input->path);
-  obj->lib_path  = push_str8_copy(arena, input->lib_path);
-  obj->input_idx = obj_idx;
-  obj->header    = header;
-  obj->comdats   = comdats;
-  obj->hotpatch  = hotpatch;
+  obj->data                = input->data;
+  obj->path                = push_str8_copy(arena, input->path);
+  obj->lib_path            = push_str8_copy(arena, input->lib_path);
+  obj->input_idx           = obj_idx;
+  obj->header              = header;
+  obj->comdats             = comdats;
+  obj->hotpatch            = hotpatch;
+  obj->associated_sections = associated_sections;
 
   ProfEnd();
 }
@@ -466,13 +492,13 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 }
 
 internal B32
-lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_length_out, U32 *check_sum_out)
+lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out)
 {
   Assert(section_number > 0);
   U32 symbol_idx = obj->comdats[section_number-1];
   if (symbol_idx != max_U32) {
     COFF_ParsedSymbol secdef = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-    coff_parse_secdef(secdef, obj->header.is_big_obj, select_out, 0, section_length_out, check_sum_out);
+    coff_parse_secdef(secdef, obj->header.is_big_obj, select_out, section_number_out, section_length_out, check_sum_out);
     return 1;
   }
   return 0;
