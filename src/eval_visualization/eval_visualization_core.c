@@ -1850,6 +1850,10 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
               {
                 string = str8_prefix(string, params->limit_strings_size);
               }
+              else if(type_kind == E_TypeKind_Array && ptr_data->type->count != 0)
+              {
+                string = str8_prefix(string, ptr_data->type->count);
+              }
               
               // rjf: escape and quote
               B32 string__is_escaped_and_quoted = (!(params->flags & EV_StringFlag_DisableStringQuotes) || depth > 0);

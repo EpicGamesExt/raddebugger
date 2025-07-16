@@ -404,6 +404,15 @@ type_coverage_eval_tests(void)
   wchar_t a_wide_string[] =
     L"This is a string, but instead of being encoded in a stream of bytes,\n"
     L"it is encoded in a stream of 2-byte packages!\n";
+  char some_data_with_a_string[] =
+  {
+    'H', 'e', 'l', 'l', 'o', 27, 27, 2, 27, 125,
+  };
+  struct SomeDataStructured
+  {
+    char data[4];
+  };
+  SomeDataStructured *some_data = (SomeDataStructured *)&some_data_with_a_string[0];
   
   const char *const_string = "Hello, World!";
   const char const_string_array[] = "Hello, World!";
