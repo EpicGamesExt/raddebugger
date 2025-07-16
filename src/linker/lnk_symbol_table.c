@@ -193,7 +193,7 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       U32                   dst_section_length;
       U32                   dst_check_sum;
       if (dst_interp == COFF_SymbolValueInterp_Regular) {
-        dst_is_comdat = lnk_try_comdat_props_from_section_number(dst->u.defined.obj, dst_parsed.section_number, &dst_select, &dst_section_length, &dst_check_sum);
+        dst_is_comdat = lnk_try_comdat_props_from_section_number(dst->u.defined.obj, dst_parsed.section_number, &dst_select, 0, &dst_section_length, &dst_check_sum);
       } else if (dst_interp == COFF_SymbolValueInterp_Common) {
         dst_select         = COFF_ComdatSelect_Largest;
         dst_section_length = dst_parsed.value;
@@ -207,7 +207,7 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       U32                   src_section_length, src_checks;
       U32                   src_check_sum;
       if (src_interp == COFF_SymbolValueInterp_Regular) {
-        src_is_comdat = lnk_try_comdat_props_from_section_number(src->u.defined.obj, src_parsed.section_number, &src_select, &src_section_length, &src_check_sum);
+        src_is_comdat = lnk_try_comdat_props_from_section_number(src->u.defined.obj, src_parsed.section_number, &src_select, 0, &src_section_length, &src_check_sum);
       } else if (src_interp == COFF_SymbolValueInterp_Common) {
         src_select         = COFF_ComdatSelect_Largest;
         src_section_length = src_parsed.value;
@@ -308,23 +308,44 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 internal void
 lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 {
-  Assert(dst != src);
-  if (scope == LNK_SymbolScope_Lib) {
-    dst->u.lib = src->u.lib;
-  } else if (scope == LNK_SymbolScope_Defined) {
-    COFF_ParsedSymbol dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
-    COFF_ParsedSymbol src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
-    COFF_SymbolValueInterpType dst_interp = coff_interp_symbol(dst_parsed.section_number, dst_parsed.value, dst_parsed.storage_class);
-    COFF_SymbolValueInterpType src_interp = coff_interp_symbol(src_parsed.section_number, src_parsed.value, src_parsed.storage_class);
+  switch (scope) {
+  case LNK_SymbolScope_Defined: {
+    COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
+    COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
     if (dst_interp == COFF_SymbolValueInterp_Regular) {
+      // remove replaced section from the output
       COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->u.defined.obj, dst_parsed.section_number);
       dst_sect->flags |= COFF_SectionFlag_LnkRemove;
-      dst->u.defined = src->u.defined;
+
+      // remove associated sections from the output
+      for (U32Node *associated_section = dst->u.defined.obj->associated_sections[dst_parsed.section_number];
+           associated_section != 0;
+           associated_section = associated_section->next) {
+        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(dst->u.defined.obj, associated_section->data);
+        section_header->flags |= COFF_SectionFlag_LnkRemove;
+      }
     }
-    if (src_interp == COFF_SymbolValueInterp_Regular) {
-      COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
-      AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
+
+    // make sure leader section is not removed from the output
+#if BUILD_DEBUG
+    {
+      COFF_ParsedSymbol          src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
+      COFF_SymbolValueInterpType src_interp = coff_interp_from_parsed_symbol(src_parsed);
+      if (src_interp == COFF_SymbolValueInterp_Regular) {
+        COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
+        AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
+      }
     }
+#endif
+  } break;
+  case LNK_SymbolScope_Import: {
+    // illegal to replace imports
+    InvalidPath;
+  } break;
+  case LNK_SymbolScope_Lib: {
+    // nothing to replace
+  } break;
+  default: { InvalidPath; }
   }
 }
 
@@ -551,31 +572,38 @@ THREAD_POOL_TASK_FUNC(lnk_finalize_weak_symbols_task)
           break;
         }
 
-        // record visited symbol
-        struct LookupLocation *loc = push_array(scratch.arena, struct LookupLocation, 1);
-        loc->symbol                = current_symbol;
-        SLLQueuePush(lookup_first, lookup_last, loc);
-
         COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
         COFF_SymbolValueInterpType current_interp = coff_interp_symbol(current_parsed.section_number, current_parsed.value, current_parsed.storage_class);
-        if (current_interp != COFF_SymbolValueInterp_Weak && current_interp != COFF_SymbolValueInterp_Undefined) {
-          break;
-        }
+        if (current_interp == COFF_SymbolValueInterp_Weak) {
+          // record visited symbol
+          struct LookupLocation *loc = push_array(scratch.arena, struct LookupLocation, 1);
+          loc->symbol                = current_symbol;
+          SLLQueuePush(lookup_first, lookup_last, loc);
 
-        // does weak symbol have the strong definition?
-        LNK_Symbol                 *defn_symbol    = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
-        COFF_ParsedSymbol           defn_parsed    = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->u.defined.obj, defn_symbol->u.defined.symbol_idx);
-        COFF_SymbolValueInterpType  defn_interp    = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
-        if (defn_interp != COFF_SymbolValueInterp_Weak) {
+          // does weak symbol have a definition?
+          LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
+          COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->u.defined.obj, defn_symbol->u.defined.symbol_idx);
+          COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
+          if (defn_interp != COFF_SymbolValueInterp_Weak) {
+            current_symbol = defn_symbol->u.defined;
+            break;
+          }
+
+          // no definition fallback to the tag
+          COFF_SymbolWeakExt         *weak_ext   = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
+          COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
+          COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
+          current_symbol = (LNK_SymbolDefined){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
+        } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
+          LNK_Symbol *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
+          if (defn_symbol == 0) {
+            MemoryZeroStruct(&current_symbol);
+            break;
+          }
           current_symbol = defn_symbol->u.defined;
+        } else {
           break;
         }
-
-        // no strong definition fallback to the tag
-        COFF_SymbolWeakExt         *weak_ext   = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
-        COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
-        COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
-        current_symbol = (LNK_SymbolDefined){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
       }
 
       // replace weak symbol with it's tag
