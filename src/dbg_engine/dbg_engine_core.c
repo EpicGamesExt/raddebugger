@@ -1843,7 +1843,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             {
               need_run = 1;
               run_kind = D_RunKind_Run;
-              run_thread = &ctrl_entity_nil;
+              run_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, params->thread);
             }
             else
             {
@@ -1970,7 +1970,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           CTRL_EntityArray processes = ctrl_entity_array_from_kind(&d_state->ctrl_entity_store->ctx, CTRL_EntityKind_Process);
           if(processes.count != 0)
           {
-            d_cmd(D_CmdKind_Continue);
+            d_cmd(D_CmdKind_Continue, .machine = params->machine, .process = params->process, .thread = params->thread);
           }
           else if(!d_ctrl_targets_running())
           {
