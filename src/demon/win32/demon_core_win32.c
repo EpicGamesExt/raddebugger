@@ -2383,7 +2383,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     // hit - so if we have data breakpoints set, we need to
                     // check this thread's debug registers, to determine if this
                     // is a regular single-step or a data breakpoint hit.
-                    if(first_flagged_trap_task != 0)
                     {
                       // rjf: first determine the flagged trap index
                       U64 flagged_trap_idx = 0;
@@ -2398,10 +2397,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           {
                             e->kind = DMN_EventKind_Breakpoint;
                             if(0){}
-                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 0; }
-                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 1; }
-                            else if(regs.dr7.u64 & (1ull<<4) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 2; }
-                            else if(regs.dr7.u64 & (1ull<<8) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; }
+                            else if(regs.dr7.u64 & (1ull<<0) && regs.dr6.u64 & (1ull<<0)) { flagged_trap_idx = 0; e->address = regs.dr0.u64; }
+                            else if(regs.dr7.u64 & (1ull<<2) && regs.dr6.u64 & (1ull<<1)) { flagged_trap_idx = 1; e->address = regs.dr1.u64; }
+                            else if(regs.dr7.u64 & (1ull<<4) && regs.dr6.u64 & (1ull<<2)) { flagged_trap_idx = 2; e->address = regs.dr2.u64; }
+                            else if(regs.dr7.u64 & (1ull<<8) && regs.dr6.u64 & (1ull<<3)) { flagged_trap_idx = 3; e->address = regs.dr3.u64; }
                           }
                         }break;
                       }

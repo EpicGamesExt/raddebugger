@@ -10405,6 +10405,14 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
         dr_fstrs_push_new(arena, &fstrs, &params, str8_lit("  "));
         dr_fstrs_concat_in_place(&fstrs, &thread_fstrs);
         dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" hit a breakpoint"));
+        if(event->vaddr_rng.min != 0)
+        {
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(" (Address: "));
+          dr_fstrs_push_new(arena, &fstrs, &params, push_str8f(arena, "0x%I64x", event->vaddr_rng.min),
+                            .font = rd_font_from_slot(RD_FontSlot_Code),
+                            .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Code));
+          dr_fstrs_push_new(arena, &fstrs, &params, str8_lit(")"));
+        }
       }
     }break;
     

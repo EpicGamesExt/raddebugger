@@ -6334,6 +6334,14 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           }
         }
         
+        // rjf: programmatic user breakpoints (we do not have state for it,
+        // but the target program(s) did something breakpoint-like, and we
+        // want to treat it as if we did)
+        if(event->address != 0)
+        {
+          hit_user_bp = 1;
+        }
+        
         // rjf: evaluate hit stop conditions
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
