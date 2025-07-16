@@ -5870,6 +5870,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //- rjf: setup run controls
       //
       DMN_RunCtrls run_ctrls = {0};
+      run_ctrls.priority_thread  = target_thread.dmn_handle;
       run_ctrls.ignore_previous_exception = 1;
       run_ctrls.run_entity_count = frozen_threads.count;
       run_ctrls.run_entities     = push_array(scratch.arena, DMN_Handle, run_ctrls.run_entity_count);

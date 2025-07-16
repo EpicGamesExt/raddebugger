@@ -1802,45 +1802,67 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
-      //- rjf: resume threads which will run
-      //
-      ProfScope("resume threads which will run")
-      {
-        for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
-        {
-          DMN_W32_Entity *thread = n->v;
-          DWORD resume_result = ResumeThread(thread->handle);
-          switch(resume_result)
-          {
-            case 0xffffffffu:
-            {
-              // TODO(rjf): error - unknown cause. need to do GetLastError, FormatMessage
-            }break;
-            default:
-            {
-              DWORD desired_counter = 0;
-              DWORD current_counter = resume_result - 1;
-              if(current_counter != desired_counter)
-              {
-                // NOTE(rjf): Warning. The user has manually suspended this thread,
-                // so even though from Demon's perspective it thinks this thread
-                // should run, it will not, because the user has manually called
-                // SuspendThread or used CREATE_SUSPENDED or whatever.
-              }
-            }break;
-          }
-        }
-      }
-      
-      //////////////////////////
       //- rjf: loop, consume win32 debug events until we produce the relevant demon events
       //
+      B32 priority_mode = !dmn_handle_match(dmn_handle_zero(), ctrls->priority_thread);
+      B32 did_priority_mode = priority_mode;
+      B32 do_threads_resume = 1;
+      DMN_W32_EntityNode *first_ran_thread = 0;
+      DMN_W32_EntityNode *last_ran_thread = 0;
       U64 begin_time = os_now_microseconds();
       String8List debug_strings = {0};
       DMN_Event *debug_strings_event = 0;
       for(B32 keep_going = 1; keep_going;)
       {
         keep_going = 0;
+        
+        ////////////////////////
+        //- rjf: resume threads that we want to run
+        //
+        // if priority mode? => first, just resume priority thread
+        // if not? => resume all non-priority threads
+        //
+        if(do_threads_resume)
+        {
+          do_threads_resume = 0;
+          for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
+          {
+            DMN_W32_Entity *thread = n->v;
+            B32 thread_is_priority = dmn_handle_match(dmn_w32_handle_from_entity(thread), ctrls->priority_thread);
+            if((priority_mode && !thread_is_priority) ||
+               (!priority_mode && did_priority_mode && thread_is_priority))
+            {
+              continue;
+            }
+            DWORD resume_result = ResumeThread(thread->handle);
+            DMN_W32_EntityNode *n = push_array(scratch.arena, DMN_W32_EntityNode, 1);
+            SLLQueuePush(first_ran_thread, last_ran_thread, n);
+            n->v = thread;
+            switch(resume_result)
+            {
+              case 0xffffffffu:
+              {
+                // TODO(rjf): error - unknown cause. need to do GetLastError, FormatMessage
+              }break;
+              default:
+              {
+                DWORD desired_counter = 0;
+                DWORD current_counter = resume_result - 1;
+                if(current_counter != desired_counter)
+                {
+                  // NOTE(rjf): Warning. The user has manually suspended this thread,
+                  // so even though from Demon's perspective it thinks this thread
+                  // should run, it will not, because the user has manually called
+                  // SuspendThread or used CREATE_SUSPENDED or whatever.
+                }
+              }break;
+            }
+            if(priority_mode && thread_is_priority)
+            {
+              break;
+            }
+          }
+        }
         
         ////////////////////////
         //- rjf: choose win32 resume code
@@ -1878,7 +1900,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
           if(resume_good)
           {
-            evt_good = !!WaitForDebugEvent(&evt, 100);
+            DWORD wait_ms = 100;
+            if(priority_mode)
+            {
+              wait_ms = 30;
+            }
+            evt_good = !!WaitForDebugEvent(&evt, wait_ms);
             if(evt_good)
             {
               dmn_w32_shared->resume_needed = 1;
@@ -1890,6 +1917,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               DWORD err = GetLastError();
               (void)err;
               keep_going = 1;
+            }
+            if(priority_mode)
+            {
+              priority_mode = 0;
+              do_threads_resume = 1;
             }
           }
         }
@@ -2664,7 +2696,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       ProfScope("suspend threads which ran")
       {
-        for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
+        for(DMN_W32_EntityNode *n = first_ran_thread; n != 0; n = n->next)
         {
           DMN_W32_Entity *thread = n->v;
           if(thread->kind != DMN_W32_EntityKind_Thread)

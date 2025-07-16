@@ -6,7 +6,6 @@
 //
 //- urgent fixes
 // [ ] hardware breakpoints regression (global eval in ctrl)
-// [ ] []string being sized by [0], due to `.` applying to first ^string
 //
 //- memory view
 // [ ] have smaller visible range than entire memory
@@ -21,9 +20,6 @@
 // [ ] disassembly sometimes has a problem where source line annotations are
 //     periodically removed/inserted... maybe updating on fs change when we
 //     shouldn't, non-deterministic line annotation path?
-// [ ] process memory cache sometimes is not correctly updating - best repro
-//     case so far is (for some reason?) only hover evaluation - only spotted
-//     on laptop in debug builds. g0 ctrl_bindings.bindings initialization.
 //
 //- watch improvements
 // [ ] *ALL* expressions in watch windows need to be editable.
@@ -115,7 +111,6 @@
 //- eval improvements
 // [ ] maybe add extra caching layer to process memory querying? we pay a pretty
 //     heavy cost even to just read 8 bytes...
-// [ ] evaluate `foo.bar` symbol names without escape hatch?
 // [ ] serializing eval view maps (?)
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi
@@ -149,7 +144,6 @@
 // [ ] investigate wide-conversion performance
 //  [ ] oversubscribing cores?
 //  [ ] conversion crashes?
-//  [ ] fastpath lookup to determine debug info relevance?
 // [ ] live++ investigations - ctrl+alt+f11 in UE?
 //
 //- memory usage improvements
@@ -189,6 +183,12 @@
 //     is not correctly incremented.
 // [x] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
 // [x] auto-annotations for non-locals
+// [x] []string being sized by [0], due to `.` applying to first ^string
+// [x] process memory cache sometimes is not correctly updating - best repro
+//     case so far is (for some reason?) only hover evaluation - only spotted
+//     on laptop in debug builds. g0 ctrl_bindings.bindings initialization.
+// [x] evaluate `foo.bar` symbol names without escape hatch?
+//  [x] fastpath lookup to determine debug info relevance?
 
 ////////////////////////////////
 //~ rjf: Build Options

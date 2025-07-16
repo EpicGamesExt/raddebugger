@@ -139,6 +139,7 @@ struct DMN_TrapChunkList
 typedef struct DMN_RunCtrls DMN_RunCtrls;
 struct DMN_RunCtrls
 {
+  DMN_Handle priority_thread;
   DMN_Handle single_step_thread;
   B8 ignore_previous_exception;
   B8 run_entities_are_unfrozen;
