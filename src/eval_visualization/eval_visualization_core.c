@@ -1931,7 +1931,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   }
                   if(inline_site != 0)
                   {
-                    E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, module_idx);
+                    RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, inline_site->type_idx);
+                    E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), inline_site->type_idx, module_idx);
                     String8 name = {0};
                     name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
                     if(inline_site->type_idx != 0)
@@ -1960,7 +1961,8 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                   RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
                   U64 proc_idx = scope->proc_idx;
                   RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-                  E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, module_idx);
+                  RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
+                  E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, module_idx);
                   String8 name = {0};
                   name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
                   if(procedure->type_idx != 0)
