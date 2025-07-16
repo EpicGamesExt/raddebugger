@@ -1556,6 +1556,7 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table)
     else if(str8_match(lhs_type->name, str8_lit("thread_locals"), 0))    {section = RDI_SectionKind_ThreadVariables;}
     else if(str8_match(lhs_type->name, str8_lit("constants"), 0))        {section = RDI_SectionKind_Constants;}
     else if(str8_match(lhs_type->name, str8_lit("types"), 0))            {section = RDI_SectionKind_UDTs;}
+    else if(str8_match(lhs_type->name, str8_lit("source_files"), 0))     {section = RDI_SectionKind_SourceFiles;}
   }
   
   // rjf: gather debug info table items
@@ -1614,6 +1615,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
     
     // rjf: get item's string
     String8 item_string = {0};
+    B32 item_is_path = 0;
     {
       U64 element_idx = item->idx;
       switch(accel->section)
@@ -1663,11 +1665,33 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(debug_info_table)
           name.str = rdi_string_from_idx(module->rdi, type_node->user_defined.name_string_idx, &name.size);
           item_string = name;
         }break;
+        case RDI_SectionKind_SourceFiles:
+        {
+          RDI_SourceFile *sf = rdi_element_from_name_idx(module->rdi, SourceFiles, element_idx);
+          String8List path_parts = {0};
+          for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, sf->file_path_node_idx);
+              fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+              fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+          {
+            String8 path_part = {0};
+            path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
+            str8_list_push_front(scratch.arena, &path_parts, path_part);
+          }
+          StringJoin join = {0};
+          join.sep = str8_lit("/");
+          item_string = str8_list_join(scratch.arena, &path_parts, &join);
+          item_is_path = 1;
+        }break;
       }
     }
     
     // rjf: build a valid expression string given item string
     String8 item_expr = item_string;
+    if(item_is_path)
+    {
+      item_expr = push_str8f(scratch.arena, "file:\"%S\"", item_string);
+    }
+    else
     {
       B32 string_can_be_evalled = 1;
       E_TokenArray tokens = e_token_array_from_text(scratch.arena, item_string);

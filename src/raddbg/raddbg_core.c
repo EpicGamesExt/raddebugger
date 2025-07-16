@@ -12271,6 +12271,7 @@ rd_frame(void)
         str8_lit_comp("constants"),
         str8_lit_comp("globals"),
         str8_lit_comp("types"),
+        str8_lit_comp("source_files"),
       };
       for EachElement(idx, debug_info_table_collection_names)
       {
@@ -12741,6 +12742,7 @@ rd_frame(void)
               str8_list_pushf(scratch.arena, &exprs, "query:types");
               str8_list_pushf(scratch.arena, &exprs, "query:globals");
               str8_list_pushf(scratch.arena, &exprs, "query:thread_locals");
+              str8_list_pushf(scratch.arena, &exprs, "query:source_files");
             }
             String8 expr = str8_list_join(scratch.arena, &exprs, &(StringJoin){.sep = str8_lit(", ")});
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id, .tab = tab->id);
@@ -14139,9 +14141,17 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Switch:
           {
-            RD_Cfg *recent_file = rd_cfg_from_id(rd_regs()->cfg);
-            RD_Cfg *path_root = rd_cfg_child_from_string(recent_file, str8_lit("path"));
-            String8 path = path_root->first->string;
+            String8 path = {0};
+            if(path.size == 0)
+            {
+              RD_Cfg *recent_file = rd_cfg_from_id(rd_regs()->cfg);
+              RD_Cfg *path_root = rd_cfg_child_from_string(recent_file, str8_lit("path"));
+              path = path_root->first->string;
+            }
+            if(path.size == 0)
+            {
+              path = rd_regs()->file_path;
+            }
             rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
