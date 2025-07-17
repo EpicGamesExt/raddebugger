@@ -825,13 +825,17 @@ dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFla
 internal U64
 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst)
 {
-  return 0;
+  DMN_LNX_Entity *entity = dmn_lnx_entity_from_handle(process);
+  U64 result = dmn_lnx_read(entity->fd, range, dst);
+  return result;
 }
 
 internal B32
 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 {
-  return 0;
+  DMN_LNX_Entity *entity = dmn_lnx_entity_from_handle(process);
+  B32 result = dmn_lnx_write(entity->fd, range, src);
+  return result;
 }
 
 //- rjf: threads
