@@ -228,11 +228,16 @@ internal String8 str8_skip_chop_slashes(String8 string);
 ////////////////////////////////
 //~ rjf: String Formatting & Copying
 
-internal String8 push_str8_cat(Arena *arena, String8 s1, String8 s2);
-internal String8 push_str8_copy(Arena *arena, String8 s);
-internal String8 push_str8fv(Arena *arena, char *fmt, va_list args);
-internal String8 push_str8f(Arena *arena, char *fmt, ...);
-internal String8 push_cstr(Arena *arena, String8 str);
+internal String8 str8_cat(Arena *arena, String8 s1, String8 s2);
+internal String8 str8_copy(Arena *arena, String8 s);
+internal String8 str8fv(Arena *arena, char *fmt, va_list args);
+internal String8 str8f(Arena *arena, char *fmt, ...);
+// TODO(rjf): remove these once we're ready to convert all usages:
+#define push_str8_cat(arena, s1, s2) str8_cat((arena), (s1), (s2))
+#define push_str8_copy(arena, s) str8_copy((arena), (s))
+#define push_str8fv(arena, fmt, args) str8fv((arena), (fmt), (args))
+#define push_str8f(arena, ...) str8f((arena), __VA_ARGS__)
+internal String8 push_cstr(Arena *arena, String8 str); // TODO(rjf): this is unnecessary - this is implied by `push_str8_copy`. need to remove.
 
 ////////////////////////////////
 //~ rjf: String <=> Integer Conversions

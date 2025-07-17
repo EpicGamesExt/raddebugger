@@ -119,10 +119,10 @@ enum
   ELF_PType_Tls         = 7,
   ELF_PType_LoOs        = 0x60000000,
   ELF_PType_HiOs        = 0x6fffffff,
-
+  
   ELF_PType_LowProc     = 0x70000000,
   ELF_PType_HighProc    = 0x7fffffff,
-
+  
   // specific to Sun
   ELF_PType_LowSunW     = 0x6ffffffa,
   ELF_PType_SunWBSS     = 0x6ffffffb,
@@ -169,7 +169,7 @@ enum
   ELF_SectionCode_SUNW_verdef            = 0x6ffffffd,
   ELF_SectionCode_SUNW_verneed           = 0x6ffffffe, // Versions defined by file
   ELF_SectionCode_SUNW_versym            = 0x6fffffff, // Versions needed by file
-
+  
   // Symbol versions
   ELF_SectionCode_GNU_verdef             = ELF_SectionCode_SUNW_verdef,
   ELF_SectionCode_GNU_verneed            = ELF_SectionCode_SUNW_verneed,
@@ -185,22 +185,22 @@ enum
   ELF_SectionIndex_Undef             = 0,      // Symbol with section index is undefined and must be resolved by the link editor
   ELF_SectionIndex_Abs               = 0xfff1, // Symbol has absolute value and wont change after relocations
   ELF_SectionIndex_Common            = 0xfff2, // This symbol indicates to linker to allocate the storage at address multiple of st_value
-
+  
   ELF_SectionIndex_LoReserve         = 0xff00,
   ELF_SectionIndex_HiReserve         = 0xffff,
-
+  
   // Processor specific
   ELF_SectionIndex_LoProc            = ELF_SectionIndex_LoReserve,
   ELF_SectionIndex_HiProc            = 0xff1f,
-
+  
   //  Reserved for OS
   ELF_SectionIndex_LoOs              = 0xff20,
   ELF_SectionIndex_HiOs              = 0xff3f,
-
+  
   ELF_SectionIndex_IA64_ASNI_Common  = ELF_SectionIndex_LoProc,
   ELF_SectionIndex_X8664_LCommon     = 0xff02,
   ELF_SectionIndex_MIPS_SCommon      = 0xff03,
-
+  
   ELF_SectionIndex_TIC6X_Common      = ELF_SectionIndex_LoReserve,
   ELF_SectionIndex_MIPS_SUndefined   = 0xff04,
 };
@@ -271,7 +271,7 @@ typedef U32 ELF_DynTag;
 enum
 {
   ELF_DynTag_Null            = 0,
-
+  
   ELF_DynTag_Needed          = 1,
   ELF_DynTag_PltRelsz        = 2,
   ELF_DynTag_PltGot          = 3,
@@ -305,10 +305,10 @@ enum
   ELF_DynTag_PreInitArray    = 32,
   ELF_DynTag_PreInitArraysz  = 33,
   ELF_DynTag_SymtabShndx     = 34,
-
+  
   ELF_DynTag_LoOs            = 0x6000000D,
   ELF_DynTag_HiOs            = 0x6ffff000,
-
+  
   ELF_DynTag_ValRngLo        = 0x6ffffd00,
   ELF_DynTag_GNU_PreLinked   = 0x6ffffdf5,
   ELF_DynTag_GNU_Conflictsz  = 0x6ffffdf6,
@@ -322,7 +322,7 @@ enum
   ELF_DynTag_SymInSz         = 0x6ffffdfe,
   ELF_DynTag_SymInEnt        = 0x6ffffdff,
   ELF_DynTag_ValRngHi        = ELF_DynTag_SymInEnt,
-
+  
   ELF_DynTag_AddrRngLo       = 0x6ffffe00,
   ELF_DynTag_GNU_Hash        = 0x6ffffef5,
   ELF_DynTag_TlsDescPlt      = 0x6ffffef6,
@@ -336,7 +336,7 @@ enum
   ELF_DynTag_MoveTab         = 0x6ffffefe,
   ELF_DynTag_SymInfo         = 0x6ffffeff,
   ELF_DynTag_AddrRngHi       = ELF_DynTag_SymInfo,
-
+  
   ELF_DynTag_RelaCount       = 0x6ffffff9,
   ELF_DynTag_RelCount        = 0x6ffffffa,
   ELF_DynTag_Flags_1         = 0x6ffffffb,
@@ -951,10 +951,10 @@ enum ELF_CompressTypeEnum
   ELF_CompressType_None = 0,
   ELF_CompressType_ZLib = 1,
   ELF_CompressType_ZStd = 2,
-
+  
   ELF_CompressType_LoOs = 0x60000000,
   ELF_CompressType_HiOs = 0x6fffffff,
-
+  
   ELF_CompressType_LoProc = 0x70000000,
   ELF_CompressType_HiProc = 0x7fffffff,
 };
@@ -975,7 +975,7 @@ typedef struct ELF_Chdr64
 
 ////////////////////////////////
 
-internal ELF_Hdr64  elf_hdr64_from_ehdr32(ELF_Hdr32 h32);
+internal ELF_Hdr64  elf_hdr64_from_hdr32(ELF_Hdr32 h32);
 internal ELF_Shdr64 elf_shdr64_from_shdr32(ELF_Shdr32 h32);
 internal ELF_Phdr64 elf_phdr64_from_phdr32(ELF_Phdr32 h32);
 internal ELF_Dyn64  elf_dyn64_from_dyn32  (ELF_Dyn32 h32);

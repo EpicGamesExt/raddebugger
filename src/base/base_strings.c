@@ -480,28 +480,30 @@ str8_skip_chop_slashes(String8 string)
 //~ rjf: String Formatting & Copying
 
 internal String8
-push_str8_cat(Arena *arena, String8 s1, String8 s2){
+str8_cat(Arena *arena, String8 s1, String8 s2)
+{
   String8 str;
   str.size = s1.size + s2.size;
   str.str = push_array_no_zero(arena, U8, str.size + 1);
   MemoryCopy(str.str, s1.str, s1.size);
   MemoryCopy(str.str + s1.size, s2.str, s2.size);
   str.str[str.size] = 0;
-  return(str);
+  return str;
 }
 
 internal String8
-push_str8_copy(Arena *arena, String8 s){
+str8_copy(Arena *arena, String8 s)
+{
   String8 str;
   str.size = s.size;
   str.str = push_array_no_zero(arena, U8, str.size + 1);
   MemoryCopy(str.str, s.str, s.size);
   str.str[str.size] = 0;
-  return(str);
+  return str;
 }
 
 internal String8
-push_str8fv(Arena *arena, char *fmt, va_list args){
+str8fv(Arena *arena, char *fmt, va_list args){
   va_list args2;
   va_copy(args2, args);
   U32 needed_bytes = raddbg_vsnprintf(0, 0, fmt, args) + 1;
@@ -510,16 +512,17 @@ push_str8fv(Arena *arena, char *fmt, va_list args){
   result.size = raddbg_vsnprintf((char*)result.str, needed_bytes, fmt, args2);
   result.str[result.size] = 0;
   va_end(args2);
-  return(result);
+  return result;
 }
 
 internal String8
-push_str8f(Arena *arena, char *fmt, ...){
+str8f(Arena *arena, char *fmt, ...)
+{
   va_list args;
   va_start(args, fmt);
   String8 result = push_str8fv(arena, fmt, args);
   va_end(args);
-  return(result);
+  return result;
 }
 
 internal String8
@@ -637,14 +640,14 @@ try_u64_from_str8_c_rules(String8 string, U64 *x)
   {
     radix = 10, prefix_size = 0;
   }
-
+  
   String8 integer    = str8_skip(string, prefix_size);
   B32     is_integer = str8_is_integer(integer, radix);
   if(is_integer)
   {
     *x = u64_from_str8(integer, radix);
   }
-
+  
   return is_integer;
 }
 
