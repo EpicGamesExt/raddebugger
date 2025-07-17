@@ -491,6 +491,53 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
   return section_header;
 }
 
+internal COFF_SectionHeader *
+lnk_coff_section_table_from_obj(LNK_Obj *obj)
+{
+  return (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+}
+
+internal LNK_Symbol **
+lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
+{
+  LNK_Symbol **symlinks = push_array(arena, LNK_Symbol *, obj->header.section_count_no_null+1);
+  COFF_ParsedSymbol symbol;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    if (interp == COFF_SymbolValueInterp_Regular && symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
+      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+      if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
+        if (symlinks[symbol.section_number] == 0 || symbol.value == 0) {
+          symlinks[symbol.section_number] = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, symbol.name);
+        }
+      }
+    }
+  }
+  return symlinks;
+}
+
+internal String8
+lnk_symlink_from_section_number(LNK_Obj *obj, U64 section_number)
+{
+  COFF_ParsedSymbol symbol = {0};
+  U32 symbol_idx = obj->symlinks[section_number];
+  if (symbol_idx != max_U32) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+  }
+  return symbol.name;
+}
+
+internal COFF_RelocArray
+lnk_coff_reloc_info_from_section_number(LNK_Obj *obj, U64 section_number)
+{
+  COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
+  COFF_RelocInfo      reloc_info     = coff_reloc_info_from_section_header(obj->data, section_header);
+  COFF_Reloc         *relocs         = str8_deserial_get_raw_ptr(obj->data, reloc_info.array_off, sizeof(*relocs)*reloc_info.count);
+  COFF_RelocArray     result         = { .count = reloc_info.count, .v = relocs };
+  return result;
+}
+
 internal B32
 lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out)
 {
