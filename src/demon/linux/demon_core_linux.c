@@ -726,13 +726,27 @@ dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
 internal B32
 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code)
 {
-  return 0;
+  B32 result = 0;
+  DMN_LNX_Entity *process_entity = dmn_lnx_entity_from_handle(process);
+  if(process_entity != &dmn_lnx_nil_entity &&
+     kill(process_entity->id, SIGKILL) != -1)
+  {
+    result = 1;
+  }
+  return result;
 }
 
 internal B32
 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process)
 {
-  return 0;
+  B32 result = 0;
+  DMN_LNX_Entity *process_entity = dmn_lnx_entity_from_handle(process);
+  if(process_entity != &dmn_lnx_nil_entity &&
+     ptrace(PTRACE_DETACH, process_entity->id, 0, 0) != -1)
+  {
+    result = 1;
+  }
+  return result;
 }
 
 internal DMN_EventList
@@ -825,7 +839,8 @@ dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 internal Arch
 dmn_arch_from_thread(DMN_Handle handle)
 {
-  return Arch_Null;
+  DMN_LNX_Entity *thread = dmn_lnx_entity_from_handle(handle);
+  return thread->arch;
 }
 
 internal U64
@@ -857,15 +872,70 @@ dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block)
 internal void
 dmn_process_iter_begin(DMN_ProcessIter *iter)
 {
+  DIR *dir = opendir("/proc");
+  MemoryZeroStruct(iter);
+  iter->v[0] = IntFromPtr(dir);
 }
 
 internal B32
 dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out)
 {
-  return 0;
+  // rjf: scan for the next process ID in the directory
+  B32 got_pid = 0;
+  String8 pid_string = {0};
+  {
+    DIR *dir = (DIR*)PtrFromInt(iter->v[0]);
+    if(dir != 0 && iter->v[1] == 0)
+    {
+      for(;;)
+      {
+        // rjf: get next entry
+        struct dirent *d = readdir(dir);
+        if(d == 0)
+        {
+          break;
+        }
+        
+        // rjf: check file name is integer
+        String8 file_name = str8_cstring((char*)d->d_name);
+        B32 is_integer = str8_is_integer(file_name, 10);
+        
+        // rjf: break on integers (which represent processes)
+        if(is_integer)
+        {
+          got_pid = 1;
+          pid_string = file_name;
+          break;
+        }
+      }
+    }
+  }
+  
+  // rjf: if we found a process id, map id => info
+  B32 result = 0;
+  if(got_pid)
+  {
+    pid_t pid = u64_from_str8(pid_string, 10);
+    String8 name = dmn_lnx_exe_path_from_pid(arena, pid);
+    if(name.size == 0)
+    {
+      name = str8_lit("(unknown process)");
+    }
+    info_out->name = name;
+    info_out->pid = pid;
+    result = 1;
+  }
+  
+  return result;
 }
 
 internal void
 dmn_process_iter_end(DMN_ProcessIter *iter)
 {
+  DIR *dir = (DIR*)PtrFromInt(iter->v[0]);
+  if(dir != 0)
+  {
+    closedir(dir);
+  }
+  MemoryZeroStruct(iter);
 }
