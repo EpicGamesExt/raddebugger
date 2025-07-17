@@ -1004,23 +1004,24 @@ os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
   endt_timespec.tv_sec = endt_us/Million(1);
   endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
   B32 result = 0;
+  pthread_rwlock_unlock(&rw_mutex_entity->rwmutex_handle);
+  pthread_mutex_lock(&cv_entity->cv.rwlock_mutex_handle);
   for(;;)
   {
-    pthread_mutex_lock(&cv_entity->cv.rwlock_mutex_handle);
     int wait_result = pthread_cond_timedwait(&cv_entity->cv.cond_handle, &cv_entity->cv.rwlock_mutex_handle, &endt_timespec);
     if(wait_result != ETIMEDOUT)
     {
       pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
-      pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
       result = 1;
       break;
     }
-    pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
     if(wait_result == ETIMEDOUT)
     {
+      pthread_rwlock_rdlock(&rw_mutex_entity->rwmutex_handle);
       break;
     }
   }
+  pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
   return result;
 }
 
@@ -1039,23 +1040,24 @@ os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
   endt_timespec.tv_sec = endt_us/Million(1);
   endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
   B32 result = 0;
+  pthread_rwlock_unlock(&rw_mutex_entity->rwmutex_handle);
+  pthread_mutex_lock(&cv_entity->cv.rwlock_mutex_handle);
   for(;;)
   {
-    pthread_mutex_lock(&cv_entity->cv.rwlock_mutex_handle);
     int wait_result = pthread_cond_timedwait(&cv_entity->cv.cond_handle, &cv_entity->cv.rwlock_mutex_handle, &endt_timespec);
     if(wait_result != ETIMEDOUT)
     {
       pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
-      pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
       result = 1;
       break;
     }
-    pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
     if(wait_result == ETIMEDOUT)
     {
+      pthread_rwlock_wrlock(&rw_mutex_entity->rwmutex_handle);
       break;
     }
   }
+  pthread_mutex_unlock(&cv_entity->cv.rwlock_mutex_handle);
   return result;
 }
 
