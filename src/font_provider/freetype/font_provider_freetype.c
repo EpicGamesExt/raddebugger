@@ -68,9 +68,9 @@ fp_metrics_from_font(FP_Handle handle)
   FP_Metrics result = {0};
   if(font.face != 0)
   {
-    result.design_units_per_em = (F32)(font.face->units_per_EM * 72.f/96.f);
+    result.design_units_per_em = (F32)(font.face->units_per_EM);
     result.ascent              = (F32)font.face->ascender;
-    result.descent             = (F32)font.face->descender;
+    result.descent             = -(F32)font.face->descender;
     result.line_gap            = (F32)(font.face->height - font.face->ascender + font.face->descender);
     result.capital_height      = (F32)(font.face->ascender);
   }
