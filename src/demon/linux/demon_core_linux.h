@@ -87,8 +87,16 @@ typedef struct DMN_LNX_State DMN_LNX_State;
 struct DMN_LNX_State
 {
   Arena *arena;
+  
+  // rjf: access locking mechanism
+  OS_Handle access_mutex;
+  B32 access_run_state;
+  
+  // rjf: deferred events
   Arena *deferred_events_arena;
   DMN_EventList deferred_events;
+  
+  // rjf: entity storage
   Arena *entities_arena;
   DMN_LNX_Entity *entities_base;
   U64 entities_count;
@@ -98,6 +106,7 @@ struct DMN_LNX_State
 
 read_only global DMN_LNX_Entity dmn_lnx_nil_entity = {&dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity};
 global DMN_LNX_State *dmn_lnx_state = 0;
+thread_static B32 dmn_lnx_ctrl_thread = 0;
 
 ////////////////////////////////
 //~ rjf: Helpers

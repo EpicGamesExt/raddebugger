@@ -479,6 +479,7 @@ dmn_init(void)
   dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
   dmn_lnx_state->entities_base = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
   dmn_lnx_state->root_entity = dmn_lnx_entity_alloc(&dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
+  dmn_lnx_state->access_mutex = os_mutex_alloc();
 }
 
 ////////////////////////////////
@@ -488,17 +489,26 @@ internal DMN_CtrlCtx *
 dmn_ctrl_begin(void)
 {
   DMN_CtrlCtx *ctx = (DMN_CtrlCtx *)1;
+  dmn_lnx_ctrl_thread = 1;
   return ctx;
 }
 
 internal void
 dmn_ctrl_exclusive_access_begin(void)
 {
+  OS_MutexScope(dmn_lnx_state->access_mutex)
+  {
+    dmn_lnx_state->access_run_state = 1;
+  }
 }
 
 internal void
 dmn_ctrl_exclusive_access_end(void)
 {
+  OS_MutexScope(dmn_lnx_state->access_mutex)
+  {
+    dmn_lnx_state->access_run_state = 1;
+  }
 }
 
 internal U32
@@ -633,16 +643,57 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
           
           //- rjf: build initial process/thread/modules entities
           DMN_LNX_Entity *process = &dmn_lnx_nil_entity;
+          DMN_LNX_Entity *main_thread = &dmn_lnx_nil_entity;
           {
             // rjf: build process
             process = dmn_lnx_entity_alloc(dmn_lnx_state->root_entity, DMN_LNX_EntityKind_Process);
+            process->arch = dmn_lnx_arch_from_pid(pid);
+            process->id = pid;
+            process->fd = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR);
+            {
+              DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
+              e->kind    = DMN_EventKind_CreateProcess;
+              e->process = dmn_lnx_handle_from_entity(process);
+            }
             
             // rjf: build thread
             {
               DMN_LNX_Entity *thread = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Thread);
+              thread->id = pid;
+              thread->arch = process->arch;
+              {
+                DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
+                e->kind    = DMN_EventKind_CreateThread;
+                e->process = dmn_lnx_handle_from_entity(process);
+                e->thread  = dmn_lnx_handle_from_entity(thread);
+              }
+              main_thread = thread;
             }
             
+            // rjf: gather all process module infos
+            DMN_LNX_ModuleInfoList module_infos = dmn_lnx_module_info_list_from_process(scratch.arena, process);
+            for(DMN_LNX_ModuleInfoNode *n = module_infos.first; n != 0; n = n->next)
+            {
+              DMN_LNX_Entity *module = dmn_lnx_entity_alloc(process, DMN_LNX_EntityKind_Module);
+              module->id = n->v.name;
+              {
+                DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
+                e->kind    = DMN_EventKind_LoadModule;
+                e->process = dmn_lnx_handle_from_entity(process);
+                e->thread  = dmn_lnx_handle_from_entity(main_thread);
+                e->module  = dmn_lnx_handle_from_entity(module);
+                e->address = n->v.vaddr_range.min;
+                e->size    = dim_1u64(n->v.vaddr_range);
+              }
+            }
             
+            // rjf: handshake event
+            {
+              DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
+              e->kind    = DMN_EventKind_HandshakeComplete;
+              e->process = dmn_lnx_handle_from_entity(process);
+              e->thread  = dmn_lnx_handle_from_entity(main_thread);
+            }
           }
         }break;
       }
@@ -707,12 +758,26 @@ dmn_halt(U64 code, U64 user_data)
 internal B32
 dmn_access_open(void)
 {
-  return 0;
+  B32 result = 0;
+  if(dmn_lnx_ctrl_thread)
+  {
+    result = 1;
+  }
+  else
+  {
+    os_mutex_take(dmn_lnx_state->access_mutex);
+    result = !dmn_lnx_state->access_run_state;
+  }
+  return result;
 }
 
 internal void
 dmn_access_close(void)
 {
+  if(!dmn_lnx_ctrl_thread)
+  {
+    os_mutex_drop(dmn_lnx_state->access_mutex);
+  }
 }
 
 //- rjf: processes
