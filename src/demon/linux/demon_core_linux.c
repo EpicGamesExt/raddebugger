@@ -50,6 +50,33 @@ dmn_lnx_write(int memory_fd, Rng1U64 range, void *src)
   return result;
 }
 
+internal String8
+dmn_lnx_read_string(Arena *arena, int memory_fd, U64 base_vaddr)
+{
+  String8 result = {0};
+  U64 string_size = 0;
+  for(U64 vaddr = base_vaddr; string_size < 4096; vaddr += 1, string_size += 1)
+  {
+    char byte = 0;
+    if(pread(memory_fd, &byte, sizeof(byte), vaddr) == 0)
+    {
+      break;
+    }
+    if(byte == '\0' || byte == '\n')
+    {
+      break;
+    }
+  }
+  if(string_size != 0)
+  {
+    char *buf = push_array_no_zero(arena, char, string_size+1);
+    pread(memory_fd, buf, string_size, base_vaddr);
+    buf[string_size] = '\0';
+    result = str8((U8 *)buf, string_size);
+  }
+  return result;
+}
+
 //- rjf: pid => info extraction
 
 internal String8
@@ -654,6 +681,8 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               DMN_Event *e = dmn_event_list_push(dmn_lnx_state->deferred_events_arena, &dmn_lnx_state->deferred_events);
               e->kind    = DMN_EventKind_CreateProcess;
               e->process = dmn_lnx_handle_from_entity(process);
+              e->arch    = process->arch;
+              e->code    = pid;
             }
             
             // rjf: build thread
@@ -666,6 +695,8 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
                 e->kind    = DMN_EventKind_CreateThread;
                 e->process = dmn_lnx_handle_from_entity(process);
                 e->thread  = dmn_lnx_handle_from_entity(thread);
+                e->arch    = thread->arch;
+                e->code    = thread->id;
               }
               main_thread = thread;
             }
@@ -684,6 +715,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
                 e->module  = dmn_lnx_handle_from_entity(module);
                 e->address = n->v.vaddr_range.min;
                 e->size    = dim_1u64(n->v.vaddr_range);
+                e->string  = dmn_lnx_read_string(dmn_lnx_state->deferred_events_arena, process->fd, n->v.name);
               }
             }
             
@@ -693,6 +725,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
               e->kind    = DMN_EventKind_HandshakeComplete;
               e->process = dmn_lnx_handle_from_entity(process);
               e->thread  = dmn_lnx_handle_from_entity(main_thread);
+              e->arch    = process->arch;
             }
           }
         }break;
@@ -753,6 +786,22 @@ internal DMN_EventList
 dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
   DMN_EventList evts = {0};
+  {
+    ////////////////////////////
+    //- rjf: push any deferred events
+    //
+    {
+      for(DMN_EventNode *n = dmn_lnx_state->deferred_events.first; n != 0; n = n->next)
+      {
+        DMN_Event *e_src = &n->v;
+        DMN_Event *e_dst = dmn_event_list_push(arena, &evts);
+        MemoryCopyStruct(e_dst, e_src);
+        e_dst->string = str8_copy(arena, e_dst->string);
+      }
+      MemoryZeroStruct(&dmn_lnx_state->deferred_events);
+      arena_clear(dmn_lnx_state->deferred_events_arena);
+    }
+  }
   return evts;
 }
 

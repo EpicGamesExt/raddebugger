@@ -2315,6 +2315,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
         lines = params->line_infos[cursor->line - params->line_num_range.min];
       }
+      rd_cmd(RD_CmdKind_FocusPanel);
       rd_cmd(RD_CmdKind_PushQuery,
              .expr = txt_pt_match(*cursor, *mark) ? str8_lit("query:text_pt_commands") : str8_lit("query:text_range_commands"),
              .do_implicit_root = 1,
