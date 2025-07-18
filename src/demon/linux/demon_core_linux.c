@@ -505,7 +505,7 @@ dmn_init(void)
   dmn_lnx_state->deferred_events_arena = arena_alloc();
   dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
   dmn_lnx_state->entities_base = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
-  dmn_lnx_state->root_entity = dmn_lnx_entity_alloc(&dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
+  dmn_lnx_entity_alloc(&dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
   dmn_lnx_state->access_mutex = os_mutex_alloc();
 }
 
@@ -673,7 +673,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
           DMN_LNX_Entity *main_thread = &dmn_lnx_nil_entity;
           {
             // rjf: build process
-            process = dmn_lnx_entity_alloc(dmn_lnx_state->root_entity, DMN_LNX_EntityKind_Process);
+            process = dmn_lnx_entity_alloc(dmn_lnx_state->entities_base, DMN_LNX_EntityKind_Process);
             process->arch = dmn_lnx_arch_from_pid(pid);
             process->id = pid;
             process->fd = open((char*)str8f(scratch.arena, "/proc/%d/mem", pid).str, O_RDWR);
@@ -787,6 +787,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
   DMN_EventList evts = {0};
   {
+    Temp scratch = scratch_begin(&arena, 1);
+    
     ////////////////////////////
     //- rjf: push any deferred events
     //
@@ -801,6 +803,124 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       MemoryZeroStruct(&dmn_lnx_state->deferred_events);
       arena_clear(dmn_lnx_state->deferred_events_arena);
     }
+    
+    ////////////////////////////
+    //- rjf: no processes, no output events -> not attached
+    //
+    if(evts.count == 0 && dmn_lnx_state->entities_base->first == &dmn_lnx_nil_entity)
+    {
+      DMN_Event *e = dmn_event_list_push(arena, &evts);
+      e->kind       = DMN_EventKind_Error;
+      e->error_kind = DMN_ErrorKind_NotAttached;
+    }
+    
+    ////////////////////////////
+    //- rjf: gather all threads which we should run
+    //
+    DMN_LNX_EntityNode *first_run_thread = 0;
+    DMN_LNX_EntityNode *last_run_thread = 0;
+    ProfScope("gather all threads which we should run")
+    {
+      //- rjf: scan all processes
+      for(DMN_LNX_Entity *process = dmn_lnx_state->entities_base->first;
+          process != &dmn_lnx_nil_entity;
+          process = process->next)
+      {
+        if(process->kind != DMN_LNX_EntityKind_Process) {continue;}
+        
+        //- rjf: determine if this process is frozen
+        B32 process_is_frozen = 0;
+        if(ctrls->run_entities_are_processes)
+        {
+          for(U64 idx = 0; idx < ctrls->run_entity_count; idx += 1)
+          {
+            if(dmn_handle_match(ctrls->run_entities[idx], dmn_lnx_handle_from_entity(process)))
+            {
+              process_is_frozen = 1;
+              break;
+            }
+          }
+        }
+        
+        //- rjf: scan all threads in this process
+        for(DMN_LNX_Entity *thread = process->first;
+            thread != &dmn_lnx_nil_entity;
+            thread = thread->next)
+        {
+          if(thread->kind != DMN_LNX_EntityKind_Thread) {continue;}
+          
+          //- rjf: determine if this thread is frozen
+          B32 is_frozen = 0;
+          {
+            // rjf: single-step? freeze if not the single-step thread.
+            if(!dmn_handle_match(dmn_handle_zero(), ctrls->single_step_thread))
+            {
+              is_frozen = !dmn_handle_match(dmn_lnx_handle_from_entity(thread), ctrls->single_step_thread);
+            }
+            
+            // rjf: not single-stepping? determine based on run controls freezing info
+            else
+            {
+              if(ctrls->run_entities_are_processes)
+              {
+                is_frozen = process_is_frozen;
+              }
+              else for(U64 idx = 0; idx < ctrls->run_entity_count; idx += 1)
+              {
+                if(dmn_handle_match(ctrls->run_entities[idx], dmn_lnx_handle_from_entity(thread)))
+                {
+                  is_frozen = 1;
+                  break;
+                }
+              }
+              if(ctrls->run_entities_are_unfrozen)
+              {
+                is_frozen ^= 1;
+              }
+            }
+          }
+          
+          //- rjf: disregard all other rules if this is the halter thread
+          // TODO(rjf): halting - here is what we do on windows...
+#if 0
+          if(dmn_w32_shared->halter_tid == thread->id)
+          {
+            is_frozen = 0;
+          }
+#endif
+          
+          //- rjf: add to list
+          if(!is_frozen)
+          {
+            DMN_LNX_EntityNode *n = push_array(scratch.arena, DMN_LNX_EntityNode, 1);
+            n->v = thread;
+            SLLQueuePush(first_run_thread, last_run_thread, n);
+          }
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: resume all threads we need to run
+    //
+    DMN_LNX_EntityNode *first_ran_thread = 0;
+    DMN_LNX_EntityNode *last_ran_thread = 0;
+    for(DMN_LNX_EntityNode *n = first_run_thread; n != 0; n = n->next)
+    {
+      ptrace(PTRACE_CONT, (pid_t)n->v->id, 0, 0);
+      DMN_LNX_EntityNode *n2 = push_array_no_zero(scratch.arena, DMN_LNX_EntityNode, 1);
+      SLLQueuePush(first_ran_thread, last_ran_thread, n2);
+      n2->v = n->v;
+    }
+    
+    ////////////////////////////
+    //- rjf: wait for next stop
+    //
+    int status = 0;
+    pid_t wait_id = waitpid(-1, &status, __WALL);
+    
+    
+    scratch_end(scratch);
   }
   return evts;
 }

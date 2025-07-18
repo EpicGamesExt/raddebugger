@@ -83,6 +83,13 @@ struct DMN_LNX_Entity
   int fd;
 };
 
+typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
+struct DMN_LNX_EntityNode
+{
+  DMN_LNX_EntityNode *next;
+  DMN_LNX_Entity *v;
+};
+
 typedef struct DMN_LNX_State DMN_LNX_State;
 struct DMN_LNX_State
 {
@@ -100,7 +107,6 @@ struct DMN_LNX_State
   Arena *entities_arena;
   DMN_LNX_Entity *entities_base;
   U64 entities_count;
-  DMN_LNX_Entity *root_entity;
   DMN_LNX_Entity *free_entity;
 };
 
