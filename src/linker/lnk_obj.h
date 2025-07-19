@@ -118,6 +118,7 @@ internal B32                  lnk_is_coff_section_debug(LNK_Obj *obj, U64 sect_i
 // --- Helpers ----------------------------------------------------------------- 
 
 internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
+internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
 
 // --- Directive Parser --------------------------------------------------------
 

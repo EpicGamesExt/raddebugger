@@ -638,12 +638,6 @@ lnk_finalize_weak_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
   ProfEnd();
 }
 
-internal COFF_ParsedSymbol
-lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
-{
-  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-}
-
 internal ISectOff
 lnk_sc_from_symbol(LNK_Symbol *symbol)
 {
@@ -684,4 +678,9 @@ lnk_file_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
   return foff;
 }
 
+internal COFF_ParsedSymbol
+lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
+{
+  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+}
 

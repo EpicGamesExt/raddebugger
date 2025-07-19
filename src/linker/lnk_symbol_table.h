@@ -158,3 +158,5 @@ internal U64      lnk_sect_off_from_symbol(LNK_Symbol *symbol);
 internal U64      lnk_virt_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol);
 internal U64      lnk_file_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol);
 
+internal COFF_ParsedSymbol lnk_parsed_symbol_from_defined(LNK_Symbol *symbol);
+
