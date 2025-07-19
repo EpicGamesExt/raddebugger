@@ -397,19 +397,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
     }
   }
 
-  // TODO: temp hack, remove when we have null obj with .debug$T
-  {
-    String8 raw_null_leaf = cv_serialize_raw_leaf(scratch.arena, CV_LeafKind_NOTYPE, str8(0,0), 1);
-
-    String8List srl = {0};
-    str8_serial_begin(scratch.arena, &srl);
-    str8_serial_push_u32(scratch.arena, &srl, CV_Signature_C13);
-    str8_serial_push_string(scratch.arena, &srl, raw_null_leaf);
-    String8 null_debug_data = str8_serial_end(tp_arena->v[0], &srl);
-    
-    str8_list_push(tp_arena->v[0], &debug_t_list_arr[0], null_debug_data);
-  }
-
   ProfBegin("Parse CodeView");
   CV_DebugS *debug_s_arr = lnk_parse_debug_s_sections(tp, tp_arena, obj_count, obj_arr, debug_s_list_arr);
   CV_DebugT *debug_p_arr = lnk_parse_debug_t_sections(tp, tp_arena, obj_count, obj_arr, debug_p_list_arr);
@@ -3028,33 +3015,29 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
 {
   ProfBeginFunction();
 
-  LNK_BuildPublicSymbolsTask   *task       = raw_task;
-  CV_SymbolList                *pub_list   = &task->pub_list_arr[task_id];
-  LNK_SymbolHashTrieChunkList   chunk_list = task->chunk_lists[task_id];
+  LNK_BuildPublicSymbolsTask *task = raw_task;
+  for (LNK_SymbolHashTrieChunk *chunk = task->chunk_lists[task_id].first; chunk != 0; chunk = chunk->next) {
+    CV_SymbolNode *nodes    = push_array_no_zero(arena, CV_SymbolNode, chunk->count);
+    U64            node_idx = 0;
+    for EachIndex(i, chunk->count) {
+      LNK_Symbol        *symbol        = chunk->v[i].symbol;
+      COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
 
-  for (LNK_SymbolHashTrieChunk *chunk = chunk_list.first; chunk != 0; chunk = chunk->next) {
-    CV_SymbolNode *nodes = push_array_no_zero(arena, CV_SymbolNode, chunk->count);
+      if (symbol_parsed.section_number == lnk_removed_section_number_from_obj(symbol->u.defined.obj)) { continue; }
 
-    for (U64 i = 0, node_idx = 0; i < chunk->count; ++i) {
-      LNK_Symbol *symbol = chunk->v[i].symbol;
+      COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+      if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-      COFF_ParsedSymbol          parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-      COFF_SymbolValueInterpType interp        = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
-      if (interp == COFF_SymbolValueInterp_Regular) {
-        CV_Pub32Flags flags = 0;
-        if (COFF_SymbolType_IsFunc(parsed_symbol.type)) {
-          flags |= CV_Pub32Flag_Function;
-        }
+      CV_Pub32Flags flags = 0;
+      if (COFF_SymbolType_IsFunc(symbol_parsed.type)) { flags |= CV_Pub32Flag_Function; }
 
-        ISectOff sc             = lnk_sc_from_symbol(symbol);
-        U16      symbol_isect16 = safe_cast_u16(sc.isect);
-        U32      symbol_off32   = safe_cast_u32(sc.off);
+      ISectOff sc             = lnk_sc_from_symbol(symbol);
+      U16      symbol_isect16 = safe_cast_u16(sc.isect);
+      U32      symbol_off32   = safe_cast_u32(sc.off);
 
-        nodes[node_idx].data = cv_make_pub32(arena, flags, symbol_off32, symbol_isect16, symbol->name);
-        cv_symbol_list_push_node(pub_list, &nodes[node_idx]);
-
-        node_idx += 1;
-      }
+      nodes[node_idx].data = cv_make_pub32(arena, flags, symbol_off32, symbol_isect16, symbol->name);
+      cv_symbol_list_push_node(&task->pub_list_arr[task_id], &nodes[node_idx]);
+      node_idx += 1;
     }
   }
 

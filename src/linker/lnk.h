@@ -202,8 +202,11 @@ internal String8 lnk_manifest_from_inputs(Arena *arena, LNK_IO_Flags io_flags, S
 
 // --- Internal Objs -----------------------------------------------------------
 
+internal String8 lnk_make_null_obj(Arena *arena);
 internal String8 lnk_make_res_obj(Arena *arena, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name);
 internal String8 lnk_make_linker_coff_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 cwd_path, String8 exe_path, String8 pdb_path, String8 cmd_line, String8 obj_name);
+
+internal U32 lnk_removed_section_number_from_obj(LNK_Obj *obj);
 
 // --- Link Context ------------------------------------------------------------
 
