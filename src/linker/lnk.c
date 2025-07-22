@@ -1266,7 +1266,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     null_obj_input->path     = str8_lit("* Null Obj *");
     null_obj_input->dedup_id = null_obj_input->path;
     null_obj_input->data     = lnk_make_null_obj(tp_arena->v[0]);
-    os_write_data_to_file_path(str8_lit("null.obj"), null_obj_input->data);
   }
   
   // input command line objs
