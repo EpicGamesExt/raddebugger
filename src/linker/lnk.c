@@ -1432,25 +1432,24 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         LNK_InputObjList unique_obj_input_list = {0};
         for (LNK_InputObj *input = input_obj_list.first, *next; input != 0; input = next) {
           next = input->next;
-          
+
           B32 was_obj_loaded = hash_table_search_path_u64(loaded_obj_ht, input->dedup_id, 0);
-          if (was_obj_loaded) {
-            continue;
+          if (was_obj_loaded) { continue; }
+
+          if (input->is_thin) {
+            String8 full_path          = input->dedup_id.size ? os_full_path_from_path(scratch.arena, input->dedup_id) : str8_zero();
+            B32     was_full_path_used = hash_table_search_path_u64(loaded_obj_ht, full_path, 0);
+            if (was_full_path_used) { continue; }
+            if (!str8_match(input->dedup_id, full_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
+              hash_table_push_path_u64(scratch.arena, loaded_obj_ht, full_path, 0);
+            }
           }
-          
-          String8 full_path          = input->dedup_id.size ? os_full_path_from_path(scratch.arena, input->dedup_id) : str8_zero();
-          B32     was_full_path_used = hash_table_search_path_u64(loaded_obj_ht, full_path, 0);
-          if (was_full_path_used) {
-            continue;
-          }
-          
+
           hash_table_push_path_u64(scratch.arena, loaded_obj_ht, input->dedup_id, 0);
-          if (!str8_match(input->dedup_id, full_path, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
-            hash_table_push_path_u64(scratch.arena, loaded_obj_ht, full_path, 0);
-          }
-          
+
           lnk_input_obj_list_push_node(&unique_obj_input_list, input);
-          lnk_log(LNK_Log_InputObj, "Input Obj: %S", full_path);
+
+          lnk_log(LNK_Log_InputObj, "Input Obj: %S", input->path);
         }
         ProfEnd();
         
