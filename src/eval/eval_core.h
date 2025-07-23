@@ -57,9 +57,11 @@ union E_Value
   U64 u64;
   U32 u32;
   U16 u16;
+  U8 u8;
   S64 s64;
   S32 s32;
-  S32 s16;
+  S16 s16;
+  S8 s8;
   F64 f64;
   F32 f32;
 };

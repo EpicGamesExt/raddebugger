@@ -1292,6 +1292,8 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
   {
     digit_group_separator = 0;
   }
+  S64 s64 = 0;
+  U64 u64 = 0;
   F64 f64 = 0;
   switch(type_kind)
   {
@@ -1366,20 +1368,22 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringParams *params, E_Eval e
       }
     }break;
     
-    case E_TypeKind_S8:
-    case E_TypeKind_S16:
-    case E_TypeKind_S32:
-    case E_TypeKind_S64:
+    case E_TypeKind_S8:  s64 = (S64)eval.value.s8; goto sint_path;
+    case E_TypeKind_S16: s64 = (S64)eval.value.s16; goto sint_path;
+    case E_TypeKind_S32: s64 = (S64)eval.value.s32; goto sint_path;
+    case E_TypeKind_S64: s64 = (S64)eval.value.s64; goto sint_path;
+    sint_path:;
     {
-      result = str8_from_s64(arena, eval.value.s64, params->radix, params->min_digits, digit_group_separator);
+      result = str8_from_s64(arena, s64, params->radix, params->min_digits, digit_group_separator);
     }break;
     
-    case E_TypeKind_U8:
-    case E_TypeKind_U16:
-    case E_TypeKind_U32:
-    case E_TypeKind_U64:
+    case E_TypeKind_U8:  u64 = (U64)eval.value.u8; goto uint_path;
+    case E_TypeKind_U16: u64 = (U64)eval.value.u16; goto uint_path;
+    case E_TypeKind_U32: u64 = (U64)eval.value.u32; goto uint_path;
+    case E_TypeKind_U64: u64 = (U64)eval.value.u64; goto uint_path;
+    uint_path:;
     {
-      result = str8_from_u64(arena, eval.value.u64, params->radix, params->min_digits, digit_group_separator);
+      result = str8_from_u64(arena, u64, params->radix, params->min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_U128:

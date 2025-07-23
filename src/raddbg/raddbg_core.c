@@ -5072,6 +5072,23 @@ rd_view_ui(Rng2F32 rect)
                       //- rjf: handle interactions
                       //
                       {
+                        // rjf: hover -> debug log
+                        if(DEV_eval_compiler_tooltips)
+                        {
+                          if(ui_hovering(sig)) UI_Tooltip
+                          {
+                            String8 text = e_debug_log_from_expr_string(scratch.arena, cell->eval.string);
+                            String8List lines = str8_split(scratch.arena, text, (U8 *)"\n", 1, StringSplitFlag_KeepEmpties);
+                            for(String8Node *n = lines.first; n != 0; n = n->next)
+                            {
+                              if(n->string.size != 0)
+                              {
+                                ui_label(n->string);
+                              }
+                            }
+                          }
+                        }
+                        
                         // rjf: hover -> rich hover cfgs
                         if(ui_hovering(sig) && cell_info.cfg != &rd_nil_cfg)
                         {

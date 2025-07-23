@@ -395,6 +395,9 @@ type_coverage_eval_tests(void)
   Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   Basics_Stdint basics_stdint = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   
+  uint32_t a = (1<<31);
+  int32_t  b = (1<<31);
+  
   char string[] = "Hello World!";
   char longer_text[] =
     "Suppose there was some text\n"
