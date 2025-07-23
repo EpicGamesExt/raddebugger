@@ -3809,6 +3809,88 @@ exit:;
   return result;
 }
 
+internal T_Result
+t_opt_ref_dangling_section(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 entry_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect   = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    COFF_ObjSymbol  *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("f"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 a_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+
+    U8 data[] = "A0000";
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".data"), PE_DATA_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT, str8_array_fixed(data));
+
+    COFF_ObjSymbol *q = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("q"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, q);
+
+    coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Largest);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("f"), 0, sect);
+    a_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 b_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+
+    U8 q[] = { 1,2,3,4};
+    COFF_ObjSection *q_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".q"), PE_DATA_SECTION_FLAGS, str8_array_fixed(q));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("q"), 0, q_sect);
+
+    U8 data[] = "BBBBBBBBBBBBBBB";
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".data"), PE_DATA_SECTION_FLAGS | COFF_SectionFlag_LnkCOMDAT, str8_array_fixed(data));
+    coff_obj_writer_push_symbol_secdef(obj_writer, sect, COFF_ComdatSelect_Largest);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("f"), 0, sect);
+
+    b_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8List b_lib;
+  {
+    COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib_writer, str8_lit("b.obj"), b_obj);
+    b_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    coff_lib_writer_release(&lib_writer);
+  }
+
+  if (!t_write_file(str8_lit("entry.obj"), entry_obj)) { goto exit; }
+  if (!t_write_file(str8_lit("a.obj"), a_obj))         { goto exit; }
+  if (!t_write_file_list(str8_lit("b.lib"), b_lib))    { goto exit; }
+
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj a.obj b.lib");
+  if (linker_exit_code != 0) { goto exit; }
+
+  String8             exe           = t_read_file(scratch.arena, str8_lit("a.exe"));
+  PE_BinInfo          pe            = pe_bin_info_from_data(scratch.arena, exe);
+  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+  String8             string_table  = str8_substr(exe, pe.string_table_range);
+  COFF_SectionHeader *sect          = t_coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".q"));
+  if (sect != 0) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////////////////////////////////////
 
 internal void
@@ -3868,6 +3950,7 @@ entry_point(CmdLine *cmdline)
     { "empty_section",                    t_empty_section                    },
     { "removed_section",                  t_removed_section                  },
     { "function_pad_min",                 t_function_pad_min                 },
+    //{ "opt_ref_dangling_section",         t_opt_ref_dangling_section         },
     //{ "import_export",        t_import_export        },
   };
 
