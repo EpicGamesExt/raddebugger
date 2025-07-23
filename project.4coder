@@ -46,10 +46,10 @@ load_paths =
 commands =
 {
   //- rjf: [raddbg]
-  // .f1 = { .win = "raddbg_stable --ipc kill_all && build raddbg telemetry", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f1 = { .win = "raddbg_stable --ipc kill_all && build raddbg telemetry", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: [raddbg wsl]
-  .f1 = { .win = "wsl ./build.sh raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  // .f1 = { .win = "wsl ./build.sh raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: [scratch]
   .f2 = { .win = "raddbg_stable --ipc kill_all && build radbin && pushd build && radbin.exe mule_main.rdi --out:a.dump && popd", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
@@ -64,8 +64,8 @@ commands =
   // .f1 = { .win = "raddbg_stable --ipc kill_all && build radbin", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: running target
-  // .f3 = { .win = "raddbg_stable --ipc run", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
-  .f3 = { .win = "wsl ./build/raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f3 = { .win = "raddbg_stable --ipc run", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  // .f3 = { .win = "wsl ./build/raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   // .f3 = { .win = "pushd build && raddbg --user:dev.raddbg_user && popd", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   // .f3 = { .win = "C:/devel/raddebugger/build/raddbg.exe --capture --user:C:/devel/raddebugger/build/local_dev.raddbg_user --project:C:/devel/raddebugger/build/local_dev.raddbg_project", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   // .f3 = { .win = "wsl_launch /mnt/c/devel/raddebugger/build/raddbg", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },

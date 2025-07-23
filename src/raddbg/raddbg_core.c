@@ -3898,7 +3898,7 @@ rd_view_ui(Rng2F32 rect)
                 {
                   for EachEnumVal(Axis2, axis)
                   {
-                    cursor_tbl.v[axis] = (delta.v[axis]>0 ? cursor_tbl_range.max.v[axis] : delta.v[axis]<0 ? cursor_tbl_range.min.v[axis] + !!cursor_tbl_min_is_empty_selection[axis] : cursor_tbl.v[axis]);
+                    cursor_tbl.v[axis] = (delta.v[0]>0 ? cursor_tbl_range.max.v[axis] : delta.v[0]<0 ? cursor_tbl_range.min.v[axis] + !!cursor_tbl_min_is_empty_selection[axis] : cursor_tbl.v[axis]);
                   }
                 }break;
               }
