@@ -13426,6 +13426,7 @@ rd_frame(void)
             }
             String8 data = str8_list_join(scratch.arena, &strings, 0);
             B32 temp_write_good = os_write_data_to_file_path(temp_path, data);
+            B32 old_del_good    = (temp_write_good && os_delete_file_at_path(overwritten_path));
             B32 old_move_good   = (temp_write_good && (!dst_exists || os_move_file_path(overwritten_path, dst_path)));
             B32 new_move_good   = (old_move_good && os_move_file_path(dst_path, temp_path));
             if(new_move_good && dst_exists)
