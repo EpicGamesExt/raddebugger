@@ -873,7 +873,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           {
             new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
           }
-          if(cast_type_kind != casted_type_kind && e_type_kind_is_integer(cast_type_kind) && e_type_kind_is_integer(casted_type_kind))
+          if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
+          {
+            new_tree = e_irtree_trunc(arena, in_tree, cast_type);
+          }
+          if(e_type_kind_is_signed(cast_type_kind) && e_type_kind_is_integer(casted_type_kind) && !e_type_kind_is_signed(casted_type_kind))
           {
             new_tree = e_irtree_trunc(arena, in_tree, cast_type);
           }
