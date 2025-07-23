@@ -3426,7 +3426,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   //- rjf: loop: try to grab cached call stack; request; wait
   //
   B32 can_request = !ins_atomic_u64_eval(&ctrl_state->ctrl_thread_run_state);
-  for(;;)
+  for(U64 retry_idx = 0;; retry_idx += 1)
   {
     //- rjf: [read-only] try to look for current call stack; wait if working
     B32 node_exists = 0;
@@ -3460,6 +3460,12 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       {
         break;
       }
+    }
+    
+    //- rjf: out of time => exit
+    if(retry_idx > 0 && os_now_microseconds() >= endt_us)
+    {
+      break;
     }
     
     //- rjf: [write] node does not exist => create; request if new or stale
@@ -3500,12 +3506,6 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       {
         node_to_request->working_count -= 1;
       }
-    }
-    
-    //- rjf: out of time => exit
-    if(os_now_microseconds() >= endt_us)
-    {
-      break;
     }
   }
   
