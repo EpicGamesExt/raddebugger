@@ -3868,16 +3868,7 @@ ctrl_thread__entry_point(void *p)
     ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
     
     //- rjf: gather & output logs
-    LogScopeResult log = log_scope_end(scratch.arena);
-    ctrl_thread__flush_info_log(log.strings[LogMsgKind_Info]);
-    if(log.strings[LogMsgKind_UserError].size != 0)
-    {
-      CTRL_EventList evts = {0};
-      CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-      evt->kind       = CTRL_EventKind_Error;
-      evt->string     = log.strings[LogMsgKind_UserError];
-      ctrl_c2u_push_events(&evts);
-    }
+    ctrl_thread__end_and_flush_log();
   }
   
   scratch_end(scratch);
@@ -5279,17 +5270,19 @@ ctrl_thread__eval_scope_end(CTRL_EvalScope *scope)
 //- rjf: log flusher
 
 internal void
-ctrl_thread__flush_info_log(String8 string)
-{
-  os_append_data_to_file_path(ctrl_state->ctrl_thread_log_path, string);
-}
-
-internal void
-ctrl_thread__end_and_flush_info_log(void)
+ctrl_thread__end_and_flush_log(void)
 {
   Temp scratch = scratch_begin(0, 0);
   LogScopeResult log = log_scope_end(scratch.arena);
-  ctrl_thread__flush_info_log(log.strings[LogMsgKind_Info]);
+  os_append_data_to_file_path(ctrl_state->ctrl_thread_log_path, log.strings[LogMsgKind_Info]);
+  if(log.strings[LogMsgKind_UserError].size != 0)
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
+    evt->kind       = CTRL_EventKind_Error;
+    evt->string     = log.strings[LogMsgKind_UserError];
+    ctrl_c2u_push_events(&evts);
+  }
   scratch_end(scratch);
 }
 

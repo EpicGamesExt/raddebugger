@@ -873,7 +873,7 @@ thread_static CTRL_EntityCtxLookupAccel *ctrl_entity_ctx_lookup_accel = 0;
 ////////////////////////////////
 //~ rjf: Logging Markup
 
-#define CTRL_CtrlThreadLogScope DeferLoop(log_scope_begin(), ctrl_thread__end_and_flush_info_log())
+#define CTRL_CtrlThreadLogScope DeferLoop(log_scope_begin(), ctrl_thread__end_and_flush_log())
 
 ////////////////////////////////
 //~ rjf: Basic Type Functions
@@ -1124,8 +1124,7 @@ internal CTRL_EvalScope *ctrl_thread__eval_scope_begin(Arena *arena, CTRL_UserBr
 internal void ctrl_thread__eval_scope_end(CTRL_EvalScope *scope);
 
 //- rjf: log flusher
-internal void ctrl_thread__flush_info_log(String8 string);
-internal void ctrl_thread__end_and_flush_info_log(void);
+internal void ctrl_thread__end_and_flush_log(void);
 
 //- rjf: msg kind implementations
 internal void ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
