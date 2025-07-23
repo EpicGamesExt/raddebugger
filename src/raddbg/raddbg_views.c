@@ -945,6 +945,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     E_Type *row_type = e_type_from_key(row->eval.irtree.type_key);
     EV_Key key = row->key;
     EV_Block *block = row->block;
+    B32 block_is_root = (block->parent == &ev_nil_block);
     E_Eval block_eval = e_eval_from_key(row->block->eval.key);
     E_TypeKey block_type_key = e_type_key_unwrap(block_eval.irtree.type_key, E_TypeUnwrapFlag_Meta);
     E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
@@ -1027,46 +1028,58 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     ////////////////////////////
     //- rjf: fill row's ctrl entity
     //
-    if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
-                                             block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+    if(!block_is_root)
     {
-      info.group_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
+      if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
+                                               block_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity))
+      {
+        info.group_entity = rd_ctrl_entity_from_eval_space(row->eval.space);
+      }
     }
     
     ////////////////////////////
     //- rjf: fill row's cfg group name / parent
     //
-    if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
-                                             block_eval.space.kind == RD_EvalSpaceKind_MetaCfg))
+    if(!block_is_root)
     {
-      info.group_cfg_parent = rd_cfg_from_eval_space(block_eval.space);
+      if(block_type_kind == E_TypeKind_Set && (block_eval.space.kind == RD_EvalSpaceKind_MetaQuery ||
+                                               block_eval.space.kind == RD_EvalSpaceKind_MetaCfg))
+      {
+        info.group_cfg_parent = rd_cfg_from_eval_space(block_eval.space);
+      }
     }
     
     ////////////////////////////
     //- rjf: fill row's group cfg name
     //
-    if(block_type_kind == E_TypeKind_Set)
+    if(!block_is_root)
     {
-      String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
-      if(singular_name.size != 0)
+      if(block_type_kind == E_TypeKind_Set)
       {
-        info.group_cfg_name = singular_name;
-      }
-      else
-      {
-        info.group_cfg_name = block_type->name;
+        String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
+        if(singular_name.size != 0)
+        {
+          info.group_cfg_name = singular_name;
+        }
+        else
+        {
+          info.group_cfg_name = block_type->name;
+        }
       }
     }
     
     ////////////////////////////
     //- rjf: fill row's group cfg
     //
-    if(info.group_cfg_name.size != 0 && (block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice) ||
-                                         block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) ||
-                                         block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
+    if(!block_is_root)
     {
-      RD_CfgID id = row->key.child_id;
-      info.group_cfg_child = rd_cfg_from_id(id);
+      if(info.group_cfg_name.size != 0 && (block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(cfgs_slice) ||
+                                           block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches) ||
+                                           block_type->expand.id_from_num == E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment)))
+      {
+        RD_CfgID id = row->key.child_id;
+        info.group_cfg_child = rd_cfg_from_id(id);
+      }
     }
     
     ////////////////////////////
