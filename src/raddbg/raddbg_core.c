@@ -10986,6 +10986,112 @@ rd_init(CmdLine *cmdln)
     rd_state->view_state_slots = push_array(arena, RD_ViewStateSlot, rd_state->view_state_slots_count);
   }
   
+  //- rjf: setup initial target from command line args
+  String8 implicit_user_arg = {0};
+  String8 implicit_project_arg = {0};
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8List target_args = {0};
+    {
+      B32 after_first_non_flag = 0;
+      for(U64 idx = 1; idx < cmdln->argc; idx += 1)
+      {
+        String8 arg = str8_cstring(cmdln->argv[idx]);
+        B32 is_flag = (str8_match(str8_prefix(arg, 1), str8_lit("-"), 0) ||
+                       str8_match(str8_prefix(arg, 1), str8_lit("--"), 0) ||
+                       str8_match(str8_prefix(arg, 1), str8_lit("/"), 0));
+        B32 is_cfg = 0;
+        if(!is_flag && !after_first_non_flag)
+        {
+          OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, arg);
+          U8 raddbg_cfg_magic[] = "// raddbg ";
+          U8 file_magic_maybe[ArrayCount(raddbg_cfg_magic)] = {0};
+          os_file_read(file, r1u64(0, 10), file_magic_maybe);
+          if(MemoryMatchArray(raddbg_cfg_magic, file_magic_maybe))
+          {
+            is_cfg = 1;
+            U8 header_suffix_buffer[256] = {0};
+            String8 header_suffix = {0};
+            header_suffix.str = header_suffix_buffer;
+            header_suffix.size = os_file_read(file, r1u64(10, 10+256), header_suffix_buffer);
+            String8 header_type_suffix = str8_skip(header_suffix, str8_find_needle(header_suffix, 0, str8_lit(" "), 0)+1);
+            if(str8_match(header_type_suffix, str8_lit("user"), StringMatchFlag_RightSideSloppy))
+            {
+              implicit_user_arg = arg;
+            }
+            else if(str8_match(header_type_suffix, str8_lit("project"), StringMatchFlag_RightSideSloppy))
+            {
+              implicit_project_arg = arg;
+            }
+          }
+          os_file_close(file);
+        }
+        if(!is_flag)
+        {
+          after_first_non_flag = 1;
+        }
+        if(after_first_non_flag && !is_cfg)
+        {
+          str8_list_push(scratch.arena, &target_args, arg);
+        }
+      }
+    }
+    if(target_args.node_count > 0 && target_args.first->string.size != 0)
+    {
+      //- rjf: unpack command line inputs
+      String8 executable_name_string = {0};
+      String8 arguments_string = {0};
+      String8 working_directory_string = {0};
+      {
+        // rjf: unpack full executable path
+        if(target_args.first->string.size != 0)
+        {
+          String8 exe_name = target_args.first->string;
+          PathStyle style = path_style_from_str8(exe_name);
+          if(style == PathStyle_Relative)
+          {
+            String8 current_path = os_get_current_path(scratch.arena);
+            exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+            exe_name = path_normalized_from_string(scratch.arena, exe_name);
+          }
+          executable_name_string = exe_name;
+        }
+        
+        // rjf: unpack working directory
+        if(target_args.first->string.size != 0)
+        {
+          String8 path_part_of_arg = str8_chop_last_slash(target_args.first->string);
+          if(path_part_of_arg.size != 0)
+          {
+            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
+            working_directory_string = path;
+          }
+        }
+        
+        // rjf: unpack arguments
+        String8List passthrough_args_list = {0};
+        for(String8Node *n = target_args.first->next; n != 0; n = n->next)
+        {
+          str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+        }
+        StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+        arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
+      }
+      
+      //- rjf: build config tree
+      RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+      RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
+      RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
+      RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
+      RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
+      rd_cfg_new(exe, executable_name_string);
+      rd_cfg_new(args, arguments_string);
+      rd_cfg_new(wdir, working_directory_string);
+      rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
+    }
+    scratch_end(scratch);
+  }
+  
   // rjf: set up user / project paths
   {
     Temp scratch = scratch_begin(0, 0);
@@ -11009,6 +11115,10 @@ rd_init(CmdLine *cmdln)
       os_make_directory(user_data_folder);
       if(user_path.size == 0)
       {
+        user_path = implicit_user_arg;
+      }
+      if(user_path.size == 0)
+      {
         String8 last_user_path = push_str8f(scratch.arena, "%S/last_user", user_data_folder);
         user_path = os_data_from_file_path(scratch.arena, last_user_path);
       }
@@ -11016,6 +11126,10 @@ rd_init(CmdLine *cmdln)
       {
         user_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
       }
+    }
+    if(project_path.size == 0)
+    {
+      project_path = implicit_project_arg;
     }
     if(project_path.size != 0)
     {
