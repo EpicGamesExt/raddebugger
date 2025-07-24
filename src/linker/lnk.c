@@ -1107,9 +1107,13 @@ THREAD_POOL_TASK_FUNC(lnk_weak_symbol_finder)
     LNK_SymbolNode *symbol_n = task->lookup_node_arr.v[symbol_idx];
     LNK_Symbol     *symbol   = symbol_n->data;
     
-    LNK_Symbol *has_strong_defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol->name);
-    if (has_strong_defn) {
-      continue;
+    LNK_Symbol *defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol->name);
+    if (defn) {
+      COFF_ParsedSymbol          defn_parsed = lnk_parsed_symbol_from_defined(defn);
+      COFF_SymbolValueInterpType defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
+      if (defn_interp != COFF_SymbolValueInterp_Weak) {
+        continue;
+      }
     }
     LNK_Symbol *has_import = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Import, symbol->name);
     if (has_import) {
