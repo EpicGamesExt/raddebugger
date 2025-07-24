@@ -2225,10 +2225,8 @@ rdim_bake_string_map_loose_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStrin
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
-    RDIM_String8 normalized_path = rdim_lower_from_str8(scratch.arena, v[idx].path);
+    RDIM_String8 normalized_path = rdim_lower_from_str8(arena, v[idx].path);
     rdim_bake_string_map_loose_insert(arena, top, map, 1, normalized_path);
-    rdim_scratch_end(scratch);
   }
 }
 
@@ -2455,11 +2453,9 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
       {
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
-          RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
           RDI_U64 src_file_idx = rdim_idx_from_src_file(&n->v[idx]);
-          RDIM_String8 normalized_path = rdim_lower_from_str8(scratch.arena, n->v[idx].path);
+          RDIM_String8 normalized_path = rdim_lower_from_str8(arena, n->v[idx].path);
           rdim_bake_name_map_push(arena, map, normalized_path, (RDI_U32)src_file_idx); // TODO(rjf): @u64_to_u32
-          rdim_scratch_end(scratch);
         }
       }
     }break;
