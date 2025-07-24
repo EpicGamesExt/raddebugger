@@ -196,6 +196,21 @@ rdim_str8_match(RDIM_String8 a, RDIM_String8 b, RDIM_StringMatchFlags flags)
   return result;
 }
 
+RDI_PROC RDIM_String8
+rdim_lower_from_str8(RDIM_Arena *arena, RDIM_String8 string)
+{
+  RDIM_String8 result = rdim_str8_copy(arena, string);
+  for(RDI_U64 idx = 0; idx < result.RDIM_String8_SizeMember; idx += 1)
+  {
+    RDI_U8 byte = result.RDIM_String8_BaseMember[idx];
+    if('A' <= byte && byte <= 'Z')
+    {
+      result.RDIM_String8_BaseMember[idx] += ('a' - 'A');
+    }
+  }
+  return result;
+}
+
 //- rjf: string lists
 
 RDI_PROC void
@@ -1949,7 +1964,7 @@ rdim_bake_path_node_from_string(RDIM_BakePathTree *tree, RDIM_String8 string)
     RDIM_BakePathNode *sub_dir_node = 0;
     for(RDIM_BakePathNode *child = node->first_child; child != 0; child = child->next_sibling)
     {
-      if(rdim_str8_match(child->name, sub_dir, RDIM_StringMatchFlag_CaseInsensitive))
+      if(rdim_str8_match(child->name, sub_dir, 0))
       {
         sub_dir_node = child;
       }
@@ -2022,7 +2037,7 @@ rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_Stri
     RDIM_BakePathNode *sub_dir_node = 0;
     for(RDIM_BakePathNode *child = node->first_child; child != 0; child = child->next_sibling)
     {
-      if(rdim_str8_match(child->name, sub_dir, RDIM_StringMatchFlag_CaseInsensitive))
+      if(rdim_str8_match(child->name, sub_dir, 0))
       {
         sub_dir_node = child;
       }
@@ -2210,7 +2225,10 @@ rdim_bake_string_map_loose_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStrin
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_map_loose_insert(arena, top, map, 1, v[idx].normal_full_path);
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    RDIM_String8 normalized_path = rdim_lower_from_str8(scratch.arena, v[idx].path);
+    rdim_bake_string_map_loose_insert(arena, top, map, 1, normalized_path);
+    rdim_scratch_end(scratch);
   }
 }
 
@@ -2437,8 +2455,11 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
       {
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
+          RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
           RDI_U64 src_file_idx = rdim_idx_from_src_file(&n->v[idx]);
-          rdim_bake_name_map_push(arena, map, n->v[idx].normal_full_path, (RDI_U32)src_file_idx); // TODO(rjf): @u64_to_u32
+          RDIM_String8 normalized_path = rdim_lower_from_str8(scratch.arena, n->v[idx].path);
+          rdim_bake_name_map_push(arena, map, normalized_path, (RDI_U32)src_file_idx); // TODO(rjf): @u64_to_u32
+          rdim_scratch_end(scratch);
         }
       }
     }break;
@@ -2545,7 +2566,7 @@ rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
     {
       for(RDI_U64 idx = 0; idx < n->count; idx += 1)
       {
-        RDIM_BakePathNode *node = rdim_bake_path_tree_insert(arena, tree, n->v[idx].normal_full_path);
+        RDIM_BakePathNode *node = rdim_bake_path_tree_insert(arena, tree, n->v[idx].path);
         node->src_file = &n->v[idx];
       }
     }
@@ -3056,9 +3077,12 @@ rdim_bake_src_files(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Ba
       ////////////////////////
       //- rjf: fill file info
       //
-      dst_file->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src_file->normal_full_path);
-      dst_file->normal_full_path_string_idx = rdim_bake_idx_from_string(strings, src_file->normal_full_path);
+      RDI_U64 scratch_pos_restore = rdim_arena_pos(scratch.arena);
+      RDIM_String8 normalized_path = rdim_lower_from_str8(scratch.arena, src_file->path);
+      dst_file->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src_file->path);
+      dst_file->normal_full_path_string_idx = rdim_bake_idx_from_string(strings, normalized_path);
       dst_file->source_line_map_idx = (RDI_U32)(dst_map ? (dst_map - dst_maps) : 0);
+      rdim_arena_pop_to(scratch.arena, scratch_pos_restore);
     }
   }
   

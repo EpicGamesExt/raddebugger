@@ -525,30 +525,30 @@ ASYNC_WORK_DEF(p2r_gather_unit_src_file_work)
             lines_n != 0;
             lines_n = lines_n->next)
         {
-          // rjf: file name -> normalized file path
+          // rjf: file name -> sanitized file path
           String8 file_path = lines_n->v.file_name;
-          String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+          String8 file_path_sanitized = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
           {
-            PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-            String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
-            if(file_path_normalized_style == PathStyle_Relative)
+            PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+            String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
+            if(file_path_sanitized_style == PathStyle_Relative)
             {
               String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
-              str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
-              file_path_normalized_parts = obj_folder_path_parts;
-              file_path_normalized_style = path_style_from_str8(obj_folder_path);
+              str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+              file_path_sanitized_parts = obj_folder_path_parts;
+              file_path_sanitized_style = path_style_from_str8(obj_folder_path);
             }
-            str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-            file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
+            str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+            file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
           }
           
-          // rjf: normalized file path -> source file node
-          U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-          U64 hit_path_slot = file_path_normalized_hash%hit_path_slots_count;
+          // rjf: sanitized file path -> source file node
+          U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+          U64 hit_path_slot = file_path_sanitized_hash%hit_path_slots_count;
           String8Node *hit_path_node = 0;
           for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
           {
-            if(str8_match(n->string, file_path_normalized, 0))
+            if(str8_match(n->string, file_path_sanitized, 0))
             {
               hit_path_node = n;
               break;
@@ -558,8 +558,8 @@ ASYNC_WORK_DEF(p2r_gather_unit_src_file_work)
           {
             hit_path_node = push_array(scratch.arena, String8Node, 1);
             SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
-            hit_path_node->string = file_path_normalized;
-            str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
+            hit_path_node->string = file_path_sanitized;
+            str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_sanitized));
           }
         }
       }
@@ -788,32 +788,32 @@ ASYNC_WORK_DEF(p2r_unit_convert_work)
         {
           CV_C13LinesParsed *lines = &lines_n->v;
           
-          // rjf: file name -> normalized file path
+          // rjf: file name -> sanitized file path
           String8 file_path = lines->file_name;
-          String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+          String8 file_path_sanitized = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
           {
-            PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-            String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
-            if(file_path_normalized_style == PathStyle_Relative)
+            PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+            String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
+            if(file_path_sanitized_style == PathStyle_Relative)
             {
               String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
-              str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
-              file_path_normalized_parts = obj_folder_path_parts;
-              file_path_normalized_style = path_style_from_str8(obj_folder_path);
+              str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+              file_path_sanitized_parts = obj_folder_path_parts;
+              file_path_sanitized_style = path_style_from_str8(obj_folder_path);
             }
-            str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-            file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
+            str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+            file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
           }
           
-          // rjf: normalized file path -> source file node
-          U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-          U64 src_file_slot = file_path_normalized_hash%in->src_file_map->slots_count;
+          // rjf: sanitized file path -> source file node
+          U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+          U64 src_file_slot = file_path_sanitized_hash%in->src_file_map->slots_count;
           P2R_SrcFileNode *src_file_node = 0;
           if(lines->line_count != 0)
           {
             for(P2R_SrcFileNode *n = in->src_file_map->slots[src_file_slot]; n != 0; n = n->next)
             {
-              if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+              if(str8_match(n->src_file->path, file_path_sanitized, 0))
               {
                 src_file_node = n;
                 break;
@@ -984,30 +984,30 @@ ASYNC_WORK_DEF(p2r_unit_convert_work)
                   seq_file_name = pdb_strtbl_string_from_off(in->pdb_strtbl, name_off);
                 }
                 
-                // rjf: file name -> normalized file path
+                // rjf: file name -> sanitized file path
                 String8 file_path            = seq_file_name;
-                String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+                String8 file_path_sanitized  = str8_copy(scratch.arena, str8_skip_chop_whitespace(file_path));
                 {
-                  PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-                  String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
-                  if(file_path_normalized_style == PathStyle_Relative)
+                  PathStyle file_path_sanitized_style = path_style_from_str8(file_path_sanitized);
+                  String8List file_path_sanitized_parts = str8_split_path(scratch.arena, file_path_sanitized);
+                  if(file_path_sanitized_style == PathStyle_Relative)
                   {
                     String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
-                    str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
-                    file_path_normalized_parts = obj_folder_path_parts;
-                    file_path_normalized_style = path_style_from_str8(obj_folder_path);
+                    str8_list_concat_in_place(&obj_folder_path_parts, &file_path_sanitized_parts);
+                    file_path_sanitized_parts = obj_folder_path_parts;
+                    file_path_sanitized_style = path_style_from_str8(obj_folder_path);
                   }
-                  str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-                  file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
+                  str8_path_list_resolve_dots_in_place(&file_path_sanitized_parts, file_path_sanitized_style);
+                  file_path_sanitized = str8_path_list_join_by_style(scratch.arena, &file_path_sanitized_parts, file_path_sanitized_style);
                 }
                 
-                // rjf: normalized file path -> source file node
-                U64              file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-                U64              src_file_slot             = file_path_normalized_hash%in->src_file_map->slots_count;
+                // rjf: sanitized file path -> source file node
+                U64              file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+                U64              src_file_slot             = file_path_sanitized_hash%in->src_file_map->slots_count;
                 P2R_SrcFileNode *src_file_node             = 0;
                 for(P2R_SrcFileNode *n = in->src_file_map->slots[src_file_slot]; n != 0; n = n->next)
                 {
-                  if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+                  if(str8_match(n->src_file->path, file_path_sanitized, 0))
                   {
                     src_file_node = n;
                     break;
@@ -3518,13 +3518,13 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
     {
       for EachIndex(path_idx, tasks_outputs[idx].src_file_paths.count)
       {
-        String8 file_path_normalized = tasks_outputs[idx].src_file_paths.v[path_idx];
-        U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-        U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
+        String8 file_path_sanitized = tasks_outputs[idx].src_file_paths.v[path_idx];
+        U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+        U64 src_file_slot = file_path_sanitized_hash%src_file_map.slots_count;
         P2R_SrcFileNode *src_file_node = 0;
         for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
         {
-          if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+          if(str8_match(n->src_file->path, file_path_sanitized, 0))
           {
             src_file_node = n;
             break;
@@ -3535,7 +3535,7 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
           src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
           SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
           src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &all_src_files__sequenceless, total_path_count);
-          src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
+          src_file_node->src_file->path = push_str8_copy(arena, file_path_sanitized);
         }
       }
     }

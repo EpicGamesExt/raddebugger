@@ -1238,12 +1238,11 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
       String8List   file_path_split      = str8_split_path(scratch.arena, file_path);
       str8_path_list_resolve_dots_in_place(&file_path_split, PathStyle_WindowsAbsolute);
       String8       file_path_resolved   = str8_path_list_join_by_style(scratch.arena, &file_path_split, PathStyle_WindowsAbsolute);
-      String8       file_path_normalized = lower_from_str8(scratch.arena, file_path_resolved);
-      RDIM_SrcFile *src_file             = hash_table_search_path_raw(source_file_ht, file_path_normalized);
+      RDIM_SrcFile *src_file             = hash_table_search_path_raw(source_file_ht, file_path_resolved);
       if (src_file == 0) {
-        src_file                   = rdim_src_file_chunk_list_push(arena, &src_files, SRC_FILE_CAP);
-        src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
-        hash_table_push_path_raw(scratch.arena, source_file_ht, src_file->normal_full_path, src_file);
+        src_file       = rdim_src_file_chunk_list_push(arena, &src_files, SRC_FILE_CAP);
+        src_file->path = push_str8_copy(arena, file_path_resolved);
+        hash_table_push_path_raw(scratch.arena, source_file_ht, src_file->path, src_file);
       }
       src_file_map[file_idx] = src_file;
     }

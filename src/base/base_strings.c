@@ -1473,7 +1473,8 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style)
 }
 
 internal String8
-str8_path_list_join_by_style(Arena *arena, String8List *path, PathStyle style){
+str8_path_list_join_by_style(Arena *arena, String8List *path, PathStyle style)
+{
   StringJoin params = {0};
   switch(style)
   {

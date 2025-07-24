@@ -762,7 +762,7 @@ rb_entry_point(CmdLine *cmdline)
               for(U64 idx = 0; idx < n->count; idx += 1)
               {
                 U64 file_idx = rdim_idx_from_src_file(&n->v[idx]);
-                String8 src_path = n->v[idx].normal_full_path;
+                String8 src_path = n->v[idx].path;
                 str8_list_pushf(arena, &dump, "FILE %I64u %S\n", file_idx, src_path);
               }
             }
