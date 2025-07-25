@@ -16,8 +16,9 @@ enum
   E_TypeUnwrapFlag_Meta          = (1<<3),
   E_TypeUnwrapFlag_Enums         = (1<<4),
   E_TypeUnwrapFlag_Aliases       = (1<<5),
+  E_TypeUnwrapFlag_Bitfields     = (1<<6),
   E_TypeUnwrapFlag_All           = 0xffffffff,
-  E_TypeUnwrapFlag_AllDecorative = (E_TypeUnwrapFlag_All & ~E_TypeUnwrapFlag_Pointers)
+  E_TypeUnwrapFlag_AllDecorative = (E_TypeUnwrapFlag_All & ~(E_TypeUnwrapFlag_Pointers|E_TypeUnwrapFlag_Bitfields))
 };
 
 ////////////////////////////////

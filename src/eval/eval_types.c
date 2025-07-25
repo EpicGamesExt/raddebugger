@@ -1509,6 +1509,7 @@ e_type_key_unwrap(E_TypeKey key, E_TypeUnwrapFlags flags)
       case E_TypeKind_MetaExpr:  {done = !(flags & E_TypeUnwrapFlag_Meta);}break;
       case E_TypeKind_Enum:      {done = !(flags & E_TypeUnwrapFlag_Enums);}break;
       case E_TypeKind_Alias:     {done = !(flags & E_TypeUnwrapFlag_Aliases);}break;
+      case E_TypeKind_Bitfield:  {done = !(flags & E_TypeUnwrapFlag_Bitfields);}break;
       case E_TypeKind_Array:
       case E_TypeKind_Ptr:
       case E_TypeKind_RRef:
