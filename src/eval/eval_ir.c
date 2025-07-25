@@ -841,6 +841,8 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         e_msg_list_concat_in_place(&result.msgs, &cast_irtree.msgs);
         E_TypeKey cast_type = cast_irtree.type_key;
         E_TypeKind cast_type_kind = e_type_kind_from_key(cast_type);
+        E_TypeKey cast_type_unwrapped = e_type_key_unwrap(cast_irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKind cast_type_unwrapped_kind = e_type_kind_from_key(cast_type_unwrapped);
         U64 cast_type_byte_size = e_type_byte_size_from_key(cast_type);
         E_IRTreeAndType casted_tree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, casted_expr);
         e_msg_list_concat_in_place(&result.msgs, &casted_tree.msgs);
@@ -848,7 +850,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_TypeKind casted_type_kind = e_type_kind_from_key(casted_type);
         U64 casted_type_byte_size = e_type_byte_size_from_key(casted_type);
         U8 in_group  = e_type_group_from_kind(casted_type_kind);
-        U8 out_group = e_type_group_from_kind(cast_type_kind);
+        U8 out_group = e_type_group_from_kind(cast_type_unwrapped_kind);
         RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
         
         // rjf: bad conditions? -> error if applicable, exit
@@ -880,11 +882,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           {
             new_tree = e_irtree_convert_lo(arena, in_tree, out_group, in_group);
           }
-          if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_kind))
+          if(cast_type_byte_size < casted_type_byte_size && e_type_kind_is_integer(cast_type_unwrapped_kind))
           {
             new_tree = e_irtree_trunc(arena, in_tree, cast_type);
           }
-          if(e_type_kind_is_signed(cast_type_kind) && e_type_kind_is_integer(casted_type_kind) && !e_type_kind_is_signed(casted_type_kind))
+          if(e_type_kind_is_signed(cast_type_unwrapped_kind) && e_type_kind_is_integer(casted_type_kind) && !e_type_kind_is_signed(casted_type_kind))
           {
             new_tree = e_irtree_trunc(arena, in_tree, cast_type);
           }

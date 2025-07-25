@@ -1001,6 +1001,21 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         {
           E_Token token = e_token_at_it(it, &tokens);
           String8 token_string = str8_substr(text, token.range);
+          
+          // rjf: skip no-op prefix keywords
+          if(token.kind == E_TokenKind_Identifier &&
+             (str8_match(token_string, str8_lit("struct"), 0) ||
+              str8_match(token_string, str8_lit("union"), 0) ||
+              str8_match(token_string, str8_lit("enum"), 0) ||
+              str8_match(token_string, str8_lit("class"), 0) ||
+              str8_match(token_string, str8_lit("typename"), 0)))
+          {
+            it += 1;
+            token = e_token_at_it(it, &tokens);
+            token_string = str8_substr(text, token.range);
+          }
+          
+          // rjf: build identifier atom
           if(token.kind == E_TokenKind_Identifier)
           {
             String8 identifier_string = token_string;
