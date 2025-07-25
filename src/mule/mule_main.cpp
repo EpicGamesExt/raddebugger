@@ -1825,6 +1825,17 @@ basic_inline_tests(void)
 ////////////////////////////////
 //~ rjf: Fancy Visualization Eval Tests
 
+struct PackedBits
+{
+  unsigned char b1 : 1;
+  unsigned char b2 : 1;
+  unsigned char b3 : 1;
+  unsigned char b4 : 1;
+  unsigned char b5 : 1;
+  unsigned char b6 : 1;
+};
+raddbg_type_view(unsigned char : 1, bool($));
+
 struct Bitmap
 {
   unsigned char *base;
@@ -1860,6 +1871,10 @@ fancy_viz_eval_tests(void)
   bool bool1 = 0; raddbg_pin(bool1);
   bool bool2 = 1; raddbg_pin(bool2);
   bool bool3 = 0; raddbg_pin(bool3);
+  PackedBits packed_bits = {};
+  packed_bits.b1 = 1;
+  packed_bits.b3 = 1;
+  packed_bits.b5 = 1;
   
   //- rjf: sliders
   float slide1 = 500.f; raddbg_pin(range1(slide1, 0, 1000));
