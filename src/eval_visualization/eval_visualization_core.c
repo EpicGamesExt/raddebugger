@@ -528,6 +528,18 @@ ev_block_tree_from_eval(Arena *arena, EV_View *view, String8 filter, E_Eval root
       // rjf: unpack eval
       E_Mode mode = t->eval.irtree.mode;
       E_Eval eval = t->eval;
+      
+      // rjf: pointers/reference evaluations -> dereference for expansion
+      {
+        E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_Modifiers|E_TypeUnwrapFlag_Meta);
+        E_TypeKind type_kind = e_type_kind_from_key(type_key);
+        if(e_type_kind_is_pointer_or_ref(type_kind))
+        {
+          eval = e_eval_wrapf(eval, "*($)");
+        }
+      }
+      
+      // rjf: unpack type key we'll use for expanding this eval
       E_TypeKey expansion_type_key = ev_expansion_type_from_key(eval.irtree.type_key);
       if(!e_type_key_match(expansion_type_key, e_type_key_zero()))
       {
