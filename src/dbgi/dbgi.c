@@ -1291,7 +1291,6 @@ ASYNC_WORK_DEF(di_search_work)
     
     //- rjf: get element, map to string; if empty, continue to next element
     void *element = (U8 *)table_base + element_size*idx;
-    U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
     String8 name = {0};
     switch(in->section_kind)
     {
@@ -1299,7 +1298,8 @@ ASYNC_WORK_DEF(di_search_work)
       {
         RDI_UDT *udt = (RDI_UDT *)element;
         RDI_TypeNode *type_node = rdi_element_from_name_idx(in->rdi, TypeNodes, udt->self_type_idx);
-        name_idx_ptr = &type_node->user_defined.name_string_idx;
+        name.str = rdi_string_from_idx(in->rdi, type_node->user_defined.name_string_idx, &name.size);
+        name = str8_copy(arena, name);
       }break;
       case RDI_SectionKind_SourceFiles:
       {
@@ -1321,7 +1321,7 @@ ASYNC_WORK_DEF(di_search_work)
       }break;
       default:
       {
-        U32 name_idx = *name_idx_ptr;
+        U32 name_idx = *(U32 *)((U8 *)element + element_name_idx_off);
         U64 name_size = 0;
         U8 *name_base = rdi_string_from_idx(in->rdi, name_idx, &name_size);
         name = str8(name_base, name_size);

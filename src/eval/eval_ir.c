@@ -644,58 +644,61 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       {
         // rjf: unpack left-hand-side
         E_Expr *lhs = expr->first;
-        E_IRTreeAndType lhs_irtree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, 0, 1, lhs);
-        e_msg_list_concat_in_place(&result.msgs, &lhs_irtree.msgs);
         
-        // rjf: try all IR trees in chain
-        for(E_IRTreeAndType *lhs_irtree_try = &lhs_irtree; lhs_irtree_try != 0; lhs_irtree_try = lhs_irtree_try->prev)
+        // rjf: try left-hand-side, first *without* autohooks, then *with* autohooks.
+        for(B32 autohooks_enabled = 0; autohooks_enabled < 2; autohooks_enabled += 1)
         {
-          // rjf: gather inherited lenses from the left-hand-side
+          E_IRTreeAndType lhs_irtree_try = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, !autohooks_enabled, 1, lhs);
+          for(E_IRTreeAndType *lhs_irtree_try_chain = &lhs_irtree_try; lhs_irtree_try_chain != 0; lhs_irtree_try_chain = lhs_irtree_try_chain->prev)
           {
-            E_TypeKey k = lhs_irtree_try->type_key;
-            E_TypeKind kind = e_type_kind_from_key(k);
-            for(;kind == E_TypeKind_Lens;)
+            // rjf: pick access hook based on type
+            E_Type *lhs_type = e_type_from_key(lhs_irtree_try_chain->type_key);
+            E_TypeAccessFunctionType *lhs_access = lhs_type->access;
+            for(E_Type *lens_type = lhs_type;
+                lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
+                lens_type = e_type_from_key(lens_type->direct_type_key))
             {
-              E_Type *lens_type = e_type_from_key(k);
-              if((lens_type->flags & E_TypeFlag_InheritedByMembers && expr->kind == E_ExprKind_MemberAccess) ||
-                 (lens_type->flags & E_TypeFlag_InheritedByElements && expr->kind == E_ExprKind_ArrayIndex))
+              if(lens_type->access != 0)
               {
-                e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
+                lhs_access = lens_type->access;
+                break;
               }
-              k = e_type_key_direct(k);
-              kind = e_type_kind_from_key(k);
             }
-          }
-          
-          // rjf: pick access hook based on type
-          E_Type *lhs_type = e_type_from_key(lhs_irtree_try->type_key);
-          E_TypeAccessFunctionType *lhs_access = lhs_type->access;
-          for(E_Type *lens_type = lhs_type;
-              lens_type->kind == E_TypeKind_Lens || lens_type->kind == E_TypeKind_Set;
-              lens_type = e_type_from_key(lens_type->direct_type_key))
-          {
-            if(lens_type->access != 0)
+            if(lhs_access == 0)
             {
-              lhs_access = lens_type->access;
+              lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
+            }
+            
+            // rjf: call into hook to do access
+            E_IRTreeAndType new_result_maybe = lhs_access(arena, parent, expr, lhs_irtree_try_chain);
+            
+            // rjf: if we got a valid result -> gather info from this irtree
+            if(new_result_maybe.root != &e_irnode_nil)
+            {
+              E_TypeKey k = lhs_irtree_try_chain->type_key;
+              E_TypeKind kind = e_type_kind_from_key(k);
+              for(;kind == E_TypeKind_Lens;)
+              {
+                E_Type *lens_type = e_type_from_key(k);
+                if((lens_type->flags & E_TypeFlag_InheritedByMembers && expr->kind == E_ExprKind_MemberAccess) ||
+                   (lens_type->flags & E_TypeFlag_InheritedByElements && expr->kind == E_ExprKind_ArrayIndex))
+                {
+                  e_type_key_list_push_front(scratch.arena, &inherited_lenses, k);
+                }
+                k = e_type_key_direct(k);
+                kind = e_type_kind_from_key(k);
+              }
+              e_msg_list_concat_in_place(&result.msgs, &lhs_irtree_try_chain->msgs);
+            }
+            
+            // rjf: if we got a valid result -> we're done
+            if(new_result_maybe.root != &e_irnode_nil)
+            {
+              result = new_result_maybe;
               break;
             }
           }
-          if(lhs_access == 0)
-          {
-            lhs_access = E_TYPE_ACCESS_FUNCTION_NAME(default);
-          }
-          
-          // rjf: call into hook to do access
-          E_IRTreeAndType new_result_maybe = lhs_access(arena, parent, expr, lhs_irtree_try);
-          
-          // rjf: if we got a valid result -> store
-          if(new_result_maybe.root != &e_irnode_nil && (result.root == &e_irnode_nil || lhs_irtree_try->auto_hook == 0))
-          {
-            result = new_result_maybe;
-          }
-          
-          // rjf: end chain if we found a result that is not an autohook
-          if(new_result_maybe.root != &e_irnode_nil && lhs_irtree_try->auto_hook == 0)
+          if(result.root != &e_irnode_nil)
           {
             break;
           }
@@ -733,7 +736,11 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             String8 full_qualified_name = str8_list_join(scratch.arena, &parts, &(StringJoin){.sep = str8_lit(".")});
             E_Expr *leaf_expr_name = e_push_expr(scratch.arena, E_ExprKind_LeafIdentifier, r1u64(0, 0));
             leaf_expr_name->string = full_qualified_name;
-            result = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, disallow_autohooks, leaf_expr_name);
+            E_IRTreeAndType new_result_maybe = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, disallow_autohooks, leaf_expr_name);
+            if(new_result_maybe.root != &e_irnode_nil)
+            {
+              result = new_result_maybe;
+            }
           }
         }
       }break;
