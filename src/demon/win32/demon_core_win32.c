@@ -1822,7 +1822,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         // if priority mode? => first, just resume priority thread
         // if not? => resume all non-priority threads
         //
-        if(do_threads_resume)
+        if(do_threads_resume) ProfScope("resume threads that we want to run")
         {
           do_threads_resume = 0;
           for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
@@ -2676,7 +2676,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         ////////////////////////
         //- rjf: exit loop after a little while, so we keep pumping e.g. debug strings
         //
-        if(os_now_microseconds() >= begin_time+100000)
+        if(os_now_microseconds() >= begin_time+100000 && debug_strings.total_size != 0)
         {
           keep_going = 0;
         }
