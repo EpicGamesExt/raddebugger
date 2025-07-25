@@ -2014,7 +2014,7 @@ ui_tooltip_begin(void)
   ui_tooltip_begin_base();
   ui_set_next_squish(0.1f-ui_state->tooltip_open_t*0.1f);
   ui_set_next_transparency(1-ui_state->tooltip_open_t);
-  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_SquishAnchored)
+  UI_Flags(UI_BoxFlag_Floating|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_SquishAnchored)
     UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     UI_CornerRadius(ui_top_font_size()*0.25f)
