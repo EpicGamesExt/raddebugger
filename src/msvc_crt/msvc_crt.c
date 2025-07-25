@@ -1,6 +1,19 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal String8
+mscrt_delay_load_helper_name_from_machine(COFF_MachineType machine)
+{
+  String8 delay_load_helper_name = str8_zero();
+  switch (machine) {
+  case COFF_MachineType_Unknown: break;
+  case COFF_MachineType_X86: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
+  case COFF_MachineType_X64: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
+  default: { NotImplemented; } break;
+  }
+  return delay_load_helper_name;
+}
+
 internal U64
 mscrt_parse_func_info(Arena              *arena,
                       String8             raw_data,

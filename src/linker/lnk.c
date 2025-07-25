@@ -1729,13 +1729,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       } break;
       case State_PushDllHelperUndefSymbol: {
         ProfBegin("Push Dll Helper Undef Symbol");
-        
-        switch (config->machine) {
-        case COFF_MachineType_X86: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME); break;
-        case COFF_MachineType_X64: delay_load_helper_name = str8_cstring(MSCRT_DELAY_LOAD_HELPER2_SYMBOL_NAME);     break;
-        default: { NotImplemented; } break;
-        }
-        
+        delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
         str8_list_push(scratch.arena, &include_symbol_list, delay_load_helper_name);
         ProfEnd();
       } break;

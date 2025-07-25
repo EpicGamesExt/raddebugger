@@ -343,6 +343,10 @@ typedef struct MSCRT_ParsedFuncInfoV4
   MSCRT_IP2State32V4       ip2state_map;
 } MSCRT_ParsedFuncInfoV4;
 
+//- Delay Load Helper
+
+internal String8 mscrt_delay_load_helper_name_from_machine(COFF_MachineType machine);
+
 //- Exception info < v4
 
 internal U64 mscrt_parse_func_info(Arena *arena, String8 raw_data, U64 section_count, COFF_SectionHeader *sections, U64 off, MSCRT_FuncInfo *func_info);
