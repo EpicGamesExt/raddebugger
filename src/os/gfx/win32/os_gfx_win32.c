@@ -996,37 +996,41 @@ os_get_gfx_info(void)
 internal void
 os_set_clipboard_text(String8 string)
 {
+  Temp scratch = scratch_begin(0, 0);
   if(OpenClipboard(0))
   {
     EmptyClipboard();
-    HANDLE string_copy_handle = GlobalAlloc(GMEM_MOVEABLE, string.size+1);
-    if(string_copy_handle)
+    String16 string16 = str16_from_8(scratch.arena, string);
+    HANDLE string16_copy_handle = GlobalAlloc(GMEM_MOVEABLE, string16.size*sizeof(string16.str[0])+1);
+    if(string16_copy_handle)
     {
-      U8 *copy_buffer = (U8 *)GlobalLock(string_copy_handle);
-      MemoryCopy(copy_buffer, string.str, string.size);
-      copy_buffer[string.size] = 0;
-      GlobalUnlock(string_copy_handle);
-      SetClipboardData(CF_TEXT, string_copy_handle);
+      U16 *copy_buffer = (U16 *)GlobalLock(string16_copy_handle);
+      MemoryCopy(copy_buffer, string16.str, string16.size*sizeof(string16.str[0]));
+      copy_buffer[string16.size] = 0;
+      GlobalUnlock(string16_copy_handle);
+      SetClipboardData(CF_UNICODETEXT, string16_copy_handle);
     }
     CloseClipboard();
   }
+  scratch_end(scratch);
 }
 
 internal String8
 os_get_clipboard_text(Arena *arena)
 {
   String8 result = {0};
-  if(IsClipboardFormatAvailable(CF_TEXT) &&
+  if(IsClipboardFormatAvailable(CF_UNICODETEXT) &&
      OpenClipboard(0))
   {
-    HANDLE data_handle = GetClipboardData(CF_TEXT);
+    HANDLE data_handle = GetClipboardData(CF_UNICODETEXT);
     if(data_handle)
     {
-      U8 *buffer = (U8 *)GlobalLock(data_handle);
+      U16 *buffer = (U16 *)GlobalLock(data_handle);
       if(buffer)
       {
-        U64 size = cstring8_length(buffer);
-        result = push_str8_copy(arena, str8(buffer, size));
+        U64 size = cstring16_length(buffer);
+        String16 string16 = str16(buffer, size);
+        result = str8_from_16(arena, string16);
         GlobalUnlock(data_handle);
       }
     }
