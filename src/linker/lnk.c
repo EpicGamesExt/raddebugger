@@ -22,12 +22,6 @@
 
 // --- Code Base ---------------------------------------------------------------
 
-#if defined(__clang__)
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Winitializer-overrides"
-# pragma clang diagnostic ignored "-Wswitch"
-#endif
-
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "hash_table.h"
@@ -64,10 +58,6 @@
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
 #include "msvc_crt/msvc_crt.c"
-
-#if defined(__clang__)
-# pragma clang diagnostic pop
-#endif
 
 // --- RDI ---------------------------------------------------------------------
 
@@ -132,6 +122,8 @@
 #include "lnk_debug_helper.c"
 #include "lnk_lib.c"
 #include "lnk_debug_info.c"
+
+// -----------------------------------------------------------------------------
 
 internal LNK_Config *
 lnk_config_from_argcv(Arena *arena, int argc, char **argv)
