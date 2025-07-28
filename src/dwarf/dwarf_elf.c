@@ -46,60 +46,64 @@ dw_input_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
     if(section_kind == DW_Section_Null)
     {
       section_kind = dw_section_dwo_kind_from_string(section_name);
-      is_dwo = 1;
+      is_dwo = (section_kind != DW_Section_Null);
     }
     
     //- rjf: decompress section data if needed
     String8 section_data__uncompressed = {0};
-    if(!(shdr->sh_flags & ELF_Shf_Compressed))
+    if(section_kind != DW_Section_Null)
     {
-      section_data__uncompressed = section_data__maybe_compressed;
-    }
-    else
-    {
-      // rjf: read compressed-section header
-      ELF_Chdr64 chdr64 = {0};
-      U64 chdr_size = 0;
-      if(ELF_HdrIs64Bit(bin->hdr.e_ident))
+      if(!(shdr->sh_flags & ELF_Shf_Compressed))
       {
-        chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr64);
+        section_data__uncompressed = section_data__maybe_compressed;
       }
-      else if(ELF_HdrIs32Bit(bin->hdr.e_ident))
+      else
       {
-        ELF_Chdr32 chdr32 = {0};
-        chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr32);
-        if(chdr_size == sizeof(chdr32))
+        // rjf: read compressed-section header
+        ELF_Chdr64 chdr64 = {0};
+        U64 chdr_size = 0;
+        if(ELF_HdrIs64Bit(bin->hdr.e_ident))
         {
-          chdr64 = elf_chdr64_from_chdr32(chdr32);
+          chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr64);
         }
-      }
-      
-      // rjf: decompress
-      {
-        String8 section_data__compressed_contents = str8_skip(section_data__maybe_compressed, chdr_size);
-        switch(chdr64.ch_type)
+        else if(ELF_HdrIs32Bit(bin->hdr.e_ident))
         {
-          default:
-          case ELF_CompressType_None:
+          ELF_Chdr32 chdr32 = {0};
+          chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr32);
+          if(chdr_size == sizeof(chdr32))
           {
-            section_data__uncompressed = section_data__compressed_contents;
-          }break;
-          case ELF_CompressType_ZLib:
+            chdr64 = elf_chdr64_from_chdr32(chdr32);
+          }
+        }
+        
+        // rjf: decompress
+        {
+          String8 section_data__compressed_contents = str8_skip(section_data__maybe_compressed, chdr_size);
+          switch(chdr64.ch_type)
           {
-            U8 *section_data_uncompressed_buffer = push_array_no_zero_aligned(arena, U8, chdr64.ch_size, chdr64.ch_addr_align);
-            U64 section_data_uncompressed_size = 0;
-            section_data_uncompressed_size = zsinflate(section_data_uncompressed_buffer, chdr64.ch_size, section_data__compressed_contents.str, section_data__compressed_contents.size);
-            section_data__uncompressed = str8(section_data_uncompressed_buffer, section_data_uncompressed_size);
-          }break;
-          case ELF_CompressType_ZStd:
-          {
-            NotImplemented;
-          }break;
+            default:
+            case ELF_CompressType_None:
+            {
+              section_data__uncompressed = section_data__compressed_contents;
+            }break;
+            case ELF_CompressType_ZLib:
+            {
+              U8 *section_data_uncompressed_buffer = push_array_no_zero_aligned(arena, U8, chdr64.ch_size, chdr64.ch_addr_align);
+              U64 section_data_uncompressed_size = 0;
+              section_data_uncompressed_size = zsinflate(section_data_uncompressed_buffer, chdr64.ch_size, section_data__compressed_contents.str, section_data__compressed_contents.size);
+              section_data__uncompressed = str8(section_data_uncompressed_buffer, section_data_uncompressed_size);
+            }break;
+            case ELF_CompressType_ZStd:
+            {
+              NotImplemented;
+            }break;
+          }
         }
       }
     }
     
     //- rjf: store
+    if(section_kind != DW_Section_Null)
     {
       is_section_present[section_kind] = 1;
       DW_Section *d = &result.sec[section_kind];
