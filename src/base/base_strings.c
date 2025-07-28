@@ -2491,7 +2491,7 @@ fuzzy_match_find(Arena *arena, String8 needle, String8 haystack)
     U64 find_pos = 0;
     for(;find_pos < haystack.size;)
     {
-      find_pos = str8_find_needle(haystack, find_pos, needle_n->string, StringMatchFlag_CaseInsensitive);
+      find_pos = str8_find_needle(haystack, find_pos, needle_n->string, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive);
       B32 is_in_gathered_ranges = 0;
       for(FuzzyMatchRangeNode *n = result.first; n != 0; n = n->next)
       {
