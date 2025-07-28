@@ -13125,7 +13125,10 @@ rd_frame(void)
             //- rjf: determine if the file is good
             B32 file_is_okay = 0;
             {
+              String8 stored_path = (kind == RD_CmdKind_OpenUser ? rd_state->user_path : rd_state->project_path);
               file_is_okay = ((file_props.size == 0 && file_props.created == 0) ||
+                              str8_match(file_path, stored_path, 0) ||
+                              stored_path.size == 0 ||
                               str8_match(str8_prefix(file_data, 9), str8_lit("// raddbg"), 0));
             }
             
