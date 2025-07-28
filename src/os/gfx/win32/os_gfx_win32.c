@@ -1001,7 +1001,7 @@ os_set_clipboard_text(String8 string)
   {
     EmptyClipboard();
     String16 string16 = str16_from_8(scratch.arena, string);
-    HANDLE string16_copy_handle = GlobalAlloc(GMEM_MOVEABLE, string16.size*sizeof(string16.str[0])+1);
+    HANDLE string16_copy_handle = GlobalAlloc(GMEM_MOVEABLE, (string16.size+1)*sizeof(string16.str[0]));
     if(string16_copy_handle)
     {
       U16 *copy_buffer = (U16 *)GlobalLock(string16_copy_handle);
