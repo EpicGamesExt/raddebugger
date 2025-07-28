@@ -75,8 +75,8 @@ os_write_data_to_file_path(String8 path, String8 data)
   OS_Handle file = os_file_open(OS_AccessFlag_Write, path);
   if(!os_handle_match(file, os_handle_zero()))
   {
-    good = 1;
-    os_file_write(file, r1u64(0, data.size), data.str);
+    U64 bytes_written = os_file_write(file, r1u64(0, data.size), data.str);
+    good = (bytes_written == data.size);
     os_file_close(file);
   }
   return good;
@@ -89,13 +89,13 @@ os_write_data_list_to_file_path(String8 path, String8List list)
   OS_Handle file = os_file_open(OS_AccessFlag_Write, path);
   if(!os_handle_match(file, os_handle_zero()))
   {
-    good = 1;
     Temp scratch = scratch_begin(0, 0);
     U64 write_buffer_size = KB(64);
     U8 *write_buffer = push_array_no_zero(scratch.arena, U8, write_buffer_size);
     U64 write_buffer_write_pos = 0;
     U64 write_buffer_read_pos = 0;
     U64 file_off = 0;
+    U64 total_bytes_written = 0;
     {
       for(String8Node *n = list.first; n != 0; n = n->next)
       {
@@ -119,9 +119,10 @@ os_write_data_list_to_file_path(String8 path, String8List list)
       }
       if(write_buffer_write_pos > write_buffer_read_pos)
       {
-        os_file_write(file, r1u64(file_off, file_off + (write_buffer_write_pos-write_buffer_read_pos)), write_buffer);
+        total_bytes_written += os_file_write(file, r1u64(file_off, file_off + (write_buffer_write_pos-write_buffer_read_pos)), write_buffer);
       }
     }
+    good = (total_bytes_written == list.total_size);
     os_file_close(file);
     scratch_end(scratch);
   }
@@ -137,9 +138,9 @@ os_append_data_to_file_path(String8 path, String8 data)
     OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append, path);
     if(!os_handle_match(file, os_handle_zero()))
     {
-      good = 1;
       U64 pos = os_properties_from_file(file).size;
-      os_file_write(file, r1u64(pos, pos+data.size), data.str);
+      U64 bytes_written = os_file_write(file, r1u64(pos, pos+data.size), data.str);
+      good = (bytes_written == data.size);
       os_file_close(file);
     }
   }
