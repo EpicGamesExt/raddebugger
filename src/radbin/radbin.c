@@ -264,13 +264,14 @@ rb_entry_point(CmdLine *cmdline)
       if(file_format == RB_FileFormat_ELF32 ||
          file_format == RB_FileFormat_ELF64)
       {
-        ELF_BinInfo elf = elf_bin_from_data(file_data);
-        ELF_GnuDebugLink debug_link = {0};
-        if(elf_parse_debug_link(file_data, &elf, &debug_link) &&
-           debug_link.path.size != 0)
+        Temp scratch = scratch_begin(&arena, 1);
+        ELF_Bin bin = elf_bin_from_data(scratch.arena, file_data);
+        ELF_GnuDebugLink debug_link = elf_gnu_debug_link_from_bin(file_data, &bin);
+        if(debug_link.path.size != 0)
         {
           str8_list_push(arena, &input_file_path_tasks, debug_link.path);
         }
+        scratch_end(scratch);
       }
       
       //////////////////////////
@@ -298,8 +299,8 @@ rb_entry_point(CmdLine *cmdline)
          file_format == RB_FileFormat_ELF64)
       {
         Temp scratch = scratch_begin(&arena, 1);
-        ELF_BinInfo elf_bin = elf_bin_from_data(file_data);
-        if(dw_is_dwarf_present_elf_section_table(file_data, &elf_bin))
+        ELF_Bin elf_bin = elf_bin_from_data(scratch.arena, file_data);
+        if(dw_is_dwarf_present_from_elf_bin(file_data, &elf_bin))
         {
           file_format_flags |= RB_FileFormatFlag_HasDWARF;
         }
@@ -898,7 +899,7 @@ rb_entry_point(CmdLine *cmdline)
         //- rjf: unpack file parses
         Arch arch = Arch_Null;
         PE_BinInfo pe = {0};
-        ELF_BinInfo elf = {0};
+        ELF_Bin elf = {0};
         DW_Input dw = {0};
         {
           if(f->format == RB_FileFormat_PE)
@@ -909,7 +910,7 @@ rb_entry_point(CmdLine *cmdline)
           if(f->format == RB_FileFormat_ELF32 ||
              f->format == RB_FileFormat_ELF64)
           {
-            elf = elf_bin_from_data(f->data);
+            elf = elf_bin_from_data(arena, f->data);
             arch = arch_from_elf_machine(elf.hdr.e_machine);
           }
           if(f->format_flags & RB_FileFormatFlag_HasDWARF)
@@ -925,7 +926,7 @@ rb_entry_point(CmdLine *cmdline)
             else if(f->format == RB_FileFormat_ELF32 ||
                     f->format == RB_FileFormat_ELF64)
             {
-              dw = dw_input_from_elf_section_table(arena, f->data, &elf);
+              dw = dw_input_from_elf_bin(arena, f->data, &elf);
             }
           }
         }

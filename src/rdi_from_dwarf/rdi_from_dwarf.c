@@ -1097,44 +1097,23 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
     case ExecutableImageKind_CoffPe:
     {
       PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, params->exe_data);
-      
-      // get image arch
       arch = pe.arch;
-      
-      // get image base
       image_base = pe.image_base;
-      
-      // get image sections
-      String8             raw_sections  = str8_substr(params->exe_data, pe.section_table_range);
-      U64                 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
+      String8 raw_sections  = str8_substr(params->exe_data, pe.section_table_range);
+      U64 section_count = raw_sections.size / sizeof(COFF_SectionHeader);
       COFF_SectionHeader *section_table = (COFF_SectionHeader *)raw_sections.str;
-      
-      // convert sections
       String8 string_table = str8_substr(params->exe_data, pe.string_table_range);
       binary_sections = c2r_rdi_binary_sections_from_coff_sections(arena, params->exe_data, string_table, section_count, section_table);
-      
-      // make DWARF input
       input = dw_input_from_coff_section_table(scratch.arena, params->exe_data, string_table, section_count, section_table);
     }break;
     case ExecutableImageKind_Elf32:
     case ExecutableImageKind_Elf64:
     {
-      ELF_BinInfo elf = elf_bin_from_data(params->dbg_data);
-      
-      // get image arch
-      arch = arch_from_elf_machine(elf.hdr.e_machine);
-      
-      // get image base
-      image_base = elf_base_addr_from_bin(&elf.hdr);
-      
-      // get image sections
-      ELF_Shdr64Array shdrs = elf_shdr64_array_from_bin(scratch.arena, params->dbg_data, &elf.hdr);
-      
-      // convert sections
-      binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, shdrs);
-      
-      // make DWARF input
-      input = dw_input_from_elf_section_table(scratch.arena, params->dbg_data, &elf);
+      ELF_Bin bin = elf_bin_from_data(scratch.arena, params->dbg_data);
+      arch = arch_from_elf_machine(bin.hdr.e_machine);
+      image_base = elf_base_addr_from_bin(&bin);
+      binary_sections = e2r_rdi_binary_sections_from_elf_section_table(arena, bin.shdrs);
+      input = dw_input_from_elf_bin(scratch.arena, params->dbg_data, &bin);
     }break;
   }
   

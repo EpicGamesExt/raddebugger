@@ -4078,9 +4078,9 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  ELF_BinInfo      bin         = elf_bin_from_data(raw_data);
+  ELF_Bin      bin         = elf_bin_from_data(raw_data);
   Arch             arch        = arch_from_elf_machine(bin.hdr.e_machine);
-  DW_Input         dwarf_input = dw_input_from_elf_section_table(scratch.arena, raw_data, &bin);
+  DW_Input         dwarf_input = dw_input_from_elf_bin(scratch.arena, raw_data, &bin);
   ELF_Class        elf_class   = bin.hdr.e_ident[ELF_Identifier_Class];
   ExecutableImageKind        image_type  = elf_class == ELF_Class_32 ? ExecutableImageKind_Elf32 : elf_class == ELF_Class_64 ? ExecutableImageKind_Elf64 : ELF_Class_None;
   B32              relaxed     = 1;

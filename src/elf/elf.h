@@ -671,6 +671,9 @@ typedef enum ELF_Identifier
   ELF_Identifier_Max        = 16,
 } ELF_Identifier;
 
+read_only global U8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
+read_only global String8 elf_magic_string = {elf_magic, sizeof(elf_magic)};
+
 typedef U16 ELF_Type;
 typedef enum ELF_TypeEnum
 {
@@ -993,4 +996,3 @@ internal String8 elf_string_from_class(Arena *arena, ELF_Class v);
 internal Arch arch_from_elf_machine(ELF_MachineKind machine);
 
 #endif // ELF_H
-

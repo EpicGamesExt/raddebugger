@@ -110,8 +110,8 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
       pe_name       = input_n->string;
       is_pe_present = 1;
     } else if (elf_check_magic(input_data)) {
-      ELF_BinInfo elf              = elf_bin_from_data(input_data);
-      B32         is_dwarf_present = dw_is_dwarf_present_elf_section_table(input_data, &elf);
+      ELF_Bin elf              = elf_bin_from_data(input_data);
+      B32         is_dwarf_present = dw_is_dwarf_present_from_bin(input_data, &elf);
       if (is_dwarf_present) {
         if (is_elf_debug_present) {
           fprintf(stderr, "error: ambiguous input, both ELFs have DWARF debug sections, please use --elf:<path> --elf_debug:<path> to clarify inputs.\n");
@@ -234,8 +234,8 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     //
     // Load image ELF
     //
-    ELF_BinInfo elf           = elf_bin_from_data(elf_data);
-    B32         has_elf_dwarf = dw_is_dwarf_present_elf_section_table(elf_data, &elf);
+    ELF_Bin elf           = elf_bin_from_data(elf_data);
+    B32         has_elf_dwarf = dw_is_dwarf_present_from_elf_bin(elf_data, &elf);
     
     // 
     // ELF doesn't have debug info and no .debug was specified on command line,
@@ -252,8 +252,8 @@ rc_context_from_cmd_line(Arena *arena, CmdLine *cmdl)
     //
     // Load .debug ELF
     //
-    ELF_BinInfo elf_debug           = elf_bin_from_data(elf_debug_data);
-    B32         has_elf_debug_dwarf = dw_is_dwarf_present_elf_section_table(elf_debug_data, &elf_debug);
+    ELF_Bin elf_debug           = elf_bin_from_data(elf_debug_data);
+    B32         has_elf_debug_dwarf = dw_is_dwarf_present_from_elf_bin(elf_debug_data, &elf_debug);
     
     //
     // Input is image ELF and .debug ELF
