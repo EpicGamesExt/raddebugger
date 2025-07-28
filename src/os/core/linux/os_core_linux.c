@@ -446,8 +446,16 @@ os_copy_file_path(String8 dst, String8 src)
 internal B32
 os_move_file_path(String8 dst, String8 src)
 {
-  // TODO(rjf)
-  return 0;
+  B32 good = 0;
+  Temp scratch = scratch_begin(0, 0);
+  {
+    char *src_cstr = (char *)push_str8_copy(scratch.arena, src).str;
+    char *dst_cstr = (char *)push_str8_copy(scratch.arena, dst).str;
+    int rename_result = rename(src_cstr, dst_cstr);
+    good = (rename_result != -1);
+  }
+  scratch_end(scratch);
+  return good;
 }
 
 internal String8
