@@ -511,15 +511,24 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(schema)
         MD_Node *tag = md_tag_from_string(schema, str8_lit("expand_commands"), 0);
         for MD_EachNode(arg, tag->first)
         {
-          RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(arg->string);
-          FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, rd_display_from_code_name(cmd_kind_info->string));
-          FuzzyMatchRangeList desc_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->description);
-          FuzzyMatchRangeList tags_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->search_tags);
-          if(name_matches.count == name_matches.needle_part_count ||
-             desc_matches.count == desc_matches.needle_part_count ||
-             tags_matches.count == tags_matches.needle_part_count)
+          B32 filtered = 0;
+          if(md_node_has_tag(arg, str8_lit("output"), 0))
           {
-            str8_list_push(scratch.arena, &commands_list, arg->string);
+            String8 expr = rd_expr_from_cfg(ext->cfg);
+            filtered = (!str8_match(expr, str8_lit("query:output"), 0));
+          }
+          if(!filtered)
+          {
+            RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(arg->string);
+            FuzzyMatchRangeList name_matches = fuzzy_match_find(scratch.arena, filter, rd_display_from_code_name(cmd_kind_info->string));
+            FuzzyMatchRangeList desc_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->description);
+            FuzzyMatchRangeList tags_matches = fuzzy_match_find(scratch.arena, filter, cmd_kind_info->search_tags);
+            if(name_matches.count == name_matches.needle_part_count ||
+               desc_matches.count == desc_matches.needle_part_count ||
+               tags_matches.count == tags_matches.needle_part_count)
+            {
+              str8_list_push(scratch.arena, &commands_list, arg->string);
+            }
           }
         }
       }

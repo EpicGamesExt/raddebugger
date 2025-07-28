@@ -15825,6 +15825,13 @@ rd_frame(void)
             }
           }break;
           
+          //- rjf: output
+          case RD_CmdKind_ClearOutput:
+          {
+            MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("")};
+            mtx_push_op(d_state->output_log_key, op);
+          }break;
+          
           //- rjf: watch pins
           case RD_CmdKind_AddWatchPin:
           case RD_CmdKind_ToggleWatchPin:

@@ -469,7 +469,7 @@ RD_VocabTable:
   {
     text,
     ```
-      @inherit(tab) x:
+      @inherit(tab) @expand_commands(@output clear_output) x:
     {
       @description("An expression to describe data which should be viewed as text or code.")
         'expression': expr_string,
@@ -504,6 +504,7 @@ RD_VocabTable:
         'show_symbol_names': bool,
       @no_callee_helper @default(1) @description("Controls whether or not line numbers are shown.")
         'show_line_numbers': bool,
+      
     }
     ```
   }
@@ -1017,6 +1018,9 @@ RD_CmdTable:    //               |        |              |                |     
   {DisableBreakpoint              1        1              0                0               "query:breakpoints"                              Cfg                null              Breakpoint              Null       0  0  0  0  1  1  1                                                           CheckHollow           "disable_breakpoint"          "Disable Breakpoint"                          "Disables a breakpoint."                                                                                           ""                               ""                                                               }
   {ClearBreakpoints               1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Trash                 "clear_breakpoints"           "Clear Breakpoints"                           "Removes all breakpoints."                                                                                         ""                               ""                                                               }
   {ListBreakpoints                0        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "list_breakpoints"            "List Breakpoints"                            "Lists all breakpoints."                                                                                           ""                               ""                                                               }
+  
+  //- rjf: output
+  {ClearOutput                    1        1              0                0               ""                                               Null               null              Nil                     Null       0  0  0  0  0  0  0                                                           Null                  "clear_output"                "Clear Output"                                "Clears all output."                                                                                               ""                               ""                                                               }
   
   //- rjf: watch pins
   {AddWatchPin                    1        1              0                0               ""                                               Expr               null              Nil                     Null       0  0  0  0  1  1  1                                                           Pin                   "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               "$watch_pins,"                                                   }
