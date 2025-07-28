@@ -5640,6 +5640,18 @@ rd_view_setting_f32_from_name(String8 name)
 
 //- rjf: evaluation & tag (a view's 'call') parameter extraction
 
+internal Rng1U64
+rd_space_range_from_eval(E_Eval eval)
+{
+  Rng1U64 range = e_range_from_eval(eval);
+  U64 size_setting = rd_view_setting_value_from_name(str8_lit("size")).u64;
+  if(size_setting != 0)
+  {
+    range.max = range.min + size_setting;
+  }
+  return range;
+}
+
 internal TXT_LangKind
 rd_lang_kind_from_eval(E_Eval eval)
 {

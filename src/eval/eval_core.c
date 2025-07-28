@@ -1350,38 +1350,41 @@ e_key_wrapf(E_Key key, char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Eval Info Extraction
 
-internal U64
-e_base_offset_from_eval(E_Eval eval)
+internal Rng1U64
+e_range_from_eval(E_Eval eval)
 {
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))
+  // rjf: choose base offset
+  U64 base_offset = 0;
   {
-    eval = e_value_eval_from_eval(eval);
-  }
-  return eval.value.u64;
-}
-
-internal U64
-e_range_size_from_eval(E_Eval eval)
-{
-  U64 result = KB(16);
-  {
-    E_TypeKey type_core = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
-    E_TypeKind type_core_kind = e_type_kind_from_key(type_core);
-    B32 got_size = 0;
-    
-    // rjf: try getting size from intrinsic type (e.g. arrays/etc.)
-    if(!got_size)
+    E_Eval base_off_eval = eval;
+    if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(base_off_eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))
     {
-      if(type_core_kind == E_TypeKind_Array ||
-         type_core_kind == E_TypeKind_Struct ||
-         type_core_kind == E_TypeKind_Union ||
-         type_core_kind == E_TypeKind_Class)
+      base_off_eval = e_value_eval_from_eval(base_off_eval);
+    }
+    base_offset = base_off_eval.value.u64;
+  }
+  
+  // rjf: choose size
+  U64 size = KB(16);
+  {
+    E_TypeKey type_key = e_type_key_unwrap(eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative);
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    if(type_kind == E_TypeKind_Ptr)
+    {
+      E_Eval ptee_eval = e_eval_wrapf(eval, "*$");
+      U64 ptee_size = e_type_byte_size_from_key(ptee_eval.irtree.type_key);
+      if(ptee_size > 8)
       {
-        result = e_type_byte_size_from_key(type_core);
-        got_size = 1;
+        size = ptee_size;
       }
     }
+    else
+    {
+      size = e_type_byte_size_from_key(type_key);
+    }
   }
+  
+  Rng1U64 result = r1u64(base_offset, base_offset+size);
   return result;
 }
 

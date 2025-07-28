@@ -2061,13 +2061,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
-  U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
-  if(size == 0)
-  {
-    size = e_range_size_from_eval(eval);
-  }
-  Rng1U64 range = r1u64(base_offset, base_offset+size);
+  Rng1U64 range = rd_space_range_from_eval(eval);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
   String8 lang = rd_view_setting_from_name(str8_lit("lang"));
   if(lang.size == 0)
@@ -2346,13 +2340,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
-  if(size == 0)
-  {
-    size = e_range_size_from_eval(eval);
-  }
-  Rng1U64 range = r1u64(base_offset, base_offset+size);
+  Rng1U64 range = rd_space_range_from_eval(eval);
   Arch arch = rd_arch_from_eval(eval);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
@@ -2535,21 +2523,11 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   Vec4F32 main_tx_color_rgba = ui_color_from_name(str8_lit("text"));
   Vec4F32 main_tx_color_hsva = hsva_from_rgba(main_tx_color_rgba);
   F32 main_font_size = ui_bottom_font_size();
-  U64 base_offset = e_base_offset_from_eval(eval);
-  U64 size = rd_view_setting_value_from_name(str8_lit("size")).u64;
-  if(size == 0)
-  {
-    size = e_range_size_from_eval(eval);
-  }
-  Rng1U64 view_range = r1u64(base_offset, base_offset+size);
+  Rng1U64 view_range = rd_space_range_from_eval(eval);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
     view_range = rd_whole_range_from_eval_space(eval.space);
-  }
-  if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity && dim_1u64(view_range) == KB(16))
-  {
-    view_range = r1u64(0, 0x7FFFFFFFFFFFull);
   }
   U64 cursor_base_vaddr = rd_view_setting_u64_from_name(str8_lit("cursor"));
   U64 mark_base_vaddr   = rd_view_setting_u64_from_name(str8_lit("mark"));
@@ -3848,7 +3826,8 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
       break;
     }
   }
-  U64 base_offset = e_base_offset_from_eval(eval);
+  Rng1U64 eval_range = e_range_from_eval(eval);
+  U64 base_offset = eval_range.min;
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
   
@@ -4361,7 +4340,8 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: evaluate & unpack expression
   //
-  U64 base_offset = e_base_offset_from_eval(eval);
+  Rng1U64 eval_range = e_range_from_eval(eval);
+  U64 base_offset = eval_range.min;
   Rng1U64 idxs_range = r1u64(base_offset, base_offset+count*sizeof(U32));
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
   HS_Key idxs_key = rd_key_from_eval_space_range(eval.space, idxs_range, 0);
