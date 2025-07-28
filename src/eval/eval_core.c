@@ -1378,7 +1378,7 @@ e_range_from_eval(E_Eval eval)
         size = ptee_size;
       }
     }
-    else
+    else if(eval.irtree.mode == E_Mode_Offset)
     {
       size = e_type_byte_size_from_key(type_key);
     }
