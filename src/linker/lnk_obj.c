@@ -6,7 +6,7 @@ lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
 {
   va_list args; va_start(args, fmt);
   String8 obj_path = obj ? obj->path : str8_lit("RADLINK");
-  String8 lib_path = obj ? obj->lib_path : str8_zero();
+  String8 lib_path = lnk_obj_get_lib_path(obj);
   lnk_error_with_loc_fv(code, obj_path, lib_path, fmt, args);
   va_end(args);
 }
@@ -43,7 +43,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   if (header.machine != COFF_MachineType_Unknown) {
     COFF_MachineType current_machine = ins_atomic_u32_eval_cond_assign(&task->machine, header.machine, COFF_MachineType_Unknown);
     if (current_machine != COFF_MachineType_Unknown && current_machine != header.machine) {
-      lnk_error_with_loc(LNK_Error_IncompatibleMachine, input->path, input->lib_path,
+      lnk_error_input_obj(LNK_Error_IncompatibleMachine, input,
           "conflicting machine types expected %S but got %S",
           coff_string_from_machine_type(current_machine),
           coff_string_from_machine_type(header.machine));
@@ -61,13 +61,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // error check: section table / symbol table / string table
   //
   if (raw_coff_section_table.size != dim_1u64(header.section_table_range)) {
-    lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read section header table");
+    lnk_error_input_obj(LNK_Error_IllData, input, "corrupted file, unable to read section header table");
   }
   if (raw_coff_symbol_table.size != dim_1u64(header.symbol_table_range)) {
-    lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read symbol table");
+    lnk_error_input_obj(LNK_Error_IllData, input, "corrupted file, unable to read symbol table");
   }
   if (raw_coff_string_table.size != dim_1u64(header.string_table_range)) {
-    lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "corrupted file, unable to read string table");
+    lnk_error_input_obj(LNK_Error_IllData, input, "corrupted file, unable to read string table");
   }
 
   //
@@ -86,18 +86,18 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
         if (contains_1u64(header.header_range, coff_sect_header->foff) ||
             (coff_sect_header->fsize > 0 && contains_1u64(header.header_range, sect_range.max-1))) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into file header)", sect_name, sect_idx+1);
+          lnk_error_input_obj(LNK_Error_IllData, input, "header (%S No. %#llx) defines out of bounds section data (file offsets point into file header)", sect_name, sect_idx+1);
         }
         if (contains_1u64(header.section_table_range, coff_sect_header->foff) ||
             (coff_sect_header->fsize > 0 && contains_1u64(header.section_table_range, sect_range.max-1))) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into section header table)", sect_name, sect_idx+1);
+          lnk_error_input_obj(LNK_Error_IllData, input, "header (%S No. %#llx) defines out of bounds section data (file offsets point into section header table)", sect_name, sect_idx+1);
         }
         if (contains_1u64(header.symbol_table_range, coff_sect_header->foff) ||
             (coff_sect_header->fsize > 0 && contains_1u64(header.symbol_table_range, sect_range.max-1))) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data (file offsets point into symbol table)", sect_name, sect_idx+1);
+          lnk_error_input_obj(LNK_Error_IllData, input, "header (%S No. %#llx) defines out of bounds section data (file offsets point into symbol table)", sect_name, sect_idx+1);
         }
         if (dim_1u64(sect_range) != coff_sect_header->fsize) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "header (%S No. %#llx) defines out of bounds section data", sect_name, sect_idx+1);
+          lnk_error_input_obj(LNK_Error_IllData, input, "header (%S No. %#llx) defines out of bounds section data", sect_name, sect_idx+1);
         }
       }
     }
@@ -116,7 +116,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
         if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
-          lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "symbol %S (No. 0x%x) points to an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
+          lnk_error_input_obj(LNK_Error_IllData, input, "symbol %S (No. 0x%x) points to an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
         }
         if (symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
           COFF_ComdatSelectType select;
@@ -124,7 +124,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           coff_parse_secdef(symbol, header.is_big_obj, &select, &section_number, 0, 0);
           if (select == COFF_ComdatSelect_Associative) {
             if (section_number == 0 || section_number > header.section_count_no_null) {
-              lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbol %S (No. 0x%x) associates with an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
+              lnk_error_input_obj(LNK_Error_IllData, input, "section definition symbol %S (No. 0x%x) associates with an out of bounds section 0x%x", symbol.name, symbol_idx, symbol.section_number);
             }
           }
         }
@@ -159,15 +159,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
                   if (comdats[symbol.section_number-1] == ~0) {
                     comdats[symbol.section_number-1] = symbol_idx;
                   } else {
-                    lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbo (No. 0x%llx) tries to ovewrite comdat", symbol_idx);
+                    lnk_error_input_obj(LNK_Error_IllData, input, "section definition symbo (No. 0x%llx) tries to ovewrite comdat", symbol_idx);
                   }
                 } else {
-                  lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section size specified by section definition symbol (No 0x%llx) doesn't match size in section header (No. 0x%x); expected 0x%x got 0x%x", symbol_idx, symbol.section_number, section_length, sect_header->fsize);
+                  lnk_error_input_obj(LNK_Error_IllData, input, "section size specified by section definition symbol (No 0x%llx) doesn't match size in section header (No. 0x%x); expected 0x%x got 0x%x", symbol_idx, symbol.section_number, section_length, sect_header->fsize);
                 }
               }
             }
           } else {
-            lnk_error_with_loc(LNK_Error_IllData, input->path, input->lib_path, "section definition symbol (No. 0x%llx) has out of bounds section number 0x%x", symbol_idx, symbol.section_number);
+            lnk_error_input_obj(LNK_Error_IllData, input, "section definition symbol (No. 0x%llx) has out of bounds section number 0x%x", symbol_idx, symbol.section_number);
           }
         }
       }
@@ -206,7 +206,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         // was section visited? -- loop found
         if (hash_table_search_u64(visited_sections, curr_section)) {
           COFF_ParsedSymbol symbol = coff_parse_symbol(header, string_table, symbol_table, comdats[sect_idx]);
-          lnk_error_with_loc(LNK_Error_AssociativeLoop, input->path, input->lib_path, "section symbol %S (No. 0x%x) does not terminate on a non-associate COMDAT symbol", symbol.name, comdats[sect_idx]);
+          lnk_error_input_obj(LNK_Error_AssociativeLoop, input, "section symbol %S (No. 0x%x) does not terminate on a non-associate COMDAT symbol", symbol.name, comdats[sect_idx]);
           break;
         }
 
@@ -294,7 +294,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // fill out obj
   obj->data                = input->data;
   obj->path                = push_str8_copy(arena, input->path);
-  obj->lib_path            = push_str8_copy(arena, input->lib_path);
+  obj->lib                 = input->lib;
   obj->input_idx           = obj_idx;
   obj->header              = header;
   obj->comdats             = comdats;
@@ -483,6 +483,16 @@ lnk_obj_get_vol_md(LNK_Obj *obj)
   return lnk_obj_match_symbol(obj, str8_lit("@vol.md")).value;
 }
 
+internal String8
+lnk_obj_get_lib_path(LNK_Obj *obj)
+{
+  String8 lib_path = {0};
+  if (obj && obj->lib) {
+    lib_path = obj->lib->path;
+  }
+  return lib_path;
+}
+
 internal COFF_SectionHeader *
 lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 {
@@ -515,17 +525,6 @@ lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
     }
   }
   return symlinks;
-}
-
-internal String8
-lnk_symlink_from_section_number(LNK_Obj *obj, U64 section_number)
-{
-  COFF_ParsedSymbol symbol = {0};
-  U32 symbol_idx = obj->symlinks[section_number];
-  if (symbol_idx != max_U32) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-  }
-  return symbol.name;
 }
 
 internal COFF_RelocArray

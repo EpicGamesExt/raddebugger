@@ -1053,7 +1053,7 @@ lnk_queue_lib_member_input(Arena               *arena,
     input->dedup_id     = push_str8f(arena, "%S/%S", lib->path, obj_path);
     input->path         = obj_path;
     input->data         = member_info.data;
-    input->lib_path     = lib->path;
+    input->lib          = lib;
     input->input_idx    = input_idx;
   } break;
   }
@@ -1534,7 +1534,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           {
             for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
               PE_ExportParse export_parse = {0};
-              lnk_parse_export_directive_ex(scratch.arena, dir->value_list, obj->path, obj->lib_path, &export_parse);
+              lnk_parse_export_directive_ex(scratch.arena, dir->value_list, obj->path, lnk_obj_get_lib_path(obj), &export_parse);
               lnk_push_export(tp_arena->v[0], export_ht, &export_symbol_list, &include_symbol_list, export_parse);
             }
           }
@@ -1591,17 +1591,17 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
           // /ENTRY
           for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Entry].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
           }
 
           // /SUBSYSTEM
           for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_SubSystem].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
           }
 
           // /STACK
           for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Stack].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
           }
         }
         ProfEnd();
@@ -4812,8 +4812,9 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
             COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx+1);
             String8 string_table = str8_substr(obj->data, obj->header.string_table_range);
             String8 section_name = coff_name_from_section_header(string_table, section_header);
-            if (obj->lib_path.size) {
-              String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(obj->lib_path));
+            if (obj->lib) {
+              String8 lib_path = lnk_obj_get_lib_path(obj);
+              String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib_path));
               String8 obj_name = str8_skip_last_slash(obj->path);
               str8_list_pushf(temp.arena, &source_list, "%S(%S) SECT%X (%S)", lib_name, obj_name, sect_idx+1, section_name);
             } else {
@@ -4842,8 +4843,9 @@ lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs
       if (lnk_is_coff_section_debug(obj, sect_idx)) {
         COFF_SectionHeader *section_header = &section_table[sect_idx];
         if (~section_header->flags & COFF_SectionFlag_LnkRemove) {
-          if (obj->lib_path.size) {
-            String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(obj->lib_path));
+          if (obj->lib) {
+            String8 lib_path = lnk_obj_get_lib_path(obj);
+            String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib_path));
             String8 obj_name = str8_skip_last_slash(obj->path);
             str8_list_pushf(arena, &map, "%S(%S) SECT%X\n", lib_name, obj_name, sect_idx+1);
           } else {

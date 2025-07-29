@@ -1,6 +1,14 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal void
+lnk_error_input_obj(LNK_ErrorCode code, LNK_InputObj *input, char *fmt, ...)
+{
+  va_list args; va_start(args, fmt);
+  lnk_error_with_loc_fv(code, input->path, input->lib ? input->lib->path : str8_zero(), fmt, args);
+  va_end(args);
+}
+
 internal String8
 lnk_string_from_input_source(LNK_InputSourceType input_source)
 {

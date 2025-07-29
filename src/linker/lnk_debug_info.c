@@ -3133,7 +3133,7 @@ lnk_build_pdb(TP_Context               *tp,
   PDB_DbiModule **mod_arr = push_array(tp_arena->v[0], PDB_DbiModule *, obj_count);
   for (U64 obj_idx = 0; obj_idx < obj_count; ++obj_idx) {
     LNK_Obj *obj = obj_arr + obj_idx;
-    mod_arr[obj_idx] = dbi_push_module(pdb->dbi, obj->path, obj->lib_path);
+    mod_arr[obj_idx] = dbi_push_module(pdb->dbi, obj->path, lnk_obj_get_lib_path(obj));
 
     // we don't support symbol append
     Assert(mod_arr[obj_idx]->sn == MSF_INVALID_STREAM_NUMBER);
@@ -4502,7 +4502,7 @@ THREAD_POOL_TASK_FUNC(lnk_find_obj_compiler_info_task)
   dst->compiler_name = comp_info->compiler_name;
   dst->source_file   = str8_zero();
   dst->object_file   = push_str8_copy(arena, obj->path);
-  dst->archive_file  = push_str8_copy(arena, obj->lib_path);
+  dst->archive_file  = lnk_obj_get_lib_path(obj);
   dst->build_path    = str8_zero();
   dst->language      = rdi_language_from_cv_language(comp_info->language);
 

@@ -9,13 +9,12 @@ typedef struct LNK_Obj
 {
   String8             data;
   String8             path;
-  String8             lib_path;
+  struct LNK_Lib     *lib;
   U32                 input_idx;
   COFF_FileHeaderInfo header;
   U32                *comdats;
   B8                  hotpatch;
   U32Node           **associated_sections;
-  U32                *symlinks;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode
@@ -102,9 +101,10 @@ internal LNK_SymbolInputResult lnk_input_obj_symbols(TP_Context *tp, TP_Arena *a
 
 // --- Metadata ----------------------------------------------------------------
 
-internal U32 lnk_obj_get_features(LNK_Obj *obj);
-internal U32 lnk_obj_get_comp_id(LNK_Obj *obj);
-internal U32 lnk_obj_get_vol_md(LNK_Obj *obj);
+internal U32     lnk_obj_get_features(LNK_Obj *obj);
+internal U32     lnk_obj_get_comp_id(LNK_Obj *obj);
+internal U32     lnk_obj_get_vol_md(LNK_Obj *obj);
+internal String8 lnk_obj_get_lib_path(LNK_Obj *obj);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 

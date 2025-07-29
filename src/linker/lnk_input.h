@@ -42,7 +42,7 @@ typedef struct LNK_InputObj
   String8              dedup_id;
   String8              path;
   String8              data;
-  String8              lib_path;
+  struct LNK_Lib      *lib;
   U64                  input_idx;
 } LNK_InputObj;
 
@@ -54,6 +54,8 @@ typedef struct LNK_InputObjList
 } LNK_InputObjList;
 
 ////////////////////////////////
+
+internal void lnk_error_input_obj(LNK_ErrorCode code, LNK_InputObj *input, char *fmt, ...);
 
 internal String8 lnk_string_from_input_source(LNK_InputSourceType input_source);
 
