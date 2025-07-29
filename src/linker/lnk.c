@@ -1437,7 +1437,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
           for EachIndex(i, ArrayCount(directive_info.v)) {
             for (LNK_Directive *dir = directive_info.v[i].first; dir != 0; dir = dir->next) {
-              lnk_apply_cmd_option_to_config(tp_arena->v[0], config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
+              lnk_apply_cmd_option_to_config(tp_arena->v[0], config, dir->id, dir->value_list, obj);
             }
           }
         }
@@ -1561,7 +1561,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         // TODO: config_refactor
         String8List value_strings = {0};
         str8_list_push(scratch.arena, &value_strings, delay_load_helper_name);
-        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
+        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
 
         ProfEnd();
       } break;
@@ -1572,7 +1572,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         // TODO: config_refactor
         String8List value_strings = {0};
         str8_list_push(scratch.arena, &value_strings, load_config_name);
-        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
+        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
 
         ProfEnd();
       } break;
@@ -1697,7 +1697,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           // TODO: config_refactor
           String8List value_strings = {0};
           str8_list_push(scratch.arena, &value_strings, config->entry_point_name);
-          lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
+          lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
         }
         // no entry point, error and exit
         else {

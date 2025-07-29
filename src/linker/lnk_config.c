@@ -305,32 +305,32 @@ lnk_cmd_line_has_switch(LNK_CmdLine cmd_line, LNK_CmdSwitchType cmd_switch)
 }
 
 internal void
-lnk_error_cmd_switch(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, char *fmt, ...)
+lnk_error_cmd_switch(LNK_ErrorCode code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0,0);
   va_list args; va_start(args, fmt);
   String8 switch_name = lnk_string_from_cmd_switch_type(cmd_switch);
   String8 message     = push_str8fv(scratch.arena, fmt, args);
   String8 output      = push_str8f(scratch.arena, "/%S: %S", switch_name, message);
-  lnk_error_with_loc(code, obj_path, lib_path, "%S", output);
+  lnk_error_obj(code, obj, "%S", output);
   va_end(args);
   scratch_end(scratch);
 }
 
 internal void
-lnk_error_cmd_switch_invalid_param_count(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch)
+lnk_error_cmd_switch_invalid_param_count(LNK_ErrorCode code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch)
 {
-  lnk_error_cmd_switch(code, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+  lnk_error_cmd_switch(code, obj, cmd_switch, "invalid number of parameters");
 }
 
 internal void
-lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 param)
+lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8 param)
 {
-  lnk_error_cmd_switch(code, obj_path, lib_path, cmd_switch, "invalid parameter \"%S\"", param);
+  lnk_error_cmd_switch(code, obj, cmd_switch, "invalid parameter \"%S\"", param);
 }
 
 internal String8
-lnk_error_check_and_strip_quotes(LNK_ErrorCode error_code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 string)
+lnk_error_check_and_strip_quotes(LNK_ErrorCode error_code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8 string)
 {
   String8 result = string;
   B32 starts_with_quote = str8_match_lit("\"", string, StringMatchFlag_RightSideSloppy);
@@ -339,26 +339,26 @@ lnk_error_check_and_strip_quotes(LNK_ErrorCode error_code, String8 obj_path, Str
       result = str8_skip(result, 1);
       result = str8_chop(result, 1);
     } else {
-      lnk_error_cmd_switch(error_code, obj_path, lib_path, cmd_switch, "detected unmatched \" in \"%S\"", string);
+      lnk_error_cmd_switch(error_code, obj, cmd_switch, "detected unmatched \" in \"%S\"", string);
     }
   }
   return result;
 }
 
 internal void
-lnk_error_invalid_uac_level_param(LNK_ErrorCode error_code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 input)
+lnk_error_invalid_uac_level_param(LNK_ErrorCode error_code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8 input)
 {
-  lnk_error_cmd_switch(error_code, obj_path, lib_path, cmd_switch, "invalid param format, expected \"level={'asInvoker'|'highestAvailable'|'requireAdministrator'}\" but got \"%S\"", input);
+  lnk_error_cmd_switch(error_code, obj, cmd_switch, "invalid param format, expected \"level={'asInvoker'|'highestAvailable'|'requireAdministrator'}\" but got \"%S\"", input);
 }
 
 internal void
-lnk_error_invalid_uac_ui_access_param(LNK_ErrorCode error_code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 input)
+lnk_error_invalid_uac_ui_access_param(LNK_ErrorCode error_code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8 input)
 {
-  lnk_error_cmd_switch(error_code, obj_path, lib_path, cmd_switch, "invalid param format, expected \"uiAccess={'true'|'false'}\" but got \"%S\"", input);
+  lnk_error_cmd_switch(error_code, obj, cmd_switch, "invalid param format, expected \"uiAccess={'true'|'false'}\" but got \"%S\"", input);
 }
 
 internal B32
-lnk_cmd_switch_parse_version(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, Version *ver_out)
+lnk_cmd_switch_parse_version(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, Version *ver_out)
 {
   Temp scratch = scratch_begin(0,0);
   B32 is_parsed = 0;
@@ -374,7 +374,7 @@ lnk_cmd_switch_parse_version(String8 obj_path, String8 lib_path, LNK_CmdSwitchTy
       maj_str = split_list.first->string;
       min_str = split_list.last->string;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid version format, too many dots, expected format: {N[.N]}");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid version format, too many dots, expected format: {N[.N]}");
       goto exit;
     }
 
@@ -384,13 +384,13 @@ lnk_cmd_switch_parse_version(String8 obj_path, String8 lib_path, LNK_CmdSwitchTy
         *ver_out = make_version(maj, min);
         is_parsed = 1;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse minor version");
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse minor version");
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse major version");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse major version");
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
   }
 
 exit:;
@@ -399,7 +399,7 @@ exit:;
 }
 
 internal B32
-lnk_cmd_switch_parse_tuple(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, Rng1U64 *tuple_out)
+lnk_cmd_switch_parse_tuple(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, Rng1U64 *tuple_out)
 {
   if (value_strings.node_count == 1) {
     U64 value;
@@ -407,7 +407,7 @@ lnk_cmd_switch_parse_tuple(String8 obj_path, String8 lib_path, LNK_CmdSwitchType
       tuple_out->v[0] = value;
       return 1;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse the parameter \"%S\"", value_strings.first->string);
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse the parameter \"%S\"", value_strings.first->string);
     }
   } else if (value_strings.node_count == 2) {
     U64 a,b;
@@ -417,13 +417,13 @@ lnk_cmd_switch_parse_tuple(String8 obj_path, String8 lib_path, LNK_CmdSwitchType
         tuple_out->v[1] = b;
         return 1;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable ot parse second parameter \"%S\"", value_strings.last->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable ot parse second parameter \"%S\"", value_strings.last->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse first parameter \"%S\"", value_strings.first->string);
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse first parameter \"%S\"", value_strings.first->string);
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
   }
   return 0;
 }
@@ -448,24 +448,24 @@ lnk_try_parse_u64(String8 string, LNK_ParseU64Flags flags, U64 *value_out)
 }
 
 internal B32
-lnk_cmd_switch_parse_u64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *value_out, LNK_ParseU64Flags flags)
+lnk_cmd_switch_parse_u64(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *value_out, LNK_ParseU64Flags flags)
 {
   if (value_strings.node_count != 1) {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters, exepcted integer number as input");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters, exepcted integer number as input");
     return 0;
   }
   if (!lnk_try_parse_u64(value_strings.first->string, flags, value_out)) {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse string \"%S\"", value_strings.first->string);
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse string \"%S\"", value_strings.first->string);
     return 0;
   }
   return 1;
 }
 
 internal B32
-lnk_cmd_switch_parse_u32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *value_out, LNK_ParseU64Flags flags)
+lnk_cmd_switch_parse_u32(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *value_out, LNK_ParseU64Flags flags)
 {
   U64 value;
-  if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &value, flags | LNK_ParseU64Flag_CheckUnder32bit)) {
+  if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &value, flags | LNK_ParseU64Flag_CheckUnder32bit)) {
     *value_out = (U32)value;
     return 1;
   }
@@ -473,7 +473,7 @@ lnk_cmd_switch_parse_u32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType c
 }
 
 internal B32
-lnk_cmd_switch_parse_u64_list(Arena *arena, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64List *list_out, LNK_ParseU64Flags flags)
+lnk_cmd_switch_parse_u64_list(Arena *arena, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64List *list_out, LNK_ParseU64Flags flags)
 {
   for (String8Node *string_n = value_strings.first; string_n != 0; string_n = string_n->next) {
     U64 value;
@@ -486,11 +486,11 @@ lnk_cmd_switch_parse_u64_list(Arena *arena, String8 obj_path, String8 lib_path, 
 }
 
 internal B32
-lnk_cmd_switch_parse_flag(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, LNK_SwitchState *value_out)
+lnk_cmd_switch_parse_flag(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, LNK_SwitchState *value_out)
 {
   B32 is_parsed = 0;
   if (value_strings.node_count > 1) {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "too many parameters");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "too many parameters");
   } else if (value_strings.node_count == 1) {
     if (str8_match_lit("no", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
       *value_out = LNK_SwitchState_No;
@@ -502,7 +502,7 @@ lnk_cmd_switch_parse_flag(String8 obj_path, String8 lib_path, LNK_CmdSwitchType 
       *value_out = 1;
       is_parsed = 1;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid parameter \"%S\"", value_strings.first->string);
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter \"%S\"", value_strings.first->string);
     }
   } else {
     *value_out = LNK_SwitchState_Yes;
@@ -512,10 +512,10 @@ lnk_cmd_switch_parse_flag(String8 obj_path, String8 lib_path, LNK_CmdSwitchType 
 }
 
 internal void
-lnk_cmd_switch_set_flag_inv_16(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits)
+lnk_cmd_switch_set_flag_inv_16(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits)
 {
   LNK_SwitchState state;
-  if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
     switch (state) {
     case LNK_SwitchState_Null: break;
     case LNK_SwitchState_Yes : *flags |= bits;  break;
@@ -525,10 +525,10 @@ lnk_cmd_switch_set_flag_inv_16(String8 obj_path, String8 lib_path, LNK_CmdSwitch
 }
 
 internal void
-lnk_cmd_switch_set_flag_inv_64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits)
+lnk_cmd_switch_set_flag_inv_64(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits)
 {
   LNK_SwitchState state;
-  if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
     switch (state) {
     case LNK_SwitchState_Null: break;
     case LNK_SwitchState_Yes : *flags |= bits;  break;
@@ -538,10 +538,10 @@ lnk_cmd_switch_set_flag_inv_64(String8 obj_path, String8 lib_path, LNK_CmdSwitch
 }
 
 internal void
-lnk_cmd_switch_set_flag_16(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits)
+lnk_cmd_switch_set_flag_16(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits)
 {
   LNK_SwitchState state;
-  if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
     switch (state) {
     case LNK_SwitchState_Null: break;
     case LNK_SwitchState_Yes : *flags |= bits;  break;
@@ -551,10 +551,10 @@ lnk_cmd_switch_set_flag_16(String8 obj_path, String8 lib_path, LNK_CmdSwitchType
 }
 
 internal void
-lnk_cmd_switch_set_flag_32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *flags, U32 bits)
+lnk_cmd_switch_set_flag_32(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *flags, U32 bits)
 {
   LNK_SwitchState state;
-  if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
     switch (state) {
     case LNK_SwitchState_Null: break;
     case LNK_SwitchState_Yes : *flags |= bits;  break;
@@ -564,10 +564,10 @@ lnk_cmd_switch_set_flag_32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType
 }
 
 internal void
-lnk_cmd_switch_set_flag_64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits)
+lnk_cmd_switch_set_flag_64(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits)
 {
   LNK_SwitchState state;
-  if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+  if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
     switch (state) {
     case LNK_SwitchState_Null: break;
     case LNK_SwitchState_Yes : *flags |= bits;  break;
@@ -577,31 +577,31 @@ lnk_cmd_switch_set_flag_64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType
 }
 
 internal B32
-lnk_cmd_switch_parse_string(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out)
+lnk_cmd_switch_parse_string(LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out)
 {
   if (value_strings.node_count == 1) {
     if (value_strings.first->string.size > 0) {
       *string_out = value_strings.first->string;
       return 1;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "empty string is not permitted");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "empty string is not permitted");
     }
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
   }
   return 0;
 }
 
 internal void
-lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out)
+lnk_cmd_switch_parse_string_copy(Arena *arena, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out)
 {
-  if (lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, string_out)) {
+  if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, string_out)) {
     *string_out = push_str8_copy(arena, *string_out);
   }
 }
 
 internal B32
-lnk_parse_alt_name_directive(String8 string, String8 obj_path, String8 lib_path, LNK_AltName *alt_out)
+lnk_parse_alt_name_directive(String8 string, LNK_Obj *obj, LNK_AltName *alt_out)
 {
   Temp scratch = scratch_begin(0,0);
   B32 is_parse_ok = 0;
@@ -611,14 +611,14 @@ lnk_parse_alt_name_directive(String8 string, String8 obj_path, String8 lib_path,
     alt_out->to   = pair.last->string;
     is_parse_ok = 1;
   } else {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, LNK_CmdSwitch_AlternateName, "syntax error in \"%S\", expected format \"FROM=TO\"", string);
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_AlternateName, "syntax error in \"%S\", expected format \"FROM=TO\"", string);
   }
   scratch_end(scratch);
   return is_parse_ok;
 }
 
 internal B32
-lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out)
+lnk_parse_export_directive_ex(Arena *arena, String8List directive, LNK_Obj *obj, PE_ExportParse *export_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -637,7 +637,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
       name = alias_name_split.first->string;
     } else {
       String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
-      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      lnk_error_obj(LNK_Error_IllExport, obj, "invalid export directive \"/EXPORT:%S\"", d);
       goto exit;
     }
 
@@ -665,12 +665,12 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
         import_by = COFF_ImportBy_Ordinal;
       } else {
         String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
-        lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "ordinal value must fit into 16-bit integer, \"/EXPORT:%S\"", d);
+        lnk_error_obj(LNK_Error_IllExport, obj, "ordinal value must fit into 16-bit integer, \"/EXPORT:%S\"", d);
         goto exit;
       }
     } else {
       String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
-      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      lnk_error_obj(LNK_Error_IllExport, obj, "invalid export directive \"/EXPORT:%S\"", d);
       goto exit;
     }
 
@@ -692,7 +692,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
     type = coff_import_header_type_from_string(str8_list_pop_front(&flags)->string);
     if (type == COFF_ImportType_Invalid) {
       String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
-      lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+      lnk_error_obj(LNK_Error_IllExport, obj, "invalid export directive \"/EXPORT:%S\"", d);
       goto exit;
     }
   }
@@ -700,13 +700,13 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_p
   // are there leftover nodes?
   if (flags.node_count != 0) {
     String8 d = str8_list_join(scratch.arena, &directive, &(StringJoin){.sep=str8_lit(",")});
-    lnk_error_with_loc(LNK_Error_IllExport, obj_path, lib_path, "invalid export directive \"/EXPORT:%S\"", d);
+    lnk_error_obj(LNK_Error_IllExport, obj, "invalid export directive \"/EXPORT:%S\"", d);
     goto exit;
   }
 
   // fill out export
-  export_out->obj_path            = obj_path;
-  export_out->lib_path            = lib_path;
+  export_out->obj_path            = obj->path;
+  export_out->lib_path            = lnk_obj_get_lib_path(obj);
   export_out->name                = push_str8_copy(arena, name);
   export_out->alias               = push_str8_copy(arena, alias);
   export_out->type                = type;
@@ -726,11 +726,11 @@ exit:;
 }
 
 internal B32
-lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out)
+lnk_parse_export_directive(Arena *arena, String8 directive, LNK_Obj *obj, PE_ExportParse *export_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List split_directive = str8_split_by_string_chars(scratch.arena, directive, str8_lit(","), 0);
-  B32 is_parsed = lnk_parse_export_directive_ex(arena, split_directive, obj_path, lib_path, export_out);
+  B32 is_parsed = lnk_parse_export_directive_ex(arena, split_directive, obj, export_out);
   scratch_end(scratch);
   return is_parsed;
 }
@@ -747,7 +747,7 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
 }
 
 internal B32
-lnk_parse_merge_directive(String8 string, String8 obj_path, String8 lib_path, LNK_MergeDirective *out)
+lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 is_parse_ok = 0;
@@ -757,7 +757,7 @@ lnk_parse_merge_directive(String8 string, String8 obj_path, String8 lib_path, LN
     out->dst = list.last->string;
     is_parse_ok = 1;
   } else {
-    lnk_error_cmd_switch(LNK_Warning_InvalidMergeDirectiveFormat, obj_path, lib_path, LNK_CmdSwitch_Merge, "unable to parse merge directive, expected format \"/MERGE:FROM=TO\" but got \"%S\"", string);
+    lnk_error_cmd_switch(LNK_Warning_InvalidMergeDirectiveFormat, obj, LNK_CmdSwitch_Merge, "unable to parse merge directive, expected format \"/MERGE:FROM=TO\" but got \"%S\"", string);
   }
   scratch_end(scratch);
   return is_parse_ok;
@@ -785,12 +785,7 @@ lnk_get_default_function_pad_min(COFF_MachineType machine)
       function_pad_min = 6;
     } break;
     default: {
-      lnk_error_cmd_switch(LNK_Error_Cmdl,
-                           str8_zero(),
-                           str8_zero(),
-                           LNK_CmdSwitch_FunctionPadMin,
-                           "default paramter is not defined for: %S",
-                           coff_string_from_machine_type(machine));
+      lnk_error_cmd_switch(LNK_Error_Cmdl, 0, LNK_CmdSwitch_FunctionPadMin, "default paramter is not defined for: %S", coff_string_from_machine_type(machine));
     } break;
   }
   return function_pad_min;
@@ -1062,7 +1057,7 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 }
 
 internal void
-lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_name, String8List value_strings, String8 obj_path, String8 lib_path)
+lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_name, String8List value_strings, LNK_Obj *obj)
 {
   Temp scratch = scratch_begin(&arena,1);
 
@@ -1071,7 +1066,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   switch (cmd_switch) {
   case LNK_CmdSwitch_Null: {
     String8 value = str8_list_join(scratch.arena, &value_strings, &(StringJoin){.sep=str8_lit_comp(",")});
-    lnk_error_with_loc(LNK_Warning_UnknownSwitch, obj_path, lib_path, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
+    lnk_error_obj(LNK_Warning_UnknownSwitch, obj, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
   } break;
 
   default: break;
@@ -1082,21 +1077,21 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Align: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->sect_align, LNK_ParseU64Flag_CheckPow2);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->sect_align, LNK_ParseU64Flag_CheckPow2);
   } break;
 
   case LNK_CmdSwitch_AllowBind: {
-    lnk_cmd_switch_set_flag_inv_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NO_BIND);
+    lnk_cmd_switch_set_flag_inv_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NO_BIND);
   } break;
 
   case LNK_CmdSwitch_AllowIsolation: {
-    lnk_cmd_switch_set_flag_inv_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NO_ISOLATION);
+    lnk_cmd_switch_set_flag_inv_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NO_ISOLATION);
   } break;
 
   case LNK_CmdSwitch_AlternateName: {
     if (value_strings.node_count == 1) {
       LNK_AltName alt_name;
-      if (lnk_parse_alt_name_directive(value_strings.first->string, obj_path, lib_path, &alt_name)) {
+      if (lnk_parse_alt_name_directive(value_strings.first->string, obj, &alt_name)) {
         alt_name.from = push_str8_copy(arena, alt_name.from);
         alt_name.to = push_str8_copy(arena, alt_name.to);
         LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
@@ -1105,12 +1100,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
         config->alt_name_list.count += 1;
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
   case LNK_CmdSwitch_AppContainer: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_APPCONTAINER);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_APPCONTAINER);
   } break;
 
   case LNK_CmdSwitch_Base: {
@@ -1124,20 +1119,20 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
         lnk_not_implemented("Response files are not implemented for /BASE");
       } else {
         Rng1U64 addr_size = {0};
-        if (lnk_cmd_switch_parse_tuple(obj_path, lib_path, cmd_switch, value_strings, &addr_size)) {
+        if (lnk_cmd_switch_parse_tuple(obj, cmd_switch, value_strings, &addr_size)) {
           config->user_base_addr = addr_size.v[0];
           config->max_image_size = addr_size.v[1];
         }
       }
     } else if (value_strings.node_count == 1) {
       U64 addr;
-      if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &addr, 0)) {
+      if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &addr, 0)) {
         config->user_base_addr = addr;
       }
     } else if (value_strings.node_count == 0) {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "expected at least 1 parameter");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "expected at least 1 parameter");
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "too many parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "too many parameters");
     }
   } break;
 
@@ -1148,23 +1143,23 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       LNK_DebugMode debug_mode = lnk_debug_mode_from_string(value_strings.first->string);
       if (debug_mode == LNK_DebugMode_GHash) {
         config->debug_mode = LNK_DebugMode_Full;
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "GHASH is not supported, switching to FULL");
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "GHASH is not supported, switching to FULL");
       } else if (debug_mode == LNK_DebugMode_FastLink) {
         config->debug_mode = LNK_DebugMode_Full;
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "FASTLINK is not supported, switching to FULL");
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "FASTLINK is not supported, switching to FULL");
       } else if (debug_mode != LNK_DebugMode_Null) {
         config->debug_mode = debug_mode;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid parameter \"%S\"", value_strings.first->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
   case LNK_CmdSwitch_DefaultLib: {
     String8List default_lib_list = str8_list_copy(arena, &value_strings);
-    if (obj_path.size) {
+    if (obj) {
       str8_list_concat_in_place(&config->input_obj_lib_list, &default_lib_list);
     } else {
       str8_list_concat_in_place(&config->input_default_lib_list, &default_lib_list);
@@ -1173,7 +1168,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Delay: {
     if (value_strings.node_count == 0 || value_strings.node_count > 1) {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     } else {
       String8 value = value_strings.first->string;
       if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
@@ -1181,7 +1176,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       } else if (str8_match_lit("nobind", value, StringMatchFlag_CaseInsensitive)) {
         config->import_table_emit_biat = 0;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value);
       }
     }
   } break;
@@ -1196,19 +1191,19 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_DynamicBase: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_DYNAMIC_BASE);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_DYNAMIC_BASE);
   } break;
 
   case LNK_CmdSwitch_Dump: { 
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unsupported switch; binary dump is done by passing /DUMP to link.exe");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unsupported switch; binary dump is done by passing /DUMP to link.exe");
   } break;
 
   case LNK_CmdSwitch_Entry: {
     String8 new_entry_point_name = {0};
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &new_entry_point_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &new_entry_point_name);
 
     if (config->entry_point_name.size) {
-      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "unable to redefine entry point \"%S\" to \"%S\"", config->entry_point_name, new_entry_point_name);
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "unable to redefine entry point \"%S\" to \"%S\"", config->entry_point_name, new_entry_point_name);
       break;
     }
 
@@ -1217,7 +1212,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Export: {
     PE_ExportParse export_parse = {0};
-    if (lnk_parse_export_directive_ex(arena, value_strings, obj_path, lib_path, &export_parse)) {
+    if (lnk_parse_export_directive_ex(arena, value_strings, obj, &export_parse)) {
       PE_ExportParseNode *exp_n = 0;
       String8 export_name = pe_name_from_export_parse(&export_parse);
       hash_table_search_string_raw(config->export_ht, export_name, &exp_n);
@@ -1252,7 +1247,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
       report:;
        if (is_ambiguous) {
-         lnk_error_with_loc(LNK_Error_IllExport, export_parse.obj_path, export_parse.lib_path, "ambiguous symbol export %S", export_parse.name);
+         lnk_error_obj(LNK_Error_IllExport, obj, "ambiguous symbol export %S", export_parse.name);
        }
       }
     }
@@ -1263,11 +1258,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_FileAlign: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->file_align, LNK_ParseU64Flag_CheckPow2);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->file_align, LNK_ParseU64Flag_CheckPow2);
   } break;
 
   case LNK_CmdSwitch_Fixed: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_Fixed);
+    lnk_cmd_switch_set_flag_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_Fixed);
   } break;
 
   case LNK_CmdSwitch_FunctionPadMin: {
@@ -1275,7 +1270,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       config->function_pad_min       = 0;
       config->infer_function_pad_min = 1;
     } else {
-      lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->function_pad_min, LNK_ParseU64Flag_CheckUnder32bit);
+      lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->function_pad_min, LNK_ParseU64Flag_CheckUnder32bit);
     }
     config->do_function_pad_min = LNK_SwitchState_Yes;
   } break;
@@ -1284,33 +1279,33 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     Rng1U64 reserve_commit;
     reserve_commit.v[0] = config->heap_reserve;
     reserve_commit.v[1] = config->heap_commit;
-    if (lnk_cmd_switch_parse_tuple(obj_path, lib_path, cmd_switch, value_strings, &reserve_commit)) {
+    if (lnk_cmd_switch_parse_tuple(obj, cmd_switch, value_strings, &reserve_commit)) {
       if (reserve_commit.v[0] >= reserve_commit.v[1]) {
         U64 reserve_aligned = AlignPow2(reserve_commit.v[0], 4);
         U64 commit_aligned = AlignPow2(reserve_commit.v[1], 4);
 #if 0
         if (reserve_aligned != reserve_commit.v[0]) {
-          lnk_error_cmd_switch(LNK_WARNING_CMDL, obj_path, lib_path, cmd_switch, "reserve is not power of two, aligned to %u bytes", reserve_aligned);
+          lnk_error_cmd_switch(LNK_WARNING_CMDL, obj, cmd_switch, "reserve is not power of two, aligned to %u bytes", reserve_aligned);
         }
         if (commit_aligned != reserve_commit.v[1]) {
-          lnk_error_cmd_switch(LNK_WARNING_CMDL, obj_path, lib_path, cmd_switch, "commit is not power of two, aligned to %u bytes", commit_aligned);
+          lnk_error_cmd_switch(LNK_WARNING_CMDL, obj, cmd_switch, "commit is not power of two, aligned to %u bytes", commit_aligned);
         }
 #endif
         config->heap_reserve = reserve_aligned;
         config->heap_commit = commit_aligned;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "commit(%llu) is greater than reserve(%llu)", reserve_commit.v[1], reserve_commit.v[0]);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "commit(%llu) is greater than reserve(%llu)", reserve_commit.v[1], reserve_commit.v[0]);
       }
     }
   } break;
 
   case LNK_CmdSwitch_HighEntropyVa: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_HIGH_ENTROPY_VA);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_HIGH_ENTROPY_VA);
   } break;
 
   case LNK_CmdSwitch_Ignore: {
     U64 error_code;
-    if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &error_code, 0)) {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &error_code, 0)) {
       switch (error_code) {
       case LNK_MsWarningCode_UnsuedDelayLoadDll: {
         lnk_suppress_error(LNK_Warning_UnusedDelayLoadDll);
@@ -1329,7 +1324,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_ImpLib: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->imp_lib_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->imp_lib_name);
   } break;
 
   case LNK_CmdSwitch_Include: {
@@ -1339,19 +1334,19 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Incremental: {
     LNK_SwitchState state;
-    if (lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &state)) {
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
       if (state == LNK_SwitchState_Yes) {
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "incremental linkage is not supported");
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "incremental linkage is not supported");
       }
     }
   } break;
 
   case LNK_CmdSwitch_LargeAddressAware: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE);
   } break;
 
   case LNK_CmdSwitch_Lib: {
-    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unsupported switch; static library is created by passing /LIB to link.exe");
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unsupported switch; static library is created by passing /LIB to link.exe");
   } break;
 
   case LNK_CmdSwitch_LibPath: {
@@ -1359,7 +1354,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     for (String8Node *dir_n = lib_dir_list.first; dir_n != 0; dir_n = dir_n->next) {
       if (!os_folder_path_exists(dir_n->string)) {
         String8 full_path = os_full_path_from_path(scratch.arena, dir_n->string);
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "path doesn't exist %S", full_path);
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "path doesn't exist %S", full_path);
       }
     }
     str8_list_concat_in_place(&config->lib_dir_list, &lib_dir_list);
@@ -1371,10 +1366,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       if (machine != COFF_MachineType_Unknown) {
         config->machine = machine;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
@@ -1397,29 +1392,29 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                 if (try_u64_from_str8_c_rules(res_id_arr.v[1], &resource_id)) {
                   config->manifest_resource_id = push_u64(arena, resource_id);
                 } else {
-                  lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse resource_id \"%S\"", res_id_arr.v[1]);
+                  lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse resource_id \"%S\"", res_id_arr.v[1]);
                 }
               } else {
-                lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid syntax expected form ID=# but got \"%S\"", param_arr.v[1]);
+                lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid syntax expected form ID=# but got \"%S\"", param_arr.v[1]);
               }
             } else {
-              lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, param_arr.v[0]);
+              lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj, cmd_switch, param_arr.v[0]);
             }
           } else {
-            lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch);
+            lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
           }
         } else if (str8_match_lit("no", param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
           config->manifest_opt = LNK_ManifestOpt_No;
         } else {
-          lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, param_arr.v[0]);
+          lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj, cmd_switch, param_arr.v[0]);
         }
       } else {
-        lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch);
+        lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
       }
     } else if (value_strings.node_count == 0) {
       config->manifest_opt = LNK_ManifestOpt_WriteToFile;
     } else {
-      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch);
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
@@ -1433,7 +1428,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_ManifestFile: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->manifest_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->manifest_name);
   } break;
 
   case LNK_CmdSwitch_ManifestInput: {
@@ -1442,7 +1437,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_ManifestUac: {
     if (value_strings.node_count == 1) {
-      String8 uac = lnk_error_check_and_strip_quotes(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, value_strings.first->string);
+      String8 uac = lnk_error_check_and_strip_quotes(LNK_Error_Cmdl, obj, cmd_switch, value_strings.first->string);
       String8List  param_list = str8_split_by_string_chars(scratch.arena, uac, str8_lit(" "), 0);
       String8Array param_arr  = str8_array_from_list(scratch.arena, &param_list);
       if (param_arr.count > 0) {
@@ -1468,44 +1463,44 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                       // ui access was parsed!
                       config->manifest_ui_access = push_str8_copy(arena, ui_access);
                     } else {
-                      lnk_error_invalid_uac_ui_access_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, ui_access_param);
+                      lnk_error_invalid_uac_ui_access_param(LNK_Error_Cmdl, obj, cmd_switch, ui_access_param);
                     }
                   } else {
-                    lnk_error_invalid_uac_ui_access_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, ui_access_param);
+                    lnk_error_invalid_uac_ui_access_param(LNK_Error_Cmdl, obj, cmd_switch, ui_access_param);
                   }
                 }
               } else {
-                lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, level_param);
+                lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj, cmd_switch, level_param);
               }
             } else {
-              lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, level_param);
+              lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj, cmd_switch, level_param);
             }
           } else {
-            lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, level_param);
+            lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj, cmd_switch, level_param);
           }
         } else if (str8_match_lit("no", param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
           config->manifest_uac = 0;
         } else {
-          lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, param_arr.v[0]);
+          lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj, cmd_switch, param_arr.v[0]);
         }
       } else {
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "empty param string");
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "empty param string");
       }
     } else {
-      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch);
+      lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
     }
   } break;
 
   case LNK_CmdSwitch_Merge: {
     if (value_strings.node_count == 1) {
       LNK_MergeDirective merge = {0};
-      if (lnk_parse_merge_directive(value_strings.first->string, obj_path, lib_path, &merge)) {
+      if (lnk_parse_merge_directive(value_strings.first->string, obj, &merge)) {
         merge.src = push_str8_copy(arena, merge.src);
         merge.dst = push_str8_copy(arena, merge.dst);
         lnk_merge_directive_list_push(arena, &config->merge_list, merge);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters %d", value_strings.node_count);
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters %d", value_strings.node_count);
     }
   } break;
 
@@ -1514,7 +1509,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     for (String8Node *node = value_strings.first; node != 0; node = node->next) {
       String8 ext = str8_skip_last_dot(node->string);
       if (!str8_match_lit("natvis", ext, StringMatchFlag_CaseInsensitive)) {
-        lnk_error_cmd_switch(LNK_Warning_InvalidNatvisFileExt, obj_path, lib_path, cmd_switch, "Visual Studio expects .natvis extension: \"%S\"", node->string);
+        lnk_error_cmd_switch(LNK_Warning_InvalidNatvisFileExt, obj, cmd_switch, "Visual Studio expects .natvis extension: \"%S\"", node->string);
       }
     }
 
@@ -1545,7 +1540,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_NxCompat: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NX_COMPAT);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_NX_COMPAT);
   } break;
 
   case LNK_CmdSwitch_Opt: {
@@ -1559,13 +1554,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                  str8_match_lit("icf=", param, StringMatchFlag_CaseInsensitive | StringMatchFlag_RightSideSloppy)) {
         String8List vals = str8_split_by_string_chars(scratch.arena, param, str8_lit("="), 0);
         if (vals.node_count > 2) {
-          lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "too many parameters for iteration");
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "too many parameters for iteration");
           continue;
         }
         if (vals.node_count == 2) {
           B32 is_parsed = try_u64_from_str8_c_rules(vals.last->string, &config->opt_iter_count);
           if (!is_parsed) {
-            lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse iterations \"%S\"", vals.last->string);
+            lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse iterations \"%S\"", vals.last->string);
             continue;
           }
         }
@@ -1577,35 +1572,35 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       } else if (str8_match_lit("nolibr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_No;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown option \"%S\"", param);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown option \"%S\"", param);
       }
     }
   } break;
 
   case LNK_CmdSwitch_Out: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->image_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->image_name);
   } break;
 
   case LNK_CmdSwitch_Pdb: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->pdb_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_name);
   } break;
 
   case LNK_CmdSwitch_PdbAltPath: {
     // see :PdbAltPath
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->pdb_alt_path);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_alt_path);
   } break;
 
   case LNK_CmdSwitch_PdbPageSize: {
     U64 page_size;
-    if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &page_size, LNK_ParseU64Flag_CheckPow2)) {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &page_size, LNK_ParseU64Flag_CheckPow2)) {
       if (page_size >= MSF_MIN_PAGE_SIZE) {
         if (page_size < MSF_MAX_PAGE_SIZE) {
           config->pdb_page_size = page_size;
         } else {
-          lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "page size must be <= %u bytes", MSF_MAX_PAGE_SIZE);
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "page size must be <= %u bytes", MSF_MAX_PAGE_SIZE);
         }
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "page size must be >= %u bytes", MSF_MIN_PAGE_SIZE);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "page size must be >= %u bytes", MSF_MIN_PAGE_SIZE);
       }
     }
   } break;
@@ -1614,7 +1609,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 0) {
       config->flags |= LNK_ConfigFlag_WriteImageChecksum;
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
@@ -1622,22 +1617,22 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     Rng1U64 reserve_commit;
     reserve_commit.v[0] = config->stack_reserve;
     reserve_commit.v[1] = config->stack_commit;
-    if (lnk_cmd_switch_parse_tuple(obj_path, lib_path, cmd_switch, value_strings, &reserve_commit)) {
+    if (lnk_cmd_switch_parse_tuple(obj, cmd_switch, value_strings, &reserve_commit)) {
       if (reserve_commit.v[0] >= reserve_commit.v[1]) {
         U64 reserve_aligned = AlignPow2(reserve_commit.v[0], 4);
         U64 commit_aligned = AlignPow2(reserve_commit.v[1], 4);
 #if 0
         if (reserve_aligned != reserve_commit.v[0]) {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "reserve is not power of two, aligned to %u", reserve_aligned);
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "reserve is not power of two, aligned to %u", reserve_aligned);
         }
         if (commit_aligned != reserve_commit.v[1]) {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "commit is not power of two, aligned to %u", commit_aligned);
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "commit is not power of two, aligned to %u", commit_aligned);
         }
 #endif
         config->stack_reserve = reserve_aligned;
         config->stack_commit = commit_aligned;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "commit(%llu) is greater than reserve(%llu)", reserve_commit.v[1], reserve_commit.v[0]);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "commit(%llu) is greater than reserve(%llu)", reserve_commit.v[1], reserve_commit.v[0]);
       }
     }
   } break;
@@ -1648,7 +1643,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       PE_WindowsSubsystem subsystem = pe_subsystem_from_string(value_strings.first->string);
       if (subsystem != PE_WindowsSubsystem_UNKNOWN) {
         if (config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "overriding subystem \"%S\" with \"%S\"",
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "overriding subystem \"%S\" with \"%S\"",
                                pe_string_from_subsystem(config->subsystem),
                                pe_string_from_subsystem(subsystem));
         }
@@ -1657,13 +1652,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
         // parse version (optional)
         if (value_strings.node_count == 2) {
           str8_list_pop_front(&value_strings); // pop subsystem parameter
-          lnk_cmd_switch_parse_version(obj_path, lib_path, cmd_switch, value_strings, &config->subsystem_ver);
+          lnk_cmd_switch_parse_version(obj, cmd_switch, value_strings, &config->subsystem_ver);
         }
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid subsystem \"%S\"", value_strings.first->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid subsystem \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
@@ -1671,15 +1666,15 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_TsAware: {
-    lnk_cmd_switch_set_flag_inv_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_NoTsAware);
+    lnk_cmd_switch_set_flag_inv_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_NoTsAware);
   } break;
 
   case LNK_CmdSwitch_Version: {
-    lnk_cmd_switch_parse_version(obj_path, lib_path, cmd_switch, value_strings, &config->image_ver);
+    lnk_cmd_switch_parse_version(obj, cmd_switch, value_strings, &config->image_ver);
   } break;
 
   case LNK_CmdSwitch_Rad_Age: {
-    lnk_cmd_switch_parse_u32(obj_path, lib_path, cmd_switch, value_strings, &config->age, 0);
+    lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->age, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_BuildInfo: {
@@ -1688,45 +1683,45 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_CheckUnusedDelayLoadDll);
+    lnk_cmd_switch_set_flag_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_CheckUnusedDelayLoadDll);
   } break;
 
   case LNK_CmdSwitch_Rad_Map: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_chunk_map_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_chunk_map_name);
     config->rad_chunk_map = LNK_SwitchState_Yes;
   } break;
 
   case LNK_CmdSwitch_Rad_MemoryMapFiles: {
-    lnk_cmd_switch_set_flag_32(obj_path, lib_path, cmd_switch, value_strings, &config->io_flags, LNK_IO_Flags_MemoryMapFiles);
+    lnk_cmd_switch_set_flag_32(obj, cmd_switch, value_strings, &config->io_flags, LNK_IO_Flags_MemoryMapFiles);
   } break;
 
   case LNK_CmdSwitch_Rad_Debug: {
-    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug);
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->rad_debug);
   } break;
 
   case LNK_CmdSwitch_Rad_DebugName: {
     // :Rad_DebugAltPath
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug_name);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_debug_name);
   } break;
 
   case LNK_CmdSwitch_Rad_DebugAltPath: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->rad_debug_alt_path);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->rad_debug_alt_path);
   } break;
 
   case LNK_CmdSwitch_Rad_DelayBind: {
-    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->import_table_emit_biat);
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->import_table_emit_biat);
   } break;
 
   case LNK_CmdSwitch_Rad_DoMerge: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_Merge);
+    lnk_cmd_switch_set_flag_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_Merge);
   } break;
 
   case LNK_CmdSwitch_Rad_EnvLib: {
-    lnk_cmd_switch_set_flag_64(obj_path, lib_path, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_EnvLib);
+    lnk_cmd_switch_set_flag_64(obj, cmd_switch, value_strings, &config->flags, LNK_ConfigFlag_EnvLib);
   } break;
 
   case LNK_CmdSwitch_Rad_Exe: {
-    lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_EXE);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_EXE);
   } break;
 
   case LNK_CmdSwitch_Rad_Guid: {
@@ -1740,11 +1735,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
         if (try_guid_from_string(value_strings.first->string, &guid)) {
           config->guid = guid;
         } else {
-          lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse \"%S\"", value_strings.first->string);
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse \"%S\"", value_strings.first->string);
         }
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters, expected GUID formatted as following: \"0000000-0000-0000-0000-000000000000\"");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters, expected GUID formatted as following: \"0000000-0000-0000-0000-000000000000\"");
     }
   } break;
 
@@ -1754,7 +1749,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       if (process_info->large_pages_allowed) {
         arena_default_flags |= ArenaFlag_LargePages;
       } else {
-        lnk_error_cmd_switch(LNK_Warning_LargePages, obj_path, lib_path, cmd_switch, "Large pages aren't enabled on this system.");
+        lnk_error_cmd_switch(LNK_Warning_LargePages, obj, cmd_switch, "Large pages aren't enabled on this system.");
 #if OS_WINDOWS
         lnk_supplement_error("To enable large pages:");
         lnk_supplement_error("\t- Press Win+R and open \"gpedit.msc\"");
@@ -1774,15 +1769,15 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       } else if (str8_match_lit("no", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         arena_default_flags &= ~ArenaFlag_LargePages;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid parameter: \"%S\", expected NO or QUIET", value_strings.first->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter: \"%S\", expected NO or QUIET", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
   case LNK_CmdSwitch_Rad_LinkVer: {
-    lnk_cmd_switch_parse_version(obj_path, lib_path, cmd_switch, value_strings, &config->link_ver);
+    lnk_cmd_switch_parse_version(obj, cmd_switch, value_strings, &config->link_ver);
   } break;
 
   case LNK_CmdSwitch_Rad_Log: {
@@ -1797,26 +1792,26 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       } else {
         LNK_LogType log_type = lnk_log_type_from_string(value_strings.first->string);
         if (log_type == LNK_Log_Null) {
-          lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);
         } else {
           lnk_set_log_status(log_type, 1);
         }
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters, expected 1");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters, expected 1");
     }
   } break;
 
   case LNK_CmdSwitch_Rad_MtPath: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->mt_path);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->mt_path);
   } break;
 
   case LNK_CmdSwitch_Rad_OsVer: {
-    lnk_cmd_switch_parse_version(obj_path, lib_path, cmd_switch, value_strings, &config->os_ver);
+    lnk_cmd_switch_parse_version(obj, cmd_switch, value_strings, &config->os_ver);
   } break;
 
   case LNK_CmdSwitch_Rad_PageSize: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->machine_page_size, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->machine_page_size, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_PathStyle: {
@@ -1825,10 +1820,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       if (path_style != PathStyle_Null) {
         config->path_style = path_style;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unable to parse parameter \"%S\"", value_strings.first->string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unable to parse parameter \"%S\"", value_strings.first->string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
     }
   } break;
 
@@ -1841,7 +1836,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     } else {
       mode = lnk_type_name_hash_mode_from_string(mode_string);
       if (mode == LNK_TypeNameHashMode_Null) {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter: \"%S\"", mode_string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown parameter: \"%S\"", mode_string);
       } else {
         config->pdb_hash_type_names = mode;
       }
@@ -1849,16 +1844,16 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_PdbHashTypeNameMap: {
-    lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &config->pdb_hash_type_name_map);
+    lnk_cmd_switch_parse_string_copy(arena, obj, cmd_switch, value_strings, &config->pdb_hash_type_name_map);
   } break;
 
   case LNK_CmdSwitch_Rad_PdbHashTypeNameLength: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->pdb_hash_type_name_length, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->pdb_hash_type_name_length, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_RemoveSection: {
     String8 sect_name = {0};
-    if (lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &sect_name)) {
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &sect_name)) {
       sect_name = push_str8_copy(arena, sect_name);
       str8_list_push(arena, &config->remove_sections, sect_name);
     }
@@ -1868,9 +1863,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 0) {
       config->shared_thread_pool_name = str8_lit(LNK_DEFAULT_THREAD_POOL_NAME);
     } else {
-      lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool_name);
+      lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &config->shared_thread_pool_name);
       if (config->shared_thread_pool_name.size == 0) {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid empty string for thread pool name");
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid empty string for thread pool name");
       }
     }
   } break;
@@ -1880,11 +1875,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 0) {
       config->max_worker_count = sysinfo->logical_processor_count;
     } else {
-      lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->max_worker_count, 0);
+      lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->max_worker_count, 0);
       if (config->max_worker_count == 0) {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "number of workers must be greater than zero");
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "number of workers must be greater than zero");
       } else if (config->max_worker_count > sysinfo->logical_processor_count) {
-        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "number of workers %llu exceeds processor count %llu", config->max_worker_count, sysinfo->logical_processor_count);
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "number of workers %llu exceeds processor count %llu", config->max_worker_count, sysinfo->logical_processor_count);
         config->max_worker_count = sysinfo->logical_processor_count;
       }
     }
@@ -1892,28 +1887,28 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Rad_SuppressError: {
     U64List error_code_list = {0};
-    if (lnk_cmd_switch_parse_u64_list(scratch.arena, obj_path, lib_path, cmd_switch, value_strings, &error_code_list, 0)) {
+    if (lnk_cmd_switch_parse_u64_list(scratch.arena, obj, cmd_switch, value_strings, &error_code_list, 0)) {
       for (U64Node *error_code_n = error_code_list.first; error_code_n != 0; error_code_n = error_code_n->next) {
         if (error_code_n->data < LNK_Error_Count) {
           lnk_suppress_error(error_code_n->data);
         } else {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "unknown error code %llu", error_code_n->data);
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "unknown error code %llu", error_code_n->data);
         }
       }
     }
   } break;
 
   case LNK_CmdSwitch_Rad_SymbolTableCapDefined: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->symbol_table_cap_defined, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_defined, 0);
   } break;
   case LNK_CmdSwitch_Rad_SymbolTableCapInternal: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->symbol_table_cap_internal, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_internal, 0);
   } break;
   case LNK_CmdSwitch_Rad_SymbolTableCapWeak: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->symbol_table_cap_weak, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_weak, 0);
   } break;
   case LNK_CmdSwitch_Rad_SymbolTableCapLib: {
-    lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &config->symbol_table_cap_lib, 0);
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->symbol_table_cap_lib, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_TargetOs: {
@@ -1923,19 +1918,19 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       if (target_os != OperatingSystem_Null) {
         config->target_os = target_os;
       } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown operating system type %S", os_string);
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown operating system type %S", os_string);
       }
     } else {
-      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj_path, lib_path, cmd_switch, "expected 1 parameter");
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, cmd_switch, "expected 1 parameter");
     }
   } break;
 
   case LNK_CmdSwitch_Rad_WriteTempFiles: {
-    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->write_temp_files);
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->write_temp_files);
   } break;
 
   case LNK_CmdSwitch_Rad_TimeStamp: {
-    lnk_cmd_switch_parse_u32(obj_path, lib_path, cmd_switch, value_strings, &config->time_stamp, 0);
+    lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
   } break;
 
   case LNK_CmdSwitch_Rad_Version: {
@@ -1945,7 +1940,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Rad_Workers: {
     U64 worker_count;
-    if (lnk_cmd_switch_parse_u64(obj_path, lib_path, cmd_switch, value_strings, &worker_count, 0)) {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &worker_count, 0)) {
       config->worker_count = worker_count;
     }
   } break;
@@ -1981,7 +1976,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
-    lnk_apply_cmd_option_to_config(arena, config, cmd->string, cmd->value_strings, str8_zero(), str8_zero());
+    lnk_apply_cmd_option_to_config(arena, config, cmd->string, cmd->value_strings, 0);
   }
 
   // :manifest_input
@@ -1995,7 +1990,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
         }
       }
     } else {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, str8_zero(), str8_zero(), LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
+      lnk_error_cmd_switch(LNK_Error_Cmdl, 0, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
     }
   }
 
@@ -2080,7 +2075,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   if (lnk_is_thread_pool_shared(config)) {
     if (config->worker_count > config->max_worker_count) {
       config->worker_count = config->max_worker_count;
-      lnk_error_cmd_switch(LNK_Warning_Cmdl, str8_zero(), str8_zero(), LNK_CmdSwitch_Rad_Workers, "worker count %llu exceeds thread pool max worker count %llu; claping count to max", config->worker_count, config->max_worker_count);
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, 0, LNK_CmdSwitch_Rad_Workers, "worker count %llu exceeds thread pool max worker count %llu; claping count to max", config->worker_count, config->max_worker_count);
     }
   }
   
