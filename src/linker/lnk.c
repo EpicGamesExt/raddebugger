@@ -1619,12 +1619,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         ProfBegin("Input Libs");
 
         // input libs from command line only
-        U64 input_source_opl = ArrayCount(input_libs);
-        if (config->no_default_libs) {
-          input_source_opl = LNK_InputSource_Default;
-        }
-        
-        for (U64 input_source = 0; input_source < ArrayCount(input_libs); ++input_source) {
+        U64 input_source_opl = config->no_default_libs ? LNK_InputSource_Default: LNK_InputSource_Count;
+        for EachIndex(input_source, input_source_opl) {
           ProfBeginV("Input Source %S", lnk_string_from_input_source(input_source));
 
           Temp             temp                  = temp_begin(scratch.arena);
