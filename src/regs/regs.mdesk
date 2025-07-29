@@ -57,8 +57,8 @@ REGS_RegTableX64:
   {fop                            16   Normal}
   {fcs                            16   Normal}
   {fds                            16   Normal}
-  {fip                            32   Normal}
-  {fdp                            32   Normal}
+  {fip                            64   Normal}
+  {fdp                            64   Normal}
   {mxcsr                          32   Normal}
   {mxcsr_mask                     32   Normal}
   {ss                             16   Normal}
