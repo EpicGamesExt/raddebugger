@@ -768,8 +768,8 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       dst->fop.u16 = xsave->ErrorOpcode;
       dst->fcs.u16 = xsave->ErrorSelector;
       dst->fds.u16 = xsave->DataSelector;
-      dst->fip.u32 = xsave->ErrorOffset;
-      dst->fdp.u32 = xsave->DataOffset;
+      dst->fip.u64 = xsave->ErrorOffset;
+      dst->fdp.u64 = xsave->DataOffset;
       dst->mxcsr.u32 = xsave->MxCsr;
       dst->mxcsr_mask.u32 = xsave->MxCsr_Mask;
       {
@@ -1037,8 +1037,8 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       fxsave->ErrorOpcode = src->fop.u16;
       fxsave->ErrorSelector = src->fcs.u16;
       fxsave->DataSelector = src->fds.u16;
-      fxsave->ErrorOffset = src->fip.u32;
-      fxsave->DataOffset = src->fdp.u32;
+      fxsave->ErrorOffset = src->fip.u64;
+      fxsave->DataOffset = src->fdp.u64;
       {
         M128A *float_d = fxsave->FloatRegisters;
         REGS_Reg80 *float_s = &src->fpr0;
