@@ -962,6 +962,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int status = 0;
       pid_t wait_id = waitpid(-1, &status, __WALL);
       final_wait_pid = wait_id;
+      done = 1;
       
       //- rjf: unpack event
       int wifexited         = WIFEXITED(status);
@@ -1012,10 +1013,35 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //- rjf: WSTOPSIG(status) is SIGSTOP
       if(wifstopped && wstopsig == SIGSTOP)
       {
+        //
         // TODO(rjf): how do we tell the following apart?:
         // - SIGSTOP All-Stop
         // - SIGSTOP Halt
         // - SIGSTOP "User"
+        //
+        // we are currently just assuming that, if we've queried a SIGSTOP to halt, then
+        // the first one that comes back is our "dummy" sigstop. this is likely not
+        // necessarily true.
+        //
+        if(thread->expecting_dummy_sigstop)
+        {
+          thread->expecting_dummy_sigstop = 0;
+          done = 0;
+        }
+        else if(dmn_lnx_state->has_halt_injection)
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &evts);
+          e->kind    = DMN_EventKind_Halt;
+          e->process = dmn_lnx_handle_from_entity(process);
+          e->thread  = dmn_lnx_handle_from_entity(thread);
+        }
+        else
+        {
+          // TODO(rjf): study this case; old notes:
+          //
+          // a signal we don't want to mess with (except to record that it
+          // happened maybe) we should "hand it back"
+        }
       }
       
       //- rjf: WSTOPSIG(status) is an unrecoverable exception (unless user does something to fix state first)
@@ -1103,6 +1129,20 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 internal void
 dmn_halt(U64 code, U64 user_data)
 {
+  if(!dmn_lnx_state->has_halt_injection)
+  {
+    DMN_LNX_Entity *process = dmn_lnx_state->entities_base->first;
+    if(process != &dmn_lnx_nil_entity)
+    {
+      union sigval sv = {0};
+      if(sigqueue(process->id, SIGSTOP, sv) != -1)
+      {
+        dmn_lnx_state->has_halt_injection = 1;
+        dmn_lnx_state->halt_code          = code;
+        dmn_lnx_state->halt_user_data     = user_data;
+      }
+    }
+  }
 }
 
 ////////////////////////////////

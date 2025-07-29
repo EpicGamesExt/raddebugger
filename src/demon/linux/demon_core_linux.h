@@ -109,6 +109,11 @@ struct DMN_LNX_State
   DMN_LNX_Entity *entities_base;
   U64 entities_count;
   DMN_LNX_Entity *free_entity;
+  
+  // rjf: halting mechanism
+  B32 has_halt_injection;
+  U64 halt_code;
+  U64 halt_user_data;
 };
 
 read_only global DMN_LNX_Entity dmn_lnx_nil_entity = {&dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity, &dmn_lnx_nil_entity};
