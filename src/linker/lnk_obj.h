@@ -123,5 +123,7 @@ internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
 
 // --- Directive Parser --------------------------------------------------------
 
-internal void lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *directive_info, String8 buffer);
+internal void              lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *directive_info, String8 buffer);
+internal String8List       lnk_raw_directives_from_obj(Arena *arena, LNK_Obj *obj);
+internal LNK_DirectiveInfo lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List raw_directives);
 

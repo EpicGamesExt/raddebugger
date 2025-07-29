@@ -630,6 +630,36 @@ lnk_obj_is_before(void *raw_a, void *raw_b)
   return a->input_idx < b->input_idx;
 }
 
+internal String8List
+lnk_raw_directives_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
+  String8List drectve_data = {0};
+  for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
+    COFF_SectionHeader *sect_header = &section_table[sect_idx];
+    if (sect_header->flags & COFF_SectionFlag_LnkInfo) {
+      String8 sect_name = str8_cstring_capped(sect_header->name, sect_header->name + sizeof(sect_header->name));
+      if (str8_match(sect_name, str8_lit(".drectve"), 0)) {
+        if (sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
+          lnk_error_obj(LNK_Error_IllData, obj, ".drectve section header has flag COFF_SectionFlag_CntUninitializedData");
+          break;
+        }
+        if (sect_header->fsize < 3) {
+          lnk_error_obj(LNK_Error_IllData, obj, "not enough bytes to parse .drectve");
+          break;
+        }
+        if (sect_header->reloc_count > 0) {
+          lnk_error_obj(LNK_Error_IllData, obj, ".drectve must not have relocations");
+          break;
+        }
+        Rng1U64 sect_range = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+        str8_list_push(arena, &drectve_data, str8_substr(obj->data, sect_range));
+      }
+    }
+  }
+  return drectve_data;
+}
+
 internal void
 lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *directive_info, String8 buffer)
 {
@@ -675,5 +705,15 @@ lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *d
   }
   
   scratch_end(scratch);
+}
+
+internal LNK_DirectiveInfo
+lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List raw_directives)
+{
+  LNK_DirectiveInfo directive_info = {0};
+  for (String8Node *drectve_n = raw_directives.first; drectve_n != 0; drectve_n = drectve_n->next) {
+    lnk_parse_msvc_linker_directive(arena, obj, &directive_info, drectve_n->string);
+  }
+  return directive_info;
 }
 
