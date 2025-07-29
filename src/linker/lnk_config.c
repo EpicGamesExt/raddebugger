@@ -609,6 +609,7 @@ lnk_parse_alt_name_directive(String8 string, String8 obj_path, String8 lib_path,
   if (pair.node_count == 2) {
     alt_out->from = pair.first->string;
     alt_out->to   = pair.last->string;
+    is_parse_ok = 1;
   } else {
     lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, LNK_CmdSwitch_AlternateName, "syntax error in \"%S\", expected format \"FROM=TO\"", string);
   }
@@ -1163,7 +1164,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_DefaultLib: {
     String8List default_lib_list = str8_list_copy(arena, &value_strings);
-    str8_list_concat_in_place(&config->input_default_lib_list, &default_lib_list);
+    if (obj_path.size) {
+      str8_list_concat_in_place(&config->input_obj_lib_list, &default_lib_list);
+    } else {
+      str8_list_concat_in_place(&config->input_default_lib_list, &default_lib_list);
+    }
   } break;
 
   case LNK_CmdSwitch_Delay: {
@@ -1190,10 +1195,6 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     config->file_characteristics |= PE_ImageFileCharacteristic_FILE_DLL;
   } break;
 
-  case LNK_CmdSwitch_DisallowLib: {
-    lnk_not_implemented("TODO: how is this switch different from /nodefaultlib?");
-  } break;
-
   case LNK_CmdSwitch_DynamicBase: {
     lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_DYNAMIC_BASE);
   } break;
@@ -1217,7 +1218,43 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_Export: {
     PE_ExportParse export_parse = {0};
     if (lnk_parse_export_directive_ex(arena, value_strings, obj_path, lib_path, &export_parse)) {
-      pe_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
+      PE_ExportParseNode *exp_n = 0;
+      String8 export_name = pe_name_from_export_parse(&export_parse);
+      hash_table_search_string_raw(config->export_ht, export_name, &exp_n);
+
+      if (exp_n == 0) {
+        // make sure export is defined
+        if (!export_parse.is_forwarder) {
+          str8_list_push(arena, &config->include_symbol_list, export_parse.name);
+        }
+
+        // push new export
+        exp_n = pe_export_parse_list_push(arena, &config->export_symbol_list, export_parse);
+
+        hash_table_push_string_raw(arena, config->export_ht, export_name, exp_n);
+      } else {
+        B32 is_ambiguous = 1;
+        PE_ExportParse *extant_export = &exp_n->data;
+
+        if (extant_export->alias.size && export_parse.alias.size && !str8_match(extant_export->alias, export_parse.alias, 0)) {
+          goto report;
+        }
+
+        if (extant_export->ordinal != export_parse.ordinal) {
+          goto report;
+        }
+
+        is_ambiguous = 0;
+
+        if (extant_export->alias.size == 0 && export_parse.alias.size != 0) {
+          extant_export->alias = export_parse.alias;
+        }
+
+      report:;
+       if (is_ambiguous) {
+         lnk_error_with_loc(LNK_Error_IllExport, export_parse.obj_path, export_parse.lib_path, "ambiguous symbol export %S", export_parse.name);
+       }
+      }
     }
   } break;
 
@@ -1485,6 +1522,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     str8_list_concat_in_place(&config->natvis_list, &natvis_list);
   } break;
 
+  case LNK_CmdSwitch_DisallowLib:
   case LNK_CmdSwitch_NoDefaultLib: {
     if (value_strings.node_count == 0) {
       config->no_default_libs = 1;
@@ -1939,6 +1977,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
   config->pdb_hash_type_name_length = 8;
   config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
+  config->export_ht                 = hash_table_init(scratch.arena, max_U16/2);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {

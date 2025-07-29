@@ -913,48 +913,6 @@ lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path)
   }
 }
 
-internal void
-lnk_push_export(Arena *arena, HashTable *export_ht, PE_ExportParseList *export_list, String8List *include_symbol_list, PE_ExportParse export_parse)
-{
-  PE_ExportParseNode *exp_n = 0;
-  String8 export_name = pe_name_from_export_parse(&export_parse);
-  hash_table_search_string_raw(export_ht, export_name, &exp_n);
-
-  if (exp_n == 0) {
-    // make sure export is defined
-    if (!export_parse.is_forwarder) {
-      str8_list_push(arena, include_symbol_list, export_parse.name);
-    }
-
-    // push new export
-    exp_n = pe_export_parse_list_push(arena, export_list, export_parse);
-
-    hash_table_push_string_raw(arena, export_ht, export_name, exp_n);
-  } else {
-    B32 is_ambiguous = 1;
-    PE_ExportParse *extant_export = &exp_n->data;
-    
-    if (extant_export->alias.size && export_parse.alias.size && !str8_match(extant_export->alias, export_parse.alias, 0)) {
-      goto report;
-    }
-
-    if (extant_export->ordinal != export_parse.ordinal) {
-      goto report;
-    }
-
-    is_ambiguous = 0;
-
-    if (extant_export->alias.size == 0 && export_parse.alias.size != 0) {
-      extant_export->alias = export_parse.alias;
-    }
-
-    report:;
-    if (is_ambiguous) {
-      lnk_error_with_loc(LNK_Error_IllExport, export_parse.obj_path, export_parse.lib_path, "ambiguous symbol export %S", export_parse.name);
-    }
-  }
-}
-
 internal String8
 lnk_make_linker_obj(Arena *arena, LNK_Config *config)
 {
@@ -1063,6 +1021,10 @@ THREAD_POOL_TASK_FUNC(lnk_undef_symbol_finder)
   for (U64 symbol_idx = range.min; symbol_idx < range.max; symbol_idx += 1) {
     LNK_SymbolNode *symbol_n = task->lookup_node_arr.v[symbol_idx];
     LNK_Symbol     *symbol   = symbol_n->data;
+
+    if (str8_match(symbol->name, str8_lit("return_1"), 0)) {
+      int x = 0;
+    }
     
     LNK_Symbol *has_defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol->name);
     if (has_defn) {
@@ -1217,6 +1179,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     State_InputSymbols,
     State_InputObjs,
     State_InputLibs,
+    State_InputAlternateNames,
     State_PushDllHelperUndefSymbol,
     State_InputLinkerObjs,
     State_PushLoadConfigUndefSymbol,
@@ -1239,17 +1202,18 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
   
   // inputs
-  String8List            include_symbol_list               = config->include_symbol_list;
-  String8List            input_disallow_lib_list           = config->disallow_lib_list;
-  String8List            input_manifest_path_list          = str8_list_copy(scratch.arena, &config->input_list[LNK_Input_Manifest]);
-  String8List            manifest_dep_list                 = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
-  PE_ExportParseList     export_symbol_list                = {0};
-  HashTable             *export_ht                         = hash_table_init(scratch.arena, max_U16/2);
+  String8Node          **last_include_symbol               = &config->include_symbol_list.first;
+  String8Node          **last_disallow_lib                 = &config->disallow_lib_list.first;
+  LNK_AltNameNode      **last_alt_name                     = &config->alt_name_list.first;
   LNK_InputObjList       input_obj_list                    = {0};
   LNK_InputImportList    input_import_list                 = {0};
   LNK_SymbolList         input_weak_list                   = {0};
-  LNK_InputLibList       input_libs[LNK_InputSource_Count] = { config->input_list[LNK_Input_Lib], config->input_default_lib_list };
-  
+  LNK_InputLib **input_libs[LNK_InputSource_Count] = {
+    &config->input_list[LNK_Input_Lib].first,
+    &config->input_default_lib_list.first,
+    &config->input_obj_lib_list.first
+  };
+
   // input :null_obj
   {
     LNK_InputObj *null_obj_input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
@@ -1302,20 +1266,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   if (config->guard_flags != LNK_Guard_None) {
     state_list_push(scratch.arena, state_list, State_PushLoadConfigUndefSymbol);
   }
-
-  //
-  // Push config exports
-  //
-  for (PE_ExportParseNode *exp_n = config->export_symbol_list.first; exp_n != 0; exp_n = exp_n->next) {
-    lnk_push_export(tp_arena->v[0], export_ht, &export_symbol_list, &include_symbol_list, exp_n->data);
-  }
-
-  //
-  // Push config alternative names
-  //
-  for (LNK_AltNameNode *alt_n = config->alt_name_list.first; alt_n != 0; alt_n = alt_n->next) {
-    lnk_symbol_table_push_alt_name(symtab, 0, alt_n->data.from, alt_n->data.to);
-  }
   
   //
   // Run states
@@ -1328,16 +1278,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
       case State_InputDisallowLibs: {
         ProfBegin("Input /disallowlib");
-        
-        for (String8Node *name_n = input_disallow_lib_list.first; name_n != 0; name_n = name_n->next) {
-          if ( ! lnk_is_lib_disallowed(disallow_lib_ht, name_n->string)) {
-            lnk_push_disallow_lib(scratch.arena, disallow_lib_ht, name_n->string);
+        for (; *last_disallow_lib; last_disallow_lib = &(*last_disallow_lib)->next) {
+          if ( ! lnk_is_lib_disallowed(disallow_lib_ht, (*last_disallow_lib)->string)) {
+            lnk_push_disallow_lib(scratch.arena, disallow_lib_ht, (*last_disallow_lib)->string);
           }
         }
-        
-        // reset input
-        MemoryZeroStruct(&input_disallow_lib_list);
-        
         ProfEnd();
       } break;
       case State_InputImports: {
@@ -1396,8 +1341,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         ProfBegin("Input Symbols");
         
         ProfBegin("Push /INCLUDE Symbols");
-        for (String8Node *include_node = include_symbol_list.first; include_node != 0; include_node = include_node->next) {
-          String8     name   = push_str8_copy(symtab->arena->v[0], include_node->string);
+        for (; *last_include_symbol; last_include_symbol = &(*last_include_symbol)->next) {
+          String8     name   = push_str8_copy(symtab->arena->v[0], (*last_include_symbol)->string);
           LNK_Symbol *symbol = lnk_make_undefined_symbol(symtab->arena->v[0], name, 0);
           lnk_symbol_list_push(scratch.arena, &lookup_undef_list, symbol);
         }
@@ -1409,7 +1354,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         lnk_symbol_list_concat_in_place(&lookup_weak_list, &unresolved_weak_list);
         
         // reset inputs
-        MemoryZeroStruct(&include_symbol_list);
         MemoryZeroStruct(&input_weak_list);
         
         ProfEnd();
@@ -1447,7 +1391,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         LNK_InputObj **thin_inputs       = lnk_thin_array_from_input_obj_list(scratch.arena, unique_obj_input_list, &thin_inputs_count);
         String8Array   thin_input_paths  = lnk_path_array_from_input_obj_array(scratch.arena, thin_inputs, thin_inputs_count);
         String8Array   thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], config->io_flags, thin_input_paths);
-        for (U64 thin_input_idx = 0; thin_input_idx < thin_inputs_count; thin_input_idx += 1) {
+        for EachIndex(thin_input_idx, thin_inputs_count) {
           thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
           thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
         }
@@ -1455,7 +1399,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
         ProfBegin("Disk Read Check");
         LNK_InputObj **input_obj_arr = lnk_array_from_input_obj_list(scratch.arena, unique_obj_input_list);
-        for (U64 input_idx = 0; input_idx < unique_obj_input_list.count; ++input_idx) {
+        for EachIndex(input_idx, unique_obj_input_list.count) {
           if (input_obj_arr[input_idx]->has_disk_read_failed) {
             lnk_error(LNK_Error_InvalidPath, "unable to find obj \"%S\"", input_obj_arr[input_idx]->path);
           }
@@ -1464,7 +1408,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         
         if (lnk_get_log_status(LNK_Log_InputObj)) {
           U64 input_size = 0;
-          for (U64 i = 0; i < unique_obj_input_list.count; ++i) { input_size += input_obj_arr[i]->data.size; }
+          for EachIndex(i, unique_obj_input_list.count) { input_size += input_obj_arr[i]->data.size; }
           lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
         }
         
@@ -1486,80 +1430,20 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           config->infer_function_pad_min = 0;
         }
 
-        ProfBegin("Handle Directives");
+        ProfBegin("Apply Directives");
         for EachIndex(obj_idx, obj_node_arr.count) {
           LNK_Obj           *obj            = &obj_node_arr.v[obj_idx].data;
           String8List        raw_directives = lnk_raw_directives_from_obj(scratch.arena, obj);
           LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
-
-          // /EXPORT
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
-            PE_ExportParse export_parse = {0};
-            lnk_parse_export_directive_ex(scratch.arena, dir->value_list, obj->path, lnk_obj_get_lib_path(obj), &export_parse);
-            lnk_push_export(tp_arena->v[0], export_ht, &export_symbol_list, &include_symbol_list, export_parse);
-          }
-
-          // /INCLUDESYMBOL
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Include].first; dir != 0; dir = dir->next) {
-            str8_list_concat_in_place(&include_symbol_list, &dir->value_list);
-          }
-
-          // /MERGE
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Merge].first; dir != 0; dir = dir->next) {
-            for (String8Node *value_n = dir->value_list.first; value_n != 0; value_n = value_n->next) {
-              LNK_MergeDirective merge_dir;
-              if (lnk_parse_merge_directive(value_n->string, obj->path, lnk_obj_get_lib_path(obj), &merge_dir)) {
-                merge_dir.src = push_str8_copy(tp_arena->v[0], merge_dir.src);
-                merge_dir.dst = push_str8_copy(tp_arena->v[0], merge_dir.dst);
-                lnk_merge_directive_list_push(tp_arena->v[0], &config->merge_list, merge_dir);
-              } 
+          for EachIndex(i, ArrayCount(directive_info.v)) {
+            for (LNK_Directive *dir = directive_info.v[i].first; dir != 0; dir = dir->next) {
+              lnk_apply_cmd_option_to_config(tp_arena->v[0], config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
             }
-          }
-
-          // /MANIFESTDEPENDENCY
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_ManifestDependency].first; dir != 0; dir = dir->next) {
-            str8_list_concat_in_place(&manifest_dep_list, &dir->value_list);
-          }
-
-          // /DISALLOWLIB
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_DisallowLib].first; dir != 0; dir = dir->next) {
-            str8_list_concat_in_place(&input_disallow_lib_list, &dir->value_list);
-          }
-
-          // /DEFAULTLIB
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_DefaultLib].first; dir != 0; dir = dir->next) {
-            str8_list_concat_in_place(&input_libs[LNK_InputSource_Obj], &dir->value_list);
-          }
-
-          // /ALTERNATENAME
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
-            for (String8Node *string_n = dir->value_list.first; string_n != 0; string_n = string_n->next) {
-              LNK_AltName alt_name;
-              if (lnk_parse_alt_name_directive(string_n->string, obj->path, lnk_obj_get_lib_path(obj), &alt_name)) {
-                alt_name.from = push_str8_copy(tp_arena->v[0], alt_name.from);
-                alt_name.to   = push_str8_copy(tp_arena->v[0], alt_name.to);
-                lnk_symbol_table_push_alt_name(symtab, obj, alt_name.from, alt_name.to);
-              }
-            }
-          }
-
-          // /ENTRY
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Entry].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
-          }
-
-          // /SUBSYSTEM
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_SubSystem].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
-          }
-
-          // /STACK
-          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Stack].first; dir != 0; dir = dir->next) {
-            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, lnk_obj_get_lib_path(obj));
           }
         }
         ProfEnd();
 
+        // input extern symbols from each obj to the symbol table
         LNK_SymbolInputResult input_result = lnk_input_obj_symbols(tp, tp_arena, symtab, obj_node_arr);
         
         // schedule symbol input
@@ -1584,12 +1468,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           ProfBeginV("Input Source %S", lnk_string_from_input_source(input_source));
 
           Temp             temp                  = temp_begin(scratch.arena);
-          LNK_InputLibList input_lib_list        = input_libs[input_source];
           LNK_InputLibList unique_input_lib_list = {0};
 
           ProfBegin("Collect unique input libs");
-          for (LNK_InputLib *input = input_lib_list.first; input != 0; input = input->next) {
-            String8 path = input->string;
+          for (; *input_libs[input_source] != 0; input_libs[input_source] = &(*input_libs[input_source])->next) {
+            String8 path = (*input_libs[input_source])->string;
 
             if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
               if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
@@ -1664,21 +1547,33 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           ProfEnd();
         }
         
-        // reset input libs
-        MemoryZeroArray(input_libs);
-        
         ProfEnd();
+      } break;
+      case State_InputAlternateNames: {
+        for (; *last_alt_name; last_alt_name = &(*last_alt_name)->next) {
+          lnk_symbol_table_push_alt_name(symtab, 0, (*last_alt_name)->data.from, (*last_alt_name)->data.to);
+        }
       } break;
       case State_PushDllHelperUndefSymbol: {
         ProfBegin("Push Dll Helper Undef Symbol");
         delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
-        str8_list_push(scratch.arena, &include_symbol_list, delay_load_helper_name);
+
+        // TODO: config_refactor
+        String8List value_strings = {0};
+        str8_list_push(scratch.arena, &value_strings, delay_load_helper_name);
+        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
+
         ProfEnd();
       } break;
       case State_PushLoadConfigUndefSymbol: {
         ProfBegin("Push Load Config Undef Symbol");
         String8 load_config_name = str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME);
-        str8_list_push(scratch.arena, &include_symbol_list, load_config_name);
+
+        // TODO: config_refactor
+        String8List value_strings = {0};
+        str8_list_push(scratch.arena, &value_strings, load_config_name);
+        lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
+
         ProfEnd();
       } break;
       case State_LookupUndef: {
@@ -1799,7 +1694,10 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         
         // generate undefined symbol so in case obj is in lib it will be linked
         if (config->entry_point_name.size) {
-          str8_list_push(scratch.arena, &include_symbol_list, config->entry_point_name);
+          // TODO: config_refactor
+          String8List value_strings = {0};
+          str8_list_push(scratch.arena, &value_strings, config->entry_point_name);
+          lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, str8_zero(), str8_zero());
         }
         // no entry point, error and exit
         else {
@@ -1933,11 +1831,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           ProfEnd();
         }
 
-        if (export_symbol_list.count) {
+        if (config->export_symbol_list.count) {
           ProfBegin("Build Export Table");
 
           PE_ExportParseList resolved_exports = {0};
-          for (PE_ExportParseNode *exp_n = export_symbol_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
+          for (PE_ExportParseNode *exp_n = config->export_symbol_list.first, *exp_n_next; exp_n != 0; exp_n = exp_n_next) {
             exp_n_next = exp_n->next;
             PE_ExportParse *exp = &exp_n->data;
 
@@ -1979,7 +1877,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           
           // do we have manifest deps passed through pragma alone?
           LNK_ManifestOpt manifest_opt = config->manifest_opt;
-          if (manifest_dep_list.node_count > 0 && manifest_opt == LNK_ManifestOpt_Null) {
+          if (config->manifest_dependency_list.node_count > 0 && manifest_opt == LNK_ManifestOpt_Null) {
             manifest_opt = LNK_ManifestOpt_Embed;
           }
 
@@ -1988,7 +1886,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
             ProfBegin("Embed Manifest");
             // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
             // resource to the tree directly
-            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
             String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
             str8_list_push(scratch.arena, &res_data_list, manifest_res);
             str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
@@ -1997,14 +1895,14 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           case LNK_ManifestOpt_WriteToFile: {
             ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
             Temp temp = temp_begin(scratch.arena);
-            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
             lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
             temp_end(temp);
             ProfEnd();
           } break;
           case LNK_ManifestOpt_Null: {
-            Assert(input_manifest_path_list.node_count == 0);
-            Assert(manifest_dep_list.node_count == 0);
+            Assert(config->input_list[LNK_Input_Manifest].node_count == 0);
+            Assert(config->manifest_dependency_list.node_count == 0);
           } break;
           case LNK_ManifestOpt_No: {
             // omit manifest generation
@@ -2087,7 +1985,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       }
     }
     
-    if (input_disallow_lib_list.node_count) {
+    if (*last_disallow_lib != 0) {
       state_list_push(scratch.arena, state_list, State_InputDisallowLibs);
       continue;
     }
@@ -2095,7 +1993,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       state_list_push(scratch.arena, state_list, State_InputImports);
       continue;
     }
-    if (input_weak_list.count || include_symbol_list.node_count) {
+    if (input_weak_list.count || *last_include_symbol != 0) {
       state_list_push(scratch.arena, state_list, State_InputSymbols);
       continue;
     }
@@ -2106,7 +2004,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     {
       B32 have_pending_lib_inputs = 0;
       for (U64 i = 0; i < ArrayCount(input_libs); ++i) {
-        if (input_libs[i].node_count) {
+        if (*input_libs[i] != 0) {
           have_pending_lib_inputs = 1;
           break;
         }
@@ -2115,6 +2013,10 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         state_list_push(scratch.arena, state_list, State_InputLibs);
         continue;
       }
+    }
+    if (*last_alt_name != 0) {
+      state_list_push(scratch.arena, state_list, State_InputAlternateNames);
+      continue;
     }
     if (lookup_undef_list.count) {
       state_list_push(scratch.arena, state_list, State_LookupUndef);
@@ -2177,8 +2079,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   link_ctx.symtab                 = symtab;
   link_ctx.objs_count             = obj_list.count;
   link_ctx.objs                   = lnk_array_from_obj_list(tp_arena->v[0], obj_list);
-  link_ctx.export_symbol_list     = export_symbol_list;
-  link_ctx.delay_load_helper_name = delay_load_helper_name;
   MemoryCopyTyped(&link_ctx.lib_index[0], &lib_index[0], ArrayCount(lib_index));
 
   ProfEnd();
@@ -2242,10 +2142,7 @@ lnk_gc_comdats(TP_Context           *tp,
                U64                   objs_count,
                LNK_Obj             **objs,
                LNK_Symbol         ***symlinks,
-               LNK_Config           *config,
-               PE_ExportParseList    export_symbol_list,
-               String8List           include_symbol_list,
-               String8               delay_load_helper_name)
+               LNK_Config           *config)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
@@ -2258,36 +2155,13 @@ lnk_gc_comdats(TP_Context           *tp,
   // define roots
   //
   {
-    String8List roots = {0};
-
-    // entry point
-    str8_list_push(scratch.arena, &roots, config->entry_point_name);
-
-    // exports
-    for (PE_ExportParseNode *exp_n = export_symbol_list.first; exp_n != 0; exp_n = exp_n->next) {
-      PE_ExportParse *exp = &exp_n->data;
-      str8_list_push(scratch.arena, &roots, exp->name);
-    }
-
-    // load config
-    LNK_Symbol *load_config_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, MSCRT_LOAD_CONFIG_SYMBOL_NAME);
-    if (load_config_symbol) {
-      str8_list_push(scratch.arena, &roots, load_config_symbol->name);
-    }
-
-    // delay load helper
-    if (delay_load_helper_name.size) {
-      str8_list_push(scratch.arena, &roots, delay_load_helper_name);
-    }
+    String8List roots = str8_list_copy(scratch.arena, &config->include_symbol_list);
 
     // tls
     LNK_Symbol *tls_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScope_Defined, MSCRT_TLS_SYMBOL_NAME);
     if (tls_symbol) {
       str8_list_pushf(scratch.arena, &roots, MSCRT_TLS_SYMBOL_NAME);
     }
-
-    // include symbols
-    str8_list_concat_in_place(&roots, &include_symbol_list);
 
     // push tasks for each root symbol
     for (String8Node *root_n = roots.first; root_n != 0; root_n = root_n->next) {
@@ -3947,9 +3821,6 @@ lnk_build_image(TP_Arena            *arena,
                 TP_Context          *tp,
                 LNK_Config          *config,
                 LNK_SymbolTable     *symtab,
-                PE_ExportParseList   export_symbol_list,
-                String8List          include_symbol_list,
-                String8              delay_load_helper_name,
                 U64                  objs_count,
                 LNK_Obj            **objs)
 {
@@ -3968,7 +3839,7 @@ lnk_build_image(TP_Arena            *arena,
   // remove unreachable COMDAT sections
   //
   if (config->opt_ref == LNK_SwitchState_Yes) {
-    lnk_gc_comdats(tp, symtab, objs_count, objs, symlinks, config, export_symbol_list, include_symbol_list, delay_load_helper_name);
+    lnk_gc_comdats(tp, symtab, objs_count, objs, symlinks, config);
   }
 
   //
@@ -4880,7 +4751,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   //
   // Image
   //
-  LNK_ImageContext image_ctx = lnk_build_image(arena, tp, config, link_ctx.symtab, link_ctx.export_symbol_list, link_ctx.include_symbol_list, link_ctx.delay_load_helper_name, link_ctx.objs_count, link_ctx.objs);
+  LNK_ImageContext image_ctx = lnk_build_image(arena, tp, config, link_ctx.symtab, link_ctx.objs_count, link_ctx.objs);
 
   // Write image in the background
   LNK_WriteThreadContext *image_write_ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
@@ -4904,7 +4775,7 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     ProfBegin("Build Import Library");
     lnk_timer_begin(LNK_Timer_Lib);
     String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
-    String8List lib_list = pe_make_import_lib(arena->v[0], config->machine, config->time_stamp, str8_skip_last_slash(config->image_name), linker_debug_symbols, link_ctx.export_symbol_list);
+    String8List lib_list = pe_make_import_lib(arena->v[0], config->machine, config->time_stamp, str8_skip_last_slash(config->image_name), linker_debug_symbols, config->export_symbol_list);
     lnk_write_data_list_to_file_path(config->imp_lib_name, str8_zero(), lib_list);
     lnk_timer_end(LNK_Timer_Lib);
     ProfEnd();

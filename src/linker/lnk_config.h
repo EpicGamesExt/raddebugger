@@ -359,6 +359,7 @@ typedef struct LNK_Config
   U64                         pdb_hash_type_name_length;
   PE_ExportParseList          export_symbol_list;
   String8List                 input_list[LNK_Input_Count];
+  String8List                 input_obj_lib_list;
   String8List                 input_default_lib_list;
   String8List                 disallow_lib_list;
   String8List                 delay_load_dll_list;
@@ -390,6 +391,7 @@ typedef struct LNK_Config
   String8                     temp_rad_chunk_map_name;
   String8List                 remove_sections;
   LNK_IO_Flags                io_flags;
+  HashTable                  *export_ht;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
