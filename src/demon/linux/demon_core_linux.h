@@ -81,6 +81,7 @@ struct DMN_LNX_Entity
   Arch arch;
   U64 id;
   int fd;
+  B32 expecting_dummy_sigstop;
 };
 
 typedef struct DMN_LNX_EntityNode DMN_LNX_EntityNode;
@@ -142,5 +143,6 @@ internal DMN_LNX_Entity *dmn_lnx_entity_alloc(DMN_LNX_Entity *parent, DMN_LNX_En
 internal void dmn_lnx_entity_release(DMN_LNX_Entity *entity);
 internal DMN_Handle dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
 internal DMN_LNX_Entity *dmn_lnx_entity_from_handle(DMN_Handle handle);
+internal DMN_LNX_Entity *dmn_lnx_thread_from_pid(pid_t pid);
 
 #endif // DEMON_CORE_LINUX_H

@@ -464,7 +464,28 @@ dmn_lnx_entity_alloc(DMN_LNX_Entity *parent, DMN_LNX_EntityKind kind)
 internal void
 dmn_lnx_entity_release(DMN_LNX_Entity *entity)
 {
-  SLLStackPush(dmn_lnx_state->free_entity, entity);
+  if(entity->parent != &dmn_lnx_nil_entity)
+  {
+    DLLRemove_NPZ(&dmn_lnx_nil_entity, entity->parent->first, entity->parent->last, entity, next, prev);
+    entity->parent = &dmn_lnx_nil_entity;
+  }
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DMN_LNX_EntityNode start_task = {0, entity};
+    DMN_LNX_EntityNode *first_task = &start_task;
+    for(DMN_LNX_EntityNode *t = first_task; t != 0; t = t->next)
+    {
+      SLLStackPush(dmn_lnx_state->free_entity, t->v);
+      for(DMN_LNX_Entity *child = t->v->first; child != &dmn_lnx_nil_entity; child = child->next)
+      {
+        DMN_LNX_EntityNode *task = push_array(scratch.arena, DMN_LNX_EntityNode, 1);
+        task->next = t->next;
+        t->next = task;
+        task->v = child;
+      }
+    }
+    scratch_end(scratch);
+  }
 }
 
 internal DMN_Handle
@@ -489,6 +510,24 @@ dmn_lnx_entity_from_handle(DMN_Handle handle)
      dmn_lnx_state->entities_base[index].gen == handle.u32[1])
   {
     result = &dmn_lnx_state->entities_base[index];
+  }
+  return result;
+}
+
+internal DMN_LNX_Entity *
+dmn_lnx_thread_from_pid(pid_t pid)
+{
+  DMN_LNX_Entity *result = &dmn_lnx_nil_entity;
+  if(pid != 0)
+  {
+    for EachIndex(idx, dmn_lnx_state->entities_count)
+    {
+      if(dmn_lnx_state->entities_base[idx].kind == DMN_LNX_EntityKind_Thread && (pid_t)dmn_lnx_state->entities_base[idx].id == pid)
+      {
+        result = &dmn_lnx_state->entities_base[idx];
+        break;
+      }
+    }
   }
   return result;
 }
@@ -914,11 +953,144 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
     
     ////////////////////////////
-    //- rjf: wait for next stop
+    //- rjf: loop: wait for next stop, produce debug events
     //
-    int status = 0;
-    pid_t wait_id = waitpid(-1, &status, __WALL);
+    pid_t final_wait_pid = 0;
+    for(B32 done = 0; !done;)
+    {
+      //- rjf: wait for next event
+      int status = 0;
+      pid_t wait_id = waitpid(-1, &status, __WALL);
+      final_wait_pid = wait_id;
+      
+      //- rjf: unpack event
+      int wifexited         = WIFEXITED(status);
+      int wifsignaled       = WIFSIGNALED(status);
+      int wifstopped        = WIFSTOPPED(status);
+      int wstopsig          = WSTOPSIG(status);
+      int ptrace_event_code = (status>>8);
+      DMN_LNX_Entity *thread = dmn_lnx_thread_from_pid(wait_id);
+      DMN_LNX_Entity *process = thread->parent;
+      B32 thread_is_process_root = (thread->id == process->id);
+      
+      //- rjf: WIFEXITED(status) -> thread exit
+      B32 thread_exit = 0;
+      U64 exit_code = 0;
+      if(wifexited)
+      {
+        thread_exit = 1;
+      }
+      
+      //- rjf: WIFEXITED(status) -> thread exit w/ exit code
+      if(wifsignaled)
+      {
+        exit_code = WTERMSIG(status);
+        thread_exit = 1;
+      }
+      
+      //- rjf: SIGTRAP:PTRACE_EVENT_EXIT
+      if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_EXIT)
+      {
+        // TODO(rjf): verify
+        thread_exit = 1;
+      }
+      
+      //- rjf: SIGTRAP:PTRACE_EVENT_CLONE
+      if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_CLONE)
+      {
+        // TODO(rjf)
+      }
+      
+      //- rjf: SIGTRAP:PTRACE_EVENT_FORK, or SIGTRAP:PTRACE_EVENT_VFORK
+      if(wifstopped && wstopsig == SIGTRAP &&
+         (ptrace_event_code == PTRACE_EVENT_FORK ||
+          ptrace_event_code == PTRACE_EVENT_VFORK))
+      {
+        // TODO(rjf)
+      }
+      
+      //- rjf: WSTOPSIG(status) is SIGSTOP
+      if(wifstopped && wstopsig == SIGSTOP)
+      {
+        // TODO(rjf): how do we tell the following apart?:
+        // - SIGSTOP All-Stop
+        // - SIGSTOP Halt
+        // - SIGSTOP "User"
+      }
+      
+      //- rjf: WSTOPSIG(status) is an unrecoverable exception (unless user does something to fix state first)
+      if(wifstopped &&
+         (wstopsig == SIGABRT ||
+          wstopsig == SIGFPE ||
+          wstopsig == SIGSEGV))
+      {
+        // TODO(rjf)
+      }
+      
+      //- rjf: thread exit, thread is process' "root thread" -> eliminate this entire entity subtree
+      if(thread_exit && thread_is_process_root)
+      {
+        // rjf: generate exit-thread / unload-module events
+        for(DMN_LNX_Entity *child = process->first; child != &dmn_lnx_nil_entity; child = child->next)
+        {
+          switch(child->kind)
+          {
+            default:{}break;
+            case DMN_LNX_EntityKind_Thread:
+            {
+              DMN_Event *e = dmn_event_list_push(arena, &evts);
+              e->kind    = DMN_EventKind_ExitThread;
+              e->process = dmn_lnx_handle_from_entity(process);
+              e->thread  = dmn_lnx_handle_from_entity(child);
+            }break;
+            case DMN_LNX_EntityKind_Module:
+            {
+              DMN_Event *e = dmn_event_list_push(arena, &evts);
+              e->kind    = DMN_EventKind_UnloadModule;
+              e->process = dmn_lnx_handle_from_entity(process);
+              e->module  = dmn_lnx_handle_from_entity(child);
+              // TODO(rjf): e->string = ...;
+            }break;
+          }
+        }
+        
+        // rjf: generate exit process event
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &evts);
+          e->kind    = DMN_EventKind_ExitProcess;
+          e->process = dmn_lnx_handle_from_entity(process);
+          e->code    = exit_code;
+        }
+        
+        // rjf: eliminate entity tree
+        dmn_lnx_entity_release(process);
+      }
+      
+      //- rjf: thread exit, thread is *not* process root -> just exit this one thread
+      if(thread_exit && !thread_is_process_root)
+      {
+        DMN_Event *e = dmn_event_list_push(arena, &evts);
+        e->kind    = DMN_EventKind_ExitThread;
+        e->process = dmn_lnx_handle_from_entity(process);
+        e->thread  = dmn_lnx_handle_from_entity(thread);
+        dmn_lnx_entity_release(thread);
+      }
+    }
     
+    ////////////////////////////
+    //- rjf: stop all threads
+    //
+    for(DMN_LNX_EntityNode *n = first_ran_thread; n != 0; n = n->next)
+    {
+      DMN_LNX_Entity *thread = n->v;
+      pid_t thread_id = (pid_t)thread->id;
+      if(thread_id != final_wait_pid)
+      {
+        union sigval sv = {0};
+        sigqueue(thread_id, SIGSTOP, sv);
+        thread->expecting_dummy_sigstop = 1;
+      }
+    }
     
     scratch_end(scratch);
   }
