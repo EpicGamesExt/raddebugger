@@ -105,6 +105,7 @@ internal U32     lnk_obj_get_features(LNK_Obj *obj);
 internal U32     lnk_obj_get_comp_id(LNK_Obj *obj);
 internal U32     lnk_obj_get_vol_md(LNK_Obj *obj);
 internal String8 lnk_obj_get_lib_path(LNK_Obj *obj);
+internal U32     lnk_obj_get_removed_section_number(LNK_Obj *obj);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 

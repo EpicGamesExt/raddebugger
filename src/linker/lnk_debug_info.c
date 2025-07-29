@@ -3023,7 +3023,7 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
       LNK_Symbol        *symbol        = chunk->v[i].symbol;
       COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
 
-      if (symbol_parsed.section_number == lnk_removed_section_number_from_obj(symbol->u.defined.obj)) { continue; }
+      if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol->u.defined.obj)) { continue; }
 
       COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
       if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }

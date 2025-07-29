@@ -866,12 +866,6 @@ lnk_make_linker_coff_obj(Arena            *arena,
   return obj;
 }
 
-internal U32
-lnk_removed_section_number_from_obj(LNK_Obj *obj)
-{
-  return obj->header.is_big_obj ? LNK_REMOVED_SECTION_NUMBER_32 : LNK_REMOVED_SECTION_NUMBER_16;
-}
-
 internal String8
 lnk_get_lib_name(String8 path)
 {
@@ -2957,7 +2951,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, reloc->isymbol);
         COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
         if (interp == COFF_SymbolValueInterp_Regular) {
-          if (symbol.section_number == lnk_removed_section_number_from_obj(obj)) {
+          if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
             if (!lnk_is_coff_section_debug(obj, sect_idx)) {
               String8 sect_name = coff_name_from_section_header(string_table, &section_table[sect_idx]);
               lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol.name, sect_name, sect_idx+1, reloc_idx);

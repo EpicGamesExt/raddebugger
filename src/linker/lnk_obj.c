@@ -493,6 +493,12 @@ lnk_obj_get_lib_path(LNK_Obj *obj)
   return lib_path;
 }
 
+internal U32
+lnk_obj_get_removed_section_number(LNK_Obj *obj)
+{
+  return obj->header.is_big_obj ? LNK_REMOVED_SECTION_NUMBER_32 : LNK_REMOVED_SECTION_NUMBER_16;
+}
+
 internal COFF_SectionHeader *
 lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 {
