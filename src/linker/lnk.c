@@ -1470,21 +1470,20 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         
         LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, config->machine, unique_obj_input_list.count, input_obj_arr);
 
-        //
         // if the machine was omitted on the command line, derive machine from obj
-        //
         if (config->machine == COFF_MachineType_Unknown) {
           for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; obj_idx += 1) {
             if (obj_node_arr.v[obj_idx].data.header.machine != COFF_MachineType_Unknown) {
               config->machine = obj_node_arr.v[obj_idx].data.header.machine;
-
-              if (config->infer_function_pad_min) {
-                config->function_pad_min = lnk_get_default_function_pad_min(config->machine);
-              }
-
               break;
             }
           }
+        }
+
+        // infer minimal padding size for functions from the target machine
+        if (config->machine != COFF_MachineType_Unknown && config->infer_function_pad_min) {
+          config->function_pad_min = lnk_get_default_function_pad_min(config->machine);
+          config->infer_function_pad_min = 0;
         }
 
         ProfBegin("Handle Directives");
