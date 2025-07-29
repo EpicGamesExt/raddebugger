@@ -129,8 +129,6 @@ lnk_cmd_line_push_option_if_not_present(Arena *arena, LNK_CmdLine *cmd_line, cha
 internal LNK_CmdLine
 lnk_cmd_line_parse_windows_rules(Arena *arena, String8List arg_list)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-
   LNK_CmdLine cmd_line = {0};
   cmd_line.raw_cmd_line = str8_list_copy(arena, &arg_list);
 
@@ -157,8 +155,6 @@ lnk_cmd_line_parse_windows_rules(Arena *arena, String8List arg_list)
       str8_list_push(arena, &cmd_line.input_list, arg);
     }
   }
-  
-  scratch_end(scratch);
   return cmd_line;
 }
 

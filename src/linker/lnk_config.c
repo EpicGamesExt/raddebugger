@@ -601,15 +601,16 @@ lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_pat
 }
 
 internal B32
-lnk_parse_alt_name_directive(String8 input, LNK_AltName *alt_out)
+lnk_parse_alt_name_directive(String8 string, String8 obj_path, String8 lib_path, LNK_AltName *alt_out)
 {
   Temp scratch = scratch_begin(0,0);
   B32 is_parse_ok = 0;
-  String8List pair = str8_split_by_string_chars(scratch.arena, input, str8_lit("="), 0);
+  String8List pair = str8_split_by_string_chars(scratch.arena, string, str8_lit("="), 0);
   if (pair.node_count == 2) {
     alt_out->from = pair.first->string;
-    alt_out->to = pair.last->string;
-    is_parse_ok = 1;
+    alt_out->to   = pair.last->string;
+  } else {
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, LNK_CmdSwitch_AlternateName, "syntax error in \"%S\", expected format \"FROM=TO\"", string);
   }
   scratch_end(scratch);
   return is_parse_ok;
@@ -745,18 +746,18 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
 }
 
 internal B32
-lnk_parse_merge_directive(String8 string, LNK_MergeDirective *out)
+lnk_parse_merge_directive(String8 string, String8 obj_path, String8 lib_path, LNK_MergeDirective *out)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 is_parse_ok = 0;
-  
   String8List list = str8_split_by_string_chars(scratch.arena, string, str8_lit("="), 0);
   if (list.node_count == 2) {
     out->src = list.first->string;
     out->dst = list.last->string;
     is_parse_ok = 1;
+  } else {
+    lnk_error_cmd_switch(LNK_Warning_InvalidMergeDirectiveFormat, obj_path, lib_path, LNK_CmdSwitch_Merge, "unable to parse merge directive, expected format \"/MERGE:FROM=TO\" but got \"%S\"", string);
   }
-  
   scratch_end(scratch);
   return is_parse_ok;
 }
@@ -1094,15 +1095,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_AlternateName: {
     if (value_strings.node_count == 1) {
       LNK_AltName alt_name;
-      if (lnk_parse_alt_name_directive(value_strings.first->string, &alt_name)) {
+      if (lnk_parse_alt_name_directive(value_strings.first->string, obj_path, lib_path, &alt_name)) {
         alt_name.from = push_str8_copy(arena, alt_name.from);
         alt_name.to = push_str8_copy(arena, alt_name.to);
         LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
         alt_name_n->data = alt_name;
         SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
         config->alt_name_list.count += 1;
-      } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "syntax error in \"%S\", expected format \"FROM=TO\"", value_strings.first->string);
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
@@ -1463,10 +1462,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_Merge: {
     if (value_strings.node_count == 1) {
       LNK_MergeDirective merge = {0};
-      if (lnk_parse_merge_directive(push_str8_copy(arena, value_strings.first->string), &merge)) {
+      if (lnk_parse_merge_directive(value_strings.first->string, obj_path, lib_path, &merge)) {
+        merge.src = push_str8_copy(arena, merge.src);
+        merge.dst = push_str8_copy(arena, merge.dst);
         lnk_merge_directive_list_push(arena, &config->merge_list, merge);
-      } else {
-        lnk_error_cmd_switch(LNK_Warning_InvalidMergeDirectiveFormat, obj_path, lib_path, cmd_switch, "unable to parse merge directive, expected format \"/MERGE:FROM=TO\" but got \"%S\"", value_strings.first->string);
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters %d", value_strings.node_count);

@@ -1488,18 +1488,15 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
         ProfBegin("Handle Directives");
         for EachIndex(obj_idx, obj_node_arr.count) {
-          LNK_Obj *obj = &obj_node_arr.v[obj_idx].data;
-
-          String8List       raw_directives = lnk_raw_directives_from_obj(scratch.arena, obj);
-          LNK_DirectiveInfo directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
+          LNK_Obj           *obj            = &obj_node_arr.v[obj_idx].data;
+          String8List        raw_directives = lnk_raw_directives_from_obj(scratch.arena, obj);
+          LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
 
           // /EXPORT
-          {
-            for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
-              PE_ExportParse export_parse = {0};
-              lnk_parse_export_directive_ex(scratch.arena, dir->value_list, obj->path, lnk_obj_get_lib_path(obj), &export_parse);
-              lnk_push_export(tp_arena->v[0], export_ht, &export_symbol_list, &include_symbol_list, export_parse);
-            }
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
+            PE_ExportParse export_parse = {0};
+            lnk_parse_export_directive_ex(scratch.arena, dir->value_list, obj->path, lnk_obj_get_lib_path(obj), &export_parse);
+            lnk_push_export(tp_arena->v[0], export_ht, &export_symbol_list, &include_symbol_list, export_parse);
           }
 
           // /INCLUDESYMBOL
@@ -1511,13 +1508,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_Merge].first; dir != 0; dir = dir->next) {
             for (String8Node *value_n = dir->value_list.first; value_n != 0; value_n = value_n->next) {
               LNK_MergeDirective merge_dir;
-              if (lnk_parse_merge_directive(value_n->string, &merge_dir)) {
+              if (lnk_parse_merge_directive(value_n->string, obj->path, lnk_obj_get_lib_path(obj), &merge_dir)) {
                 merge_dir.src = push_str8_copy(tp_arena->v[0], merge_dir.src);
                 merge_dir.dst = push_str8_copy(tp_arena->v[0], merge_dir.dst);
                 lnk_merge_directive_list_push(tp_arena->v[0], &config->merge_list, merge_dir);
-              } else {
-                lnk_error_obj(LNK_Warning_IllData, obj, "can't parse merge directive \"%S\"", value_n->string);
-              }
+              } 
             }
           }
 
@@ -1537,17 +1532,13 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           }
 
           // /ALTERNATENAME
-          {
-            for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
-              for (String8Node *string_n = dir->value_list.first; string_n != 0; string_n = string_n->next) {
-                LNK_AltName alt_name;
-                if (lnk_parse_alt_name_directive(string_n->string, &alt_name)) {
-                  alt_name.from = push_str8_copy(tp_arena->v[0], alt_name.from);
-                  alt_name.to = push_str8_copy(tp_arena->v[0], alt_name.to);
-                  lnk_symbol_table_push_alt_name(symtab, obj, alt_name.from, alt_name.to);
-                } else {
-                  lnk_error_obj(LNK_Error_Cmdl, obj, "syntax error in \"%S\", expected format \"FROM=TO\"", string_n->string);
-                }
+          for (LNK_Directive *dir = directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
+            for (String8Node *string_n = dir->value_list.first; string_n != 0; string_n = string_n->next) {
+              LNK_AltName alt_name;
+              if (lnk_parse_alt_name_directive(string_n->string, obj->path, lnk_obj_get_lib_path(obj), &alt_name)) {
+                alt_name.from = push_str8_copy(tp_arena->v[0], alt_name.from);
+                alt_name.to   = push_str8_copy(tp_arena->v[0], alt_name.to);
+                lnk_symbol_table_push_alt_name(symtab, obj, alt_name.from, alt_name.to);
               }
             }
           }

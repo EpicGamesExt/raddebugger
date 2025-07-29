@@ -556,11 +556,11 @@ internal void lnk_cmd_switch_set_flag_64    (String8 obj_path, String8 lib_path,
 internal B32  lnk_cmd_switch_parse_string   (String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
 internal void lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
 
-internal B32 lnk_parse_alt_name_directive(String8 input, LNK_AltName *alt_out);
+internal B32 lnk_parse_alt_name_directive(String8 string, String8 obj_path, String8 lib_path, LNK_AltName *alt_out);
 internal B32 lnk_parse_export_directive_ex(Arena *arena, String8List directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out);
 internal B32 lnk_parse_export_directive(Arena *arena, String8 directive, String8 obj_path, String8 lib_path, PE_ExportParse *export_out);
 internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data);
-internal B32 lnk_parse_merge_directive(String8 string, LNK_MergeDirective *parse_out);
+internal B32 lnk_parse_merge_directive(String8 string, String8 obj_path, String8 lib_path, LNK_MergeDirective *parse_out);
 
 // --- Getters -----------------------------------------------------------------
 
