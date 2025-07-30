@@ -253,6 +253,7 @@ typedef struct LNK_AltName
 {
   String8 from;
   String8 to;
+  struct LNK_Obj *obj;
 } LNK_AltName;
 
 typedef struct LNK_AltNameNode
@@ -392,6 +393,7 @@ typedef struct LNK_Config
   String8List                 remove_sections;
   LNK_IO_Flags                io_flags;
   HashTable                  *export_ht;
+  HashTable                  *alt_name_ht;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
@@ -563,6 +565,7 @@ internal B32 lnk_parse_merge_directive    (String8 string, struct LNK_Obj *obj, 
 internal B32 lnk_parse_export_directive   (Arena *arena, String8 directive, struct LNK_Obj *obj, PE_ExportParse *export_out);
 internal B32 lnk_parse_export_directive_ex(Arena *arena, String8List directive, struct LNK_Obj *obj, PE_ExportParse *export_out);
 
+internal LNK_AltNameNode *        lnk_alt_name_list_push(Arena *arena, LNK_AltNameList *list, LNK_AltName data);
 internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data);
 
 // --- Getters -----------------------------------------------------------------

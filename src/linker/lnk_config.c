@@ -609,6 +609,7 @@ lnk_parse_alt_name_directive(String8 string, LNK_Obj *obj, LNK_AltName *alt_out)
   if (pair.node_count == 2) {
     alt_out->from = pair.first->string;
     alt_out->to   = pair.last->string;
+    alt_out->obj  = obj;
     is_parse_ok = 1;
   } else {
     lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_AlternateName, "syntax error in \"%S\", expected format \"FROM=TO\"", string);
@@ -1092,12 +1093,25 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 1) {
       LNK_AltName alt_name;
       if (lnk_parse_alt_name_directive(value_strings.first->string, obj, &alt_name)) {
-        alt_name.from = push_str8_copy(arena, alt_name.from);
-        alt_name.to = push_str8_copy(arena, alt_name.to);
-        LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
-        alt_name_n->data = alt_name;
-        SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
-        config->alt_name_list.count += 1;
+        String8 to_extant = {0};
+        if (hash_table_search_string_string(config->alt_name_ht, alt_name.from, &to_extant)) {
+          if (str8_match(to_extant, alt_name.to, 0)) {
+            // ignore, duplicate
+          } else {
+            lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", alt_name.from, to_extant, alt_name.from, alt_name.to);
+          }
+        } else {
+          hash_table_push_string_string(arena, config->alt_name_ht, alt_name.from, alt_name.to);
+
+          alt_name.from = push_str8_copy(arena, alt_name.from);
+          alt_name.to   = push_str8_copy(arena, alt_name.to);
+
+          LNK_AltNameNode *alt_name_n = push_array(arena, LNK_AltNameNode, 1);
+          alt_name_n->data            = alt_name;
+
+          SLLQueuePush(config->alt_name_list.first, config->alt_name_list.last, alt_name_n);
+          config->alt_name_list.count += 1;
+        }
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid number of parameters");
@@ -1973,6 +1987,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   config->pdb_hash_type_name_length = 8;
   config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
   config->export_ht                 = hash_table_init(scratch.arena, max_U16/2);
+  config->alt_name_ht               = hash_table_init(scratch.arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {

@@ -75,6 +75,12 @@ lnk_symbol_list_concat_in_place(LNK_SymbolList *list, LNK_SymbolList *to_concat)
   SLLConcatInPlace(list, to_concat);
 }
 
+internal void
+lnk_symbol_concat_in_place_array(LNK_SymbolList *list, LNK_SymbolList *to_concat, U64 to_concat_count)
+{
+  SLLConcatInPlaceArray(list, to_concat, to_concat_count);
+}
+
 internal LNK_SymbolList
 lnk_symbol_list_from_array(Arena *arena, LNK_SymbolArray arr)
 {
@@ -467,7 +473,6 @@ lnk_symbol_table_init(TP_Arena *arena)
   for (U64 i = 0; i < LNK_SymbolScope_Count; ++i) {
     symtab->chunk_lists[i] = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
   }
-  symtab->alt_names = hash_table_init(arena->v[0], 1024);
   return symtab;
 }
 
@@ -487,15 +492,8 @@ lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol
 internal LNK_Symbol *
 lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name)
 {
-  U64 hash = lnk_symbol_hash(name);
+  U64                 hash = lnk_symbol_hash(name);
   LNK_SymbolHashTrie *trie = lnk_symbol_hash_trie_search(symtab->scopes[scope], hash, name);
-  if (trie == 0) {
-    String8 alt_name = {0};
-    if (hash_table_search_string_string(symtab->alt_names, name, &alt_name)) {
-      U64 alt_hash = lnk_symbol_hash(alt_name);
-      trie = lnk_symbol_hash_trie_search(symtab->scopes[scope], alt_hash, alt_name);
-    }
-  }
   return trie ? trie->symbol : 0;
 }
 
@@ -514,16 +512,39 @@ lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *f
   return symbol;
 }
 
-internal void
-lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, LNK_Obj *obj, String8 from, String8 to)
+internal
+THREAD_POOL_TASK_FUNC(lnk_check_anti_dependecy_task)
 {
-  String8 to_extant;
-  if (hash_table_search_string_string(symtab->alt_names, from, &to_extant)) {
-    if (!str8_match(to_extant, to, 0)) {
-      lnk_error_obj(LNK_Error_AlternateNameConflict, obj, "conflicting alternative name: existing '%S=%S' vs. new '%S=%S'", from, to_extant, from, to);
+  LNK_FinalizeWeakSymbolsTask *task   = raw_task;
+  LNK_SymbolTable             *symtab = task->symtab;
+  LNK_SymbolHashTrieChunk     *chunk  = task->chunks[task_id];
+
+  for EachIndex(i, chunk->count) {
+    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+      COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol->u.defined.obj->header.is_big_obj);
+      if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
+        COFF_ParsedSymbol          default_symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, weak_ext->tag_index);
+        COFF_SymbolValueInterpType default_symbol_interp = coff_interp_from_parsed_symbol(default_symbol_parsed);
+
+        COFF_SymbolValueInterpType actual_default_symbol_interp = default_symbol_interp;
+        if (default_symbol_interp == COFF_SymbolValueInterp_Undefined) {
+          LNK_Symbol *actual_default_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, default_symbol_parsed.name);
+          if (actual_default_symbol) {
+            COFF_ParsedSymbol actual_default_symbol_parsed = lnk_parsed_symbol_from_defined(actual_default_symbol);
+            actual_default_symbol_interp = coff_interp_from_parsed_symbol(actual_default_symbol_parsed);
+          }
+        }
+
+        if (actual_default_symbol_interp == COFF_SymbolValueInterp_Weak) {
+          LNK_SymbolNode *symbol_n = push_array(arena, LNK_SymbolNode, 1);
+          symbol_n->data = symbol;
+          lnk_symbol_list_push_node(&task->anti_dependency_symbols[task_id], symbol_n);
+        }
+      }
     }
-  } else {
-    hash_table_push_string_string(symtab->arena->v[0], symtab->alt_names, from, to);
   }
 }
 
@@ -538,10 +559,10 @@ THREAD_POOL_TASK_FUNC(lnk_finalize_weak_symbols_task)
 
   for EachIndex(i, chunk->count) {
     LNK_Symbol                 *symbol        = chunk->v[i].symbol;
-    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-    COFF_SymbolValueInterpType  symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
+    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
     if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      struct LookupLocation { struct LookupLocation *next; LNK_SymbolDefined symbol; };
+      struct LookupLocation { struct LookupLocation *next; LNK_SymbolDefined symbol; B32 is_anti_dependency; };
       struct LookupLocation *lookup_first = 0, *lookup_last = 0;
 
       LNK_SymbolDefined current_symbol = symbol->u.defined;
@@ -615,10 +636,10 @@ THREAD_POOL_TASK_FUNC(lnk_finalize_weak_symbols_task)
 }
 
 internal void
-lnk_finalize_weak_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
+lnk_finalize_weak_symbols(TP_Arena *arena, TP_Context *tp, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
+  Temp scratch = scratch_begin(arena->v, arena->count);
 
   U64 chunks_count = 0;
   for EachIndex(worker_id, tp->worker_count) { chunks_count += symtab->chunk_lists[LNK_SymbolScope_Defined][worker_id].count; }
@@ -632,6 +653,25 @@ lnk_finalize_weak_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
   }
 
   LNK_FinalizeWeakSymbolsTask task = { .symtab = symtab, .chunks = chunks };
+
+  {
+    TP_Temp temp = tp_temp_begin(arena);
+    task.anti_dependency_symbols = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
+    tp_for_parallel(tp, arena, chunks_count, lnk_check_anti_dependecy_task, &task);
+
+    LNK_SymbolList anti_dependency_symbol_list = {0};
+    lnk_symbol_concat_in_place_array(&anti_dependency_symbol_list, task.anti_dependency_symbols, tp->worker_count);
+    LNK_SymbolArray anti_dependency_symbols = lnk_symbol_array_from_list(scratch.arena, anti_dependency_symbol_list);
+    radsort(anti_dependency_symbols.v, anti_dependency_symbols.count, lnk_symbol_defined_is_before);
+
+    for EachIndex(symbol_idx, anti_dependency_symbols.count) {
+      LNK_Symbol *s = &anti_dependency_symbols.v[symbol_idx];
+      lnk_error_obj(LNK_Error_UnresolvedSymbol, s->u.defined.obj, "unresolved symbol %S", s->name);
+    }
+
+    tp_temp_end(temp);
+  }
+
   tp_for_parallel(tp, 0, chunks_count, lnk_finalize_weak_symbols_task, &task);
 
   scratch_end(scratch);

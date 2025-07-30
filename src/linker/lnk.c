@@ -1076,6 +1076,7 @@ THREAD_POOL_TASK_FUNC(lnk_weak_symbol_finder)
       case COFF_WeakExt_NoLibrary: {
         // NOLIBRARY means weak symbol should be resolved in case where strong definition pulls in lib member.
       } break;
+      case COFF_WeakExt_AntiDependency:
       case COFF_WeakExt_SearchLibrary: {
         member_symbol = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Lib, symbol->name);
       } break;
@@ -1550,9 +1551,32 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         ProfEnd();
       } break;
       case State_InputAlternateNames: {
+        ProfBegin("Input Alternate Names");
+        COFF_ObjWriter *obj_writer = 0;
         for (; *last_alt_name; last_alt_name = &(*last_alt_name)->next) {
-          lnk_symbol_table_push_alt_name(symtab, 0, (*last_alt_name)->data.from, (*last_alt_name)->data.to);
+          // make object writer if it was reset
+          if (obj_writer == 0) {
+            obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+          }
+
+          // append weak symbol
+          COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_undef(obj_writer, (*last_alt_name)->data.to);
+          coff_obj_writer_push_symbol_weak(obj_writer, (*last_alt_name)->data.from, COFF_WeakExt_AntiDependency, tag);
+
+          // flush on last directive or next directive is issued from a different obj
+          if ((*last_alt_name)->next == 0 || (*last_alt_name)->data.obj != (*last_alt_name)->next->data.obj) {
+            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->path     = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->path : str8_lit("RADLINK");
+            input->dedup_id = push_str8f(scratch.arena, "* ALTERNATE NAMES FOR %S *", input->path);
+            input->data     = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
+            input->lib      = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->lib : 0;
+
+            // reset obj writer
+            coff_obj_writer_release(&obj_writer);
+            obj_writer = 0;
+          }
         }
+        ProfEnd();
       } break;
       case State_PushDllHelperUndefSymbol: {
         ProfBegin("Push Dll Helper Undef Symbol");
@@ -1997,6 +2021,10 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       state_list_push(scratch.arena, state_list, State_InputSymbols);
       continue;
     }
+    if (*last_alt_name != 0) {
+      state_list_push(scratch.arena, state_list, State_InputAlternateNames);
+      continue;
+    }
     if (input_obj_list.count) {
       state_list_push(scratch.arena, state_list, State_InputObjs);
       continue;
@@ -2013,10 +2041,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         state_list_push(scratch.arena, state_list, State_InputLibs);
         continue;
       }
-    }
-    if (*last_alt_name != 0) {
-      state_list_push(scratch.arena, state_list, State_InputAlternateNames);
-      continue;
     }
     if (lookup_undef_list.count) {
       state_list_push(scratch.arena, state_list, State_LookupUndef);
@@ -2054,7 +2078,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   }
 
   // pass over symbol table and replace weak symbols without a strong definition with fallback definitions
-  lnk_finalize_weak_symbols(tp, symtab);
+  lnk_finalize_weak_symbols(tp_arena, tp, symtab);
 
   // log
   {

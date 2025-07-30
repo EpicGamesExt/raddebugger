@@ -104,7 +104,6 @@ typedef struct LNK_SymbolTable
   TP_Arena                    *arena;
   LNK_SymbolHashTrie          *scopes[LNK_SymbolScope_Count];
   LNK_SymbolHashTrieChunkList *chunk_lists[LNK_SymbolScope_Count];
-  HashTable                   *alt_names;
 } LNK_SymbolTable;
 
 // --- Workers Contensts -------------------------------------------------------
@@ -113,6 +112,7 @@ typedef struct
 {
   LNK_SymbolTable          *symtab;
   LNK_SymbolHashTrieChunk **chunks;
+  LNK_SymbolList           *anti_dependency_symbols;
 } LNK_FinalizeWeakSymbolsTask;
 
 // --- Symbol Make -------------------------------------------------------------
@@ -127,6 +127,7 @@ internal LNK_Symbol * lnk_make_import_symbol(Arena *arena, String8 name, String8
 internal void                lnk_symbol_list_push_node(LNK_SymbolList *list, LNK_SymbolNode *node);
 internal LNK_SymbolNode *    lnk_symbol_list_push(Arena *arena, LNK_SymbolList *list, LNK_Symbol *symbol);
 internal void                lnk_symbol_list_concat_in_place(LNK_SymbolList *list, LNK_SymbolList *to_concat);
+internal void                lnk_symbol_concat_in_place_array(LNK_SymbolList *list, LNK_SymbolList *to_concat, U64 to_concat_count);
 internal LNK_SymbolList      lnk_symbol_list_from_array(Arena *arena, LNK_SymbolArray arr);
 internal LNK_SymbolNodeArray lnk_symbol_node_array_from_list(Arena *arena, LNK_SymbolList list);
 internal LNK_SymbolArray     lnk_symbol_array_from_list(Arena *arena, LNK_SymbolList list);
@@ -146,9 +147,7 @@ internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Sy
 internal LNK_Symbol *      lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name);
 internal LNK_Symbol *      lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *fmt, ...);
 
-internal void lnk_symbol_table_push_alt_name(LNK_SymbolTable *symtab, struct LNK_Obj *obj, String8 from, String8 to);
-
-internal void lnk_finalize_weak_symbols(TP_Context *tp, LNK_SymbolTable *symtab);
+internal void lnk_finalize_weak_symbols(TP_Arena *arena, TP_Context *tp, LNK_SymbolTable *symtab);
 
 // --- Symbol Contrib Helpers --------------------------------------------------
 
