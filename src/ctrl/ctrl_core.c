@@ -4026,6 +4026,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   String8 rdi_dbg_path = str8_zero();
   String8 raddbg_data = str8_zero();
   Rng1U64 raddbg_section_voff_range = r1u64(0, 0);
+  Rng1U64 raddbg_is_attached_section_voff_range = r1u64(0, 0);
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -4224,6 +4225,11 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
             raddbg_section_voff_range.min = sec[idx].voff;
             raddbg_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
           }
+          else if(str8_match(section_name, str8_lit(".rdbgia"), 0))
+          {
+            raddbg_is_attached_section_voff_range.min = sec[idx].voff;
+            raddbg_is_attached_section_voff_range.max = sec[idx].voff + sec[idx].vsize;
+          }
         }
         raddbg_data.size = dim_1u64(raddbg_section_voff_range);
         raddbg_data.str = push_array(arena, U8, raddbg_data.size);
@@ -4232,11 +4238,11 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         scratch_end(scratch);
       }
       
-      // rjf: if we have a raddbg section, mark the first byte as 1, to signify attachment
-      if(raddbg_section_voff_range.max != raddbg_section_voff_range.min)
+      // rjf: if we have a "raddbg is attached" section, mark the first byte as 1, to signify attachment
+      if(raddbg_is_attached_section_voff_range.max != raddbg_is_attached_section_voff_range.min)
       {
         U8 new_value = 1;
-        dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_section_voff_range.min, &new_value);
+        dmn_process_write_struct(process.dmn_handle, vaddr_range.min + raddbg_is_attached_section_voff_range.min, &new_value);
       }
     }
   }

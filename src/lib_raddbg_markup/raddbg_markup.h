@@ -98,8 +98,9 @@ void raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *f
 #include <stdio.h>
 #endif
 
-//- first byte of exe data section -> is attached
-raddbg_exe_data unsigned char raddbg_is_attached_byte_marker[1] = {0};
+//- special section gets "is attached" byte
+#pragma section(".rdbgia", read, write)
+__declspec(allocate(".rdbgia")) unsigned char raddbg_is_attached_byte_marker[1] = {0};
 
 //- types
 
