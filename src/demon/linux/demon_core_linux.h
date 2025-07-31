@@ -331,5 +331,6 @@ internal DMN_Handle dmn_lnx_handle_from_entity(DMN_LNX_Entity *entity);
 internal DMN_LNX_Entity *dmn_lnx_entity_from_handle(DMN_Handle handle);
 internal DMN_LNX_Entity *dmn_lnx_thread_from_pid(pid_t pid);
 internal B32 dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block);
+internal B32 dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block);
 
 #endif // DEMON_CORE_LINUX_H

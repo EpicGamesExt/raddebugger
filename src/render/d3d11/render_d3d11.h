@@ -129,6 +129,7 @@ struct R_D3D11_State
 {
   // rjf: state
   Arena *arena;
+  U64 window_count;
   R_D3D11_Window *first_free_window;
   R_D3D11_Tex2D *first_free_tex2d;
   R_D3D11_Buffer *first_free_buffer;

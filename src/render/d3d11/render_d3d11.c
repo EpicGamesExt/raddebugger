@@ -548,6 +548,8 @@ r_window_equip(OS_Handle handle)
     r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
     
     result = r_d3d11_handle_from_window(window);
+    r_d3d11_state->window_count += 1;
+    r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
   }
   ProfEnd();
   return result;
@@ -571,6 +573,8 @@ r_window_unequip(OS_Handle handle, R_Handle equip_handle)
     window->swapchain->lpVtbl->Release(window->swapchain);
     window->generation += 1;
     SLLStackPush(r_d3d11_state->first_free_window, window);
+    r_d3d11_state->window_count -= 1;
+    r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
   }
   ProfEnd();
 }
