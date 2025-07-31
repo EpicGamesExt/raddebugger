@@ -545,7 +545,9 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
     case Arch_arm32:
     {NotImplemented;}break;
     
+    ////////////////////////////
     //- rjf: [x64]
+    //
     case Arch_x64:
     {
       REGS_RegBlockX64 *dst = (REGS_RegBlockX64 *)reg_block;
@@ -725,10 +727,138 @@ dmn_lnx_thread_write_reg_block(DMN_LNX_Entity *thread, void *reg_block)
     case Arch_arm32:
     {NotImplemented;}break;
     
+    ////////////////////////////
     //- rjf: [x64]
+    //
     case Arch_x64:
     {
+      REGS_RegBlockX64 *src = (REGS_RegBlockX64 *)reg_block;
+      pid_t tid = (pid_t)thread->id;
       
+      //- rjf: write GPR
+      B32 did_gpr = 0;
+      {
+        DMN_LNX_UserX64 dst = {0};
+        dst.regs.rax       = src->rax.u64;
+        dst.regs.rcx       = src->rcx.u64;
+        dst.regs.rdx       = src->rdx.u64;
+        dst.regs.rbx       = src->rbx.u64;
+        dst.regs.rsp       = src->rsp.u64;
+        dst.regs.rbp       = src->rbp.u64;
+        dst.regs.rsi       = src->rsi.u64;
+        dst.regs.rdi       = src->rdi.u64;
+        dst.regs.r8        = src->r8.u64;
+        dst.regs.r9        = src->r9.u64;
+        dst.regs.r10       = src->r10.u64;
+        dst.regs.r11       = src->r11.u64;
+        dst.regs.r12       = src->r12.u64;
+        dst.regs.r13       = src->r13.u64;
+        dst.regs.r14       = src->r14.u64;
+        dst.regs.r15       = src->r15.u64;
+        dst.regs.cs        = src->cs.u16;
+        dst.regs.ds        = src->ds.u16;
+        dst.regs.es        = src->es.u16;
+        dst.regs.fs        = src->fs.u16;
+        dst.regs.gs        = src->gs.u16;
+        dst.regs.ss        = src->ss.u16;
+        dst.regs.fsbase    = src->fsbase.u64;
+        dst.regs.gsbase    = src->gsbase.u64;
+        dst.regs.rip       = src->rip.u64;
+        dst.regs.rflags    = src->rflags.u64;
+        struct iovec iov_gpr = {0};
+        iov_gpr.iov_base = &dst;
+        iov_gpr.iov_len = sizeof(dst);
+        int gpr_result = ptrace(PTRACE_SETREGSET, tid, (void*)NT_PRSTATUS, &iov_gpr);
+        did_gpr = (gpr_result != -1);
+      }
+      
+      //- rjf: write FPR
+      B32 did_fpr = 0;
+      if(did_gpr)
+      {
+        // rjf: fill xsave structure
+        DMN_LNX_XSave xsave = {0};
+        {
+          xsave.legacy.fcw          = src->fcw.u16;
+          xsave.legacy.fsw          = src->fsw.u16;
+          xsave.legacy.ftw          = src->ftw.u16;
+          xsave.legacy.fop          = src->fop.u16;
+          xsave.legacy.b64.fip      = src->fip.u64;
+          xsave.legacy.b64.fdp      = src->fdp.u64;
+          xsave.legacy.mxcsr        = src->mxcsr.u32;
+          xsave.legacy.mxcsr_mask   = src->mxcsr_mask.u32;
+          {
+            U8 *float_d = xsave.legacy.st_space.u8;
+            REGS_Reg80 *float_s = &src->st0;
+            for(U32 n = 0; n < 8; n += 1, float_s += 1, float_d += 16)
+            {
+              MemoryCopy(float_d, float_s, sizeof(*float_s));
+            }
+          }
+          {
+            U8 *xmm_d = xsave.legacy.xmm_space.u8;
+            REGS_Reg512 *xmm_s = &src->zmm0;
+            for(U32 n = 0; n < 16; n += 1, xmm_s += 1, xmm_d += 16)
+            {
+              MemoryCopy(xmm_d, xmm_s, 16);
+            }
+          }
+          xsave.header.xstate_bv = 7;
+          {
+            // TODO(rjf): this is a lie; ymm can technically move around. study & fix.
+            U8 *ymm_d = xsave.ymmh;
+            REGS_Reg512 *ymm_s = &src->zmm0;
+            for(U32 n = 0; n < 16; n += 1, ymm_s += 1, ymm_d += 16)
+            {
+              MemoryCopy(ymm_d, ((U8 *)ymm_s) + 16, 16);
+            }
+          }
+        }
+        
+        // rjf: try xsave
+        int xsave_result = -1;
+        {
+          struct iovec iov_xsave = {0};
+          iov_xsave.iov_base = &xsave;
+          iov_xsave.iov_len = sizeof(xsave);
+          xsave_result = ptrace(PTRACE_SETREGSET, tid, (void*)NT_X86_XSTATE, &iov_xsave);
+        }
+        
+        // rjf: try fxsave
+        int fxsave_result = -1;
+        if(xsave_result == -1)
+        {
+          struct iovec iov_fxsave = {0};
+          iov_fxsave.iov_base = &xsave.legacy;
+          iov_fxsave.iov_len = sizeof(xsave.legacy);
+          fxsave_result = ptrace(PTRACE_SETREGSET, tid, (void*)NT_FPREGSET, &iov_fxsave);
+        }
+        
+        // rjf: good finish requires xsave or fxsave
+        did_fpr = (xsave_result != -1 || fxsave_result != -1);
+      }
+      
+      //- rjf: write debug registers
+      B32 did_dbg = 0;
+      if(did_fpr)
+      {
+        did_dbg = 1;
+        REGS_Reg64 *dr_s = &src->dr0;
+        for(U32 i = 0; i < 8; i += 1, dr_s += 1)
+        {
+          if(i != 4 && i != 5)
+          {
+            U64 offset = OffsetOf(DMN_LNX_UserX64, u_debugreg[i]);
+            int poke_result = ptrace(PTRACE_POKEUSER, tid, PtrFromInt(offset), dr_s->u64);
+            if(poke_result == -1)
+            {
+              did_dbg = 0;
+            }
+          }
+        }
+      }
+      
+      result = (did_dbg);
     }break;
   }
   return result;
