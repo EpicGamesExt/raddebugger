@@ -201,6 +201,7 @@ struct DMN_LNX_ProcessAux
   U64 phent;
   U64 phdr;
   U64 execfn;
+  U64 pagesz;
 };
 
 typedef struct DMN_LNX_PhdrInfo DMN_LNX_PhdrInfo;

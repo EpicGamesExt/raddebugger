@@ -171,6 +171,7 @@ dmn_lnx_arch_from_pid(pid_t pid)
     // rjf: determine arch from elf machine kind
     result = arch_from_elf_machine(hdr.e_machine);
     
+    close(exe_fd);
     scratch_end(scratch);
   }
   return result;
@@ -227,6 +228,7 @@ dmn_lnx_aux_from_pid(pid_t pid, Arch arch)
         case ELF_AuxType_Phent:        result.phent  = val; break;
         case ELF_AuxType_Phdr:         result.phdr   = val; break;
         case ELF_AuxType_ExecFn:       result.execfn = val; break;
+        case ELF_AuxType_Pagesz:       result.pagesz = val; break;
       }
     }
     brkloop:;
@@ -243,6 +245,7 @@ internal DMN_LNX_PhdrInfo
 dmn_lnx_phdr_info_from_memory(int memory_fd, B32 is_32bit, U64 phvaddr, U64 phsize, U64 phcount)
 {
   DMN_LNX_PhdrInfo result = {0};
+  result.range.min = max_U64;
   
   // rjf: determine how much phdr we'll read
   U64 phdr_size_expected = (is_32bit ? sizeof(ELF_Phdr32) : sizeof(ELF_Phdr64));
@@ -277,6 +280,7 @@ dmn_lnx_phdr_info_from_memory(int memory_fd, B32 is_32bit, U64 phvaddr, U64 phsi
     // rjf: save
     switch(p_type)
     {
+      default:{}break;
       case ELF_PType_Dynamic:
       {
         result.dynamic = p_vaddr;
@@ -307,8 +311,7 @@ dmn_lnx_module_info_list_from_process(Arena *arena, DMN_LNX_Entity *process)
   DMN_LNX_ProcessAux aux = dmn_lnx_aux_from_pid((pid_t)process->id, arch);
   
   //- rjf: memory => phdr info
-  DMN_LNX_PhdrInfo phdr_info = dmn_lnx_phdr_info_from_memory(memory_fd, is_32bit,
-                                                             aux.phdr, aux.phent, aux.phnum);
+  DMN_LNX_PhdrInfo phdr_info = dmn_lnx_phdr_info_from_memory(memory_fd, is_32bit, aux.phdr, aux.phent, aux.phnum);
   
   //- rjf: memory space & vaddr => linkmap first
   U64 first_linkmap_vaddr = 0;
@@ -360,10 +363,11 @@ dmn_lnx_module_info_list_from_process(Arena *arena, DMN_LNX_Entity *process)
   //- rjf: push main module
   DMN_LNX_ModuleInfoList list = {0};
   {
+    U64 base_vaddr = (aux.phdr & ~(aux.pagesz-1));
     DMN_LNX_ModuleInfoNode *n = push_array(arena, DMN_LNX_ModuleInfoNode, 1);
     SLLQueuePush(list.first, list.last, n);
     list.count += 1;
-    n->v.vaddr_range = phdr_info.range;
+    n->v.vaddr_range = shift_1u64(phdr_info.range, base_vaddr);
     n->v.name = aux.execfn;
   }
   
@@ -1084,6 +1088,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
                 e->process = dmn_lnx_handle_from_entity(process);
                 e->thread  = dmn_lnx_handle_from_entity(main_thread);
                 e->module  = dmn_lnx_handle_from_entity(module);
+                e->arch    = process->arch;
                 e->address = n->v.vaddr_range.min;
                 e->size    = dim_1u64(n->v.vaddr_range);
                 e->string  = dmn_lnx_read_string(dmn_lnx_state->deferred_events_arena, process->fd, n->v.name);
@@ -1360,7 +1365,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int wifsignaled       = WIFSIGNALED(status);
       int wifstopped        = WIFSTOPPED(status);
       int wstopsig          = WSTOPSIG(status);
-      int ptrace_event_code = (status>>8);
+      int ptrace_event_code = (status>>16);
       DMN_LNX_Entity *thread = dmn_lnx_thread_from_pid(wait_id);
       DMN_LNX_Entity *process = thread->parent;
       B32 thread_is_process_root = (thread->id == process->id);
@@ -1385,36 +1390,34 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //- rjf: WIFEXITED(status) -> thread exit w/ exit code
-      if(wifsignaled)
+      else if(wifsignaled)
       {
         exit_code = WTERMSIG(status);
         thread_exit = 1;
       }
       
       //- rjf: SIGTRAP:PTRACE_EVENT_EXIT
-      if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_EXIT)
+      else if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_EXIT)
       {
         // TODO(rjf): verify
         thread_exit = 1;
       }
       
       //- rjf: SIGTRAP:PTRACE_EVENT_CLONE
-      if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_CLONE)
+      else if(wifstopped && wstopsig == SIGTRAP && ptrace_event_code == PTRACE_EVENT_CLONE)
       {
         // TODO(rjf)
       }
       
       //- rjf: SIGTRAP:PTRACE_EVENT_FORK, or SIGTRAP:PTRACE_EVENT_VFORK
-      B32 sigtrap_handled = 0;
-      if(!sigtrap_handled && wifstopped && wstopsig == SIGTRAP &&
-         (ptrace_event_code == PTRACE_EVENT_FORK ||
-          ptrace_event_code == PTRACE_EVENT_VFORK))
+      else if(wifstopped && wstopsig == SIGTRAP &&
+              (ptrace_event_code == PTRACE_EVENT_FORK ||
+               ptrace_event_code == PTRACE_EVENT_VFORK))
       {
-        sigtrap_handled = 1;
       }
       
       //- rjf: SIGTRAP
-      if(!sigtrap_handled && wifstopped && wstopsig == SIGTRAP)
+      else if(wifstopped && wstopsig == SIGTRAP)
       {
         // rjf: this is the single step thread => this is a single step completion
         DMN_EventKind e_kind = DMN_EventKind_Trap;
@@ -1443,7 +1446,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //- rjf: WSTOPSIG(status) is SIGSTOP
-      if(wifstopped && wstopsig == SIGSTOP)
+      else if(wifstopped && wstopsig == SIGSTOP)
       {
         //
         // TODO(rjf): how do we tell the following apart?:
@@ -1477,12 +1480,19 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //- rjf: WSTOPSIG(status) is an unrecoverable exception (unless user does something to fix state first)
-      if(wifstopped &&
-         (wstopsig == SIGABRT ||
-          wstopsig == SIGFPE ||
-          wstopsig == SIGSEGV))
+      else if(wifstopped)
       {
-        // TODO(rjf)
+        // TODO(rjf): possible cases:
+        // SIGABRT
+        // SIGFPE
+        // SIGSEGV
+        // SIGILL
+        DMN_Event *e = dmn_event_list_push(arena, &evts);
+        e->kind                = DMN_EventKind_Exception;
+        e->process             = dmn_lnx_handle_from_entity(process);
+        e->thread              = dmn_lnx_handle_from_entity(thread);
+        e->instruction_pointer = rip;
+        e->signo               = wstopsig;
       }
       
       //- rjf: thread exit, thread is process' "root thread" -> eliminate this entire entity subtree
