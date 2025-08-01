@@ -3944,7 +3944,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //- rjf: image-region canvas interaction
   //
   Vec2S32 mouse_bmp = {-1, -1};
-  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig)) RD_Font(RD_FontSlot_Code)
+  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig))
   {
     Vec2F32 mouse_scr = sub_2f32(ui_mouse(), rect.p0);
     Vec2F32 mouse_cvs = rd_bitmap_canvas_from_screen_pos(view_center_pos, zoom, canvas_rect, mouse_scr);
@@ -3956,6 +3956,9 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
       if(0 <= off_bytes && off_bytes+r_tex2d_format_bytes_per_pixel_table[topology.fmt] <= data.size &&
          r_tex2d_format_bytes_per_pixel_table[topology.fmt] != 0)
       {
+        RD_RegsScope(.vaddr_range = r1u64(offset_range.min + off_bytes, offset_range.min + off_bytes + r_tex2d_format_bytes_per_pixel_table[topology.fmt]),
+                     .eval_space = eval.space)
+          rd_set_hover_regs(RD_RegSlot_VaddrRange);
         B32 color_is_good = 1;
         Vec4F32 color = {0};
         switch(topology.fmt)
