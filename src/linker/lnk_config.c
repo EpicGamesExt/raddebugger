@@ -1342,8 +1342,16 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Include: {
-    String8List include_symbol_list = str8_list_copy(arena, &value_strings);
-    str8_list_concat_in_place(&config->include_symbol_list, &include_symbol_list);
+    for (String8Node *value_n = value_strings.first; value_n != 0; value_n = value_n->next) {
+      // is this a duplicate symbol?
+      if (hash_table_search_string_raw(config->include_symbol_ht, value_n->string, 0)) {
+        continue;
+      }
+
+      String8 include_symbol = push_str8_copy(arena, value_n->string);
+      hash_table_push_string_raw(arena, config->include_symbol_ht, include_symbol, 0);
+      str8_list_push(arena, &config->include_symbol_list, include_symbol);
+    }
   } break;
 
   case LNK_CmdSwitch_Incremental: {
@@ -1986,8 +1994,9 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
   config->pdb_hash_type_name_length = 8;
   config->data_dir_count            = PE_DataDirectoryIndex_COUNT;
-  config->export_ht                 = hash_table_init(scratch.arena, max_U16/2);
-  config->alt_name_ht               = hash_table_init(scratch.arena, 0x100);
+  config->export_ht                 = hash_table_init(arena, max_U16/2);
+  config->alt_name_ht               = hash_table_init(arena, 0x100);
+  config->include_symbol_ht         = hash_table_init(arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {

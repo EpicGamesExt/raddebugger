@@ -394,6 +394,7 @@ typedef struct LNK_Config
   LNK_IO_Flags                io_flags;
   HashTable                  *export_ht;
   HashTable                  *alt_name_ht;
+  HashTable                  *include_symbol_ht;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------

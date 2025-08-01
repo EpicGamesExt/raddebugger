@@ -1208,7 +1208,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   LNK_AltNameNode      **last_alt_name                     = &config->alt_name_list.first;
   LNK_InputObjList       input_obj_list                    = {0};
   LNK_InputImportList    input_import_list                 = {0};
-  LNK_SymbolList         input_weak_list                   = {0};
   LNK_InputLib **input_libs[LNK_InputSource_Count] = {
     &config->input_list[LNK_Input_Lib].first,
     &config->input_default_lib_list.first,
@@ -1341,21 +1340,21 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       case State_InputSymbols: {
         ProfBegin("Input Symbols");
         
-        ProfBegin("Push /INCLUDE Symbols");
+        // push a relocation which references an undefined include symbol
+        COFF_ObjWriter  *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+        COFF_ObjSection *sect       = coff_obj_writer_push_section(obj_writer, str8_lit(".radinc$"), 0, str8_zero());
         for (; *last_include_symbol; last_include_symbol = &(*last_include_symbol)->next) {
-          String8     name   = push_str8_copy(symtab->arena->v[0], (*last_include_symbol)->string);
-          LNK_Symbol *symbol = lnk_make_undefined_symbol(symtab->arena->v[0], name, 0);
-          lnk_symbol_list_push(scratch.arena, &lookup_undef_list, symbol);
+          COFF_ObjSymbol *include_symbol = coff_obj_writer_push_symbol_undef(obj_writer,  (*last_include_symbol)->string);
+          coff_obj_writer_section_push_reloc(obj_writer, sect, 0, include_symbol, 0);
         }
-        ProfEnd();
 
-        // we defined new symbols, give unresolved symbols another chance to be resolved
-        lnk_symbol_list_concat_in_place(&lookup_undef_list, &unresolved_undef_list);
-        lnk_symbol_list_concat_in_place(&lookup_weak_list, &input_weak_list);
-        lnk_symbol_list_concat_in_place(&lookup_weak_list, &unresolved_weak_list);
-        
-        // reset inputs
-        MemoryZeroStruct(&input_weak_list);
+        // input obj with includes
+        LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+        input->path         = str8_lit("* INCLUDE SYMBOLS *");
+        input->dedup_id     = push_str8f(scratch.arena, "%S %llu", input->path, input_obj_list.count);
+        input->data         = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
+
+        coff_obj_writer_release(&obj_writer);
         
         ProfEnd();
       } break;
@@ -1448,12 +1447,9 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         LNK_SymbolInputResult input_result = lnk_input_obj_symbols(tp, tp_arena, symtab, obj_node_arr);
         
         // schedule symbol input
-        lnk_symbol_list_concat_in_place(&input_weak_list, &input_result.weak_symbols);
-        lnk_symbol_list_concat_in_place(&lookup_undef_list, &input_result.undef_symbols);
-
-        // give another chance to unresolved symbols
         lnk_symbol_list_concat_in_place(&lookup_undef_list, &unresolved_undef_list);
-        lnk_symbol_list_concat_in_place(&input_weak_list, &unresolved_weak_list);
+        lnk_symbol_list_concat_in_place(&lookup_undef_list, &input_result.undef_symbols);
+        lnk_symbol_list_concat_in_place(&lookup_weak_list, &input_result.weak_symbols);
         
         // reset input objs
         MemoryZeroStruct(&input_obj_list);
@@ -2017,7 +2013,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       state_list_push(scratch.arena, state_list, State_InputImports);
       continue;
     }
-    if (input_weak_list.count || *last_include_symbol != 0) {
+    if (*last_include_symbol != 0) {
       state_list_push(scratch.arena, state_list, State_InputSymbols);
       continue;
     }
