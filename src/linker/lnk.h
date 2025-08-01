@@ -81,7 +81,6 @@ typedef struct
   U64                        function_pad_min;
   U64                        default_align;
   LNK_SectionContrib        *null_sc;
-  LNK_Symbol              ***symlinks;
   LNK_SectionContrib      ***sect_map;
   HashTable                 *contribs_ht;
   LNK_SectionArray           image_sects;

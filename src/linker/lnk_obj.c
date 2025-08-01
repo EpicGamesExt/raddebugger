@@ -346,24 +346,11 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
   LNK_InputCoffSymbolTable *task = raw_task;
   LNK_Obj                  *obj  = &task->objs.v[task_id].data;
 
-  //
-  // parse obj header
-  //
-  COFF_FileHeaderInfo header = coff_file_header_info_from_data(obj->data);
-
-  //
-  // extract COFF info
-  //
-  String8 raw_coff_section_table = str8_substr(obj->data, header.section_table_range);
-  String8 raw_coff_symbol_table  = str8_substr(obj->data, header.symbol_table_range);
-  String8 raw_coff_string_table  = str8_substr(obj->data, header.string_table_range);
-
   COFF_ParsedSymbol symbol = {0};
-  for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    // read symbol
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
 
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
     switch (interp) {
     case COFF_SymbolValueInterp_Regular: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
@@ -411,6 +398,34 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
   }
 }
 
+internal LNK_SymbolHashTrie **
+lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
+{
+  LNK_SymbolHashTrie **symlinks = push_array(arena, LNK_SymbolHashTrie *, obj->header.section_count_no_null+1);
+  COFF_ParsedSymbol symbol;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
+    if (interp == COFF_SymbolValueInterp_Regular && symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
+      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+      if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
+        if (symlinks[symbol.section_number] == 0 || symbol.value == 0) {
+          symlinks[symbol.section_number] = lnk_symbol_table_search_(symtab, LNK_SymbolScope_Defined, symbol.name);
+        }
+      }
+    }
+  }
+  return symlinks;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_assign_comdat_symlinks_task)
+{
+  LNK_InputCoffSymbolTable *task = raw_task;
+  LNK_Obj                  *obj  = &task->objs.v[task_id].data;
+  obj->symlinks = lnk_symlinks_from_obj(arena, task->symtab, obj);
+}
+
 internal LNK_SymbolInputResult
 lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs)
 {
@@ -423,6 +438,7 @@ lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, 
   task.weak_lists               = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
   task.undef_lists              = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
   tp_for_parallel(tp, arena, objs.count, lnk_input_coff_symbol_table, &task);
+  tp_for_parallel(tp, arena, objs.count, lnk_assign_comdat_symlinks_task, &task);
 
   LNK_SymbolInputResult result = {0};
   SLLConcatInPlaceArray(&result.weak_symbols,  task.weak_lists,  tp->worker_count);
@@ -499,6 +515,13 @@ lnk_obj_get_removed_section_number(LNK_Obj *obj)
   return obj->header.is_big_obj ? LNK_REMOVED_SECTION_NUMBER_32 : LNK_REMOVED_SECTION_NUMBER_16;
 }
 
+internal LNK_Symbol *
+lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number)
+{
+  LNK_SymbolHashTrie *symlink = obj->symlinks[section_number];
+  return symlink ? symlink->symbol : 0;
+}
+
 internal COFF_SectionHeader *
 lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 {
@@ -511,26 +534,6 @@ internal COFF_SectionHeader *
 lnk_coff_section_table_from_obj(LNK_Obj *obj)
 {
   return (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
-}
-
-internal LNK_Symbol **
-lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
-{
-  LNK_Symbol **symlinks = push_array(arena, LNK_Symbol *, obj->header.section_count_no_null+1);
-  COFF_ParsedSymbol symbol;
-  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-    if (interp == COFF_SymbolValueInterp_Regular && symbol.aux_symbol_count == 0 && symbol.storage_class == COFF_SymStorageClass_External) {
-      COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
-      if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
-        if (symlinks[symbol.section_number] == 0 || symbol.value == 0) {
-          symlinks[symbol.section_number] = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, symbol.name);
-        }
-      }
-    }
-  }
-  return symlinks;
 }
 
 internal COFF_RelocArray

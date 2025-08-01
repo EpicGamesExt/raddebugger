@@ -7,14 +7,15 @@
 
 typedef struct LNK_Obj
 {
-  String8             data;
-  String8             path;
-  struct LNK_Lib     *lib;
-  U32                 input_idx;
-  COFF_FileHeaderInfo header;
-  U32                *comdats;
-  B8                  hotpatch;
-  U32Node           **associated_sections;
+  String8              data;
+  String8              path;
+  struct LNK_Lib      *lib;
+  U32                  input_idx;
+  COFF_FileHeaderInfo  header;
+  U32                 *comdats;
+  B8                   hotpatch;
+  U32Node            **associated_sections;
+  LNK_SymbolHashTrie **symlinks;
 } LNK_Obj;
 
 typedef struct LNK_ObjNode
@@ -101,11 +102,12 @@ internal LNK_SymbolInputResult lnk_input_obj_symbols(TP_Context *tp, TP_Arena *a
 
 // --- Metadata ----------------------------------------------------------------
 
-internal U32     lnk_obj_get_features(LNK_Obj *obj);
-internal U32     lnk_obj_get_comp_id(LNK_Obj *obj);
-internal U32     lnk_obj_get_vol_md(LNK_Obj *obj);
-internal String8 lnk_obj_get_lib_path(LNK_Obj *obj);
-internal U32     lnk_obj_get_removed_section_number(LNK_Obj *obj);
+internal U32          lnk_obj_get_features(LNK_Obj *obj);
+internal U32          lnk_obj_get_comp_id(LNK_Obj *obj);
+internal U32          lnk_obj_get_vol_md(LNK_Obj *obj);
+internal String8      lnk_obj_get_lib_path(LNK_Obj *obj);
+internal U32          lnk_obj_get_removed_section_number(LNK_Obj *obj);
+internal LNK_Symbol * lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 

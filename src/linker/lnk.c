@@ -1021,10 +1021,6 @@ THREAD_POOL_TASK_FUNC(lnk_undef_symbol_finder)
   for (U64 symbol_idx = range.min; symbol_idx < range.max; symbol_idx += 1) {
     LNK_SymbolNode *symbol_n = task->lookup_node_arr.v[symbol_idx];
     LNK_Symbol     *symbol   = symbol_n->data;
-
-    if (str8_match(symbol->name, str8_lit("return_1"), 0)) {
-      int x = 0;
-    }
     
     LNK_Symbol *has_defn = lnk_symbol_table_search(task->symtab, LNK_SymbolScope_Defined, symbol->name);
     if (has_defn) {
@@ -2110,15 +2106,14 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 }
 
 internal B32
-lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_Symbol **symlinks, LNK_SymbolDefined symbol, LNK_SymbolDefined *symbol_out)
+lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol, LNK_SymbolDefined *symbol_out)
 {
   B32                        is_resolved   = 1;
   COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
   COFF_SymbolValueInterpType symbol_interp = coff_interp_symbol(symbol_parsed.section_number, symbol_parsed.value, symbol_parsed.storage_class);
   switch (symbol_interp) {
   case COFF_SymbolValueInterp_Regular: { 
-    COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(symbol.obj, symbol_parsed.section_number);
-    LNK_Symbol         *symlink        = section_header->flags & COFF_SectionFlag_LnkCOMDAT ? symlinks[symbol_parsed.section_number] : 0;
+    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number);
     *symbol_out = symlink ? symlink->u.defined : symbol;
   } break;
   case COFF_SymbolValueInterp_Weak: {
@@ -2157,12 +2152,7 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_Symbol **symlinks, LNK_SymbolDef
 }
 
 internal void
-lnk_gc_comdats(TP_Context           *tp,
-               LNK_SymbolTable      *symtab,
-               U64                   objs_count,
-               LNK_Obj             **objs,
-               LNK_Symbol         ***symlinks,
-               LNK_Config           *config)
+lnk_gc_comdats(TP_Context *tp, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs, LNK_Config *config)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
@@ -2252,7 +2242,7 @@ lnk_gc_comdats(TP_Context           *tp,
     for EachIndex(reloc_idx, t->relocs.count) {
       COFF_Reloc        *reloc                    = &t->relocs.v[reloc_idx];
       LNK_SymbolDefined  reloc_symbol             = {0};
-      B32                is_reloc_symbol_resolved = lnk_resolve_symbol(symtab, symlinks[t->obj->input_idx], (LNK_SymbolDefined){ .obj = t->obj, .symbol_idx = reloc->isymbol }, &reloc_symbol);
+      B32                is_reloc_symbol_resolved = lnk_resolve_symbol(symtab, (LNK_SymbolDefined){ .obj = t->obj, .symbol_idx = reloc->isymbol }, &reloc_symbol);
       if (is_reloc_symbol_resolved) {
         // parse and interp reloc symbol
         LNK_Obj                    *reloc_obj    = reloc_symbol.obj;
@@ -2452,7 +2442,7 @@ THREAD_POOL_TASK_FUNC(lnk_set_comdat_leaders_contribs_task)
     COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
     if (~section_header->flags & COFF_SectionFlag_LnkCOMDAT) { continue; }
 
-    LNK_Symbol *symlink = task->symlinks[obj_idx][section_number];
+    LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(obj, section_number);
     if (symlink == 0) { continue; }
 
     COFF_ParsedSymbol symlink_parsed = lnk_parsed_symbol_from_defined(symlink);
@@ -2479,7 +2469,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_comdat_leaders_task)
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
     if (interp == COFF_SymbolValueInterp_Regular) {
-      LNK_Symbol *symlink = task->symlinks[obj_idx][symbol.section_number];
+      LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(obj, symbol.section_number);
       if (symlink && symlink->u.defined.obj != obj) {
         U32 section_number;
         U32 value;
@@ -2667,7 +2657,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_regular_symbols_task)
 }
 
 internal void
-lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Symbol **symlinks, LNK_Obj *obj, B8 *was_symbol_patched, COFF_SymbolValueInterpType fixup_type)
+lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Obj *obj, B8 *was_symbol_patched, COFF_SymbolValueInterpType fixup_type)
 {
   ProfBeginV("%S\n", obj->path);
 
@@ -2681,7 +2671,7 @@ lnk_patch_obj_symtab(LNK_SymbolTable *symtab, LNK_Symbol **symlinks, LNK_Obj *ob
 
     LNK_SymbolDefined symbol_to_resolve = { .obj = obj, .symbol_idx = symbol_idx };
     LNK_SymbolDefined fixup_symbol      = {0};
-    B32               is_resolved       = lnk_resolve_symbol(symtab, symlinks, symbol_to_resolve, &fixup_symbol);
+    B32               is_resolved       = lnk_resolve_symbol(symtab, symbol_to_resolve, &fixup_symbol);
     if (is_resolved) {
       COFF_ParsedSymbol          fixup_src  = lnk_parsed_symbol_from_coff_symbol_idx(fixup_symbol.obj, fixup_symbol.symbol_idx);
       COFF_SymbolValueInterpType fixup_type = coff_interp_symbol(fixup_src.section_number, fixup_src.value, fixup_src.storage_class);
@@ -2714,28 +2704,28 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_patch_common_symbols_task)
 {
   LNK_BuildImageTask *task = raw_task;
-  lnk_patch_obj_symtab(task->symtab, task->symlinks[task_id], task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Common);
+  lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Common);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_patch_abs_symbols_task)
 {
   LNK_BuildImageTask *task = raw_task;
-  lnk_patch_obj_symtab(task->symtab, task->symlinks[task_id], task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Abs);
+  lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Abs);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_patch_undefined_symbols_task)
 {
   LNK_BuildImageTask *task = raw_task;
-  lnk_patch_obj_symtab(task->symtab, task->symlinks[task_id], task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Undefined);
+  lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Undefined);
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_patch_weak_symbols_task)
 {
   LNK_BuildImageTask *task = raw_task;
-  lnk_patch_obj_symtab(task->symtab, task->symlinks[task_id], task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Weak);
+  lnk_patch_obj_symtab(task->symtab, task->objs[task_id], task->u.patch_symtabs.was_symbol_patched[task_id], COFF_SymbolValueInterp_Weak);
 }
 
 internal U64
@@ -3850,16 +3840,10 @@ lnk_build_image(TP_Arena            *arena,
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   //
-  // gather symbol links to COMDAT sections
-  //
-  LNK_Symbol ***symlinks = push_array(arena->v[0], LNK_Symbol **, objs_count);
-  for EachIndex(obj_idx, objs_count) { symlinks[obj_idx] = lnk_symlinks_from_obj(scratch.arena, symtab, objs[obj_idx]); }
-
-  //
   // remove unreachable COMDAT sections
   //
   if (config->opt_ref == LNK_SwitchState_Yes) {
-    lnk_gc_comdats(tp, symtab, objs_count, objs, symlinks, config);
+    lnk_gc_comdats(tp, symtab, objs_count, objs, config);
   }
 
   //
@@ -3880,7 +3864,6 @@ lnk_build_image(TP_Arena            *arena,
     .function_pad_min = config->function_pad_min,
     .default_align    = coff_default_align_from_machine(config->machine),
     .null_sc          = push_array(arena->v[0], LNK_SectionContrib, 1),
-    .symlinks         = symlinks,
   };
 
   {

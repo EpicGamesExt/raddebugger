@@ -489,11 +489,17 @@ lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol
   lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, scope, symbol);
 }
 
+internal LNK_SymbolHashTrie *
+lnk_symbol_table_search_(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name)
+{
+  U64 hash = lnk_symbol_hash(name);
+  return lnk_symbol_hash_trie_search(symtab->scopes[scope], hash, name);
+}
+
 internal LNK_Symbol *
 lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name)
 {
-  U64                 hash = lnk_symbol_hash(name);
-  LNK_SymbolHashTrie *trie = lnk_symbol_hash_trie_search(symtab->scopes[scope], hash, name);
+  LNK_SymbolHashTrie *trie = lnk_symbol_table_search_(symtab, scope, name);
   return trie ? trie->symbol : 0;
 }
 
