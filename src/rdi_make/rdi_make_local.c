@@ -6,7 +6,7 @@
 ////////////////////////////////
 
 internal RDIM_DataModel
-rdim_infer_data_model(OperatingSystem os, RDI_Arch arch)
+rdim_data_model_from_os_arch(OperatingSystem os, RDI_Arch arch)
 {
   RDIM_DataModel data_model = RDIM_DataModel_Null;
 #define Case(os_name, arch_name, model_name) if(os == OperatingSystem_##os_name && arch == Arch_##arch_name) { data_model = RDIM_DataModel_##model_name; }

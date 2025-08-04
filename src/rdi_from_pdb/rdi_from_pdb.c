@@ -3708,25 +3708,43 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
   // from regular type info.
   //
   RDIM_Type **itype_type_ptrs = 0;
-  RDIM_TypeChunkList all_types = rdim_init_type_chunk_list(arena, top_level_info.arch);
+  RDIM_Type **basic_type_ptrs = 0;
+  RDIM_TypeChunkList all_types = {0};
+#define p2r_builtin_type_ptr_from_kind(kind) ((basic_type_ptrs && RDI_TypeKind_FirstBuiltIn <= (kind) && (kind) <= RDI_TypeKind_LastBuiltIn) ? (basic_type_ptrs[(kind) - RDI_TypeKind_FirstBuiltIn]) : 0)
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
   if(in->subset_flags & RDIM_SubsetFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
+    basic_type_ptrs = push_array(arena, RDIM_Type *, (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn + 1));
     
-    //////////////////////////
-    //- basic type aliases
+    ////////////////////////////
+    //- rjf: build basic types
     //
     {
-      RDIM_DataModel data_model = rdim_infer_data_model(OperatingSystem_Windows, top_level_info.arch);
-      RDI_TypeKind short_type      = rdim_short_type_from_data_model(data_model);
-      RDI_TypeKind ushort_type     = rdim_unsigned_short_type_from_data_model(data_model);
-      RDI_TypeKind long_type       = rdim_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_type      = rdim_unsigned_long_type_from_data_model(data_model);
-      RDI_TypeKind long_long_type  = rdim_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ulong_long_type = rdim_unsigned_long_long_type_from_data_model(data_model);
-      RDI_TypeKind ptr_type        = rdim_pointer_size_t_type_from_data_model(data_model);
-      
+      for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn;
+          type_kind <= RDI_TypeKind_LastBuiltIn;
+          type_kind += 1)
+      {
+        RDIM_Type *type = rdim_type_chunk_list_push(arena, &all_types, 512);
+        type->name.str  = rdi_string_from_type_kind(type_kind, &type->name.size);
+        type->kind      = type_kind;
+        type->byte_size = rdi_size_from_basic_type_kind(type_kind);
+        basic_type_ptrs[type_kind - RDI_TypeKind_FirstBuiltIn] = type;
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: build basic type aliases
+    //
+    {
+      RDIM_DataModel data_model = rdim_data_model_from_os_arch(OperatingSystem_Windows, top_level_info.arch);
+      RDI_TypeKind short_type      = rdim_short_type_kind_from_data_model(data_model);
+      RDI_TypeKind ushort_type     = rdim_unsigned_short_type_kind_from_data_model(data_model);
+      RDI_TypeKind long_type       = rdim_long_type_kind_from_data_model(data_model);
+      RDI_TypeKind ulong_type      = rdim_unsigned_long_type_kind_from_data_model(data_model);
+      RDI_TypeKind long_long_type  = rdim_long_long_type_kind_from_data_model(data_model);
+      RDI_TypeKind ulong_long_type = rdim_unsigned_long_long_type_kind_from_data_model(data_model);
+      RDI_TypeKind ptr_type        = rdim_pointer_size_t_type_kind_from_data_model(data_model);
       struct
       {
         char *       name;
@@ -3776,22 +3794,22 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
         { "char32_t"             , RDI_TypeKind_Char32     , CV_BasicType_CHAR32     }, // always UTF-32
         { "__pointer"            , ptr_type                , CV_BasicType_PTR        }
       };
-      
-      itype_type_ptrs[CV_BasicType_NOTYPE]  = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_NULL);
-      itype_type_ptrs[CV_BasicType_HRESULT] = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_HResult);
-      itype_type_ptrs[CV_BasicType_VOID]    = rdim_builtin_type_from_kind(all_types, RDI_TypeKind_Void);
-      
-      for(U64 i = 0; i < ArrayCount(table); i += 1)
+      for EachElement(idx, table)
       {
         RDIM_Type *builtin_alias   = rdim_type_chunk_list_push(arena, &all_types, tpi_leaf->itype_opl);
         builtin_alias->kind        = RDI_TypeKind_Alias;
-        builtin_alias->name        = str8_cstring(table[i].name);
-        builtin_alias->direct_type = rdim_builtin_type_from_kind(all_types, table[i].kind_rdi);
-        builtin_alias->byte_size   = rdi_size_from_basic_type_kind(table[i].kind_rdi);
-        itype_type_ptrs[table[i].kind_cv] = builtin_alias;
+        builtin_alias->name        = str8_cstring(table[idx].name);
+        builtin_alias->direct_type = p2r_builtin_type_ptr_from_kind(table[idx].kind_rdi);
+        builtin_alias->byte_size   = rdi_size_from_basic_type_kind(table[idx].kind_rdi);
+        itype_type_ptrs[table[idx].kind_cv] = builtin_alias;
       }
+      itype_type_ptrs[CV_BasicType_HRESULT] = basic_type_ptrs[RDI_TypeKind_HResult - RDI_TypeKind_FirstBuiltIn];
+      itype_type_ptrs[CV_BasicType_VOID]    = basic_type_ptrs[RDI_TypeKind_HResult - RDI_TypeKind_Void];
     }
     
+    ////////////////////////////
+    //- rjf: build types from TPI
+    //
     for(CV_TypeId root_itype = 0; root_itype < itype_opl; root_itype += 1)
     {
       for(P2R_TypeIdChain *itype_chain = itype_chains[root_itype];
@@ -4222,6 +4240,8 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
       }
     }
   }
+#undef p2r_type_ptr_from_itype
+#undef p2r_builtin_type_ptr_from_kind
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 4: kick off UDT build

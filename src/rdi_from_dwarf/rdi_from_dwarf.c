@@ -7,41 +7,80 @@
 //     however it is optional and in case it is missing converter has to generate the ranges from scopes.
 // [ ] Error handling
 
-internal RDI_RegCode
-d2r_rdi_reg_from_dw_reg_code_x64(U64 reg_code)
+////////////////////////////////
+//~ rjf: Enum Conversion Helpers
+
+internal RDI_Language
+d2r_rdi_language_from_dw_language(DW_Language v)
 {
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX64_##reg_name_dw: return RDI_RegCodeX64_##reg_name_rdi;
-    DW_Regs_X64_XList(X)
-#undef X
+  RDI_Language result = RDI_Language_NULL;
+  switch(v)
+  {
+    default:{}break;
+    
+    case DW_Language_C89:
+    case DW_Language_C99:
+    case DW_Language_C11:
+    case DW_Language_C:
+    {
+      result = RDI_Language_C;
+    }break;
+    
+    case DW_Language_CPlusPlus03:
+    case DW_Language_CPlusPlus11:
+    case DW_Language_CPlusPlus14:
+    case DW_Language_CPlusPlus:
+    {
+      result = RDI_Language_CPlusPlus;
+    }break;
   }
-  InvalidPath;
-  return 0;
+  return result;
 }
 
-internal RDI_RegCode
-d2r_rdi_reg_from_dw_reg_code_x86(U64 reg_code)
+internal RDI_RegCodeX86
+d2r_rdi_reg_code_from_dw_reg_x86(DW_RegX86 v)
 {
-  switch (reg_code) {
-#define X(reg_name_dw, reg_code_dw, reg_name_rdi, reg_pos, reg_size) case DW_RegX86_##reg_name_dw: return RDI_RegCodeX86_##reg_name_rdi;
+  RDI_RegCodeX86 result = RDI_RegCode_nil;
+  switch(v)
+  {
+    default:{}break;
+#define X(reg_dw, val_dw, reg_rdi, ...) case DW_RegX86_##reg_dw: result = RDI_RegCodeX86_##reg_rdi; break;
     DW_Regs_X86_XList(X)
 #undef X
   }
-  InvalidPath;
-  return 0;
+  return result;
+}
+
+internal RDI_RegCodeX64
+d2r_rdi_reg_code_from_dw_reg_x64(DW_RegX64 v)
+{
+  RDI_RegCodeX64 result = RDI_RegCode_nil;
+  switch(v)
+  {
+    default:{}break;
+#define X(reg_dw, val_dw, reg_rdi, off, size) case DW_RegX64_##reg_dw:{result = RDI_RegCodeX64_##reg_rdi;}break;
+    DW_Regs_X64_XList(X)
+#undef X
+  }
+  return result;
 }
 
 internal RDI_RegCode
-d2r_rdi_reg_from_dw_reg_code(Arch arch, U64 reg_code)
+d2r_rdi_reg_code_from_dw_reg(Arch arch, DW_Reg v)
 {
-  switch (arch) {
-    case Arch_Null: return 0;
-    case Arch_x64:  return d2r_rdi_reg_from_dw_reg_code_x64(reg_code);
-    case Arch_x86:  return d2r_rdi_reg_from_dw_reg_code_x86(reg_code);
-    default: InvalidPath;
+  RDI_RegCode result = RDI_RegCode_nil;
+  switch(arch)
+  {
+    default:
+    case Arch_Null:
+    case Arch_x86:{result = d2r_rdi_reg_code_from_dw_reg_x86(v);}break;
+    case Arch_x64:{result = d2r_rdi_reg_code_from_dw_reg_x64(v);}break;
   }
-  return 0;
+  return result;
 }
+
+////////////////////////////////
+//~ rjf: Type Conversion Helpers
 
 internal RDIM_Type *
 d2r_create_type(Arena *arena, D2R_TypeTable *type_table)
@@ -89,7 +128,8 @@ d2r_type_from_attrib(Arena *arena, D2R_TypeTable *type_table, DW_Input *input, D
       Assert(!"unexpected attrib class");
     }
   } else if (attrib->attrib_kind == DW_AttribKind_Null) {
-    type = rdim_builtin_type_from_kind(*type_table->types, RDI_TypeKind_NULL);
+    // TODO(rjf):
+    // type = rdim_builtin_type_from_kind(*type_table->types, RDI_TypeKind_NULL);
   }
   
   return type;
@@ -237,6 +277,9 @@ d2r_type_group_from_type_kind(RDI_TypeKind x)
   }
   return RDI_EvalTypeGroup_Other;
 }
+
+////////////////////////////////
+//~ rjf: Bytecode Conversion Helpers
 
 internal RDIM_EvalBytecode
 d2r_bytecode_from_expression(Arena       *arena,
@@ -404,7 +447,7 @@ SLLStackPush(stack, f);                                       \
         U64 reg_size     = dw_reg_size_from_code(arch, reg_code_dw);
         U64 reg_pos      = dw_reg_pos_from_code(arch, reg_code_dw);
         
-        RDI_RegCode reg_code_rdi  = d2r_rdi_reg_from_dw_reg_code(arch, reg_code_dw);
+        RDI_RegCode reg_code_rdi  = d2r_rdi_reg_code_from_dw_reg(arch, reg_code_dw);
         U32         regread_param = RDI_EncodeRegReadParam(reg_code_rdi, reg_size, reg_pos);
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_RegRead, regread_param);
         push_of_type(d2r_unsigned_type_kind_from_size(reg_size));
@@ -417,7 +460,7 @@ SLLStackPush(stack, f);                                       \
         U64 reg_size = dw_reg_size_from_code(arch, reg_code_dw);
         U64 reg_pos  = dw_reg_pos_from_code(arch, reg_code_dw);
         
-        RDI_RegCode reg_code_rdi  = d2r_rdi_reg_from_dw_reg_code(arch, reg_code_dw);
+        RDI_RegCode reg_code_rdi  = d2r_rdi_reg_code_from_dw_reg(arch, reg_code_dw);
         U32         regread_param = RDI_EncodeRegReadParam(reg_code_rdi, reg_size, reg_pos);
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_RegRead, regread_param);
         push_of_type(d2r_unsigned_type_kind_from_size(reg_size));
@@ -501,7 +544,7 @@ SLLStackPush(stack, f);                                       \
         S64 reg_off     = 0;
         cursor += str8_deserial_read_sleb128(expr, cursor, &reg_off);
         
-        RDI_RegCode reg_code_rdi = d2r_rdi_reg_from_dw_reg_code(arch, reg_code_dw);
+        RDI_RegCode reg_code_rdi = d2r_rdi_reg_code_from_dw_reg(arch, reg_code_dw);
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_RegReadDyn, reg_code_rdi);
         if (reg_off > 0) {
           rdim_bytecode_push_sconst(arena, &bc, reg_off);
@@ -518,7 +561,7 @@ SLLStackPush(stack, f);                                       \
         cursor += str8_deserial_read_uleb128(expr, cursor, &reg_code_dw);
         cursor += str8_deserial_read_sleb128(expr, cursor, &reg_off);
         
-        RDI_RegCode reg_code_rdi = d2r_rdi_reg_from_dw_reg_code(arch, reg_code_dw);
+        RDI_RegCode reg_code_rdi = d2r_rdi_reg_code_from_dw_reg(arch, reg_code_dw);
         rdim_bytecode_push_op(arena, &bc, RDI_EvalOp_RegReadDyn, reg_code_rdi);
         if (reg_off > 0) {
           rdim_bytecode_push_sconst(arena, &bc, reg_off);
@@ -1031,6 +1074,9 @@ d2r_cu_contrib_map_from_aranges(Arena *arena, DW_Input *input, U64 image_base)
   return cm;
 }
 
+////////////////////////////////
+//~ rjf: Compilation Unit / Scope Conversion Helpers
+
 internal RDIM_Rng1U64ChunkList
 d2r_voff_ranges_from_cu_info_off(D2R_CompUnitContribMap map, U64 info_off)
 {
@@ -1072,6 +1118,9 @@ d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D
   
   return scope;
 }
+
+////////////////////////////////
+//~ rjf: Main Conversion Entry Point
 
 internal RDIM_BakeParams
 d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
@@ -1140,7 +1189,7 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
   
   RDIM_UnitChunkList       units        = {0};
   RDIM_UDTChunkList        udts         = {0};
-  RDIM_TypeChunkList       types        = rdim_init_type_chunk_list(arena, arch);
+  RDIM_TypeChunkList       types        = {0};
   RDIM_SymbolChunkList     gvars        = {0};
   RDIM_SymbolChunkList     tvars        = {0};
   RDIM_SymbolChunkList     procs        = {0};
@@ -1336,7 +1385,7 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
     unit->object_file   = str8_zero();
     unit->archive_file  = str8_zero();
     unit->build_path    = cu_dir;
-    unit->language      = rdi_language_from_dw_language(cu_lang);
+    unit->language      = d2r_rdi_language_from_dw_language(cu_lang);
     unit->line_table    = cu_line_tables_rdi[cu_idx];
     unit->voff_ranges   = cu_voff_ranges;
     
@@ -1583,7 +1632,11 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
               default: AssertAlways(!"unexpected base type encoding"); break; // TODO: error handling
             }
             
-            RDIM_Type *base_type = rdim_builtin_type_from_kind(types, kind);
+            // TODO(rjf): this is not good. we can't grab existing type nodes & mutate them here.
+            // to parallelize this properly, we need to *produce* new data only, otherwise threads
+            // will stomp over each other everywhere.
+            //
+            RDIM_Type *base_type = 0; // rdim_builtin_type_from_kind(types, kind);
             base_type->kind      = kind;
             base_type->byte_size = byte_size;
             
@@ -2069,69 +2122,4 @@ d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
   
   scratch_end(scratch);
   return bake_params;
-}
-
-internal RDI_Language
-rdi_language_from_dw_language(DW_Language v)
-{
-  RDI_Language result = RDI_Language_NULL;
-  switch (v) {
-    case DW_Language_Null: result = RDI_Language_NULL; break;
-    
-    case DW_Language_C89:
-    case DW_Language_C99:
-    case DW_Language_C11:
-    case DW_Language_C:
-    result = RDI_Language_C;
-    break;
-    
-    case DW_Language_CPlusPlus03:
-    case DW_Language_CPlusPlus11:
-    case DW_Language_CPlusPlus14:
-    case DW_Language_CPlusPlus:
-    result = RDI_Language_CPlusPlus;
-    break;
-    
-    default: NotImplemented; break;
-  }
-  return result;
-}
-
-internal RDI_RegCodeX86
-rdi_reg_from_dw_reg_x86(DW_RegX86 v)
-{
-  RDI_RegCodeX86 result = RDI_RegCode_nil;
-  switch (v) {
-#define X(reg_dw, val_dw, reg_rdi, ...) case DW_RegX86_##reg_dw: result = RDI_RegCodeX86_##reg_rdi; break;
-    DW_Regs_X86_XList(X)
-#undef X
-    default: NotImplemented; break;
-  }
-  return result;
-}
-
-internal B32
-rdi_reg_from_dw_reg_x64(DW_RegX64 v, RDI_RegCodeX64 *code_out, U64 *off_out, U64 *size_out)
-{
-  RDI_RegCodeX64 result = RDI_RegCode_nil;
-  switch (v) {
-#define X(reg_dw, val_dw, reg_rdi, off, size) case DW_RegX64_##reg_dw: result = RDI_RegCodeX64_##reg_rdi; *off_out = off; *size_out = size; break;
-    DW_Regs_X64_XList(X)
-#undef X
-    default: NotImplemented; break;
-  }
-  return result;
-}
-
-internal B32
-rdi_reg_from_dw_reg(Arch arch, DW_Reg v, RDI_RegCode *code_out, U64 *off_out, U64 *size_out)
-{
-  RDI_RegCode result = RDI_RegCode_nil;
-  switch (arch) {
-    case Arch_Null: break;
-    case Arch_x86: ; break;
-    case Arch_x64: return rdi_reg_from_dw_reg_x64(v, code_out, off_out, size_out);
-    default: NotImplemented; break;
-  }
-  return 0;
 }

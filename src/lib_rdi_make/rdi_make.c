@@ -479,7 +479,7 @@ rdim_rng1u64_chunk_list_push(RDIM_Arena *arena, RDIM_Rng1U64ChunkList *list, RDI
 //~ Data Model
 
 RDI_PROC RDI_TypeKind
-rdim_short_type_from_data_model(RDIM_DataModel data_model)
+rdim_short_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -495,7 +495,7 @@ rdim_short_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model)
+rdim_unsigned_short_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -543,7 +543,7 @@ rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_long_type_from_data_model(RDIM_DataModel data_model)
+rdim_long_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -559,7 +559,7 @@ rdim_long_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
+rdim_unsigned_long_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -575,7 +575,7 @@ rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
+rdim_long_long_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -591,7 +591,7 @@ rdim_long_long_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
+rdim_unsigned_long_long_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -607,7 +607,7 @@ rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model)
 }
 
 RDI_PROC RDI_TypeKind
-rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model)
+rdim_pointer_size_t_type_kind_from_data_model(RDIM_DataModel data_model)
 {
   switch(data_model)
   {
@@ -1344,41 +1344,6 @@ rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
 {
   RDI_U32 count = list->total_size / sizeof(RDI_LocationBlock);
   return count;
-}
-
-////////////////////////////////
-
-RDI_PROC RDIM_Type *
-rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind)
-{
-  return &list.first->v[type_kind];
-}
-
-RDI_PROC RDIM_TypeChunkList
-rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch)
-{
-  RDIM_TypeChunkList list = {0};
-  
-  RDI_U64 type_cap = (RDI_TypeKind_LastBuiltIn - RDI_TypeKind_FirstBuiltIn) + 2;
-  
-  // RDI_TypeKind_NULL
-  rdim_type_chunk_list_push(arena, &list, type_cap);
-  
-  for(RDI_TypeKind type_kind = RDI_TypeKind_FirstBuiltIn; type_kind <= RDI_TypeKind_LastBuiltIn; type_kind += 1)
-  {
-    RDIM_Type *type = rdim_type_chunk_list_push(arena, &list, type_cap);
-    type->name.str  = rdi_string_from_type_kind(type_kind, &type->name.size);
-    type->kind      = type_kind;
-    type->byte_size = rdi_size_from_basic_type_kind(type_kind);
-  }
-  
-  RDIM_Type *void_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Void);
-  void_type->byte_size = rdi_addr_size_from_arch(arch);
-  
-  RDIM_Type *handle_type = rdim_builtin_type_from_kind(list, RDI_TypeKind_Handle);
-  handle_type->byte_size = rdi_addr_size_from_arch(arch);
-  
-  return list;
 }
 
 ////////////////////////////////

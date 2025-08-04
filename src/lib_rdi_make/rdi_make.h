@@ -1429,15 +1429,15 @@ RDI_PROC void rdim_rng1u64_chunk_list_push(RDIM_Arena *arena, RDIM_Rng1U64ChunkL
 ////////////////////////////////
 //~ Data Model
 
-RDI_PROC RDI_TypeKind rdim_short_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_unsigned_short_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_short_type_kind_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_short_type_kind_from_data_model(RDIM_DataModel data_model);
 RDI_PROC RDI_TypeKind rdim_int_type_from_data_model(RDIM_DataModel data_model);
 RDI_PROC RDI_TypeKind rdim_unsigned_int_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_long_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_unsigned_long_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_long_long_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_unsigned_long_long_type_from_data_model(RDIM_DataModel data_model);
-RDI_PROC RDI_TypeKind rdim_pointer_size_t_type_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_type_kind_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_type_kind_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_long_long_type_kind_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_unsigned_long_long_type_kind_from_data_model(RDIM_DataModel data_model);
+RDI_PROC RDI_TypeKind rdim_pointer_size_t_type_kind_from_data_model(RDIM_DataModel data_model);
 
 ////////////////////////////////
 //~ rjf: [Building] Binary Section Info Building
@@ -1520,14 +1520,9 @@ RDI_PROC RDIM_Location *rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg
 //- rjf: location sets
 RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location);
 
-//- rjf:location block chunk list
+//- rjf: location block chunk list
 RDI_PROC RDI_LocationBlock *rdim_location_block_chunk_list_push_array(RDIM_Arena *arena, RDIM_String8List *list, RDI_U32 count);
 RDI_PROC RDI_U32 rdim_count_from_location_block_chunk_list(RDIM_String8List *list);
-
-////////////////////////////////
-
-RDI_PROC RDIM_TypeChunkList rdim_init_type_chunk_list(RDIM_Arena *arena, RDI_Arch arch);
-RDI_PROC RDIM_Type *        rdim_builtin_type_from_kind(RDIM_TypeChunkList list, RDI_TypeKind type_kind);
 
 ////////////////////////////////
 //~ rjf: [Baking Helpers] Baked VMap Building
