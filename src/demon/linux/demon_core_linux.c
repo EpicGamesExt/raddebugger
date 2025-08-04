@@ -564,7 +564,8 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
         struct iovec iov_gpr = {0};
         iov_gpr.iov_len = sizeof(ctx);
         iov_gpr.iov_base = &ctx;
-        if(ptrace(PTRACE_GETREGSET, tid, (void*)NT_PRSTATUS, &iov_gpr) != -1)
+        int ptrace_result = ptrace(PTRACE_GETREGSET, tid, (void*)NT_PRSTATUS, &iov_gpr);
+        if(ptrace_result != -1)
         {
           got_gpr = 1;
           DMN_LNX_UserRegsX64 *src = &ctx.regs;
@@ -595,6 +596,13 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
           dst->rip.u64    = src->rip;
           dst->rflags.u64 = src->rflags;
         }
+        else
+        {
+          int error_code = errno;
+          (void)error_code;
+          int x = 0;
+          (void)x;
+        }
       }
       
       //- rjf: read FPR
@@ -612,11 +620,19 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
           struct iovec iov_xsave = {0};
           iov_xsave.iov_len = sizeof(xsave_buffer);
           iov_xsave.iov_base = xsave_buffer;
-          if(ptrace(PTRACE_GETREGSET, tid, (void*)NT_X86_XSTATE, &iov_xsave) != -1)
+          int ptrace_result = ptrace(PTRACE_GETREGSET, tid, (void*)NT_X86_XSTATE, &iov_xsave);
+          if(ptrace_result != -1)
           {
             xsave = push_array_no_zero(scratch.arena, DMN_LNX_XSave, 1);
             MemoryCopy(xsave, xsave_buffer, sizeof(*xsave));
             xsave_legacy = &xsave->legacy;
+          }
+          else
+          {
+            int error_code = errno;
+            (void)error_code;
+            int x = 0;
+            (void)x;
           }
         }
         
@@ -627,10 +643,18 @@ dmn_lnx_thread_read_reg_block(DMN_LNX_Entity *thread, void *reg_block)
           struct iovec iov_fxsave = {0};
           iov_fxsave.iov_len = sizeof(fxsave);
           iov_fxsave.iov_base = &fxsave;
-          if(ptrace(PTRACE_GETREGSET, tid, (void *)NT_FPREGSET, &iov_fxsave) != -1)
+          int ptrace_result = ptrace(PTRACE_GETREGSET, tid, (void *)NT_FPREGSET, &iov_fxsave);
+          if(ptrace_result != -1)
           {
             xsave_legacy = push_array_no_zero(scratch.arena, DMN_LNX_XSaveLegacy, 1);
             MemoryCopy(xsave_legacy, &fxsave, sizeof(*xsave_legacy));
+          }
+          else
+          {
+            int error_code = errno;
+            (void)error_code;
+            int x = 0;
+            (void)x;
           }
         }
         
@@ -909,7 +933,7 @@ dmn_ctrl_exclusive_access_end(void)
 {
   OS_MutexScope(dmn_lnx_state->access_mutex)
   {
-    dmn_lnx_state->access_run_state = 1;
+    dmn_lnx_state->access_run_state = 0;
   }
 }
 
