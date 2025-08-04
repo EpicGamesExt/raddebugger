@@ -3867,6 +3867,22 @@ ctrl_thread__entry_point(void *p)
     ins_atomic_u64_inc_eval(&ctrl_state->mem_gen);
     ins_atomic_u64_inc_eval(&ctrl_state->reg_gen);
     
+    //- rjf: update thread register cache
+    ProfScope("update thread register cache")
+    {
+      CTRL_EntityCtx *entity_ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+      CTRL_EntityArray threads = ctrl_entity_array_from_kind(entity_ctx, CTRL_EntityKind_Thread);
+      REGS_RegBlockX64 *blocks = push_array(scratch.arena, REGS_RegBlockX64, threads.count);
+      {
+        for EachIndex(idx, threads.count)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          ctrl_reg_block_from_thread(scratch.arena, entity_ctx, threads.v[idx]->handle);
+          scratch_end(scratch);
+        }
+      }
+    }
+    
     //- rjf: gather & output logs
     ctrl_thread__end_and_flush_log();
   }
