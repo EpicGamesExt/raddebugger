@@ -706,7 +706,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, LNK_Obj *obj,
   }
 
   // fill out export
-  export_out->obj_path            = obj->path;
+  export_out->obj_path            = obj ? obj->path : str8_zero();
   export_out->lib_path            = lnk_obj_get_lib_path(obj);
   export_out->name                = push_str8_copy(arena, name);
   export_out->alias               = push_str8_copy(arena, alias);
@@ -735,7 +735,6 @@ lnk_parse_export_directive(Arena *arena, String8 directive, LNK_Obj *obj, PE_Exp
   scratch_end(scratch);
   return is_parsed;
 }
-
 
 internal LNK_MergeDirectiveNode *
 lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data)
