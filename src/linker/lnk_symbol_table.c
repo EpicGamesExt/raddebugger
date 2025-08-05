@@ -22,15 +22,6 @@ lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_
 }
 
 internal LNK_Symbol *
-lnk_make_import_symbol(Arena *arena, String8 name, String8 import_header)
-{
-  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name                = name;
-  symbol->u.imp.import_header = import_header;
-  return symbol;
-}
-
-internal LNK_Symbol *
 lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj)
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
@@ -299,9 +290,6 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
     }
   } break;
-  case LNK_SymbolScope_Import: {
-    lnk_error_multiply_defined_symbol(dst, src);
-  } break;
   case LNK_SymbolScope_Lib: {
     // link.exe picks symbol from lib that is discovered first
     can_replace = lnk_symbol_lib_is_before(src, dst);
@@ -343,10 +331,6 @@ lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       }
     }
 #endif
-  } break;
-  case LNK_SymbolScope_Import: {
-    // illegal to replace imports
-    InvalidPath;
   } break;
   case LNK_SymbolScope_Lib: {
     // nothing to replace
