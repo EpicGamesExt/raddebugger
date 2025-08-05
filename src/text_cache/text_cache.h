@@ -322,8 +322,8 @@ internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 d
 internal String8 txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 data, S64 line_num);
 internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
 internal TXT_ScopeNode *txt_scope_node_from_info_num(TXT_TextInfo *info, U64 num);
-internal TXT_ScopeNode *txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off);
-internal TXT_ScopeNode *txt_scope_node_from_info_data_pt(TXT_TextInfo *info, TxtPt pt);
+internal TXT_ScopeNode *txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off);
+internal TXT_ScopeNode *txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt);
 
 ////////////////////////////////
 //~ rjf: Parse Threads

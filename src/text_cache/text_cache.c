@@ -2098,7 +2098,7 @@ txt_scope_node_from_info_num(TXT_TextInfo *info, U64 num)
 }
 
 internal TXT_ScopeNode *
-txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off)
+txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off)
 {
   TXT_ScopeNode *result = &txt_scope_node_nil;
   {
@@ -2106,7 +2106,7 @@ txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off)
     U64 opl = info->scope_pts.count;
     for(;;)
     {
-      U64 mid = (opl - first) / 2;
+      U64 mid = first + (opl - first) / 2;
       if(mid >= info->scope_pts.count) { break; }
       U64 mid_off = info->tokens.v[info->scope_pts.v[mid].token_idx].range.min;
       if(off == mid_off || (first == mid && opl == mid+1))
@@ -2128,10 +2128,10 @@ txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off)
 }
 
 internal TXT_ScopeNode *
-txt_scope_node_from_info_data_pt(TXT_TextInfo *info, TxtPt pt)
+txt_scope_node_from_info_pt(TXT_TextInfo *info, TxtPt pt)
 {
   U64 off = txt_off_from_info_pt(info, pt);
-  TXT_ScopeNode *result = txt_scope_node_from_info_data_off(info, off);
+  TXT_ScopeNode *result = txt_scope_node_from_info_off(info, off);
   return result;
 }
 

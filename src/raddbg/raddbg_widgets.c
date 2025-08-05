@@ -2114,6 +2114,15 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: cursor -> scope info
+  //
+  TXT_ScopeNode *cursor_scope_node = &txt_scope_node_nil;
+  if(params->text_info != 0)
+  {
+    cursor_scope_node = txt_scope_node_from_info_pt(params->text_info, rd_regs()->cursor);
+  }
+  
+  //////////////////////////////
   //- rjf: produce fancy strings for each line
   //
   DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
@@ -2168,6 +2177,19 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
             F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
             token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
+          }
+          
+          // rjf: scope endpoints enclosing cursor -> highlight
+          for(TXT_ScopeNode *scope_n = cursor_scope_node;
+              scope_n != &txt_scope_node_nil;
+              scope_n = txt_scope_node_from_info_num(params->text_info, scope_n->parent_num))
+          {
+            if(params->text_info->tokens.v[scope_n->token_idx_range.min].range.min == token->range.min ||
+               params->text_info->tokens.v[scope_n->token_idx_range.max].range.min == token->range.min)
+            {
+              token_color = pop_color;
+              break;
+            }
           }
           
           // rjf: push fancy string
