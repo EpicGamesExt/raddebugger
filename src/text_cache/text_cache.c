@@ -2291,11 +2291,9 @@ ASYNC_WORK_DEF(txt_parse_work)
       ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size);
     }
     
-    //- rjf: lang -> lex function
-    TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
-    
     //- rjf: lex function * data -> tokens
     TXT_TokenArray tokens = {0};
+    TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
     if(lex_function != 0)
     {
       tokens = lex_function(info_arena, bytes_processed_ptr, data);
@@ -2306,6 +2304,116 @@ ASYNC_WORK_DEF(txt_parse_work)
     if(bytes_processed_ptr)
     {
       ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size + data.size*(lex_function != 0));
+    }
+    
+    //- rjf: count scope points
+    U64 scope_pt_opener_count = 0;
+    U64 scope_pt_count = 0;
+    for EachIndex(idx, tokens.count)
+    {
+      if(tokens.v[idx].kind == TXT_TokenKind_Symbol)
+      {
+        String8 token_string = str8_substr(data, tokens.v[idx].range);
+        B32 is_opener = (token_string.str[0] == '{' ||
+                         token_string.str[0] == '(' ||
+                         token_string.str[0] == '[');
+        B32 is_closer = (token_string.str[0] == '}' ||
+                         token_string.str[0] == ')' ||
+                         token_string.str[0] == ']');
+        if(token_string.size == 1 && (is_opener || is_closer))
+        {
+          scope_pt_count += 1;
+          scope_pt_opener_count += !!is_opener;
+        }
+      }
+    }
+    
+    //- rjf: allocate & fill scope data
+    info.scope_pts.count = scope_pt_count;
+    info.scope_pts.v = push_array_no_zero(info_arena, TXT_ScopePt, info.scope_pts.count);
+    info.scope_nodes.count = scope_pt_opener_count;
+    info.scope_nodes.v = push_array_no_zero(info_arena, TXT_ScopeNode, info.scope_nodes.count);
+    {
+      typedef struct ScopeTask ScopeTask;
+      struct ScopeTask
+      {
+        ScopeTask *next;
+        U64 scope_idx;
+      };
+      Temp scratch = scratch_begin(0, 0);
+      ScopeTask *top_scope_task = 0;
+      ScopeTask *free_scope_task = 0;
+      U64 pt_idx = 0;
+      U64 scope_idx = 0;
+      for EachIndex(token_idx, tokens.count)
+      {
+        if(tokens.v[token_idx].kind == TXT_TokenKind_Symbol)
+        {
+          String8 token_string = str8_substr(data, tokens.v[token_idx].range);
+          B32 is_opener = (token_string.str[0] == '{' ||
+                           token_string.str[0] == '(' ||
+                           token_string.str[0] == '[');
+          B32 is_closer = (token_string.str[0] == '}' ||
+                           token_string.str[0] == ')' ||
+                           token_string.str[0] == ']');
+          
+          // rjf: opener symbols -> push scope
+          if(is_opener)
+          {
+            // rjf: insert into scope tree
+            TXT_ScopeNode *new_scope = &info.scope_nodes.v[scope_idx];
+            new_scope->token_idx_range.min = token_idx;
+            if(top_scope_task)
+            {
+              U64 new_scope_num = scope_idx+1;
+              TXT_ScopeNode *parent = &info.scope_nodes.v[top_scope_task->scope_idx];
+              if(parent->first_num == 0)
+              {
+                parent->first_num = new_scope_num;
+              }
+              if(parent->last_num != 0)
+              {
+                TXT_ScopeNode *prev_scope = &info.scope_nodes.v[parent->last_num-1];
+                prev_scope->next_num = new_scope_num;
+              }
+              parent->last_num = new_scope_num;
+              new_scope->parent_num = top_scope_task->scope_idx+1;
+            }
+            
+            // rjf: push onto scope stack
+            ScopeTask *scope_task = free_scope_task;
+            if(scope_task)
+            {
+              SLLStackPop(free_scope_task);
+            }
+            else
+            {
+              scope_task = push_array(scratch.arena, ScopeTask, 1);
+            }
+            scope_task->scope_idx = scope_idx;
+            scope_idx += 1;
+            SLLStackPush(top_scope_task, scope_task);
+          }
+          
+          // rjf: opener or closer -> fill endpoint
+          if(top_scope_task && (is_opener || is_closer))
+          {
+            info.scope_pts.v[pt_idx].token_idx = token_idx;
+            info.scope_pts.v[pt_idx].scope_idx = top_scope_task->scope_idx;
+            pt_idx += 1;
+          }
+          
+          // rjf: closer symbols -> pop
+          if(is_closer && top_scope_task != 0)
+          {
+            ScopeTask *popped = top_scope_task;
+            info.scope_nodes.v[popped->scope_idx].token_idx_range.max = token_idx;
+            SLLStackPop(top_scope_task);
+            SLLStackPush(free_scope_task, popped);
+          }
+        }
+      }
+      scratch_end(scratch);
     }
   }
   

@@ -86,6 +86,37 @@ struct TXT_TokenArrayArray
   TXT_TokenArray *v;
 };
 
+typedef struct TXT_ScopeNode TXT_ScopeNode;
+struct TXT_ScopeNode
+{
+  U64 first_num;
+  U64 last_num;
+  U64 next_num;
+  U64 parent_num;
+  Rng1U64 token_idx_range;
+};
+
+typedef struct TXT_ScopeNodeArray TXT_ScopeNodeArray;
+struct TXT_ScopeNodeArray
+{
+  TXT_ScopeNode *v;
+  U64 count;
+};
+
+typedef struct TXT_ScopePt TXT_ScopePt;
+struct TXT_ScopePt
+{
+  U64 token_idx;
+  U64 scope_idx;
+};
+
+typedef struct TXT_ScopePtArray TXT_ScopePtArray;
+struct TXT_ScopePtArray
+{
+  TXT_ScopePt *v;
+  U64 count;
+};
+
 typedef struct TXT_TextInfo TXT_TextInfo;
 struct TXT_TextInfo
 {
@@ -94,6 +125,8 @@ struct TXT_TextInfo
   U64 lines_max_size;
   TXT_LineEndKind line_end_kind;
   TXT_TokenArray tokens;
+  TXT_ScopePtArray scope_pts;
+  TXT_ScopeNodeArray scope_nodes;
   U64 bytes_processed;
   U64 bytes_to_process;
 };
