@@ -32,7 +32,6 @@ dw_input_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
 {
   DW_Input result = {0};
   B32 is_section_present[ArrayCount(result.sec)] = {0};
-  Temp scratch = scratch_begin(&arena, 1);
   for(U64 section_idx = 1; section_idx < bin->shdrs.count; section_idx += 1)
   {
     ELF_Shdr64 *shdr = &bin->shdrs.v[section_idx];
@@ -49,69 +48,67 @@ dw_input_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
       is_dwo = (section_kind != DW_Section_Null);
     }
     
+    if(section_kind == DW_Section_Null)  { continue; } // skip unknown sections
+    if(is_section_present[section_kind]) { continue; } // skip duplicate sections
+    
     //- rjf: decompress section data if needed
     String8 section_data__uncompressed = {0};
-    if(section_kind != DW_Section_Null)
+    if(!(shdr->sh_flags & ELF_Shf_Compressed))
     {
-      if(!(shdr->sh_flags & ELF_Shf_Compressed))
+      section_data__uncompressed = section_data__maybe_compressed;
+    }
+    else
+    {
+      // rjf: read compressed-section header
+      ELF_Chdr64 chdr64 = {0};
+      U64 chdr_size = 0;
+      if(ELF_HdrIs64Bit(bin->hdr.e_ident))
       {
-        section_data__uncompressed = section_data__maybe_compressed;
+        chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr64);
       }
-      else
+      else if(ELF_HdrIs32Bit(bin->hdr.e_ident))
       {
-        // rjf: read compressed-section header
-        ELF_Chdr64 chdr64 = {0};
-        U64 chdr_size = 0;
-        if(ELF_HdrIs64Bit(bin->hdr.e_ident))
+        ELF_Chdr32 chdr32 = {0};
+        chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr32);
+        if(chdr_size == sizeof(chdr32))
         {
-          chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr64);
+          chdr64 = elf_chdr64_from_chdr32(chdr32);
         }
-        else if(ELF_HdrIs32Bit(bin->hdr.e_ident))
+      }
+      
+      // rjf: decompress
+      {
+        String8 section_data__compressed_contents = str8_skip(section_data__maybe_compressed, chdr_size);
+        switch(chdr64.ch_type)
         {
-          ELF_Chdr32 chdr32 = {0};
-          chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr32);
-          if(chdr_size == sizeof(chdr32))
+          case ELF_CompressType_None:
           {
-            chdr64 = elf_chdr64_from_chdr32(chdr32);
-          }
-        }
-        
-        // rjf: decompress
-        {
-          String8 section_data__compressed_contents = str8_skip(section_data__maybe_compressed, chdr_size);
-          switch(chdr64.ch_type)
+            section_data__uncompressed = section_data__compressed_contents;
+          }break;
+          case ELF_CompressType_ZLib:
           {
-            default:
-            case ELF_CompressType_None:
-            {
-              section_data__uncompressed = section_data__compressed_contents;
-            }break;
-            case ELF_CompressType_ZLib:
-            {
-              U8 *section_data_uncompressed_buffer = push_array_no_zero_aligned(arena, U8, chdr64.ch_size, chdr64.ch_addr_align);
-              U64 section_data_uncompressed_size = 0;
-              section_data_uncompressed_size = zsinflate(section_data_uncompressed_buffer, chdr64.ch_size, section_data__compressed_contents.str, section_data__compressed_contents.size);
-              section_data__uncompressed = str8(section_data_uncompressed_buffer, section_data_uncompressed_size);
-            }break;
-            case ELF_CompressType_ZStd:
-            {
-              NotImplemented;
-            }break;
-          }
+            U8 *section_data_uncompressed_buffer = push_array_no_zero_aligned(arena, U8, chdr64.ch_size, chdr64.ch_addr_align);
+            U64 section_data_uncompressed_size = zsinflate(section_data_uncompressed_buffer, chdr64.ch_size, section_data__compressed_contents.str, section_data__compressed_contents.size);
+            section_data__uncompressed = str8(section_data_uncompressed_buffer, section_data_uncompressed_size);
+          }break;
+          case ELF_CompressType_ZStd:
+          {
+            NotImplemented;
+          }break;
+          default:
+          {
+            NotImplemented;
+          }break;
         }
       }
     }
     
     //- rjf: store
-    if(section_kind != DW_Section_Null)
-    {
-      is_section_present[section_kind] = 1;
-      DW_Section *d = &result.sec[section_kind];
-      d->name   = push_str8_copy(arena, section_name);
-      d->data   = section_data__uncompressed;
-      d->is_dwo = is_dwo;
-    }
+    is_section_present[section_kind] = 1;
+    DW_Section *d = &result.sec[section_kind];
+    d->name   = push_str8_copy(arena, section_name);
+    d->data   = section_data__uncompressed;
+    d->is_dwo = is_dwo;
   }
-  scratch_end(scratch);
   return result;
 }
