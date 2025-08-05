@@ -2086,6 +2086,55 @@ txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info
   return result;
 }
 
+internal TXT_ScopeNode *
+txt_scope_node_from_info_num(TXT_TextInfo *info, U64 num)
+{
+  TXT_ScopeNode *result = &txt_scope_node_nil;
+  if(1 <= num && num <= info->scope_nodes.count)
+  {
+    result = &info->scope_nodes.v[num-1];
+  }
+  return result;
+}
+
+internal TXT_ScopeNode *
+txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off)
+{
+  TXT_ScopeNode *result = &txt_scope_node_nil;
+  {
+    U64 first = 0;
+    U64 opl = info->scope_pts.count;
+    for(;;)
+    {
+      U64 mid = (opl - first) / 2;
+      if(mid >= info->scope_pts.count) { break; }
+      U64 mid_off = info->tokens.v[info->scope_pts.v[mid].token_idx].range.min;
+      if(off == mid_off || (first == mid && opl == mid+1))
+      {
+        result = &info->scope_nodes.v[info->scope_pts.v[mid].scope_idx];
+        break;
+      }
+      else if(off < mid_off)
+      {
+        opl = mid;
+      }
+      else if(mid_off < off)
+      {
+        first = mid;
+      }
+    }
+  }
+  return result;
+}
+
+internal TXT_ScopeNode *
+txt_scope_node_from_info_data_pt(TXT_TextInfo *info, TxtPt pt)
+{
+  U64 off = txt_off_from_info_pt(info, pt);
+  TXT_ScopeNode *result = txt_scope_node_from_info_data_off(info, off);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Transfer Threads
 

@@ -1281,71 +1281,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
-  //- rjf: produce fancy strings for each line
-  //
-  DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
-  {
-    DR_FStrParams fstr_params =
-    {
-      params->font,
-      rd_raster_flags_from_slot(RD_FontSlot_Code),
-      rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault),
-      params->font_size,
-    };
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num <= params->line_num_range.max;
-        line_num += 1, line_idx += 1)
-    {
-      String8 line_string = params->line_text[line_idx];
-      Rng1U64 line_range = params->line_ranges[line_idx];
-      TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
-      DR_FStrList fstrs = {0};
-      if(line_tokens->count == 0)
-      {
-        dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, line_string);
-      }
-      else
-      {
-        TXT_Token *line_tokens_first = line_tokens->v;
-        TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
-        for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
-        {
-          // rjf: token -> token string
-          String8 token_string = {0};
-          {
-            Rng1U64 token_range = r1u64(0, line_string.size);
-            if(token->range.min > line_range.min)
-            {
-              token_range.min += token->range.min-line_range.min;
-            }
-            if(token->range.max < line_range.max)
-            {
-              token_range.max = token->range.max-line_range.min;
-            }
-            token_string = str8_substr(line_string, token_range);
-          }
-          
-          // rjf: token -> token color
-          RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
-          RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
-          Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
-          if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
-          {
-            Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
-            F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
-            token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
-          }
-          
-          // rjf: push fancy string
-          dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, token_string, .color = token_color);
-        }
-      }
-      lines_fstrs[line_idx] = fstrs;
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: build top-level container
   //
   UI_Box *top_container_box = &ui_nil_box;
@@ -1980,6 +1915,270 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: mouse -> text coordinates
+  //
+  TxtPt mouse_pt = {0};
+  ProfScope("mouse -> text coordinates")
+  {
+    Vec2F32 mouse = ui_mouse();
+    
+    // rjf: mouse y => index
+    U64 mouse_y_line_idx = (U64)((mouse.y - text_container_box->rect.y0) / params->line_height_px);
+    
+    // rjf: index => line num
+    S64 line_num = (params->line_num_range.min + mouse_y_line_idx);
+    String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
+    
+    // rjf: mouse x * string => column
+    S64 column = fnt_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
+    
+    // rjf: bundle
+    mouse_pt = txt_pt(line_num, column);
+    
+    // rjf: clamp
+    {
+      U64 last_line_size = params->line_text[dim_1s64(params->line_num_range)].size;
+      TxtRng legal_pt_rng = txt_rng(txt_pt(params->line_num_range.min, 1),
+                                    txt_pt(params->line_num_range.max, last_line_size+1));
+      if(txt_pt_less_than(mouse_pt, legal_pt_rng.min))
+      {
+        mouse_pt = legal_pt_rng.min;
+      }
+      if(txt_pt_less_than(legal_pt_rng.max, mouse_pt))
+      {
+        mouse_pt = legal_pt_rng.max;
+      }
+    }
+    
+    result.mouse_pt = mouse_pt;
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse point -> mouse token range, mouse line range
+  //
+  TxtRng mouse_token_rng = txt_rng(mouse_pt, mouse_pt);
+  TxtRng mouse_line_rng = txt_rng(mouse_pt, mouse_pt);
+  if(contains_1s64(params->line_num_range, mouse_pt.line))
+  {
+    TXT_TokenArray *line_tokens = &params->line_tokens[mouse_pt.line-params->line_num_range.min];
+    Rng1U64 line_range = params->line_ranges[mouse_pt.line-params->line_num_range.min];
+    U64 mouse_pt_off = (mouse_pt.column-1) + line_range.min;
+    for(U64 line_token_idx = 0; line_token_idx < line_tokens->count; line_token_idx += 1)
+    {
+      TXT_Token *line_token = &line_tokens->v[line_token_idx];
+      if(contains_1u64(line_token->range, mouse_pt_off))
+      {
+        Rng1U64 line_token_range_clamped = intersect_1u64(line_token->range, line_range);
+        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token_range_clamped.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token_range_clamped.max-line_range.min));
+        break;
+      }
+    }
+    mouse_line_rng = txt_rng(txt_pt(mouse_pt.line, 1), txt_pt(mouse_pt.line, 1+(line_range.max-line_range.min)));
+  }
+  
+  //////////////////////////////
+  //- rjf: interact with margin box & text box
+  //
+  B32 search_query_invalidated = 0;
+  UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
+  UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
+  UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
+  {
+    //- rjf: determine mouse drag range
+    TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
+    if(text_container_sig.f & UI_SignalFlag_LeftTripleDragging)
+    {
+      mouse_drag_rng = mouse_line_rng;
+    }
+    else if(text_container_sig.f & UI_SignalFlag_LeftDoubleDragging)
+    {
+      mouse_drag_rng = mouse_token_rng;
+    }
+    
+    //- rjf: clicking/dragging over the text container
+    if(!ctrlified && ui_dragging(text_container_sig))
+    {
+      if(mouse_pt.line == 0)
+      {
+        mouse_pt.column = 1;
+        if(ui_mouse().y <= top_container_box->rect.y0)
+        {
+          mouse_pt.line = params->line_num_range.min - 2;
+        }
+        else if(ui_mouse().y >= top_container_box->rect.y1)
+        {
+          mouse_pt.line = params->line_num_range.max + 2;
+        }
+      }
+      if(ui_pressed(text_container_sig))
+      {
+        *cursor = mouse_drag_rng.max;
+        *mark = mouse_drag_rng.min;
+      }
+      if(txt_pt_less_than(mouse_pt, *mark))
+      {
+        *cursor = mouse_drag_rng.min;
+      }
+      else
+      {
+        *cursor = mouse_drag_rng.max;
+      }
+      *preferred_column = cursor->column;
+    }
+    
+    //- rjf: dragging will invalidate the search string, so we don't want to draw it while dragging/releasing
+    if(ui_dragging(text_container_sig) || ui_released(text_container_sig))
+    {
+      search_query_invalidated = 1;
+    }
+    
+    //- rjf: right-click => code context menu
+    if(ui_right_clicked(text_container_sig))
+    {
+      if(txt_pt_match(*cursor, *mark))
+      {
+        *cursor = *mark = mouse_pt;
+      }
+      U64 vaddr = 0;
+      D_LineList lines = {0};
+      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
+      {
+        vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
+        lines = params->line_infos[cursor->line - params->line_num_range.min];
+      }
+      rd_cmd(RD_CmdKind_FocusPanel);
+      rd_cmd(RD_CmdKind_PushQuery,
+             .expr = txt_pt_match(*cursor, *mark) ? str8_lit("query:text_pt_commands") : str8_lit("query:text_range_commands"),
+             .do_implicit_root = 1,
+             .do_lister = 1,
+             .ui_key = ui_get_selected_state()->root->key,
+             .off_px = ui_mouse(),
+             .cursor = *cursor,
+             .mark = *mark,
+             .vaddr = vaddr,
+             .lines = lines);
+    }
+    
+    //- rjf: drop target is dropped -> process
+    if(drop_can_hit_lines && ui_key_match(ui_drop_hot_key(), drop_site_key) && rd_drag_drop())
+    {
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
+      {
+        S64 line_num = mouse_pt.line;
+        U64 line_idx = line_num - params->line_num_range.min;
+        U64 line_vaddr = params->line_vaddrs[line_idx];
+        rd_cmd(RD_CmdKind_AddWatchPin,
+               .expr       = rd_state->drag_drop_regs->expr,
+               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
+               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
+               .vaddr      = line_vaddr);
+      }
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && drop_cfg != &rd_nil_cfg)
+      {
+        S64 line_num = mouse_pt.line;
+        U64 line_idx = line_num - params->line_num_range.min;
+        U64 line_vaddr = params->line_vaddrs[line_idx];
+        rd_cmd(RD_CmdKind_RelocateCfg,
+               .cfg        = drop_cfg->id,
+               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
+               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
+               .vaddr      = line_vaddr);
+      }
+      if(drop_thread != &ctrl_entity_nil)
+      {
+        S64 line_num = mouse_pt.line;
+        U64 line_idx = line_num - params->line_num_range.min;
+        U64 line_vaddr = params->line_vaddrs[line_idx];
+        CTRL_Entity *thread = drop_thread;
+        U64 new_rip_vaddr = line_vaddr;
+        if(params->line_vaddrs[line_idx] == 0)
+        {
+          D_LineList *lines = &params->line_infos[line_idx];
+          for(D_LineNode *n = lines->first; n != 0; n = n->next)
+          {
+            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
+            CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
+            if(module != &ctrl_entity_nil)
+            {
+              new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+              break;
+            }
+          }
+        }
+        rd_cmd(RD_CmdKind_SetThreadIP, .thread = thread->handle, .vaddr = new_rip_vaddr);
+      }
+    }
+    
+    //- rjf: commit text container signal to main output
+    result.base = text_container_sig;
+  }
+  
+  //////////////////////////////
+  //- rjf: produce fancy strings for each line
+  //
+  DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
+  {
+    DR_FStrParams fstr_params =
+    {
+      params->font,
+      rd_raster_flags_from_slot(RD_FontSlot_Code),
+      rd_rgba_from_code_color_slot(RD_CodeColorSlot_CodeDefault),
+      params->font_size,
+    };
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num <= params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      String8 line_string = params->line_text[line_idx];
+      Rng1U64 line_range = params->line_ranges[line_idx];
+      TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
+      DR_FStrList fstrs = {0};
+      if(line_tokens->count == 0)
+      {
+        dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, line_string);
+      }
+      else
+      {
+        TXT_Token *line_tokens_first = line_tokens->v;
+        TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+        for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
+        {
+          // rjf: token -> token string
+          String8 token_string = {0};
+          {
+            Rng1U64 token_range = r1u64(0, line_string.size);
+            if(token->range.min > line_range.min)
+            {
+              token_range.min += token->range.min-line_range.min;
+            }
+            if(token->range.max < line_range.max)
+            {
+              token_range.max = token->range.max-line_range.min;
+            }
+            token_string = str8_substr(line_string, token_range);
+          }
+          
+          // rjf: token -> token color
+          RD_CodeColorSlot token_color_slot = rd_code_color_slot_from_txt_token_kind(token->kind);
+          RD_CodeColorSlot lookup_color_slot = rd_code_color_slot_from_txt_token_kind_lookup_string(token->kind, token_string);
+          Vec4F32 token_color = rd_rgba_from_code_color_slot(token_color_slot);
+          if(lookup_color_slot != RD_CodeColorSlot_CodeDefault)
+          {
+            Vec4F32 lookup_color = rd_rgba_from_code_color_slot(lookup_color_slot);
+            F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
+            token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
+          }
+          
+          // rjf: push fancy string
+          dr_fstrs_push_new(scratch.arena, &fstrs, &fstr_params, token_string, .color = token_color);
+        }
+      }
+      lines_fstrs[line_idx] = fstrs;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: determine starting offset for each at line, at which we can begin placing extra info to the right
   //
   F32 *line_extras_off = push_array(scratch.arena, F32, dim_1s64(params->line_num_range)+1);
@@ -2181,205 +2380,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       }
     }
     di_scope_close(scope);
-  }
-  
-  //////////////////////////////
-  //- rjf: mouse -> text coordinates
-  //
-  TxtPt mouse_pt = {0};
-  ProfScope("mouse -> text coordinates")
-  {
-    Vec2F32 mouse = ui_mouse();
-    
-    // rjf: mouse y => index
-    U64 mouse_y_line_idx = (U64)((mouse.y - text_container_box->rect.y0) / params->line_height_px);
-    
-    // rjf: index => line num
-    S64 line_num = (params->line_num_range.min + mouse_y_line_idx);
-    String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
-    
-    // rjf: mouse x * string => column
-    S64 column = fnt_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
-    
-    // rjf: bundle
-    mouse_pt = txt_pt(line_num, column);
-    
-    // rjf: clamp
-    {
-      U64 last_line_size = params->line_text[dim_1s64(params->line_num_range)].size;
-      TxtRng legal_pt_rng = txt_rng(txt_pt(params->line_num_range.min, 1),
-                                    txt_pt(params->line_num_range.max, last_line_size+1));
-      if(txt_pt_less_than(mouse_pt, legal_pt_rng.min))
-      {
-        mouse_pt = legal_pt_rng.min;
-      }
-      if(txt_pt_less_than(legal_pt_rng.max, mouse_pt))
-      {
-        mouse_pt = legal_pt_rng.max;
-      }
-    }
-    
-    result.mouse_pt = mouse_pt;
-  }
-  
-  //////////////////////////////
-  //- rjf: mouse point -> mouse token range, mouse line range
-  //
-  TxtRng mouse_token_rng = txt_rng(mouse_pt, mouse_pt);
-  TxtRng mouse_line_rng = txt_rng(mouse_pt, mouse_pt);
-  if(contains_1s64(params->line_num_range, mouse_pt.line))
-  {
-    TXT_TokenArray *line_tokens = &params->line_tokens[mouse_pt.line-params->line_num_range.min];
-    Rng1U64 line_range = params->line_ranges[mouse_pt.line-params->line_num_range.min];
-    U64 mouse_pt_off = (mouse_pt.column-1) + line_range.min;
-    for(U64 line_token_idx = 0; line_token_idx < line_tokens->count; line_token_idx += 1)
-    {
-      TXT_Token *line_token = &line_tokens->v[line_token_idx];
-      if(contains_1u64(line_token->range, mouse_pt_off))
-      {
-        Rng1U64 line_token_range_clamped = intersect_1u64(line_token->range, line_range);
-        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token_range_clamped.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token_range_clamped.max-line_range.min));
-        break;
-      }
-    }
-    mouse_line_rng = txt_rng(txt_pt(mouse_pt.line, 1), txt_pt(mouse_pt.line, 1+(line_range.max-line_range.min)));
-  }
-  
-  //////////////////////////////
-  //- rjf: interact with margin box & text box
-  //
-  B32 search_query_invalidated = 0;
-  UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
-  UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
-  UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
-  {
-    //- rjf: determine mouse drag range
-    TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
-    if(text_container_sig.f & UI_SignalFlag_LeftTripleDragging)
-    {
-      mouse_drag_rng = mouse_line_rng;
-    }
-    else if(text_container_sig.f & UI_SignalFlag_LeftDoubleDragging)
-    {
-      mouse_drag_rng = mouse_token_rng;
-    }
-    
-    //- rjf: clicking/dragging over the text container
-    if(!ctrlified && ui_dragging(text_container_sig))
-    {
-      if(mouse_pt.line == 0)
-      {
-        mouse_pt.column = 1;
-        if(ui_mouse().y <= top_container_box->rect.y0)
-        {
-          mouse_pt.line = params->line_num_range.min - 2;
-        }
-        else if(ui_mouse().y >= top_container_box->rect.y1)
-        {
-          mouse_pt.line = params->line_num_range.max + 2;
-        }
-      }
-      if(ui_pressed(text_container_sig))
-      {
-        *cursor = mouse_drag_rng.max;
-        *mark = mouse_drag_rng.min;
-      }
-      if(txt_pt_less_than(mouse_pt, *mark))
-      {
-        *cursor = mouse_drag_rng.min;
-      }
-      else
-      {
-        *cursor = mouse_drag_rng.max;
-      }
-      *preferred_column = cursor->column;
-    }
-    
-    //- rjf: dragging will invalidate the search string, so we don't want to draw it while dragging/releasing
-    if(ui_dragging(text_container_sig) || ui_released(text_container_sig))
-    {
-      search_query_invalidated = 1;
-    }
-    
-    //- rjf: right-click => code context menu
-    if(ui_right_clicked(text_container_sig))
-    {
-      if(txt_pt_match(*cursor, *mark))
-      {
-        *cursor = *mark = mouse_pt;
-      }
-      U64 vaddr = 0;
-      D_LineList lines = {0};
-      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
-      {
-        vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
-        lines = params->line_infos[cursor->line - params->line_num_range.min];
-      }
-      rd_cmd(RD_CmdKind_FocusPanel);
-      rd_cmd(RD_CmdKind_PushQuery,
-             .expr = txt_pt_match(*cursor, *mark) ? str8_lit("query:text_pt_commands") : str8_lit("query:text_range_commands"),
-             .do_implicit_root = 1,
-             .do_lister = 1,
-             .ui_key = ui_get_selected_state()->root->key,
-             .off_px = ui_mouse(),
-             .cursor = *cursor,
-             .mark = *mark,
-             .vaddr = vaddr,
-             .lines = lines);
-    }
-    
-    //- rjf: drop target is dropped -> process
-    if(drop_can_hit_lines && ui_key_match(ui_drop_hot_key(), drop_site_key) && rd_drag_drop())
-    {
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
-      {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
-        rd_cmd(RD_CmdKind_AddWatchPin,
-               .expr       = rd_state->drag_drop_regs->expr,
-               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
-               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
-               .vaddr      = line_vaddr);
-      }
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && drop_cfg != &rd_nil_cfg)
-      {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
-        rd_cmd(RD_CmdKind_RelocateCfg,
-               .cfg        = drop_cfg->id,
-               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
-               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
-               .vaddr      = line_vaddr);
-      }
-      if(drop_thread != &ctrl_entity_nil)
-      {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
-        CTRL_Entity *thread = drop_thread;
-        U64 new_rip_vaddr = line_vaddr;
-        if(params->line_vaddrs[line_idx] == 0)
-        {
-          D_LineList *lines = &params->line_infos[line_idx];
-          for(D_LineNode *n = lines->first; n != 0; n = n->next)
-          {
-            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, &d_state->ctrl_entity_store->ctx, &n->v.dbgi_key);
-            CTRL_Entity *module = ctrl_module_from_thread_candidates(&d_state->ctrl_entity_store->ctx, thread, &modules);
-            if(module != &ctrl_entity_nil)
-            {
-              new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
-              break;
-            }
-          }
-        }
-        rd_cmd(RD_CmdKind_SetThreadIP, .thread = thread->handle, .vaddr = new_rip_vaddr);
-      }
-    }
-    
-    //- rjf: commit text container signal to main output
-    result.base = text_container_sig;
   }
   
   //////////////////////////////

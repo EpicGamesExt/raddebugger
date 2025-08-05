@@ -258,6 +258,7 @@ struct TXT_Shared
 ////////////////////////////////
 //~ rjf: Globals
 
+read_only global TXT_ScopeNode txt_scope_node_nil = {0};
 thread_static TXT_TCTX *txt_tctx = 0;
 global TXT_Shared *txt_shared = 0;
 
@@ -320,6 +321,9 @@ internal Rng1U64 txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String
 internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng);
 internal String8 txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 data, S64 line_num);
 internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
+internal TXT_ScopeNode *txt_scope_node_from_info_num(TXT_TextInfo *info, U64 num);
+internal TXT_ScopeNode *txt_scope_node_from_info_data_off(TXT_TextInfo *info, U64 off);
+internal TXT_ScopeNode *txt_scope_node_from_info_data_pt(TXT_TextInfo *info, TxtPt pt);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
