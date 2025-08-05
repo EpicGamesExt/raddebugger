@@ -3804,7 +3804,7 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
         itype_type_ptrs[table[idx].kind_cv] = builtin_alias;
       }
       itype_type_ptrs[CV_BasicType_HRESULT] = basic_type_ptrs[RDI_TypeKind_HResult - RDI_TypeKind_FirstBuiltIn];
-      itype_type_ptrs[CV_BasicType_VOID]    = basic_type_ptrs[RDI_TypeKind_HResult - RDI_TypeKind_Void];
+      itype_type_ptrs[CV_BasicType_VOID]    = basic_type_ptrs[RDI_TypeKind_Void - RDI_TypeKind_FirstBuiltIn];
     }
     
     ////////////////////////////
