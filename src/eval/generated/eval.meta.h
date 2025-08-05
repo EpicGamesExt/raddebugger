@@ -107,6 +107,7 @@ E_ExprKind_Address,
 E_ExprKind_Cast,
 E_ExprKind_Sizeof,
 E_ExprKind_Typeof,
+E_ExprKind_Symbolof,
 E_ExprKind_ByteSwap,
 E_ExprKind_Pos,
 E_ExprKind_Neg,
@@ -170,8 +171,8 @@ C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
 extern String8 e_type_kind_basic_string_table[61];
 extern U8 e_type_kind_basic_byte_size_table[61];
-extern String8 e_expr_kind_strings[49];
-extern E_OpInfo e_expr_kind_op_info_table[49];
+extern String8 e_expr_kind_strings[50];
+extern E_OpInfo e_expr_kind_op_info_table[50];
 extern String8 e_interpretation_code_display_strings[11];
 
 C_LINKAGE_END

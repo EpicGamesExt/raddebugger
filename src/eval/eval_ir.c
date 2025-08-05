@@ -953,6 +953,53 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         result.mode     = E_Mode_Null;
       }break;
       
+      //- rjf: symbolof
+      case E_ExprKind_Symbolof:
+      {
+        E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, expr->first);
+        E_IRNode *r_value_tree = e_irtree_resolve_to_value(arena, r_tree.mode, r_tree.root, r_tree.type_key);
+        E_OpList oplist = e_oplist_from_irtree(scratch.arena, r_value_tree);
+        String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+        E_Interpretation interpretation = e_interpret(bytecode);
+        E_Module *module = &e_module_nil;
+        U32 rdi_idx = 0;
+        for EachIndex(idx, e_base_ctx->modules_count)
+        {
+          E_Module *m = &e_base_ctx->modules[idx];
+          if(e_space_match(interpretation.space, m->space) && contains_1u64(m->vaddr_range, interpretation.value.u64))
+          {
+            module = m;
+            rdi_idx = (U32)idx;
+            break;
+          }
+        }
+        if(module != &e_module_nil)
+        {
+          U64 voff = interpretation.value.u64 - module->vaddr_range.min;
+          U64 new_vaddr = 0;
+          RDI_Procedure *p = rdi_procedure_from_voff(module->rdi, voff);
+          RDI_GlobalVariable *g = rdi_global_variable_from_voff(module->rdi, voff);
+          U32 type_idx = 0;
+          if(p->name_string_idx != 0)
+          {
+            type_idx = p->type_idx;
+            new_vaddr = module->vaddr_range.min + rdi_first_voff_from_procedure(module->rdi, p);
+          }
+          else if(g->name_string_idx != 0)
+          {
+            type_idx = g->type_idx;
+            new_vaddr = module->vaddr_range.min + g->voff;
+          }
+          if(type_idx != 0)
+          {
+            RDI_TypeNode *t = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
+            result.root = e_irtree_const_u(arena, new_vaddr);
+            result.mode = E_Mode_Value;
+            result.type_key = e_type_key_ext(e_type_kind_from_rdi(t->kind), type_idx, rdi_idx);
+          }
+        }
+      }break;
+      
       //- rjf: byteswap
       case E_ExprKind_ByteSwap:
       {

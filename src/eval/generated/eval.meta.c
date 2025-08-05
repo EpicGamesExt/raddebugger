@@ -144,7 +144,7 @@ U8 e_type_kind_basic_byte_size_table[61] =
 0,
 };
 
-String8 e_expr_kind_strings[49] =
+String8 e_expr_kind_strings[50] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -155,6 +155,7 @@ str8_lit_comp("Address"),
 str8_lit_comp("Cast"),
 str8_lit_comp("Sizeof"),
 str8_lit_comp("Typeof"),
+str8_lit_comp("Symbolof"),
 str8_lit_comp("ByteSwap"),
 str8_lit_comp("Pos"),
 str8_lit_comp("Neg"),
@@ -197,7 +198,7 @@ str8_lit_comp("Unsigned"),
 str8_lit_comp("Define"),
 };
 
-E_OpInfo e_expr_kind_op_info_table[49] =
+E_OpInfo e_expr_kind_op_info_table[50] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -208,6 +209,7 @@ E_OpInfo e_expr_kind_op_info_table[49] =
 { E_OpKind_Null, 1, str8_lit_comp("cast("), str8_lit_comp(")"), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("sizeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("typeof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
+{ E_OpKind_UnaryPrefix, 1, str8_lit_comp("symbolof "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("bswap "), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("+"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("-"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
