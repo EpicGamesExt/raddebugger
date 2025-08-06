@@ -1274,6 +1274,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   B32 do_thread_glow = rd_setting_b32_from_name(str8_lit("thread_glow"));
   B32 do_bp_lines = rd_setting_b32_from_name(str8_lit("breakpoint_lines"));
   B32 do_bp_glow = rd_setting_b32_from_name(str8_lit("breakpoint_glow"));
+  B32 do_scope_lines = rd_setting_b32_from_name(str8_lit("cursor_scope_lines"));
   Vec4F32 pop_color = {0};
   UI_TagF("pop")
   {
@@ -2381,7 +2382,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: equip cursor scope rendering info
   //
-  if(cursor_scope_node != &txt_scope_node_nil)
+  if(do_scope_lines && cursor_scope_node != &txt_scope_node_nil)
   {
     Vec4F32 scope_line_color = highlight_color;
     scope_line_color.w *= 0.25f;
@@ -2413,7 +2414,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                           text_base_pos.x + x_px_range.max+1,
                                           text_base_pos.y + line_y + params->line_height_px + params->font_size*0.1f);
           F32 midpoint = center_1f32(r1f32(underline_rect.x0, underline_rect.x1));
-          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f);
+          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f, .rate = rd_state->catchall_animation_rate);
           Rng2F32 underline_clip = {0};
           underline_clip.x0 = mix_1f32(midpoint, underline_rect.x0 - params->font_size, t);
           underline_clip.x1 = mix_1f32(midpoint, underline_rect.x1 + params->font_size, t);
@@ -2445,7 +2446,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             scope_range_y_px.max = ((txt_range.max.line - params->line_num_range.min) + 1) * params->line_height_px;
           }
           F32 midpoint = center_1f32(scope_range_y_px);
-          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f);
+          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f, .rate = rd_state->catchall_animation_rate);
           Rng2F32 scope_rect = r2f32p(text_base_pos.x + indent_depth_px - params->font_size*0.2f,
                                       text_base_pos.y + scope_range_y_px.min,
                                       text_base_pos.x + indent_depth_px - params->font_size*0.2f + params->font_size*1.f,

@@ -256,6 +256,10 @@ RD_VocabTable:
       @display_name('View Call Argument Helper') @description("Enables the view call argument helper, which shows view arguments and documentation, while typing expressions.") @default(1)
         'view_call_argument_helper': bool,
       
+      //- rjf: scope decorations
+      @default(1) @display_name('Cursor Scope Lines') @description("Controls whether or not scopes containing the cursor in text views are drawn.")
+        'cursor_scope_lines': bool,
+      
       //- rjf: thread & breakpoint decorations
       @default(1) @display_name('Thread Lines') @description("Controls whether or not a long horizontal line is drawn before the next line or instruction that the selected thread will execute in source and disassembly views.")
         'thread_lines': bool,
