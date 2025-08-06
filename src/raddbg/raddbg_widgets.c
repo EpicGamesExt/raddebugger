@@ -1279,6 +1279,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     pop_color = ui_color_from_name(str8_lit("background"));
   }
+  Vec4F32 highlight_color = {0};
+  UI_TagF("focus")
+  {
+    highlight_color = ui_color_from_name(str8_lit("border"));
+  }
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -2123,6 +2128,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: equip cursor scope rendering info
+  //
+  if(cursor_scope_node != &txt_scope_node_nil)
+  {
+    
+  }
+  
+  //////////////////////////////
   //- rjf: produce fancy strings for each line
   //
   DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
@@ -2187,7 +2200,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             if(params->text_info->tokens.v[scope_n->token_idx_range.min].range.min == token->range.min ||
                params->text_info->tokens.v[scope_n->token_idx_range.max].range.min == token->range.min)
             {
-              token_color = pop_color;
+              token_color = highlight_color;
               break;
             }
           }

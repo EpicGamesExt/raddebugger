@@ -2101,26 +2101,41 @@ internal TXT_ScopeNode *
 txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off)
 {
   TXT_ScopeNode *result = &txt_scope_node_nil;
+  if(info->scope_pts.count != 0)
   {
     U64 first = 0;
     U64 opl = info->scope_pts.count;
     for(;;)
     {
-      U64 mid = first + (opl - first) / 2;
-      if(mid >= info->scope_pts.count) { break; }
+      U64 mid = (first + opl) / 2;
       U64 mid_off = info->tokens.v[info->scope_pts.v[mid].token_idx].range.min;
-      if(off == mid_off || (first == mid && opl == mid+1))
+      if(mid_off < off)
       {
-        result = &info->scope_nodes.v[info->scope_pts.v[mid].scope_idx];
-        break;
+        first = mid;
       }
       else if(off < mid_off)
       {
         opl = mid;
       }
-      else if(mid_off < off)
+      else
       {
         first = mid;
+        break;
+      }
+      if(opl - first <= 1)
+      {
+        break;
+      }
+    }
+    TXT_ScopeNode *closest_node = &info->scope_nodes.v[info->scope_pts.v[first].scope_idx];
+    for(TXT_ScopeNode *scope_n = closest_node;
+        scope_n != &txt_scope_node_nil;
+        scope_n = txt_scope_node_from_info_num(info, scope_n->parent_num))
+    {
+      if(off < info->tokens.v[scope_n->token_idx_range.max].range.max)
+      {
+        result = scope_n;
+        break;
       }
     }
   }
