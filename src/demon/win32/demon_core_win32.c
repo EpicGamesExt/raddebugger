@@ -1684,6 +1684,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           }break;
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite|DMN_TrapFlag_BreakOnExecute:
                           case DMN_TrapFlag_BreakOnRead|DMN_TrapFlag_BreakOnWrite:
+                          case DMN_TrapFlag_BreakOnRead:
                           {
                             regs.dr7.u64 |= (((U64)bit17) << (trap_idx*4));
                             regs.dr7.u64 |= (((U64)bit18) << (trap_idx*4));
