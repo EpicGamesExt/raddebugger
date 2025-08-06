@@ -106,6 +106,7 @@ struct RD_CodeSliceParams
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
   TXT_TextInfo *text_info;
+  String8 text_data;
   
   // rjf: visual parameters
   FNT_Tag font;

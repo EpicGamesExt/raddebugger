@@ -81,6 +81,14 @@ internal F32 length_3f32(Vec3F32 v)                             {F32 c = sqrt_f3
 internal Vec3F32 normalize_3f32(Vec3F32 v)                      {v = scale_3f32(v, 1.f/length_3f32(v)); return v;}
 internal Vec3F32 mix_3f32(Vec3F32 a, Vec3F32 b, F32 t)          {Vec3F32 c = {mix_1f32(a.x, b.x, t), mix_1f32(a.y, b.y, t), mix_1f32(a.z, b.z, t)}; return c;}
 internal Vec3F32 cross_3f32(Vec3F32 a, Vec3F32 b)               {Vec3F32 c = {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x}; return c;}
+internal Vec3F32 xform_3f32(Vec3F32 v, Mat3x3F32 m)
+{
+  Vec3F32 result;
+  result.x = v.x*m.v[0][0] + v.y*m.v[1][0] + v.z*m.v[2][0];
+  result.y = v.x*m.v[0][1] + v.y*m.v[1][1] + v.z*m.v[2][1];
+  result.z = v.x*m.v[0][2] + v.y*m.v[1][2] + v.z*m.v[2][2];
+  return result;
+}
 
 internal Vec3S32 vec_3s32(S32 x, S32 y, S32 z)                  {Vec3S32 v = {x, y, z}; return v;}
 internal Vec3S32 add_3s32(Vec3S32 a, Vec3S32 b)                 {Vec3S32 c = {a.x+b.x, a.y+b.y, a.z+b.z}; return c;}

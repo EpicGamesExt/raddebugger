@@ -485,6 +485,7 @@ internal F32 length_3f32(Vec3F32 v);
 internal Vec3F32 normalize_3f32(Vec3F32 v);
 internal Vec3F32 mix_3f32(Vec3F32 a, Vec3F32 b, F32 t);
 internal Vec3F32 cross_3f32(Vec3F32 a, Vec3F32 b);
+internal Vec3F32 xform_3f32(Vec3F32 v, Mat3x3F32 m);
 
 #define v3s32(x, y, z) vec_3s32((x), (y), (z))
 internal Vec3S32 vec_3s32(S32 x, S32 y, S32 z);

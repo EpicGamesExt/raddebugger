@@ -507,12 +507,19 @@ dr_sub_bucket(DR_Bucket *bucket)
           MemoryCopyStruct(&dst_group_n->params, &src_group_n->params);
           dst_group_n->batches = src_group_n->batches;
           dst_group_n->params.xform = dr_top_xform2d();
+          B32 clip_is_set = !(dst_group_n->params.clip.x0 == 0 &&
+                              dst_group_n->params.clip.y0 == 0 &&
+                              dst_group_n->params.clip.x1 == 0 &&
+                              dst_group_n->params.clip.y1 == 0);
+          if(clip_is_set)
+          {
+            Rng2F32 og_clip = dst_group_n->params.clip;
+            Mat3x3F32 xform = dst_group_n->params.xform;
+            dst_group_n->params.clip = r2f32(xform_3f32(v3f32(og_clip.x0, og_clip.y0, 1), xform).xy,
+                                             xform_3f32(v3f32(og_clip.x1, og_clip.y1, 1), xform).xy);
+          }
           if(dst_clip_is_set)
           {
-            B32 clip_is_set = !(dst_group_n->params.clip.x0 == 0 &&
-                                dst_group_n->params.clip.y0 == 0 &&
-                                dst_group_n->params.clip.x1 == 0 &&
-                                dst_group_n->params.clip.y1 == 0);
             dst_group_n->params.clip = clip_is_set ? intersect_2f32(dst_clip, dst_group_n->params.clip) : dst_clip;
           }
         }

@@ -1982,6 +1982,179 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
+  //- rjf: determine starting offset for each at line, at which we can begin placing extra info to the right
+  //
+  F32 *line_extras_off = push_array(scratch.arena, F32, dim_1s64(params->line_num_range)+1);
+  {
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num <= params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      F32 line_text_dim = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, params->line_text[line_idx]).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
+      line_extras_off[line_idx] = Max(line_text_dim, params->font_size*30);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: produce per-line extra annotation containers
+  //
+  UI_Box **line_extras_boxes = push_array(scratch.arena, UI_Box *, dim_1s64(params->line_num_range)+1);
+  UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f)) UI_Parent(text_container_box) UI_Focus(UI_FocusKind_Off)
+  {
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      ui_set_next_fixed_x(line_extras_off[line_idx]);
+      ui_set_next_fixed_y(line_idx*params->line_height_px);
+      line_extras_boxes[line_idx] = ui_build_box_from_stringf(0, "###extras_%I64x", line_idx);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build watch pin annotations
+  //
+  UI_Focus(UI_FocusKind_Off)
+  {
+    DI_Scope *scope = di_scope_open();
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      RD_CfgList immediate_pins = {0};
+      String8 line_text = params->line_text[line_idx];
+      for(U64 off = 0, next_off = line_text.size;
+          off < line_text.size;
+          off = next_off)
+      {
+        // rjf: find next opener
+        String8 markup_opener = str8_lit("raddbg_pin(");
+        next_off = str8_find_needle(line_text, off, markup_opener, 0);
+        next_off += markup_opener.size;
+        
+        // rjf: extract contents of markup
+        String8 contents = {0};
+        S32 nest = 1;
+        for(U64 off2 = next_off; off2 < line_text.size; off2 += 1)
+        {
+          if(line_text.str[off2] == '(')
+          {
+            nest += 1;
+          }
+          else if(line_text.str[off2] == ')')
+          {
+            nest -= 1;
+            if(nest == 0)
+            {
+              contents = str8_substr(line_text, r1u64(next_off, off2));
+              break;
+            }
+          }
+        }
+        
+        // rjf: gather arguments
+        String8List args = {0};
+        {
+          S32 nest = 0;
+          U64 arg_start_off = 0;
+          for(U64 contents_off = 0; contents_off <= contents.size; contents_off += 1)
+          {
+            if(nest == 0 && (contents_off == contents.size || contents.str[contents_off] == ','))
+            {
+              String8 arg = str8_substr(contents, r1u64(arg_start_off, contents_off));
+              arg = str8_skip_chop_whitespace(arg);
+              str8_list_push(scratch.arena, &args, arg);
+              arg_start_off = contents_off+1;
+            }
+            if(contents_off < contents.size)
+            {
+              if(contents.str[contents_off] == '(')
+              {
+                nest += 1;
+              }
+              else if(contents.str[contents_off] == ')')
+              {
+                nest -= 1;
+              }
+            }
+          }
+        }
+        
+        // rjf: extract fixed arguments
+        String8 expr_string = {0};
+        if(args.first != 0)
+        {
+          expr_string = args.first->string;
+        }
+        
+        // rjf: build immediate pin for this markup
+        if(expr_string.size != 0)
+        {
+          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("markup_pin_%I64x_%I64x", line_num, off);
+          RD_Cfg *pin = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("watch_pin"));
+          RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(pin, str8_lit("expression"));
+          rd_cfg_new_replace(expr, expr_string);
+          rd_cfg_list_push(scratch.arena, &immediate_pins, pin);
+        }
+      }
+      RD_CfgList pin_lists[] =
+      {
+        params->line_pins[line_idx],
+        immediate_pins,
+      };
+      E_ParentKey(e_key_zero()) for EachElement(list_idx, pin_lists)
+      {
+        RD_CfgList pins = pin_lists[list_idx];
+        if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])
+          RD_Font(RD_FontSlot_Code)
+          UI_FontSize(params->font_size)
+          UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+        {
+          for(RD_CfgNode *n = pins.first; n != 0; n = n->next)
+          {
+            RD_Cfg *pin = n->v;
+            String8 pin_expr = rd_expr_from_cfg(pin);
+            E_Eval eval = e_eval_from_string(pin_expr);
+            String8 eval_string = {0};
+            if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
+            {
+              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
+              eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, params->font, params->font_size, params->font_size*60.f, eval);
+            }
+            ui_spacer(ui_em(1.5f, 1.f));
+            ui_set_next_pref_width(ui_children_sum(1));
+            UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
+            UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|
+                                                    UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
+                                                    UI_BoxFlag_DrawHotEffects|
+                                                    UI_BoxFlag_DrawBorder, pin_box_key);
+            UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              Vec4F32 pin_color = rd_color_from_cfg(pin);
+              if(pin_color.w == 0)
+              {
+                pin_color = ui_color_from_name(str8_lit("text"));
+              }
+              Vec4F32 default_code_color = ui_color_from_name(str8_lit("code_default"));
+              rd_code_label(0.8f, 1, default_code_color, pin_expr);
+              rd_code_label(0.6f, 1, default_code_color, eval_string);
+            }
+            UI_Signal pin_sig = ui_signal_from_box(pin_box);
+            if(ui_key_match(pin_box_key, ui_hot_key()))
+            {
+              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr);
+            }
+          }
+        }
+      }
+    }
+    di_scope_close(scope);
+  }
+  
+  //////////////////////////////
   //- rjf: interact with margin box & text box
   //
   B32 search_query_invalidated = 0;
@@ -2128,14 +2301,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
-  //- rjf: equip cursor scope rendering info
-  //
-  if(cursor_scope_node != &txt_scope_node_nil)
-  {
-    
-  }
-  
-  //////////////////////////////
   //- rjf: produce fancy strings for each line
   //
   DR_FStrList *lines_fstrs = push_array(scratch.arena, DR_FStrList, dim_1s64(params->line_num_range)+1);
@@ -2214,36 +2379,92 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
-  //- rjf: determine starting offset for each at line, at which we can begin placing extra info to the right
+  //- rjf: equip cursor scope rendering info
   //
-  F32 *line_extras_off = push_array(scratch.arena, F32, dim_1s64(params->line_num_range)+1);
+  if(cursor_scope_node != &txt_scope_node_nil)
   {
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num <= params->line_num_range.max;
-        line_num += 1, line_idx += 1)
+    Vec4F32 scope_line_color = highlight_color;
+    scope_line_color.w *= 0.25f;
+    DR_Bucket *bucket = dr_bucket_make();
+    DR_BucketScope(bucket)
     {
-      DR_FStrList line_fstrs = lines_fstrs[line_idx];
-      F32 line_text_dim = dr_dim_from_fstrs(params->tab_size, &line_fstrs).x + params->line_num_width_px + params->catchall_margin_width_px + params->priority_margin_width_px;
-      line_extras_off[line_idx] = Max(line_text_dim, params->font_size*30);
+      Vec2F32 text_base_pos = v2f32(text_container_box->rect.x0 + params->line_num_width_px + line_num_padding_px,
+                                    text_container_box->rect.y0);
+      for(TXT_ScopeNode *scope_n = cursor_scope_node;
+          scope_n != &txt_scope_node_nil;
+          scope_n = txt_scope_node_from_info_num(params->text_info, scope_n->parent_num))
+      {
+        Rng1U64 token_idx_range = scope_n->token_idx_range;
+        Rng1U64 off_range = r1u64(params->text_info->tokens.v[token_idx_range.min].range.min, params->text_info->tokens.v[token_idx_range.max].range.min);
+        TxtRng txt_range = txt_rng(txt_pt_from_info_off__linear_scan(params->text_info, off_range.min), txt_pt_from_info_off__linear_scan(params->text_info, off_range.max));
+        
+        //- rjf: single-line scopes (underline)
+        if(txt_range.min.line == txt_range.max.line && contains_1s64(params->line_num_range, txt_range.min.line))
+        {
+          S64 line_num = txt_range.min.line;
+          U64 line_idx = (U64)(line_num - params->line_num_range.min);
+          String8 line_string = params->line_text[line_idx];
+          Rng1U64 line_off_range = r1u64(off_range.min - params->line_ranges[line_idx].min, off_range.max+1 - params->line_ranges[line_idx].min);
+          Rng1F32 x_px_range = r1f32(fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_string, line_off_range.min)).x,
+                                     fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_string, line_off_range.max)).x);
+          F32 line_y = line_idx*params->line_height_px;
+          Rng2F32 underline_rect = r2f32p(text_base_pos.x + x_px_range.min,
+                                          text_base_pos.y + line_y + params->line_height_px*0.5f,
+                                          text_base_pos.x + x_px_range.max+1,
+                                          text_base_pos.y + line_y + params->line_height_px + params->font_size*0.1f);
+          F32 midpoint = center_1f32(r1f32(underline_rect.x0, underline_rect.x1));
+          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f);
+          Rng2F32 underline_clip = {0};
+          underline_clip.x0 = mix_1f32(midpoint, underline_rect.x0 - params->font_size, t);
+          underline_clip.x1 = mix_1f32(midpoint, underline_rect.x1 + params->font_size, t);
+          underline_clip.y0 = underline_rect.y0 + (underline_rect.y1 - underline_rect.y0) * 0.65f;
+          underline_clip.y1 = 10000;
+          DR_ClipScope(underline_clip)
+          {
+            dr_rect(underline_rect, scope_line_color, params->font_size*0.1f, 1.f, 1.f);
+          }
+        }
+        
+        //- rjf: cross-line scopes
+        if(txt_range.min.line != txt_range.max.line && params->line_num_range.max > txt_range.min.line && params->line_num_range.min < txt_range.max.line)
+        {
+          String8 opener_line = txt_string_from_info_data_line_num(params->text_info, params->text_data, txt_range.min.line);
+          String8 closer_line = txt_string_from_info_data_line_num(params->text_info, params->text_data, txt_range.max.line);
+          String8 opener_line_pre_opener = str8_prefix(opener_line, txt_range.min.column-1);
+          String8 closer_line_pre_closer = str8_prefix(closer_line, txt_range.max.column-1);
+          F32 opener_line_pre_opener_px = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, opener_line_pre_opener).x;
+          F32 closer_line_pre_closer_px = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, closer_line_pre_closer).x;
+          F32 indent_depth_px = Min(opener_line_pre_opener_px, closer_line_pre_closer_px);
+          Rng1F32 scope_range_y_px = r1f32(0, dim_2f32(text_container_box->rect).y);
+          if(contains_1s64(params->line_num_range, txt_range.min.line))
+          {
+            scope_range_y_px.min = (txt_range.min.line - params->line_num_range.min) * params->line_height_px;
+          }
+          if(contains_1s64(params->line_num_range, txt_range.max.line))
+          {
+            scope_range_y_px.max = ((txt_range.max.line - params->line_num_range.min) + 1) * params->line_height_px;
+          }
+          F32 midpoint = center_1f32(scope_range_y_px);
+          F32 t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), 1.f);
+          Rng2F32 scope_rect = r2f32p(text_base_pos.x + indent_depth_px - params->font_size*0.2f,
+                                      text_base_pos.y + scope_range_y_px.min,
+                                      text_base_pos.x + indent_depth_px - params->font_size*0.2f + params->font_size*1.f,
+                                      text_base_pos.y + scope_range_y_px.max);
+          Rng2F32 scope_clip_rect = {0};
+          {
+            scope_clip_rect.x0 = scope_rect.x0 - params->font_size*10.f;
+            scope_clip_rect.x1 = scope_rect.x0 + (scope_rect.x1 - scope_rect.x0)*0.4f;
+            scope_clip_rect.y0 = mix_1f32(midpoint, scope_rect.y0 - params->font_size*0.1f, t);
+            scope_clip_rect.y1 = mix_1f32(midpoint, scope_rect.y1 + params->font_size*0.1f, t);
+          }
+          DR_ClipScope(scope_clip_rect)
+          {
+            dr_rect(scope_rect, scope_line_color, params->font_size*0.1f, 1.f, 1.f);
+          }
+        }
+      }
     }
-  }
-  
-  //////////////////////////////
-  //- rjf: produce per-line extra annotation containers
-  //
-  UI_Box **line_extras_boxes = push_array(scratch.arena, UI_Box *, dim_1s64(params->line_num_range)+1);
-  UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f)) UI_Parent(text_container_box) UI_Focus(UI_FocusKind_Off)
-  {
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
-        line_num += 1, line_idx += 1)
-    {
-      ui_set_next_fixed_x(line_extras_off[line_idx]);
-      ui_set_next_fixed_y(line_idx*params->line_height_px);
-      line_extras_boxes[line_idx] = ui_build_box_from_stringf(0, "###extras_%I64x", line_idx);
-    }
+    ui_box_equip_draw_bucket(text_container_box, bucket);
   }
   
   //////////////////////////////
@@ -2274,147 +2495,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         }
       }
     }
-  }
-  
-  //////////////////////////////
-  //- rjf: build watch pin annotations
-  //
-  UI_Focus(UI_FocusKind_Off)
-  {
-    DI_Scope *scope = di_scope_open();
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
-        line_num += 1, line_idx += 1)
-    {
-      RD_CfgList immediate_pins = {0};
-      String8 line_text = params->line_text[line_idx];
-      for(U64 off = 0, next_off = line_text.size;
-          off < line_text.size;
-          off = next_off)
-      {
-        // rjf: find next opener
-        String8 markup_opener = str8_lit("raddbg_pin(");
-        next_off = str8_find_needle(line_text, off, markup_opener, 0);
-        next_off += markup_opener.size;
-        
-        // rjf: extract contents of markup
-        String8 contents = {0};
-        S32 nest = 1;
-        for(U64 off2 = next_off; off2 < line_text.size; off2 += 1)
-        {
-          if(line_text.str[off2] == '(')
-          {
-            nest += 1;
-          }
-          else if(line_text.str[off2] == ')')
-          {
-            nest -= 1;
-            if(nest == 0)
-            {
-              contents = str8_substr(line_text, r1u64(next_off, off2));
-              break;
-            }
-          }
-        }
-        
-        // rjf: gather arguments
-        String8List args = {0};
-        {
-          S32 nest = 0;
-          U64 arg_start_off = 0;
-          for(U64 contents_off = 0; contents_off <= contents.size; contents_off += 1)
-          {
-            if(nest == 0 && (contents_off == contents.size || contents.str[contents_off] == ','))
-            {
-              String8 arg = str8_substr(contents, r1u64(arg_start_off, contents_off));
-              arg = str8_skip_chop_whitespace(arg);
-              str8_list_push(scratch.arena, &args, arg);
-              arg_start_off = contents_off+1;
-            }
-            if(contents_off < contents.size)
-            {
-              if(contents.str[contents_off] == '(')
-              {
-                nest += 1;
-              }
-              else if(contents.str[contents_off] == ')')
-              {
-                nest -= 1;
-              }
-            }
-          }
-        }
-        
-        // rjf: extract fixed arguments
-        String8 expr_string = {0};
-        if(args.first != 0)
-        {
-          expr_string = args.first->string;
-        }
-        
-        // rjf: build immediate pin for this markup
-        if(expr_string.size != 0)
-        {
-          RD_Cfg *immediate_root = rd_immediate_cfg_from_keyf("markup_pin_%I64x_%I64x", line_num, off);
-          RD_Cfg *pin = rd_cfg_child_from_string_or_alloc(immediate_root, str8_lit("watch_pin"));
-          RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(pin, str8_lit("expression"));
-          rd_cfg_new_replace(expr, expr_string);
-          rd_cfg_list_push(scratch.arena, &immediate_pins, pin);
-        }
-      }
-      RD_CfgList pin_lists[] =
-      {
-        params->line_pins[line_idx],
-        immediate_pins,
-      };
-      E_ParentKey(e_key_zero()) for EachElement(list_idx, pin_lists)
-      {
-        RD_CfgList pins = pin_lists[list_idx];
-        if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])
-          RD_Font(RD_FontSlot_Code)
-          UI_FontSize(params->font_size)
-          UI_PrefHeight(ui_px(params->line_height_px, 1.f))
-        {
-          for(RD_CfgNode *n = pins.first; n != 0; n = n->next)
-          {
-            RD_Cfg *pin = n->v;
-            String8 pin_expr = rd_expr_from_cfg(pin);
-            E_Eval eval = e_eval_from_string(pin_expr);
-            String8 eval_string = {0};
-            if(!e_type_key_match(e_type_key_zero(), eval.irtree.type_key))
-            {
-              EV_StringParams string_params = {.flags = EV_StringFlag_ReadOnlyDisplayRules, .radix = 10};
-              eval_string = rd_value_string_from_eval(scratch.arena, str8_zero(), &string_params, params->font, params->font_size, params->font_size*60.f, eval);
-            }
-            ui_spacer(ui_em(1.5f, 1.f));
-            ui_set_next_pref_width(ui_children_sum(1));
-            UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
-            UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|
-                                                    UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
-                                                    UI_BoxFlag_DrawHotEffects|
-                                                    UI_BoxFlag_DrawBorder, pin_box_key);
-            UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
-            {
-              Vec4F32 pin_color = rd_color_from_cfg(pin);
-              if(pin_color.w == 0)
-              {
-                pin_color = ui_color_from_name(str8_lit("text"));
-              }
-              Vec4F32 default_code_color = ui_color_from_name(str8_lit("code_default"));
-              rd_code_label(0.8f, 1, default_code_color, pin_expr);
-              rd_code_label(0.6f, 1, default_code_color, eval_string);
-            }
-            UI_Signal pin_sig = ui_signal_from_box(pin_box);
-            if(ui_key_match(pin_box_key, ui_hot_key()))
-            {
-              rd_set_hover_eval(v2f32(pin_box->rect.x0, pin_box->rect.y1-2.f), pin_expr);
-            }
-          }
-        }
-      }
-    }
-    di_scope_close(scope);
   }
   
   //////////////////////////////
@@ -2485,7 +2565,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0)
   {
     E_Eval eval = e_eval_from_string(mouse_expr);
-    if(eval.msgs.max_kind == E_MsgKind_Null && (eval.irtree.mode != E_Mode_Null || mouse_expr_is_explicit))
+    B32 eval_implicit_hover = (eval.irtree.mode != E_Mode_Null &&
+                               eval.space.kind == RD_EvalSpaceKind_CtrlEntity);
+    if(eval.msgs.max_kind == E_MsgKind_Null && (eval_implicit_hover || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
       if(contains_1s64(params->line_num_range, mouse_pt.line))
