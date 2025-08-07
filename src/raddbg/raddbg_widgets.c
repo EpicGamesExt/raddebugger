@@ -2384,17 +2384,24 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   if(do_scope_lines && cursor_scope_node != &txt_scope_node_nil)
   {
-    Vec4F32 scope_line_color = highlight_color;
-    scope_line_color.w *= 0.25f;
+    F32 scope_line_thickness = params->font_size*0.1f;
+    scope_line_thickness = Max(scope_line_thickness, 1.f);
     DR_Bucket *bucket = dr_bucket_make();
     DR_BucketScope(bucket)
     {
       Vec2F32 text_base_pos = v2f32(text_container_box->rect.x0 + params->line_num_width_px + line_num_padding_px,
                                     text_container_box->rect.y0);
+      F32 ancestor_chain_depth = 0;
       for(TXT_ScopeNode *scope_n = cursor_scope_node;
           scope_n != &txt_scope_node_nil;
-          scope_n = txt_scope_node_from_info_num(params->text_info, scope_n->parent_num))
+          scope_n = txt_scope_node_from_info_num(params->text_info, scope_n->parent_num), ancestor_chain_depth += 1)
       {
+        Vec4F32 scope_line_color = highlight_color;
+        F32 scope_line_color_target = highlight_color.w;
+        scope_line_color_target *= 1 - ancestor_chain_depth / 6.f;
+        scope_line_color_target = Max(0.2f, scope_line_color_target);
+        F32 scope_line_color_t = ui_anim(ui_key_from_stringf(text_container_box->key, "###scope_depth_%I64x_%I64x", scope_n->token_idx_range.min, scope_n->token_idx_range.max), scope_line_color_target, .rate = rd_state->menu_animation_rate__slow);
+        scope_line_color.w = scope_line_color_t*0.5f;
         Rng1U64 token_idx_range = scope_n->token_idx_range;
         Rng1U64 off_range = r1u64(params->text_info->tokens.v[token_idx_range.min].range.min, params->text_info->tokens.v[token_idx_range.max].range.min);
         TxtRng txt_range = txt_rng(txt_pt_from_info_off__linear_scan(params->text_info, off_range.min), txt_pt_from_info_off__linear_scan(params->text_info, off_range.max));
@@ -2422,7 +2429,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           underline_clip.y1 = 10000;
           DR_ClipScope(underline_clip)
           {
-            dr_rect(underline_rect, scope_line_color, params->font_size*0.1f, 1.f, 1.f);
+            dr_rect(underline_rect, scope_line_color, params->font_size*0.1f, scope_line_thickness, 1.f);
           }
         }
         
@@ -2460,7 +2467,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           }
           DR_ClipScope(scope_clip_rect)
           {
-            dr_rect(scope_rect, scope_line_color, params->font_size*0.1f, 1.f, 1.f);
+            dr_rect(scope_rect, scope_line_color, params->font_size*0.1f, scope_line_thickness, 1.f);
           }
         }
       }
