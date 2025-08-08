@@ -99,15 +99,6 @@ typedef struct LNK_SymbolTable
   LNK_SymbolHashTrieChunkList *chunk_lists[LNK_SymbolScope_Count];
 } LNK_SymbolTable;
 
-// --- Workers Contensts -------------------------------------------------------
-
-typedef struct
-{
-  LNK_SymbolTable          *symtab;
-  LNK_SymbolHashTrieChunk **chunks;
-  LNK_SymbolList           *anti_dependency_symbols;
-} LNK_FinalizeWeakSymbolsTask;
-
 // --- Symbol Make -------------------------------------------------------------
 
 internal LNK_Symbol * lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
@@ -144,8 +135,6 @@ internal LNK_SymbolTable * lnk_symbol_table_init(TP_Arena *arena);
 internal void              lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol *symbol);
 internal LNK_Symbol *      lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name);
 internal LNK_Symbol *      lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *fmt, ...);
-
-internal void lnk_replace_weak_symbols_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab);
 
 // --- Symbol Contrib Helpers --------------------------------------------------
 

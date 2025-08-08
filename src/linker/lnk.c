@@ -1244,6 +1244,22 @@ lnk_find_refs(Arena               *arena,
   ProfEnd();
 }
 
+internal
+THREAD_POOL_TASK_FUNC(lnk_replace_weak_symbols_with_default_symbol_task)
+{
+  LNK_ReplaceWeakSymbolsWithDefaultSymbolTask *task = raw_task;
+  LNK_SymbolTable         *symtab = task->symtab;
+  LNK_SymbolHashTrieChunk *chunk  = task->chunks[task_id];
+  for EachIndex(i, chunk->count) {
+    LNK_Symbol                 *symbol        = chunk->v[i].symbol;
+    COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+    COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
+    if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+      symbol->u.defined = lnk_default_symbol_from_weak(symtab, symbol->u.defined);
+    }
+  }
+}
+
 internal LNK_LinkContext
 lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 {
@@ -2174,8 +2190,18 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   }
   ProfEnd();
 
-  lnk_replace_weak_symbols_with_default_symbols(tp, symtab);
+  ProfBegin("Replace Unresolved Weak Symbols With Defualt Symbol");
+  {
+    U64                       chunks_count = 0;
+    LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunk_lists[LNK_SymbolScope_Defined], symtab->arena->count, &chunks_count);
+    LNK_ReplaceWeakSymbolsWithDefaultSymbolTask task = { .symtab = symtab, .chunks = chunks };
+    tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_symbols_with_default_symbol_task, &task);
+  }
+  ProfEnd();
 
+  //
+  // fill out link context
+  //
   LNK_LinkContext link_ctx        = {0};
   link_ctx.symtab                 = symtab;
   link_ctx.objs_count             = obj_list.count;
@@ -2198,7 +2224,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     }
     lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %M]", total_input_size);
   }
-  
 
   ProfEnd();
   scratch_end(scratch);

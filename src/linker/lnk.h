@@ -77,6 +77,12 @@ typedef struct LNK_BaseRelocPageArray
 
 typedef struct
 {
+  LNK_SymbolTable          *symtab;
+  LNK_SymbolHashTrieChunk **chunks;
+} LNK_ReplaceWeakSymbolsWithDefaultSymbolTask;
+
+typedef struct
+{
   LNK_SymbolTable           *symtab;
   LNK_SectionTable          *sectab;
   U64                        objs_count;
