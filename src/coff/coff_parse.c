@@ -285,6 +285,13 @@ coff_interp_from_parsed_symbol(COFF_ParsedSymbol symbol)
   return coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
 }
 
+internal B32
+coff_is_undefined_data_symbol(COFF_ParsedSymbol symbol)
+{
+  COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
+  return interp == COFF_SymbolValueInterp_Undefined && symbol.storage_class == COFF_SymStorageClass_External;
+}
+
 internal void
 coff_parse_secdef(COFF_ParsedSymbol symbol, B32 is_big_obj, COFF_ComdatSelectType *selection_out, U32 *number_out, U32 *length_out, U32 *check_sum_out)
 {

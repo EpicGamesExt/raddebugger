@@ -268,6 +268,7 @@ internal COFF_Symbol16Node *coff_symbol16_list_push(Arena *arena, COFF_Symbol16L
 
 internal COFF_SymbolValueInterpType coff_interp_symbol(U32 section_number, U32 value, COFF_SymStorageClass storage_class);
 internal COFF_SymbolValueInterpType coff_interp_from_parsed_symbol(COFF_ParsedSymbol symbol);
+internal B32 coff_is_undefined_data_symbol(COFF_ParsedSymbol symbol);
 
 internal void coff_parse_secdef(COFF_ParsedSymbol symbol, B32 is_big_obj, COFF_ComdatSelectType *selection_out, U32 *number_out, U32 *length_out, U32 *check_sum_out);
 internal COFF_SymbolWeakExt * coff_parse_weak_tag(COFF_ParsedSymbol symbol, B32 is_big_obj);

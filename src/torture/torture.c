@@ -744,6 +744,87 @@ exit:;
 }
 
 internal T_Result
+t_link_undef(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 undef_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("undef"));
+    undef_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 entry_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0x48, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00,  // mov rax, $imm
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("undef"));
+    coff_obj_writer_section_push_reloc_voff(obj_writer, sect, 0, symbol);
+    entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  if (!t_write_file(str8_lit("undef.obj"), undef_obj)) { goto exit; }
+  if (!t_write_file(str8_lit("entry.obj"), entry_obj)) { goto exit; }
+
+  // try linking unresolved symbol and see if linker picks up on that
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj undef.obj");
+  if (linker_exit_code != LNK_Error_UnresolvedSymbol) { goto exit; }
+
+  result = T_Result_Pass;
+exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
+t_link_unref_undef(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  T_Result result = T_Result_Fail;
+
+  String8 undef_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0,COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("undef"));
+    undef_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  String8 entry_obj;
+  {
+    COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    U8 text[] = {
+      0xC3 // ret
+    };
+    COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
+    entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_release(&obj_writer);
+  }
+
+  if (!t_write_file(str8_lit("undef.obj"), undef_obj)) { goto exit; }
+  if (!t_write_file(str8_lit("entry.obj"), entry_obj)) { goto exit; }
+
+  // try linking unreferenced unresolved symbol, this must link
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj undef.obj");
+  if (linker_exit_code != 0) { goto exit; }
+
+  result = T_Result_Pass;
+  exit:;
+  scratch_end(scratch);
+  return result;
+}
+
+internal T_Result
 t_weak_vs_weak(void)
 {
   Temp scratch = scratch_begin(0,0);
@@ -3910,6 +3991,8 @@ entry_point(CmdLine *cmdline)
     { "merge",                            t_merge                            },
     { "undef_section",                    t_undef_section                    },
     { "undef_reloc_section",              t_undef_reloc_section              },
+    { "link_undef",                       t_link_undef                       },
+    { "link_unref_undef",                 t_link_unref_undef                 },
     { "weak_vs_weak",                     t_weak_vs_weak                     },
     { "weak_vs_common",                   t_weak_vs_common                   },
     { "abs_vs_weak",                      t_abs_vs_weak                      },

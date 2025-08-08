@@ -1101,7 +1101,7 @@ lnk_find_refs(Arena               *arena,
   }
 
   //
-  // walk relocations and mark referenced sections as live
+  // walk relocations and mark referenced sections with live flag
   //
   for (; task_stack; ) {
     struct Task *t = task_stack; SLLStackPop(task_stack);
@@ -1115,12 +1115,10 @@ lnk_find_refs(Arena               *arena,
       for (;;) {
         COFF_ParsedSymbol          ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
         COFF_SymbolValueInterpType ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
-
         if (ref_interp == COFF_SymbolValueInterp_Weak) {
           LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
           COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_defined(defn);
           COFF_SymbolValueInterpType  defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
-
           if (defn_interp == COFF_SymbolValueInterp_Weak) {
             LNK_Symbol         *member_symbol = 0;
             COFF_SymbolWeakExt *weak_ext      = coff_parse_weak_tag(ref_parsed, ref_symbol.obj->header.is_big_obj);
@@ -1172,12 +1170,11 @@ lnk_find_refs(Arena               *arena,
           }
         }
         else if (ref_interp == COFF_SymbolValueInterp_Undefined) {
-          MemoryZeroStruct(&ref_symbol);
-
           if (ref_parsed.storage_class == COFF_SymStorageClass_External) {
             LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
             COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_defined(defn);
             COFF_SymbolValueInterpType  defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
+
             if (defn_interp == COFF_SymbolValueInterp_Undefined) {
               LNK_Symbol *member_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Lib, ref_parsed.name);
               if (member_symbol) {
@@ -1207,6 +1204,13 @@ lnk_find_refs(Arena               *arena,
       COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
       COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
       LNK_Obj                    *ref_obj    = ref_symbol.obj;
+
+      // mark referenced symbol live
+      if (ref_parsed.storage_class == COFF_SymStorageClass_External ||
+          ref_parsed.storage_class == COFF_SymStorageClass_WeakExternal) {
+        LNK_Symbol *ref_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
+        lnk_mark_symbol_live(ref_symbol);
+      }
 
       if (ref_interp == COFF_SymbolValueInterp_Regular) {
         // make section number list (reloc section + associates)
@@ -2122,9 +2126,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       for EachIndex(i, chunk->count) {
         LNK_Symbol *symbol = chunk->v[i].symbol;
         if (symbol->is_live) {
-          COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-          COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+          COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+          if (coff_is_undefined_data_symbol(symbol_parsed)) {
             undefs_count += 1;
           }
         }
@@ -2138,9 +2141,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       for EachIndex(i, chunk->count) {
         LNK_Symbol *symbol = chunk->v[i].symbol;
         if (symbol->is_live) {
-          COFF_ParsedSymbol          symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-          COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-          if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
+          COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
+          if (coff_is_undefined_data_symbol(symbol_parsed)) {
             undefs[undefs_cursor++] = chunk->v[i].symbol;
           }
         }

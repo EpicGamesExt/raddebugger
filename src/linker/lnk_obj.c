@@ -345,11 +345,9 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
 {
   LNK_InputCoffSymbolTable *task = raw_task;
   LNK_Obj                  *obj  = &task->objs.v[task_id].data;
-
   COFF_ParsedSymbol symbol = {0};
   for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
     symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
-
     COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
     switch (interp) {
     case COFF_SymbolValueInterp_Regular: {
@@ -366,17 +364,17 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
       LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
       lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
     } break;
-    case COFF_SymbolValueInterp_Common: {
-      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
-    } break;
-    case COFF_SymbolValueInterp_Abs: {
+    case COFF_SymbolValueInterp_Undefined: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
         lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
       }
     } break;
-    case COFF_SymbolValueInterp_Undefined: {
+    case COFF_SymbolValueInterp_Common: {
+      LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
+      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+    } break;
+    case COFF_SymbolValueInterp_Abs: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
         lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);

@@ -5,6 +5,9 @@
 
 // --- Link --------------------------------------------------------------------
 
+#define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
+#define LNK_SECTION_FLAG_IS_LIVE (1 << 0)
+
 typedef struct LNK_LinkContext
 {
   LNK_SymbolTable   *symtab;
@@ -15,11 +18,8 @@ typedef struct LNK_LinkContext
 
 // -- Image --------------------------------------------------------------------
 
-#define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
 #define LNK_REMOVED_SECTION_NUMBER_32 (U32)-3
 #define LNK_REMOVED_SECTION_NUMBER_16 (U16)-3
-
-#define LNK_SECTION_FLAG_IS_LIVE (1 << 0)
 
 typedef struct LNK_ImageContext
 {
