@@ -1101,7 +1101,7 @@ lnk_find_refs(Arena               *arena,
   }
 
   //
-  // walk relocations and unset the remove flag on visited sections
+  // walk relocations and mark referenced sections as live
   //
   for (; task_stack; ) {
     struct Task *t = task_stack; SLLStackPop(task_stack);
@@ -1160,7 +1160,6 @@ lnk_find_refs(Arena               *arena,
             default: { NotImplemented; } break;
             }
 
-            member_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Lib, ref_parsed.name);
             if (member_symbol) {
               lnk_queue_lib_member_input(arena, config, member_symbol, imports_out, objs_out);
               MemoryZeroStruct(&ref_symbol);
@@ -1173,18 +1172,23 @@ lnk_find_refs(Arena               *arena,
           }
         }
         else if (ref_interp == COFF_SymbolValueInterp_Undefined) {
-          LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
-          COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_defined(defn);
-          COFF_SymbolValueInterpType  defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
-          if (defn_interp == COFF_SymbolValueInterp_Undefined) {
-            LNK_Symbol *member_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Lib, ref_parsed.name);
-            if (member_symbol) {
-              lnk_queue_lib_member_input(arena, config, member_symbol, imports_out, objs_out);
+          MemoryZeroStruct(&ref_symbol);
+
+          if (ref_parsed.storage_class == COFF_SymStorageClass_External) {
+            LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
+            COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_defined(defn);
+            COFF_SymbolValueInterpType  defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
+            if (defn_interp == COFF_SymbolValueInterp_Undefined) {
+              LNK_Symbol *member_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Lib, ref_parsed.name);
+              if (member_symbol) {
+                lnk_queue_lib_member_input(arena, config, member_symbol, imports_out, objs_out);
+              }
+              break;
+            } else {
+              ref_symbol = defn->u.defined;
             }
-            MemoryZeroStruct(&ref_symbol);
-            break;
           } else {
-            ref_symbol = defn->u.defined;
+            break;
           }
         } else if (ref_interp == COFF_SymbolValueInterp_Regular) {
           LNK_Symbol *symlink = lnk_obj_get_comdat_symlink(ref_symbol.obj, ref_parsed.section_number);
