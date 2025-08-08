@@ -37,12 +37,6 @@ typedef struct LNK_ObjNodeArray
   LNK_ObjNode *v;
 } LNK_ObjNodeArray;
 
-typedef struct LNK_SymbolInputResult
-{
-  LNK_SymbolList weak_symbols;
-  LNK_SymbolList undef_symbols;
-} LNK_SymbolInputResult;
-
 // --- Directive Parser --------------------------------------------------------
 
 typedef struct LNK_Directive
@@ -78,8 +72,6 @@ typedef struct
 {
   LNK_SymbolTable *symtab;
   LNK_ObjNodeArray objs;
-  LNK_SymbolList  *weak_lists;
-  LNK_SymbolList  *undef_lists;
 } LNK_InputCoffSymbolTable;
 
 typedef struct
@@ -96,9 +88,9 @@ internal void lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...);
 
 // --- Input -------------------------------------------------------------------
 
-internal LNK_Obj **            lnk_array_from_obj_list(Arena *arena, LNK_ObjList list);
-internal LNK_ObjNodeArray      lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *tp_arena, LNK_ObjList *obj_list, COFF_MachineType machine, U64 input_count, LNK_InputObj **inputs);
-internal LNK_SymbolInputResult lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs);
+internal LNK_Obj **       lnk_array_from_obj_list(Arena *arena, LNK_ObjList list);
+internal LNK_ObjNodeArray lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *tp_arena, LNK_ObjList *obj_list, COFF_MachineType machine, U64 input_count, LNK_InputObj **inputs);
+internal void             lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs);
 
 // --- Metadata ----------------------------------------------------------------
 

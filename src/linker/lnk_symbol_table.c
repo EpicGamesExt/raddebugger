@@ -21,20 +21,17 @@ lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_
   return symbol;
 }
 
-internal LNK_Symbol *
-lnk_make_undefined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj)
-{
-  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name        = name;
-  symbol->u.undef.obj = obj;
-  return symbol;
-}
-
 internal B32
 lnk_symbol_defined_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
   return a->u.defined.obj->input_idx < b->u.defined.obj->input_idx;
+}
+
+internal B32
+lnk_symbol_defined_ptr_is_before(void *raw_a, void *raw_b)
+{
+  return lnk_symbol_defined_is_before(*(LNK_Symbol **)raw_a, *(LNK_Symbol **)raw_b);
 }
 
 internal B32
@@ -144,8 +141,36 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
     COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
     COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
 
+    // undefined vs regular
+    if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Regular) {
+      can_replace = 1;
+    }
+    // undefined vs weak
+    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Weak) {
+      can_replace = 1;
+    }
+    // undefined vs undefined
+    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
+      can_replace = lnk_symbol_defined_is_before(src, dst);
+    }
+    // undefined vs common
+    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Common) {
+      can_replace = 1;
+    }
+    // undefined vs abs
+    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Abs) {
+      can_replace = 1;
+    }
+    // undefined vs debug
+    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Debug) {
+      can_replace = 1;
+    }
+    // regular/weak/common/abs/debug vs undefined
+    else if (dst_interp != COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
+      can_replace = 0;
+    }
     // regular vs abs
-    if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs) {
+    else if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs) {
       lnk_error_multiply_defined_symbol(dst, src);
     }
     // abs vs regular
@@ -439,6 +464,129 @@ lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie)
   ins_atomic_ptr_eval_assign(&trie->symbol, 0);
 }
 
+internal LNK_SymbolHashTrieChunk **
+lnk_array_from_symbol_hash_trie_chunk_list(Arena *arena, LNK_SymbolHashTrieChunkList *lists, U64 lists_count, U64 *count_out)
+{
+  U64 chunks_count = 0;
+  for EachIndex(i, lists_count) { chunks_count += lists[i].count; }
+
+  LNK_SymbolHashTrieChunk **chunks        = push_array(arena, LNK_SymbolHashTrieChunk *, chunks_count);
+  U64                       chunks_cursor = 0;
+  for EachIndex(i, lists_count) {
+    for (LNK_SymbolHashTrieChunk *chunk = lists[i].first; chunk != 0; chunk = chunk->next) {
+      chunks[chunks_cursor++] = chunk;
+    }
+  }
+
+  if (count_out) {
+    *count_out = chunks_count;
+  }
+
+  return chunks;
+}
+
+internal COFF_ParsedSymbol
+lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
+{
+  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+}
+
+internal B32
+lnk_mark_symbol_live(LNK_Symbol *symbol)
+{
+  B32 was_live = ins_atomic_u32_eval_assign(&symbol->is_live, 1);
+  return was_live;
+}
+
+internal LNK_SymbolDefined
+lnk_default_symbol_from_weak(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  struct LookupLocation { struct LookupLocation *next; LNK_SymbolDefined symbol; B32 is_anti_dep; };
+  struct LookupLocation *lookup_first = 0, *lookup_last = 0;
+
+  COFF_ParsedSymbol   head_parsed    = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+  COFF_SymbolWeakExt *head_weak_ext  = coff_parse_weak_tag(head_parsed, symbol.obj->header.is_big_obj);
+  LNK_SymbolDefined   current_symbol = (LNK_SymbolDefined){ .obj = symbol.obj, .symbol_idx = head_weak_ext->tag_index };
+
+  for (;;) {
+    // guard against self-referencing weak symbols
+    struct LookupLocation *was_visited = 0;
+    for (struct LookupLocation *l = lookup_first; l != 0; l = l->next) {
+      if (MemoryCompare(&l->symbol, &current_symbol, sizeof(LNK_SymbolDefined)) == 0) { was_visited = l; break; }
+    }
+    if (was_visited) {
+      Temp temp = temp_begin(scratch.arena);
+
+      String8List ref_list = {0};
+      for (struct LookupLocation *l = lookup_first; l != 0; l = l->next) {
+        COFF_ParsedSymbol loc_symbol = lnk_parsed_symbol_from_coff_symbol_idx(l->symbol.obj, l->symbol.symbol_idx);
+        str8_list_pushf(temp.arena, &ref_list, "\t%S Symbol %S (No. %#x) =>", l->symbol.obj->path, loc_symbol.name, l->symbol.symbol_idx);
+      }
+      COFF_ParsedSymbol loc_symbol = lnk_parsed_symbol_from_coff_symbol_idx(lookup_first->symbol.obj, lookup_first->symbol.symbol_idx);
+      str8_list_pushf(temp.arena, &ref_list, "\t%S Symbol %S (No. %#x)", lookup_first->symbol.obj->path, loc_symbol.name, lookup_first->symbol.symbol_idx);
+
+      COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
+      String8           loc_string    = str8_list_join(temp.arena, &ref_list, &(StringJoin){ .sep = str8_lit("\n") });
+      lnk_error_obj(LNK_Error_WeakCycle, symbol.obj, "unable to resolve cyclic symbol %S; ref chain:\n%S", parsed_symbol.name, loc_string);
+
+      MemoryZeroStruct(&current_symbol);
+
+      temp_end(temp);
+      break;
+    }
+
+    COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
+    COFF_SymbolValueInterpType current_interp = coff_interp_symbol(current_parsed.section_number, current_parsed.value, current_parsed.storage_class);
+    if (current_interp == COFF_SymbolValueInterp_Weak) {
+      // check for anti dependency
+      for (struct LookupLocation *l = lookup_first; l != 0; l = l->next) {
+        if (l->is_anti_dep) {
+          lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol.obj, "unresolved symbol %S", head_parsed.name);
+          break;
+        }
+      }
+
+      // does weak symbol have a definition?
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
+      COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->u.defined.obj, defn_symbol->u.defined.symbol_idx);
+      COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
+      if (defn_interp != COFF_SymbolValueInterp_Weak) {
+        current_symbol = defn_symbol->u.defined;
+        break;
+      }
+
+      // no definition fallback to default symbol
+      COFF_SymbolWeakExt         *weak_ext   = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
+      COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
+      COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
+      current_symbol = (LNK_SymbolDefined){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
+
+      // record visited symbol
+      struct LookupLocation *loc = push_array(scratch.arena, struct LookupLocation, 1);
+      loc->symbol                = current_symbol;
+      loc->is_anti_dep           = weak_ext->characteristics == COFF_WeakExt_AntiDependency;
+      SLLQueuePush(lookup_first, lookup_last, loc);
+    } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
+      COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_defined(defn_symbol);
+      COFF_SymbolValueInterpType  defn_interp = coff_interp_from_parsed_symbol(defn_parsed);
+
+      current_symbol = defn_symbol->u.defined;
+
+      if (defn_interp == COFF_SymbolValueInterp_Undefined) {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  scratch_end(scratch);
+  return current_symbol;
+}
+
 internal U64
 lnk_symbol_hash(String8 string)
 {
@@ -539,10 +687,8 @@ THREAD_POOL_TASK_FUNC(lnk_check_anti_dependecy_task)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_finalize_weak_symbols_task)
+THREAD_POOL_TASK_FUNC(lnk_replace_weak_symbols_with_default_symbols_task)
 {
-  Temp scratch = scratch_begin(&arena,1);
-
   LNK_FinalizeWeakSymbolsTask *task   = raw_task;
   LNK_SymbolTable             *symtab = task->symtab;
   LNK_SymbolHashTrieChunk     *chunk  = task->chunks[task_id];
@@ -552,117 +698,22 @@ THREAD_POOL_TASK_FUNC(lnk_finalize_weak_symbols_task)
     COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
     COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
     if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      struct LookupLocation { struct LookupLocation *next; LNK_SymbolDefined symbol; B32 is_anti_dependency; };
-      struct LookupLocation *lookup_first = 0, *lookup_last = 0;
-
-      LNK_SymbolDefined current_symbol = symbol->u.defined;
-      for (;;) {
-        // guard against self-referencing weak symbols
-        struct LookupLocation *was_visited = 0;
-        for (struct LookupLocation *l = lookup_first; l != 0; l = l->next) {
-          if (MemoryCompare(&l->symbol, &current_symbol, sizeof(LNK_SymbolDefined)) == 0) { was_visited = l; break; }
-        }
-        if (was_visited) {
-          Temp temp = temp_begin(scratch.arena);
-
-          String8List ref_list = {0};
-          for (struct LookupLocation *l = lookup_first; l != 0; l = l->next) {
-            COFF_ParsedSymbol loc_symbol = lnk_parsed_symbol_from_coff_symbol_idx(l->symbol.obj, l->symbol.symbol_idx);
-            str8_list_pushf(temp.arena, &ref_list, "\t%S Symbol %S (No. %#x) =>", l->symbol.obj->path, loc_symbol.name, l->symbol.symbol_idx);
-          }
-          COFF_ParsedSymbol loc_symbol = lnk_parsed_symbol_from_coff_symbol_idx(lookup_first->symbol.obj, lookup_first->symbol.symbol_idx);
-          str8_list_pushf(temp.arena, &ref_list, "\t%S Symbol %S (No. %#x)", lookup_first->symbol.obj->path, loc_symbol.name, lookup_first->symbol.symbol_idx);
-
-          COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
-          String8           loc_string    = str8_list_join(temp.arena, &ref_list, &(StringJoin){ .sep = str8_lit("\n") });
-          lnk_error_obj(LNK_Error_WeakCycle, symbol->u.defined.obj, "unable to resolve cyclic symbol %S; ref chain:\n%S", parsed_symbol.name, loc_string);
-
-          MemoryZeroStruct(&current_symbol);
-
-          temp_end(temp);
-          break;
-        }
-
-        COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
-        COFF_SymbolValueInterpType current_interp = coff_interp_symbol(current_parsed.section_number, current_parsed.value, current_parsed.storage_class);
-        if (current_interp == COFF_SymbolValueInterp_Weak) {
-          // record visited symbol
-          struct LookupLocation *loc = push_array(scratch.arena, struct LookupLocation, 1);
-          loc->symbol                = current_symbol;
-          SLLQueuePush(lookup_first, lookup_last, loc);
-
-          // does weak symbol have a definition?
-          LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
-          COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->u.defined.obj, defn_symbol->u.defined.symbol_idx);
-          COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
-          if (defn_interp != COFF_SymbolValueInterp_Weak) {
-            current_symbol = defn_symbol->u.defined;
-            break;
-          }
-
-          // no definition fallback to the tag
-          COFF_SymbolWeakExt         *weak_ext   = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
-          COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
-          COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
-          current_symbol = (LNK_SymbolDefined){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
-        } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
-          LNK_Symbol *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
-          if (defn_symbol == 0) {
-            MemoryZeroStruct(&current_symbol);
-            break;
-          }
-          current_symbol = defn_symbol->u.defined;
-        } else {
-          break;
-        }
-      }
-
-      // replace weak symbol with it's tag
-      symbol->u.defined = current_symbol;
+      symbol->u.defined = lnk_default_symbol_from_weak(symtab, symbol->u.defined);
     }
   }
-
-  scratch_end(scratch);
 }
 
 internal void
-lnk_finalize_weak_symbols(TP_Arena *arena, TP_Context *tp, LNK_SymbolTable *symtab)
+lnk_replace_weak_symbols_with_default_symbols(TP_Context *tp, LNK_SymbolTable *symtab)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(arena->v, arena->count);
+  Temp scratch = scratch_begin(0,0);
 
-  U64 chunks_count = 0;
-  for EachIndex(worker_id, tp->worker_count) { chunks_count += symtab->chunk_lists[LNK_SymbolScope_Defined][worker_id].count; }
-
-  LNK_SymbolHashTrieChunk **chunks        = push_array(scratch.arena, LNK_SymbolHashTrieChunk *, chunks_count);
-  U64                       chunks_cursor = 0;
-  for EachIndex(worker_id, tp->worker_count) {
-    for (LNK_SymbolHashTrieChunk *chunk = symtab->chunk_lists[LNK_SymbolScope_Defined][worker_id].first; chunk != 0; chunk = chunk->next) {
-      chunks[chunks_cursor++] = chunk;
-    }
-  }
+  U64                       chunks_count = 0;
+  LNK_SymbolHashTrieChunk **chunks       = lnk_array_from_symbol_hash_trie_chunk_list(scratch.arena, symtab->chunk_lists[LNK_SymbolScope_Defined], symtab->arena->count, &chunks_count);
 
   LNK_FinalizeWeakSymbolsTask task = { .symtab = symtab, .chunks = chunks };
-
-  {
-    TP_Temp temp = tp_temp_begin(arena);
-    task.anti_dependency_symbols = push_array(scratch.arena, LNK_SymbolList, tp->worker_count);
-    tp_for_parallel(tp, arena, chunks_count, lnk_check_anti_dependecy_task, &task);
-
-    LNK_SymbolList anti_dependency_symbol_list = {0};
-    lnk_symbol_concat_in_place_array(&anti_dependency_symbol_list, task.anti_dependency_symbols, tp->worker_count);
-    LNK_SymbolArray anti_dependency_symbols = lnk_symbol_array_from_list(scratch.arena, anti_dependency_symbol_list);
-    radsort(anti_dependency_symbols.v, anti_dependency_symbols.count, lnk_symbol_defined_is_before);
-
-    for EachIndex(symbol_idx, anti_dependency_symbols.count) {
-      LNK_Symbol *s = &anti_dependency_symbols.v[symbol_idx];
-      lnk_error_obj(LNK_Error_UnresolvedSymbol, s->u.defined.obj, "unresolved symbol %S", s->name);
-    }
-
-    tp_temp_end(temp);
-  }
-
-  tp_for_parallel(tp, 0, chunks_count, lnk_finalize_weak_symbols_task, &task);
+  tp_for_parallel(tp, 0, chunks_count, lnk_replace_weak_symbols_with_default_symbols_task, &task);
 
   scratch_end(scratch);
   ProfEnd();
@@ -706,11 +757,5 @@ lnk_file_off_from_symbol(COFF_SectionHeader **section_table, LNK_Symbol *symbol)
   ISectOff sc   = lnk_sc_from_symbol(symbol);
   U64      foff = section_table[sc.isect]->foff + sc.off;
   return foff;
-}
-
-internal COFF_ParsedSymbol
-lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
-{
-  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
 }
 

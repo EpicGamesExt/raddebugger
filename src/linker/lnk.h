@@ -19,6 +19,8 @@ typedef struct LNK_LinkContext
 #define LNK_REMOVED_SECTION_NUMBER_32 (U32)-3
 #define LNK_REMOVED_SECTION_NUMBER_16 (U16)-3
 
+#define LNK_SECTION_FLAG_IS_LIVE (1 << 0)
+
 typedef struct LNK_ImageContext
 {
   String8           image_data;
@@ -212,7 +214,7 @@ internal void    lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht,
 internal void    lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path);
 
 internal LNK_InputObjList lnk_push_linker_symbols(Arena *arena, LNK_Config *config);
-internal void             lnk_queue_lib_member_input(Arena *arena, PathStyle path_style, LNK_SymbolLib *symbol, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
+internal void             lnk_queue_lib_member_input(Arena *arena, LNK_Config *config, LNK_Symbol *symbol, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
 
 internal LNK_LinkContext lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);
 
