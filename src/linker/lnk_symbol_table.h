@@ -123,9 +123,10 @@ internal LNK_SymbolHashTrieChunk ** lnk_array_from_symbol_hash_trie_chunk_list(A
 
 // --- Symbol Helpers ----------------------------------------------------------
 
-internal COFF_ParsedSymbol lnk_parsed_symbol_from_defined(LNK_Symbol *symbol);
-internal B32               lnk_mark_symbol_live(LNK_Symbol *symbol);
-internal LNK_SymbolDefined lnk_default_symbol_from_weak(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol);
+internal COFF_ParsedSymbol          lnk_parsed_symbol_from_defined(LNK_Symbol *symbol);
+internal COFF_SymbolValueInterpType lnk_interp_from_symbol(LNK_Symbol *symbol);
+internal B32                        lnk_mark_symbol_live(LNK_Symbol *symbol);
+internal LNK_SymbolDefined          lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol);
 
 // --- Symbol Table ------------------------------------------------------------
 

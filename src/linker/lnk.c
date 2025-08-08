@@ -1165,7 +1165,7 @@ lnk_find_refs(Arena               *arena,
               MemoryZeroStruct(&ref_symbol);
               break;
             } else {
-              ref_symbol = lnk_default_symbol_from_weak(symtab, ref_symbol);
+              ref_symbol = lnk_resolve_weak_symbol(symtab, ref_symbol);
             }
           } else {
             ref_symbol = defn->u.defined;
@@ -1259,7 +1259,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_symbols_with_default_symbol_task)
     COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
     COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
     if (symbol_interp == COFF_SymbolValueInterp_Weak) {
-      symbol->u.defined = lnk_default_symbol_from_weak(symtab, symbol->u.defined);
+      symbol->u.defined = lnk_resolve_weak_symbol(symtab, symbol->u.defined);
     }
   }
 }
