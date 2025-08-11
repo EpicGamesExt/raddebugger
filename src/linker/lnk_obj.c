@@ -58,7 +58,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   String8 raw_coff_string_table  = str8_substr(input->data, header.string_table_range);
 
   //
-  // error check: section table / symbol table / string table
+  // error check section table / symbol table / string table
   //
   if (raw_coff_section_table.size != dim_1u64(header.section_table_range)) {
     lnk_error_input_obj(LNK_Error_IllData, input, "corrupted file, unable to read section header table");
@@ -104,15 +104,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   //
-  // error check symbols
+  // error check symbol table
   //
   {
     COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(input->data, header.section_table_range).str;
-    String8 string_table = str8_substr(input->data, header.string_table_range);
-    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+      symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
         if (symbol.section_number == 0 || symbol.section_number > header.section_count_no_null) {
@@ -140,11 +138,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     comdats = push_array_no_zero(arena, U32, header.section_count_no_null);
     MemorySet(comdats, 0xff, header.section_count_no_null * sizeof(comdats[0]));
 
-    String8 string_table = str8_substr(input->data, header.string_table_range);
-    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
     COFF_ParsedSymbol symbol;
     for (U64 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+      symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
 
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
       if (interp == COFF_SymbolValueInterp_Regular) {
@@ -180,8 +176,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   {
     Temp scratch = scratch_begin(&arena, 1);
 
-    String8    string_table     = str8_substr(input->data, header.string_table_range);
-    String8    symbol_table     = str8_substr(input->data, header.symbol_table_range);
     HashTable *visited_sections = hash_table_init(scratch.arena, 32);
     for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
       for (U32 curr_section = sect_idx;;) {
@@ -193,7 +187,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         }
 
         // extract COMDAT info for current section
-        COFF_ParsedSymbol     symbol         = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+        COFF_ParsedSymbol     symbol         = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
         COFF_ComdatSelectType select         = COFF_ComdatSelect_Null;
         U32                   section_number = 0;
         coff_parse_secdef(symbol, header.is_big_obj, &select, &section_number, 0, 0);
@@ -205,7 +199,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
         // was section visited? -- loop found
         if (hash_table_search_u64(visited_sections, curr_section)) {
-          COFF_ParsedSymbol symbol = coff_parse_symbol(header, string_table, symbol_table, comdats[sect_idx]);
+          COFF_ParsedSymbol symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, comdats[sect_idx]);
           lnk_error_input_obj(LNK_Error_AssociativeLoop, input, "section symbol %S (No. 0x%x) does not terminate on a non-associate COMDAT symbol", symbol.name, comdats[sect_idx]);
           break;
         }
@@ -230,12 +224,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   //
   U32Node **associated_sections = push_array(arena, U32Node *, header.section_count_no_null + 1);
   {
-    String8 string_table = str8_substr(input->data, header.string_table_range);
-    String8 symbol_table = str8_substr(input->data, header.symbol_table_range);
-
     COFF_ParsedSymbol symbol;
     for (U32 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = coff_parse_symbol(header, string_table, symbol_table, symbol_idx);
+      symbol = coff_parse_symbol(header, raw_coff_string_table, raw_coff_symbol_table, symbol_idx);
       COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
       if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
         COFF_ComdatSelectType selection      = COFF_ComdatSelect_Null;
