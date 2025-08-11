@@ -283,14 +283,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   // fill out obj
-  obj->data                = input->data;
-  obj->path                = push_str8_copy(arena, input->path);
-  obj->lib                 = input->lib;
-  obj->input_idx           = obj_idx;
-  obj->header              = header;
-  obj->comdats             = comdats;
-  obj->hotpatch            = hotpatch;
-  obj->associated_sections = associated_sections;
+  obj->data                    = input->data;
+  obj->path                    = push_str8_copy(arena, input->path);
+  obj->lib                     = input->lib;
+  obj->input_idx               = obj_idx;
+  obj->header                  = header;
+  obj->comdats                 = comdats;
+  obj->exclude_from_debug_info = input->exclude_from_debug_info;
+  obj->hotpatch                = hotpatch;
+  obj->associated_sections     = associated_sections;
 
   ProfEnd();
 }

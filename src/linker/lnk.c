@@ -1313,10 +1313,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
   // input :null_obj
   {
-    LNK_InputObj *null_obj_input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-    null_obj_input->path     = str8_lit("* Null Obj *");
-    null_obj_input->dedup_id = null_obj_input->path;
-    null_obj_input->data     = lnk_make_null_obj(tp_arena->v[0]);
+    LNK_InputObj *null_obj_input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+    null_obj_input->exclude_from_debug_info = 1;
+    null_obj_input->path                    = str8_lit("* Null Obj *");
+    null_obj_input->dedup_id                = null_obj_input->path;
+    null_obj_input->data                    = lnk_make_null_obj(tp_arena->v[0]);
   }
   
   // input command line objs
@@ -1438,10 +1439,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         }
 
         // input obj with includes
-        LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-        input->path         = str8_lit("* INCLUDE SYMBOLS *");
-        input->dedup_id     = push_str8f(scratch.arena, "%S %llu", input->path, obj_list.count);
-        input->data         = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
+        LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+        input->exclude_from_debug_info = 1;
+        input->path                    = str8_lit("* INCLUDE SYMBOLS *");
+        input->dedup_id                = push_str8f(scratch.arena, "%S %llu", input->path, obj_list.count);
+        input->data                    = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
 
         coff_obj_writer_release(&obj_writer);
         
@@ -1651,11 +1653,12 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
           // flush on last directive or next directive is issued from a different obj
           if ((*last_alt_name)->next == 0 || (*last_alt_name)->data.obj != (*last_alt_name)->next->data.obj) {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->path     = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->path : str8_lit("RADLINK");
-            input->dedup_id = push_str8f(scratch.arena, "* ALTERNATE NAMES FOR %S *", input->path);
-            input->data     = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
-            input->lib      = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->lib : 0;
+            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->path                    = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->path : str8_lit("RADLINK");
+            input->exclude_from_debug_info = 1;
+            input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAMES FOR %S *", input->path);
+            input->data                    = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
+            input->lib                     = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->lib : 0;
 
             // reset obj writer
             coff_obj_writer_release(&obj_writer);
@@ -1822,10 +1825,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       case State_InputLinkerObjs: {
         {
           ProfBegin("Push Linker Symbols");
-          LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-          input->path = str8_lit("* Linker Symbols *");
-          input->dedup_id = input->path;
-          input->data = lnk_make_linker_obj(tp_arena->v[0], config);
+          LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+          input->path                    = str8_lit("* Linker Symbols *");
+          input->exclude_from_debug_info = 1;
+          input->dedup_id                = input->path;
+          input->data                    = lnk_make_linker_obj(tp_arena->v[0], config);
           ProfEnd();
         }
 
@@ -1858,18 +1862,20 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           }
           String8 linker_debug_symbols = lnk_make_linker_debug_symbols(tp_arena->v[0], config->machine);
           {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_null_import_descriptor_delayed(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
-            input->path      = str8_lit("* Delayed Null Import Descriptor *");
-            input->dedup_id  = input->path;
+            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->input_idx               = obj_list.count;
+            input->exclude_from_debug_info = 1;
+            input->data                    = pe_make_null_import_descriptor_delayed(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
+            input->path                    = str8_lit("* Delayed Null Import Descriptor *");
+            input->dedup_id                = input->path;
           }
           {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_null_thunk_data_obj_delayed(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
-            input->path      = str8_lit("* Delayed Null Thunk Data *");
-            input->dedup_id  = input->path;
+            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->input_idx               = obj_list.count;
+            input->exclude_from_debug_info = 1;
+            input->data                    = pe_make_null_thunk_data_obj_delayed(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
+            input->path                    = str8_lit("* Delayed Null Thunk Data *");
+            input->dedup_id                = input->path;
           }
 
           ProfEnd();
@@ -1892,18 +1898,20 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           }
           String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
           {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_null_import_descriptor_obj(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
-            input->path      = str8_lit("* Null Import Descriptor *");
-            input->dedup_id  = input->path;
+            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->input_idx               = obj_list.count;
+            input->exclude_from_debug_info = 1;
+            input->data                    = pe_make_null_import_descriptor_obj(tp_arena->v[0], time_stamp, config->machine, linker_debug_symbols);
+            input->path                    = str8_lit("* Null Import Descriptor *");
+            input->dedup_id                = input->path;
           }
           {
-            LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->input_idx = obj_list.count;
-            input->data      = pe_make_null_thunk_data_obj(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
-            input->path      = str8_lit("* Null Thunk Data *");
-            input->dedup_id  = input->path;
+            LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+            input->input_idx               = obj_list.count;
+            input->exclude_from_debug_info = 1;
+            input->data                    = pe_make_null_thunk_data_obj(tp_arena->v[0], lnk_get_image_name(config), time_stamp, config->machine, linker_debug_symbols);
+            input->path                    = str8_lit("* Null Thunk Data *");
+            input->dedup_id                = input->path;
           }
         
           ProfEnd();
@@ -2045,16 +2053,18 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           {
             ProfBegin("Build * Debug Directories *");
             if (config->debug_mode != LNK_DebugMode_None && config->debug_mode != LNK_DebugMode_Null) {
-              LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-              input->path     = str8_lit("* Debug Directory PDB *");
-              input->dedup_id = input->path;
-              input->data     = pe_make_debug_directory_pdb_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
+              LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+              input->exclude_from_debug_info = 1;
+              input->path                    = str8_lit("* Debug Directory PDB *");
+              input->dedup_id                = input->path;
+              input->data                    = pe_make_debug_directory_pdb_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
             }
             if (config->rad_debug == LNK_SwitchState_Yes) {
-              LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-              input->path     = str8_lit("* Debug Directory RDI *");
-              input->dedup_id = input->path;
-              input->data     = pe_make_debug_directory_rdi_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->rad_debug_alt_path);
+              LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+              input->exclude_from_debug_info = 1;
+              input->path                    = str8_lit("* Debug Directory RDI *");
+              input->dedup_id                = input->path;
+              input->data                    = pe_make_debug_directory_rdi_obj(tp_arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->rad_debug_alt_path);
             }
             ProfEnd();
           }
@@ -4762,10 +4772,18 @@ lnk_run(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     ProfBegin("Debug Info");
     lnk_timer_begin(LNK_Timer_Debug);
 
+    U64       objs_count = 0;
+    LNK_Obj **objs       = push_array(scratch.arena, LNK_Obj *, link_ctx.objs_count);
+    for EachIndex(obj_idx, link_ctx.objs_count) {
+      LNK_Obj *obj = link_ctx.objs[obj_idx];
+      if (obj->exclude_from_debug_info) { continue; }
+      objs[objs_count++] = obj;
+    }
+
     //
     // CodeView
     //
-    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, link_ctx.objs_count, link_ctx.objs);
+    LNK_CodeViewInput input = lnk_make_code_view_input(tp, arena, config->io_flags, config->lib_dir_list, objs_count, objs);
     CV_DebugT        *types = lnk_import_types(tp, arena, &input);
 
     //

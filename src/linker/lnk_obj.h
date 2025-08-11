@@ -14,6 +14,7 @@ typedef struct LNK_Obj
   COFF_FileHeaderInfo  header;
   U32                 *comdats;
   B8                   hotpatch;
+  B8                   exclude_from_debug_info;
   U32Node            **associated_sections;
   LNK_SymbolHashTrie **symlinks;
 } LNK_Obj;
