@@ -88,6 +88,7 @@ enum
   RD_EvalSpaceKind_MetaTheme,
   RD_EvalSpaceKind_MetaCtrlEntity,
   RD_EvalSpaceKind_MetaUnattachedProcess,
+  RD_EvalSpaceKind_MetaCallStackTree,
 };
 
 ////////////////////////////////
@@ -600,6 +601,8 @@ struct RD_State
   F32 frame_dt;
   DI_Scope *frame_di_scope;
   CTRL_Scope *frame_ctrl_scope;
+  CTRL_CallStackTree frame_call_stack_tree;
+  B32 got_frame_call_stack_tree;
   
   // rjf: dbgi match store
   DI_MatchStore *match_store;

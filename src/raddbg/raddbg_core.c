@@ -11499,6 +11499,7 @@ rd_frame(void)
   CTRL_Scope *frame_ctrl_scope_restore = rd_state->frame_ctrl_scope;
   rd_state->frame_di_scope = di_scope_open();
   rd_state->frame_ctrl_scope = ctrl_scope_open();
+  rd_state->got_frame_call_stack_tree = 0;
   
   //////////////////////////////
   //- rjf: calculate avg length in us of last many frames
@@ -12292,6 +12293,26 @@ rd_frame(void)
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, r1u64(0, 0));
         expr->type_key = collection_type_key;
         expr->space = e_space_make(RD_EvalSpaceKind_MetaQuery);
+        e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
+      }
+      
+      //- rjf: add macro for call stack tree
+      {
+        String8 collection_name = str8_lit("call_stack_tree");
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
+                                                        .name = collection_name,
+                                                        .flags = E_TypeFlag_StubSingleLineExpansion,
+                                                        .access = E_TYPE_ACCESS_FUNCTION_NAME(call_stack_tree),
+                                                        .expand =
+                                                        {
+                                                          .info   = E_TYPE_EXPAND_INFO_FUNCTION_NAME(call_stack_tree),
+                                                          .range  = E_TYPE_EXPAND_RANGE_FUNCTION_NAME(call_stack_tree)
+                                                        });
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafValue, r1u64(0, 0));
+        expr->value.u64 = 1;
+        expr->type_key = collection_type_key;
+        expr->space = e_space_make(RD_EvalSpaceKind_MetaCallStackTree);
         e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }

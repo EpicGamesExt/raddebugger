@@ -103,6 +103,7 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities);
 ////////////////////////////////
 //~ rjf: Call Stack Tree Type Hooks
 
+E_TYPE_ACCESS_FUNCTION_DEF(call_stack_tree);
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(call_stack_tree);
 

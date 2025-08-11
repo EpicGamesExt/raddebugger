@@ -188,6 +188,22 @@ ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src)
   return dst;
 }
 
+internal CTRL_HandleArray
+ctrl_handle_array_from_list(Arena  *arena, CTRL_HandleList *src)
+{
+  CTRL_HandleArray array = {0};
+  array.count = src->count;
+  array.v = push_array_no_zero(arena, CTRL_Handle, array.count);
+  {
+    U64 idx = 0;
+    for(CTRL_HandleNode *n = src->first; n != 0; n = n->next, idx += 1)
+    {
+      array.v[idx] = n->v;
+    }
+  }
+  return array;
+}
+
 internal String8
 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle)
 {
@@ -1543,6 +1559,9 @@ ctrl_init(void)
     ctrl_state->module_image_info_cache.stripes[idx].arena = arena_alloc();
     ctrl_state->module_image_info_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
+  ctrl_state->call_stack_tree_cache.tree.root = &ctrl_call_stack_tree_node_nil;
+  ctrl_state->call_stack_tree_cache.cv = os_condition_variable_alloc();
+  ctrl_state->call_stack_tree_cache.rw_mutex = os_rw_mutex_alloc();
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
@@ -7358,9 +7377,14 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
   if(pre_mem_gen == post_mem_gen &&
      pre_reg_gen == post_reg_gen)
   {
+    U64 id_gen = 0;
     arena = arena_alloc();
     tree.root = push_array(arena, CTRL_CallStackTreeNode, 1);
     MemoryCopyStruct(tree.root, &ctrl_call_stack_tree_node_nil);
+    tree.root->id = id_gen;
+    tree.slots_count = Max(1, threads_count);
+    tree.slots = push_array(arena, CTRL_CallStackTreeNode *, tree.slots_count);
+    id_gen += 1;
     for EachIndex(thread_idx, threads_count)
     {
       CTRL_Handle thread = threads[thread_idx];
@@ -7385,6 +7409,9 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
         {
           next_node = push_array(arena, CTRL_CallStackTreeNode, 1);
           MemoryCopyStruct(next_node, &ctrl_call_stack_tree_node_nil);
+          next_node->id = id_gen;
+          SLLStackPush_N(tree.slots[next_node->id%tree.slots_count], next_node, hash_next);
+          id_gen += 1;
           SLLQueuePush_NZ(&ctrl_call_stack_tree_node_nil, thread_node->first, thread_node->last, next_node, next);
           next_node->parent = thread_node;
           thread_node->child_count += 1;

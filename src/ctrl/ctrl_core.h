@@ -84,6 +84,13 @@ struct CTRL_HandleList
   U64 count;
 };
 
+typedef struct CTRL_HandleArray CTRL_HandleArray;
+struct CTRL_HandleArray
+{
+  CTRL_Handle *v;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Generated Code
 
@@ -277,11 +284,13 @@ struct CTRL_CallStack
 typedef struct CTRL_CallStackTreeNode CTRL_CallStackTreeNode;
 struct CTRL_CallStackTreeNode
 {
+  CTRL_CallStackTreeNode *hash_next;
   CTRL_CallStackTreeNode *first;
   CTRL_CallStackTreeNode *last;
   CTRL_CallStackTreeNode *next;
   CTRL_CallStackTreeNode *parent;
   U64 child_count;
+  U64 id;
   CTRL_Handle process;
   U64 vaddr;
   U64 depth;
@@ -293,6 +302,8 @@ typedef struct CTRL_CallStackTree CTRL_CallStackTree;
 struct CTRL_CallStackTree
 {
   CTRL_CallStackTreeNode *root;
+  U64 slots_count;
+  CTRL_CallStackTreeNode **slots;
 };
 
 ////////////////////////////////
@@ -911,6 +922,7 @@ read_only global CTRL_Entity ctrl_entity_nil =
 };
 read_only global CTRL_CallStackTreeNode ctrl_call_stack_tree_node_nil =
 {
+  0,
   &ctrl_call_stack_tree_node_nil,
   &ctrl_call_stack_tree_node_nil,
   &ctrl_call_stack_tree_node_nil,
@@ -945,6 +957,7 @@ internal CTRL_Handle ctrl_handle_make(CTRL_MachineID machine_id, DMN_Handle dmn_
 internal B32 ctrl_handle_match(CTRL_Handle a, CTRL_Handle b);
 internal void ctrl_handle_list_push(Arena *arena, CTRL_HandleList *list, CTRL_Handle *pair);
 internal CTRL_HandleList ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src);
+internal CTRL_HandleArray ctrl_handle_array_from_list(Arena  *arena, CTRL_HandleList *src);
 internal String8 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle);
 internal CTRL_Handle ctrl_handle_from_string(String8 string);
 

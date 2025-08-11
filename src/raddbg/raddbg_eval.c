@@ -1541,14 +1541,90 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities)
 ////////////////////////////////
 //~ rjf: Call Stack Tree Type Hooks
 
+E_TYPE_ACCESS_FUNCTION_DEF(call_stack_tree)
+{
+  E_IRTreeAndType result = {&e_irnode_nil};
+  if(expr->kind == E_ExprKind_MemberAccess)
+  {
+    String8 id_string = expr->first->next->string;
+    U64 id = u64_from_str8(str8_skip(id_string, 1), 16);
+    if(id != 0)
+    {
+      result.type_key = lhs_irtree->type_key;
+      result.mode = E_Mode_Value;
+      result.root = e_irtree_set_space(arena, e_space_make(RD_EvalSpaceKind_MetaCallStackTree), e_irtree_const_u(arena, id));
+    }
+  }
+  return result;
+}
+
+typedef struct RD_CallStackTreeExpandAccel RD_CallStackTreeExpandAccel;
+struct RD_CallStackTreeExpandAccel
+{
+  CTRL_CallStackTreeNode *node;
+  CTRL_CallStackTreeNode **children;
+  CTRL_HandleArray threads;
+};
+
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree)
 {
-  
+  if(!rd_state->got_frame_call_stack_tree)
+  {
+    rd_state->got_frame_call_stack_tree = 1;
+    rd_state->frame_call_stack_tree = ctrl_call_stack_tree(rd_state->frame_ctrl_scope, 0);
+  }
+  RD_CallStackTreeExpandAccel *accel = push_array(arena, RD_CallStackTreeExpandAccel, 1);
+  accel->node = &ctrl_call_stack_tree_node_nil;
+  U64 id = e_value_eval_from_eval(eval).value.u64;
+  if(rd_state->frame_call_stack_tree.slots_count != 0)
+  {
+    for(CTRL_CallStackTreeNode *n = rd_state->frame_call_stack_tree.slots[id%rd_state->frame_call_stack_tree.slots_count];
+        n != 0;
+        n = n->hash_next)
+    {
+      if(n->id == id)
+      {
+        accel->node = n;
+        break;
+      }
+    }
+  }
+  accel->children = push_array(arena, CTRL_CallStackTreeNode *, accel->node->child_count);
+  {
+    U64 idx = 0;
+    for(CTRL_CallStackTreeNode *n = accel->node->first;
+        n != &ctrl_call_stack_tree_node_nil;
+        n = n->next, idx += 1)
+    {
+      accel->children[idx] = n;
+    }
+  }
+  accel->threads = ctrl_handle_array_from_list(arena, &accel->node->threads);
+  E_TypeExpandInfo result = {accel};
+  result.expr_count = accel->node->child_count + accel->threads.count;
+  return result;
 }
 
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(call_stack_tree)
 {
-  
+  Temp scratch = scratch_begin(&arena, 1);
+  RD_CallStackTreeExpandAccel *accel = (RD_CallStackTreeExpandAccel *)user_data;
+  CTRL_CallStackTreeNode *node = accel->node;
+  U64 needed_row_count = dim_1u64(idx_range);
+  for EachIndex(idx, needed_row_count)
+  {
+    E_Eval eval = e_eval_nil;
+    if(idx < node->child_count)
+    {
+      eval = e_eval_from_stringf("query:call_stack_tree.$%I64x", accel->children[idx]->id);
+    }
+    else if(node->child_count <= idx && idx < node->child_count + accel->threads.count)
+    {
+      eval = e_eval_from_stringf("query:control.%S", ctrl_string_from_handle(scratch.arena, accel->threads.v[idx - node->child_count]));
+    }
+    evals_out[idx] = eval;
+  }
+  scratch_end(scratch);
 }
 
 ////////////////////////////////
