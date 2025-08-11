@@ -101,6 +101,12 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(ctrl_entities);
 E_TYPE_EXPAND_RANGE_FUNCTION_DEF(ctrl_entities);
 
 ////////////////////////////////
+//~ rjf: Call Stack Tree Type Hooks
+
+E_TYPE_EXPAND_INFO_FUNCTION_DEF(call_stack_tree);
+E_TYPE_EXPAND_RANGE_FUNCTION_DEF(call_stack_tree);
+
+////////////////////////////////
 //~ rjf: Debug Info Tables Eval Hooks
 
 E_TYPE_EXPAND_INFO_FUNCTION_DEF(debug_info_table);

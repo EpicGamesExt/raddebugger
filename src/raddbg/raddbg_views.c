@@ -105,6 +105,21 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   }
   
   //////////////////////////////
+  //- rjf: set up wrap cache
+  //
+  if(cv->wrap_arena == 0)
+  {
+    cv->wrap_arena = rd_push_view_arena();
+  }
+  if(cv->wrap_total_vline_count == 0)
+  {
+    arena_clear(cv->wrap_arena);
+    cv->wrap_total_vline_count = text_info->lines_count;
+    cv->wrap_cache_slots_count = text_info->lines_count/64;
+    cv->wrap_cache_slots = push_array(cv->wrap_arena, RD_CodeViewTLineWrapCacheSlot, cv->wrap_cache_slots_count);
+  }
+  
+  //////////////////////////////
   //- rjf: determine visible line range / count
   //
   Rng1S64 visible_line_num_range = r1s64(scroll_pos.y.idx + (S64)(scroll_pos.y.off) + 1 - !!(scroll_pos.y.off < 0),
@@ -1015,7 +1030,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         info.callstack_thread = entity;
         U64 frame_num = ev_block_num_from_id(block, key.child_id);
         B32 call_stack_high_priority = ctrl_handle_match(entity->handle, rd_base_regs()->thread);
-        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+        CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
         if(1 <= frame_num && frame_num <= call_stack.frames_count)
         {
           CTRL_CallStackFrame *f = &call_stack.frames[frame_num-1];
@@ -2924,7 +2939,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     CTRL_Scope *ctrl_scope = ctrl_scope_open();
     CTRL_Entity *selected_thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_regs()->thread);
     CTRL_Entity *selected_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
-    CTRL_CallStack selected_call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, selected_thread, 1, 0);
+    CTRL_CallStack selected_call_stack = ctrl_call_stack_from_thread(ctrl_scope, selected_thread->handle, 1, 0);
     CTRL_Entity *eval_process = &ctrl_entity_nil;
     if(eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
     {

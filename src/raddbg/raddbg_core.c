@@ -1817,7 +1817,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         case CTRL_EntityKind_Thread:
         {
           CTRL_Scope *ctrl_scope = ctrl_scope_open();
-          CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, entity, 1, rd_state->frame_eval_memread_endt_us);
+          CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, entity->handle, 1, rd_state->frame_eval_memread_endt_us);
           U64 concrete_frame_idx = e_interpret_ctx->reg_unwind_count;
           if(concrete_frame_idx < call_stack.concrete_frames_count)
           {
@@ -6469,7 +6469,7 @@ rd_window_frame(void)
             Vec4F32 symbol_color = ui_color_from_name(str8_lit("code_symbol"));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             B32 call_stack_high_priority = ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, ctrl_entity, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, ctrl_entity->handle, call_stack_high_priority, call_stack_high_priority ? rd_state->frame_eval_memread_endt_us : 0);
             if(call_stack.frames_count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));
@@ -16231,7 +16231,7 @@ rd_frame(void)
           {
             CTRL_Scope *ctrl_scope = ctrl_scope_open();
             CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, thread, 1, os_now_microseconds()+10000);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, os_now_microseconds()+10000);
             CTRL_CallStackFrame *frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             if(frame == 0)
             {
@@ -16250,7 +16250,7 @@ rd_frame(void)
           {
             CTRL_Scope *ctrl_scope = ctrl_scope_open();
             CTRL_Entity *thread = ctrl_entity_from_handle(&d_state->ctrl_entity_store->ctx, rd_base_regs()->thread);
-            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, thread, 1, os_now_microseconds()+10000);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, os_now_microseconds()+10000);
             CTRL_CallStackFrame *current_frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
             CTRL_CallStackFrame *next_frame = current_frame;
             if(current_frame != 0) switch(kind)

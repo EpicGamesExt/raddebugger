@@ -1209,7 +1209,7 @@ d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count)
   else
   {
     CTRL_Scope *ctrl_scope = ctrl_scope_open();
-    CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, thread, 1, 0);
+    CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, 0);
     if(callstack.concrete_frames_count != 0)
     {
       result = regs_rip_from_arch_block(thread->arch, callstack.concrete_frames[unwind_count%callstack.concrete_frames_count]->regs);
@@ -1889,7 +1889,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 CTRL_Scope *ctrl_scope = ctrl_scope_open();
                 
                 // rjf: thread => call stack
-                CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, &d_state->ctrl_entity_store->ctx, thread, 1, os_now_microseconds()+10000);
+                CTRL_CallStack callstack = ctrl_call_stack_from_thread(ctrl_scope, thread->handle, 1, os_now_microseconds()+10000);
                 
                 // rjf: use first unwind frame to generate trap
                 if(callstack.concrete_frames_count > 1)

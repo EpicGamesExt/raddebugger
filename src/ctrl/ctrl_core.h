@@ -272,6 +272,30 @@ struct CTRL_CallStack
 };
 
 ////////////////////////////////
+//~ rjf: Call Stack Tree Types
+
+typedef struct CTRL_CallStackTreeNode CTRL_CallStackTreeNode;
+struct CTRL_CallStackTreeNode
+{
+  CTRL_CallStackTreeNode *first;
+  CTRL_CallStackTreeNode *last;
+  CTRL_CallStackTreeNode *next;
+  CTRL_CallStackTreeNode *parent;
+  U64 child_count;
+  CTRL_Handle process;
+  U64 vaddr;
+  U64 depth;
+  CTRL_HandleList threads;
+  U64 all_descendant_threads_count;
+};
+
+typedef struct CTRL_CallStackTree CTRL_CallStackTree;
+struct CTRL_CallStackTree
+{
+  CTRL_CallStackTreeNode *root;
+};
+
+////////////////////////////////
 //~ rjf: Trap Types
 
 typedef U32 CTRL_TrapFlags;
@@ -701,6 +725,22 @@ struct CTRL_ModuleImageInfoCache
 };
 
 ////////////////////////////////
+//~ rjf: Call Stack Tree Cache Types
+
+typedef struct CTRL_CallStackTreeCache CTRL_CallStackTreeCache;
+struct CTRL_CallStackTreeCache
+{
+  Arena *arena;
+  CTRL_CallStackTree tree;
+  OS_Handle cv;
+  OS_Handle rw_mutex;
+  U64 reg_gen;
+  U64 mem_gen;
+  U64 scope_touch_count;
+  U64 request_count;
+};
+
+////////////////////////////////
 //~ rjf: Touched Debug Info Directory Cache
 
 typedef struct CTRL_DbgDirNode CTRL_DbgDirNode;
@@ -746,6 +786,7 @@ struct CTRL_Scope
   CTRL_Scope *next;
   CTRL_ScopeCallStackTouch *first_call_stack_touch;
   CTRL_ScopeCallStackTouch *last_call_stack_touch;
+  U64 call_stack_tree_touch_count;
 };
 
 typedef struct CTRL_TCTX CTRL_TCTX;
@@ -791,6 +832,7 @@ struct CTRL_State
   CTRL_ThreadRegCache thread_reg_cache;
   CTRL_CallStackCache call_stack_cache;
   CTRL_ModuleImageInfoCache module_image_info_cache;
+  CTRL_CallStackTreeCache call_stack_tree_cache;
   
   // rjf: generations
   U64 run_gen;
@@ -866,6 +908,13 @@ read_only global CTRL_Entity ctrl_entity_nil =
   &ctrl_entity_nil,
   &ctrl_entity_nil,
   &ctrl_entity_nil,
+};
+read_only global CTRL_CallStackTreeNode ctrl_call_stack_tree_node_nil =
+{
+  &ctrl_call_stack_tree_node_nil,
+  &ctrl_call_stack_tree_node_nil,
+  &ctrl_call_stack_tree_node_nil,
+  &ctrl_call_stack_tree_node_nil,
 };
 thread_static CTRL_TCTX *ctrl_tctx = 0;
 thread_static CTRL_EntityCtxLookupAccel *ctrl_entity_ctx_lookup_accel = 0;
@@ -1071,7 +1120,12 @@ internal CTRL_CallStackFrame *ctrl_call_stack_frame_from_unwind_and_inline_depth
 ////////////////////////////////
 //~ rjf: Call Stack Cache Functions
 
-internal CTRL_CallStack ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_Entity *thread, B32 high_priority, U64 endt_us);
+internal CTRL_CallStack ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Call Stack Tree Cache Functions
+
+internal CTRL_CallStackTree ctrl_call_stack_tree(CTRL_Scope *scope, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes
@@ -1154,5 +1208,10 @@ internal void ctrl_u2csb_dequeue_req(CTRL_Handle *out_thread);
 
 //- rjf: entry point
 ASYNC_WORK_DEF(ctrl_call_stack_build_work);
+
+////////////////////////////////
+//~ rjf: Asynchronous Call Stack Tree Building Functions
+
+ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work);
 
 #endif // CTRL_CORE_H
