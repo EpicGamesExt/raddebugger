@@ -2010,9 +2010,9 @@ t_simple_lib_test(void)
   {
     COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
     coff_lib_writer_push_obj(lib_writer, str8_lit("test.obj"), test_obj);
-    String8List test_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    String8 test_lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
     coff_lib_writer_release(&lib_writer);
-    if (!t_write_file_list(test_lib_name, test_lib)) {
+    if (!t_write_file(test_lib_name, test_lib)) {
       goto exit;
     }
   }
@@ -3304,9 +3304,9 @@ t_include(void)
 
     COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
     coff_lib_writer_push_obj(lib_writer, str8_lit("include.obj"), obj);
-    String8List lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
+    String8 lib = coff_lib_writer_serialize(scratch.arena, lib_writer, 0, 0, 1);
     coff_lib_writer_release(&lib_writer);
-    if (!t_write_file_list(str8_lit("include.lib"), lib)) { goto exit; }
+    if (!t_write_file(str8_lit("include.lib"), lib)) { goto exit; }
   }
 
   {
@@ -3944,7 +3944,7 @@ t_opt_ref_dangling_section(void)
     coff_obj_writer_release(&obj_writer);
   }
 
-  String8List b_lib;
+  String8 b_lib;
   {
     COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
     coff_lib_writer_push_obj(lib_writer, str8_lit("b.obj"), b_obj);
@@ -3954,7 +3954,7 @@ t_opt_ref_dangling_section(void)
 
   if (!t_write_file(str8_lit("entry.obj"), entry_obj)) { goto exit; }
   if (!t_write_file(str8_lit("a.obj"), a_obj))         { goto exit; }
-  if (!t_write_file_list(str8_lit("b.lib"), b_lib))    { goto exit; }
+  if (!t_write_file(str8_lit("b.lib"), b_lib))         { goto exit; }
 
   int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj a.obj b.lib");
   if (linker_exit_code != 0) { goto exit; }

@@ -165,7 +165,7 @@ coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine
   }
 }
 
-internal String8List
+internal String8
 coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeStamp time_stamp, U16 mode, B32 emit_second_member)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -215,30 +215,30 @@ coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeSta
       member_offsets[member_idx] = member_data_list.total_size;
 
       String8 member_data   = member->data;
-      String8 member_header = coff_make_lib_member_header(arena, name, time_stamp, 0, 0, mode, member_data.size);
+      String8 member_header = coff_make_lib_member_header(scratch.arena, name, time_stamp, 0, 0, mode, member_data.size);
 
-      str8_list_push(arena, &member_data_list, member_header);
-      str8_list_push(arena, &member_data_list, member_data);
+      str8_list_push(scratch.arena, &member_data_list, member_header);
+      str8_list_push(scratch.arena, &member_data_list, member_data);
       {
         U64 pad_size = AlignPadPow2(member_data_list.total_size, COFF_Archive_MemberAlign);
-        U8 *pad      = push_array(arena, U8, pad_size);
-        str8_list_push(arena, &member_data_list, str8(pad, pad_size));
+        U8 *pad      = push_array(scratch.arena, U8, pad_size);
+        str8_list_push(scratch.arena, &member_data_list, str8(pad, pad_size));
       }
     }
   }
   
   // long names member
   if (long_names_list.total_size) {
-    String8 header        = coff_make_lib_member_header(arena, str8_lit("//"), time_stamp, 0, 0, mode, long_names_list.total_size);
-    String8 data          = str8_list_join(arena, &long_names_list, 0);
+    String8 header        = coff_make_lib_member_header(scratch.arena, str8_lit("//"), time_stamp, 0, 0, mode, long_names_list.total_size);
+    String8 data          = str8_list_join(scratch.arena, &long_names_list, 0);
     U64     member_offset = member_data_list.total_size + data.size + header.size;
     {
       U64 pad_size = AlignPadPow2(member_offset, COFF_Archive_MemberAlign);
-      U8 *pad      = push_array(arena, U8, pad_size);
-      str8_list_push_front(arena, &member_data_list, str8(pad, pad_size));
+      U8 *pad      = push_array(scratch.arena, U8, pad_size);
+      str8_list_push_front(scratch.arena, &member_data_list, str8(pad, pad_size));
     }
-    str8_list_push_front(arena, &member_data_list, data);
-    str8_list_push_front(arena, &member_data_list, header);
+    str8_list_push_front(scratch.arena, &member_data_list, data);
+    str8_list_push_front(scratch.arena, &member_data_list, header);
   }
   
   // compute size for symbol string table
@@ -310,17 +310,17 @@ coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeSta
     str8_list_push(scratch.arena, &second_member_data_list, str8_array(member_idx16_arr, symbols_count));
     str8_list_push(scratch.arena, &second_member_data_list, str8(name_buffer, name_buffer_size));
 
-    String8 member_data   = str8_list_join(arena, &second_member_data_list, 0);
-    String8 member_header = coff_make_lib_member_header(arena, str8_lit("/"), time_stamp, 0, 0, mode, member_data.size);
+    String8 member_data   = str8_list_join(scratch.arena, &second_member_data_list, 0);
+    String8 member_header = coff_make_lib_member_header(scratch.arena, str8_lit("/"), time_stamp, 0, 0, mode, member_data.size);
     
     U64 member_offset = member_data_list.total_size + member_data.size + member_header.size;
     {
       U64 pad_size = AlignPadPow2(member_offset, COFF_Archive_MemberAlign);
-      U8 *pad      = push_array(arena, U8, pad_size);
-      str8_list_push_front(arena, &member_data_list, str8(pad, pad_size));
+      U8 *pad      = push_array(scratch.arena, U8, pad_size);
+      str8_list_push_front(scratch.arena, &member_data_list, str8(pad, pad_size));
     }
-    str8_list_push_front(arena, &member_data_list, member_data);
-    str8_list_push_front(arena, &member_data_list, member_header);
+    str8_list_push_front(scratch.arena, &member_data_list, member_data);
+    str8_list_push_front(scratch.arena, &member_data_list, member_header);
   }
   
   // first linker member (obsolete, but kept for compatability reasons)
@@ -343,23 +343,25 @@ coff_lib_writer_serialize(Arena *arena, COFF_LibWriter *lib_writer, COFF_TimeSta
     str8_list_push(scratch.arena, &first_member_data_list, str8_array(member_off32_arr, symbols_count));
     str8_list_push(scratch.arena, &first_member_data_list, str8(name_buffer, name_buffer_size));
 
-    String8 member_data   = str8_list_join(arena, &first_member_data_list, 0);
-    String8 member_header = coff_make_lib_member_header(arena, str8_lit("/"), time_stamp, 0, 0, mode, member_data.size);
+    String8 member_data   = str8_list_join(scratch.arena, &first_member_data_list, 0);
+    String8 member_header = coff_make_lib_member_header(scratch.arena, str8_lit("/"), time_stamp, 0, 0, mode, member_data.size);
     
     U64 member_offset = sizeof(g_coff_archive_sig) + member_header.size + member_data.size;
     {
       U64 pad_size = AlignPadPow2(member_offset, COFF_Archive_MemberAlign);
-      U8 *pad      = push_array(arena, U8, pad_size);
-      str8_list_push_front(arena, &member_data_list, str8(pad, pad_size));
+      U8 *pad      = push_array(scratch.arena, U8, pad_size);
+      str8_list_push_front(scratch.arena, &member_data_list, str8(pad, pad_size));
     }
-    str8_list_push_front(arena, &member_data_list, member_data);
-    str8_list_push_front(arena, &member_data_list, member_header);
+    str8_list_push_front(scratch.arena, &member_data_list, member_data);
+    str8_list_push_front(scratch.arena, &member_data_list, member_header);
   }
   
   // archive signature
-  str8_list_push_front(arena, &member_data_list, str8_struct(&g_coff_archive_sig));
+  str8_list_push_front(scratch.arena, &member_data_list, str8_struct(&g_coff_archive_sig));
+
+  String8 raw_lib = str8_list_join(arena, &member_data_list, 0);
   
   scratch_end(scratch);
-  return member_data_list; 
+  return raw_lib; 
 }
 
