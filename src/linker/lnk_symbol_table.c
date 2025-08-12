@@ -14,10 +14,10 @@ lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 sym
 internal LNK_Symbol *
 lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_offset)
 {
-  LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
-  symbol->name                = name;
-  symbol->u.lib.lib           = lib;
-  symbol->u.lib.member_offset = member_offset;
+  LNK_Symbol *symbol               = push_array(arena, LNK_Symbol, 1);
+  symbol->name                     = name;
+  symbol->u.member.v.lib           = lib;
+  symbol->u.member.v.member_offset = member_offset;
   return symbol;
 }
 
@@ -38,7 +38,7 @@ internal B32
 lnk_symbol_lib_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
-  return a->u.lib.lib->input_idx < b->u.lib.lib->input_idx;
+  return a->u.member.v.lib->input_idx < b->u.member.v.lib->input_idx;
 }
 
 internal void

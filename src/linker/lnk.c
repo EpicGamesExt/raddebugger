@@ -965,18 +965,32 @@ lnk_make_linker_obj(Arena *arena, LNK_Config *config)
 internal void
 lnk_queue_lib_member_input(Arena               *arena,
                            LNK_Config          *config,
-                           LNK_Symbol          *symbol,
+                           LNK_Symbol          *pull_in_ref,
+                           LNK_Symbol          *member_symbol,
                            LNK_InputImportList *input_import_list,
                            LNK_InputObjList    *input_obj_list)
 {
-  B32 was_live = lnk_mark_symbol_live(symbol);
+  // lookup member in the lib where pull-in reference is declared
+  LNK_Symbol *best_match = member_symbol;
+  for (LNK_Symbol *s = member_symbol; s != 0; s = s->u.member.next) {
+    if (s->u.member.v.lib == pull_in_ref->u.member.v.lib) {
+      best_match = s;
+      break;
+    }
+  }
+
+  B32 was_live = lnk_mark_symbol_live(best_match);
   if (!was_live) {
-    LNK_SymbolLib *member    = &symbol->u.lib;
-    LNK_Lib       *lib       = member->lib;
-    U64            input_idx = Compose64Bit(lib->input_idx, member->member_offset);
+    LNK_Lib *lib           = best_match->u.member.v.lib;
+    U64      member_offset = best_match->u.member.v.member_offset;
+
+    // compose input index so that members are laid out in the image
+    // in the order of undefined symbols appearing in objs,
+    // mimicking serial discovery
+    U64 input_idx = Compose64Bit(pull_in_ref->u.defined.obj->input_idx, pull_in_ref->u.defined.symbol_idx);
 
     // parse member
-    COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, member->member_offset);
+    COFF_ArchiveMember member_info = coff_archive_member_from_offset(lib->data, member_offset);
     COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
 
     switch (member_type) {
@@ -1159,7 +1173,7 @@ lnk_find_refs(Arena               *arena,
             }
 
             if (member_symbol) {
-              lnk_queue_lib_member_input(arena, config, member_symbol, imports_out, objs_out);
+              lnk_queue_lib_member_input(arena, config, defn, member_symbol, imports_out, objs_out);
               MemoryZeroStruct(&ref_symbol);
               break;
             } else {
@@ -1178,7 +1192,7 @@ lnk_find_refs(Arena               *arena,
             if (defn_interp == COFF_SymbolValueInterp_Undefined) {
               LNK_Symbol *member_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Lib, ref_parsed.name);
               if (member_symbol) {
-                lnk_queue_lib_member_input(arena, config, member_symbol, imports_out, objs_out);
+                lnk_queue_lib_member_input(arena, config, defn, member_symbol, imports_out, objs_out);
               }
               break;
             } else {

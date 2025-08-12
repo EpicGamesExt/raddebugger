@@ -24,18 +24,16 @@ typedef struct LNK_SymbolLib
   U64             member_offset;
 } LNK_SymbolLib;
 
-typedef struct LNK_SymbolUndefined
-{
-  struct LNK_Obj *obj;
-} LNK_SymbolUndefined;
-
 typedef struct LNK_Symbol
 {
   String8 name;
   B32     is_live;
   union {
     LNK_SymbolDefined   defined;
-    LNK_SymbolLib       lib;
+    struct {
+      struct LNK_Symbol *next;
+      LNK_SymbolLib      v;
+    } member;
   } u;
 } LNK_Symbol;
 
