@@ -1352,6 +1352,32 @@ os_semaphore_drop(OS_Handle semaphore)
   ReleaseSemaphore(handle, 1, 0);
 }
 
+//- rjf: barriers
+
+internal OS_Handle
+os_barrier_alloc(U64 count)
+{
+  OS_W32_Entity *entity = os_w32_entity_alloc(OS_W32_EntityKind_Barrier);
+  InitializeSynchronizationBarrier(&entity->sb, count, -1);
+  OS_Handle result = {IntFromPtr(entity)};
+  return result;
+}
+
+internal void
+os_barrier_release(OS_Handle barrier)
+{
+  OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(barrier.u64[0]);
+  DeleteSynchronizationBarrier(&entity->sb);
+  os_w32_entity_release(entity);
+}
+
+internal void
+os_barrier_wait(OS_Handle barrier)
+{
+  OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(barrier.u64[0]);
+  EnterSynchronizationBarrier(&entity->sb, 0);
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
