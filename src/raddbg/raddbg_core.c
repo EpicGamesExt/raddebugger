@@ -12298,6 +12298,7 @@ rd_frame(void)
       }
       
       //- rjf: add macro for call stack tree
+#if 0
       {
         String8 collection_name = str8_lit("call_stack_tree");
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set,
@@ -12316,6 +12317,7 @@ rd_frame(void)
         e_string2expr_map_insert(scratch.arena, macro_map, collection_name, expr);
         e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, collection_name, collection_type_key);
       }
+#endif
       
       //- rjf: add macro / lookup rules for unattached processes
       {
