@@ -316,7 +316,6 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
     }
   } break;
   case LNK_SymbolScope_Lib: {
-    // link.exe picks symbol from lib that is discovered first
     can_replace = lnk_symbol_lib_is_before(src, dst);
   } break;
   default: { InvalidPath; }
@@ -345,7 +344,7 @@ lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       }
     }
 
-    // make sure leader section is not removed from the output
+    // assert leader section is live
 #if BUILD_DEBUG
     {
       COFF_ParsedSymbol          src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
@@ -358,7 +357,9 @@ lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 #endif
   } break;
   case LNK_SymbolScope_Lib: {
-    // nothing to replace
+    LNK_Symbol *last;
+    for (last = src; last->u.member.next != 0; last = last->u.member.next);
+    last->u.member.next = dst;
   } break;
   default: { InvalidPath; }
   }

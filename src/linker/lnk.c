@@ -973,7 +973,7 @@ lnk_queue_lib_member_input(Arena               *arena,
   // lookup member in the lib where pull-in reference is declared
   LNK_Symbol *best_match = member_symbol;
   for (LNK_Symbol *s = member_symbol; s != 0; s = s->u.member.next) {
-    if (s->u.member.v.lib == pull_in_ref->u.member.v.lib) {
+    if (s->u.member.v.lib == pull_in_ref->u.defined.obj->lib) {
       best_match = s;
       break;
     }
