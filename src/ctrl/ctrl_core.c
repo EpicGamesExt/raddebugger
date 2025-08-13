@@ -3490,8 +3490,8 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Handle thread_handle, B32 hi
       }
     }
     
-    //- rjf: out of time => exit
-    if(retry_idx > 0 && os_now_microseconds() >= endt_us)
+    //- rjf: out of time, or got new result => exit
+    if((retry_idx > 0 && os_now_microseconds() >= endt_us) || !node_stale)
     {
       break;
     }
