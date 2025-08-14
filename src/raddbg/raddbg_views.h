@@ -14,6 +14,30 @@ enum
   RD_CodeViewBuildFlag_All         = 0xffffffff,
 };
 
+typedef struct RD_CodeViewTLineSplitNode RD_CodeViewTLineSplitNode;
+struct RD_CodeViewTLineSplitNode
+{
+  RD_CodeViewTLineSplitNode *next;
+  U64 off;
+};
+
+typedef struct RD_CodeViewTLineWrapCacheNode RD_CodeViewTLineWrapCacheNode;
+struct RD_CodeViewTLineWrapCacheNode
+{
+  RD_CodeViewTLineWrapCacheNode *hash_next;
+  RD_CodeViewTLineWrapCacheNode *hash_prev;
+  S64 line_num;
+  RD_CodeViewTLineSplitNode *first_split;
+  RD_CodeViewTLineSplitNode *last_split;
+};
+
+typedef struct RD_CodeViewTLineWrapCacheSlot RD_CodeViewTLineWrapCacheSlot;
+struct RD_CodeViewTLineWrapCacheSlot
+{
+  RD_CodeViewTLineWrapCacheNode *first;
+  RD_CodeViewTLineWrapCacheNode *last;
+};
+
 typedef struct RD_CodeViewState RD_CodeViewState;
 struct RD_CodeViewState
 {
@@ -32,6 +56,12 @@ struct RD_CodeViewState
   Arena *find_text_arena;
   String8 find_text_fwd;
   String8 find_text_bwd;
+  
+  // rjf: line wrapping cache & info
+  Arena *wrap_arena;
+  RD_CodeViewTLineWrapCacheSlot *wrap_cache_slots;
+  U64 wrap_cache_slots_count;
+  U64 wrap_total_vline_count;
 };
 
 typedef struct RD_CodeViewBuildResult RD_CodeViewBuildResult;

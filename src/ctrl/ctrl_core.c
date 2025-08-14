@@ -188,6 +188,22 @@ ctrl_handle_list_copy(Arena *arena, CTRL_HandleList *src)
   return dst;
 }
 
+internal CTRL_HandleArray
+ctrl_handle_array_from_list(Arena  *arena, CTRL_HandleList *src)
+{
+  CTRL_HandleArray array = {0};
+  array.count = src->count;
+  array.v = push_array_no_zero(arena, CTRL_Handle, array.count);
+  {
+    U64 idx = 0;
+    for(CTRL_HandleNode *n = src->first; n != 0; n = n->next, idx += 1)
+    {
+      array.v[idx] = n->v;
+    }
+  }
+  return array;
+}
+
 internal String8
 ctrl_string_from_handle(Arena *arena, CTRL_Handle handle)
 {
@@ -1451,6 +1467,14 @@ ctrl_scope_close(CTRL_Scope *scope)
     os_condition_variable_broadcast(t->stripe->cv);
     SLLStackPush(ctrl_tctx->free_call_stack_touch, t);
   }
+  for(U64 idx = 0; idx < scope->call_stack_tree_touch_count; idx += 1)
+  {
+    ins_atomic_u64_dec_eval(&ctrl_state->call_stack_tree_cache.scope_touch_count);
+  }
+  if(scope->call_stack_tree_touch_count != 0)
+  {
+    os_condition_variable_broadcast(ctrl_state->call_stack_tree_cache.cv);
+  }
   SLLStackPush(ctrl_tctx->free_scope, scope);
 }
 
@@ -1535,6 +1559,9 @@ ctrl_init(void)
     ctrl_state->module_image_info_cache.stripes[idx].arena = arena_alloc();
     ctrl_state->module_image_info_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
+  ctrl_state->call_stack_tree_cache.tree.root = &ctrl_call_stack_tree_node_nil;
+  ctrl_state->call_stack_tree_cache.cv = os_condition_variable_alloc();
+  ctrl_state->call_stack_tree_cache.rw_mutex = os_rw_mutex_alloc();
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
@@ -3407,7 +3434,7 @@ ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U
 //~ rjf: Call Stack Cache Functions
 
 internal CTRL_CallStack
-ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_Entity *thread, B32 high_priority, U64 endt_us)
+ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Handle thread_handle, B32 high_priority, U64 endt_us)
 {
   CTRL_CallStack call_stack = {0};
   CTRL_CallStackCache *cache = &ctrl_state->call_stack_cache;
@@ -3415,8 +3442,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   //////////////////////////////
   //- rjf: unpack thread
   //
-  CTRL_Handle handle = thread->handle;
-  U64 hash = ctrl_hash_from_handle(handle);
+  U64 hash = ctrl_hash_from_handle(thread_handle);
   U64 slot_idx = hash%cache->slots_count;
   U64 stripe_idx = slot_idx%cache->stripes_count;
   CTRL_CallStackCacheSlot *slot = &cache->slots[slot_idx];
@@ -3439,7 +3465,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       CTRL_CallStackCacheNode *node = 0;
       for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
       {
-        if(ctrl_handle_match(n->thread, handle))
+        if(ctrl_handle_match(n->thread, thread_handle))
         {
           node = n;
           node_exists  = 1;
@@ -3464,8 +3490,8 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       }
     }
     
-    //- rjf: out of time => exit
-    if(retry_idx > 0 && os_now_microseconds() >= endt_us)
+    //- rjf: out of time, or got new result => exit
+    if((retry_idx > 0 && os_now_microseconds() >= endt_us) || !node_stale)
     {
       break;
     }
@@ -3478,7 +3504,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       CTRL_CallStackCacheNode *node = 0;
       for(CTRL_CallStackCacheNode *n = slot->first; n != 0; n = n->next)
       {
-        if(ctrl_handle_match(n->thread, handle))
+        if(ctrl_handle_match(n->thread, thread_handle))
         {
           node = n;
           break;
@@ -3488,7 +3514,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
       {
         node = push_array(stripe->arena, CTRL_CallStackCacheNode, 1);
         DLLPushBack(slot->first, slot->last, node);
-        node->thread = thread->handle;
+        node->thread = thread_handle;
       }
       if(node->working_count == 0)
       {
@@ -3500,7 +3526,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
     //- rjf: request if needed
     if(node_to_request != 0)
     {
-      if(ctrl_u2csb_enqueue_req(thread->handle, endt_us))
+      if(ctrl_u2csb_enqueue_req(thread_handle, endt_us))
       {
         async_push_work(ctrl_call_stack_build_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
       }
@@ -3512,6 +3538,47 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_EntityCtx *entity_ctx, CTRL_
   }
   
   return call_stack;
+}
+
+////////////////////////////////
+//~ rjf: Call Stack Tree Cache Functions
+
+internal CTRL_CallStackTree
+ctrl_call_stack_tree(CTRL_Scope *scope, U64 endt_us)
+{
+  CTRL_CallStackTree result = {&ctrl_call_stack_tree_node_nil};
+  {
+    U64 reg_gen = ctrl_reg_gen();
+    U64 mem_gen = ctrl_mem_gen();
+    CTRL_CallStackTreeCache *cache = &ctrl_state->call_stack_tree_cache;
+    OS_MutexScopeR(cache->rw_mutex) for(;;)
+    {
+      // rjf: unpack cache/time state
+      B32 is_stale = (cache->reg_gen != reg_gen || cache->mem_gen != mem_gen);
+      B32 out_of_time = (os_now_microseconds() >= endt_us);
+      
+      // rjf: is stale? -> request new calculation
+      if(is_stale && !ins_atomic_u64_eval_cond_assign(&cache->request_count, 1, 0))
+      {
+        os_rw_mutex_drop_r(cache->rw_mutex);
+        async_push_work(ctrl_call_stack_tree_build_work);
+        os_rw_mutex_take_r(cache->rw_mutex);
+      }
+      
+      // rjf: is not stale, or we're out of time? -> grab cached result & touch, exit
+      if(!is_stale || out_of_time)
+      {
+        result = cache->tree;
+        ins_atomic_u64_inc_eval(&cache->scope_touch_count);
+        scope->call_stack_tree_touch_count += 1;
+        break;
+      }
+      
+      // rjf: wait for new results
+      os_condition_variable_wait_rw_r(cache->cv, cache->rw_mutex, endt_us);
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -7258,6 +7325,136 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     }
   }
   
+  scratch_end(scratch);
+  return 0;
+}
+
+////////////////////////////////
+//~ rjf: Asynchronous Call Stack Tree Building Functions
+
+ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
+{
+  Temp scratch = scratch_begin(0, 0);
+  CTRL_Scope *ctrl_scope = ctrl_scope_open();
+  
+  //- rjf: gather list of all thread handles
+  U64 threads_count = 0;
+  CTRL_Handle *threads = 0;
+  CTRL_Handle *threads_processes = 0;
+  Arch *threads_arches = 0;
+  OS_MutexScopeR(ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
+  {
+    CTRL_EntityCtx *ctx = &ctrl_state->ctrl_thread_entity_store->ctx;
+    CTRL_EntityArray thread_entities = ctrl_entity_array_from_kind(ctx, CTRL_EntityKind_Thread);
+    threads_count = thread_entities.count;
+    threads = push_array(scratch.arena, CTRL_Handle, threads_count);
+    threads_processes = push_array(scratch.arena, CTRL_Handle, threads_count);
+    threads_arches = push_array(scratch.arena, Arch, threads_count);
+    for EachIndex(idx, threads_count)
+    {
+      threads[idx] = thread_entities.v[idx]->handle;
+      threads_processes[idx] = thread_entities.v[idx]->parent->handle;
+      threads_arches[idx] = thread_entities.v[idx]->arch;
+    }
+  }
+  
+  //- rjf: gather all callstacks
+  U64 pre_mem_gen = ctrl_mem_gen();
+  U64 pre_reg_gen = ctrl_reg_gen();
+  CTRL_CallStack *call_stacks = push_array(scratch.arena, CTRL_CallStack, threads_count);
+  {
+    for EachIndex(idx, threads_count)
+    {
+      call_stacks[idx] = ctrl_call_stack_from_thread(ctrl_scope, threads[idx], 0, os_now_microseconds()+1000);
+    }
+  }
+  U64 post_mem_gen = ctrl_mem_gen();
+  U64 post_reg_gen = ctrl_reg_gen();
+  
+  //- rjf: build call stack tree
+  Arena *arena = 0;
+  CTRL_CallStackTree tree = {&ctrl_call_stack_tree_node_nil};
+  if(pre_mem_gen == post_mem_gen &&
+     pre_reg_gen == post_reg_gen)
+  {
+    U64 id_gen = 0;
+    arena = arena_alloc();
+    tree.root = push_array(arena, CTRL_CallStackTreeNode, 1);
+    MemoryCopyStruct(tree.root, &ctrl_call_stack_tree_node_nil);
+    tree.root->id = id_gen;
+    tree.slots_count = Max(1, threads_count);
+    tree.slots = push_array(arena, CTRL_CallStackTreeNode *, tree.slots_count);
+    id_gen += 1;
+    for EachIndex(thread_idx, threads_count)
+    {
+      CTRL_Handle thread = threads[thread_idx];
+      CTRL_Handle process = threads_processes[thread_idx];
+      Arch arch = threads_arches[thread_idx];
+      CTRL_CallStack call_stack = call_stacks[thread_idx];
+      CTRL_CallStackTreeNode *thread_node = tree.root;
+      for EachIndex(frame_idx, call_stack.frames_count)
+      {
+        U64 vaddr = regs_rip_from_arch_block(arch, call_stack.frames[frame_idx].regs);
+        U64 depth = call_stack.frames[frame_idx].inline_depth;
+        CTRL_CallStackTreeNode *next_node = &ctrl_call_stack_tree_node_nil;
+        for(CTRL_CallStackTreeNode *child = thread_node->first; child != &ctrl_call_stack_tree_node_nil; child = child->next)
+        {
+          if(ctrl_handle_match(child->process, process) && child->vaddr == vaddr && child->depth == depth)
+          {
+            next_node = child;
+            break;
+          }
+        }
+        if(next_node == &ctrl_call_stack_tree_node_nil)
+        {
+          next_node = push_array(arena, CTRL_CallStackTreeNode, 1);
+          MemoryCopyStruct(next_node, &ctrl_call_stack_tree_node_nil);
+          next_node->id = id_gen;
+          SLLStackPush_N(tree.slots[next_node->id%tree.slots_count], next_node, hash_next);
+          id_gen += 1;
+          SLLQueuePush_NZ(&ctrl_call_stack_tree_node_nil, thread_node->first, thread_node->last, next_node, next);
+          next_node->parent = thread_node;
+          thread_node->child_count += 1;
+        }
+        thread_node = next_node;
+      }
+      ctrl_handle_list_push(arena, &thread_node->threads, &thread);
+      for(CTRL_CallStackTreeNode *n = thread_node; n != &ctrl_call_stack_tree_node_nil; n = n->parent)
+      {
+        n->all_descendant_threads_count += 1;
+      }
+    }
+  }
+  
+  //- rjf: commit to cache
+  Arena *old_arena = 0;
+  CTRL_CallStackTreeCache *cache = &ctrl_state->call_stack_tree_cache;
+  if(tree.root != &ctrl_call_stack_tree_node_nil)
+  {
+    OS_MutexScopeW(cache->rw_mutex) for(;;)
+    {
+      if(cache->scope_touch_count == 0)
+      {
+        old_arena = cache->arena;
+        cache->arena = arena;
+        cache->tree = tree;
+        cache->reg_gen = post_reg_gen;
+        cache->mem_gen = post_mem_gen;
+        cache->request_count -= 1;
+        break;
+      }
+      os_condition_variable_wait_rw_w(cache->cv, cache->rw_mutex, max_U64);
+    }
+  }
+  os_condition_variable_broadcast(cache->cv);
+  
+  //- rjf: release old arena
+  if(old_arena)
+  {
+    arena_release(old_arena);
+  }
+  
+  ctrl_scope_close(ctrl_scope);
   scratch_end(scratch);
   return 0;
 }

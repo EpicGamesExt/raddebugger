@@ -1091,14 +1091,18 @@ internal OS_Handle
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
   OS_Handle result = {0};
-  if (name.size > 0) {
+  if (name.size > 0)
+  {
     // TODO: we need to allocate shared memory to store sem_t
     // NotImplemented;
-  } else {
+  }
+  else
+  {
     sem_t *s = mmap(0, sizeof(*s), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     AssertAlways(s != MAP_FAILED);
     int err = sem_init(s, 0, initial_count);
-    if (err == 0) {
+    if(err == 0)
+    {
       result.u64[0] = (U64)s;
     }
   }
@@ -1127,17 +1131,19 @@ os_semaphore_close(OS_Handle semaphore)
 internal B32
 os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
+  // TODO(rjf): we need to use `sem_timedwait` here.
   AssertAlways(endt_us == max_U64);
-  for (;;) {
+  for(;;)
+  {
     int err = sem_wait((sem_t*)semaphore.u64[0]);
-    if (err == 0) {
+    if(err == 0)
+    {
       break;
-    } else {
-      if (errno == EAGAIN) {
-        continue;
-      }
     }
-    InvalidPath;
+    else if(errno == EAGAIN)
+    {
+      continue;
+    }
     break;
   }
   return 1;
@@ -1146,18 +1152,48 @@ os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  for (;;) {
+  for(;;)
+  {
     int err = sem_post((sem_t*)semaphore.u64[0]);
-    if (err == 0) {
+    if(err == 0)
+    {
       break;
-    } else {
-      if (errno == EAGAIN) {
+    }
+    else
+    {
+      if(errno == EAGAIN)
+      {
         continue;
       }
     }
-    InvalidPath;
     break;
   }
+}
+
+//- rjf: barriers
+
+internal OS_Handle
+os_barrier_alloc(U64 count)
+{
+  OS_LNX_Entity *entity = os_w32_entity_alloc(OS_LNX_EntityKind_Barrier);
+  pthread_barrier_init(&entity->barrier, count);
+  OS_Handle result = {IntFromPtr(entity)};
+  return result;
+}
+
+internal void
+os_barrier_release(OS_Handle barrier)
+{
+  OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
+  pthread_barrier_destroy(&entity->barrier);
+  os_lnx_entity_release(entity);
+}
+
+internal void
+os_barrier_wait(OS_Handle barrier)
+{
+  OS_LNX_Entity *entity = (OS_LNX_Entity*)PtrFromInt(barrier.u64[0]);
+  pthread_barrier_wait(&entity->barrier);
 }
 
 ////////////////////////////////

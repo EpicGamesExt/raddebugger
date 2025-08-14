@@ -752,9 +752,9 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_Expr *r_expr = expr->first;
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKey r_type = e_type_key_unwrap(r_tree.type_key, E_TypeUnwrapFlag_AllDecorative & ~E_TypeUnwrapFlag_Enums);
         E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
-        E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All);
+        E_TypeKey r_type_direct = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_All & ~E_TypeUnwrapFlag_Enums);
         U64 r_type_direct_size = e_type_byte_size_from_key(r_type_direct);
         
         // rjf: bad conditions? -> error if applicable, exit
@@ -812,7 +812,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
         E_IRTreeAndType r_tree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, r_expr);
         e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
         E_TypeKey r_type = r_tree.type_key;
-        E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative);
+        E_TypeKey r_type_unwrapped = e_type_key_unwrap(r_type, E_TypeUnwrapFlag_AllDecorative & (~E_TypeUnwrapFlag_Enums));
         E_TypeKind r_type_unwrapped_kind = e_type_kind_from_key(r_type_unwrapped);
         
         // rjf: bad conditions? -> error if applicable, exit

@@ -2132,7 +2132,7 @@ txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off)
         scope_n != &txt_scope_node_nil;
         scope_n = txt_scope_node_from_info_num(info, scope_n->parent_num))
     {
-      if(off < info->tokens.v[scope_n->token_idx_range.max].range.max)
+      if(info->tokens.v[scope_n->token_idx_range.min].range.min <= off && off < info->tokens.v[scope_n->token_idx_range.max].range.max)
       {
         result = scope_n;
         break;

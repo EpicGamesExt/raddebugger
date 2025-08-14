@@ -301,6 +301,11 @@ internal void      os_semaphore_close(OS_Handle semaphore);
 internal B32       os_semaphore_take(OS_Handle semaphore, U64 endt_us);
 internal void      os_semaphore_drop(OS_Handle semaphore);
 
+//- rjf: barriers
+internal OS_Handle os_barrier_alloc(U64 count);
+internal void      os_barrier_release(OS_Handle barrier);
+internal void      os_barrier_wait(OS_Handle barrier);
+
 //- rjf: scope macros
 #define OS_MutexScope(mutex) DeferLoop(os_mutex_take(mutex), os_mutex_drop(mutex))
 #define OS_MutexScopeR(mutex) DeferLoop(os_rw_mutex_take_r(mutex), os_rw_mutex_drop_r(mutex))
