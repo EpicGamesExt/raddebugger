@@ -2,44 +2,53 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-// NOTE(allen): Thread Context Functions
+//~ rjf: Globals
 
 C_LINKAGE thread_static TCTX* tctx_thread_local;
 #if !BUILD_SUPPLEMENTARY_UNIT
 C_LINKAGE thread_static TCTX* tctx_thread_local = 0;
 #endif
 
-internal void
-tctx_init_and_equip(TCTX *tctx)
+////////////////////////////////
+//~ rjf: Thread Context Functions
+
+//- rjf: thread-context allocation & selection
+
+internal TCTX *
+tctx_alloc(void)
 {
-  MemoryZeroStruct(tctx);
-  Arena **arena_ptr = tctx->arenas;
-  for(U64 i = 0; i < ArrayCount(tctx->arenas); i += 1, arena_ptr += 1)
-  {
-    *arena_ptr = arena_alloc();
-  }
+  Arena *arena = arena_alloc();
+  TCTX *tctx = push_array(arena, TCTX, 1);
+  tctx->arenas[0] = arena;
+  tctx->arenas[1] = arena_alloc();
+  return tctx;
+}
+
+internal void
+tctx_release(TCTX *tctx)
+{
+  arena_release(tctx->arenas[1]);
+  arena_release(tctx->arenas[0]);
+}
+
+internal void
+tctx_select(TCTX *tctx)
+{
   tctx_thread_local = tctx;
 }
 
-internal void
-tctx_release(void)
-{
-  for(U64 i = 0; i < ArrayCount(tctx_thread_local->arenas); i += 1)
-  {
-    arena_release(tctx_thread_local->arenas[i]);
-  }
-}
-
 internal TCTX *
-tctx_get_equipped(void)
+tctx_selected(void)
 {
   return tctx_thread_local;
 }
 
+//- rjf: scratch arenas
+
 internal Arena *
 tctx_get_scratch(Arena **conflicts, U64 count)
 {
-  TCTX *tctx = tctx_get_equipped();
+  TCTX *tctx = tctx_selected();
   Arena *result = 0;
   Arena **arena_ptr = tctx->arenas;
   for(U64 i = 0; i < ArrayCount(tctx->arenas); i += 1, arena_ptr += 1)
@@ -63,10 +72,32 @@ tctx_get_scratch(Arena **conflicts, U64 count)
   return result;
 }
 
+//- rjf: wavefront metadata
+
+internal void
+tctx_set_wavefront_info(U64 wavefront_idx, U64 wavefront_count)
+{
+  TCTX *tctx = tctx_selected();
+  OS_Handle barrier = os_barrier_alloc(wavefront_count);
+  tctx->wavefront_idx = wavefront_idx;
+  tctx->wavefront_count = wavefront_count;
+  tctx->wavefront_barrier_id = barrier.u64[0];
+}
+
+internal void
+tctx_wavefront_barrier_wait(void)
+{
+  TCTX *tctx = tctx_selected();
+  OS_Handle barrier = {tctx->wavefront_barrier_id};
+  os_barrier_wait(barrier);
+}
+
+//- rjf: thread names
+
 internal void
 tctx_set_thread_name(String8 string)
 {
-  TCTX *tctx = tctx_get_equipped();
+  TCTX *tctx = tctx_selected();
   U64 size = ClampTop(string.size, sizeof(tctx->thread_name));
   MemoryCopy(tctx->thread_name, string.str, size);
   tctx->thread_name_size = size;
@@ -75,15 +106,17 @@ tctx_set_thread_name(String8 string)
 internal String8
 tctx_get_thread_name(void)
 {
-  TCTX *tctx = tctx_get_equipped();
+  TCTX *tctx = tctx_selected();
   String8 result = str8(tctx->thread_name, tctx->thread_name_size);
   return result;
 }
 
+//- rjf: thread source-locations
+
 internal void
 tctx_write_srcloc(char *file_name, U64 line_number)
 {
-  TCTX *tctx = tctx_get_equipped();
+  TCTX *tctx = tctx_selected();
   tctx->file_name = file_name;
   tctx->line_number = line_number;
 }
@@ -91,7 +124,7 @@ tctx_write_srcloc(char *file_name, U64 line_number)
 internal void
 tctx_read_srcloc(char **file_name, U64 *line_number)
 {
-  TCTX *tctx = tctx_get_equipped();
+  TCTX *tctx = tctx_selected();
   *file_name = tctx->file_name;
   *line_number = tctx->line_number;
 }

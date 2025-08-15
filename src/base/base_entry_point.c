@@ -105,10 +105,10 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 internal void
 supplement_thread_base_entry_point(void (*entry_point)(void *params), void *params)
 {
-  TCTX tctx;
-  tctx_init_and_equip(&tctx);
+  TCTX *tctx = tctx_alloc();
+  tctx_select(tctx);
   entry_point(params);
-  tctx_release();
+  tctx_release(tctx);
 }
 
 internal U64

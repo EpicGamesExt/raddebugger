@@ -123,10 +123,7 @@ os_lnx_thread_entry_point(void *ptr)
   OS_LNX_Entity *entity = (OS_LNX_Entity *)ptr;
   OS_ThreadFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  func(thread_ptr);
-  tctx_release();
+  supplement_thread_base_entry_point(func, thread_ptr);
   return 0;
 }
 
@@ -1302,8 +1299,8 @@ main(int argc, char **argv)
     }
     
     //- rjf: set up thread context
-    local_persist TCTX tctx;
-    tctx_init_and_equip(&tctx);
+    TCTX *tctx = tctx_alloc();
+    tctx_select(tctx);
     
     //- rjf: set up dynamically allocated state
     os_lnx_state.arena = arena_alloc();
