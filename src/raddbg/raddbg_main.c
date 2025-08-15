@@ -197,6 +197,10 @@
 #define BUILD_TITLE "The RAD Debugger"
 #define OS_FEATURE_GRAPHICAL 1
 
+#define DMN_INIT_MANUAL 1
+#define CTRL_INIT_MANUAL 1
+#define OS_GFX_INIT_MANUAL 1
+#define FP_INIT_MANUAL 1
 #define R_INIT_MANUAL 1
 #define TEX_INIT_MANUAL 1
 #define GEO_INIT_MANUAL 1
@@ -439,9 +443,6 @@ entry_point(CmdLine *cmd_line)
     jit_attach = (jit_addr != 0);
   }
   
-  //- rjf: set up layers
-  ctrl_set_wakeup_hook(wakeup_hook_ctrl);
-  
   //- rjf: dispatch to top-level codepath based on execution mode
   switch(exec_mode)
   {
@@ -487,12 +488,17 @@ entry_point(CmdLine *cmd_line)
       
       //- rjf: manual layer initialization
       {
+        dmn_init();
+        ctrl_init();
+        os_gfx_init();
+        fp_init();
         r_init(cmd_line);
         tex_init();
         geo_init();
         fnt_init();
         d_init();
         rd_init(cmd_line);
+        ctrl_set_wakeup_hook(wakeup_hook_ctrl);
       }
       
       //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread

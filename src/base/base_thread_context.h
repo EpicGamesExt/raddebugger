@@ -17,10 +17,10 @@ struct TCTX
   U8 thread_name[32];
   U64 thread_name_size;
   
-  // rjf: wavefront info
-  U64 wavefront_idx;
-  U64 wavefront_count;
-  U64 wavefront_barrier_id;
+  // rjf: lane info
+  U64 lane_idx;
+  U64 lane_count;
+  U64 lane_barrier_id;
   
   // rjf: source location info
   char *file_name;
@@ -41,11 +41,16 @@ internal Arena *tctx_get_scratch(Arena **conflicts, U64 count);
 #define scratch_begin(conflicts, count) temp_begin(tctx_get_scratch((conflicts), (count)))
 #define scratch_end(scratch) temp_end(scratch)
 
-//- rjf: wavefront metadata
-internal void tctx_set_wavefront_info(U64 wavefront_idx, U64 wavefront_count);
-internal void tctx_wavefront_barrier_wait(void);
-#define wavefront_thread(idx, count) tctx_set_wavefront_info((idx), (count))
-#define wavefront_barrier() tctx_wavefront_barrier_wait()
+//- rjf: lane metadata
+internal void tctx_set_lane_info(U64 lane_idx, U64 lane_count);
+internal void tctx_lane_barrier_wait(void);
+internal Rng1U64 tctx_lane_idx_range_from_count(U64 count);
+#define lane_idx() (tctx_selected()->lane_idx)
+#define lane_count() (tctx_selected()->lane_count)
+#define lane_from_task_idx(idx) ((idx)%lane_count())
+#define lane_thread(idx, count) tctx_set_lane_info((idx), (count))
+#define lane_sync() tctx_lane_barrier_wait()
+#define lane_range(count) tctx_lane_idx_range_from_count(count)
 
 //- rjf: thread names
 internal void tctx_set_thread_name(String8 name);

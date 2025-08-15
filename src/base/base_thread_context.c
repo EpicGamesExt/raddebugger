@@ -21,6 +21,7 @@ tctx_alloc(void)
   TCTX *tctx = push_array(arena, TCTX, 1);
   tctx->arenas[0] = arena;
   tctx->arenas[1] = arena_alloc();
+  tctx->lane_count = 1;
   return tctx;
 }
 
@@ -72,24 +73,35 @@ tctx_get_scratch(Arena **conflicts, U64 count)
   return result;
 }
 
-//- rjf: wavefront metadata
+//- rjf: lane metadata
 
 internal void
-tctx_set_wavefront_info(U64 wavefront_idx, U64 wavefront_count)
+tctx_set_lane_info(U64 lane_idx, U64 lane_count)
 {
   TCTX *tctx = tctx_selected();
-  OS_Handle barrier = os_barrier_alloc(wavefront_count);
-  tctx->wavefront_idx = wavefront_idx;
-  tctx->wavefront_count = wavefront_count;
-  tctx->wavefront_barrier_id = barrier.u64[0];
+  OS_Handle barrier = os_barrier_alloc(lane_count);
+  tctx->lane_idx = lane_idx;
+  tctx->lane_count = lane_count;
+  tctx->lane_barrier_id = barrier.u64[0];
 }
 
 internal void
-tctx_wavefront_barrier_wait(void)
+tctx_lane_barrier_wait(void)
 {
   TCTX *tctx = tctx_selected();
-  OS_Handle barrier = {tctx->wavefront_barrier_id};
+  OS_Handle barrier = {tctx->lane_barrier_id};
   os_barrier_wait(barrier);
+}
+
+internal Rng1U64
+tctx_lane_idx_range_from_count(U64 count)
+{
+  U64 idxes_per_lane = count/lane_count();
+  U64 lane_base_idx = lane_idx()*idxes_per_lane;
+  U64 lane_opl_idx = lane_base_idx + idxes_per_lane;
+  U64 lane_opl_idx__clamped = Min(lane_opl_idx, count);
+  Rng1U64 result = r1u64(lane_base_idx, lane_opl_idx__clamped);
+  return result;
 }
 
 //- rjf: thread names
