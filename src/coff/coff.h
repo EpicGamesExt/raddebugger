@@ -297,7 +297,7 @@ enum
   COFF_WeakExt_NoLibrary      = 1,
   COFF_WeakExt_SearchLibrary  = 2,
   COFF_WeakExt_SearchAlias    = 3,
-  COFF_WeakExt_AntiDependency = 4, // default symbol must not reference a weak symbol
+  COFF_WeakExt_AntiDependency = 4, // search libraries only if the default symbol is weak, even if the weak symbol points to itself
 };
 
 // storage class: External
