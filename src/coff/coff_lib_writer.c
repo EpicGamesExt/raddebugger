@@ -116,7 +116,7 @@ coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_d
       }
 
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-      if (interp == COFF_SymbolValueInterp_Regular) {
+      if (interp == COFF_SymbolValueInterp_Regular || interp == COFF_SymbolValueInterp_Common || interp == COFF_SymbolValueInterp_Abs) {
         if (symbol.storage_class == COFF_SymStorageClass_External) {
           COFF_LibWriterSymbol lib_symbol = {0};
           lib_symbol.name          = symbol.name;
