@@ -51,12 +51,20 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   //
   String8List symbol_table = {0};
   {
+    {
+      U64 symbol_idx = 0;
+      for (COFF_ObjSymbolNode *symbol_n = obj_writer->symbol_first; symbol_n != 0; symbol_n = symbol_n->next) {
+        COFF_ObjSymbol *s = &symbol_n->v;
+
+        // assign symbol index
+        s->idx = symbol_idx++;
+        symbol_idx += s->aux_symbols.node_count;
+      }
+    }
+
     U64 symbol_idx = 0;
     for (COFF_ObjSymbolNode *symbol_n = obj_writer->symbol_first; symbol_n != 0; symbol_n = symbol_n->next) {
       COFF_ObjSymbol *s = &symbol_n->v;
-
-      // assign symbol index
-      s->idx = symbol_idx++;
 
       COFF_Symbol16 *d = push_array(scratch.arena, COFF_Symbol16, 1);
       str8_list_push(scratch.arena, &symbol_table, str8_struct(d));
