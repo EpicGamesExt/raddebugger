@@ -1175,8 +1175,8 @@ os_semaphore_drop(OS_Handle semaphore)
 internal OS_Handle
 os_barrier_alloc(U64 count)
 {
-  OS_LNX_Entity *entity = os_w32_entity_alloc(OS_LNX_EntityKind_Barrier);
-  pthread_barrier_init(&entity->barrier, count);
+  OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_Barrier);
+  pthread_barrier_init(&entity->barrier, 0, count);
   OS_Handle result = {IntFromPtr(entity)};
   return result;
 }

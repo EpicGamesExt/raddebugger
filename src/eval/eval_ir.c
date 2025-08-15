@@ -1184,6 +1184,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
 #define E_ArithPath_PtrAdd          1
 #define E_ArithPath_PtrSub          2
 #define E_ArithPath_PtrArrayCompare 3
+#define E_ArithPath_TypeCompare     4
         B32 ptr_arithmetic_mul_rptr = 0;
         U32 arith_path = E_ArithPath_Normal;
         if(kind == E_ExprKind_Add)
@@ -1216,7 +1217,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             }
           }
         }
-        else if(kind == E_ExprKind_EqEq)
+        else if(kind == E_ExprKind_EqEq || kind == E_ExprKind_NtEq)
         {
           if(l_type_kind == E_TypeKind_Array && (r_type_kind == E_TypeKind_Ptr || r_is_decay))
           {
@@ -1225,6 +1226,10 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
           if(r_type_kind == E_TypeKind_Array && (l_type_kind == E_TypeKind_Ptr || l_is_decay))
           {
             arith_path = E_ArithPath_PtrArrayCompare;
+          }
+          if(l_tree.mode == E_Mode_Null && r_tree.mode == E_Mode_Null)
+          {
+            arith_path = E_ArithPath_TypeCompare;
           }
         }
         
@@ -1357,6 +1362,14 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
             
             // rjf: generate
             result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
+            result.type_key = e_type_key_basic(E_TypeKind_Bool);
+            result.mode     = E_Mode_Value;
+          }break;
+          
+          //- rjf: type comparison
+          case E_ArithPath_TypeCompare:
+          {
+            result.root     = e_irtree_const_u(arena, !!e_type_match(l_type, r_type));
             result.type_key = e_type_key_basic(E_TypeKind_Bool);
             result.mode     = E_Mode_Value;
           }break;
