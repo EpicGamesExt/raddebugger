@@ -76,14 +76,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   COFF_SectionHeader *coff_section_table = (COFF_SectionHeader *)raw_coff_section_table.str;
   for (U64 sect_idx = 0; sect_idx < header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *coff_sect_header = &coff_section_table[sect_idx];
-
-    // read name
-    String8 sect_name = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
-
+    String8             sect_name        = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
     if (~coff_sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
       if (coff_sect_header->fsize > 0) {
         Rng1U64 sect_range = rng_1u64(coff_sect_header->foff, coff_sect_header->foff + coff_sect_header->fsize);
-
         if (contains_1u64(header.header_range, coff_sect_header->foff) ||
             (coff_sect_header->fsize > 0 && contains_1u64(header.header_range, sect_range.max-1))) {
           lnk_error_input_obj(LNK_Error_IllData, input, "header (%S No. %#llx) defines out of bounds section data (file offsets point into file header)", sect_name, sect_idx+1);
@@ -412,44 +408,23 @@ internal void
 lnk_input_obj_symbols(TP_Context *tp, TP_Arena *arena, LNK_SymbolTable *symtab, LNK_ObjNodeArray objs)
 {
   ProfBeginFunction();
-
   LNK_InputCoffSymbolTable task = { .symtab = symtab, .objs = objs };
   tp_for_parallel(tp, arena, objs.count, lnk_input_coff_symbol_table, &task);
   tp_for_parallel(tp, arena, objs.count, lnk_assign_comdat_symlinks_task, &task);
-
   ProfEnd();
 }
 
 internal COFF_ParsedSymbol
 lnk_obj_match_symbol(LNK_Obj *obj, String8 match_name)
 {
-  COFF_ParsedSymbol result = {0};
-
-  COFF_FileHeaderInfo coff_info = coff_file_header_info_from_data(obj->data);
-
-  String8 raw_coff_symbol_table = str8_substr(obj->data, coff_info.symbol_table_range);
-  String8 raw_coff_string_table = str8_substr(obj->data, coff_info.string_table_range);
-
   COFF_ParsedSymbol symbol;
-  for (U64 symbol_idx = 0; symbol_idx < coff_info.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-    void *symbol_ptr;
-    if (coff_info.is_big_obj) {
-      symbol_ptr = &((COFF_Symbol32 *)raw_coff_symbol_table.str)[symbol_idx];
-      symbol     = coff_parse_symbol32(raw_coff_string_table, symbol_ptr);
-    } else {
-      symbol_ptr = &((COFF_Symbol16 *)raw_coff_symbol_table.str)[symbol_idx];
-      symbol     = coff_parse_symbol16(raw_coff_string_table, symbol_ptr);
-    }
-
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx(obj, symbol_idx);
     if (str8_match(symbol.name, match_name, 0)) {
-      result = symbol;
-      break;
+      return symbol;
     }
   }
-
-  return result;
+  return (COFF_ParsedSymbol){0};
 }
 
 internal MSCRT_FeatFlags
