@@ -34,7 +34,7 @@ rb_entry_point(CmdLine *cmdline)
       RB_FileFormatFlags file_format_flags = 0;
       ProfScope("do thin analysis of file")
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read, n->string);
+        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, n->string);
         FileProperties props = os_properties_from_file(file);
         
         //- rjf: PDB magic -> PDB input
