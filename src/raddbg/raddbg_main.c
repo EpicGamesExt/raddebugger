@@ -6,6 +6,7 @@
 //
 //- urgent fixes
 // [ ] hardware breakpoints regression (global eval in ctrl)
+// [ ] native filesystem dialog, resizing raddbg window -> crash!
 //
 //- memory view
 // [ ] have smaller visible range than entire memory

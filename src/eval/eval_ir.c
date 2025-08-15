@@ -2222,7 +2222,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
       {
         E_IRTreeAndType direct_irtree = e_push_irtree_and_type_from_expr(arena, parent, &e_default_identifier_resolution_rule, disallow_autohooks, 1, expr->first);
         result = direct_irtree;
-        E_TypeKey direct_type_key = result.type_key;
+        E_TypeKey direct_type_key = e_type_key_unwrap(result.type_key, E_TypeUnwrapFlag_AllDecorative);
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         if(e_type_kind_is_signed(direct_type_kind))
         {

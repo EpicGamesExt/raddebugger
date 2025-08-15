@@ -859,10 +859,19 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
             e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Missing `)`.");
           }
           
+          // rjf: require type
+          if(type_parse.expr == &e_expr_nil)
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Expected type in `cast(...)`.");
+          }
+          
           // rjf: fill prefix unary info
-          prefix_unary_kind = E_ExprKind_Cast;
-          prefix_unary_precedence = 2;
-          prefix_unary_cast_expr = type_parse.expr;
+          else
+          {
+            prefix_unary_kind = E_ExprKind_Cast;
+            prefix_unary_precedence = 2;
+            prefix_unary_cast_expr = type_parse.expr;
+          }
           end_cast_parse:;
         }
         
@@ -1303,11 +1312,49 @@ e_push_parse_from_string_tokens__prec(Arena *arena, String8 text, E_TokenArray t
         }
       }
       
+      // rjf: "as" style casts
+      if(token.kind == E_TokenKind_Identifier &&
+         str8_match(token_string, str8_lit("as"), 0))
+      {
+        it += 1;
+        
+        // rjf: parse type expression
+        E_Parse type_parse = e_push_parse_from_string_tokens__prec(arena, text, e_token_array_make_first_opl(it, it_opl), e_max_precedence, 1);
+        e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
+        it = type_parse.last_token;
+        
+        // rjf: require type
+        if(type_parse.expr == &e_expr_nil)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token.range, "Expected type following `as`.");
+        }
+        
+        // rjf: build cast expr
+        else
+        {
+          E_Expr *rhs = atom;
+          atom = e_push_expr(arena, E_ExprKind_Cast, token.range);
+          e_expr_push_child(atom, type_parse.expr);
+          e_expr_push_child(atom, rhs);
+        }
+      }
+      
       // rjf: quit if this doesn't look like any patterns of postfix unary we know
       if(!is_postfix_unary)
       {
         break;
       }
+    }
+    
+    ////////////////////////////
+    //- rjf: no atom, just single `unsigned` prefix unary? -> unsigned int type expr
+    //
+    if(atom == &e_expr_nil &&
+       first_prefix_unary != 0 &&
+       first_prefix_unary->kind == E_ExprKind_Unsigned)
+    {
+      atom = e_push_expr(arena, E_ExprKind_LeafIdentifier, first_prefix_unary->cast_type_expr->range);
+      atom->string = str8_lit("int");
     }
     
     ////////////////////////////

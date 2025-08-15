@@ -3781,6 +3781,7 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
         { "__uint8"              , RDI_TypeKind_U8         , CV_BasicType_UINT8      },
         { "__int16"              , RDI_TypeKind_S16        , CV_BasicType_INT16      },
         { "__uint16"             , RDI_TypeKind_U16        , CV_BasicType_UINT16     },
+        { "int"                  , RDI_TypeKind_S32        , CV_BasicType_INT32      },
         { "int32"                , RDI_TypeKind_S32        , CV_BasicType_INT32      },
         { "uint32"               , RDI_TypeKind_U32        , CV_BasicType_UINT32     },
         { "__int64"              , RDI_TypeKind_S64        , CV_BasicType_INT64      },
