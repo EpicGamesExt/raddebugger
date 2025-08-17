@@ -6,6 +6,7 @@
 // --- Link --------------------------------------------------------------------
 
 #define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"
+#define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 #define LNK_SECTION_FLAG_IS_LIVE (1 << 0)
 
 typedef struct LNK_LinkContext
