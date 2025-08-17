@@ -390,11 +390,13 @@ typedef struct LNK_Config
   String8                     temp_pdb_name;
   String8                     temp_rad_debug_name;
   String8                     temp_rad_chunk_map_name;
+  String8                     delay_load_helper_name;
   String8List                 remove_sections;
   LNK_IO_Flags                io_flags;
   HashTable                  *export_ht;
   HashTable                  *alt_name_ht;
   HashTable                  *include_symbol_ht;
+  HashTable                  *delay_load_ht;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
@@ -579,8 +581,8 @@ internal Version lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, CO
 
 internal B32 lnk_do_debug_info        (LNK_Config *config);
 internal B32 lnk_is_thread_pool_shared(LNK_Config *config);
-
-internal B32 lnk_is_section_removed(LNK_Config *config, String8 section_name);
+internal B32 lnk_is_section_removed   (LNK_Config *config, String8 section_name);
+internal B32 lnk_is_dll_delay_load    (LNK_Config *config, String8 dll_name);
 
 // --- Config ------------------------------------------------------------------
 

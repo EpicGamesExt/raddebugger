@@ -933,6 +933,12 @@ lnk_is_section_removed(LNK_Config *config, String8 section_name)
   return is_removed;
 }
 
+internal B32
+lnk_is_dll_delay_load(LNK_Config *config, String8 dll_name)
+{
+  return hash_table_search_path_u64(config->delay_load_ht, dll_name, 0);
+}
+
 internal void
 lnk_print_build_info()
 {
@@ -1195,8 +1201,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_DelayLoad: {
-    String8List delay_load_dll_list = str8_list_copy(arena, &value_strings);
-    str8_list_concat_in_place(&config->delay_load_dll_list, &delay_load_dll_list);
+    for (String8Node *name_n = value_strings.first; name_n != 0; name_n = name_n->next) {
+      if (hash_table_search_path_u64(config->delay_load_ht, name_n->string, 0)) { continue; }
+      String8 name = push_str8_copy(arena, name_n->string);
+      hash_table_push_path_u64(arena, config->delay_load_ht, name, 0);
+      str8_list_push(arena, &config->delay_load_dll_list, name);
+    }
   } break;
 
   case LNK_CmdSwitch_Dll: {
