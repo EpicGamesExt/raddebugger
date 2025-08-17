@@ -103,7 +103,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
         if (s->aux_symbols.node_count > 0) {
           COFF_ObjSymbolWeak *s_weak = (COFF_ObjSymbolWeak *)s->aux_symbols.first->string.str;
           COFF_SymbolWeakExt *d_weak = push_array(scratch.arena, COFF_SymbolWeakExt, 1);
-          d_weak->tag_index       = s_weak->tag->idx;
+          d_weak->tag_index       = s_weak->tag ? s_weak->tag->idx : max_U32;
           d_weak->characteristics = s_weak->characteristics;
 
           str8_list_push(scratch.arena, &symbol_table, str8_struct(d_weak));
@@ -413,6 +413,14 @@ coff_obj_writer_push_symbol_common(COFF_ObjWriter *obj_writer, String8 name, U32
   loc.type = COFF_SymbolLocation_Common;
   COFF_ObjSymbol *s = coff_obj_writer_push_symbol(obj_writer, name, size, loc, type, COFF_SymStorageClass_External);
   return s;
+}
+
+internal void
+coff_obj_writer_set_default_symbol(COFF_ObjSymbol *weak_symbol, COFF_ObjSymbol *default_symbol)
+{
+  AssertAlways(weak_symbol->storage_class == COFF_SymStorageClass_WeakExternal);
+  COFF_ObjSymbolWeak *w = (COFF_ObjSymbolWeak *)weak_symbol->aux_symbols.first->string.str;
+  w->tag = default_symbol;
 }
 
 internal COFF_ObjReloc*
