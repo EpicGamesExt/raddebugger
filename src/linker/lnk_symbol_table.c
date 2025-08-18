@@ -579,15 +579,10 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
     COFF_ParsedSymbol          current_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, current_symbol.symbol_idx);
     COFF_SymbolValueInterpType current_interp = coff_interp_symbol(current_parsed.section_number, current_parsed.value, current_parsed.storage_class);
     if (current_interp == COFF_SymbolValueInterp_Weak) {
-      // check for anti dependency
-      for (struct S *s = sf; s != 0; s = s->next) {
-        if (s->is_anti_dep) {
-          COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
-          lnk_error_obj(LNK_Error_UnresolvedSymbol, symbol.obj, "unresolved symbol %S", parsed_symbol.name);
-          MemoryZeroStruct(&current_symbol);
-          break;
-        }
-      }
+      // record visited symbol
+      struct S *s = push_array(scratch.arena, struct S, 1);
+      s->symbol   = current_symbol;
+      SLLQueuePush(sf, sl, s);
 
       // does weak symbol have a definition?
       LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
@@ -600,16 +595,18 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
 
       COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
 
-      // record visited symbol
-      struct S *s    = push_array(scratch.arena, struct S, 1);
-      s->symbol      = current_symbol;
-      s->is_anti_dep = weak_ext->characteristics == COFF_WeakExt_AntiDependency;
-      SLLQueuePush(sf, sl, s);
-
-      // no definition fallback to default symbol
+      // no definition -- fallback to default symbol
       COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx(current_symbol.obj, weak_ext->tag_index);
       COFF_SymbolValueInterpType  tag_interp = coff_interp_symbol(tag_parsed.section_number, tag_parsed.value, tag_parsed.storage_class);
       current_symbol = (LNK_SymbolDefined){ .obj = current_symbol.obj, .symbol_idx = weak_ext->tag_index };
+
+      if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
+        if (tag_interp == COFF_SymbolValueInterp_Undefined || tag_interp == COFF_SymbolValueInterp_Weak) {
+          LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, tag_parsed.name);
+          tag_interp = lnk_interp_from_symbol(dep_symbol);
+        }
+        if (tag_interp == COFF_SymbolValueInterp_Weak) { goto exit; }
+      }
     } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
       LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
       COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn_symbol);
@@ -622,6 +619,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
     } else { break; }
   }
 
+exit:;
   scratch_end(scratch);
   return current_symbol;
 }
