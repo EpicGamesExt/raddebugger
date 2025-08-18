@@ -3196,7 +3196,7 @@ p2r_convert(Arena *arena, ASYNC_Root *async_root, P2R_ConvertParams *in)
   //- rjf: parse PDB strtbl
   //
   PDB_Strtbl *strtbl = 0;
-  String8 raw_strtbl = str8_zero();
+  String8 raw_strtbl = {0};
   if(named_streams != 0) ProfScope("parse PDB strtbl")
   {
     MSF_StreamNumber strtbl_sn = named_streams->sn[PDB_NamedStream_StringTable];

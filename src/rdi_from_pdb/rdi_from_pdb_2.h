@@ -21,6 +21,7 @@ struct P2R2_Shared
 {
   MSF_RawStreamTable *msf_raw_stream_table;
   MSF_Parsed *msf;
+  
   PDB_Info *pdb_info;
   PDB_NamedStreamTable *named_streams;
   
@@ -51,6 +52,17 @@ struct P2R2_Shared
   RDI_Arch arch;
   
   String8Array *unit_src_file_paths;
+  U64Array *unit_src_file_paths_hashes;
+  U64 total_path_count;
+  
+  RDIM_SrcFileChunkList all_src_files__sequenceless;
+  P2R_SrcFileMap src_file_map;
+  
+  RDIM_UnitChunkList all_units;
+  RDIM_LineTableChunkList *units_line_tables;
+  RDIM_LineTable **units_first_inline_site_line_tables;
+  
+  RDIM_LineTableChunkList all_line_tables;
 };
 
 global P2R2_Shared *p2r2_shared = 0;
