@@ -92,6 +92,23 @@ struct P2R2_Shared
   RDIM_Type **itype_type_ptrs;
   RDIM_Type **basic_type_ptrs;
   RDIM_TypeChunkList all_types;
+  
+  RDIM_UDTChunkList *lanes_udts;
+  
+  RDIM_SymbolChunkList *lanes_procedures;
+  RDIM_SymbolChunkList *lanes_global_variables;
+  RDIM_SymbolChunkList *lanes_thread_variables;
+  RDIM_SymbolChunkList *lanes_constants;
+  RDIM_ScopeChunkList *lanes_scopes;
+  RDIM_InlineSiteChunkList *lanes_inline_sites;
+  RDIM_TypeChunkList *lanes_typedefs;
+  
+  RDIM_SymbolChunkList all_procedures;
+  RDIM_SymbolChunkList all_global_variables;
+  RDIM_SymbolChunkList all_thread_variables;
+  RDIM_SymbolChunkList all_constants;
+  RDIM_ScopeChunkList all_scopes;
+  RDIM_InlineSiteChunkList all_inline_sites;
 };
 
 global P2R2_Shared *p2r2_shared = 0;
