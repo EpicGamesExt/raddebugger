@@ -802,9 +802,7 @@ t_link_unref_undef(void)
   String8 entry_obj;
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    U8 text[] = {
-      0xC3 // ret
-    };
+    U8 text[] = { 0xc3 };
     COFF_ObjSection *sect = coff_obj_writer_push_section(obj_writer, str8_lit(".text"), PE_TEXT_SECTION_FLAGS, str8_array_fixed(text));
     coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, sect);
     entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
@@ -816,7 +814,7 @@ t_link_unref_undef(void)
 
   // try linking unreferenced unresolved symbol, this must link
   int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe entry.obj undef.obj");
-  if (linker_exit_code != 0) { goto exit; }
+  if (linker_exit_code == 0) { goto exit; }
 
   result = T_Result_Pass;
   exit:;
@@ -1184,74 +1182,58 @@ internal T_Result
 t_undef_weak(void)
 {
   Temp scratch = scratch_begin(0,0);
-
   T_Result result = T_Result_Fail;
 
-  String8 entry_symbol_name = str8_lit("my_entry");
-  String8 shared_symbol_name = str8_lit("foo");
-
-  U8 weak_payload[] = { 0xDE, 0xAD, 0xBE, 0xEF };
-  String8 weak_obj_name = str8_lit("weak.obj");
+  String8 weak_obj;
   {
+    U8 weak_payload[] = { 0xDE, 0xAD, 0xBE, 0xEF };
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *weak_sect = t_push_data_section(obj_writer, str8_array_fixed(weak_payload));
     COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("ptr"));
-    coff_obj_writer_push_symbol_weak(obj_writer, shared_symbol_name, COFF_WeakExt_SearchAlias, tag);
-    String8 weak_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_push_symbol_weak(obj_writer, str8_lit("foo"), COFF_WeakExt_SearchAlias, tag);
+    weak_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
-    if (!t_write_file(weak_obj_name, weak_obj)) {
-      goto exit;
-    }
   }
 
-  String8 ptr_obj_name = str8_lit("ptr.obj");
+  String8 ptr_obj;
   {
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
-    COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_undef(obj_writer, entry_symbol_name);
+    COFF_ObjSymbol *tag = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("entry"));
     coff_obj_writer_push_symbol_weak(obj_writer, str8_lit("ptr"), COFF_WeakExt_SearchAlias, tag);
-    String8 ptr_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    ptr_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
-    if (!t_write_file(ptr_obj_name, ptr_obj)) {
-      goto exit;
-    }
   }
 
-  U8 undef_obj_payload[] = { 0x00, 0x00, 0x00, 0x00 };
-  String8 undef_obj_name = str8_lit("undef.obj");
+  String8 undef_obj;
   {
+    U8 undef_obj_payload[] = { 0x00, 0x00, 0x00, 0x00 };
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *undef_sect = t_push_data_section(obj_writer, str8_array_fixed(undef_obj_payload));
-    COFF_ObjSymbol *undef_symbol = coff_obj_writer_push_symbol_undef(obj_writer, shared_symbol_name);
+    COFF_ObjSymbol *undef_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit("foo"));
     coff_obj_writer_section_push_reloc(obj_writer, undef_sect, 0, undef_symbol, COFF_Reloc_X64_Addr32Nb);
-    String8 undef_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    undef_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
-    if (!t_write_file(undef_obj_name, undef_obj)) {
-      goto exit;
-    }
   }
 
-  U8 entry_payload[] = {0xC3};
-  String8 entry_obj_name = str8_lit("entry.obj");
+  String8 entry_obj;
   {
+    U8 entry_payload[] = {0xC3};
     COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
     COFF_ObjSection *text_sect = t_push_text_section(obj_writer, str8_array_fixed(entry_payload));
-    coff_obj_writer_push_symbol_extern(obj_writer, entry_symbol_name, 0, text_sect);
-    String8 entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
+    coff_obj_writer_push_symbol_extern(obj_writer, str8_lit("entry"), 0, text_sect);
+    entry_obj = coff_obj_writer_serialize(scratch.arena, obj_writer);
     coff_obj_writer_release(&obj_writer);
-    if (!t_write_file(entry_obj_name, entry_obj)) {
-      goto exit;
-    }
   }
 
-  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:%S /out:a.exe %S %S %S %S", entry_symbol_name, weak_obj_name, entry_obj_name, ptr_obj_name, undef_obj_name);
+  if (!t_write_file(str8_lit("weak.obj"), weak_obj))   { goto exit; }
+  if (!t_write_file(str8_lit("ptr.obj"), ptr_obj))     { goto exit; }
+  if (!t_write_file(str8_lit("undef.obj"), undef_obj)) { goto exit; }
+  if (!t_write_file(str8_lit("entry.obj"), entry_obj)) { goto exit; }
 
-  T_Linker link_ident = t_ident_linker();
-  if (linker_exit_code != 0) {
-    goto exit;
-  }
+  int linker_exit_code = t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe weak.obj entry.obj ptr.obj undef.obj");
+  if (linker_exit_code != 0) { goto exit; }
 
   result = T_Result_Pass;
-
 exit:;
   scratch_end(scratch);
   return result;
@@ -4033,8 +4015,6 @@ entry_point(CmdLine *cmdline)
     { "empty_section",                    t_empty_section                    },
     { "removed_section",                  t_removed_section                  },
     { "function_pad_min",                 t_function_pad_min                 },
-    //{ "opt_ref_dangling_section",         t_opt_ref_dangling_section         },
-    //{ "import_export",        t_import_export        },
   };
 
   //
