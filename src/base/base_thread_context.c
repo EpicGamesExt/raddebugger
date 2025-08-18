@@ -92,11 +92,14 @@ tctx_lane_barrier_wait(void)
 internal Rng1U64
 tctx_lane_idx_range_from_count(U64 count)
 {
-  U64 idxes_per_lane = (count + lane_count()-1) / lane_count();
-  U64 lane_base_idx = lane_idx()*idxes_per_lane;
-  U64 lane_opl_idx = lane_base_idx + idxes_per_lane;
+  U64 main_idxes_per_lane = count/lane_count();
+  U64 leftover_idxes_count = count - main_idxes_per_lane*lane_count();
+  U64 leftover_idxes_before_this_lane_count = Min(lane_idx(), leftover_idxes_count);
+  U64 lane_base_idx = lane_idx()*main_idxes_per_lane + leftover_idxes_before_this_lane_count;
+  U64 lane_base_idx__clamped = Min(lane_base_idx, count);
+  U64 lane_opl_idx = lane_base_idx__clamped + main_idxes_per_lane + ((lane_idx() < leftover_idxes_count) ? 1 : 0);
   U64 lane_opl_idx__clamped = Min(lane_opl_idx, count);
-  Rng1U64 result = r1u64(lane_base_idx, lane_opl_idx__clamped);
+  Rng1U64 result = r1u64(lane_base_idx__clamped, lane_opl_idx__clamped);
   return result;
 }
 

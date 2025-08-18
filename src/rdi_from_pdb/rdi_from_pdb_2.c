@@ -45,7 +45,7 @@ p2r2_convert_thread_entry_point(void *p)
   {
     ProfScope("parse PDB info")
     {
-      String8 info_data = msf_data_from_stream(p2r2_shared->msf, PDB_FixedStream_Info);
+      String8 info_data = msf_data_from_stream(msf, PDB_FixedStream_Info);
       p2r2_shared->pdb_info = pdb_info_from_data(arena, info_data);
       if(p2r2_shared->pdb_info->features & PDB_FeatureFlag_MINIMAL_DBG_INFO)
       {
@@ -325,7 +325,6 @@ p2r2_convert_thread_entry_point(void *p)
     lane_sync();
     
     //- rjf: do wide gather
-#if 0
     {
       Rng1U64 range = lane_range(comp_units->count);
       for EachInRange(idx, range)
@@ -417,7 +416,7 @@ p2r2_convert_thread_entry_point(void *p)
               U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
               
               //- rjf: skip invalid ranges
-              if(sym_off_opl > pdb_unit_sym->data.size || sym_off_first > pdb_unit_sym->data.size || sym_off_first > sym_off_opl)
+              if(sym_off_opl > unit_sym->data.size || sym_off_first > unit_sym->data.size || sym_off_first > sym_off_opl)
               {
                 continue;
               }
@@ -425,8 +424,8 @@ p2r2_convert_thread_entry_point(void *p)
               //- rjf: unpack symbol info
               CV_SymKind kind = rec_range->hdr.kind;
               U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-              void *sym_header_struct_base = pdb_unit_sym->data.str + sym_off_first;
-              void *sym_data_opl = pdb_unit_sym->data.str + sym_off_opl;
+              void *sym_header_struct_base = unit_sym->data.str + sym_off_first;
+              void *sym_data_opl = unit_sym->data.str + sym_off_opl;
               
               //- rjf: skip bad sizes
               if(sym_off_first + sym_header_struct_size > sym_off_opl)
@@ -444,7 +443,7 @@ p2r2_convert_thread_entry_point(void *p)
                 case CV_SymKind_GPROC32:
                 {
                   CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-                  COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections.count) ? &in->coff_sections.v[proc32->sec-1] : 0;
+                  COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
                   if(section != 0)
                   {
                     base_voff = section->voff + proc32->off;
@@ -462,8 +461,8 @@ p2r2_convert_thread_entry_point(void *p)
                   CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
                   {
                     U64 hash = cv_hash_from_item_id(sym->inlinee);
-                    U64 slot_idx = hash%pdb_unit_c13->inlinee_lines_parsed_slots_count;
-                    for(CV_C13InlineeLinesParsedNode *n = pdb_unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
+                    U64 slot_idx = hash%unit_c13->inlinee_lines_parsed_slots_count;
+                    for(CV_C13InlineeLinesParsedNode *n = unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
                     {
                       if(n->v.inlinee == sym->inlinee)
                       {
@@ -477,7 +476,7 @@ p2r2_convert_thread_entry_point(void *p)
                   if(inlinee_lines_parsed != 0)
                   {
                     // rjf: grab checksums sub-section
-                    CV_C13SubSectionNode *file_chksms = pdb_unit_c13->file_chksms_sub_section;
+                    CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
                     
                     // rjf: gathered lines
                     U32 last_file_off = max_U32;
@@ -505,9 +504,9 @@ p2r2_convert_thread_entry_point(void *p)
                         String8 seq_file_name = {0};
                         if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
                         {
-                          CV_C13Checksum *checksum = (CV_C13Checksum*)(pdb_unit_c13->data.str + file_chksms->off + last_file_off);
+                          CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
                           U32             name_off = checksum->name_off;
-                          seq_file_name = pdb_strtbl_string_from_off(in->pdb_strtbl, name_off);
+                          seq_file_name = pdb_strtbl_string_from_off(strtbl, name_off);
                         }
                         
                         // rjf: file name -> normalized file path
@@ -572,7 +571,6 @@ p2r2_convert_thread_entry_point(void *p)
         p2r2_shared->unit_src_file_paths[idx] = str8_array_from_list(arena, &src_file_paths);
       }
     }
-#endif
     
 #if 0 // TODO(rjf): OLD
     U64 tasks_count = comp_unit_count;
