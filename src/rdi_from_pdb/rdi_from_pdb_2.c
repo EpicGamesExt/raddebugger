@@ -10,15 +10,39 @@ p2r2_convert_thread_entry_point(void *p)
   ThreadNameF("p2r2_convert_thread_%I64u", lane_idx());
   
   //////////////////////////////////////////////////////////////
+  //- rjf: do base MSF parse
+  //
+  {
+    // rjf: setup output buckets
+    if(lane_idx() == 0)
+    {
+      p2r2_shared = push_array(arena, P2R2_Shared, 1);
+      p2r2_shared->msf_raw_stream_table = msf_raw_stream_table_from_data(arena, params->input_pdb_data);
+      p2r2_shared->msf = push_array(arena, MSF_Parsed, 1);
+      p2r2_shared->msf->page_size    = p2r2_shared->msf_raw_stream_table->page_size;
+      p2r2_shared->msf->page_count   = p2r2_shared->msf_raw_stream_table->total_page_count;
+      p2r2_shared->msf->stream_count = p2r2_shared->msf_raw_stream_table->stream_count;
+      p2r2_shared->msf->streams      = push_array(arena, String8, p2r2_shared->msf->stream_count);
+    }
+    lane_sync();
+    
+    // rjf: do wide fill
+    {
+      Rng1U64 range = lane_range(p2r2_shared->msf->stream_count);
+      for EachInRange(idx, range)
+      {
+        p2r2_shared->msf->streams[idx] = msf_data_from_stream_number(arena, params->input_pdb_data, p2r2_shared->msf_raw_stream_table, idx);
+      }
+    }
+  }
+  lane_sync();
+  MSF_Parsed *msf = p2r2_shared->msf;
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: do top-level MSF/PDB extraction
   //
   if(lane_idx() == 0) ProfScope("do top-level MSF/PDB extraction")
   {
-    ProfScope("parse MSF")
-    {
-      p2r2_shared = push_array(arena, P2R2_Shared, 1);
-      p2r2_shared->msf = msf_parsed_from_data(arena, params->input_pdb_data);
-    }
     ProfScope("parse PDB info")
     {
       String8 info_data = msf_data_from_stream(p2r2_shared->msf, PDB_FixedStream_Info);
@@ -34,7 +58,6 @@ p2r2_convert_thread_entry_point(void *p)
     }
   }
   lane_sync();
-  MSF_Parsed *msf = p2r2_shared->msf;
   PDB_Info *pdb_info = p2r2_shared->pdb_info;
   PDB_NamedStreamTable *named_streams = p2r2_shared->named_streams;
   

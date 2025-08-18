@@ -230,6 +230,7 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
 internal String8
 msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
 {
+  ProfBeginFunction();
   String8 result = {0};
   if(sn < st->stream_count)
   {
@@ -268,6 +269,7 @@ msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *
     
     result = str8(stream_buf, copy_size);
   }
+  ProfEnd();
   return result;
 }
 

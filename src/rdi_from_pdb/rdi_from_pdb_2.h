@@ -19,6 +19,7 @@ struct P2R2_ConvertThreadParams
 typedef struct P2R2_Shared P2R2_Shared;
 struct P2R2_Shared
 {
+  MSF_RawStreamTable *msf_raw_stream_table;
   MSF_Parsed *msf;
   PDB_Info *pdb_info;
   PDB_NamedStreamTable *named_streams;
