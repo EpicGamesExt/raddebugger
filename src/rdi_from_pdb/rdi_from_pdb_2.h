@@ -78,10 +78,20 @@ struct P2R2_Shared
   P2R_SrcFileMap src_file_map;
   
   RDIM_UnitChunkList all_units;
-  RDIM_LineTableChunkList *units_line_tables;
   RDIM_LineTable **units_first_inline_site_line_tables;
+  RDIM_LineTableChunkList *lanes_line_tables;
   
   RDIM_LineTableChunkList all_line_tables;
+  
+  CV_TypeId *itype_fwd_map;
+  CV_TypeId itype_first;
+  CV_TypeId itype_opl;
+  
+  P2R_TypeIdChain **itype_chains;
+  
+  RDIM_Type **itype_type_ptrs;
+  RDIM_Type **basic_type_ptrs;
+  RDIM_TypeChunkList all_types;
 };
 
 global P2R2_Shared *p2r2_shared = 0;
