@@ -50,8 +50,8 @@ typedef struct FS_Stripe FS_Stripe;
 struct FS_Stripe
 {
   Arena *arena;
-  OS_Handle cv;
-  OS_Handle rw_mutex;
+  CondVar cv;
+  RWMutex rw_mutex;
 };
 
 ////////////////////////////////
@@ -74,8 +74,8 @@ struct FS_Shared
   U8 *u2s_ring_base;
   U64 u2s_ring_write_pos;
   U64 u2s_ring_read_pos;
-  OS_Handle u2s_ring_cv;
-  OS_Handle u2s_ring_mutex;
+  CondVar u2s_ring_cv;
+  Mutex u2s_ring_mutex;
   
   // rjf: change detector threads
   OS_Handle detector_thread;

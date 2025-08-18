@@ -20,7 +20,7 @@ mtx_init(void)
   for(U64 idx = 0; idx < mtx_shared->stripes_count; idx += 1)
   {
     mtx_shared->stripes[idx].arena = arena_alloc();
-    mtx_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    mtx_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
   }
   mtx_shared->mut_threads_count = Min(os_get_system_info()->logical_processor_count, 4);
   mtx_shared->mut_threads = push_array(arena, MTX_MutThread, mtx_shared->mut_threads_count);
@@ -28,8 +28,8 @@ mtx_init(void)
   {
     mtx_shared->mut_threads[idx].ring_size = KB(64);
     mtx_shared->mut_threads[idx].ring_base = push_array_no_zero(arena, U8, mtx_shared->mut_threads[idx].ring_size);
-    mtx_shared->mut_threads[idx].cv = os_condition_variable_alloc();
-    mtx_shared->mut_threads[idx].mutex = os_mutex_alloc();
+    mtx_shared->mut_threads[idx].cv = cond_var_alloc();
+    mtx_shared->mut_threads[idx].mutex = mutex_alloc();
     mtx_shared->mut_threads[idx].thread = os_thread_launch(mtx_mut_thread__entry_point, &mtx_shared->mut_threads[idx], 0);
   }
 }
@@ -65,9 +65,9 @@ mtx_enqueue_op(MTX_MutThread *thread, HS_Key buffer_key, MTX_Op op)
       thread->ring_write_pos += ring_write(thread->ring_base, thread->ring_size, thread->ring_write_pos, op.replace.str, op.replace.size);
       break;
     }
-    os_condition_variable_wait(thread->cv, thread->mutex, max_U64);
+    cond_var_wait(thread->cv, thread->mutex, max_U64);
   }
-  os_condition_variable_broadcast(thread->cv);
+  cond_var_broadcast(thread->cv);
 }
 
 internal void
@@ -85,9 +85,9 @@ mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, HS_Key *buffer_key_out, MTX_
       thread->ring_read_pos += ring_read(thread->ring_base, thread->ring_size, thread->ring_read_pos, op_out->replace.str, op_out->replace.size);
       break;
     }
-    os_condition_variable_wait(thread->cv, thread->mutex, max_U64);
+    cond_var_wait(thread->cv, thread->mutex, max_U64);
   }
-  os_condition_variable_broadcast(thread->cv);
+  cond_var_broadcast(thread->cv);
 }
 
 internal void

@@ -27,7 +27,7 @@ struct ASYNC_WorkParams
 {
   void *input;
   void **output;
-  OS_Handle semaphore;
+  Semaphore semaphore;
   U64 *completion_counter;
   U64 *working_counter;
   U64 endt_us;
@@ -40,7 +40,7 @@ struct ASYNC_Work
   ASYNC_WorkFunctionType *work_function;
   void *input;
   void **output;
-  OS_Handle semaphore;
+  Semaphore semaphore;
   U64 *completion_counter;
   U64 *working_counter;
 };
@@ -51,7 +51,7 @@ struct ASYNC_Work
 typedef struct ASYNC_Task ASYNC_Task;
 struct ASYNC_Task
 {
-  OS_Handle semaphore;
+  Semaphore semaphore;
   void *output;
 };
 
@@ -89,8 +89,8 @@ struct ASYNC_Ring
   U8 *ring_base;
   U64 ring_write_pos;
   U64 ring_read_pos;
-  OS_Handle ring_mutex;
-  OS_Handle ring_cv;
+  Mutex ring_mutex;
+  CondVar ring_cv;
 };
 
 typedef struct ASYNC_Shared ASYNC_Shared;
@@ -100,8 +100,8 @@ struct ASYNC_Shared
   
   // rjf: user -> work thread ring buffers
   ASYNC_Ring rings[ASYNC_Priority_COUNT];
-  OS_Handle ring_mutex;
-  OS_Handle ring_cv;
+  Mutex ring_mutex;
+  CondVar ring_cv;
   
   // rjf: work threads
   OS_Handle *work_threads;

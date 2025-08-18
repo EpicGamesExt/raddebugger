@@ -121,8 +121,8 @@ typedef struct PTG_GraphStripe PTG_GraphStripe;
 struct PTG_GraphStripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
   PTG_GraphNode *free_node;
 };
 
@@ -176,8 +176,8 @@ struct PTG_Shared
   U8 *u2b_ring_base;
   U64 u2b_ring_write_pos;
   U64 u2b_ring_read_pos;
-  OS_Handle u2b_ring_cv;
-  OS_Handle u2b_ring_mutex;
+  CondVar u2b_ring_cv;
+  Mutex u2b_ring_mutex;
   
   // rjf: builder threads
   U64 builder_thread_count;

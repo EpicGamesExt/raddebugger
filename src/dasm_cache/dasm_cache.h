@@ -207,8 +207,8 @@ typedef struct DASM_Stripe DASM_Stripe;
 struct DASM_Stripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
   DASM_Node *free_node;
 };
 
@@ -259,8 +259,8 @@ struct DASM_Shared
   U8 *u2p_ring_base;
   U64 u2p_ring_write_pos;
   U64 u2p_ring_read_pos;
-  OS_Handle u2p_ring_cv;
-  OS_Handle u2p_ring_mutex;
+  CondVar u2p_ring_cv;
+  Mutex u2p_ring_mutex;
   
   // rjf: evictor/detector thread
   OS_Handle evictor_detector_thread;

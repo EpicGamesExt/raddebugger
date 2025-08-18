@@ -5,6 +5,17 @@
 #define BASE_THREAD_CONTEXT_H
 
 ////////////////////////////////
+//~ rjf: Lane Group Context
+
+typedef struct LaneCtx LaneCtx;
+struct LaneCtx
+{
+  U64 lane_idx;
+  U64 lane_count;
+  Barrier barrier;
+};
+
+////////////////////////////////
 //~ rjf: Base Per-Thread State Bundle
 
 typedef struct TCTX TCTX;
@@ -17,10 +28,8 @@ struct TCTX
   U8 thread_name[32];
   U64 thread_name_size;
   
-  // rjf: lane info
-  U64 lane_idx;
-  U64 lane_count;
-  U64 lane_barrier_id;
+  // rjf: lane context
+  LaneCtx lane_ctx;
   
   // rjf: source location info
   char *file_name;
@@ -42,13 +51,13 @@ internal Arena *tctx_get_scratch(Arena **conflicts, U64 count);
 #define scratch_end(scratch) temp_end(scratch)
 
 //- rjf: lane metadata
-internal void tctx_set_lane_info(U64 lane_idx, U64 lane_count);
+internal void tctx_set_lane_ctx(LaneCtx lane_ctx);
 internal void tctx_lane_barrier_wait(void);
 internal Rng1U64 tctx_lane_idx_range_from_count(U64 count);
-#define lane_idx() (tctx_selected()->lane_idx)
-#define lane_count() (tctx_selected()->lane_count)
+#define lane_idx() (tctx_selected()->lane_ctx.lane_idx)
+#define lane_count() (tctx_selected()->lane_ctx.lane_count)
 #define lane_from_task_idx(idx) ((idx)%lane_count())
-#define lane_thread(idx, count) tctx_set_lane_info((idx), (count))
+#define lane_ctx(ctx) tctx_set_lane_ctx((ctx))
 #define lane_sync() tctx_lane_barrier_wait()
 #define lane_range(count) tctx_lane_idx_range_from_count(count)
 

@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Scalar Ops
+//~ rjf: Scalar Math Ops
 
 internal F32
 mix_1f32(F32 a, F32 b, F32 t)
@@ -809,4 +809,3 @@ rng1s64_array_from_list(Arena *arena, Rng1S64List *list)
   }
   return arr;
 }
-

@@ -5,12 +5,6 @@
 #define BASE_STRINGS_H
 
 ////////////////////////////////
-//~ rjf: Third Party Includes
-
-#define STB_SPRINTF_DECORATE(name) raddbg_##name
-#include "third_party/stb/stb_sprintf.h"
-
-////////////////////////////////
 //~ rjf: String Types
 
 typedef struct String8 String8;
@@ -211,8 +205,6 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
-internal B32 str8_ends_with(String8 string, String8 end, StringMatchFlags flags);
-#define str8_ends_with_lit(string, end_lit, flags) str8_ends_with((string), str8_lit(end_lit), (flags))
 
 ////////////////////////////////
 //~ rjf: String Slicing
@@ -245,7 +237,6 @@ internal String8 push_cstr(Arena *arena, String8 str); // TODO(rjf): this is unn
 //- rjf: string -> integer
 internal S64 sign_from_str8(String8 string, String8 *string_tail);
 internal B32 str8_is_integer(String8 string, U32 radix);
-
 internal U64 u64_from_str8(String8 string, U32 radix);
 internal S64 s64_from_str8(String8 string, U32 radix);
 internal U32 u32_from_str8(String8 string, U32 radix);
@@ -474,4 +465,4 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 internal U64 u64_hash_from_seed_str8(U64 seed, String8 string);
 internal U64 u64_hash_from_str8(String8 string);
 
-#endif // BASE_STRINGS_H
+#endif //BASE_STRINGS_H

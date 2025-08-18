@@ -905,7 +905,7 @@ dmn_init(void)
   dmn_lnx_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
   dmn_lnx_state->entities_base = push_array(dmn_lnx_state->entities_arena, DMN_LNX_Entity, 0);
   dmn_lnx_entity_alloc(&dmn_lnx_nil_entity, DMN_LNX_EntityKind_Root);
-  dmn_lnx_state->access_mutex = os_mutex_alloc();
+  dmn_lnx_state->access_mutex = mutex_alloc();
 }
 
 ////////////////////////////////
@@ -1649,7 +1649,7 @@ dmn_access_open(void)
   }
   else
   {
-    os_mutex_take(dmn_lnx_state->access_mutex);
+    mutex_take(dmn_lnx_state->access_mutex);
     result = !dmn_lnx_state->access_run_state;
   }
   return result;
@@ -1660,7 +1660,7 @@ dmn_access_close(void)
 {
   if(!dmn_lnx_ctrl_thread)
   {
-    os_mutex_drop(dmn_lnx_state->access_mutex);
+    mutex_drop(dmn_lnx_state->access_mutex);
   }
 }
 

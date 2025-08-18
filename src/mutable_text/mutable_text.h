@@ -27,7 +27,7 @@ struct MTX_Stripe
 {
   Arena *arena;
   MTX_Node *free_node;
-  OS_Handle rw_mutex;
+  RWMutex rw_mutex;
 };
 
 ////////////////////////////////
@@ -47,8 +47,8 @@ struct MTX_MutThread
   U8 *ring_base;
   U64 ring_read_pos;
   U64 ring_write_pos;
-  OS_Handle cv;
-  OS_Handle mutex;
+  CondVar cv;
+  Mutex mutex;
   OS_Handle thread;
 };
 

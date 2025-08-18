@@ -945,7 +945,7 @@ os_rw_mutex_drop_w(OS_Handle rw_mutex)
 //- rjf: condition variables
 
 internal OS_Handle
-os_condition_variable_alloc(void)
+os_cond_var_alloc(void)
 {
   OS_LNX_Entity *entity = os_lnx_entity_alloc(OS_LNX_EntityKind_ConditionVariable);
   int init_result = pthread_cond_init(&entity->cv.cond_handle, 0);
@@ -970,7 +970,7 @@ os_condition_variable_alloc(void)
 }
 
 internal void
-os_condition_variable_release(OS_Handle cv)
+os_cond_var_release(OS_Handle cv)
 {
   if(os_handle_match(cv, os_handle_zero())) { return; }
   OS_LNX_Entity *entity = (OS_LNX_Entity *)cv.u64[0];
@@ -980,7 +980,7 @@ os_condition_variable_release(OS_Handle cv)
 }
 
 internal B32
-os_condition_variable_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
+os_cond_var_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
 {
   if(os_handle_match(cv, os_handle_zero())) { return 0; }
   if(os_handle_match(mutex, os_handle_zero())) { return 0; }
@@ -995,7 +995,7 @@ os_condition_variable_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us)
 }
 
 internal B32
-os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
+os_cond_var_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
   // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
   // this together, but this would probably just be a lot better if we just
@@ -1031,7 +1031,7 @@ os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 }
 
 internal B32
-os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
+os_cond_var_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
   // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
   // this together, but this would probably just be a lot better if we just
@@ -1067,7 +1067,7 @@ os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 }
 
 internal void
-os_condition_variable_signal(OS_Handle cv)
+os_cond_var_signal(OS_Handle cv)
 {
   if(os_handle_match(cv, os_handle_zero())) { return; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];
@@ -1075,7 +1075,7 @@ os_condition_variable_signal(OS_Handle cv)
 }
 
 internal void
-os_condition_variable_broadcast(OS_Handle cv)
+os_cond_var_broadcast(OS_Handle cv)
 {
   if(os_handle_match(cv, os_handle_zero())) { return; }
   OS_LNX_Entity *cv_entity = (OS_LNX_Entity *)cv.u64[0];

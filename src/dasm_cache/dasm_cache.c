@@ -270,13 +270,13 @@ dasm_init(void)
   for(U64 idx = 0; idx < dasm_shared->stripes_count; idx += 1)
   {
     dasm_shared->stripes[idx].arena = arena_alloc();
-    dasm_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    dasm_shared->stripes[idx].cv = os_condition_variable_alloc();
+    dasm_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
+    dasm_shared->stripes[idx].cv = cond_var_alloc();
   }
   dasm_shared->u2p_ring_size = KB(64);
   dasm_shared->u2p_ring_base = push_array_no_zero(arena, U8, dasm_shared->u2p_ring_size);
-  dasm_shared->u2p_ring_cv = os_condition_variable_alloc();
-  dasm_shared->u2p_ring_mutex = os_mutex_alloc();
+  dasm_shared->u2p_ring_cv = cond_var_alloc();
+  dasm_shared->u2p_ring_mutex = mutex_alloc();
   dasm_shared->evictor_detector_thread = os_thread_launch(dasm_evictor_detector_thread__entry_point, 0, 0);
 }
 
@@ -473,11 +473,11 @@ dasm_u2p_enqueue_req(HS_Root root, U128 hash, DASM_Params *params, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, endt_us);
+    cond_var_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, endt_us);
   }
   if(good)
   {
-    os_condition_variable_broadcast(dasm_shared->u2p_ring_cv);
+    cond_var_broadcast(dasm_shared->u2p_ring_cv);
   }
   return good;
 }
@@ -503,9 +503,9 @@ dasm_u2p_dequeue_req(Arena *arena, HS_Root *root_out, U128 *hash_out, DASM_Param
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbgi_key.min_timestamp);
       break;
     }
-    os_condition_variable_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, max_U64);
+    cond_var_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(dasm_shared->u2p_ring_cv);
+  cond_var_broadcast(dasm_shared->u2p_ring_cv);
 }
 
 ASYNC_WORK_DEF(dasm_parse_work)

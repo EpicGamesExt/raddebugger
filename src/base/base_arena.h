@@ -5,12 +5,9 @@
 #define BASE_ARENA_H
 
 ////////////////////////////////
-//~ rjf: Constants
+//~ rjf: Arena Types
 
 #define ARENA_HEADER_SIZE 128
-
-////////////////////////////////
-//~ rjf: Types
 
 typedef U64 ArenaFlags;
 enum
@@ -59,14 +56,11 @@ struct Temp
 };
 
 ////////////////////////////////
-//~ rjf: Global Defaults
+//~ rjf: Arena Functions
 
 global U64 arena_default_reserve_size = MB(64);
 global U64 arena_default_commit_size  = KB(64);
 global ArenaFlags arena_default_flags = 0;
-
-////////////////////////////////
-//~ rjf: Arena Functions
 
 //- rjf: arena creation/destruction
 internal Arena *arena_alloc_(ArenaParams *params);

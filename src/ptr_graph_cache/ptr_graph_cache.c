@@ -17,13 +17,13 @@ ptg_init(void)
   for(U64 idx = 0; idx < ptg_shared->stripes_count; idx += 1)
   {
     ptg_shared->stripes[idx].arena = arena_alloc();
-    ptg_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    ptg_shared->stripes[idx].cv = os_condition_variable_alloc();
+    ptg_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
+    ptg_shared->stripes[idx].cv = cond_var_alloc();
   }
   ptg_shared->u2b_ring_size = KB(64);
   ptg_shared->u2b_ring_base = push_array_no_zero(arena, U8, ptg_shared->u2b_ring_size);
-  ptg_shared->u2b_ring_cv = os_condition_variable_alloc();
-  ptg_shared->u2b_ring_mutex = os_mutex_alloc();
+  ptg_shared->u2b_ring_cv = cond_var_alloc();
+  ptg_shared->u2b_ring_mutex = mutex_alloc();
   ptg_shared->builder_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   ptg_shared->builder_threads = push_array(arena, OS_Handle, ptg_shared->builder_thread_count);
   for(U64 idx = 0; idx < ptg_shared->builder_thread_count; idx += 1)
@@ -136,11 +136,11 @@ ptg_u2b_enqueue_req(PTG_Key *key, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(ptg_shared->u2b_ring_cv, ptg_shared->u2b_ring_mutex, endt_us);
+    cond_var_wait(ptg_shared->u2b_ring_cv, ptg_shared->u2b_ring_mutex, endt_us);
   }
   if(good)
   {
-    os_condition_variable_broadcast(ptg_shared->u2b_ring_cv);
+    cond_var_broadcast(ptg_shared->u2b_ring_cv);
   }
   return good;
 }
@@ -156,9 +156,9 @@ ptg_u2b_dequeue_req(PTG_Key *key_out)
       ptg_shared->u2b_ring_read_pos += ring_read_struct(ptg_shared->u2b_ring_base, ptg_shared->u2b_ring_size, ptg_shared->u2b_ring_read_pos, key_out);
       break;
     }
-    os_condition_variable_wait(ptg_shared->u2b_ring_cv, ptg_shared->u2b_ring_mutex, max_U64);
+    cond_var_wait(ptg_shared->u2b_ring_cv, ptg_shared->u2b_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(ptg_shared->u2b_ring_cv);
+  cond_var_broadcast(ptg_shared->u2b_ring_cv);
 }
 
 internal void

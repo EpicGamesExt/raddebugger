@@ -875,7 +875,7 @@ ctrl_entity_ctx_rw_store_alloc(void)
   store->ctx.hash_slots_count = 1024;
   store->ctx.hash_slots = push_array(arena, CTRL_EntityHashSlot, store->ctx.hash_slots_count);
   CTRL_Entity *root = store->ctx.root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, ctrl_handle_zero(), 0);
-  CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()), 0);
+  CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, Arch_CURRENT, ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()), 0);
   Temp scratch = scratch_begin(0, 0);
   String8 local_machine_name = push_str8f(scratch.arena, "This PC (%S)", os_get_system_info()->machine_name);
   ctrl_entity_equip_string(store, local_machine, local_machine_name);
@@ -1464,7 +1464,7 @@ ctrl_scope_close(CTRL_Scope *scope)
   {
     next = t->next;
     ins_atomic_u64_dec_eval(&t->node->scope_touch_count);
-    os_condition_variable_broadcast(t->stripe->cv);
+    cond_var_broadcast(t->stripe->cv);
     SLLStackPush(ctrl_tctx->free_call_stack_touch, t);
   }
   for(U64 idx = 0; idx < scope->call_stack_tree_touch_count; idx += 1)
@@ -1473,7 +1473,7 @@ ctrl_scope_close(CTRL_Scope *scope)
   }
   if(scope->call_stack_tree_touch_count != 0)
   {
-    os_condition_variable_broadcast(ctrl_state->call_stack_tree_cache.cv);
+    cond_var_broadcast(ctrl_state->call_stack_tree_cache.cv);
   }
   SLLStackPush(ctrl_tctx->free_scope, scope);
 }
@@ -1528,8 +1528,8 @@ ctrl_init(void)
   ctrl_state->process_memory_cache.stripes = push_array(arena, CTRL_ProcessMemoryCacheStripe, ctrl_state->process_memory_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->process_memory_cache.stripes_count; idx += 1)
   {
-    ctrl_state->process_memory_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    ctrl_state->process_memory_cache.stripes[idx].cv = os_condition_variable_alloc();
+    ctrl_state->process_memory_cache.stripes[idx].rw_mutex = rw_mutex_alloc();
+    ctrl_state->process_memory_cache.stripes[idx].cv = cond_var_alloc();
   }
   ctrl_state->thread_reg_cache.slots_count = 1024;
   ctrl_state->thread_reg_cache.slots = push_array(arena, CTRL_ThreadRegCacheSlot, ctrl_state->thread_reg_cache.slots_count);
@@ -1538,7 +1538,7 @@ ctrl_init(void)
   for(U64 idx = 0; idx < ctrl_state->thread_reg_cache.stripes_count; idx += 1)
   {
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
-    ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = rw_mutex_alloc();
   }
   ctrl_state->call_stack_cache.slots_count = 1024;
   ctrl_state->call_stack_cache.slots = push_array(arena, CTRL_CallStackCacheSlot, ctrl_state->call_stack_cache.slots_count);
@@ -1547,8 +1547,8 @@ ctrl_init(void)
   for(U64 idx = 0; idx < ctrl_state->call_stack_cache.stripes_count; idx += 1)
   {
     ctrl_state->call_stack_cache.stripes[idx].arena = arena_alloc();
-    ctrl_state->call_stack_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    ctrl_state->call_stack_cache.stripes[idx].cv = os_condition_variable_alloc();
+    ctrl_state->call_stack_cache.stripes[idx].rw_mutex = rw_mutex_alloc();
+    ctrl_state->call_stack_cache.stripes[idx].cv = cond_var_alloc();
   }
   ctrl_state->module_image_info_cache.slots_count = 1024;
   ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
@@ -1557,20 +1557,20 @@ ctrl_init(void)
   for(U64 idx = 0; idx < ctrl_state->module_image_info_cache.stripes_count; idx += 1)
   {
     ctrl_state->module_image_info_cache.stripes[idx].arena = arena_alloc();
-    ctrl_state->module_image_info_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    ctrl_state->module_image_info_cache.stripes[idx].rw_mutex = rw_mutex_alloc();
   }
   ctrl_state->call_stack_tree_cache.tree.root = &ctrl_call_stack_tree_node_nil;
-  ctrl_state->call_stack_tree_cache.cv = os_condition_variable_alloc();
-  ctrl_state->call_stack_tree_cache.rw_mutex = os_rw_mutex_alloc();
+  ctrl_state->call_stack_tree_cache.cv = cond_var_alloc();
+  ctrl_state->call_stack_tree_cache.rw_mutex = rw_mutex_alloc();
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
-  ctrl_state->u2c_ring_mutex = os_mutex_alloc();
-  ctrl_state->u2c_ring_cv = os_condition_variable_alloc();
+  ctrl_state->u2c_ring_mutex = mutex_alloc();
+  ctrl_state->u2c_ring_cv = cond_var_alloc();
   ctrl_state->c2u_ring_size = KB(64);
   ctrl_state->c2u_ring_max_string_size = ctrl_state->c2u_ring_size/2;
   ctrl_state->c2u_ring_base = push_array_no_zero(arena, U8, ctrl_state->c2u_ring_size);
-  ctrl_state->c2u_ring_mutex = os_mutex_alloc();
-  ctrl_state->c2u_ring_cv = os_condition_variable_alloc();
+  ctrl_state->c2u_ring_mutex = mutex_alloc();
+  ctrl_state->c2u_ring_cv = cond_var_alloc();
   {
     Temp scratch = scratch_begin(0, 0);
     String8 user_program_data_path = os_get_process_info()->user_program_data_path;
@@ -1580,7 +1580,7 @@ ctrl_init(void)
     os_write_data_to_file_path(ctrl_state->ctrl_thread_log_path, str8_zero());
     scratch_end(scratch);
   }
-  ctrl_state->ctrl_thread_entity_ctx_rw_mutex = os_rw_mutex_alloc();
+  ctrl_state->ctrl_thread_entity_ctx_rw_mutex = rw_mutex_alloc();
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_ctx_rw_store_alloc();
   ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
   ctrl_state->ctrl_thread_msg_process_arena = arena_alloc();
@@ -1596,12 +1596,12 @@ ctrl_init(void)
   }
   ctrl_state->u2ms_ring_size = KB(64);
   ctrl_state->u2ms_ring_base = push_array(arena, U8, ctrl_state->u2ms_ring_size);
-  ctrl_state->u2ms_ring_mutex = os_mutex_alloc();
-  ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
+  ctrl_state->u2ms_ring_mutex = mutex_alloc();
+  ctrl_state->u2ms_ring_cv = cond_var_alloc();
   ctrl_state->u2csb_ring_size = KB(64);
   ctrl_state->u2csb_ring_base = push_array(arena, U8, ctrl_state->u2csb_ring_size);
-  ctrl_state->u2csb_ring_mutex = os_mutex_alloc();
-  ctrl_state->u2csb_ring_cv = os_condition_variable_alloc();
+  ctrl_state->u2csb_ring_mutex = mutex_alloc();
+  ctrl_state->u2csb_ring_cv = cond_var_alloc();
   ctrl_state->ctrl_thread_log = log_alloc();
   ctrl_state->ctrl_thread = os_thread_launch(ctrl_thread__entry_point, 0, 0);
 }
@@ -1726,7 +1726,7 @@ ctrl_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 vaddr_range, B32 
       }
       else
       {
-        os_condition_variable_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
+        cond_var_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
       }
     }
     key_is_stale = id_stale;
@@ -3482,7 +3482,7 @@ ctrl_call_stack_from_thread(CTRL_Scope *scope, CTRL_Handle thread_handle, B32 hi
       }
       else if(node_working)
       {
-        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+        cond_var_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
       }
       else
       {
@@ -3560,9 +3560,9 @@ ctrl_call_stack_tree(CTRL_Scope *scope, U64 endt_us)
       // rjf: is stale? -> request new calculation
       if(is_stale && !ins_atomic_u64_eval_cond_assign(&cache->request_count, 1, 0))
       {
-        os_rw_mutex_drop_r(cache->rw_mutex);
+        rw_mutex_drop_r(cache->rw_mutex);
         async_push_work(ctrl_call_stack_tree_build_work);
-        os_rw_mutex_take_r(cache->rw_mutex);
+        rw_mutex_take_r(cache->rw_mutex);
       }
       
       // rjf: is not stale, or we're out of time? -> grab cached result & touch, exit
@@ -3575,7 +3575,7 @@ ctrl_call_stack_tree(CTRL_Scope *scope, U64 endt_us)
       }
       
       // rjf: wait for new results
-      os_condition_variable_wait_rw_r(cache->cv, cache->rw_mutex, endt_us);
+      cond_var_wait_rw_r(cache->cv, cache->rw_mutex, endt_us);
     }
   }
   return result;
@@ -3657,11 +3657,11 @@ ctrl_u2c_push_msgs(CTRL_MsgList *msgs, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(ctrl_state->u2c_ring_cv, ctrl_state->u2c_ring_mutex, endt_us);
+    cond_var_wait(ctrl_state->u2c_ring_cv, ctrl_state->u2c_ring_mutex, endt_us);
   }
   if(good)
   {
-    os_condition_variable_broadcast(ctrl_state->u2c_ring_cv);
+    cond_var_broadcast(ctrl_state->u2c_ring_cv);
   }
   scratch_end(scratch);
   return good;
@@ -3684,9 +3684,9 @@ ctrl_u2c_pop_msgs(Arena *arena)
       ctrl_state->u2c_ring_read_pos += ring_read(ctrl_state->u2c_ring_base, ctrl_state->u2c_ring_size, ctrl_state->u2c_ring_read_pos, msgs_srlzed_baked.str, size_to_decode);
       break;
     }
-    os_condition_variable_wait(ctrl_state->u2c_ring_cv, ctrl_state->u2c_ring_mutex, max_U64);
+    cond_var_wait(ctrl_state->u2c_ring_cv, ctrl_state->u2c_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(ctrl_state->u2c_ring_cv);
+  cond_var_broadcast(ctrl_state->u2c_ring_cv);
   CTRL_MsgList msgs = ctrl_msg_list_from_serialized_string(arena, msgs_srlzed_baked);
   scratch_end(scratch);
   return msgs;
@@ -3718,9 +3718,9 @@ ctrl_c2u_push_events(CTRL_EventList *events)
           ctrl_state->c2u_ring_write_pos += ring_write(ctrl_state->c2u_ring_base, ctrl_state->c2u_ring_size, ctrl_state->c2u_ring_write_pos, event_srlzed.str, event_srlzed.size);
           break;
         }
-        os_condition_variable_wait(ctrl_state->c2u_ring_cv, ctrl_state->c2u_ring_mutex, os_now_microseconds()+100);
+        cond_var_wait(ctrl_state->c2u_ring_cv, ctrl_state->c2u_ring_mutex, os_now_microseconds()+100);
       }
-      os_condition_variable_broadcast(ctrl_state->c2u_ring_cv);
+      cond_var_broadcast(ctrl_state->c2u_ring_cv);
       if(ctrl_state->wakeup_hook != 0)
       {
         ctrl_state->wakeup_hook();
@@ -3755,7 +3755,7 @@ ctrl_c2u_pop_events(Arena *arena)
       break;
     }
   }
-  os_condition_variable_broadcast(ctrl_state->c2u_ring_cv);
+  cond_var_broadcast(ctrl_state->c2u_ring_cv);
   scratch_end(scratch);
   ProfEnd();
   return events;
@@ -6880,9 +6880,9 @@ ctrl_u2ms_enqueue_req(HS_Key key, CTRL_Handle process, Rng1U64 vaddr_range, B32 
       break;
     }
     if(os_now_microseconds() >= endt_us) {break;}
-    os_condition_variable_wait(ctrl_state->u2ms_ring_cv, ctrl_state->u2ms_ring_mutex, endt_us);
+    cond_var_wait(ctrl_state->u2ms_ring_cv, ctrl_state->u2ms_ring_mutex, endt_us);
   }
-  os_condition_variable_broadcast(ctrl_state->u2ms_ring_cv);
+  cond_var_broadcast(ctrl_state->u2ms_ring_cv);
   return good;
 }
 
@@ -6900,9 +6900,9 @@ ctrl_u2ms_dequeue_req(HS_Key *out_key, CTRL_Handle *out_process, Rng1U64 *out_va
       ctrl_state->u2ms_ring_read_pos += ring_read_struct(ctrl_state->u2ms_ring_base, ctrl_state->u2ms_ring_size, ctrl_state->u2ms_ring_read_pos, out_zero_terminated);
       break;
     }
-    os_condition_variable_wait(ctrl_state->u2ms_ring_cv, ctrl_state->u2ms_ring_mutex, max_U64);
+    cond_var_wait(ctrl_state->u2ms_ring_cv, ctrl_state->u2ms_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(ctrl_state->u2ms_ring_cv);
+  cond_var_broadcast(ctrl_state->u2ms_ring_cv);
 }
 
 //- rjf: entry point
@@ -7068,7 +7068,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   }
   
   //- rjf: broadcast changes
-  os_condition_variable_broadcast(process_stripe->cv);
+  cond_var_broadcast(process_stripe->cv);
   if(!u128_match(u128_zero(), hash))
   {
     if(ctrl_state->wakeup_hook != 0)
@@ -7104,11 +7104,11 @@ ctrl_u2csb_enqueue_req(CTRL_Handle thread, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(ctrl_state->u2csb_ring_cv, ctrl_state->u2csb_ring_mutex, endt_us);
+    cond_var_wait(ctrl_state->u2csb_ring_cv, ctrl_state->u2csb_ring_mutex, endt_us);
   }
   if(good)
   {
-    os_condition_variable_broadcast(ctrl_state->u2csb_ring_cv);
+    cond_var_broadcast(ctrl_state->u2csb_ring_cv);
   }
   return good;
 }
@@ -7124,9 +7124,9 @@ ctrl_u2csb_dequeue_req(CTRL_Handle *out_thread)
       ctrl_state->u2csb_ring_read_pos += ring_read_struct(ctrl_state->u2csb_ring_base, ctrl_state->u2csb_ring_size, ctrl_state->u2csb_ring_read_pos, out_thread);
       break;
     }
-    os_condition_variable_wait(ctrl_state->u2csb_ring_cv, ctrl_state->u2csb_ring_mutex, max_U64);
+    cond_var_wait(ctrl_state->u2csb_ring_cv, ctrl_state->u2csb_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(ctrl_state->u2csb_ring_cv);
+  cond_var_broadcast(ctrl_state->u2csb_ring_cv);
 }
 
 //- rjf: entry point
@@ -7296,7 +7296,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
         // rjf: found, not committed? -> wait & retry
         if(found && !committed)
         {
-          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10);
+          cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+10);
         }
       }
     }
@@ -7318,7 +7318,7 @@ ASYNC_WORK_DEF(ctrl_call_stack_build_work)
     }
     
     //- rjf: broadcast update
-    os_condition_variable_broadcast(stripe->cv);
+    cond_var_broadcast(stripe->cv);
     if(ctrl_state->wakeup_hook != 0)
     {
       ctrl_state->wakeup_hook();
@@ -7443,10 +7443,10 @@ ASYNC_WORK_DEF(ctrl_call_stack_tree_build_work)
         cache->request_count -= 1;
         break;
       }
-      os_condition_variable_wait_rw_w(cache->cv, cache->rw_mutex, max_U64);
+      cond_var_wait_rw_w(cache->cv, cache->rw_mutex, max_U64);
     }
   }
-  os_condition_variable_broadcast(cache->cv);
+  cond_var_broadcast(cache->cv);
   
   //- rjf: release old arena
   if(old_arena)

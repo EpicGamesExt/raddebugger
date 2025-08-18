@@ -514,7 +514,7 @@ e_type_key_cons_base(Type *type)
       if(type->flags & TypeFlag_IsPlainText){ flags |= E_TypeFlag_IsPlainText; }
       if(type->flags & TypeFlag_IsCodeText) { flags |= E_TypeFlag_IsCodeText; }
       if(type->flags & TypeFlag_IsPathText) { flags |= E_TypeFlag_IsPathText; }
-      result = e_type_key_cons_ptr(arch_from_context(), direct_type, 1, flags);
+      result = e_type_key_cons_ptr(Arch_CURRENT, direct_type, 1, flags);
     }break;
     case TypeKind_Array:
     {
@@ -531,7 +531,7 @@ e_type_key_cons_base(Type *type)
         e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key);
       }
       E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
-      result = e_type_key_cons(.arch    = arch_from_context(),
+      result = e_type_key_cons(.arch    = Arch_CURRENT,
                                .kind    = E_TypeKind_Struct,
                                .name    = type->name,
                                .members = members_array.v,

@@ -197,7 +197,7 @@ struct DMN_W32_Shared
   String8List env_strings;
   
   // rjf: access locking mechanism
-  OS_Handle access_mutex;
+  Mutex access_mutex;
   B32 access_run_state;
   
   // rjf: detaching info

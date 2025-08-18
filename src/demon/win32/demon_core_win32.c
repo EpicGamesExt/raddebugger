@@ -1142,7 +1142,7 @@ dmn_init(void)
   Arena *arena = arena_alloc();
   dmn_w32_shared = push_array(arena, DMN_W32_Shared, 1);
   dmn_w32_shared->arena = arena;
-  dmn_w32_shared->access_mutex = os_mutex_alloc();
+  dmn_w32_shared->access_mutex = mutex_alloc();
   dmn_w32_shared->detach_arena = arena_alloc();
   dmn_w32_shared->entities_arena = arena_alloc(.reserve_size = GB(8), .commit_size = KB(64));
   dmn_w32_shared->entities_base = dmn_w32_entity_alloc(&dmn_w32_entity_nil, DMN_W32_EntityKind_Root, 0);
@@ -2977,7 +2977,7 @@ dmn_access_open(void)
   }
   else
   {
-    os_mutex_take(dmn_w32_shared->access_mutex);
+    mutex_take(dmn_w32_shared->access_mutex);
     result = !dmn_w32_shared->access_run_state;
   }
   return result;
@@ -2988,7 +2988,7 @@ dmn_access_close(void)
 {
   if(!dmn_w32_ctrl_thread)
   {
-    os_mutex_drop(dmn_w32_shared->access_mutex);
+    mutex_drop(dmn_w32_shared->access_mutex);
   }
 }
 

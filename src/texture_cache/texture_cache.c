@@ -34,13 +34,13 @@ tex_init(void)
   for(U64 idx = 0; idx < tex_shared->stripes_count; idx += 1)
   {
     tex_shared->stripes[idx].arena = arena_alloc();
-    tex_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    tex_shared->stripes[idx].cv = os_condition_variable_alloc();
+    tex_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
+    tex_shared->stripes[idx].cv = cond_var_alloc();
   }
   tex_shared->u2x_ring_size = KB(64);
   tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
-  tex_shared->u2x_ring_cv = os_condition_variable_alloc();
-  tex_shared->u2x_ring_mutex = os_mutex_alloc();
+  tex_shared->u2x_ring_cv = cond_var_alloc();
+  tex_shared->u2x_ring_mutex = mutex_alloc();
   tex_shared->evictor_thread = os_thread_launch(tex_evictor_thread__entry_point, 0, 0);
 }
 
@@ -237,11 +237,11 @@ tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, endt_us);
+    cond_var_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, endt_us);
   }
   if(good)
   {
-    os_condition_variable_broadcast(tex_shared->u2x_ring_cv);
+    cond_var_broadcast(tex_shared->u2x_ring_cv);
   }
   return good;
 }
@@ -258,9 +258,9 @@ tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out)
       tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, top_out);
       break;
     }
-    os_condition_variable_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, max_U64);
+    cond_var_wait(tex_shared->u2x_ring_cv, tex_shared->u2x_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(tex_shared->u2x_ring_cv);
+  cond_var_broadcast(tex_shared->u2x_ring_cv);
 }
 
 ASYNC_WORK_DEF(tex_xfer_work)

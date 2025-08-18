@@ -160,6 +160,8 @@
 #define MemoryMatchStruct(a,b)  MemoryMatch((a),(b),sizeof(*(a)))
 #define MemoryMatchArray(a,b)   MemoryMatch((a),(b),sizeof(a))
 
+#define MemoryIsZeroStruct(ptr) memory_is_zero((ptr), sizeof(*(ptr)))
+
 #define MemoryRead(T,p,e)    ( ((p)+sizeof(T)<=(e))?(*(T*)(p)):(0) )
 #define MemoryConsume(T,p,e) ( ((p)+sizeof(T)<=(e))?((p)+=sizeof(T),*(T*)((p)-sizeof(T))):((p)=(e),0) )
 
@@ -421,6 +423,37 @@ union U512
 };
 
 ////////////////////////////////
+//~ rjf: Basic Type Structures
+
+typedef struct U16Array U16Array;
+struct U16Array
+{
+  U64  count;
+  U16 *v;
+};
+
+typedef struct U32Array U32Array;
+struct U32Array
+{
+  U64  count;
+  U32 *v;
+};
+
+typedef struct U64Array U64Array;
+struct U64Array
+{
+  U64  count;
+  U64 *v;
+};
+
+typedef struct U128Array U128Array;
+struct U128Array
+{
+  U64   count;
+  U128 *v;
+};
+
+////////////////////////////////
 //~ rjf: Basic Types & Spaces
 
 typedef enum Dimension
@@ -486,6 +519,15 @@ typedef enum OperatingSystem
   OperatingSystem_Linux,
   OperatingSystem_Mac,
   OperatingSystem_COUNT,
+#if OS_WINDOWS
+  OperatingSystem_CURRENT = OperatingSystem_Windows,
+#elif OS_LINUX
+  OperatingSystem_CURRENT = OperatingSystem_Linux,
+#elif OS_MAC
+  OperatingSystem_CURRENT = OperatingSystem_Mac,
+#else
+  OperatingSystem_CURRENT = OperatingSystem_Null,
+#endif
 }
 OperatingSystem;
 
@@ -508,6 +550,17 @@ typedef enum Arch
   Arch_arm64,
   Arch_arm32,
   Arch_COUNT,
+#if ARCH_X64
+  Arch_CURRENT = Arch_x64,
+#elif ARCH_X86
+  Arch_CURRENT = Arch_x86,
+#elif ARCH_ARM64
+  Arch_CURRENT = Arch_arm64,
+#elif ARCH_ARM32
+  Arch_CURRENT = Arch_arm32,
+#else
+  Arch_CURRENT = Arch_Null,
+#endif
 }
 Arch;
 
@@ -518,6 +571,15 @@ typedef enum Compiler
   Compiler_gcc,
   Compiler_clang,
   Compiler_COUNT,
+#if COMPILER_MSVC
+  Compiler_CURRENT = Compiler_msvc,
+#elif COMPILER_GCC
+  Compiler_CURRENT = Compiler_gcc,
+#elif COMPILER_CLANG
+  Compiler_CURRENT = Compiler_clang,
+#else
+  Compiler_CURRENT = Compiler_Null,
+#endif
 }
 Compiler;
 
@@ -539,7 +601,7 @@ struct TxtRng
 };
 
 ////////////////////////////////
-//~ Globally Unique Ids
+//~ rjf: Globally Unique Ids
 
 typedef union Guid Guid;
 union Guid
@@ -556,35 +618,7 @@ union Guid
 StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
 
 ////////////////////////////////
-//~ Arrays
-
-typedef struct U16Array U16Array;
-struct U16Array
-{
-  U64  count;
-  U16 *v;
-};
-typedef struct U32Array U32Array;
-struct U32Array
-{
-  U64  count;
-  U32 *v;
-};
-typedef struct U64Array U64Array;
-struct U64Array
-{
-  U64  count;
-  U64 *v;
-};
-typedef struct U128Array U128Array;
-struct U128Array
-{
-  U64   count;
-  U128 *v;
-};
-
-////////////////////////////////
-//~ NOTE(allen): Constants
+//~ rjf: Basic Constants
 
 global U32 sign32     = 0x80000000;
 global U32 exponent32 = 0x7F800000;
@@ -745,7 +779,7 @@ global const U64 bit63 = (1ull<<62);
 global const U64 bit64 = (1ull<<63);
 
 ////////////////////////////////
-//~ allen: Time
+//~ rjf: Time Types
 
 typedef enum WeekDay
 {
@@ -803,7 +837,7 @@ struct DateTime
 typedef U64 DenseTime;
 
 ////////////////////////////////
-//~ allen: Files
+//~ rjf: File Types
 
 typedef U32 FilePropertyFlags;
 enum
@@ -896,10 +930,6 @@ internal B32 txt_rng_contains(TxtRng r, TxtPt pt);
 
 internal U64 bit_size_from_arch(Arch arch);
 internal U64 max_instruction_size_from_arch(Arch arch);
-
-internal OperatingSystem operating_system_from_context(void);
-internal Arch arch_from_context(void);
-internal Compiler compiler_from_context(void);
 
 ////////////////////////////////
 //~ rjf: Time Functions

@@ -5679,7 +5679,7 @@ rd_arch_from_eval(E_Eval eval)
   Arch arch = process->arch;
   if(arch == Arch_Null)
   {
-    arch = arch_from_context();
+    arch = Arch_CURRENT;
   }
   
   // rjf: try arch arguments

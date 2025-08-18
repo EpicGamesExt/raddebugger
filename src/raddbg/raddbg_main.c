@@ -335,17 +335,17 @@ struct IPCInfo
 //- rjf: IPC resources
 #define IPC_SHARED_MEMORY_BUFFER_SIZE MB(4)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
-global OS_Handle ipc_sender2main_signal_semaphore = {0};
-global OS_Handle ipc_sender2main_lock_semaphore = {0};
+global Semaphore ipc_sender2main_signal_semaphore = {0};
+global Semaphore ipc_sender2main_lock_semaphore = {0};
 global U8 *ipc_sender2main_shared_memory_base = 0;
-global OS_Handle ipc_main2sender_signal_semaphore = {0};
-global OS_Handle ipc_main2sender_lock_semaphore = {0};
+global Semaphore ipc_main2sender_signal_semaphore = {0};
+global Semaphore ipc_main2sender_lock_semaphore = {0};
 global U8 *ipc_main2sender_shared_memory_base = 0;
 global U8  ipc_s2m_ring_buffer[MB(4)] = {0};
 global U64 ipc_s2m_ring_write_pos = 0;
 global U64 ipc_s2m_ring_read_pos = 0;
-global OS_Handle ipc_s2m_ring_mutex = {0};
-global OS_Handle ipc_s2m_ring_cv = {0};
+global Mutex ipc_s2m_ring_mutex = {0};
+global CondVar ipc_s2m_ring_cv = {0};
 
 ////////////////////////////////
 //~ rjf: IPC Signaler Thread
@@ -373,9 +373,9 @@ ipc_signaler_thread__entry_point(void *p)
             ipc_s2m_ring_write_pos += ring_write(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_write_pos, msg.str, msg.size);
             break;
           }
-          os_condition_variable_wait(ipc_s2m_ring_cv, ipc_s2m_ring_mutex, max_U64);
+          cond_var_wait(ipc_s2m_ring_cv, ipc_s2m_ring_mutex, max_U64);
         }
-        os_condition_variable_broadcast(ipc_s2m_ring_cv);
+        cond_var_broadcast(ipc_s2m_ring_cv);
         os_send_wakeup_event();
         ipc_info->msg_size = 0;
         os_semaphore_drop(ipc_sender2main_lock_semaphore);
@@ -525,8 +525,8 @@ entry_point(CmdLine *cmd_line)
         ipc_main2sender_lock_semaphore = os_semaphore_alloc(1, 1, ipc_main2sender_lock_semaphore_name);
         
         // rjf: set up ipc-receiver -> main thread ring buffer; launch signaler thread
-        ipc_s2m_ring_mutex = os_mutex_alloc();
-        ipc_s2m_ring_cv = os_condition_variable_alloc();
+        ipc_s2m_ring_mutex = mutex_alloc();
+        ipc_s2m_ring_cv = cond_var_alloc();
         IPCInfo *ipc_info = (IPCInfo *)ipc_sender2main_shared_memory_base;
         if(ipc_sender2main_shared_memory_base != 0)
         {
@@ -562,7 +562,7 @@ entry_point(CmdLine *cmd_line)
             }
             if(consumed)
             {
-              os_condition_variable_broadcast(ipc_s2m_ring_cv);
+              cond_var_broadcast(ipc_s2m_ring_cv);
             }
             if(msg.size != 0)
             {

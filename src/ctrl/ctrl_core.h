@@ -585,8 +585,8 @@ struct CTRL_ProcessMemoryCacheSlot
 typedef struct CTRL_ProcessMemoryCacheStripe CTRL_ProcessMemoryCacheStripe;
 struct CTRL_ProcessMemoryCacheStripe
 {
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
 };
 
 typedef struct CTRL_ProcessMemoryCache CTRL_ProcessMemoryCache;
@@ -634,7 +634,7 @@ typedef struct CTRL_ThreadRegCacheStripe CTRL_ThreadRegCacheStripe;
 struct CTRL_ThreadRegCacheStripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
+  RWMutex rw_mutex;
 };
 
 typedef struct CTRL_ThreadRegCache CTRL_ThreadRegCache;
@@ -680,8 +680,8 @@ typedef struct CTRL_CallStackCacheStripe CTRL_CallStackCacheStripe;
 struct CTRL_CallStackCacheStripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
 };
 
 typedef struct CTRL_CallStackCache CTRL_CallStackCache;
@@ -723,7 +723,7 @@ typedef struct CTRL_ModuleImageInfoCacheStripe CTRL_ModuleImageInfoCacheStripe;
 struct CTRL_ModuleImageInfoCacheStripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
+  RWMutex rw_mutex;
 };
 
 typedef struct CTRL_ModuleImageInfoCache CTRL_ModuleImageInfoCache;
@@ -743,8 +743,8 @@ struct CTRL_CallStackTreeCache
 {
   Arena *arena;
   CTRL_CallStackTree tree;
-  OS_Handle cv;
-  OS_Handle rw_mutex;
+  CondVar cv;
+  RWMutex rw_mutex;
   U64 reg_gen;
   U64 mem_gen;
   U64 scope_touch_count;
@@ -855,8 +855,8 @@ struct CTRL_State
   U8 *u2c_ring_base;
   U64 u2c_ring_write_pos;
   U64 u2c_ring_read_pos;
-  OS_Handle u2c_ring_mutex;
-  OS_Handle u2c_ring_cv;
+  Mutex u2c_ring_mutex;
+  CondVar u2c_ring_cv;
   
   // rjf: ctrl -> user event ring buffer
   U64 c2u_ring_size;
@@ -864,15 +864,15 @@ struct CTRL_State
   U8 *c2u_ring_base;
   U64 c2u_ring_write_pos;
   U64 c2u_ring_read_pos;
-  OS_Handle c2u_ring_mutex;
-  OS_Handle c2u_ring_cv;
+  Mutex c2u_ring_mutex;
+  CondVar c2u_ring_cv;
   
   // rjf: ctrl thread state
   U64 ctrl_thread_run_state;
   String8 ctrl_thread_log_path;
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
-  OS_Handle ctrl_thread_entity_ctx_rw_mutex;
+  RWMutex ctrl_thread_entity_ctx_rw_mutex;
   CTRL_EntityCtxRWStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
   Arena *ctrl_thread_msg_process_arena;
@@ -896,16 +896,16 @@ struct CTRL_State
   U8 *u2ms_ring_base;
   U64 u2ms_ring_write_pos;
   U64 u2ms_ring_read_pos;
-  OS_Handle u2ms_ring_mutex;
-  OS_Handle u2ms_ring_cv;
+  Mutex u2ms_ring_mutex;
+  CondVar u2ms_ring_cv;
   
   // rjf: user -> call stack builder ring buffer
   U64 u2csb_ring_size;
   U8 *u2csb_ring_base;
   U64 u2csb_ring_write_pos;
   U64 u2csb_ring_read_pos;
-  OS_Handle u2csb_ring_mutex;
-  OS_Handle u2csb_ring_cv;
+  Mutex u2csb_ring_mutex;
+  CondVar u2csb_ring_cv;
 };
 
 ////////////////////////////////

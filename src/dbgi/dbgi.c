@@ -209,8 +209,8 @@ di_init(void)
   for(U64 idx = 0; idx < di_shared->stripes_count; idx += 1)
   {
     di_shared->stripes[idx].arena = arena_alloc();
-    di_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    di_shared->stripes[idx].cv = os_condition_variable_alloc();
+    di_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
+    di_shared->stripes[idx].cv = cond_var_alloc();
   }
   di_shared->search_slots_count = 512;
   di_shared->search_slots = push_array(arena, DI_SearchSlot, di_shared->search_slots_count);
@@ -219,23 +219,23 @@ di_init(void)
   for(U64 idx = 0; idx < di_shared->search_stripes_count; idx += 1)
   {
     di_shared->search_stripes[idx].arena = arena_alloc();
-    di_shared->search_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    di_shared->search_stripes[idx].cv = os_condition_variable_alloc();
+    di_shared->search_stripes[idx].rw_mutex = rw_mutex_alloc();
+    di_shared->search_stripes[idx].cv = cond_var_alloc();
   }
-  di_shared->u2p_ring_mutex = os_mutex_alloc();
-  di_shared->u2p_ring_cv = os_condition_variable_alloc();
+  di_shared->u2p_ring_mutex = mutex_alloc();
+  di_shared->u2p_ring_cv = cond_var_alloc();
   di_shared->u2p_ring_size = KB(64);
   di_shared->u2p_ring_base = push_array_no_zero(arena, U8, di_shared->u2p_ring_size);
-  di_shared->p2u_ring_mutex = os_mutex_alloc();
-  di_shared->p2u_ring_cv = os_condition_variable_alloc();
+  di_shared->p2u_ring_mutex = mutex_alloc();
+  di_shared->p2u_ring_cv = cond_var_alloc();
   di_shared->p2u_ring_size = KB(64);
   di_shared->p2u_ring_base = push_array_no_zero(arena, U8, di_shared->p2u_ring_size);
   di_shared->search_threads_count = 1;
   di_shared->search_threads = push_array(arena, DI_SearchThread, di_shared->search_threads_count);
   for EachIndex(idx, di_shared->search_threads_count)
   {
-    di_shared->search_threads[idx].ring_mutex = os_mutex_alloc();
-    di_shared->search_threads[idx].ring_cv    = os_condition_variable_alloc();
+    di_shared->search_threads[idx].ring_mutex = mutex_alloc();
+    di_shared->search_threads[idx].ring_cv    = cond_var_alloc();
     di_shared->search_threads[idx].ring_size  = KB(64);
     di_shared->search_threads[idx].ring_base  = push_array_no_zero(arena, U8, di_shared->search_threads[idx].ring_size);
     di_shared->search_threads[idx].thread = os_thread_launch(di_search_thread__entry_point, (void *)idx, 0);
@@ -279,12 +279,12 @@ di_scope_close(DI_Scope *scope)
     if(t->node != 0)
     {
       ins_atomic_u64_dec_eval(&t->node->touch_count);
-      os_condition_variable_broadcast(t->stripe->cv);
+      cond_var_broadcast(t->stripe->cv);
     }
     if(t->search_node != 0)
     {
       ins_atomic_u64_dec_eval(&t->search_node->scope_refcount);
-      os_condition_variable_broadcast(t->search_stripe->cv);
+      cond_var_broadcast(t->search_stripe->cv);
     }
     SLLStackPush(di_tctx->free_touch, t);
   }
@@ -343,7 +343,7 @@ di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key)
 {
   ProfBeginFunction();
   DI_Node *node = 0;
-  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  StringMatchFlags match_flags = path_match_flags_from_os(OperatingSystem_CURRENT);
   U64 most_recent_timestamp = max_U64;
   for(DI_Node *n = slot->first; n != 0; n = n->next)
   {
@@ -505,7 +505,7 @@ di_open(DI_Key *key)
         {
           di_u2p_enqueue_key(key, max_U64);
           ins_atomic_u64_eval_assign(&node->is_working, 1);
-          DeferLoop(os_rw_mutex_drop_w(stripe->rw_mutex), os_rw_mutex_take_w(stripe->rw_mutex))
+          DeferLoop(rw_mutex_drop_w(stripe->rw_mutex), rw_mutex_take_w(stripe->rw_mutex))
           {
             async_push_work(di_parse_work);
           }
@@ -566,7 +566,7 @@ di_close(DI_Key *key)
           }
           
           //- rjf: wait for touch count / working marker to go to 0
-          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
+          cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
         }
       }
     }
@@ -625,7 +625,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
         ProfScope("ask for parse")
         {
           ins_atomic_u64_eval_assign(&node->is_working, 1);
-          DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
+          DeferLoop(rw_mutex_drop_r(stripe->rw_mutex), rw_mutex_take_r(stripe->rw_mutex))
           {
             async_push_work(di_parse_work, .priority = high_priority ? ASYNC_Priority_High : ASYNC_Priority_Low);
           }
@@ -640,7 +640,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, B32 high_priority, U64 endt_us)
       
       //- rjf: wait on this stripe
       {
-        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+        cond_var_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
       }
     }
     scratch_end(scratch);
@@ -740,7 +740,7 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
       }
       
       // rjf: no results, but have time to wait -> wait
-      os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, endt_us);
+      cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, endt_us);
     }
   }
   return items;
@@ -770,11 +770,11 @@ di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, endt_us);
+    cond_var_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, endt_us);
   }
   if(sent)
   {
-    os_condition_variable_broadcast(di_shared->u2p_ring_cv);
+    cond_var_broadcast(di_shared->u2p_ring_cv);
   }
   return sent;
 }
@@ -793,9 +793,9 @@ di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
       di_shared->u2p_ring_read_pos += ring_read(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_key->path.str, out_key->path.size);
       break;
     }
-    os_condition_variable_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, max_U64);
+    cond_var_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(di_shared->u2p_ring_cv);
+  cond_var_broadcast(di_shared->u2p_ring_cv);
 }
 
 internal void
@@ -813,9 +813,9 @@ di_p2u_push_event(DI_Event *event)
       di_shared->p2u_ring_write_pos += ring_write(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, event->string.str, event->string.size);
       break;
     }
-    os_condition_variable_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, max_U64);
+    cond_var_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(di_shared->p2u_ring_cv);
+  cond_var_broadcast(di_shared->p2u_ring_cv);
 }
 
 internal DI_EventList
@@ -839,9 +839,9 @@ di_p2u_pop_events(Arena *arena, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, endt_us);
+    cond_var_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, endt_us);
   }
-  os_condition_variable_broadcast(di_shared->p2u_ring_cv);
+  cond_var_broadcast(di_shared->p2u_ring_cv);
   return events;
 }
 
@@ -1136,7 +1136,7 @@ ASYNC_WORK_DEF(di_parse_work)
       os_file_close(file);
     }
   }
-  os_condition_variable_broadcast(stripe->cv);
+  cond_var_broadcast(stripe->cv);
   
   scratch_end(scratch);
   ProfEnd();
@@ -1167,11 +1167,11 @@ di_u2s_enqueue_req(U128 key, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(thread->ring_cv, thread->ring_mutex, endt_us);
+    cond_var_wait(thread->ring_cv, thread->ring_mutex, endt_us);
   }
   if(result)
   {
-    os_condition_variable_broadcast(thread->ring_cv);
+    cond_var_broadcast(thread->ring_cv);
   }
   return result;
 }
@@ -1189,9 +1189,9 @@ di_u2s_dequeue_req(U64 thread_idx)
       thread->ring_read_pos += ring_read_struct(thread->ring_base, thread->ring_size, thread->ring_read_pos, &key);
       break;
     }
-    os_condition_variable_wait(thread->ring_cv, thread->ring_mutex, max_U64);
+    cond_var_wait(thread->ring_cv, thread->ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(thread->ring_cv);
+  cond_var_broadcast(thread->ring_cv);
   return key;
 }
 
@@ -1541,7 +1541,7 @@ di_search_thread__entry_point(void *p)
         }
         if(found && !done)
         {
-          os_condition_variable_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+1000);
+          cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, os_now_microseconds()+1000);
         }
       }
     }
@@ -1610,17 +1610,17 @@ di_match_store_alloc(void)
     store->gen_arenas[idx] = arena_alloc();
   }
   store->params_arena           = arena_alloc();
-  store->params_rw_mutex        = os_rw_mutex_alloc();
+  store->params_rw_mutex        = rw_mutex_alloc();
   store->match_name_slots_count = 4096;
   store->match_name_slots       = push_array(arena, DI_MatchNameSlot, store->match_name_slots_count);
-  store->match_rw_mutex         = os_rw_mutex_alloc();
-  store->match_cv               = os_condition_variable_alloc();
-  store->u2m_ring_cv            = os_condition_variable_alloc();
-  store->u2m_ring_mutex         = os_mutex_alloc();
+  store->match_rw_mutex         = rw_mutex_alloc();
+  store->match_cv               = cond_var_alloc();
+  store->u2m_ring_cv            = cond_var_alloc();
+  store->u2m_ring_mutex         = mutex_alloc();
   store->u2m_ring_size          = KB(2);
   store->u2m_ring_base          = push_array_no_zero(arena, U8, store->u2m_ring_size);
-  store->m2u_ring_cv            = os_condition_variable_alloc();
-  store->m2u_ring_mutex         = os_mutex_alloc();
+  store->m2u_ring_cv            = cond_var_alloc();
+  store->m2u_ring_mutex         = mutex_alloc();
   store->m2u_ring_size          = KB(2);
   store->m2u_ring_base          = push_array_no_zero(arena, U8, store->m2u_ring_size);
   return store;
@@ -1756,11 +1756,11 @@ di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
         {
           break;
         }
-        os_condition_variable_wait(store->u2m_ring_cv, store->u2m_ring_mutex, endt_us);
+        cond_var_wait(store->u2m_ring_cv, store->u2m_ring_mutex, endt_us);
       }
       if(sent)
       {
-        os_condition_variable_broadcast(store->u2m_ring_cv);
+        cond_var_broadcast(store->u2m_ring_cv);
         async_push_work(di_match_work, .input = store, .priority = ASYNC_Priority_Low, .completion_counter = &node->cmp_count);
         node->req_params_hash = store->params_hash;
         node->req_count += 1;
@@ -1780,7 +1780,7 @@ di_match_from_name(DI_MatchStore *store, String8 name, U64 endt_us)
         {
           break;
         }
-        os_condition_variable_wait_rw_r(store->match_cv, store->match_rw_mutex, endt_us);
+        cond_var_wait_rw_r(store->match_cv, store->match_rw_mutex, endt_us);
       }
     }
     
@@ -1817,9 +1817,9 @@ ASYNC_WORK_DEF(di_match_work)
         store->u2m_ring_read_pos += ring_read(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, name.str, name.size);
         break;
       }
-      os_condition_variable_wait(store->u2m_ring_cv, store->u2m_ring_mutex, max_U64);
+      cond_var_wait(store->u2m_ring_cv, store->u2m_ring_mutex, max_U64);
     }
-    os_condition_variable_broadcast(store->u2m_ring_cv);
+    cond_var_broadcast(store->u2m_ring_cv);
     
     //- rjf: read parameters
     U64 params_hash = 0;

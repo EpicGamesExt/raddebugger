@@ -2,214 +2,195 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Third Party Includes
-
-#if !BUILD_SUPPLEMENTARY_UNIT
-# define STB_SPRINTF_IMPLEMENTATION
-# define STB_SPRINTF_STATIC
-# include "third_party/stb/stb_sprintf.h"
-#endif
-
-////////////////////////////////
-//~ NOTE(allen): String <-> Integer Tables
-
-read_only global U8 integer_symbols[16] = {
-  '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
-};
-
-// NOTE(allen): Includes reverses for uppercase and lowercase hex.
-read_only global U8 integer_symbol_reverse[128] = {
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-};
-
-read_only global U8 base64[64] = {
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-  '_', '$',
-};
-
-read_only global U8 base64_reverse[128] = {
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0xFF,0xFF,0xFF,0xFF,0x3F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-  0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,
-  0xFF,0x24,0x25,0x26,0x27,0x28,0x29,0x2A,0x2B,0x2C,0x2D,0x2E,0x2F,0x30,0x31,0x32,
-  0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3A,0x3B,0x3C,0x3D,0xFF,0xFF,0xFF,0xFF,0x3E,
-  0xFF,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,
-  0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20,0x21,0x22,0x23,0xFF,0xFF,0xFF,0xFF,0xFF,
-};
-
-////////////////////////////////
 //~ rjf: Character Classification & Conversion Functions
 
 internal B32
-char_is_space(U8 c){
-  return(c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' || c == '\v');
+char_is_space(U8 c)
+{
+  return (c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f' || c == '\v');
 }
 
 internal B32
-char_is_upper(U8 c){
-  return('A' <= c && c <= 'Z');
+char_is_upper(U8 c)
+{
+  return ('A' <= c && c <= 'Z');
 }
 
 internal B32
-char_is_lower(U8 c){
-  return('a' <= c && c <= 'z');
+char_is_lower(U8 c)
+{
+  return ('a' <= c && c <= 'z');
 }
 
 internal B32
-char_is_alpha(U8 c){
-  return(char_is_upper(c) || char_is_lower(c));
+char_is_alpha(U8 c)
+{
+  return (char_is_upper(c) || char_is_lower(c));
 }
 
 internal B32
-char_is_slash(U8 c){
-  return(c == '/' || c == '\\');
+char_is_slash(U8 c)
+{
+  return (c == '/' || c == '\\');
 }
 
 internal B32
-char_is_digit(U8 c, U32 base){
+char_is_digit(U8 c, U32 base)
+{
   B32 result = 0;
-  if (0 < base && base <= 16){
+  if(0 < base && base <= 16)
+  {
     U8 val = integer_symbol_reverse[c];
-    if (val < base){
+    if(val < base)
+    {
       result = 1;
     }
   }
-  return(result);
+  return result;
 }
 
 internal U8
-char_to_lower(U8 c){
-  if (char_is_upper(c)){
+char_to_lower(U8 c)
+{
+  if(char_is_upper(c))
+  {
     c += ('a' - 'A');
   }
-  return(c);
+  return c;
 }
 
 internal U8
-char_to_upper(U8 c){
-  if (char_is_lower(c)){
+char_to_upper(U8 c)
+{
+  if(char_is_lower(c))
+  {
     c += ('A' - 'a');
   }
-  return(c);
+  return c;
 }
 
 internal U8
-char_to_correct_slash(U8 c){
-  if(char_is_slash(c)){
+char_to_correct_slash(U8 c)
+{
+  if(char_is_slash(c))
+  {
     c = '/';
   }
-  return(c);
+  return c;
 }
 
 ////////////////////////////////
 //~ rjf: C-String Measurement
 
 internal U64
-cstring8_length(U8 *c){
+cstring8_length(U8 *c)
+{
   U8 *p = c;
   for (;*p != 0; p += 1);
-  return(p - c);
+  return (p - c);
 }
 
 internal U64
-cstring16_length(U16 *c){
+cstring16_length(U16 *c)
+{
   U16 *p = c;
   for (;*p != 0; p += 1);
-  return(p - c);
+  return (p - c);
 }
 
 internal U64
-cstring32_length(U32 *c){
+cstring32_length(U32 *c)
+{
   U32 *p = c;
   for (;*p != 0; p += 1);
-  return(p - c);
+  return (p - c);
 }
 
 ////////////////////////////////
 //~ rjf: String Constructors
 
 internal String8
-str8(U8 *str, U64 size){
+str8(U8 *str, U64 size)
+{
   String8 result = {str, size};
-  return(result);
+  return result;
 }
 
 internal String8
-str8_range(U8 *first, U8 *one_past_last){
+str8_range(U8 *first, U8 *one_past_last)
+{
   String8 result = {first, (U64)(one_past_last - first)};
-  return(result);
+  return result;
 }
 
 internal String8
-str8_zero(void){
+str8_zero(void)
+{
   String8 result = {0};
-  return(result);
+  return result;
 }
 
 internal String16
-str16(U16 *str, U64 size){
+str16(U16 *str, U64 size)
+{
   String16 result = {str, size};
-  return(result);
+  return result;
 }
 
 internal String16
-str16_range(U16 *first, U16 *one_past_last){
+str16_range(U16 *first, U16 *one_past_last)
+{
   String16 result = {first, (U64)(one_past_last - first)};
-  return(result);
+  return result;
 }
 
 internal String16
-str16_zero(void){
+str16_zero(void)
+{
   String16 result = {0};
-  return(result);
+  return result;
 }
 
 internal String32
-str32(U32 *str, U64 size){
+str32(U32 *str, U64 size)
+{
   String32 result = {str, size};
-  return(result);
+  return result;
 }
 
 internal String32
-str32_range(U32 *first, U32 *one_past_last){
+str32_range(U32 *first, U32 *one_past_last)
+{
   String32 result = {first, (U64)(one_past_last - first)};
-  return(result);
+  return result;
 }
 
 internal String32
-str32_zero(void){
+str32_zero(void)
+{
   String32 result = {0};
-  return(result);
+  return result;
 }
 
 internal String8
-str8_cstring(char *c){
+str8_cstring(char *c)
+{
   String8 result = {(U8*)c, cstring8_length((U8*)c)};
-  return(result);
+  return result;
 }
 
 internal String16
-str16_cstring(U16 *c){
+str16_cstring(U16 *c)
+{
   String16 result = {(U16*)c, cstring16_length((U16*)c)};
-  return(result);
+  return result;
 }
 
 internal String32
-str32_cstring(U32 *c){
+str32_cstring(U32 *c)
+{
   String32 result = {(U32*)c, cstring32_length((U32*)c)};
-  return(result);
+  return result;
 }
 
 internal String8
@@ -242,7 +223,6 @@ str8_cstring_capped_reverse(void *raw_start, void *raw_cap)
   for(; ptr > start; )
   {
     ptr -= 1;
-    
     if (*ptr == '\0')
     {
       break;
@@ -331,35 +311,43 @@ str8_match(String8 a, String8 b, StringMatchFlags flags)
 }
 
 internal U64
-str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags){
+str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
+{
   U8 *p = string.str + start_pos;
   U64 stop_offset = Max(string.size + 1, needle.size) - needle.size;
   U8 *stop_p = string.str + stop_offset;
-  if (needle.size > 0){
+  if(needle.size > 0)
+  {
     U8 *string_opl = string.str + string.size;
     String8 needle_tail = str8_skip(needle, 1);
     StringMatchFlags adjusted_flags = flags | StringMatchFlag_RightSideSloppy;
     U8 needle_first_char_adjusted = needle.str[0];
-    if(adjusted_flags & StringMatchFlag_CaseInsensitive){
+    if(adjusted_flags & StringMatchFlag_CaseInsensitive)
+    {
       needle_first_char_adjusted = char_to_upper(needle_first_char_adjusted);
     }
-    for (;p < stop_p; p += 1){
+    for(;p < stop_p; p += 1)
+    {
       U8 haystack_char_adjusted = *p;
-      if(adjusted_flags & StringMatchFlag_CaseInsensitive){
+      if(adjusted_flags & StringMatchFlag_CaseInsensitive)
+      {
         haystack_char_adjusted = char_to_upper(haystack_char_adjusted);
       }
-      if (haystack_char_adjusted == needle_first_char_adjusted){
-        if (str8_match(str8_range(p + 1, string_opl), needle_tail, adjusted_flags)){
+      if(haystack_char_adjusted == needle_first_char_adjusted)
+      {
+        if(str8_match(str8_range(p + 1, string_opl), needle_tail, adjusted_flags))
+        {
           break;
         }
       }
     }
   }
   U64 result = string.size;
-  if (p < stop_p){
+  if(p < stop_p)
+  {
     result = (U64)(p - string.str);
   }
-  return(result);
+  return result;
 }
 
 internal U64
@@ -578,7 +566,7 @@ str8_is_integer(String8 string, U32 radix){
       }
     }
   }
-  return(result);
+  return result;
 }
 
 internal U64
@@ -1046,7 +1034,7 @@ str8_list_pushf(Arena *arena, String8List *list, char *fmt, ...){
   String8 string = push_str8fv(arena, fmt, args);
   String8Node *result = str8_list_push(arena, list, string);
   va_end(args);
-  return(result);
+  return result;
 }
 
 internal String8Node*
@@ -1056,7 +1044,7 @@ str8_list_push_frontf(Arena *arena, String8List *list, char *fmt, ...){
   String8 string = push_str8fv(arena, fmt, args);
   String8Node *result = str8_list_push_front(arena, list, string);
   va_end(args);
-  return(result);
+  return result;
 }
 
 internal String8List
@@ -1069,7 +1057,7 @@ str8_list_copy(Arena *arena, String8List *list){
     String8 new_string = push_str8_copy(arena, node->string);
     str8_list_push_node_set_string(&result, new_node, new_string);
   }
-  return(result);
+  return result;
 }
 
 internal String8List
@@ -1155,7 +1143,7 @@ str8_list_join(Arena *arena, String8List *list, StringJoin *optional_params){
   
   *ptr = 0;
   
-  return(result);
+  return result;
 }
 
 internal void
@@ -1568,7 +1556,7 @@ path_relative_dst_from_absolute_dst_src(Arena *arena, String8 dst, String8 src)
       src_n != 0 && bp_n != 0;
       src_n = src_n->next, bp_n = bp_n->next)
   {
-    if(str8_match(src_n->string, bp_n->string, path_match_flags_from_os(operating_system_from_context())))
+    if(str8_match(src_n->string, bp_n->string, path_match_flags_from_os(OperatingSystem_CURRENT)))
     {
       num_backtracks -= 1;
     }
@@ -1602,7 +1590,7 @@ path_relative_dst_from_absolute_dst_src(Arena *arena, String8 dst, String8 src)
           bp_n != 0;
           bp_n = bp_n->next)
       {
-        if(!unique_from_src && (src_n == 0 || !str8_match(src_n->string, bp_n->string, path_match_flags_from_os(operating_system_from_context()))))
+        if(!unique_from_src && (src_n == 0 || !str8_match(src_n->string, bp_n->string, path_match_flags_from_os(OperatingSystem_CURRENT))))
         {
           unique_from_src = 1;
         }
@@ -1833,7 +1821,7 @@ utf8_decode(U8 *str, U64 max){
       }
     }
   }
-  return(result);
+  return result;
 }
 
 internal UnicodeDecode
@@ -1845,7 +1833,7 @@ utf16_decode(U16 *str, U64 max){
     result.codepoint = ((str[0] - 0xD800) << 10) | ((str[1] - 0xDC00) + 0x10000);
     result.inc = 2;
   }
-  return(result);
+  return result;
 }
 
 internal U32
@@ -2045,7 +2033,7 @@ string_from_dimension(Dimension dimension){
   if ((U32)dimension < 4){
     result = strings[dimension];
   }
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2058,7 +2046,7 @@ string_from_side(Side side){
   if ((U32)side < 2){
     result = strings[side];
   }
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2085,7 +2073,7 @@ string_from_arch(Arch arch){
   if (arch < Arch_COUNT){
     result = strings[arch];
   }
-  return(result);
+  return result;
 }
 
 ////////////////////////////////
@@ -2106,7 +2094,7 @@ string_from_week_day(WeekDay week_day){
   if ((U32)week_day < WeekDay_COUNT){
     result = strings[week_day];
   }
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2129,7 +2117,7 @@ string_from_month(Month month){
   if ((U32)month < Month_COUNT){
     result = strings[month];
   }
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2146,7 +2134,7 @@ push_date_time_string(Arena *arena, DateTime *date_time){
   String8 result = push_str8f(arena, "%d %s %d, %02d:%02d:%02d %s",
                               date_time->day, mon_str, date_time->year,
                               adjusted_hour, date_time->min, date_time->sec, ampm);
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2155,7 +2143,7 @@ push_file_name_date_time_string(Arena *arena, DateTime *date_time){
   String8 result = push_str8f(arena, "%d-%s-%0d--%02d-%02d-%02d",
                               date_time->year, mon_str, date_time->day,
                               date_time->hour, date_time->min, date_time->sec);
-  return(result);
+  return result;
 }
 
 internal String8
@@ -2176,7 +2164,7 @@ string_from_elapsed_time(Arena *arena, DateTime dt){
   StringJoin join = { str8_lit_comp(""), str8_lit_comp(" "), str8_lit_comp("") };
   String8 result = str8_list_join(arena, &list, &join);
   scratch_end(scratch);
-  return(result);
+  return result;
 }
 
 ////////////////////////////////
@@ -2819,6 +2807,7 @@ str8_is_before_case_sensitive(const void *a, const void *b)
   return cmp < 0;
 }
 
+////////////////////////////////
 //~ rjf: Basic String Hashes
 
 #if !defined(XXH_IMPLEMENTATION)

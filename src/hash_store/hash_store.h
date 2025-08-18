@@ -145,8 +145,8 @@ typedef struct HS_Stripe HS_Stripe;
 struct HS_Stripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
 };
 
 ////////////////////////////////

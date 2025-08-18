@@ -566,7 +566,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
         Assert(!"unable to read data directory");
       }
     }
-
+    
     // export virtual directory ranges
     data_dir_vranges = push_array(arena, Rng1U64, data_dir_count);
     for(U32 dir_idx = 0; dir_idx < data_dir_count; dir_idx += 1)
@@ -582,7 +582,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
         Assert(!"unable to read data directory");
       }
     }
-
+    
     // export directory range
     data_dir_range = rng_1u64(optional_range.min + reported_data_dir_offset, optional_range.min + reported_data_dir_offset + data_dir_count * sizeof(PE_DataDirectory));
   }
@@ -1009,18 +1009,18 @@ pe_parsed_imports_from_data(Arena              *arena,
 {
   PE_ParsedImport *imports      = 0;
   U64              import_count = 0;
-
+  
   U64 name_table_foff = coff_foff_from_voff(sections, section_count, name_table_voff);
   String8 entries = str8_substr(raw_data, rng_1u64(name_table_foff, raw_data.size));
   if (is_pe32) {
     import_count = index_of_zero_u32((U32 *)entries.str, entries.size/sizeof(U32));
     if (import_count == max_U64) { import_count = 0; }
     imports = push_array(arena, PE_ParsedImport, import_count);
-
+    
     for (U64 imp_idx = 0; imp_idx < import_count; imp_idx += 1) {
       U32 raw_entry = 0;
       str8_deserial_read_struct(entries, imp_idx*sizeof(raw_entry), &raw_entry);
-
+      
       B32 is_ordinal = ExtractBit(raw_entry, 31);
       if (is_ordinal) {
         // fill out ordinal import
@@ -1048,11 +1048,11 @@ pe_parsed_imports_from_data(Arena              *arena,
     import_count = index_of_zero_u64((U64 *)entries.str, entries.size/sizeof(U64));
     if (import_count == max_U64) { import_count = 0; }
     imports = push_array(arena, PE_ParsedImport, import_count);
-
+    
     for (U64 imp_idx = 0; imp_idx < import_count; imp_idx += 1) {
       U64 raw_entry = 0;
       str8_deserial_read_struct(entries, imp_idx*sizeof(raw_entry), &raw_entry);
-
+      
       B32 is_ordinal = ExtractBit(raw_entry, 63);
       if (is_ordinal) {
         // fill out ordinal import
@@ -1215,7 +1215,7 @@ pe_delay_imports_from_data(Arena              *arena,
                                                                 raw_dll->name_table_voff,
                                                                 &import_count);
     
-
+    
     // parse bound table
     Rng1U64 bound_table_range = {0};
     if (raw_dll->bound_table_voff) {
@@ -1224,7 +1224,7 @@ pe_delay_imports_from_data(Arena              *arena,
     }
     U64  bound_table_count;
     U64 *bound_table = pe_array_from_null_term_addr(arena, is_pe32, raw_data, bound_table_range, &bound_table_count);
-
+    
     // parse unload table
     Rng1U64 unload_table_range = {0};
     if (raw_dll->unload_table_voff) {
@@ -1233,7 +1233,7 @@ pe_delay_imports_from_data(Arena              *arena,
     }
     U64 unload_table_count;
     U64 *unload_table = pe_array_from_null_term_addr(arena, is_pe32, raw_data, unload_table_range, &unload_table_count);
-
+    
     // fill out DLL
     PE_ParsedDelayDLLImport *dll = dlls+dll_idx;
     dll->attributes              = raw_dll->attributes;
@@ -1782,12 +1782,12 @@ pe_has_plus_header(COFF_MachineType machine)
 {
   B32 has_plus_header = 0;
   switch (machine) {
-  case COFF_MachineType_X86: {
-    has_plus_header = 0;
-  } break;
-  case COFF_MachineType_X64: {
-    has_plus_header = 1;
-  } break;
+    case COFF_MachineType_X86: {
+      has_plus_header = 0;
+    } break;
+    case COFF_MachineType_X64: {
+      has_plus_header = 1;
+    } break;
   }
   return has_plus_header;
 }
@@ -1806,13 +1806,13 @@ pe_pdata_sort(COFF_MachineType machine, String8 raw_pdata)
 {
   ProfBeginFunction();
   switch (machine) {
-  case COFF_MachineType_Unknown: break;
-  case COFF_MachineType_X86:
-  case COFF_MachineType_X64: {
-    U64 count = raw_pdata.size / sizeof(PE_IntelPdata);
-    radsort((PE_IntelPdata *)raw_pdata.str, count, pe_pdata_is_before_x86_64);
-  } break;
-  default: { NotImplemented; } break;
+    case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X86:
+    case COFF_MachineType_X64: {
+      U64 count = raw_pdata.size / sizeof(PE_IntelPdata);
+      radsort((PE_IntelPdata *)raw_pdata.str, count, pe_pdata_is_before_x86_64);
+    } break;
+    default: { NotImplemented; } break;
   }
   ProfEnd();
 }

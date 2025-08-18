@@ -135,7 +135,7 @@ struct R_D3D11_State
   R_D3D11_Buffer *first_free_buffer;
   R_D3D11_Tex2D *first_to_free_tex2d;
   R_D3D11_Buffer *first_to_free_buffer;
-  OS_Handle device_rw_mutex;
+  RWMutex device_rw_mutex;
   
   // rjf: base d3d11 objects
   ID3D11Device            *base_device;

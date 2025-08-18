@@ -32,8 +32,8 @@ typedef struct GEO_Stripe GEO_Stripe;
 struct GEO_Stripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
-  OS_Handle cv;
+  RWMutex rw_mutex;
+  CondVar cv;
 };
 
 ////////////////////////////////
@@ -84,8 +84,8 @@ struct GEO_Shared
   U8 *u2x_ring_base;
   U64 u2x_ring_write_pos;
   U64 u2x_ring_read_pos;
-  OS_Handle u2x_ring_cv;
-  OS_Handle u2x_ring_mutex;
+  CondVar u2x_ring_cv;
+  Mutex u2x_ring_mutex;
   
   // rjf: evictor thread
   OS_Handle evictor_thread;

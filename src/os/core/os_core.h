@@ -270,41 +270,41 @@ internal void      os_thread_detach(OS_Handle handle);
 //~ rjf: @os_hooks Synchronization Primitives (Implemented Per-OS)
 
 //- rjf: recursive mutexes
-internal OS_Handle os_mutex_alloc(void);
-internal void      os_mutex_release(OS_Handle mutex);
-internal void      os_mutex_take(OS_Handle mutex);
-internal void      os_mutex_drop(OS_Handle mutex);
+internal Mutex os_mutex_alloc(void);
+internal void  os_mutex_release(Mutex mutex);
+internal void  os_mutex_take(Mutex mutex);
+internal void  os_mutex_drop(Mutex mutex);
 
 //- rjf: reader/writer mutexes
-internal OS_Handle os_rw_mutex_alloc(void);
-internal void      os_rw_mutex_release(OS_Handle rw_mutex);
-internal void      os_rw_mutex_take_r(OS_Handle mutex);
-internal void      os_rw_mutex_drop_r(OS_Handle mutex);
-internal void      os_rw_mutex_take_w(OS_Handle mutex);
-internal void      os_rw_mutex_drop_w(OS_Handle mutex);
+internal RWMutex os_rw_mutex_alloc(void);
+internal void    os_rw_mutex_release(RWMutex mutex);
+internal void    os_rw_mutex_take_r(RWMutex mutex);
+internal void    os_rw_mutex_drop_r(RWMutex mutex);
+internal void    os_rw_mutex_take_w(RWMutex mutex);
+internal void    os_rw_mutex_drop_w(RWMutex mutex);
 
 //- rjf: condition variables
-internal OS_Handle os_condition_variable_alloc(void);
-internal void      os_condition_variable_release(OS_Handle cv);
+internal CondVar   os_cond_var_alloc(void);
+internal void      os_cond_var_release(CondVar cv);
 // returns false on timeout, true on signal, (max_wait_ms = max_U64) -> no timeout
-internal B32       os_condition_variable_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us);
-internal B32       os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us);
-internal B32       os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us);
-internal void      os_condition_variable_signal(OS_Handle cv);
-internal void      os_condition_variable_broadcast(OS_Handle cv);
+internal B32       os_cond_var_wait(CondVar cv, Mutex mutex, U64 endt_us);
+internal B32       os_cond_var_wait_rw_r(CondVar cv, RWMutex mutex_rw, U64 endt_us);
+internal B32       os_cond_var_wait_rw_w(CondVar cv, RWMutex mutex_rw, U64 endt_us);
+internal void      os_cond_var_signal(CondVar cv);
+internal void      os_cond_var_broadcast(CondVar cv);
 
 //- rjf: cross-process semaphores
-internal OS_Handle os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name);
-internal void      os_semaphore_release(OS_Handle semaphore);
-internal OS_Handle os_semaphore_open(String8 name);
-internal void      os_semaphore_close(OS_Handle semaphore);
-internal B32       os_semaphore_take(OS_Handle semaphore, U64 endt_us);
-internal void      os_semaphore_drop(OS_Handle semaphore);
+internal Semaphore os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name);
+internal void      os_semaphore_release(Semaphore semaphore);
+internal Semaphore os_semaphore_open(String8 name);
+internal void      os_semaphore_close(Semaphore semaphore);
+internal B32       os_semaphore_take(Semaphore semaphore, U64 endt_us);
+internal void      os_semaphore_drop(Semaphore semaphore);
 
 //- rjf: barriers
-internal OS_Handle os_barrier_alloc(U64 count);
-internal void      os_barrier_release(OS_Handle barrier);
-internal void      os_barrier_wait(OS_Handle barrier);
+internal Barrier   os_barrier_alloc(U64 count);
+internal void      os_barrier_release(Barrier barrier);
+internal void      os_barrier_wait(Barrier barrier);
 
 //- rjf: scope macros
 #define OS_MutexScope(mutex) DeferLoop(os_mutex_take(mutex), os_mutex_drop(mutex))

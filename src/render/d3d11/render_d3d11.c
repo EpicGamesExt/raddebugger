@@ -159,7 +159,7 @@ r_init(CmdLine *cmdln)
   Arena *arena = arena_alloc();
   r_d3d11_state = push_array(arena, R_D3D11_State, 1);
   r_d3d11_state->arena = arena;
-  r_d3d11_state->device_rw_mutex = os_rw_mutex_alloc();
+  r_d3d11_state->device_rw_mutex = rw_mutex_alloc();
   
   //- rjf: create base device
   ProfBegin("create base device");

@@ -76,8 +76,8 @@ hs_init(void)
   {
     HS_Stripe *stripe = &hs_shared->stripes[idx];
     stripe->arena = arena_alloc();
-    stripe->rw_mutex = os_rw_mutex_alloc();
-    stripe->cv = os_condition_variable_alloc();
+    stripe->rw_mutex = rw_mutex_alloc();
+    stripe->cv = cond_var_alloc();
   }
   hs_shared->key_slots_count = 4096;
   hs_shared->key_stripes_count = Min(hs_shared->key_slots_count, os_get_system_info()->logical_processor_count);
@@ -88,8 +88,8 @@ hs_init(void)
   {
     HS_Stripe *stripe = &hs_shared->key_stripes[idx];
     stripe->arena = arena_alloc();
-    stripe->rw_mutex = os_rw_mutex_alloc();
-    stripe->cv = os_condition_variable_alloc();
+    stripe->rw_mutex = rw_mutex_alloc();
+    stripe->cv = cond_var_alloc();
   }
   hs_shared->root_slots_count = 4096;
   hs_shared->root_stripes_count = Min(hs_shared->root_slots_count, os_get_system_info()->logical_processor_count);
@@ -100,8 +100,8 @@ hs_init(void)
   {
     HS_Stripe *stripe = &hs_shared->root_stripes[idx];
     stripe->arena = arena_alloc();
-    stripe->rw_mutex = os_rw_mutex_alloc();
-    stripe->cv = os_condition_variable_alloc();
+    stripe->rw_mutex = rw_mutex_alloc();
+    stripe->cv = cond_var_alloc();
   }
   hs_shared->evictor_thread = os_thread_launch(hs_evictor_thread__entry_point, 0, 0);
 }

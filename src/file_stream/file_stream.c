@@ -49,13 +49,13 @@ fs_init(void)
   for(U64 idx = 0; idx < fs_shared->stripes_count; idx += 1)
   {
     fs_shared->stripes[idx].arena = arena_alloc();
-    fs_shared->stripes[idx].cv = os_condition_variable_alloc();
-    fs_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    fs_shared->stripes[idx].cv = cond_var_alloc();
+    fs_shared->stripes[idx].rw_mutex = rw_mutex_alloc();
   }
   fs_shared->u2s_ring_size = KB(64);
   fs_shared->u2s_ring_base = push_array_no_zero(arena, U8, fs_shared->u2s_ring_size);
-  fs_shared->u2s_ring_cv = os_condition_variable_alloc();
-  fs_shared->u2s_ring_mutex = os_mutex_alloc();
+  fs_shared->u2s_ring_cv = cond_var_alloc();
+  fs_shared->u2s_ring_mutex = mutex_alloc();
   fs_shared->detector_thread = os_thread_launch(fs_detector_thread__entry_point, 0, 0);
 }
 
@@ -177,7 +177,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
          fs_u2s_enqueue_req(key, range, path, endt_us))
       {
         ins_atomic_u64_inc_eval(&range_node->working_count);
-        DeferLoop(os_rw_mutex_drop_w(path_stripe->rw_mutex), os_rw_mutex_take_w(path_stripe->rw_mutex))
+        DeferLoop(rw_mutex_drop_w(path_stripe->rw_mutex), rw_mutex_take_w(path_stripe->rw_mutex))
         {
           async_push_work(fs_stream_work, .working_counter = &range_node->working_count);
         }
@@ -187,7 +187,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
       B32 have_results = !u128_match(hs_hash_from_key(key, 0), u128_zero());
       if(!have_results && os_now_microseconds() < endt_us)
       {
-        os_condition_variable_wait_rw_w(path_stripe->cv, path_stripe->rw_mutex, endt_us);
+        cond_var_wait_rw_w(path_stripe->cv, path_stripe->rw_mutex, endt_us);
       }
       else
       {
@@ -267,11 +267,11 @@ fs_u2s_enqueue_req(HS_Key key, Rng1U64 range, String8 path, U64 endt_us)
       fs_shared->u2s_ring_write_pos += ring_write(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, path.str, path.size);
       break;
     }
-    os_condition_variable_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, endt_us);
+    cond_var_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, endt_us);
   }
   if(result)
   {
-    os_condition_variable_broadcast(fs_shared->u2s_ring_cv);
+    cond_var_broadcast(fs_shared->u2s_ring_cv);
   }
   return result;
 }
@@ -292,9 +292,9 @@ fs_u2s_dequeue_req(Arena *arena, HS_Key *key_out, Rng1U64 *range_out, String8 *p
       fs_shared->u2s_ring_read_pos += ring_read(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, path_out->str, path_out->size);
       break;
     }
-    os_condition_variable_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, max_U64);
+    cond_var_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(fs_shared->u2s_ring_cv);
+  cond_var_broadcast(fs_shared->u2s_ring_cv);
 }
 
 ASYNC_WORK_DEF(fs_stream_work)
@@ -379,7 +379,7 @@ ASYNC_WORK_DEF(fs_stream_work)
       node->props = post_props;
     }
   }
-  os_condition_variable_broadcast(path_stripe->cv);
+  cond_var_broadcast(path_stripe->cv);
   
   ProfEnd();
   scratch_end(scratch);

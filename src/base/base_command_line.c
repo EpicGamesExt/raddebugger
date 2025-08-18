@@ -104,7 +104,7 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
       {
         option_name = str8_skip(option_name, 1);
       }
-      else if(operating_system_from_context() == OperatingSystem_Windows &&
+      else if(OperatingSystem_CURRENT == OperatingSystem_Windows &&
               str8_match(str8_prefix(node->string, 1), str8_lit("/"), 0))
       {
         option_name = str8_skip(option_name, 1);

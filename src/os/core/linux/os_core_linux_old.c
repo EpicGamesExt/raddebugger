@@ -1501,7 +1501,7 @@ os_rw_mutex_drop_w_(OS_Handle mutex)
 //- rjf: condition variables
 
 internal OS_Handle
-os_condition_variable_alloc(void){
+os_cond_var_alloc(void){
   // entity
   LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_ConditionVariable);
   
@@ -1521,7 +1521,7 @@ os_condition_variable_alloc(void){
 }
 
 internal void
-os_condition_variable_release(OS_Handle cv){
+os_cond_var_release(OS_Handle cv){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.id);
   pthread_cond_destroy(&entity->cond);
   lnx_free_entity(entity);
