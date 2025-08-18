@@ -1,6 +1,41 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal RDIM_BakeParams
+p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in)
+{
+  RDIM_BakeParams result = {0};
+  Temp scratch = scratch_begin(thread_arenas, thread_count);
+  Barrier barrier = barrier_alloc(thread_count);
+  {
+    P2R2_ConvertThreadParams *thread_params = push_array(scratch.arena, P2R2_ConvertThreadParams, thread_count);
+    OS_Handle *threads = push_array(scratch.arena, OS_Handle, thread_count);
+    for EachIndex(idx, thread_count)
+    {
+      thread_params[idx].arena = thread_arenas[idx];
+      thread_params[idx].lane_ctx.lane_idx   = idx;
+      thread_params[idx].lane_ctx.lane_count = thread_count;
+      thread_params[idx].lane_ctx.barrier    = barrier;
+      thread_params[idx].input_exe_name      = in->input_exe_name;
+      thread_params[idx].input_exe_data      = in->input_exe_data;
+      thread_params[idx].input_pdb_name      = in->input_pdb_name;
+      thread_params[idx].input_pdb_data      = in->input_pdb_data;
+      thread_params[idx].deterministic       = in->deterministic;
+    }
+    for EachIndex(idx, thread_count)
+    {
+      threads[idx] = os_thread_launch(p2r2_convert_thread_entry_point, &thread_params[idx], 0);
+    }
+    for EachIndex(idx, thread_count)
+    {
+      os_thread_join(threads[idx], max_U64);
+    }
+  }
+  barrier_release(barrier);
+  scratch_end(scratch);
+  return result;
+}
+
 internal void
 p2r2_convert_thread_entry_point(void *p)
 {
@@ -279,84 +314,276 @@ p2r2_convert_thread_entry_point(void *p)
   U64 arch_addr_size = rdi_addr_size_from_arch(arch);
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce top-level-info
+  //- rjf: organize subsets of unit symbol streams by lane
   //
-  RDIM_TopLevelInfo top_level_info = {0};
+  ProfScope("organize subsets of unit symbol streams by lane")
   {
-    top_level_info.arch          = arch;
-    top_level_info.exe_name      = str8_skip_last_slash(params->input_exe_name);
-    top_level_info.exe_hash      = exe_hash;
-    top_level_info.voff_max      = exe_voff_max;
-    if(params->deterministic)
+    //- rjf: set up
+    ProfScope("set up") if(lane_idx() == 0)
     {
-      top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
+      p2r2_shared->lane_sym_blocks = push_array(arena, P2R2_UnitSymBlockList, lane_count());
+      p2r2_shared->total_sym_record_count = 0;
+      for EachIndex(unit_idx, comp_units->count)
+      {
+        p2r2_shared->total_sym_record_count += sym_for_unit[unit_idx]->sym_ranges.count;
+      }
+    }
+    lane_sync();
+    
+    //- rjf: gather
+    ProfScope("gather")
+    {
+      Rng1U64 lane_sym_range = lane_range(p2r2_shared->total_sym_record_count);
+      {
+        U64 scan_sym_idx = 0;
+        for EachIndex(idx, comp_units->count)
+        {
+          Rng1U64 unit_sym_range = r1u64(scan_sym_idx, scan_sym_idx + sym_for_unit[idx]->sym_ranges.count);
+          Rng1U64 sym_range_in_unit = intersect_1u64(unit_sym_range, lane_sym_range);
+          if(sym_range_in_unit.max > sym_range_in_unit.min)
+          {
+            P2R2_UnitSymBlock *block = push_array(arena, P2R2_UnitSymBlock, 1);
+            SLLQueuePush(p2r2_shared->lane_sym_blocks[lane_idx()].first, p2r2_shared->lane_sym_blocks[lane_idx()].last, block);
+            block->unit_idx = idx;
+            block->unit_rec_range = r1u64(sym_range_in_unit.min - scan_sym_idx, sym_range_in_unit.max - scan_sym_idx);
+          }
+          scan_sym_idx += sym_for_unit[idx]->sym_ranges.count;
+        }
+      }
     }
   }
+  lane_sync();
+  P2R2_UnitSymBlockList *lane_sym_blocks = p2r2_shared->lane_sym_blocks;
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build binary sections list
+  //- rjf: gather all file paths
   //
-  RDIM_BinarySectionList binary_sections = {0};
-  ProfScope("build binary section list")
-  {
-    COFF_SectionHeader *coff_ptr = coff_sections.v;
-    COFF_SectionHeader *coff_opl = coff_ptr + coff_sections.count;
-    for(;coff_ptr < coff_opl; coff_ptr += 1)
-    {
-      char *name_first = (char *)coff_ptr->name;
-      char *name_opl   = name_first + sizeof(coff_ptr->name);
-      RDIM_BinarySection *sec = rdim_binary_section_list_push(arena, &binary_sections);
-      sec->name       = str8_cstring_capped(name_first, name_opl);
-      sec->flags      = p2r_rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
-      sec->voff_first = coff_ptr->voff;
-      sec->voff_opl   = coff_ptr->voff+coff_ptr->vsize;
-      sec->foff_first = coff_ptr->foff;
-      sec->foff_opl   = coff_ptr->foff+coff_ptr->fsize;
-    }
-  }
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: gather all source file paths; build nodes
-  //
-  ProfScope("gather all source file paths; build nodes")
+  ProfScope("gather all file paths")
   {
     //- rjf: prep outputs
     ProfScope("prep outputs") if(lane_idx() == 0)
     {
-      p2r2_shared->unit_src_file_paths = push_array(arena, String8Array, comp_units->count);
-      p2r2_shared->unit_src_file_paths_hashes = push_array(arena, U64Array, comp_units->count);
+      p2r2_shared->lane_file_paths = push_array(arena, String8Array, lane_count());
+      p2r2_shared->lane_file_paths_hashes = push_array(arena, U64Array, lane_count());
     }
     lane_sync();
     
     //- rjf: do wide gather
     ProfScope("do wide gather")
     {
-      Rng1U64 range = lane_range(comp_units->count);
-      for EachInRange(idx, range)
+      Temp scratch = scratch_begin(&arena, 1);
+      String8List src_file_paths = {0};
+      
+      //- rjf: build local hash table to dedup files within this lane
+      U64 hit_path_slots_count = 4096;
+      String8Node **hit_path_slots = push_array(scratch.arena, String8Node *, hit_path_slots_count);
+      
+      //- rjf: iterate lane blocks & gather inline site file names
+      ProfScope("gather inline site file names from this lane's symbols")
+        for(P2R2_UnitSymBlock *lane_block = lane_sym_blocks[lane_idx()].first;
+            lane_block != 0;
+            lane_block = lane_block->next)
       {
-        PDB_CompUnit *unit = comp_units->units[idx];
-        CV_SymParsed *unit_sym = sym_for_unit[idx];
-        CV_C13Parsed *unit_c13 = c13_for_unit[idx];
-        CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
-        CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
-        String8List src_file_paths = {0};
+        //- rjf: unpack unit
+        PDB_CompUnit *unit = comp_units->units[lane_block->unit_idx];
+        CV_SymParsed *unit_sym = sym_for_unit[lane_block->unit_idx];
+        CV_C13Parsed *unit_c13 = c13_for_unit[lane_block->unit_idx];
+        CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges + lane_block->unit_rec_range.min;
+        CV_RecRange *rec_ranges_opl   = unit_sym->sym_ranges.ranges + lane_block->unit_rec_range.max;
+        
+        //- rjf: produce obj name/path
+        String8 obj_name = unit->obj_name;
+        if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
+           str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
         {
-          Temp scratch = scratch_begin(&arena, 1);
+          MemoryZeroStruct(&obj_name);
+        }
+        String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
+        
+        //- rjf: find all inline site symbols & gather filenames
+        U64 base_voff = 0;
+        for(CV_RecRange *rec_range = rec_ranges_first;
+            rec_range < rec_ranges_opl;
+            rec_range += 1)
+        {
+          //- rjf: rec range -> symbol info range
+          U64 sym_off_first = rec_range->off + 2;
+          U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
           
-          //- rjf: build local hash table to dedup files within this unit
-          U64 hit_path_slots_count = 4096;
-          String8Node **hit_path_slots = push_array(scratch.arena, String8Node *, hit_path_slots_count);
+          //- rjf: skip invalid ranges
+          if(sym_off_opl > unit_sym->data.size || sym_off_first > unit_sym->data.size || sym_off_first > sym_off_opl)
+          {
+            continue;
+          }
           
-          //- rjf: produce obj name/path
+          //- rjf: unpack symbol info
+          CV_SymKind kind = rec_range->hdr.kind;
+          U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+          void *sym_header_struct_base = unit_sym->data.str + sym_off_first;
+          void *sym_data_opl = unit_sym->data.str + sym_off_opl;
+          
+          //- rjf: skip bad sizes
+          if(sym_off_first + sym_header_struct_size > sym_off_opl)
+          {
+            continue;
+          }
+          
+          //- rjf: process symbol
+          switch(kind)
+          {
+            default:{}break;
+            
+            //- rjf: LPROC32/GPROC32 (gather base address)
+            case CV_SymKind_LPROC32:
+            case CV_SymKind_GPROC32:
+            {
+              CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
+              COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
+              if(section != 0)
+              {
+                base_voff = section->voff + proc32->off;
+              }
+            }break;
+            
+            //- rjf: INLINESITE
+            case CV_SymKind_INLINESITE:
+            {
+              // rjf: unpack sym
+              CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
+              String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+              
+              // rjf: map inlinee -> parsed cv c13 inlinee line info
+              CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
+              {
+                U64 hash = cv_hash_from_item_id(sym->inlinee);
+                U64 slot_idx = hash%unit_c13->inlinee_lines_parsed_slots_count;
+                for(CV_C13InlineeLinesParsedNode *n = unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
+                {
+                  if(n->v.inlinee == sym->inlinee)
+                  {
+                    inlinee_lines_parsed = &n->v;
+                    break;
+                  }
+                }
+              }
+              
+              // rjf: build line table, fill with parsed binary annotations
+              if(inlinee_lines_parsed != 0)
+              {
+                // rjf: grab checksums sub-section
+                CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
+                
+                // rjf: gathered lines
+                U32 last_file_off = max_U32;
+                U32 curr_file_off = max_U32;
+                U64 line_count = 0;
+                CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_lines_parsed->file_off, inlinee_lines_parsed->first_source_ln, base_voff);
+                for(;;)
+                {
+                  // rjf: step & update
+                  CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
+                  if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile)
+                  {
+                    last_file_off = curr_file_off;
+                    curr_file_off = step.file_off;
+                  }
+                  if(step.flags == 0 && line_count > 0)
+                  {
+                    last_file_off = curr_file_off;
+                    curr_file_off = max_U32;
+                  }
+                  
+                  // rjf: file updated -> gather new file name
+                  if(last_file_off != max_U32 && last_file_off != curr_file_off)
+                  {
+                    String8 seq_file_name = {0};
+                    if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
+                    {
+                      CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
+                      U32             name_off = checksum->name_off;
+                      seq_file_name = pdb_strtbl_string_from_off(strtbl, name_off);
+                    }
+                    
+                    // rjf: file name -> normalized file path
+                    String8 file_path            = seq_file_name;
+                    String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+                    {
+                      PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
+                      String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
+                      if(file_path_normalized_style == PathStyle_Relative)
+                      {
+                        String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
+                        str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
+                        file_path_normalized_parts = obj_folder_path_parts;
+                        file_path_normalized_style = path_style_from_str8(obj_folder_path);
+                      }
+                      str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
+                      file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
+                    }
+                    
+                    // rjf: normalized file path -> source file node
+                    U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+                    U64 hit_path_slot = file_path_normalized_hash%hit_path_slots_count;
+                    String8Node *hit_path_node = 0;
+                    for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
+                    {
+                      if(str8_match(n->string, file_path_normalized, 0))
+                      {
+                        hit_path_node = n;
+                        break;
+                      }
+                    }
+                    if(hit_path_node == 0)
+                    {
+                      hit_path_node = push_array(scratch.arena, String8Node, 1);
+                      SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
+                      hit_path_node->string = file_path_normalized;
+                      str8_list_push(arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
+                    }
+                    line_count = 0;
+                  }
+                  
+                  // rjf: count lines
+                  if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine)
+                  {
+                    line_count += 1;
+                  }
+                  
+                  // rjf: no more flags -> done
+                  if(step.flags == 0)
+                  {
+                    break;
+                  }
+                }
+              }
+            }break;
+          }
+        }
+      }
+      
+      //- rjf: do per-unit wide gather from unit line tables
+      ProfScope("do per-unit wide gather from unit line tables")
+      {
+        // rjf: iterate all units for this lane
+        Rng1U64 range = lane_range(comp_units->count);
+        for EachInRange(idx, range)
+        {
+          PDB_CompUnit *unit = comp_units->units[idx];
+          CV_SymParsed *unit_sym = sym_for_unit[idx];
+          CV_C13Parsed *unit_c13 = c13_for_unit[idx];
+          CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
+          CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
+          
+          // rjf: produce obj name/path
           String8 obj_name = unit->obj_name;
           if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
              str8_match(obj_name, str8_lit("Import:"), StringMatchFlag_RightSideSloppy))
           {
             MemoryZeroStruct(&obj_name);
           }
-          String8 obj_folder_path = lower_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
+          String8 obj_folder_path = backslashed_from_str8(scratch.arena, str8_chop_last_slash(obj_name));
           
-          //- rjf: find all files in this unit's (non-inline) line info
+          // rjf: find all files in this unit's (non-inline) line info
           ProfScope("find all files in this unit's (non-inline) line info")
             for(CV_C13SubSectionNode *node = unit_c13->first_sub_section;
                 node != 0;
@@ -407,192 +634,43 @@ p2r2_convert_thread_entry_point(void *p)
               }
             }
           }
-          
-          //- rjf: find all files in unit's inline line info
-          ProfScope("find all files in unit's inline line info")
-          {
-            U64 base_voff = 0;
-            for(CV_RecRange *rec_range = rec_ranges_first;
-                rec_range < rec_ranges_opl;
-                rec_range += 1)
-            {
-              //- rjf: rec range -> symbol info range
-              U64 sym_off_first = rec_range->off + 2;
-              U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-              
-              //- rjf: skip invalid ranges
-              if(sym_off_opl > unit_sym->data.size || sym_off_first > unit_sym->data.size || sym_off_first > sym_off_opl)
-              {
-                continue;
-              }
-              
-              //- rjf: unpack symbol info
-              CV_SymKind kind = rec_range->hdr.kind;
-              U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-              void *sym_header_struct_base = unit_sym->data.str + sym_off_first;
-              void *sym_data_opl = unit_sym->data.str + sym_off_opl;
-              
-              //- rjf: skip bad sizes
-              if(sym_off_first + sym_header_struct_size > sym_off_opl)
-              {
-                continue;
-              }
-              
-              //- rjf: process symbol
-              switch(kind)
-              {
-                default:{}break;
-                
-                //- rjf: LPROC32/GPROC32 (gather base address)
-                case CV_SymKind_LPROC32:
-                case CV_SymKind_GPROC32:
-                {
-                  CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-                  COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections.count) ? &coff_sections.v[proc32->sec-1] : 0;
-                  if(section != 0)
-                  {
-                    base_voff = section->voff + proc32->off;
-                  }
-                }break;
-                
-                //- rjf: INLINESITE
-                case CV_SymKind_INLINESITE:
-                {
-                  // rjf: unpack sym
-                  CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
-                  String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
-                  
-                  // rjf: map inlinee -> parsed cv c13 inlinee line info
-                  CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
-                  {
-                    U64 hash = cv_hash_from_item_id(sym->inlinee);
-                    U64 slot_idx = hash%unit_c13->inlinee_lines_parsed_slots_count;
-                    for(CV_C13InlineeLinesParsedNode *n = unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
-                    {
-                      if(n->v.inlinee == sym->inlinee)
-                      {
-                        inlinee_lines_parsed = &n->v;
-                        break;
-                      }
-                    }
-                  }
-                  
-                  // rjf: build line table, fill with parsed binary annotations
-                  if(inlinee_lines_parsed != 0)
-                  {
-                    // rjf: grab checksums sub-section
-                    CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
-                    
-                    // rjf: gathered lines
-                    U32 last_file_off = max_U32;
-                    U32 curr_file_off = max_U32;
-                    U64 line_count = 0;
-                    CV_C13InlineSiteDecoder decoder = cv_c13_inline_site_decoder_init(inlinee_lines_parsed->file_off, inlinee_lines_parsed->first_source_ln, base_voff);
-                    for(;;)
-                    {
-                      // rjf: step & update
-                      CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, binary_annots);
-                      if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile)
-                      {
-                        last_file_off = curr_file_off;
-                        curr_file_off = step.file_off;
-                      }
-                      if(step.flags == 0 && line_count > 0)
-                      {
-                        last_file_off = curr_file_off;
-                        curr_file_off = max_U32;
-                      }
-                      
-                      // rjf: file updated -> gather new file name
-                      if(last_file_off != max_U32 && last_file_off != curr_file_off)
-                      {
-                        String8 seq_file_name = {0};
-                        if(last_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
-                        {
-                          CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + last_file_off);
-                          U32             name_off = checksum->name_off;
-                          seq_file_name = pdb_strtbl_string_from_off(strtbl, name_off);
-                        }
-                        
-                        // rjf: file name -> normalized file path
-                        String8 file_path            = seq_file_name;
-                        String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
-                        {
-                          PathStyle file_path_normalized_style = path_style_from_str8(file_path_normalized);
-                          String8List file_path_normalized_parts = str8_split_path(scratch.arena, file_path_normalized);
-                          if(file_path_normalized_style == PathStyle_Relative)
-                          {
-                            String8List obj_folder_path_parts = str8_split_path(scratch.arena, obj_folder_path);
-                            str8_list_concat_in_place(&obj_folder_path_parts, &file_path_normalized_parts);
-                            file_path_normalized_parts = obj_folder_path_parts;
-                            file_path_normalized_style = path_style_from_str8(obj_folder_path);
-                          }
-                          str8_path_list_resolve_dots_in_place(&file_path_normalized_parts, file_path_normalized_style);
-                          file_path_normalized = str8_path_list_join_by_style(scratch.arena, &file_path_normalized_parts, file_path_normalized_style);
-                        }
-                        
-                        // rjf: normalized file path -> source file node
-                        U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-                        U64 hit_path_slot = file_path_normalized_hash%hit_path_slots_count;
-                        String8Node *hit_path_node = 0;
-                        for(String8Node *n = hit_path_slots[hit_path_slot]; n != 0; n = n->next)
-                        {
-                          if(str8_match(n->string, file_path_normalized, 0))
-                          {
-                            hit_path_node = n;
-                            break;
-                          }
-                        }
-                        if(hit_path_node == 0)
-                        {
-                          hit_path_node = push_array(scratch.arena, String8Node, 1);
-                          SLLStackPush(hit_path_slots[hit_path_slot], hit_path_node);
-                          hit_path_node->string = file_path_normalized;
-                          str8_list_push(scratch.arena, &src_file_paths, push_str8_copy(arena, file_path_normalized));
-                        }
-                        line_count = 0;
-                      }
-                      
-                      // rjf: count lines
-                      if(step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine)
-                      {
-                        line_count += 1;
-                      }
-                      
-                      // rjf: no more flags -> done
-                      if(step.flags == 0)
-                      {
-                        break;
-                      }
-                    }
-                  }
-                }break;
-              }
-            }
-          }
-          scratch_end(scratch);
-        }
-        p2r2_shared->unit_src_file_paths[idx] = str8_array_from_list(arena, &src_file_paths);
-        ProfScope("hash all paths")
-        {
-          p2r2_shared->unit_src_file_paths_hashes[idx].count = p2r2_shared->unit_src_file_paths[idx].count;
-          p2r2_shared->unit_src_file_paths_hashes[idx].v = push_array(arena, U64, p2r2_shared->unit_src_file_paths[idx].count);
-          for EachIndex(path_idx, p2r2_shared->unit_src_file_paths_hashes[idx].count)
-          {
-            p2r2_shared->unit_src_file_paths_hashes[idx].v[path_idx] = rdi_hash(p2r2_shared->unit_src_file_paths[idx].v[path_idx].str, p2r2_shared->unit_src_file_paths[idx].v[path_idx].size);
-          }
         }
       }
+      
+      //- rjf: merge into array for this lane
+      p2r2_shared->lane_file_paths[lane_idx()] = str8_array_from_list(arena, &src_file_paths);
+      
+      //- rjf: hash this lane's file paths
+      {
+        String8Array lane_paths = p2r2_shared->lane_file_paths[lane_idx()];
+        U64Array lane_paths_hashes = {0};
+        lane_paths_hashes.count = lane_paths.count;
+        lane_paths_hashes.v = push_array(arena, U64, lane_paths_hashes.count);
+        for EachIndex(idx, lane_paths.count)
+        {
+          lane_paths_hashes.v[idx] = rdi_hash(lane_paths.v[idx].str, lane_paths.v[idx].size);
+        }
+        p2r2_shared->lane_file_paths_hashes[lane_idx()] = lane_paths_hashes;
+      }
+      
+      scratch_end(scratch);
     }
-    lane_sync();
-    
+  }
+  lane_sync();
+  String8Array *lane_file_paths = p2r2_shared->lane_file_paths;
+  U64Array *lane_file_paths_hashes = p2r2_shared->lane_file_paths_hashes;
+  
+  //////////////////////////////
+  //- rjf: build unified collection & map for source files
+  //
+  {
     //- rjf: set up table
     ProfScope("set up table") if(lane_idx() == 0)
     {
       p2r2_shared->total_path_count = 0;
-      for EachIndex(idx, comp_units->count)
+      for EachIndex(idx, lane_count())
       {
-        p2r2_shared->total_path_count += p2r2_shared->unit_src_file_paths[idx].count;
+        p2r2_shared->total_path_count += p2r2_shared->lane_file_paths[idx].count;
       }
       p2r2_shared->src_file_map.slots_count = p2r2_shared->total_path_count + p2r2_shared->total_path_count/2 + 1;
       p2r2_shared->src_file_map.slots = push_array(arena, P2R_SrcFileNode *, p2r2_shared->src_file_map.slots_count);
@@ -602,12 +680,12 @@ p2r2_convert_thread_entry_point(void *p)
     //- rjf: fill table
     ProfScope("fill table") if(lane_idx() == 0)
     {
-      for EachIndex(idx, comp_units->count)
+      for EachIndex(idx, lane_count())
       {
-        for EachIndex(path_idx, p2r2_shared->unit_src_file_paths[idx].count)
+        for EachIndex(path_idx, p2r2_shared->lane_file_paths[idx].count)
         {
-          String8 file_path_sanitized = p2r2_shared->unit_src_file_paths[idx].v[path_idx];
-          U64 file_path_sanitized_hash = rdi_hash(file_path_sanitized.str, file_path_sanitized.size);
+          String8 file_path_sanitized = p2r2_shared->lane_file_paths[idx].v[path_idx];
+          U64 file_path_sanitized_hash = p2r2_shared->lane_file_paths_hashes[idx].v[path_idx];
           U64 src_file_slot = file_path_sanitized_hash%p2r2_shared->src_file_map.slots_count;
           P2R_SrcFileNode *src_file_node = 0;
           for(P2R_SrcFileNode *n = p2r2_shared->src_file_map.slots[src_file_slot]; n != 0; n = n->next)
@@ -991,39 +1069,45 @@ p2r2_convert_thread_entry_point(void *p)
   }
   lane_sync();
   RDIM_LineTableChunkList all_line_tables = p2r2_shared->all_line_tables;
-}
-
-internal RDIM_BakeParams
-p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in)
-{
-  RDIM_BakeParams result = {0};
-  Temp scratch = scratch_begin(thread_arenas, thread_count);
-  Barrier barrier = barrier_alloc(thread_count);
+  
+  //-
+  //-
+  //--
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: produce top-level-info
+  //
+  RDIM_TopLevelInfo top_level_info = {0};
   {
-    P2R2_ConvertThreadParams *thread_params = push_array(scratch.arena, P2R2_ConvertThreadParams, thread_count);
-    OS_Handle *threads = push_array(scratch.arena, OS_Handle, thread_count);
-    for EachIndex(idx, thread_count)
+    top_level_info.arch          = arch;
+    top_level_info.exe_name      = str8_skip_last_slash(params->input_exe_name);
+    top_level_info.exe_hash      = exe_hash;
+    top_level_info.voff_max      = exe_voff_max;
+    if(params->deterministic)
     {
-      thread_params[idx].arena = thread_arenas[idx];
-      thread_params[idx].lane_ctx.lane_idx   = idx;
-      thread_params[idx].lane_ctx.lane_count = thread_count;
-      thread_params[idx].lane_ctx.barrier    = barrier;
-      thread_params[idx].input_exe_name      = in->input_exe_name;
-      thread_params[idx].input_exe_data      = in->input_exe_data;
-      thread_params[idx].input_pdb_name      = in->input_pdb_name;
-      thread_params[idx].input_pdb_data      = in->input_pdb_data;
-      thread_params[idx].deterministic       = in->deterministic;
-    }
-    for EachIndex(idx, thread_count)
-    {
-      threads[idx] = os_thread_launch(p2r2_convert_thread_entry_point, &thread_params[idx], 0);
-    }
-    for EachIndex(idx, thread_count)
-    {
-      os_thread_join(threads[idx], max_U64);
+      top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
     }
   }
-  barrier_release(barrier);
-  scratch_end(scratch);
-  return result;
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: build binary sections list
+  //
+  RDIM_BinarySectionList binary_sections = {0};
+  ProfScope("build binary section list")
+  {
+    COFF_SectionHeader *coff_ptr = coff_sections.v;
+    COFF_SectionHeader *coff_opl = coff_ptr + coff_sections.count;
+    for(;coff_ptr < coff_opl; coff_ptr += 1)
+    {
+      char *name_first = (char *)coff_ptr->name;
+      char *name_opl   = name_first + sizeof(coff_ptr->name);
+      RDIM_BinarySection *sec = rdim_binary_section_list_push(arena, &binary_sections);
+      sec->name       = str8_cstring_capped(name_first, name_opl);
+      sec->flags      = p2r_rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
+      sec->voff_first = coff_ptr->voff;
+      sec->voff_opl   = coff_ptr->voff+coff_ptr->vsize;
+      sec->foff_first = coff_ptr->foff;
+      sec->foff_opl   = coff_ptr->foff+coff_ptr->fsize;
+    }
+  }
 }

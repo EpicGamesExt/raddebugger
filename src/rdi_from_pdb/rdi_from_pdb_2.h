@@ -16,6 +16,21 @@ struct P2R2_ConvertThreadParams
   B32 deterministic;
 };
 
+typedef struct P2R2_UnitSymBlock P2R2_UnitSymBlock;
+struct P2R2_UnitSymBlock
+{
+  P2R2_UnitSymBlock *next;
+  U64 unit_idx;
+  Rng1U64 unit_rec_range;
+};
+
+typedef struct P2R2_UnitSymBlockList P2R2_UnitSymBlockList;
+struct P2R2_UnitSymBlockList
+{
+  P2R2_UnitSymBlock *first;
+  P2R2_UnitSymBlock *last;
+};
+
 typedef struct P2R2_Shared P2R2_Shared;
 struct P2R2_Shared
 {
@@ -51,8 +66,12 @@ struct P2R2_Shared
   U64 exe_voff_max;
   RDI_Arch arch;
   
-  String8Array *unit_src_file_paths;
-  U64Array *unit_src_file_paths_hashes;
+  U64 total_sym_record_count;
+  P2R2_UnitSymBlockList *lane_sym_blocks;
+  
+  String8Array *lane_file_paths;
+  U64Array *lane_file_paths_hashes;
+  
   U64 total_path_count;
   
   RDIM_SrcFileChunkList all_src_files__sequenceless;
@@ -67,7 +86,7 @@ struct P2R2_Shared
 
 global P2R2_Shared *p2r2_shared = 0;
 
-internal void p2r2_convert_thread_entry_point(void *p);
 internal RDIM_BakeParams p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in);
+internal void p2r2_convert_thread_entry_point(void *p);
 
 #endif // RDI_FROM_PDB_2_H

@@ -85,8 +85,11 @@ tctx_set_lane_ctx(LaneCtx lane_ctx)
 internal void
 tctx_lane_barrier_wait(void)
 {
+  ProfBeginFunction();
+  ProfColor(0xff0000ff);
   TCTX *tctx = tctx_selected();
   os_barrier_wait(tctx->lane_ctx.barrier);
+  ProfEnd();
 }
 
 internal Rng1U64

@@ -43,7 +43,7 @@
 # define ProfEndLockWait(...)      tmEndWaitForLock(0)
 # define ProfLockTake(...)         tmAcquiredLock(0, 0, __VA_ARGS__)
 # define ProfLockDrop(...)         tmReleasedLock(0, __VA_ARGS__)
-# define ProfColor(color)          tmZoneColorSticky(color)
+# define ProfColor(color)          tmZoneColor((((color) & 0xff000000) >> 24) / 255.f, (((color) & 0x00ff0000) >> 16) / 255.f, (((color) & 0x0000ff00) >> 8) / 255.f)
 # define ProfBeginV(...)                                                           \
 if (TM_API_PTR) {                                                                \
 static tm_uint64 file_id = 0; TM_API_PTR->_tmStaticString(&file_id, __FILE__); \
