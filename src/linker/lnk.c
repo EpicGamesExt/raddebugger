@@ -1220,11 +1220,7 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
         section_header->flags |= COFF_SectionFlag_LnkRemove;
       }
 
-      // TODO: Reset reserved flag so it does not get propagated to the image sections.
-      // We need to mask out reserved flags when gathering section definitions to actually
-      // prevent propagation.
-      section_header->flags &= ~LNK_SECTION_FLAG_IS_LIVE;
-
+      // remove associated sections
       if (section_header->flags & COFF_SectionFlag_LnkRemove) {
         for (U32Node *section_number_n = obj->associated_sections[section_number]; section_number_n != 0; section_number_n = section_number_n->next) {
           U32                 section_number = section_number_n->data;
@@ -1232,6 +1228,11 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
           section_header->flags |= COFF_SectionFlag_LnkRemove;
         }
       }
+
+      // TODO: Reset reserved flag so it does not get propagated to the image sections.
+      // We need to mask out reserved flags when gathering section definitions to actually
+      // prevent propagation.
+      section_header->flags &= ~LNK_SECTION_FLAG_IS_LIVE;
     }
   }
   ProfEnd();
@@ -1284,7 +1285,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     State_InputInclude,
     State_InputObjs,
     State_InputLibs,
-    State_InputAlternateNames,
     State_InputDelayLoadDlls,
     State_InputLinkerObjs,
     State_SearchUndefined,
@@ -1318,7 +1318,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
   String8Node         **last_include_symbol               = &config->include_symbol_list.first;
   String8Node         **last_disallow_lib                 = &config->disallow_lib_list.first;
   String8Node         **last_delay_load_dll               = &config->delay_load_dll_list.first;
-  LNK_AltNameNode     **last_alt_name                     = &config->alt_name_list.first;
   LNK_InputObjList      input_obj_list                    = {0};
   LNK_InputImportList   input_import_list                 = {0};
   LNK_InputLib        **input_libs[LNK_InputSource_Count] = { &config->input_list[LNK_Input_Lib].first, &config->input_default_lib_list.first, &config->input_obj_lib_list.first };
@@ -1531,6 +1530,39 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         
         // reset input objs
         MemoryZeroStruct(&input_obj_list);
+
+        // replace undefined symbols that have an alternate name with a weak symbol
+        for (LNK_AltNameNode *alt_name_n = config->alt_name_list.first; alt_name_n != 0; alt_name_n = alt_name_n->next) {
+          LNK_SymbolHashTrie *symbol_ht = lnk_symbol_table_search_(symtab, LNK_SymbolScope_Defined, alt_name_n->data.from);
+          if (symbol_ht) {
+            COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol_ht->symbol);
+            if (interp == COFF_SymbolValueInterp_Undefined) {
+              // clear slot for the weak alternate name that replaces an undefined symbol
+              symbol_ht->symbol = 0;
+
+              // make obj with alternamte name symbol
+              String8 alt_name_obj;
+              {
+                COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+                COFF_ObjSymbol *from_symbol = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.from, COFF_WeakExt_SearchLibrary, 0);
+                COFF_ObjSymbol *to_symbol   = coff_obj_writer_push_symbol_weak(obj_writer, alt_name_n->data.to,   COFF_WeakExt_AntiDependency, from_symbol);
+                coff_obj_writer_set_default_symbol(from_symbol, to_symbol);
+                alt_name_obj = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
+                coff_obj_writer_release(&obj_writer);
+              }
+
+              // input alt name obj
+              {
+                LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
+                input->path                    = alt_name_n->data.obj ? alt_name_n->data.obj->path : str8_lit("RADLINK");
+                input->exclude_from_debug_info = 1;
+                input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAME FOR %S=%S *", alt_name_n->data.from, alt_name_n->data.to, obj_list.count);
+                input->data                    = alt_name_obj;
+                input->lib                     = alt_name_n->data.obj ? alt_name_n->data.obj->lib : 0;
+              }
+            }
+          }
+        }
         
         ProfEnd();
       } break;
@@ -1627,43 +1659,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
         
         ProfEnd();
       } break;
-      case State_InputAlternateNames: {
-        ProfBegin("Input Alternate Names");
-
-        // linker is not allowed to create a new alternate name if the "from" symbol already exists
-        // (MSVC silently ignores the directive)
-        {
-          LNK_Symbol *extant_from = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, (*last_alt_name)->data.from);
-          if (extant_from) {
-            COFF_SymbolValueInterpType extant_interp = lnk_interp_from_symbol(extant_from);
-            if (extant_interp != COFF_SymbolValueInterp_Undefined) { break; }
-          }
-        }
-
-        // make & input alternate name obj
-        {
-          COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
-
-          COFF_ObjSymbol *null_symbol = coff_obj_writer_push_symbol_undef(obj_writer, str8_lit(LNK_NULL_SYMBOL));
-          COFF_ObjSymbol *from_symbol = coff_obj_writer_push_symbol_weak(obj_writer, (*last_alt_name)->data.from, COFF_WeakExt_Rad_WeakSearchLibrary, null_symbol);
-          COFF_ObjSymbol *to_symbol   = coff_obj_writer_push_symbol_weak(obj_writer, (*last_alt_name)->data.to,   COFF_WeakExt_Rad_WeakSearchLibrary, from_symbol);
-
-          String8 alt_name_obj = coff_obj_writer_serialize(tp_arena->v[0], obj_writer);
-          coff_obj_writer_release(&obj_writer);
-
-          LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-          input->path                    = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->path : str8_lit("RADLINK");
-          input->exclude_from_debug_info = 1;
-          input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAMES FOR %S * %u", input->path, obj_list.count);
-          input->data                    = alt_name_obj;
-          input->lib                     = (*last_alt_name)->data.obj ? (*last_alt_name)->data.obj->lib : 0;
-        }
-
-        // advance to next alt name
-        last_alt_name = &(*last_alt_name)->next;
-
-        ProfEnd();
-      } break;
       case State_InputDelayLoadDlls: {
         ProfBegin("Input Delay Load Dlls");
 
@@ -1672,6 +1667,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
         // establish delay load helper name
         config->delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
+
         // TODO: config_refactor
         String8List value_strings = {0};
         str8_list_push(scratch.arena, &value_strings, config->delay_load_helper_name);
@@ -2128,10 +2124,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     }
     if (*last_include_symbol) {
       state_list_push(scratch.arena, state_list, State_InputInclude);
-      continue;
-    }
-    if (*last_alt_name) {
-      state_list_push(scratch.arena, state_list, State_InputAlternateNames);
       continue;
     }
     {
