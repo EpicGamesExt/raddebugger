@@ -1138,6 +1138,9 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
           if (reloc_parsed.storage_class == COFF_SymStorageClass_External) {
             LNK_Symbol *defn = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
             next_ref = defn->u.defined;
+          } else {
+            MemoryZeroStruct(&ref_symbol);
+            break;
           }
         } else if (ref_interp == COFF_SymbolValueInterp_Weak) {
           LNK_Symbol *defn = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
