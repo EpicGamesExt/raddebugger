@@ -1665,8 +1665,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       case State_InputDelayLoadDlls: {
         ProfBegin("Input Delay Load Dlls");
 
+        // skip input delay load dlls
         for (; *last_delay_load_dll; last_delay_load_dll = &(*last_delay_load_dll)->next);
 
+        // establish delay load helper name
+        config->delay_load_helper_name = mscrt_delay_load_helper_name_from_machine(config->machine);
         // TODO: config_refactor
         String8List value_strings = {0};
         str8_list_push(scratch.arena, &value_strings, config->delay_load_helper_name);

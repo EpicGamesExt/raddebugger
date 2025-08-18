@@ -2006,6 +2006,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line, LNK_CmdLine cmd
   config->export_ht                 = hash_table_init(arena, max_U16/2);
   config->alt_name_ht               = hash_table_init(arena, 0x100);
   config->include_symbol_ht         = hash_table_init(arena, 0x100);
+  config->delay_load_ht             = hash_table_init(arena, 0x100);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
