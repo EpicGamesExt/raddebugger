@@ -672,7 +672,23 @@ rb_entry_point(CmdLine *cmdline)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          ProfScope("convert") bake_params = p2r_convert(arena, async_root, &convert_params);
+          if(cmd_line_has_flag(cmdline, str8_lit("p2r2")))
+          {
+            ProfScope("convert (2)")
+            {
+              U64 thread_count = os_get_system_info()->logical_processor_count;
+              Arena **thread_arenas = push_array(arena, Arena *, thread_count);
+              for EachIndex(idx, thread_count)
+              {
+                thread_arenas[idx] = arena_alloc();
+              }
+              bake_params = p2r2_convert(thread_arenas, thread_count, &convert_params);
+            }
+          }
+          else
+          {
+            ProfScope("convert") bake_params = p2r_convert(arena, async_root, &convert_params);
+          }
           
           // rjf: no output path? -> pick one based on PDB
           if(output_path.size == 0) switch(output_kind)

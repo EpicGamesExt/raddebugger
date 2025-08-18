@@ -8,8 +8,7 @@ typedef struct P2R2_ConvertThreadParams P2R2_ConvertThreadParams;
 struct P2R2_ConvertThreadParams
 {
   Arena *arena;
-  U64 lane_idx;
-  U64 lane_count;
+  LaneCtx lane_ctx;
   String8 input_exe_name;
   String8 input_exe_data;
   String8 input_pdb_name;
@@ -56,5 +55,6 @@ struct P2R2_Shared
 global P2R2_Shared *p2r2_shared = 0;
 
 internal void p2r2_convert_thread_entry_point(void *p);
+internal RDIM_BakeParams p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in);
 
 #endif // RDI_FROM_PDB_2_H

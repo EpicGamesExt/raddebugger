@@ -6,7 +6,8 @@ p2r2_convert_thread_entry_point(void *p)
 {
   P2R2_ConvertThreadParams *params = (P2R2_ConvertThreadParams *)p;
   Arena *arena = params->arena;
-  lane_thread(params->lane_idx, params->lane_count);
+  lane_ctx(params->lane_ctx);
+  ThreadNameF("p2r2_convert_thread_%I64u", lane_idx());
   
   //////////////////////////////////////////////////////////////
   //- rjf: do top-level MSF/PDB extraction
@@ -605,5 +606,39 @@ p2r2_convert_thread_entry_point(void *p)
   }
   RDIM_SrcFileChunkList all_src_files__sequenceless = {0};
   P2R_SrcFileMap src_file_map = {0};
-  
+}
+
+internal RDIM_BakeParams
+p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in)
+{
+  RDIM_BakeParams result = {0};
+  Temp scratch = scratch_begin(thread_arenas, thread_count);
+  Barrier barrier = barrier_alloc(thread_count);
+  {
+    P2R2_ConvertThreadParams *thread_params = push_array(scratch.arena, P2R2_ConvertThreadParams, thread_count);
+    OS_Handle *threads = push_array(scratch.arena, OS_Handle, thread_count);
+    for EachIndex(idx, thread_count)
+    {
+      thread_params[idx].arena = thread_arenas[idx];
+      thread_params[idx].lane_ctx.lane_idx   = idx;
+      thread_params[idx].lane_ctx.lane_count = thread_count;
+      thread_params[idx].lane_ctx.barrier    = barrier;
+      thread_params[idx].input_exe_name      = in->input_exe_name;
+      thread_params[idx].input_exe_data      = in->input_exe_data;
+      thread_params[idx].input_pdb_name      = in->input_pdb_name;
+      thread_params[idx].input_pdb_data      = in->input_pdb_data;
+      thread_params[idx].deterministic       = in->deterministic;
+    }
+    for EachIndex(idx, thread_count)
+    {
+      threads[idx] = os_thread_launch(p2r2_convert_thread_entry_point, &thread_params[idx], 0);
+    }
+    for EachIndex(idx, thread_count)
+    {
+      os_thread_join(threads[idx], max_U64);
+    }
+  }
+  barrier_release(barrier);
+  scratch_end(scratch);
+  return result;
 }
