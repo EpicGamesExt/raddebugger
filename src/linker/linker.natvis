@@ -32,6 +32,7 @@
     <AlternativeType Name="LNK_ChunkList"/>
     <AlternativeType Name="LNK_ExportParseList"/>
     <AlternativeType Name="LNK_InputImportList"/>
+    <AlternativeType Name="LNK_ObjList"/>
     <AlternativeType Name="CV_SymbolList"/>
     <DisplayString>{{count={count} first={first} }}</DisplayString>
     <Expand>
