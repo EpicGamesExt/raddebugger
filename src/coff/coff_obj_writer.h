@@ -118,6 +118,7 @@ internal COFF_ObjSymbol * coff_obj_writer_push_symbol_common(COFF_ObjWriter *obj
 internal void coff_obj_writer_set_default_symbol(COFF_ObjSymbol *weak_symbol, COFF_ObjSymbol *default_symbol);
 
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol, COFF_RelocType reloc_type);
+internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_addr32(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_addr(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
 internal COFF_ObjReloc * coff_obj_writer_section_push_reloc_voff(COFF_ObjWriter *obj_writer, COFF_ObjSection *sect, U32 apply_off, COFF_ObjSymbol *symbol);
 
