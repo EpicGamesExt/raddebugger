@@ -28,7 +28,7 @@ typedef struct LNK_CodeViewInput
   String8        *type_server_path_arr; // [type_server_count]
   String8        *type_server_data_arr; // [type_server_count]
   U64List        *ts_to_obj_arr;        // [type_server_count]
-  LNK_Obj        *obj_arr;              // [count]
+  LNK_Obj       **obj_arr;              // [count]
   LNK_PchInfo    *pch_arr;              // [count]
   CV_DebugS      *debug_s_arr;          // [count]
   CV_DebugT      *debug_p_arr;          // [count]
@@ -39,7 +39,7 @@ typedef struct LNK_CodeViewInput
   LNK_CodeViewSymbolsInput *symbol_inputs;  // [total_symbol_input_count]
   CV_SymbolListArray       *parsed_symbols; // [count]
 
-  LNK_Obj                  *internal_obj_arr;         // [internal_count]
+  LNK_Obj                 **internal_obj_arr;         // [internal_count]
   CV_DebugS                *internal_debug_s_arr;     // [internal_count]
   CV_DebugT                *internal_debug_t_arr;     // [internal_count]
   CV_DebugT                *internal_debug_p_arr;     // [internal_count]
@@ -47,7 +47,7 @@ typedef struct LNK_CodeViewInput
   LNK_CodeViewSymbolsInput *internal_symbol_inputs;   // [internal_total_symbol_input_count]
   CV_SymbolListArray       *internal_parsed_symbols;  // [internal_count]
 
-  LNK_Obj                   *external_obj_arr;           // [external_count]
+  LNK_Obj                  **external_obj_arr;           // [external_count]
   CV_DebugS                 *external_debug_s_arr;       // [external_count]
   CV_DebugT                 *external_debug_t_arr;       // [external_count]
   CV_DebugT                 *external_debug_p_arr;       // [external_count]
@@ -312,7 +312,7 @@ typedef struct
 
 typedef struct
 {
-  LNK_Obj                    *obj_arr;
+  LNK_Obj                   **obj_arr;
   PDB_DbiModule             **mod_arr;
   PDB_DbiSectionContribList  *sc_list;
   String8                     image_data;
@@ -436,7 +436,7 @@ typedef struct
 
 typedef struct
 {
-  LNK_Obj               *obj_arr;
+  LNK_Obj              **obj_arr;
   CV_DebugS             *debug_s_arr;
   U64                    total_src_file_count;
   LNK_SourceFileBucket **src_file_buckets;
@@ -453,7 +453,7 @@ typedef struct
 typedef struct
 {
   COFF_SectionHeaderArray   image_sects;
-  LNK_Obj                  *obj_arr;
+  LNK_Obj                 **obj_arr;
   CV_DebugS                *debug_s_arr;
   CV_DebugT                 ipi;
   LNK_CodeViewSymbolsInput *symbol_inputs;
@@ -496,7 +496,7 @@ typedef struct
 internal CV_DebugS *       lnk_parse_debug_s_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *sect_list_arr);
 internal CV_DebugT *       lnk_parse_debug_t_sections(TP_Context *tp, TP_Arena *arena, U64 obj_count, LNK_Obj **obj_arr, String8List *debug_t_list_arr);
 internal CV_SymbolList *   lnk_cv_symbol_list_arr_from_debug_s_arr(TP_Context *tp, TP_Arena *arena, U64 obj_count, CV_DebugS *debug_s_arr);
-internal LNK_PchInfo *     lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols);
+internal LNK_PchInfo *     lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols);
 
 internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_flags, String8List lib_dir_list, U64 objs_count, LNK_Obj **objs);
 
@@ -553,7 +553,7 @@ internal String8List lnk_build_rad_debug_info(TP_Context               *tp,
                                               String8                   image_name,
                                               String8                   image_data,
                                               U64                       obj_count,
-                                              LNK_Obj                  *obj_arr,
+                                              LNK_Obj                 **obj_arr,
                                               CV_DebugS                *debug_s_arr,
                                               U64                       total_symbol_input_count,
                                               LNK_CodeViewSymbolsInput *symbol_inputs,
@@ -575,7 +575,7 @@ internal String8List lnk_build_pdb(TP_Context               *tp,
                                    LNK_Config               *config,
                                    LNK_SymbolTable          *symtab,
                                    U64                       obj_count,
-                                   LNK_Obj                  *obj_arr,
+                                   LNK_Obj                 **obj_arr,
                                    CV_DebugS                *debug_s_arr,
                                    U64                       total_symbol_input_count,
                                    LNK_CodeViewSymbolsInput *symbol_inputs,

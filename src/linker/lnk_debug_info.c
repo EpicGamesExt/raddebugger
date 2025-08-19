@@ -140,7 +140,7 @@ THREAD_POOL_TASK_FUNC(lnk_parse_cv_symbols_task)
 }
 
 internal LNK_PchInfo *
-lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols)
+lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj **obj_arr, CV_DebugT *debug_t_arr, CV_DebugT *debug_p_arr, CV_SymbolListArray *parsed_symbols)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -155,16 +155,16 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_
 
     if (debug_t->count && debug_p->count) {
         lnk_error_obj(LNK_Warning_MultipleDebugTAndDebugP,
-                      &obj_arr[obj_idx],
+                      obj_arr[obj_idx],
                       "multiple sections with debug types detected, obj must have either .debug$T or .debug$P (using .debug$T for type server)");
       continue;
     }
 
     if (debug_p->count) {
-      String8 obj_path = obj_arr[obj_idx].path;      
+      String8 obj_path = obj_arr[obj_idx]->path;      
       obj_path = path_absolute_dst_from_relative_dst_src(scratch.arena, obj_path, work_dir);
       if (hash_table_search_path(debug_p_ht, obj_path)) {
-        lnk_error_obj(LNK_Warning_DuplicateObjPath, &obj_arr[obj_idx], "duplicate obj path %S", obj_path);
+        lnk_error_obj(LNK_Warning_DuplicateObjPath, obj_arr[obj_idx], "duplicate obj path %S", obj_path);
       } else {
         hash_table_push_path_u64(scratch.arena, debug_p_ht, obj_path, obj_idx);
       }
@@ -183,7 +183,7 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_
       // map obj name in LF_PRECOMP to obj index
       U64 debug_p_obj_idx;
       if (!hash_table_search_path_u64(debug_p_ht, obj_path, &debug_p_obj_idx)) {
-        lnk_error_obj(LNK_Error_PrecompObjNotFound, &obj_arr[obj_idx], "LF_PRECOMP references non-existent obj %S", obj_path);
+        lnk_error_obj(LNK_Error_PrecompObjNotFound, obj_arr[obj_idx], "LF_PRECOMP references non-existent obj %S", obj_path);
         lnk_exit(LNK_Error_PrecompObjNotFound);
       }
 
@@ -194,34 +194,34 @@ lnk_setup_pch(Arena *arena, U64 obj_count, LNK_Obj *obj_arr, CV_DebugT *debug_t_
 
       // error check LF_PRECOMP
       if (precomp.start_index > CV_MinComplexTypeIndex) {
-        lnk_error_obj(LNK_Warning_AtypicalStartIndex, &obj_arr[obj_idx], "atypical start index 0x%X in LF_PRECOMP", precomp.start_index);
+        lnk_error_obj(LNK_Warning_AtypicalStartIndex, obj_arr[obj_idx], "atypical start index 0x%X in LF_PRECOMP", precomp.start_index);
       }
       if (precomp.start_index < CV_MinComplexTypeIndex) {
-        lnk_error_obj(LNK_Error_InvalidStartIndex, &obj_arr[obj_idx], "invalid start index 0x%X in LF_PRECOMP; must be >= 0x%X", precomp.start_index, CV_MinComplexTypeIndex);
+        lnk_error_obj(LNK_Error_InvalidStartIndex, obj_arr[obj_idx], "invalid start index 0x%X in LF_PRECOMP; must be >= 0x%X", precomp.start_index, CV_MinComplexTypeIndex);
       }
       if (precomp.leaf_count > debug_p.count) {
-        lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, &obj_arr[obj_idx], "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p.count, obj_arr[debug_p_obj_idx].path);
+        lnk_error_obj(LNK_Error_InvalidPrecompLeafCount, obj_arr[obj_idx], "leaf count %u LF_PRECOMP exceeds leaf count %u in .debug$P in %S", precomp.leaf_count, debug_p.count, obj_arr[debug_p_obj_idx]->path);
       }
 
       // error check LF_ENDPRECOMP
       if (endprecomp_leaf.kind != CV_LeafKind_ENDPRECOMP) {
-        lnk_error_obj(LNK_Error_EndprecompNotFound, &obj_arr[obj_idx], "unable to find LF_ENDPRECOMP @ 0x%X in %S", precomp.leaf_count, obj_arr[debug_p_obj_idx].path);
+        lnk_error_obj(LNK_Error_EndprecompNotFound, obj_arr[obj_idx], "unable to find LF_ENDPRECOMP @ 0x%X in %S", precomp.leaf_count, obj_arr[debug_p_obj_idx]->path);
       }
       if (endprecomp_leaf.data.size != sizeof(CV_LeafEndPreComp)) {
-        lnk_error_obj(LNK_Error_IllData, &obj_arr[obj_idx], "invalid size 0x%X for LF_ENDPRECOMP", endprecomp_leaf.data.size);
+        lnk_error_obj(LNK_Error_IllData, obj_arr[obj_idx], "invalid size 0x%X for LF_ENDPRECOMP", endprecomp_leaf.data.size);
       }
       if (endprecomp->sig != precomp.sig) {
-        lnk_error_obj(LNK_Error_PrecompSigMismatch, &obj_arr[obj_idx], "signature mismatch between LF_PRECOMP(0x%X) and LF_ENDPRECOMP(0x%X); precomp obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx].path);
+        lnk_error_obj(LNK_Error_PrecompSigMismatch, obj_arr[obj_idx], "signature mismatch between LF_PRECOMP(0x%X) and LF_ENDPRECOMP(0x%X); precomp obj %S", precomp.sig, endprecomp->sig, obj_arr[debug_p_obj_idx]->path);
       }
       { // check against S_OBJNAME sig in precompiled obj $$SYMBOLS
         CV_SymbolList symbol_list = parsed_symbols[debug_p_obj_idx].v[0];
         if (symbol_list.count) {
           CV_ObjInfo obj_info = cv_obj_info_from_symbol(symbol_list.first->data);
           if (obj_info.sig != 0 && obj_info.sig != precomp.sig) {
-            lnk_error_obj(LNK_Error_PrecompSigMismatch, &obj_arr[obj_idx], "signature mismatch between LF_PRECOMP(0x%X) and S_OBJNAME(0x%X) in %S", precomp.sig, obj_info.sig, &obj_arr[debug_p_obj_idx].path);
+            lnk_error_obj(LNK_Error_PrecompSigMismatch, obj_arr[obj_idx], "signature mismatch between LF_PRECOMP(0x%X) and S_OBJNAME(0x%X) in %S", precomp.sig, obj_info.sig, obj_arr[debug_p_obj_idx]->path);
           }
         } else {
-          lnk_error_obj(LNK_Warning_PrecompObjSymbolsNotFound, &obj_arr[obj_idx], "symbols not found, unable to chceck LF_PRECOMP signature against S_OBJ");
+          lnk_error_obj(LNK_Warning_PrecompObjSymbolsNotFound, obj_arr[obj_idx], "symbols not found, unable to chceck LF_PRECOMP signature against S_OBJ");
         }
       }
 
@@ -406,7 +406,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   ProfBegin("Sort Type Servers");
 
   U64 external_count = 0, internal_count = 0;
-  LNK_Obj   *sorted_obj_arr     = push_array_no_zero(tp_arena->v[0], LNK_Obj, obj_count);
+  LNK_Obj   **sorted_obj_arr    = push_array_no_zero(tp_arena->v[0], LNK_Obj *, obj_count);
   CV_DebugS *sorted_debug_s_arr = push_array_no_zero(tp_arena->v[0], CV_DebugS, obj_count);
   CV_DebugT *sorted_debug_t_arr = push_array_no_zero(tp_arena->v[0], CV_DebugT, obj_count);
   CV_DebugT *sorted_debug_p_arr = push_array_no_zero(tp_arena->v[0], CV_DebugT, obj_count);
@@ -420,7 +420,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       // TODO: report error: somehow obj was compiled with /Zi and /Yc
       Assert(debug_p_arr[obj_idx].count == 0);
       
-      sorted_obj_arr[slot_idx]     = *obj_arr[obj_idx];
+      sorted_obj_arr[slot_idx]     = obj_arr[obj_idx];
       sorted_debug_s_arr[slot_idx] = debug_s_arr[obj_idx];
       sorted_debug_t_arr[slot_idx] = debug_t_arr[obj_idx];
       MemoryZeroStruct(&sorted_debug_p_arr[slot_idx]);
@@ -429,7 +429,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
       U64 slot_idx = internal_count;
       ++internal_count;
       
-      sorted_obj_arr[slot_idx]     = *obj_arr[obj_idx];
+      sorted_obj_arr[slot_idx]     = obj_arr[obj_idx];
       sorted_debug_s_arr[slot_idx] = debug_s_arr[obj_idx];
       sorted_debug_t_arr[slot_idx] = debug_t_arr[obj_idx];
       sorted_debug_p_arr[slot_idx] = debug_p_arr[obj_idx];
@@ -439,8 +439,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   ProfEnd();
   
   // setup pointers to arrays
-  LNK_Obj   *internal_obj_arr     = sorted_obj_arr;
-  LNK_Obj   *external_obj_arr     = sorted_obj_arr + internal_count;
+  LNK_Obj   **internal_obj_arr     = sorted_obj_arr;
+  LNK_Obj   **external_obj_arr     = sorted_obj_arr + internal_count;
   CV_DebugS *internal_debug_s_arr = sorted_debug_s_arr;
   CV_DebugS *external_debug_s_arr = sorted_debug_s_arr + internal_count;
   CV_DebugT *internal_debug_t_arr = sorted_debug_t_arr;
@@ -726,7 +726,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
           str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t%S\n", ts_path_arr.v[ts_idx]);
           str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\tDependent obj(s):\n");
           for (U64Node *obj_idx_node = obj_idx_list.first; obj_idx_node != 0; obj_idx_node = obj_idx_node->next) {
-            String8 obj_path = external_obj_arr[obj_idx_node->data].path;
+            String8 obj_path = external_obj_arr[obj_idx_node->data]->path;
             str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\t\t%S\n", obj_path);
           }
         }
@@ -754,7 +754,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_IO_Flags io_fla
   cv.type_server_count                 = ts_path_arr.count;
   cv.type_server_path_arr              = ts_path_arr.v;
   cv.ts_to_obj_arr                     = ts_to_obj_arr;
-  cv.obj_arr                           = sorted_obj_arr;
+  cv.obj_arr                           = obj_arr;
   cv.pch_arr                           = pch_arr;
   cv.debug_s_arr                       = sorted_debug_s_arr;
   cv.debug_p_arr                       = sorted_debug_p_arr;
@@ -1209,7 +1209,7 @@ lnk_hash_cv_leaf(Arena               *arena,
         String8 leaf_kind_str = cv_string_from_leaf_kind(leaf.kind);
         String8 leaf_info     = push_str8f(scratch.arena, "LF_%S(type_index: 0x%x) forward refs member type index 0x%x (leaf struct offset: 0x%llx)", leaf_kind_str, curr_ti, sub_ti, ti_n->offset);
         if (loc_type == LNK_LeafLocType_Internal) {
-          lnk_error_obj(LNK_Error_InvalidTypeIndex, input->internal_obj_arr+loc_idx, "%S", leaf_info);
+          lnk_error_obj(LNK_Error_InvalidTypeIndex, input->internal_obj_arr[loc_idx], "%S", leaf_info);
         } else if (loc_type == LNK_LeafLocType_External) {
           lnk_error(LNK_Error_InvalidTypeIndex, "%S: %S", input->type_server_path_arr[loc_idx], leaf_info);
         } else {
@@ -2944,7 +2944,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   U64                             obj_idx = task_id;
   LNK_PushDbiSecContribTaskData  *task    = raw_task;
   PDB_DbiModule                  *mod     = task->mod_arr[obj_idx];
-  LNK_Obj                        *obj     = &task->obj_arr[obj_idx];
+  LNK_Obj                        *obj     = task->obj_arr[obj_idx];
 
   COFF_SectionHeader        *obj_section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
   PDB_DbiSectionContribNode *sc_arr            = push_array_no_zero(arena, PDB_DbiSectionContribNode, obj->header.section_count_no_null);
@@ -3094,7 +3094,7 @@ lnk_build_pdb(TP_Context               *tp,
               LNK_Config               *config,
               LNK_SymbolTable          *symtab,
               U64                       obj_count,
-              LNK_Obj                  *obj_arr,
+              LNK_Obj                 **obj_arr,
               CV_DebugS                *debug_s_arr,
               U64                       total_symbol_input_count,
               LNK_CodeViewSymbolsInput *symbol_inputs,
@@ -3132,7 +3132,7 @@ lnk_build_pdb(TP_Context               *tp,
   ProfBegin("Reserve DBI Modules");
   PDB_DbiModule **mod_arr = push_array(tp_arena->v[0], PDB_DbiModule *, obj_count);
   for (U64 obj_idx = 0; obj_idx < obj_count; ++obj_idx) {
-    LNK_Obj *obj = obj_arr + obj_idx;
+    LNK_Obj *obj = obj_arr[obj_idx];
     mod_arr[obj_idx] = dbi_push_module(pdb->dbi, obj->path, lnk_obj_get_lib_path(obj));
 
     // we don't support symbol append
@@ -4306,10 +4306,10 @@ THREAD_POOL_TASK_FUNC(lnk_insert_src_files_task)
   String8List                      raw_strtab_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
 
   if (raw_strtab_list.node_count > 1) {
-    lnk_error_obj(LNK_Warning_IllData, &task->obj_arr[obj_idx], "Multiple string table sub-sections, picking first one.");
+    lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], "Multiple string table sub-sections, picking first one.");
   }
   if (raw_chksms_list.node_count > 1) {
-    lnk_error_obj(LNK_Warning_IllData, &task->obj_arr[obj_idx], "Multiple file checksum sub-sections, picking first one.");
+    lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], "Multiple file checksum sub-sections, picking first one.");
   }
 
   String8               string_table = cv_string_table_from_debug_s(debug_s);
@@ -4490,7 +4490,7 @@ THREAD_POOL_TASK_FUNC(lnk_find_obj_compiler_info_task)
   }
   exit:;
 
-  LNK_Obj *obj = &task->obj_arr[task_id];
+  LNK_Obj *obj = task->obj_arr[task_id];
 
   // fill out unit info
   U64 unit_chunk_idx = task_id / task->unit_chunk_cap;
@@ -4517,7 +4517,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_line_tables_to_rdi_task)
 
   U64                       unit_idx = task_id;
   LNK_ConvertUnitToRDITask *task     = raw_task;
-  LNK_Obj                  *obj      = &task->obj_arr[unit_idx];
+  LNK_Obj                  *obj      = task->obj_arr[unit_idx];
   CV_DebugS                 debug_s  = task->debug_s_arr[unit_idx];
 
   U64        unit_chunk_idx = unit_idx / task->unit_chunk_cap;
@@ -4614,7 +4614,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
 
   LNK_ConvertUnitToRDITask *task                = raw_task;
   LNK_CodeViewSymbolsInput  symbols_input       = task->symbol_inputs[task_id];
-  LNK_Obj                  *obj                 = &task->obj_arr[symbols_input.obj_idx];
+  LNK_Obj                  *obj                 = task->obj_arr[symbols_input.obj_idx];
   LNK_CodeViewCompilerInfo  comp_info           = task->comp_info_arr[symbols_input.obj_idx];
   CV_InlineeLinesAccel     *inlinee_lines_accel = task->inlinee_lines_accel_arr[symbols_input.obj_idx];
 
@@ -5243,8 +5243,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_inline_site_line_tables_task)
       // prase checksum header
       CV_C13Checksum *checksum_header = (CV_C13Checksum *) (raw_file_chksms.str + lines.file_off);
       if (lines.file_off + sizeof(CV_C13Checksum) + checksum_header->len > raw_file_chksms.size) {
-        LNK_Obj *obj = task->obj_arr + obj_idx;
-        lnk_error_obj(LNK_Warning_IllData, obj, "Not enough bytes to read file checksum @ 0x%llx.", lines.file_off);
+        lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], "Not enough bytes to read file checksum @ 0x%llx.", lines.file_off);
         continue;
       }
       String8 file_path      = str8_cstring_capped(raw_string_table.str + checksum_header->name_off, raw_string_table.str + raw_string_table.size);
@@ -5255,8 +5254,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_inline_site_line_tables_task)
       U64                   src_file_hash   = lnk_src_file_hash_cv(normal_path, checksum_header->kind, checksum_bytes);
       LNK_SourceFileBucket *src_file_bucket = lnk_src_file_hash_table_lookup_slot(task->src_file_buckets, task->src_file_buckets_cap, src_file_hash, normal_path, checksum_header->kind, checksum_bytes);
       if (src_file_bucket == 0) {
-        LNK_Obj *obj = task->obj_arr + obj_idx;
-        lnk_error_obj(LNK_Error_UnexpectedCodePath, obj, "Unable to find source file in the hash table: \"%S\".", file_path);
+        lnk_error_obj(LNK_Error_UnexpectedCodePath, task->obj_arr[obj_idx], "Unable to find source file in the hash table: \"%S\".", file_path);
         continue;
       }
       RDIB_SourceFile *src_file = src_file_bucket->src_file;
@@ -5290,7 +5288,7 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_virtual_ranges_task)
   LNK_ConvertUnitToRDITask *task = raw_task;
 
   U64      unit_idx = task_id;
-  LNK_Obj *obj      = &task->obj_arr[unit_idx];
+  LNK_Obj *obj      = task->obj_arr[unit_idx];
 
   U64 unit_chunk_idx = unit_idx / task->unit_chunk_cap;
   U64 local_unit_idx = unit_idx - unit_chunk_idx * task->unit_chunk_cap;
@@ -5329,7 +5327,7 @@ lnk_build_rad_debug_info(TP_Context               *tp,
                          String8                   image_name,
                          String8                   image_data,
                          U64                       obj_count,
-                         LNK_Obj                  *obj_arr,
+                         LNK_Obj                 **obj_arr,
                          CV_DebugS                *debug_s_arr,
                          U64                       total_symbol_input_count,
                          LNK_CodeViewSymbolsInput *symbol_inputs,
