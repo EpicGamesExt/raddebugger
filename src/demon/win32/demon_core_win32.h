@@ -61,6 +61,82 @@
 #define DMN_W32_EXCEPTION_RADDBG_SET_VADDR_RANGE_NOTE    0x00524156u
 
 ////////////////////////////////
+//~ rjf: Win32 Exception ExceptionInformation Codes
+//
+// used as a subcode, apparently in all cases, for DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN.
+// need to somehow pipe this through & interpret it correctly in outer layers... @fastfail
+
+#define DMN_W32_FAST_FAIL_LEGACY_GS_VIOLATION               0
+#define DMN_W32_FAST_FAIL_VTGUARD_CHECK_FAILURE             1
+#define DMN_W32_FAST_FAIL_STACK_COOKIE_CHECK_FAILURE        2
+#define DMN_W32_FAST_FAIL_CORRUPT_LIST_ENTRY                3
+#define DMN_W32_FAST_FAIL_INCORRECT_STACK                   4
+#define DMN_W32_FAST_FAIL_INVALID_ARG                       5
+#define DMN_W32_FAST_FAIL_GS_COOKIE_INIT                    6
+#define DMN_W32_FAST_FAIL_FATAL_APP_EXIT                    7
+#define DMN_W32_FAST_FAIL_RANGE_CHECK_FAILURE               8
+#define DMN_W32_FAST_FAIL_UNSAFE_REGISTRY_ACCESS            9
+#define DMN_W32_FAST_FAIL_GUARD_ICALL_CHECK_FAILURE         10
+#define DMN_W32_FAST_FAIL_GUARD_WRITE_CHECK_FAILURE         11
+#define DMN_W32_FAST_FAIL_INVALID_FIBER_SWITCH              12
+#define DMN_W32_FAST_FAIL_INVALID_SET_OF_CONTEXT            13
+#define DMN_W32_FAST_FAIL_INVALID_REFERENCE_COUNT           14
+#define DMN_W32_FAST_FAIL_INVALID_JUMP_BUFFER               18
+#define DMN_W32_FAST_FAIL_MRDATA_MODIFIED                   19
+#define DMN_W32_FAST_FAIL_CERTIFICATION_FAILURE             20
+#define DMN_W32_FAST_FAIL_INVALID_EXCEPTION_CHAIN           21
+#define DMN_W32_FAST_FAIL_CRYPTO_LIBRARY                    22
+#define DMN_W32_FAST_FAIL_INVALID_CALL_IN_DLL_CALLOUT       23
+#define DMN_W32_FAST_FAIL_INVALID_IMAGE_BASE                24
+#define DMN_W32_FAST_FAIL_DLOAD_PROTECTION_FAILURE          25
+#define DMN_W32_FAST_FAIL_UNSAFE_EXTENSION_CALL             26
+#define DMN_W32_FAST_FAIL_DEPRECATED_SERVICE_INVOKED        27
+#define DMN_W32_FAST_FAIL_INVALID_BUFFER_ACCESS             28
+#define DMN_W32_FAST_FAIL_INVALID_BALANCED_TREE             29
+#define DMN_W32_FAST_FAIL_INVALID_NEXT_THREAD               30
+#define DMN_W32_FAST_FAIL_GUARD_ICALL_CHECK_SUPPRESSED      31         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_APCS_DISABLED                     32
+#define DMN_W32_FAST_FAIL_INVALID_IDLE_STATE                33
+#define DMN_W32_FAST_FAIL_MRDATA_PROTECTION_FAILURE         34
+#define DMN_W32_FAST_FAIL_UNEXPECTED_HEAP_EXCEPTION         35
+#define DMN_W32_FAST_FAIL_INVALID_LOCK_STATE                36
+#define DMN_W32_FAST_FAIL_GUARD_JUMPTABLE                   37         // Known to compiler, must retain value 37
+#define DMN_W32_FAST_FAIL_INVALID_LONGJUMP_TARGET           38
+#define DMN_W32_FAST_FAIL_INVALID_DISPATCH_CONTEXT          39
+#define DMN_W32_FAST_FAIL_INVALID_THREAD                    40
+#define DMN_W32_FAST_FAIL_INVALID_SYSCALL_NUMBER            41         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_INVALID_FILE_OPERATION            42         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_LPAC_ACCESS_DENIED                43         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_GUARD_SS_FAILURE                  44
+#define DMN_W32_FAST_FAIL_LOADER_CONTINUITY_FAILURE         45         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_GUARD_EXPORT_SUPPRESSION_FAILURE  46
+#define DMN_W32_FAST_FAIL_INVALID_CONTROL_STACK             47
+#define DMN_W32_FAST_FAIL_SET_CONTEXT_DENIED                48
+#define DMN_W32_FAST_FAIL_INVALID_IAT                       49
+#define DMN_W32_FAST_FAIL_HEAP_METADATA_CORRUPTION          50
+#define DMN_W32_FAST_FAIL_PAYLOAD_RESTRICTION_VIOLATION     51
+#define DMN_W32_FAST_FAIL_LOW_LABEL_ACCESS_DENIED           52         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_ENCLAVE_CALL_FAILURE              53
+#define DMN_W32_FAST_FAIL_UNHANDLED_LSS_EXCEPTON            54
+#define DMN_W32_FAST_FAIL_ADMINLESS_ACCESS_DENIED           55         // Telemetry, nonfatal
+#define DMN_W32_FAST_FAIL_UNEXPECTED_CALL                   56
+#define DMN_W32_FAST_FAIL_CONTROL_INVALID_RETURN_ADDRESS    57
+#define DMN_W32_FAST_FAIL_UNEXPECTED_HOST_BEHAVIOR          58
+#define DMN_W32_FAST_FAIL_FLAGS_CORRUPTION                  59
+#define DMN_W32_FAST_FAIL_VEH_CORRUPTION                    60
+#define DMN_W32_FAST_FAIL_ETW_CORRUPTION                    61
+#define DMN_W32_FAST_FAIL_RIO_ABORT                         62
+#define DMN_W32_FAST_FAIL_INVALID_PFN                       63
+#define DMN_W32_FAST_FAIL_GUARD_ICALL_CHECK_FAILURE_XFG     64
+#define DMN_W32_FAST_FAIL_CAST_GUARD                        65         // Known to compiler, must retain value 65
+#define DMN_W32_FAST_FAIL_HOST_VISIBILITY_CHANGE            66
+#define DMN_W32_FAST_FAIL_KERNEL_CET_SHADOW_STACK_ASSIST    67
+#define DMN_W32_FAST_FAIL_PATCH_CALLBACK_FAILED             68
+#define DMN_W32_FAST_FAIL_NTDLL_PATCH_FAILED                69
+#define DMN_W32_FAST_FAIL_INVALID_FLS_DATA                  70
+#define DMN_W32_FAST_FAIL_INVALID_FAST_FAIL_CODE            0xFFFFFFFF
+
+////////////////////////////////
 //~ rjf: Win32 Register Codes
 
 #define DMN_W32_CTX_X86       0x00010000

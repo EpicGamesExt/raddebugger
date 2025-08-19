@@ -86,7 +86,7 @@ internal void
 tctx_lane_barrier_wait(void)
 {
   ProfBeginFunction();
-  ProfColor(0xff0000ff);
+  ProfColor(0x00000ff);
   TCTX *tctx = tctx_selected();
   os_barrier_wait(tctx->lane_ctx.barrier);
   ProfEnd();

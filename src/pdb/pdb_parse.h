@@ -185,6 +185,11 @@ typedef struct PDB_GsiParsed
 } PDB_GsiParsed;
 
 ////////////////////////////////
+//~ rjf: Globals
+
+read_only global PDB_CompUnit pdb_comp_unit_nil = {0};
+
+////////////////////////////////
 //~ PDB Parser Functions
 
 internal PDB_Info*            pdb_info_from_data(Arena *arena, String8 pdb_info_data);

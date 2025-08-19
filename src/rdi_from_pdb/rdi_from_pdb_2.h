@@ -16,25 +16,35 @@ struct P2R2_ConvertThreadParams
   B32 deterministic;
 };
 
-typedef struct P2R2_UnitSymBlock P2R2_UnitSymBlock;
-struct P2R2_UnitSymBlock
+typedef struct P2R2_SymBlock P2R2_SymBlock;
+struct P2R2_SymBlock
 {
-  P2R2_UnitSymBlock *next;
-  U64 unit_idx;
-  Rng1U64 unit_rec_range;
+  P2R2_SymBlock *next;
+  PDB_CompUnit *unit;
+  CV_SymParsed *sym;
+  CV_C13Parsed *c13;
+  Rng1U64 sym_rec_range;
 };
 
-typedef struct P2R2_UnitSymBlockList P2R2_UnitSymBlockList;
-struct P2R2_UnitSymBlockList
+typedef struct P2R2_SymBlockList P2R2_SymBlockList;
+struct P2R2_SymBlockList
 {
-  P2R2_UnitSymBlock *first;
-  P2R2_UnitSymBlock *last;
+  P2R2_SymBlock *first;
+  P2R2_SymBlock *last;
+};
+
+typedef struct P2R2_UnitSubStartPtInfo P2R2_UnitSubStartPtInfo;
+struct P2R2_UnitSubStartPtInfo
+{
+  CV_SymFrameproc last_frameproc;
+  U64 last_proc_voff;
 };
 
 typedef struct P2R2_Shared P2R2_Shared;
 struct P2R2_Shared
 {
   MSF_RawStreamTable *msf_raw_stream_table;
+  U64 msf_stream_lane_counter;
   MSF_Parsed *msf;
   
   PDB_Info *pdb_info;
@@ -55,19 +65,25 @@ struct P2R2_Shared
   CV_LeafParsed *tpi_leaf;
   PDB_TpiHashParsed *ipi_hash;
   CV_LeafParsed *ipi_leaf;
-  CV_SymParsed *sym;
   PDB_CompUnitArray *comp_units;
   PDB_CompUnitContributionArray *comp_unit_contributions;
   RDIM_Rng1U64ChunkList *unit_ranges;
   
-  CV_SymParsed **sym_for_unit;
-  CV_C13Parsed **c13_for_unit;
+  U64 sym_c13_unit_lane_counter;
+  U64 all_syms_count;
+  CV_SymParsed **all_syms; // [0] -> global; rest are unit nums
+  CV_C13Parsed **all_c13s; // [0] -> blank (global); rest are unit nums
   
   U64 exe_voff_max;
   RDI_Arch arch;
+  U64 symbol_count_prediction;
+  
+  P2R_LinkNameMap link_name_map;
   
   U64 total_sym_record_count;
-  P2R2_UnitSymBlockList *lane_sym_blocks;
+  P2R2_SymBlockList *lane_sym_blocks;
+  
+  P2R2_UnitSubStartPtInfo *lane_unit_sub_start_pt_infos;
   
   String8Array *lane_file_paths;
   U64Array *lane_file_paths_hashes;
@@ -78,8 +94,8 @@ struct P2R2_Shared
   P2R_SrcFileMap src_file_map;
   
   RDIM_UnitChunkList all_units;
-  RDIM_LineTable **units_first_inline_site_line_tables;
   RDIM_LineTableChunkList *lanes_line_tables;
+  RDIM_LineTable **lanes_first_inline_site_line_tables;
   
   RDIM_LineTableChunkList all_line_tables;
   
@@ -91,9 +107,11 @@ struct P2R2_Shared
   
   RDIM_Type **itype_type_ptrs;
   RDIM_Type **basic_type_ptrs;
-  RDIM_TypeChunkList all_types;
+  RDIM_TypeChunkList all_types__pre_typedefs;
   
   RDIM_UDTChunkList *lanes_udts;
+  
+  RDIM_UDTChunkList all_udts;
   
   RDIM_SymbolChunkList *lanes_procedures;
   RDIM_SymbolChunkList *lanes_global_variables;
@@ -109,6 +127,7 @@ struct P2R2_Shared
   RDIM_SymbolChunkList all_constants;
   RDIM_ScopeChunkList all_scopes;
   RDIM_InlineSiteChunkList all_inline_sites;
+  RDIM_TypeChunkList all_types;
 };
 
 global P2R2_Shared *p2r2_shared = 0;

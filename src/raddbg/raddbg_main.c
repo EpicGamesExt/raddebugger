@@ -5,6 +5,8 @@
 //~ rjf: post-0.9.20 TODO notes
 //
 //- urgent fixes
+// [ ] (use msvc assert as an example) show fastfail exception info (code, name, etc.) - comes from ExceptionInformation @fastfail
+// [ ] stepping w/ spoofs & shadow stack enabled - writing spoof will send a stack buffer overrun event @shadow_stack_step
 // [ ] hardware breakpoints regression (global eval in ctrl)
 // [ ] native filesystem dialog, resizing raddbg window -> crash!
 //

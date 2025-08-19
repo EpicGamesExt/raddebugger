@@ -2404,6 +2404,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN:
                   {
                     e->kind = DMN_EventKind_Trap;
+                    if(exception->ExceptionInformation[0] == DMN_W32_FAST_FAIL_CONTROL_INVALID_RETURN_ADDRESS)
+                    {
+                      // TODO(rjf): this is a shadow stack violation - this can imply that the spoof was hit.
+                      // need to handle this correctly in the ctrl layer when stepping w/ a spoof set.
+                      //
+                      // @shadow_stack_step
+                    }
                   }break;
                   
                   //- rjf: fill single-step event info
