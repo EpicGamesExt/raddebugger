@@ -63,9 +63,9 @@ tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
   B32 is_shared = (name.size > 0);
 
   // alloc semaphores
-  OS_Handle main_semaphore = {0};
-  OS_Handle task_semaphore = {0};
-  OS_Handle exec_semaphore = {0};
+  Semaphore main_semaphore = {0};
+  Semaphore task_semaphore = {0};
+  Semaphore exec_semaphore = {0};
   if (worker_count > 1) {
     main_semaphore = os_semaphore_alloc(0, 1, str8_zero());
     if (is_shared) {
@@ -111,7 +111,7 @@ tp_release(TP_Context *pool)
 {
   pool->is_live = 0;
 
-  B32 is_shared = !os_handle_match(pool->exec_semaphore, os_handle_zero());
+  B32 is_shared = pool->exec_semaphore.u64[0] != 0;
   if (is_shared) {
     for (U64 i = 0; i < pool->worker_count; ++i) {
       os_semaphore_drop(pool->exec_semaphore);
@@ -209,7 +209,7 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
     U64 drop_count = Min(task_count, pool->worker_count);
 
     // if we are in shared mode ping local semaphore
-    if (!os_handle_match(pool->exec_semaphore, os_handle_zero())) {
+    if (pool->exec_semaphore.u64[0] != 0) {
       for (U64 worker_idx = 0; worker_idx < drop_count; worker_idx +=1) {
         os_semaphore_drop(pool->exec_semaphore);
       }

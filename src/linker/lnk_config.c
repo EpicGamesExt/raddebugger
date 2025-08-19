@@ -333,15 +333,20 @@ internal String8
 lnk_error_check_and_strip_quotes(LNK_ErrorCode error_code, LNK_Obj *obj, LNK_CmdSwitchType cmd_switch, String8 string)
 {
   String8 result = string;
-  B32 starts_with_quote = str8_match_lit("\"", string, StringMatchFlag_RightSideSloppy);
-  if (starts_with_quote) {
-    if (str8_ends_with_lit(string, "\"", 0)) {
-      result = str8_skip(result, 1);
-      result = str8_chop(result, 1);
-    } else {
-      lnk_error_cmd_switch(error_code, obj, cmd_switch, "detected unmatched \" in \"%S\"", string);
-    }
+
+  B32 starts_with_quote = str8_match(str8_substr(string, rng_1u64(0,1)), str8_lit("\""), 0);
+  B32 ends_with_quote   = 0;
+  if (string.size > 2) {
+    ends_with_quote = str8_match(str8_substr(string, rng_1u64(string.size-1,string.size)), str8_lit("\""), 0);
   }
+
+  if (starts_with_quote && ends_with_quote) {
+    result = str8_skip(result, 1);
+    result = str8_chop(result, 1);
+  } else if (starts_with_quote && !ends_with_quote) {
+    lnk_error_cmd_switch(error_code, obj, cmd_switch, "detected unmatched \" in \"%S\"", string);
+  }
+
   return result;
 }
 

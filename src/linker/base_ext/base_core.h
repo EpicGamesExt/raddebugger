@@ -110,10 +110,6 @@
 
 ////////////////////////////////
 
-#define MemoryIsZeroStruct(p) memory_is_zero(p, sizeof(*p))
-
-////////////////////////////////
-
 typedef struct
 {
   U64 major;

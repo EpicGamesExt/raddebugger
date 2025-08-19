@@ -28,9 +28,9 @@ typedef struct TP_Worker
 typedef struct TP_Context
 {
   B32          is_live;
-  OS_Handle    exec_semaphore;
-  OS_Handle    task_semaphore;
-  OS_Handle    main_semaphore;
+  Semaphore    exec_semaphore;
+  Semaphore    task_semaphore;
+  Semaphore    main_semaphore;
 
   U32          worker_count;
   TP_Worker   *worker_arr;

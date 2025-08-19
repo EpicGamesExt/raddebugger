@@ -4201,7 +4201,7 @@ lnk_src_file_hash_table_lookup_slot(LNK_SourceFileBucket **buckets,
     if (buckets[bucket_idx] == 0) {
       break;
     }
-    if (rdib_source_file_match(buckets[bucket_idx]->src_file, &temp, operating_system_from_context())) {
+    if (rdib_source_file_match(buckets[bucket_idx]->src_file, &temp, OperatingSystem_CURRENT)) {
       return buckets[bucket_idx];
     }
     bucket_idx = (bucket_idx + 1) % cap;
@@ -4233,7 +4233,7 @@ lnk_src_file_insert_or_update(LNK_SourceFileBucket **buckets, U64 cap, U64 hash,
 
       // another thread took the bucket...
       goto retry;
-    } else if (rdib_source_file_match(curr_bucket->src_file, new_bucket->src_file, operating_system_from_context())) {
+    } else if (rdib_source_file_match(curr_bucket->src_file, new_bucket->src_file, OperatingSystem_CURRENT)) {
       // do we need to update value in the bucket?
       int cmp = u64_compar(&curr_bucket->obj_idx, &new_bucket->obj_idx);
       if (cmp <= 0) {
