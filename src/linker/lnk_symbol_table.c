@@ -150,18 +150,16 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
       LNK_Symbol *weak, *undef;
       COFF_ParsedSymbol weak_parsed;
       if (dst_interp == COFF_SymbolValueInterp_Weak) {
-        weak        = dst;
-        undef       = src;
+        weak = dst, undef = src;
         weak_parsed = dst_parsed;
       } else {
-        weak        = src;
-        undef       = dst;
+        weak = src, undef = dst;
         weak_parsed = src_parsed;
       }
 
       COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->u.defined.obj->header.is_big_obj);
       if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
-        can_replace = lnk_symbol_defined_is_before(weak, undef);
+        can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
       } else if (weak_ext->characteristics == COFF_WeakExt_NoLibrary) {
         can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
       } else if (weak_ext->characteristics == COFF_WeakExt_SearchAlias) {
@@ -218,22 +216,22 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
     }
     // weak vs weak
     else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
-      COFF_ParsedSymbol dst_parsed = lnk_parsed_symbol_from_defined(dst);
-      COFF_ParsedSymbol src_parsed = lnk_parsed_symbol_from_defined(src);
       COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst->u.defined.obj->header.is_big_obj);
       COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src->u.defined.obj->header.is_big_obj);
-      if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
-        // TODO: test
-        lnk_error_multiply_defined_symbol(dst, src);
-      } else if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias) {
-        // TODO: test
-        can_replace = 0;
+      if ((dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias)) {
+        if (lnk_symbol_defined_is_before(dst, src) || src_ext->characteristics == COFF_WeakExt_AntiDependency) {
+          can_replace = 0;
+        } else {
+          lnk_error_multiply_defined_symbol(dst, src);
+        }
       } else if (dst_ext->characteristics != COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
-        // TODO: test
-        can_replace = 1;
-      } else if (dst_ext->characteristics == COFF_WeakExt_NoLibrary && src_ext->characteristics == COFF_WeakExt_AntiDependency) {
-        can_replace = 1;
-        can_replace = lnk_symbol_defined_is_before(src, dst);
+        if (lnk_symbol_defined_is_before(src, dst) || dst_ext->characteristics == COFF_WeakExt_AntiDependency) {
+          can_replace = 1;
+        } else {
+          lnk_error_multiply_defined_symbol(dst, src);
+        }
+      } else if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
+        lnk_error_multiply_defined_symbol(dst, src);
       } else {
         can_replace = lnk_symbol_defined_is_before(src, dst);
       }
