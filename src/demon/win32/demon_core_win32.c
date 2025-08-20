@@ -690,7 +690,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       
       //- rjf: unpack info about available features
       U32 feature_mask = GetEnabledXStateFeatures();
-      B32 xstate_enabled = (feature_mask & (XSTATE_MASK_AVX | XSTATE_MASK_AVX512)) != 0;
+      B32 xstate_enabled = (feature_mask & (XSTATE_MASK_AVX | XSTATE_MASK_AVX512 | XSTATE_MASK_CET_U)) != 0;
       
       //- rjf: set up context
       CONTEXT *ctx = 0;
@@ -709,7 +709,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       //- rjf: unpack features available on this context
       if (xstate_enabled)
       {
-        SetXStateFeaturesMask(ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
+        SetXStateFeaturesMask(ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512 | XSTATE_MASK_CET_U);
       }
       
       //- rjf: get thread context
@@ -864,6 +864,18 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
         for(U32 n = 0; n < 16; n += 1, zmm_d += 1)
         {
           MemoryZero(zmm_d, sizeof(*zmm_d));
+        }
+      }
+
+      // CET / Shadow Stack
+      if(xstate_mask & XSTATE_MASK_CET_U)
+      {
+        DWORD cet_length = 0;
+        XSAVE_CET_U_FORMAT *cet = LocateXStateFeature(ctx, XSTATE_CET_U, &cet_length);
+        if (cet_length == sizeof(*cet))
+        {
+          dst->cetmsr.u64 = cet->Ia32CetUMsr;
+          dst->cetssp.u64 = cet->Ia32Pl3SspMsr;
         }
       }
       

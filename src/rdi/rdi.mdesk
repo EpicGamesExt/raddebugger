@@ -438,6 +438,8 @@ RDI_RegCodeX64Table:
   {fip             98}
   {fdp             99}
   {mxcsr_mask      100}
+  {cetmsr          101}
+  {cetssp          102}
 }
 
 @enum(RDI_U32) RDI_Arch:
