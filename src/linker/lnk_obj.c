@@ -345,27 +345,27 @@ THREAD_POOL_TASK_FUNC(lnk_input_coff_symbol_table)
           break;
         }
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+        lnk_symbol_table_push_(task->symtab, arena, worker_id, defn);
       }
     } break;
     case COFF_SymbolValueInterp_Weak: {
       LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+      lnk_symbol_table_push_(task->symtab, arena, worker_id, defn);
     } break;
     case COFF_SymbolValueInterp_Undefined: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+        lnk_symbol_table_push_(task->symtab, arena, worker_id, defn);
       }
     } break;
     case COFF_SymbolValueInterp_Common: {
       LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-      lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+      lnk_symbol_table_push_(task->symtab, arena, worker_id, defn);
     } break;
     case COFF_SymbolValueInterp_Abs: {
       if (symbol.storage_class == COFF_SymStorageClass_External) {
         LNK_Symbol *defn = lnk_make_defined_symbol(arena, symbol.name, obj, symbol_idx);
-        lnk_symbol_table_push_(task->symtab, arena, worker_id, LNK_SymbolScope_Defined, defn);
+        lnk_symbol_table_push_(task->symtab, arena, worker_id, defn);
       }
     } break;
     case COFF_SymbolValueInterp_Debug: {
@@ -388,7 +388,7 @@ lnk_symlinks_from_obj(Arena *arena, LNK_SymbolTable *symtab, LNK_Obj *obj)
       COFF_SectionHeader *sect_header = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
       if (sect_header->flags & COFF_SectionFlag_LnkCOMDAT) {
         if (symlinks[symbol.section_number] == 0 || symbol.value == 0) {
-          symlinks[symbol.section_number] = lnk_symbol_table_search_(symtab, LNK_SymbolScope_Defined, symbol.name);
+          symlinks[symbol.section_number] = lnk_symbol_table_search_(symtab, symbol.name);
         }
       }
     }

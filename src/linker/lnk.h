@@ -175,15 +175,6 @@ typedef struct
   U128    *hashes;
 } LNK_Blake3Hasher;
 
-typedef struct
-{
-  LNK_SymbolTable  *symtab;
-  union {
-    LNK_ObjNodeArray objs;
-    LNK_LibNodeArray libs;
-  } u;
-} LNK_SymbolPusher;
-
 // --- Config -----------------------------------------------------------------
 
 internal LNK_Config * lnk_config_from_argcv(Arena *arena, int argc, char **argv);
@@ -221,7 +212,7 @@ internal void    lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht,
 internal void    lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path);
 
 internal LNK_InputObjList lnk_push_linker_symbols(Arena *arena, LNK_Config *config);
-internal void             lnk_queue_lib_member_input(Arena *arena, LNK_Config *config, LNK_Symbol *pull_in_ref, LNK_Symbol *member_symbol, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
+internal void             lnk_queue_lib_member_for_input(Arena *arena, LNK_Config *config, LNK_Symbol *pull_in_ref, LNK_Lib *lib, U32 member_idx, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
 
 internal LNK_LinkContext lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);
 

@@ -221,29 +221,18 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, S
   return result;
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_push_lib_symbols_task)
+internal B32
+lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out)
 {
-  LNK_SymbolPusher *task   = raw_task;
-  LNK_SymbolTable  *symtab = task->symtab;
-  LNK_Lib          *lib    = &task->u.libs.v[task_id].data;
+  // TODO: symbol names are already sorted, replace with binary search
   for EachIndex(symbol_idx, lib->symbol_count) {
-    U32 member_offset_number = lib->symbol_indices[symbol_idx];
-    if (member_offset_number > 0) { 
-      LNK_Symbol *symbol = lnk_make_lib_symbol(arena, lib->symbol_names.v[symbol_idx], lib, member_offset_number-1);
-      lnk_symbol_table_push_(symtab, arena, worker_id, LNK_SymbolScope_Lib, symbol);
+    if (str8_match(lib->symbol_names.v[symbol_idx], symbol_name, 0)) {
+      if (member_idx_out) {
+        *member_idx_out = lib->symbol_indices[symbol_idx] - 1;
+      }
+      return 1;
     }
   }
-}
-
-internal void
-lnk_input_lib_symbols(TP_Context *tp, LNK_SymbolTable *symtab, LNK_LibNodeArray libs)
-{
-  ProfBeginFunction();
-  LNK_SymbolPusher task = {0};
-  task.symtab           = symtab;
-  task.u.libs           = libs;
-  tp_for_parallel(tp, symtab->arena, libs.count, lnk_push_lib_symbols_task, &task);
-  ProfEnd();
+  return 0;
 }
 
