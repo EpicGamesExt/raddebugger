@@ -9,8 +9,9 @@ typedef struct LNK_Lib
   String8          data;
   COFF_ArchiveType type;
   U32              symbol_count;
-  U32             *member_off_arr;
-  String8List      symbol_name_list;
+  U32             *member_offsets;
+  U16             *symbol_indices;
+  String8Array     symbol_names;
   String8          long_names;
   U64              input_idx;
 } LNK_Lib;

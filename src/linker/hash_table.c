@@ -276,6 +276,13 @@ hash_table_search_string_raw(HashTable *ht, String8 key, void *value_out)
   return 0;
 }
 
+internal BucketNode *
+hash_table_push_u32_u32(Arena *arena, HashTable *ht, U32 key, U32 value)
+{
+  U64 hash = hash_table_hasher(str8_struct(&key));
+  return hash_table_push(arena, ht, hash, (KeyValuePair){ .key_u32 = key, .value_u32 = value });
+}
+
 internal B32
 hash_table_search_string_string(HashTable *ht, String8 key, String8 *value_out)
 {
@@ -283,6 +290,19 @@ hash_table_search_string_string(HashTable *ht, String8 key, String8 *value_out)
   if (result) {
     if (value_out) {
       *value_out = result->value_string;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+internal B32
+hash_table_search_u32_u32(HashTable *ht, U32 key, U32 *value_out)
+{
+  KeyValuePair *result = hash_table_search_u32(ht, key);
+  if (result) {
+    if (value_out) {
+      *value_out = result->value_u32;
     }
     return 1;
   }
