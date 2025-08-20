@@ -14,6 +14,7 @@ struct P2R2_ConvertThreadParams
   String8 input_pdb_name;
   String8 input_pdb_data;
   B32 deterministic;
+  RDIM_BakeParams *out_bake_params;
 };
 
 typedef struct P2R2_SymBlock P2R2_SymBlock;

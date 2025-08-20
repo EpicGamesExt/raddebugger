@@ -21,6 +21,7 @@ p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in)
       thread_params[idx].input_pdb_name      = in->input_pdb_name;
       thread_params[idx].input_pdb_data      = in->input_pdb_data;
       thread_params[idx].deterministic       = in->deterministic;
+      thread_params[idx].out_bake_params     = &result;
     }
     for EachIndex(idx, thread_count)
     {
@@ -1241,7 +1242,7 @@ p2r2_convert_thread_entry_point(void *p)
     }
   }
   lane_sync();
-  RDIM_UnitChunkList *all_units = &p2r2_shared->all_units;
+  RDIM_UnitChunkList all_units = p2r2_shared->all_units;
   RDIM_LineTableChunkList *lanes_line_tables = p2r2_shared->lanes_line_tables;
   RDIM_LineTable **lanes_first_inline_site_line_tables = p2r2_shared->lanes_first_inline_site_line_tables;
   
@@ -1272,11 +1273,13 @@ p2r2_convert_thread_entry_point(void *p)
         RDIM_LineTable *line_table = &line_table_chunk_n->v[chunk_line_table_idx];
         for(RDIM_LineSequenceNode *s = line_table->first_seq; s != 0; s = s->next)
         {
-          rdim_src_file_push_line_sequence(arena, &all_src_files__sequenceless, s->v.src_file, &s->v);
+          rdim_src_file_push_line_sequence(arena, &p2r2_shared->all_src_files__sequenceless, s->v.src_file, &s->v);
         }
       }
     }
   }
+  lane_sync();
+  RDIM_SrcFileChunkList all_src_files = p2r2_shared->all_src_files__sequenceless;
   
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
@@ -3951,45 +3954,57 @@ p2r2_convert_thread_entry_point(void *p)
   RDIM_InlineSiteChunkList all_inline_sites      = p2r2_shared->all_inline_sites;
   RDIM_TypeChunkList all_types                   = p2r2_shared->all_types;
   
-  //-
-  //-
-  //--
-  
   //////////////////////////////////////////////////////////////
-  //- rjf: produce top-level-info
+  //- rjf: bundle all outputs
   //
-  RDIM_TopLevelInfo top_level_info = {0};
+  if(lane_idx() == 0)
   {
-    top_level_info.arch          = arch;
-    top_level_info.exe_name      = str8_skip_last_slash(params->input_exe_name);
-    top_level_info.exe_hash      = exe_hash;
-    top_level_info.voff_max      = exe_voff_max;
-    if(params->deterministic)
+    //- rjf: produce top-level-info
+    RDIM_TopLevelInfo top_level_info = {0};
     {
-      top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
+      top_level_info.arch          = arch;
+      top_level_info.exe_name      = str8_skip_last_slash(params->input_exe_name);
+      top_level_info.exe_hash      = exe_hash;
+      top_level_info.voff_max      = exe_voff_max;
+      if(params->deterministic)
+      {
+        top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
+      }
     }
-  }
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: build binary sections list
-  //
-  RDIM_BinarySectionList binary_sections = {0};
-  ProfScope("build binary section list")
-  {
-    COFF_SectionHeader *coff_ptr = coff_sections.v;
-    COFF_SectionHeader *coff_opl = coff_ptr + coff_sections.count;
-    for(;coff_ptr < coff_opl; coff_ptr += 1)
+    
+    //- rjf: build binary sections list
+    RDIM_BinarySectionList binary_sections = {0};
+    ProfScope("build binary section list")
     {
-      char *name_first = (char *)coff_ptr->name;
-      char *name_opl   = name_first + sizeof(coff_ptr->name);
-      RDIM_BinarySection *sec = rdim_binary_section_list_push(arena, &binary_sections);
-      sec->name       = str8_cstring_capped(name_first, name_opl);
-      sec->flags      = p2r_rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
-      sec->voff_first = coff_ptr->voff;
-      sec->voff_opl   = coff_ptr->voff+coff_ptr->vsize;
-      sec->foff_first = coff_ptr->foff;
-      sec->foff_opl   = coff_ptr->foff+coff_ptr->fsize;
+      COFF_SectionHeader *coff_ptr = coff_sections.v;
+      COFF_SectionHeader *coff_opl = coff_ptr + coff_sections.count;
+      for(;coff_ptr < coff_opl; coff_ptr += 1)
+      {
+        char *name_first = (char *)coff_ptr->name;
+        char *name_opl   = name_first + sizeof(coff_ptr->name);
+        RDIM_BinarySection *sec = rdim_binary_section_list_push(arena, &binary_sections);
+        sec->name       = str8_cstring_capped(name_first, name_opl);
+        sec->flags      = p2r_rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
+        sec->voff_first = coff_ptr->voff;
+        sec->voff_opl   = coff_ptr->voff+coff_ptr->vsize;
+        sec->foff_first = coff_ptr->foff;
+        sec->foff_opl   = coff_ptr->foff+coff_ptr->fsize;
+      }
     }
+    
+    //- rjf: fill
+    params->out_bake_params->top_level_info   = top_level_info;
+    params->out_bake_params->binary_sections  = binary_sections;
+    params->out_bake_params->units            = all_units;
+    params->out_bake_params->types            = all_types;
+    params->out_bake_params->udts             = all_udts;
+    params->out_bake_params->src_files        = all_src_files;
+    params->out_bake_params->line_tables      = all_line_tables;
+    params->out_bake_params->global_variables = all_global_variables;
+    params->out_bake_params->thread_variables = all_thread_variables;
+    params->out_bake_params->constants        = all_constants;
+    params->out_bake_params->procedures       = all_procedures;
+    params->out_bake_params->scopes           = all_scopes;
+    params->out_bake_params->inline_sites     = all_inline_sites;
   }
-  
 }
