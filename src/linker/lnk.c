@@ -1537,9 +1537,6 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           if (symbol_ht) {
             COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol_ht->symbol);
             if (interp == COFF_SymbolValueInterp_Undefined) {
-              // clear slot for the weak alternate name that replaces an undefined symbol
-              symbol_ht->symbol = 0;
-
               // make obj with alternamte name symbol
               String8 alt_name_obj;
               {
@@ -1556,7 +1553,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                 LNK_InputObj *input            = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
                 input->path                    = alt_name_n->data.obj ? alt_name_n->data.obj->path : str8_lit("RADLINK");
                 input->exclude_from_debug_info = 1;
-                input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAME FOR %S=%S *", alt_name_n->data.from, alt_name_n->data.to, obj_list.count);
+                input->dedup_id                = push_str8f(scratch.arena, "* ALTERNATE NAME FOR %S=%S %u *", alt_name_n->data.from, alt_name_n->data.to, obj_list.count);
                 input->data                    = alt_name_obj;
                 input->lib                     = alt_name_n->data.obj ? alt_name_n->data.obj->lib : 0;
               }

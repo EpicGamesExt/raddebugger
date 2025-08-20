@@ -159,7 +159,7 @@ lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
 
       COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->u.defined.obj->header.is_big_obj);
       if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
-        can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
+        can_replace = lnk_symbol_defined_is_before(dst, src);
       } else if (weak_ext->characteristics == COFF_WeakExt_NoLibrary) {
         can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
       } else if (weak_ext->characteristics == COFF_WeakExt_SearchAlias) {
