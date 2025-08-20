@@ -6,18 +6,8 @@ lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 sym
 {
   LNK_Symbol *symbol = push_array(arena, LNK_Symbol, 1);
   symbol->name                 = name;
-  symbol->u.defined.obj        = obj;
-  symbol->u.defined.symbol_idx = symbol_idx;
-  return symbol;
-}
-
-internal LNK_Symbol *
-lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U32 member_idx)
-{
-  LNK_Symbol *symbol            = push_array(arena, LNK_Symbol, 1);
-  symbol->name                  = name;
-  symbol->u.member.v.lib        = lib;
-  symbol->u.member.v.member_idx = member_idx;
+  symbol->defined.obj        = obj;
+  symbol->defined.symbol_idx = symbol_idx;
   return symbol;
 }
 
@@ -25,20 +15,13 @@ internal B32
 lnk_symbol_defined_is_before(void *raw_a, void *raw_b)
 {
   LNK_Symbol *a = raw_a, *b = raw_b;
-  return a->u.defined.obj->input_idx < b->u.defined.obj->input_idx;
+  return a->defined.obj->input_idx < b->defined.obj->input_idx;
 }
 
 internal B32
 lnk_symbol_defined_ptr_is_before(void *raw_a, void *raw_b)
 {
   return lnk_symbol_defined_is_before(*(LNK_Symbol **)raw_a, *(LNK_Symbol **)raw_b);
-}
-
-internal B32
-lnk_symbol_lib_is_before(void *raw_a, void *raw_b)
-{
-  LNK_Symbol *a = raw_a, *b = raw_b;
-  return a->u.member.v.lib->input_idx < b->u.member.v.lib->input_idx;
 }
 
 internal void
@@ -125,281 +108,265 @@ lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *
 internal void
 lnk_error_multiply_defined_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->u.defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->u.defined.symbol_idx, src->u.defined.obj->path, src->u.defined.symbol_idx);
+  lnk_error_obj(LNK_Error_MultiplyDefinedSymbol, dst->defined.obj, "symbol \"%S\" (No. %#x) is multiply defined in %S (No. %#x)", dst->name, dst->defined.symbol_idx, src->defined.obj->path, src->defined.symbol_idx);
 }
 
 internal B32
-lnk_can_replace_symbol(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
+lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
   B32 can_replace = 0;
-  switch (scope) {
-  case LNK_SymbolScope_Defined: {
-    LNK_Obj                    *dst_obj    = dst->u.defined.obj;
-    LNK_Obj                    *src_obj    = src->u.defined.obj;
-    COFF_ParsedSymbol           dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
-    COFF_ParsedSymbol           src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
-    COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
-    COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
 
-    // undefined vs regular
-    if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Regular) {
-      can_replace = 1;
-    }
-    // (weak vs undefined) or (undefined vs weak)
-    else if ((dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Undefined) || (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Weak)) {
-      LNK_Symbol *weak, *undef;
-      COFF_ParsedSymbol weak_parsed;
-      if (dst_interp == COFF_SymbolValueInterp_Weak) {
-        weak = dst, undef = src;
-        weak_parsed = dst_parsed;
-      } else {
-        weak = src, undef = dst;
-        weak_parsed = src_parsed;
-      }
+  LNK_Obj                    *dst_obj    = dst->defined.obj;
+  LNK_Obj                    *src_obj    = src->defined.obj;
+  COFF_ParsedSymbol           dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->defined.obj, dst->defined.symbol_idx);
+  COFF_ParsedSymbol           src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->defined.obj, src->defined.symbol_idx);
+  COFF_SymbolValueInterpType  dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
+  COFF_SymbolValueInterpType  src_interp = coff_interp_from_parsed_symbol(src_parsed);
 
-      COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->u.defined.obj->header.is_big_obj);
-      if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
-        can_replace = lnk_symbol_defined_is_before(dst, src);
-      } else if (weak_ext->characteristics == COFF_WeakExt_NoLibrary) {
-        can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
-      } else if (weak_ext->characteristics == COFF_WeakExt_SearchAlias) {
-        can_replace = dst_interp == COFF_SymbolValueInterp_Undefined;
-      } else {
-        can_replace = lnk_symbol_defined_is_before(src, dst);
-      }
+  // undefined vs regular
+  if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Regular) {
+    can_replace = 1;
+  }
+  // (weak vs undefined) or (undefined vs weak)
+  else if ((dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Undefined) || (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Weak)) {
+    LNK_Symbol *weak, *undef;
+    COFF_ParsedSymbol weak_parsed;
+    if (dst_interp == COFF_SymbolValueInterp_Weak) {
+      weak = dst, undef = src;
+      weak_parsed = dst_parsed;
+    } else {
+      weak = src, undef = dst;
+      weak_parsed = src_parsed;
     }
-    // undefined vs undefined
-    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
+
+    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->defined.obj->header.is_big_obj);
+    if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
+      can_replace = lnk_symbol_defined_is_before(dst, src);
+    } else if (weak_ext->characteristics == COFF_WeakExt_NoLibrary) {
+      can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
+    } else if (weak_ext->characteristics == COFF_WeakExt_SearchAlias) {
+      can_replace = dst_interp == COFF_SymbolValueInterp_Undefined;
+    } else {
       can_replace = lnk_symbol_defined_is_before(src, dst);
     }
-    // undefined vs common
-    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Common) {
+  }
+  // undefined vs undefined
+  else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
+    can_replace = lnk_symbol_defined_is_before(src, dst);
+  }
+  // undefined vs common
+  else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Common) {
+    can_replace = 1;
+  }
+  // undefined vs abs
+  else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Abs) {
+    can_replace = 1;
+  }
+  // undefined vs debug
+  else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Debug) {
+    can_replace = 1;
+  }
+  // regular/common/abs/debug vs undefined
+  else if (dst_interp != COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
+    can_replace = 0;
+  }
+  // regular vs abs
+  else if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs) {
+    lnk_error_multiply_defined_symbol(dst, src);
+  }
+  // abs vs regular
+  else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Regular) {
+    lnk_error_multiply_defined_symbol(dst, src);
+  }
+  // abs vs common
+  else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Common) {
+    if (lnk_symbol_defined_is_before(dst, src)) {
       can_replace = 1;
-    }
-    // undefined vs abs
-    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Abs) {
-      can_replace = 1;
-    }
-    // undefined vs debug
-    else if (dst_interp == COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Debug) {
-      can_replace = 1;
-    }
-    // regular/common/abs/debug vs undefined
-    else if (dst_interp != COFF_SymbolValueInterp_Undefined && src_interp == COFF_SymbolValueInterp_Undefined) {
-      can_replace = 0;
-    }
-    // regular vs abs
-    else if (dst_interp == COFF_SymbolValueInterp_Regular && src_interp == COFF_SymbolValueInterp_Abs) {
+    } else {
       lnk_error_multiply_defined_symbol(dst, src);
     }
-    // abs vs regular
-    else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Regular) {
+  }
+  // common vs abs
+  else if (dst_interp == COFF_SymbolValueInterp_Common && src_interp == COFF_SymbolValueInterp_Abs) {
+    if (lnk_symbol_defined_is_before(dst, src)) {
       lnk_error_multiply_defined_symbol(dst, src);
     }
-    // abs vs common
-    else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Common) {
-      if (lnk_symbol_defined_is_before(dst, src)) {
-        can_replace = 1;
-      } else {
-        lnk_error_multiply_defined_symbol(dst, src);
-      }
-    }
-    // common vs abs
-    else if (dst_interp == COFF_SymbolValueInterp_Common && src_interp == COFF_SymbolValueInterp_Abs) {
-      if (lnk_symbol_defined_is_before(dst, src)) {
-        lnk_error_multiply_defined_symbol(dst, src);
-      }
-    }
-    // abs vs abs
-    else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Abs) {
-      lnk_error_multiply_defined_symbol(dst, src);
-    }
-    // weak vs weak
-    else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
-      COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst->u.defined.obj->header.is_big_obj);
-      COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src->u.defined.obj->header.is_big_obj);
-      if ((dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias)) {
-        if (lnk_symbol_defined_is_before(dst, src) || src_ext->characteristics == COFF_WeakExt_AntiDependency) {
-          can_replace = 0;
-        } else {
-          lnk_error_multiply_defined_symbol(dst, src);
-        }
-      } else if (dst_ext->characteristics != COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
-        if (lnk_symbol_defined_is_before(src, dst) || dst_ext->characteristics == COFF_WeakExt_AntiDependency) {
-          can_replace = 1;
-        } else {
-          lnk_error_multiply_defined_symbol(dst, src);
-        }
-      } else if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
-        lnk_error_multiply_defined_symbol(dst, src);
-      } else {
-        can_replace = lnk_symbol_defined_is_before(src, dst);
-      }
-    }
-    // weak vs regular/abs/common
-    else if (dst_interp == COFF_SymbolValueInterp_Weak && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Abs || src_interp == COFF_SymbolValueInterp_Common)) {
-      can_replace = 1;
-    }
-    // regular/abs/common vs weak
-    else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Abs || dst_interp == COFF_SymbolValueInterp_Common) && src_interp == COFF_SymbolValueInterp_Weak) {
-      can_replace = 0;
-    }
-    // regular/common vs regular/common
-    else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
-      // parse dst symbol properties
-      B32                   dst_is_comdat = 0;
-      COFF_ComdatSelectType dst_select;
-      U32                   dst_section_length;
-      U32                   dst_check_sum;
-      if (dst_interp == COFF_SymbolValueInterp_Regular) {
-        dst_is_comdat = lnk_try_comdat_props_from_section_number(dst->u.defined.obj, dst_parsed.section_number, &dst_select, 0, &dst_section_length, &dst_check_sum);
-      } else if (dst_interp == COFF_SymbolValueInterp_Common) {
-        dst_select         = COFF_ComdatSelect_Largest;
-        dst_section_length = dst_parsed.value;
-        dst_check_sum      = 0;
-        dst_is_comdat      = 1;
-      }
-
-      // parse src symbol properties
-      B32                   src_is_comdat = 0;
-      COFF_ComdatSelectType src_select;
-      U32                   src_section_length, src_checks;
-      U32                   src_check_sum;
-      if (src_interp == COFF_SymbolValueInterp_Regular) {
-        src_is_comdat = lnk_try_comdat_props_from_section_number(src->u.defined.obj, src_parsed.section_number, &src_select, 0, &src_section_length, &src_check_sum);
-      } else if (src_interp == COFF_SymbolValueInterp_Common) {
-        src_select         = COFF_ComdatSelect_Largest;
-        src_section_length = src_parsed.value;
-        src_check_sum      = 0;
-        src_is_comdat      = 1;
-      }
-
-      // regular non-comdat vs communal
-      if (dst_interp == COFF_SymbolValueInterp_Regular && !dst_is_comdat && src_interp == COFF_SymbolValueInterp_Common) {
+  }
+  // abs vs abs
+  else if (dst_interp == COFF_SymbolValueInterp_Abs && src_interp == COFF_SymbolValueInterp_Abs) {
+    lnk_error_multiply_defined_symbol(dst, src);
+  }
+  // weak vs weak
+  else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
+    COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst->defined.obj->header.is_big_obj);
+    COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src->defined.obj->header.is_big_obj);
+    if ((dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias)) {
+      if (lnk_symbol_defined_is_before(dst, src) || src_ext->characteristics == COFF_WeakExt_AntiDependency) {
         can_replace = 0;
-      }
-      // communal vs regular non-comdat
-      else if (dst_interp == COFF_SymbolValueInterp_Common && src_interp == COFF_SymbolValueInterp_Regular && !src_is_comdat) {
-        can_replace = 1;
-      }
-      // handle COMDATs
-      else if (dst_is_comdat && src_is_comdat) {
-        if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest)) {
-          src_select = COFF_ComdatSelect_Largest;
-        }
-        if (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any) {
-          dst_select = COFF_ComdatSelect_Largest;
-        }
-
-        if (src_select == dst_select) {
-          switch (src_select) {
-          case COFF_ComdatSelect_Null:
-          case COFF_ComdatSelect_Any: {
-            if (src_section_length == dst_section_length) {
-              can_replace = lnk_obj_is_before(src_obj, dst_obj);
-            } else {
-              // both COMDATs are valid but to get smaller exe pick smallest
-              can_replace = src_section_length < dst_section_length;
-            }
-          } break;
-          case COFF_ComdatSelect_NoDuplicates: {
-            lnk_error_multiply_defined_symbol(dst, src);
-          } break;
-          case COFF_ComdatSelect_SameSize: {
-            if (dst_section_length == src_section_length) {
-              can_replace = lnk_obj_is_before(src_obj, dst_obj);
-            } else {
-              lnk_error_multiply_defined_symbol(dst, src);
-            }
-          } break;
-          case COFF_ComdatSelect_ExactMatch: {
-            COFF_SectionHeader *dst_sect_header = lnk_coff_section_header_from_section_number(dst_obj, dst_parsed.section_number);
-            COFF_SectionHeader *src_sect_header = lnk_coff_section_header_from_section_number(src_obj, src_parsed.section_number);
-            String8             dst_data        = str8_substr(dst_obj->data, rng_1u64(dst_sect_header->foff, dst_sect_header->foff + dst_sect_header->fsize));
-            String8             src_data        = str8_substr(src_obj->data, rng_1u64(src_sect_header->foff, src_sect_header->foff + src_sect_header->fsize));
-            B32                 is_exact_match  = 0;
-            if (dst_check_sum != 0 && src_check_sum != 0) {
-              is_exact_match = dst_check_sum == src_check_sum && str8_match(dst_data, src_data, 0);
-            } else {
-              is_exact_match = str8_match(dst_data, src_data, 0);
-            }
-
-            if (is_exact_match) {
-              can_replace = lnk_obj_is_before(src_obj, dst_obj);
-            } else {
-              lnk_error_multiply_defined_symbol(dst, src);
-            }
-          } break;
-          case COFF_ComdatSelect_Largest: {
-            if (dst_section_length == src_section_length) {
-              can_replace = lnk_obj_is_before(src_obj, dst_obj);
-            } else {
-              can_replace = dst_section_length < src_section_length;
-            }
-          } break;
-          case COFF_ComdatSelect_Associative: { /* ignore */ } break;
-          default: { InvalidPath; } break;
-          }
-        } else {
-          lnk_error_obj(LNK_Warning_UnresolvedComdat, src_obj,
-                        "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
-                        src->name, coff_string_from_comdat_select_type(src_select), coff_string_from_comdat_select_type(dst_select), dst_obj);
-        }
       } else {
         lnk_error_multiply_defined_symbol(dst, src);
+      }
+    } else if (dst_ext->characteristics != COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
+      if (lnk_symbol_defined_is_before(src, dst) || dst_ext->characteristics == COFF_WeakExt_AntiDependency) {
+        can_replace = 1;
+      } else {
+        lnk_error_multiply_defined_symbol(dst, src);
+      }
+    } else if (dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics == COFF_WeakExt_SearchAlias) {
+      lnk_error_multiply_defined_symbol(dst, src);
+    } else {
+      can_replace = lnk_symbol_defined_is_before(src, dst);
+    }
+  }
+  // weak vs regular/abs/common
+  else if (dst_interp == COFF_SymbolValueInterp_Weak && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Abs || src_interp == COFF_SymbolValueInterp_Common)) {
+    can_replace = 1;
+  }
+  // regular/abs/common vs weak
+  else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Abs || dst_interp == COFF_SymbolValueInterp_Common) && src_interp == COFF_SymbolValueInterp_Weak) {
+    can_replace = 0;
+  }
+  // regular/common vs regular/common
+  else if ((dst_interp == COFF_SymbolValueInterp_Regular || dst_interp == COFF_SymbolValueInterp_Common) && (src_interp == COFF_SymbolValueInterp_Regular || src_interp == COFF_SymbolValueInterp_Common)) {
+    // parse dst symbol properties
+    B32                   dst_is_comdat = 0;
+    COFF_ComdatSelectType dst_select;
+    U32                   dst_section_length;
+    U32                   dst_check_sum;
+    if (dst_interp == COFF_SymbolValueInterp_Regular) {
+      dst_is_comdat = lnk_try_comdat_props_from_section_number(dst->defined.obj, dst_parsed.section_number, &dst_select, 0, &dst_section_length, &dst_check_sum);
+    } else if (dst_interp == COFF_SymbolValueInterp_Common) {
+      dst_select         = COFF_ComdatSelect_Largest;
+      dst_section_length = dst_parsed.value;
+      dst_check_sum      = 0;
+      dst_is_comdat      = 1;
+    }
+
+    // parse src symbol properties
+    B32                   src_is_comdat = 0;
+    COFF_ComdatSelectType src_select;
+    U32                   src_section_length, src_checks;
+    U32                   src_check_sum;
+    if (src_interp == COFF_SymbolValueInterp_Regular) {
+      src_is_comdat = lnk_try_comdat_props_from_section_number(src->defined.obj, src_parsed.section_number, &src_select, 0, &src_section_length, &src_check_sum);
+    } else if (src_interp == COFF_SymbolValueInterp_Common) {
+      src_select         = COFF_ComdatSelect_Largest;
+      src_section_length = src_parsed.value;
+      src_check_sum      = 0;
+      src_is_comdat      = 1;
+    }
+
+    // regular non-comdat vs communal
+    if (dst_interp == COFF_SymbolValueInterp_Regular && !dst_is_comdat && src_interp == COFF_SymbolValueInterp_Common) {
+      can_replace = 0;
+    }
+    // communal vs regular non-comdat
+    else if (dst_interp == COFF_SymbolValueInterp_Common && src_interp == COFF_SymbolValueInterp_Regular && !src_is_comdat) {
+      can_replace = 1;
+    }
+    // handle COMDATs
+    else if (dst_is_comdat && src_is_comdat) {
+      if ((src_select == COFF_ComdatSelect_Any && dst_select == COFF_ComdatSelect_Largest)) {
+        src_select = COFF_ComdatSelect_Largest;
+      }
+      if (src_select == COFF_ComdatSelect_Largest && dst_select == COFF_ComdatSelect_Any) {
+        dst_select = COFF_ComdatSelect_Largest;
+      }
+
+      if (src_select == dst_select) {
+        switch (src_select) {
+        case COFF_ComdatSelect_Null:
+        case COFF_ComdatSelect_Any: {
+          if (src_section_length == dst_section_length) {
+            can_replace = lnk_obj_is_before(src_obj, dst_obj);
+          } else {
+            // both COMDATs are valid but to get smaller exe pick smallest
+            can_replace = src_section_length < dst_section_length;
+          }
+        } break;
+        case COFF_ComdatSelect_NoDuplicates: {
+          lnk_error_multiply_defined_symbol(dst, src);
+        } break;
+        case COFF_ComdatSelect_SameSize: {
+          if (dst_section_length == src_section_length) {
+            can_replace = lnk_obj_is_before(src_obj, dst_obj);
+          } else {
+            lnk_error_multiply_defined_symbol(dst, src);
+          }
+        } break;
+        case COFF_ComdatSelect_ExactMatch: {
+          COFF_SectionHeader *dst_sect_header = lnk_coff_section_header_from_section_number(dst_obj, dst_parsed.section_number);
+          COFF_SectionHeader *src_sect_header = lnk_coff_section_header_from_section_number(src_obj, src_parsed.section_number);
+          String8             dst_data        = str8_substr(dst_obj->data, rng_1u64(dst_sect_header->foff, dst_sect_header->foff + dst_sect_header->fsize));
+          String8             src_data        = str8_substr(src_obj->data, rng_1u64(src_sect_header->foff, src_sect_header->foff + src_sect_header->fsize));
+          B32                 is_exact_match  = 0;
+          if (dst_check_sum != 0 && src_check_sum != 0) {
+            is_exact_match = dst_check_sum == src_check_sum && str8_match(dst_data, src_data, 0);
+          } else {
+            is_exact_match = str8_match(dst_data, src_data, 0);
+          }
+
+          if (is_exact_match) {
+            can_replace = lnk_obj_is_before(src_obj, dst_obj);
+          } else {
+            lnk_error_multiply_defined_symbol(dst, src);
+          }
+        } break;
+        case COFF_ComdatSelect_Largest: {
+          if (dst_section_length == src_section_length) {
+            can_replace = lnk_obj_is_before(src_obj, dst_obj);
+          } else {
+            can_replace = dst_section_length < src_section_length;
+          }
+        } break;
+        case COFF_ComdatSelect_Associative: { /* ignore */ } break;
+        default: { InvalidPath; } break;
+        }
+      } else {
+        lnk_error_obj(LNK_Warning_UnresolvedComdat, src_obj,
+            "%S: COMDAT selection conflict detected, current selection %S, leader selection %S from %S", 
+            src->name, coff_string_from_comdat_select_type(src_select), coff_string_from_comdat_select_type(dst_select), dst_obj);
       }
     } else {
-      lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
+      lnk_error_multiply_defined_symbol(dst, src);
     }
-  } break;
-  case LNK_SymbolScope_Lib: {
-    can_replace = lnk_symbol_lib_is_before(src, dst);
-  } break;
-  default: { InvalidPath; }
+  } else {
+    lnk_error(LNK_Error_InvalidPath, "unable to find a suitable replacement logic for symbol combination");
   }
+
   return can_replace;
 }
 
 internal void
-lnk_on_symbol_replace(LNK_SymbolScope scope, LNK_Symbol *dst, LNK_Symbol *src)
+lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
 {
-  switch (scope) {
-  case LNK_SymbolScope_Defined: {
-    COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->u.defined.obj, dst->u.defined.symbol_idx);
-    COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
-    if (dst_interp == COFF_SymbolValueInterp_Regular) {
-      // remove replaced section from the output
-      COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->u.defined.obj, dst_parsed.section_number);
-      dst_sect->flags |= COFF_SectionFlag_LnkRemove;
+  COFF_ParsedSymbol          dst_parsed = lnk_parsed_symbol_from_coff_symbol_idx(dst->defined.obj, dst->defined.symbol_idx);
+  COFF_SymbolValueInterpType dst_interp = coff_interp_from_parsed_symbol(dst_parsed);
+  if (dst_interp == COFF_SymbolValueInterp_Regular) {
+    // remove replaced section from the output
+    COFF_SectionHeader *dst_sect = lnk_coff_section_header_from_section_number(dst->defined.obj, dst_parsed.section_number);
+    dst_sect->flags |= COFF_SectionFlag_LnkRemove;
 
-      // remove associated sections from the output
-      for (U32Node *associated_section = dst->u.defined.obj->associated_sections[dst_parsed.section_number];
-           associated_section != 0;
-           associated_section = associated_section->next) {
-        COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(dst->u.defined.obj, associated_section->data);
-        section_header->flags |= COFF_SectionFlag_LnkRemove;
-      }
+    // remove associated sections from the output
+    for (U32Node *associated_section = dst->defined.obj->associated_sections[dst_parsed.section_number];
+        associated_section != 0;
+        associated_section = associated_section->next) {
+      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(dst->defined.obj, associated_section->data);
+      section_header->flags |= COFF_SectionFlag_LnkRemove;
     }
-
-    // assert leader section is live
-#if BUILD_DEBUG
-    {
-      COFF_ParsedSymbol          src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->u.defined.obj, src->u.defined.symbol_idx);
-      COFF_SymbolValueInterpType src_interp = coff_interp_from_parsed_symbol(src_parsed);
-      if (src_interp == COFF_SymbolValueInterp_Regular) {
-        COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->u.defined.obj, src_parsed.section_number);
-        AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
-      }
-    }
-#endif
-  } break;
-  case LNK_SymbolScope_Lib: {
-    LNK_Symbol *last;
-    for (last = src; last->u.member.next != 0; last = last->u.member.next);
-    last->u.member.next = dst;
-  } break;
-  default: { InvalidPath; }
   }
+
+  // assert leader section is live
+#if BUILD_DEBUG
+  {
+    COFF_ParsedSymbol          src_parsed = lnk_parsed_symbol_from_coff_symbol_idx(src->defined.obj, src->defined.symbol_idx);
+    COFF_SymbolValueInterpType src_interp = coff_interp_from_parsed_symbol(src_parsed);
+    if (src_interp == COFF_SymbolValueInterp_Regular) {
+      COFF_SectionHeader *src_sect = lnk_coff_section_header_from_section_number(src->defined.obj, src_parsed.section_number);
+      AssertAlways(~src_sect->flags & COFF_SectionFlag_LnkRemove);
+    }
+  }
+#endif
 }
 
 internal void
@@ -407,7 +374,6 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
                                        LNK_SymbolHashTrieChunkList  *chunks,
                                        LNK_SymbolHashTrie          **trie,
                                        U64                           hash,
-                                       LNK_SymbolScope               scope,
                                        LNK_Symbol                   *symbol)
 {
   LNK_SymbolHashTrie **curr_trie_ptr = trie;
@@ -447,13 +413,13 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
 
         // apply replacement
         if (leader) {
-          if (lnk_can_replace_symbol(scope, leader, src)) {
+          if (lnk_can_replace_symbol(leader, src)) {
             // discard leader
-            lnk_on_symbol_replace(scope, leader, src);
+            lnk_on_symbol_replace(leader, src);
             leader = src;
           } else {
             // discard source
-            lnk_on_symbol_replace(scope, src, leader);
+            lnk_on_symbol_replace(src, leader);
             src = leader;
           }
         } else {
@@ -526,7 +492,7 @@ lnk_array_from_symbol_hash_trie_chunk_list(Arena *arena, LNK_SymbolHashTrieChunk
 internal COFF_ParsedSymbol
 lnk_parsed_symbol_from_defined(LNK_Symbol *symbol)
 {
-  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+  return lnk_parsed_symbol_from_coff_symbol_idx(symbol->defined.obj, symbol->defined.symbol_idx);
 }
 
 internal COFF_SymbolValueInterpType
@@ -576,11 +542,11 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
       SLLQueuePush(sf, sl, s);
 
       // does weak symbol have a definition?
-      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
-      COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->u.defined.obj, defn_symbol->u.defined.symbol_idx);
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
+      COFF_ParsedSymbol           defn_parsed = lnk_parsed_symbol_from_coff_symbol_idx(defn_symbol->defined.obj, defn_symbol->defined.symbol_idx);
       COFF_SymbolValueInterpType  defn_interp = coff_interp_symbol(defn_parsed.section_number, defn_parsed.value, defn_parsed.storage_class);
       if (defn_interp != COFF_SymbolValueInterp_Weak) {
-        current_symbol = defn_symbol->u.defined;
+        current_symbol = defn_symbol->defined;
         break;
       }
 
@@ -593,20 +559,20 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol)
 
       if (weak_ext->characteristics == COFF_WeakExt_AntiDependency) {
         if (tag_interp == COFF_SymbolValueInterp_Undefined || tag_interp == COFF_SymbolValueInterp_Weak) {
-          LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, tag_parsed.name);
+          LNK_Symbol *dep_symbol = lnk_symbol_table_search(symtab, tag_parsed.name);
           tag_interp = lnk_interp_from_symbol(dep_symbol);
         }
         if (tag_interp == COFF_SymbolValueInterp_Weak) { goto exit; }
       }
     } else if (current_interp == COFF_SymbolValueInterp_Undefined) {
-      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, current_parsed.name);
+      LNK_Symbol                 *defn_symbol = lnk_symbol_table_search(symtab, current_parsed.name);
       COFF_SymbolValueInterpType  defn_interp = lnk_interp_from_symbol(defn_symbol);
 
       // unresolved undefined symbol
       if (defn_interp == COFF_SymbolValueInterp_Undefined) { break; }
 
       // follow symbol definition
-      current_symbol = defn_symbol->u.defined;
+      current_symbol = defn_symbol->defined;
     } else { break; }
   }
 
@@ -630,41 +596,39 @@ lnk_symbol_table_init(TP_Arena *arena)
 {
   LNK_SymbolTable *symtab = push_array(arena->v[0], LNK_SymbolTable, 1);
   symtab->arena           = arena;
-  for (U64 i = 0; i < LNK_SymbolScope_Count; ++i) {
-    symtab->chunk_lists[i] = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
-  }
+  symtab->chunks          = push_array(arena->v[0], LNK_SymbolHashTrieChunkList, arena->count);
   return symtab;
 }
 
 internal void
-lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK_SymbolScope scope, LNK_Symbol *symbol)
+lnk_symbol_table_push_(LNK_SymbolTable *symtab, Arena *arena, U64 worker_id, LNK_Symbol *symbol)
 {
   U64 hash = lnk_symbol_hash(symbol->name);
-  lnk_symbol_hash_trie_insert_or_replace(arena, &symtab->chunk_lists[scope][worker_id], &symtab->scopes[scope], hash, scope, symbol);
+  lnk_symbol_hash_trie_insert_or_replace(arena, &symtab->chunks[worker_id], &symtab->root, hash, symbol);
 }
 
 internal void
-lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_SymbolScope scope, LNK_Symbol *symbol)
+lnk_symbol_table_push(LNK_SymbolTable *symtab, LNK_Symbol *symbol)
 {
-  lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, scope, symbol);
+  lnk_symbol_table_push_(symtab, symtab->arena->v[0], 0, symbol);
 }
 
 internal LNK_SymbolHashTrie *
-lnk_symbol_table_search_(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name)
+lnk_symbol_table_search_(LNK_SymbolTable *symtab, String8 name)
 {
   U64 hash = lnk_symbol_hash(name);
-  return lnk_symbol_hash_trie_search(symtab->scopes[scope], hash, name);
+  return lnk_symbol_hash_trie_search(symtab->root, hash, name);
 }
 
 internal LNK_Symbol *
-lnk_symbol_table_search(LNK_SymbolTable *symtab, LNK_SymbolScope scope, String8 name)
+lnk_symbol_table_search(LNK_SymbolTable *symtab, String8 name)
 {
-  LNK_SymbolHashTrie *trie = lnk_symbol_table_search_(symtab, scope, name);
+  LNK_SymbolHashTrie *trie = lnk_symbol_table_search_(symtab, name);
   return trie ? trie->symbol : 0;
 }
 
 internal LNK_Symbol *
-lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *fmt, ...)
+lnk_symbol_table_searchf(LNK_SymbolTable *symtab, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
  
@@ -672,7 +636,7 @@ lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *f
   String8 name = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
   
-  LNK_Symbol *symbol = lnk_symbol_table_search(symtab, scope, name);
+  LNK_Symbol *symbol = lnk_symbol_table_search(symtab, name);
 
   scratch_end(scratch);
   return symbol;
@@ -681,7 +645,7 @@ lnk_symbol_table_searchf(LNK_SymbolTable *symtab, LNK_SymbolScope scope, char *f
 internal ISectOff
 lnk_sc_from_symbol(LNK_Symbol *symbol)
 {
-  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->u.defined.obj, symbol->u.defined.symbol_idx);
+  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx(symbol->defined.obj, symbol->defined.symbol_idx);
 
   ISectOff sc = {0};
   sc.isect    = parsed_symbol.section_number;
