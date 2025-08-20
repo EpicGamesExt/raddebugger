@@ -11,6 +11,7 @@ typedef struct LNK_Lib
   U32              symbol_count;
   U32             *member_offsets;
   U16             *symbol_indices;
+  B8              *was_member_queued;
   String8Array     symbol_names;
   String8          long_names;
   U64              input_idx;

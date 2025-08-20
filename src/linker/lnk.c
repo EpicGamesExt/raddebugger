@@ -982,10 +982,12 @@ lnk_queue_lib_member_for_input(Arena               *arena,
     }
   }
 
-  B32 was_live = lnk_mark_symbol_live(best_match);
-  if (!was_live) {
-    LNK_Lib *lib           = best_match->u.member.v.lib;
-    U64      member_offset = best_match->u.member.v.member_offset;
+  LNK_Lib *lib        = best_match->u.member.v.lib;
+  U32      member_idx = best_match->u.member.v.member_idx;
+
+  B32 was_member_queued = ins_atomic_u8_eval_assign(&lib->was_member_queued[member_idx], 1);
+  if (!was_member_queued) {
+    U64 member_offset = lib->member_offsets[member_idx];
 
     // compose input index so that members are laid out in the image
     // in the order of undefined symbols appearing in objs,
@@ -1162,13 +1164,6 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
       COFF_ParsedSymbol           ref_parsed = lnk_parsed_symbol_from_coff_symbol_idx(ref_symbol.obj, ref_symbol.symbol_idx);
       COFF_SymbolValueInterpType  ref_interp = coff_interp_from_parsed_symbol(ref_parsed);
       LNK_Obj                    *ref_obj    = ref_symbol.obj;
-
-      // mark referenced symbol live
-      if (ref_parsed.storage_class == COFF_SymStorageClass_External ||
-          ref_parsed.storage_class == COFF_SymStorageClass_WeakExternal) {
-        LNK_Symbol *ref_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScope_Defined, ref_parsed.name);
-        lnk_mark_symbol_live(ref_symbol);
-      }
 
       if (ref_interp == COFF_SymbolValueInterp_Regular) {
         // make section number list (reloc section + associates)

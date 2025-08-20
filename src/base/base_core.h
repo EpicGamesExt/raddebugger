@@ -194,6 +194,7 @@
 #if COMPILER_MSVC
 # include <intrin.h>
 # if ARCH_X64
+#  define ins_atomic_u8_eval_assign(x,c)         InterlockedExchange8((volatile CHAR *)(x), (c))
 #  define ins_atomic_u64_eval(x)                 *((volatile U64 *)(x))
 #  define ins_atomic_u64_inc_eval(x)             InterlockedIncrement64((volatile __int64 *)(x))
 #  define ins_atomic_u64_dec_eval(x)             InterlockedDecrement64((volatile __int64 *)(x))

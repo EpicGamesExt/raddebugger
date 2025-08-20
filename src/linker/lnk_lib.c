@@ -69,6 +69,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
     return 0;
   }
 
+  U32     member_count   = 0;
   U64     symbol_count   = 0;
   String8 string_table   = {0};
   U16    *symbol_indices = 0;
@@ -80,6 +81,7 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
     Assert(second_member.symbol_count == second_member.symbol_index_count);
     Assert(second_member.member_count == second_member.member_offset_count);
     
+    member_count   = second_member.member_count;
     symbol_count   = second_member.symbol_count;
     string_table   = second_member.string_table;
     member_offsets = second_member.member_offsets;
@@ -120,7 +122,8 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
         symbol_indices[symbol_idx] = member_off_idx+1;
       }
 
-      member_offsets = push_array_no_zero(arena, U32, member_off_ht->count);
+      member_count   = member_off_ht->count;
+      member_offsets = push_array_no_zero(arena, U32, member_count);
       for EachIndex(bucket_idx, member_off_ht->cap) {
         BucketList *bucket = &member_off_ht->buckets[bucket_idx];
         for (BucketNode *n = bucket->first; n != 0; n = n->next) {
@@ -147,14 +150,15 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, LNK_Lib *lib_out)
   symbol_count = Min(symbol_count, symbol_names.count);
   
   // init lib
-  lib_out->path             = push_str8_copy(arena, path);
-  lib_out->data             = data;
-  lib_out->type             = type;
-  lib_out->symbol_count     = symbol_count;
-  lib_out->member_offsets   = member_offsets;
-  lib_out->symbol_indices   = symbol_indices;
-  lib_out->symbol_names     = symbol_names;
-  lib_out->long_names       = parse.long_names;
+  lib_out->path              = push_str8_copy(arena, path);
+  lib_out->data              = data;
+  lib_out->type              = type;
+  lib_out->symbol_count      = symbol_count;
+  lib_out->member_offsets    = member_offsets;
+  lib_out->symbol_indices    = symbol_indices;
+  lib_out->was_member_queued = push_array(arena, B8, member_count);
+  lib_out->symbol_names      = symbol_names;
+  lib_out->long_names        = parse.long_names;
   
   ProfEnd();
   return 1;
@@ -226,7 +230,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_lib_symbols_task)
   for EachIndex(symbol_idx, lib->symbol_count) {
     U32 member_offset_number = lib->symbol_indices[symbol_idx];
     if (member_offset_number > 0) { 
-      LNK_Symbol *symbol = lnk_make_lib_symbol(arena, lib->symbol_names.v[symbol_idx], lib, lib->member_offsets[member_offset_number-1]);
+      LNK_Symbol *symbol = lnk_make_lib_symbol(arena, lib->symbol_names.v[symbol_idx], lib, member_offset_number-1);
       lnk_symbol_table_push_(symtab, arena, worker_id, LNK_SymbolScope_Lib, symbol);
     }
   }
