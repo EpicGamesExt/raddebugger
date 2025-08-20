@@ -109,6 +109,8 @@ REGS_RegCodeX64_k4,
 REGS_RegCodeX64_k5,
 REGS_RegCodeX64_k6,
 REGS_RegCodeX64_k7,
+REGS_RegCodeX64_cetmsr,
+REGS_RegCodeX64_cetssp,
 REGS_RegCodeX64_COUNT,
 } REGS_RegCodeX64;
 
@@ -423,6 +425,8 @@ REGS_Reg64 k4;
 REGS_Reg64 k5;
 REGS_Reg64 k6;
 REGS_Reg64 k7;
+REGS_Reg64 cetmsr;
+REGS_Reg64 cetssp;
 };
 
 typedef struct REGS_RegBlockX86 REGS_RegBlockX86;
@@ -491,11 +495,11 @@ REGS_Reg256 ymm7;
 };
 
 C_LINKAGE_BEGIN
-extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[101];
+extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[103];
 extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[96];
-extern String8 regs_g_reg_code_x64_string_table[101];
+extern String8 regs_g_reg_code_x64_string_table[103];
 extern String8 regs_g_alias_code_x64_string_table[96];
-extern REGS_Rng regs_g_reg_code_x64_rng_table[101];
+extern REGS_Rng regs_g_reg_code_x64_rng_table[103];
 extern REGS_Slice regs_g_alias_code_x64_slice_table[96];
 extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[61];
 extern REGS_UsageKind regs_g_alias_code_x86_usage_kind_table[36];

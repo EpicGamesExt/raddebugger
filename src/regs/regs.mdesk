@@ -107,6 +107,8 @@ REGS_RegTableX64:
   {k5                             64   Normal}
   {k6                             64   Normal}
   {k7                             64   Normal}
+  {cetmsr                         64   Normal}
+  {cetssp                         64   Normal}
 }
 
 @table(name base off size usage)
