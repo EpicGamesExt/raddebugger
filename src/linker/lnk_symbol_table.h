@@ -21,13 +21,12 @@ typedef struct LNK_SymbolDefined
 typedef struct LNK_SymbolLib
 {
   struct LNK_Lib *lib;
-  U64             member_offset;
+  U32             member_idx;
 } LNK_SymbolLib;
 
 typedef struct LNK_Symbol
 {
   String8 name;
-  B32     is_live;
   union {
     LNK_SymbolDefined   defined;
     struct {
@@ -100,7 +99,7 @@ typedef struct LNK_SymbolTable
 // --- Symbol Make -------------------------------------------------------------
 
 internal LNK_Symbol * lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 symbol_idx);
-internal LNK_Symbol * lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_offset);
+internal LNK_Symbol * lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U32 member_idx);
 
 // --- Symbol Containers ------------------------------------------------------
 
@@ -123,7 +122,6 @@ internal LNK_SymbolHashTrieChunk ** lnk_array_from_symbol_hash_trie_chunk_list(A
 
 internal COFF_ParsedSymbol          lnk_parsed_symbol_from_defined(LNK_Symbol *symbol);
 internal COFF_SymbolValueInterpType lnk_interp_from_symbol(LNK_Symbol *symbol);
-internal B32                        lnk_mark_symbol_live(LNK_Symbol *symbol);
 internal LNK_SymbolDefined          lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_SymbolDefined symbol);
 
 // --- Symbol Table ------------------------------------------------------------

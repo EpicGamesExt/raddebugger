@@ -12,12 +12,12 @@ lnk_make_defined_symbol(Arena *arena, String8 name, struct LNK_Obj *obj, U32 sym
 }
 
 internal LNK_Symbol *
-lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U64 member_offset)
+lnk_make_lib_symbol(Arena *arena, String8 name, struct LNK_Lib *lib, U32 member_idx)
 {
-  LNK_Symbol *symbol               = push_array(arena, LNK_Symbol, 1);
-  symbol->name                     = name;
-  symbol->u.member.v.lib           = lib;
-  symbol->u.member.v.member_offset = member_offset;
+  LNK_Symbol *symbol            = push_array(arena, LNK_Symbol, 1);
+  symbol->name                  = name;
+  symbol->u.member.v.lib        = lib;
+  symbol->u.member.v.member_idx = member_idx;
   return symbol;
 }
 
@@ -534,13 +534,6 @@ lnk_interp_from_symbol(LNK_Symbol *symbol)
 {
   COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_defined(symbol); 
   return coff_interp_from_parsed_symbol(symbol_parsed);
-}
-
-internal B32
-lnk_mark_symbol_live(LNK_Symbol *symbol)
-{
-  B32 was_live = ins_atomic_u32_eval_assign(&symbol->is_live, 1);
-  return was_live;
 }
 
 internal LNK_SymbolDefined
