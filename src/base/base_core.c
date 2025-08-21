@@ -628,8 +628,22 @@ index_of_zero_u64(U64 *ptr, U64 count)
 //~ rjf: Third Party Includes
 
 #if !BUILD_SUPPLEMENTARY_UNIT
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#elif defined(_MSC_VER)
+#pragma warning (push, 0)
+#endif
+
 # define STB_SPRINTF_IMPLEMENTATION
+# define STB_SPRINTF_STATIC
 # include "third_party/stb/stb_sprintf.h"
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning (pop, 0)
 #endif
 
 ////////////////////////////////
