@@ -42,7 +42,6 @@ internal Vec2S64 scale_2s64(Vec2S64 v, S64 s)                   {Vec2S64 c = {v.
 internal S64 dot_2s64(Vec2S64 a, Vec2S64 b)                     {S64 c = a.x*b.x + a.y*b.y; return c;}
 internal S64 length_squared_2s64(Vec2S64 v)                     {S64 c = v.x*v.x + v.y*v.y; return c;}
 internal S64 length_2s64(Vec2S64 v)                             {S64 c = (S64)sqrt_f64((F64)(v.x*v.x + v.y*v.y)); return c;}
-internal Vec2S64 normalize_2s64(Vec2S64 v)                      {v = scale_2s64(v, (S64)(1.f/length_2s64(v))); return v;}
 internal Vec2S64 mix_2s64(Vec2S64 a, Vec2S64 b, F32 t)          {Vec2S64 c = {(S64)mix_1f32((F32)a.x, (F32)b.x, t), (S64)mix_1f32((F32)a.y, (F32)b.y, t)}; return c;}
 
 internal Vec2S32 vec_2s32(S32 x, S32 y)                         {Vec2S32 v = {x, y}; return v;}
@@ -54,7 +53,6 @@ internal Vec2S32 scale_2s32(Vec2S32 v, S32 s)                   {Vec2S32 c = {v.
 internal S32 dot_2s32(Vec2S32 a, Vec2S32 b)                     {S32 c = a.x*b.x + a.y*b.y; return c;}
 internal S32 length_squared_2s32(Vec2S32 v)                     {S32 c = v.x*v.x + v.y*v.y; return c;}
 internal S32 length_2s32(Vec2S32 v)                             {S32 c = (S32)sqrt_f32((F32)v.x*(F32)v.x + (F32)v.y*(F32)v.y); return c;}
-internal Vec2S32 normalize_2s32(Vec2S32 v)                      {v = scale_2s32(v, (S32)(1.f/length_2s32(v))); return v;}
 internal Vec2S32 mix_2s32(Vec2S32 a, Vec2S32 b, F32 t)          {Vec2S32 c = {(S32)mix_1f32((F32)a.x, (F32)b.x, t), (S32)mix_1f32((F32)a.y, (F32)b.y, t)}; return c;}
 
 internal Vec2S16 vec_2s16(S16 x, S16 y)                         {Vec2S16 v = {x, y}; return v;}
@@ -66,7 +64,6 @@ internal Vec2S16 scale_2s16(Vec2S16 v, S16 s)                   {Vec2S16 c = {(S
 internal S16 dot_2s16(Vec2S16 a, Vec2S16 b)                     {S16 c = a.x*b.x + a.y*b.y; return c;}
 internal S16 length_squared_2s16(Vec2S16 v)                     {S16 c = v.x*v.x + v.y*v.y; return c;}
 internal S16 length_2s16(Vec2S16 v)                             {S16 c = (S16)sqrt_f32((F32)(v.x*v.x + v.y*v.y)); return c;}
-internal Vec2S16 normalize_2s16(Vec2S16 v)                      {v = scale_2s16(v, (S16)(1.f/length_2s16(v))); return v;}
 internal Vec2S16 mix_2s16(Vec2S16 a, Vec2S16 b, F32 t)          {Vec2S16 c = {(S16)mix_1f32((F32)a.x, (F32)b.x, t), (S16)mix_1f32((F32)a.y, (F32)b.y, t)}; return c;}
 
 internal Vec3F32 vec_3f32(F32 x, F32 y, F32 z)                  {Vec3F32 v = {x, y, z}; return v;}
@@ -99,7 +96,6 @@ internal Vec3S32 scale_3s32(Vec3S32 v, S32 s)                   {Vec3S32 c = {v.
 internal S32 dot_3s32(Vec3S32 a, Vec3S32 b)                     {S32 c = a.x*b.x + a.y*b.y + a.z*b.z; return c;}
 internal S32 length_squared_3s32(Vec3S32 v)                     {S32 c = v.x*v.x + v.y*v.y + v.z*v.z; return c;}
 internal S32 length_3s32(Vec3S32 v)                             {S32 c = (S32)sqrt_f32((F32)(v.x*v.x + v.y*v.y + v.z*v.z)); return c;}
-internal Vec3S32 normalize_3s32(Vec3S32 v)                      {v = scale_3s32(v, (S32)(1.f/length_3s32(v))); return v;}
 internal Vec3S32 mix_3s32(Vec3S32 a, Vec3S32 b, F32 t)          {Vec3S32 c = {(S32)mix_1f32((F32)a.x, (F32)b.x, t), (S32)mix_1f32((F32)a.y, (F32)b.y, t), (S32)mix_1f32((F32)a.z, (F32)b.z, t)}; return c;}
 internal Vec3S32 cross_3s32(Vec3S32 a, Vec3S32 b)               {Vec3S32 c = {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x}; return c;}
 
@@ -124,7 +120,6 @@ internal Vec4S32 scale_4s32(Vec4S32 v, S32 s)                   {Vec4S32 c = {v.
 internal S32 dot_4s32(Vec4S32 a, Vec4S32 b)                     {S32 c = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; return c;}
 internal S32 length_squared_4s32(Vec4S32 v)                     {S32 c = v.x*v.x + v.y*v.y + v.z*v.z + v.w*v.w; return c;}
 internal S32 length_4s32(Vec4S32 v)                             {S32 c = (S32)sqrt_f32((F32)(v.x*v.x + v.y*v.y + v.z*v.z + v.w*v.w)); return c;}
-internal Vec4S32 normalize_4s32(Vec4S32 v)                      {v = scale_4s32(v, (S32)(1.f/length_4s32(v))); return v;}
 internal Vec4S32 mix_4s32(Vec4S32 a, Vec4S32 b, F32 t)          {Vec4S32 c = {(S32)mix_1f32((F32)a.x, (F32)b.x, t), (S32)mix_1f32((F32)a.y, (F32)b.y, t), (S32)mix_1f32((F32)a.z, (F32)b.z, t), (S32)mix_1f32((F32)a.w, (F32)b.w, t)}; return c;}
 
 ////////////////////////////////
