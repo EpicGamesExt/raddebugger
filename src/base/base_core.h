@@ -217,6 +217,7 @@
 #  error Atomic intrinsics not defined for this compiler / architecture combination.
 # endif
 #elif COMPILER_CLANG || COMPILER_GCC
+#  define ins_atomic_u8_eval_assign(x,c)         __atomic_exchange_n(x, c, __ATOMIC_SEQ_CST)
 #  define ins_atomic_u64_eval(x)                 __atomic_load_n(x, __ATOMIC_SEQ_CST)
 #  define ins_atomic_u64_inc_eval(x)             (__atomic_fetch_add((volatile U64 *)(x), 1, __ATOMIC_SEQ_CST) + 1)
 #  define ins_atomic_u64_dec_eval(x)             (__atomic_fetch_sub((volatile U64 *)(x), 1, __ATOMIC_SEQ_CST) - 1)
