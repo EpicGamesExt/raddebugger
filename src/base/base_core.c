@@ -41,7 +41,7 @@ u128_zero(void)
 internal U128
 u128_make(U64 v0, U64 v1)
 {
-  U128 v = {v0, v1};
+  U128 v = { .u64 = { v0, v1 }};
   return v;
 }
 
