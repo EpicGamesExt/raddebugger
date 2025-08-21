@@ -1271,8 +1271,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
     State_InputLibs,
     State_InputDelayLoadDlls,
     State_InputLinkerObjs,
-    State_SearchUndefined,
-    State_SearchWeak,
+    State_SearchUndefinedAndWeak,
     State_SearchWeakAntiDep,
     State_SearchEntryPoint,
   };
@@ -1286,10 +1285,9 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 } while (0)
 #define state_list_pop(l) (l).first->state; SLLQueuePop((l).first, (l).last); (l).count -= 1
   typedef enum {
-    SearchFlag_Undefined   = (1 << 0),
-    SearchFlag_Weak        = (1 << 1),
-    SearchFlag_WeakAntiDep = (1 << 2),
-    SearchFlag_All         = (SearchFlag_Undefined|SearchFlag_Weak|SearchFlag_WeakAntiDep)
+    SearchFlag_UndefinedAndWeak = (1 << 0),
+    SearchFlag_WeakAntiDep      = (1 << 1),
+    SearchFlag_All              = (SearchFlag_UndefinedAndWeak|SearchFlag_WeakAntiDep)
   } SearchFlags;
   
   ProfBeginFunction();
@@ -1656,8 +1654,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 
         ProfEnd();
       } break;
-      case State_SearchUndefined: {
-        ProfBegin("Search Undefined");
+      case State_SearchUndefinedAndWeak: {
+        ProfBegin("Search Undefined And Weak");
         LNK_InputImportList new_imports = {0};
         LNK_InputObjList    new_objs    = {0};
         for EachIndex(i, ArrayCount(lib_index)) {
@@ -1673,45 +1671,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                     if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
                       lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
                     }
-                  }
-                }
-              }
-            }
-            if (new_imports.count || new_objs.count) {
-              goto end_search_undefined;
-            }
-          }
-        }
-        end_search_undefined:;
-        
-        {
-          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
-          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
-          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
-
-          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
-          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
-          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
-
-          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
-          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
-        }
-
-        ProfEnd();
-      } break;
-      case State_SearchWeak: {
-        ProfBegin("Search Weak");
-        LNK_InputImportList new_imports = {0};
-        LNK_InputObjList new_objs = {0};
-        for EachIndex(i, ArrayCount(lib_index)) {
-          for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-            for EachIndex(worker_id, symtab->arena->count) {
-              for (LNK_SymbolHashTrieChunk *c = symtab->chunks[worker_id].first; c != 0; c = c->next) {
-                for EachIndex(i, c->count) {
-                  LNK_Symbol                 *symbol        = c->v[i].symbol;
-                  COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_defined(symbol);
-                  COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-                  if (symbol_interp == COFF_SymbolValueInterp_Weak) {
+                  } else if (symbol_interp == COFF_SymbolValueInterp_Weak) {
                     COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol_parsed, symbol->defined.obj->header.is_big_obj);
                     if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
                       U32 member_idx;
@@ -1724,12 +1684,12 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
               }
             }
             if (new_imports.count || new_objs.count) {
-              goto end_search_weak;
+              goto end_search_undefined;
             }
           }
         }
-        end_search_weak:;
-
+        end_search_undefined:;
+        
         {
           LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
           radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
@@ -2207,14 +2167,9 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       state_list_push(scratch.arena, state_list, State_InputDelayLoadDlls);
       continue;
     }
-    if (search_flags & SearchFlag_Undefined) {
-      search_flags &= ~SearchFlag_Undefined;
-      state_list_push(scratch.arena, state_list, State_SearchUndefined);
-      continue;
-    }
-    if (search_flags & SearchFlag_Weak) {
-      search_flags &= ~SearchFlag_Weak;
-      state_list_push(scratch.arena, state_list, State_SearchWeak);
+    if (search_flags & SearchFlag_UndefinedAndWeak) {
+      search_flags &= ~SearchFlag_UndefinedAndWeak;
+      state_list_push(scratch.arena, state_list, State_SearchUndefinedAndWeak);
       continue;
     }
     if (search_flags & SearchFlag_WeakAntiDep) {
