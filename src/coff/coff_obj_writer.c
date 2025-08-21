@@ -93,6 +93,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
       case COFF_SymbolLocation_Section: d->section_number = safe_cast_u16(s->loc.u.section->section_number); break;
       case COFF_SymbolLocation_Abs:     d->section_number = COFF_Symbol_AbsSection16;         break;
       case COFF_SymbolLocation_Undef:   d->section_number = COFF_Symbol_UndefinedSection;     break;
+      case COFF_SymbolLocation_Common:  d->section_number = COFF_Symbol_UndefinedSection;     break;
       }
       d->type             = s->type;
       d->storage_class    = s->storage_class;
