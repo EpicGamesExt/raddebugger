@@ -141,7 +141,11 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 
     COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(weak_parsed, weak->defined.obj->header.is_big_obj);
     if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
-      can_replace = lnk_symbol_defined_is_before(dst, src);
+      // NOTE: MSVC does not let a weak symbol to replace an undefined one,
+      // but LLD links without errors or warnings, meaning undefined symbols
+      // are resolved to the weak, which can potentially change behaviour of
+      // the linked image
+      can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
     } else if (weak_ext->characteristics == COFF_WeakExt_NoLibrary) {
       can_replace = dst_interp == COFF_SymbolValueInterp_Weak;
     } else if (weak_ext->characteristics == COFF_WeakExt_SearchAlias) {
