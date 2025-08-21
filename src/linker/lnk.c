@@ -1521,6 +1521,9 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           if (symbol_ht) {
             COFF_SymbolValueInterpType interp = lnk_interp_from_symbol(symbol_ht->symbol);
             if (interp == COFF_SymbolValueInterp_Undefined) {
+              // clear out slot so weak symbol can replace undefined symbol
+              symbol_ht->symbol = 0;
+
               // make obj with alternamte name symbol
               String8 alt_name_obj;
               {
