@@ -558,7 +558,7 @@ RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_siz
           piv = scan;
           while( scan <= rend )
           {
-            size_t adv = is_before( scan, tmp );
+            int adv = is_before( scan, tmp );
             swapper( piv, scan, element_size );
             if ( adv ) piv = rsadd_ptr( piv, element_size ); // needs to be a cmov
             scan = rsadd_ptr( scan, element_size );
