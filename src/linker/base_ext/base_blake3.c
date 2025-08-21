@@ -4,6 +4,7 @@
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmacro-redefined"
+#pragma clang diagnostic ignored "-Wsign-conversion"
 #elif defined(_MSC_VER)
 #pragma warning (push, 0)
 #endif
