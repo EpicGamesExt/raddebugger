@@ -27,7 +27,7 @@ cd /D "%~dp0"
 :: - `spall`: enable spall profiling support
 
 :: --- Unpack Arguments -------------------------------------------------------
-for %%a in (%*) do set "%%a=1"
+for %%a in (%*) do set "%%~a=1"
 if not "%msvc%"=="1" if not "%clang%"=="1" set msvc=1
 if not "%release%"=="1" set debug=1
 if "%debug%"=="1"   set release=0 && echo [debug mode]
