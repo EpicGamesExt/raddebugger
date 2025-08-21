@@ -36,15 +36,15 @@ typedef struct LNK_InputImportList
 
 typedef struct LNK_InputObj
 {
-  struct LNK_InputObj *next;
+  String8              path;
+  String8              dedup_id;
+  String8              data;
   B8                   is_thin;
   B8                   exclude_from_debug_info;
   B8                   has_disk_read_failed;
-  String8              dedup_id;
-  String8              path;
-  String8              data;
   struct LNK_Lib      *lib;
   U64                  input_idx;
+  struct LNK_InputObj *next;
 } LNK_InputObj;
 
 typedef struct LNK_InputObjList

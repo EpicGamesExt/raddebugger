@@ -8,8 +8,8 @@ def get_sorted_objs(pdb_path):
     filtered_lines = [line for line in lines if line.lstrip().startswith("Mod ")]
     # sort by the obj_path portion (line format: "Mod <imod> <obj_path>")
     def extract_path(line):  return line.split(maxsplit=2)[2].lower()
-    sorted_lines = sorted(filtered_lines, key=extract_path)
-    return sorted_lines
+    #sorted_lines = sorted(filtered_lines, key=extract_path)
+    return filtered_lines
 
 if __name__ == "__main__":
     sorted_objs = get_sorted_objs(sys.argv[1])

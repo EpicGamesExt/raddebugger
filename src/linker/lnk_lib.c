@@ -1,56 +1,17 @@
 // Copyright (c) 2025 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal LNK_LibNode *
-lnk_lib_list_pop_node_atomic(LNK_LibList *list)
+internal int
+lnk_lib_node_is_before(void *a, void *b)
 {
-  for (;;) {
-    LNK_LibNode *expected = list->first;
-    LNK_LibNode *current  = ins_atomic_ptr_eval_cond_assign(&list->first, expected->next, expected);
-    if (expected == current) { 
-      ins_atomic_u64_dec_eval(&list->count);
-      return expected;
-    }
-  }
+  return ((LNK_LibNode*)a)->data.input_idx < ((LNK_LibNode*)b)->data.input_idx;
 }
 
-internal void
-lnk_lib_list_push_node_atomic(LNK_LibList *list, LNK_LibNode *node)
+internal int
+lnk_lib_node_ptr_is_before(void *raw_a, void *raw_b)
 {
-  for (;;) {
-    LNK_LibNode *expected = list->first;
-    LNK_LibNode *current  = ins_atomic_ptr_eval_cond_assign(&list->first, node, expected);
-    if (current == expected) {
-      node->next = expected;
-      ins_atomic_u64_inc_eval(&list->count);
-      return;
-    }
-  }
-}
-
-internal void
-lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node)
-{
-  SLLStackPush(list->first, node);
-  list->count += 1;
-}
-
-internal LNK_LibList
-lnk_lib_list_reserve(Arena *arena, U64 count)
-{
-  LNK_LibList result = {0};
-  LNK_LibNode *nodes = push_array(arena, LNK_LibNode, count);
-  for (U64 i = 0; i < count; i += 1) { lnk_lib_list_push_node(&result, &nodes[i]); }
-  return result;
-}
-
-internal LNK_LibNodeArray
-lnk_array_from_lib_list(Arena *arena, LNK_LibList list)
-{
-  LNK_LibNodeArray result = {0};
-  result.v = push_array(arena, LNK_LibNode, list.count);
-  for (LNK_LibNode *n = list.first; n != 0; n = n->next) { result.v[result.count++] = *n; }
-  return result;
+  LNK_LibNode **a = raw_a, **b = raw_b;
+  return lnk_lib_node_is_before(*a, *b);
 }
 
 internal B32
@@ -169,21 +130,25 @@ THREAD_POOL_TASK_FUNC(lnk_lib_initer)
 {
   LNK_LibIniter *task = raw_task;
 
-  LNK_LibNode *lib_node = lnk_lib_list_pop_node_atomic(&task->free_libs);
+  U64          lib_node_idx = ins_atomic_u64_inc_eval(&task->next_free_lib_idx)-1;
+  LNK_LibNode *lib_node     = &task->free_libs[lib_node_idx];
   lib_node->data.input_idx = task_id;
 
   B32 is_valid_lib = lnk_lib_from_data(arena, task->data_arr[task_id], task->path_arr[task_id], &lib_node->data);
   if (is_valid_lib) {
-    lnk_lib_list_push_node_atomic(&task->valid_libs, lib_node);
+    U64 valid_lib_idx = ins_atomic_u64_inc_eval(&task->valid_libs_count)-1;
+    task->valid_libs[valid_lib_idx] = lib_node;
   } else {
-    lnk_lib_list_push_node_atomic(&task->invalid_libs, lib_node);
+    U64 invalid_lib_idx = ins_atomic_u64_inc_eval(&task->invalid_libs_count);
+    task->invalid_libs[invalid_lib_idx] = lib_node;
   }
 }
 
-internal int
-lnk_lib_node_is_before(void *a, void *b)
+internal void
+lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node)
 {
-  return ((LNK_LibNode*)a)->data.input_idx < ((LNK_LibNode*)b)->data.input_idx;
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
 }
 
 internal LNK_LibNodeArray
@@ -196,26 +161,27 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, S
 
   // parse libs in parallel
   LNK_LibIniter task = {0};
-  task.free_libs     = lnk_lib_list_reserve(scratch.arena, lib_count);
+  task.free_libs     = push_array(arena->v[0], LNK_LibNode, lib_count);
+  task.valid_libs    = push_array(scratch.arena, LNK_LibNode *, lib_count);
+  task.invalid_libs  = push_array(scratch.arena, LNK_LibNode *, lib_count);
   task.data_arr      = data_arr.v;
   task.path_arr      = path_arr.v;
   tp_for_parallel(tp, arena, lib_count, lnk_lib_initer, &task);
 
   // report invalid libs
-  LNK_LibNodeArray invalid_libs = lnk_array_from_lib_list(scratch.arena, task.invalid_libs);
-  radsort(invalid_libs.v, invalid_libs.count, lnk_lib_node_is_before);
-  for (U64 i = 0; i < task.invalid_libs.count; i += 1) {
-    U64 input_idx = invalid_libs.v[i].data.input_idx;
+  radsort(task.invalid_libs, task.invalid_libs_count, lnk_lib_node_ptr_is_before);
+  for EachIndex(i, task.invalid_libs_count) {
+    U64 input_idx = task.invalid_libs[i]->data.input_idx;
     lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", path_arr.v[input_idx]);
   }
 
   // push parsed libs
-  LNK_LibNodeArray result = lnk_array_from_lib_list(arena->v[0], task.valid_libs);
-  radsort(result.v, result.count, lnk_lib_node_is_before);
-  for (U64 i = result.count; i > 0; i -= 1) {
-    result.v[i-1].data.input_idx = list->count;
-    lnk_lib_list_push_node(list, &result.v[i-1]);
+  radsort(task.valid_libs, task.valid_libs_count, lnk_lib_node_ptr_is_before);
+  for EachIndex(i, task.valid_libs_count) {
+    lnk_lib_list_push_node(list, task.valid_libs[i]);
   }
+
+  LNK_LibNodeArray result = { .count = task.valid_libs_count, task.valid_libs };
 
   scratch_end(scratch);
   return result;

@@ -16,6 +16,7 @@
   </Type>
 
   <Type Name="LNK_ExportParseList">
+    <AlternativeType Name="LNK_InputObjList"/>
     <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
     <Expand>
 			<LinkedListItems>
@@ -33,6 +34,7 @@
     <AlternativeType Name="LNK_ExportParseList"/>
     <AlternativeType Name="LNK_InputImportList"/>
     <AlternativeType Name="LNK_ObjList"/>
+    <AlternativeType Name="LNK_InputImportList"/>
     <AlternativeType Name="CV_SymbolList"/>
     <DisplayString>{{count={count} first={first} }}</DisplayString>
     <Expand>
