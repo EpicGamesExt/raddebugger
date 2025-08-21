@@ -1262,7 +1262,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
 internal LNK_LinkContext
 lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 {
-  enum {
+  enum State {
     State_Null,
     State_InputDisallowLibs,
     State_InputImports,
