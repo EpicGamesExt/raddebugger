@@ -14,6 +14,13 @@
 #include <stdint.h>
 
 ////////////////////////////////
+//~ rjf: Third Party Includes
+
+#define STB_SPRINTF_DECORATE(name) raddbg_##name
+#define STB_SPRINTF_STATIC
+#include "third_party/stb/stb_sprintf.h"
+
+////////////////////////////////
 //~ rjf: Codebase Keywords
 
 #define internal      static
