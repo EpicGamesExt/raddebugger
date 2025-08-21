@@ -1626,7 +1626,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
           if (lnk_get_log_status(LNK_Log_InputLib)) {
             if (libs.count > 0) {
               U64 input_size = 0;
-              for EachIndex(i, libs.count) { input_size += libs.v[i].data.data.size; }
+              for EachIndex(i, libs.count) { input_size += libs.v[i]->data.data.size; }
               lnk_log(LNK_Log_InputObj, "[ Lib Input Size %M ]", input_size);
             }
           }
@@ -1658,6 +1658,8 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       } break;
       case State_SearchUndefined: {
         ProfBegin("Search Undefined");
+        LNK_InputImportList new_imports = {0};
+        LNK_InputObjList    new_objs    = {0};
         for EachIndex(i, ArrayCount(lib_index)) {
           for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
             for EachIndex(worker_id, symtab->arena->count) {
@@ -1669,22 +1671,38 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                   if (symbol_interp == COFF_SymbolValueInterp_Undefined) {
                     U32 member_idx;
                     if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
-                      lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &input_import_list, &input_obj_list);
+                      lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
                     }
                   }
                 }
               }
             }
-            if (input_import_list.count || input_obj_list.count) {
+            if (new_imports.count || new_objs.count) {
               goto end_search_undefined;
             }
           }
         }
         end_search_undefined:;
+        
+        {
+          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
+          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
+          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
+
+          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
+          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
+          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
+
+          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
+          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
+        }
+
         ProfEnd();
       } break;
       case State_SearchWeak: {
         ProfBegin("Search Weak");
+        LNK_InputImportList new_imports = {0};
+        LNK_InputObjList new_objs = {0};
         for EachIndex(i, ArrayCount(lib_index)) {
           for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
             for EachIndex(worker_id, symtab->arena->count) {
@@ -1698,23 +1716,39 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                     if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
                       U32 member_idx;
                       if (lnk_search_lib(&lib_n->data, symbol->name, &member_idx)) {
-                        lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &input_import_list, &input_obj_list);
+                        lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
                       }
                     }
                   }
                 }
               }
             }
-            if (input_import_list.count || input_obj_list.count) {
+            if (new_imports.count || new_objs.count) {
               goto end_search_weak;
             }
           }
         }
         end_search_weak:;
+
+        {
+          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
+          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
+          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
+
+          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
+          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
+          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
+
+          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
+          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
+        }
+
         ProfEnd();
       } break;
       case State_SearchWeakAntiDep: {
         ProfBegin("Search Weak AntiDep");
+        LNK_InputImportList new_imports = {0};
+        LNK_InputObjList    new_objs    = {0};
         for EachIndex(i, ArrayCount(lib_index)) {
           for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
             for EachIndex(worker_id, symtab->arena->count) {
@@ -1732,7 +1766,7 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                       if (dep_interp == COFF_SymbolValueInterp_Weak) {
                         U32 member_idx;
                         if (lnk_search_lib(&lib_n->data, symbol_parsed.name, &member_idx)) {
-                          lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &input_import_list, &input_obj_list);
+                          lnk_queue_lib_member_for_input(scratch.arena, config, symbol, &lib_n->data, member_idx, &new_imports, &new_objs);
                         }
                       }
                     }
@@ -1740,13 +1774,26 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
                 }
               }
             }
-
-            if (input_import_list.count || input_obj_list.count) {
+            if (new_imports.count || new_objs.count) {
               goto end_search_antidep;
             }
           }
         }
         end_search_antidep:;
+
+        {
+          LNK_InputImportNode **import_nodes = lnk_input_import_arr_from_list(scratch.arena, new_imports);
+          radsort(import_nodes, new_imports.count, lnk_input_import_is_before);
+          new_imports = lnk_list_from_input_import_arr(import_nodes, new_imports.count);
+
+          LNK_InputObj **obj_nodes = lnk_array_from_input_obj_list(scratch.arena, new_objs);
+          radsort(obj_nodes, new_objs.count, lnk_input_obj_compar_is_before);
+          new_objs = lnk_list_from_input_obj_arr(obj_nodes, new_objs.count);
+
+          lnk_input_import_list_concat_in_place(&input_import_list, &new_imports);
+          lnk_input_obj_list_concat_in_place(&input_obj_list, &new_objs);
+        }
+
         ProfEnd();
       } break;
       case State_SearchEntryPoint: {

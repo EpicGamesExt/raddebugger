@@ -84,20 +84,15 @@ lnk_path_array_from_input_obj_array(Arena *arena, LNK_InputObj **arr, U64 count)
 internal int
 lnk_input_obj_compar(const void *raw_a, const void *raw_b)
 {
-  const LNK_InputObj **a = (const LNK_InputObj **) raw_a;
-  const LNK_InputObj **b = (const LNK_InputObj **) raw_b;
-  int cmp = str8_compar_case_sensitive(&(*a)->path, &(*b)->path);
-  return cmp;
+  LNK_InputObj * const *a = raw_a, * const *b = raw_b;
+  return u64_compar(&(*a)->input_idx, &(*b)->input_idx);
 }
 
 internal int
 lnk_input_obj_compar_is_before(void *raw_a, void *raw_b)
 {
-  LNK_InputObj **a = raw_a;
-  LNK_InputObj **b = raw_b;
-  int cmp = str8_compar_case_sensitive(&(*a)->path, &(*b)->path);
-  int is_before = cmp < 0;
-  return is_before;
+  LNK_InputObj **a = raw_a, **b = raw_b;
+  return lnk_input_obj_compar(a, b) < 0;
 }
 
 internal LNK_InputObjList
