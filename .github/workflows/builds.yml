@@ -31,7 +31,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call build %${{ matrix.target }}% %${{ matrix.compiler }}% %${{ matrix.mode }}% || exit /b 1
+          call build "${{ matrix.target }}" "${{ matrix.compiler }}" "${{ matrix.mode }}" || exit /b 1
 
   run-torture:
     runs-on: windows-2022
