@@ -627,12 +627,8 @@ index_of_zero_u64(U64 *ptr, U64 count)
 ////////////////////////////////
 //~ rjf: Third Party Includes
 
-#define STB_SPRINTF_DECORATE(name) raddbg_##name
-#include "third_party/stb/stb_sprintf.h"
-
 #if !BUILD_SUPPLEMENTARY_UNIT
 # define STB_SPRINTF_IMPLEMENTATION
-# define STB_SPRINTF_STATIC
 # include "third_party/stb/stb_sprintf.h"
 #endif
 
