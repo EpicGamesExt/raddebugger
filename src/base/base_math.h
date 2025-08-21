@@ -443,7 +443,6 @@ internal Vec2S64 scale_2s64(Vec2S64 v, S64 s);
 internal S64 dot_2s64(Vec2S64 a, Vec2S64 b);
 internal S64 length_squared_2s64(Vec2S64 v);
 internal S64 length_2s64(Vec2S64 v);
-internal Vec2S64 normalize_2s64(Vec2S64 v);
 internal Vec2S64 mix_2s64(Vec2S64 a, Vec2S64 b, F32 t);
 
 #define v2s32(x, y) vec_2s32((x), (y))
@@ -456,7 +455,6 @@ internal Vec2S32 scale_2s32(Vec2S32 v, S32 s);
 internal S32 dot_2s32(Vec2S32 a, Vec2S32 b);
 internal S32 length_squared_2s32(Vec2S32 v);
 internal S32 length_2s32(Vec2S32 v);
-internal Vec2S32 normalize_2s32(Vec2S32 v);
 internal Vec2S32 mix_2s32(Vec2S32 a, Vec2S32 b, F32 t);
 
 #define v2s16(x, y) vec_2s16((x), (y))
@@ -469,7 +467,6 @@ internal Vec2S16 scale_2s16(Vec2S16 v, S16 s);
 internal S16 dot_2s16(Vec2S16 a, Vec2S16 b);
 internal S16 length_squared_2s16(Vec2S16 v);
 internal S16 length_2s16(Vec2S16 v);
-internal Vec2S16 normalize_2s16(Vec2S16 v);
 internal Vec2S16 mix_2s16(Vec2S16 a, Vec2S16 b, F32 t);
 
 #define v3f32(x, y, z) vec_3f32((x), (y), (z))
@@ -497,7 +494,6 @@ internal Vec3S32 scale_3s32(Vec3S32 v, S32 s);
 internal S32 dot_3s32(Vec3S32 a, Vec3S32 b);
 internal S32 length_squared_3s32(Vec3S32 v);
 internal S32 length_3s32(Vec3S32 v);
-internal Vec3S32 normalize_3s32(Vec3S32 v);
 internal Vec3S32 mix_3s32(Vec3S32 a, Vec3S32 b, F32 t);
 internal Vec3S32 cross_3s32(Vec3S32 a, Vec3S32 b);
 
@@ -524,7 +520,6 @@ internal Vec4S32 scale_4s32(Vec4S32 v, S32 s);
 internal S32 dot_4s32(Vec4S32 a, Vec4S32 b);
 internal S32 length_squared_4s32(Vec4S32 v);
 internal S32 length_4s32(Vec4S32 v);
-internal Vec4S32 normalize_4s32(Vec4S32 v);
 internal Vec4S32 mix_4s32(Vec4S32 a, Vec4S32 b, F32 t);
 
 ////////////////////////////////
