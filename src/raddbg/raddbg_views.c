@@ -3309,10 +3309,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           U64 as_u64 = 0;
           F32 as_f32 = 0;
           F64 as_f64 = 0;
-          e_space_read(eval.space, &as_u64, r1u64(cursor_base_vaddr, cursor_base_vaddr+1));
-          memcpy(&as_u8, &as_u64, sizeof(as_u8));
-          memcpy(&as_u16, &as_u64, sizeof(as_u16));
-          memcpy(&as_u32, &as_u64, sizeof(as_u32));
+          e_space_read(eval.space, &as_u64, r1u64(cursor_base_vaddr, cursor_base_vaddr+8));
+          memcpy(&as_u8, &as_u64, sizeof(U8));
+          memcpy(&as_u16, &as_u64, sizeof(U16));
+          memcpy(&as_u32, &as_u64, sizeof(U32));
           memcpy(&as_f32, &as_u64, sizeof(as_f32));
           memcpy(&as_f64, &as_u64, sizeof(as_f64));
           ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
