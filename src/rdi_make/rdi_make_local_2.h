@@ -21,6 +21,8 @@ struct RDIM_UnsortedJoinedLineTable
 typedef struct RDIM2_Shared RDIM2_Shared;
 struct RDIM2_Shared
 {
+  RDIM_BakePathTree *path_tree;
+  
   RDI_U64 line_tables_count;
   RDI_U64 line_table_block_take_counter;
   RDIM_LineTable **src_line_tables;

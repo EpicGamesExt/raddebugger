@@ -14,6 +14,16 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
+  //- rjf: build interned path tree
+  //
+  if(lane_idx() == 0) ProfScope("build interned path tree")
+  {
+    rdim2_shared->path_tree = rdim_bake_path_tree_from_params(arena, params);
+  }
+  lane_sync();
+  RDIM_BakePathTree *path_tree = rdim2_shared->path_tree;
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: gather all unsorted, joined, line table info; & sort
   //
   ProfScope("gather all unsorted, joined, line table info; & sort")
@@ -327,19 +337,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       RDIM_BakeStringMapTopology *map_top = &rdim2_shared->bake_string_map_topology;
       RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(arena, map_top, map);
       rdim2_shared->bake_strings = rdim_bake_string_map_tight_from_loose(arena, map_top, &bake_string_map_base_idxes, map);
-#if 1
-      for EachIndex(idx, rdim2_shared->bake_strings.slots_count)
-      {
-        for(RDIM_BakeStringChunkNode *n = rdim2_shared->bake_strings.slots[idx].first; n != 0; n = n->next)
-        {
-          for EachIndex(n_idx, n->count)
-          {
-            fprintf(stdout, "%.*s\n", str8_varg(n->v[n_idx].string));
-          }
-        }
-      }
-      fflush(stdout);
-#endif
     }
   }
   lane_sync();
