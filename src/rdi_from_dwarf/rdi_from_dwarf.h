@@ -100,4 +100,4 @@ internal RDIM_Rng1U64ChunkList d2r_voff_ranges_from_cu_info_off(D2R_CompUnitCont
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point
 
-internal RDIM_BakeParams d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params);
+internal RDIM_BakeParams d2r_convert(Arena *arena, D2R_ConvertParams *params);

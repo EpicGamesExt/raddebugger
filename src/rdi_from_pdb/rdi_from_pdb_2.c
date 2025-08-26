@@ -2,49 +2,8 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal RDIM_BakeParams
-p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in)
+p2r2_convert(Arena *arena, P2R_ConvertParams *params)
 {
-  RDIM_BakeParams result = {0};
-  Temp scratch = scratch_begin(thread_arenas, thread_count);
-  Barrier barrier = barrier_alloc(thread_count);
-  {
-    P2R2_ConvertThreadParams *thread_params = push_array(scratch.arena, P2R2_ConvertThreadParams, thread_count);
-    OS_Handle *threads = push_array(scratch.arena, OS_Handle, thread_count);
-    for EachIndex(idx, thread_count)
-    {
-      thread_params[idx].arena = thread_arenas[idx];
-      thread_params[idx].lane_ctx.lane_idx   = idx;
-      thread_params[idx].lane_ctx.lane_count = thread_count;
-      thread_params[idx].lane_ctx.barrier    = barrier;
-      thread_params[idx].input_exe_name      = in->input_exe_name;
-      thread_params[idx].input_exe_data      = in->input_exe_data;
-      thread_params[idx].input_pdb_name      = in->input_pdb_name;
-      thread_params[idx].input_pdb_data      = in->input_pdb_data;
-      thread_params[idx].deterministic       = in->deterministic;
-      thread_params[idx].out_bake_params     = &result;
-    }
-    for EachIndex(idx, thread_count)
-    {
-      threads[idx] = os_thread_launch(p2r2_convert_thread_entry_point, &thread_params[idx], 0);
-    }
-    for EachIndex(idx, thread_count)
-    {
-      os_thread_join(threads[idx], max_U64);
-    }
-  }
-  barrier_release(barrier);
-  scratch_end(scratch);
-  return result;
-}
-
-internal void
-p2r2_convert_thread_entry_point(void *p)
-{
-  P2R2_ConvertThreadParams *params = (P2R2_ConvertThreadParams *)p;
-  Arena *arena = params->arena;
-  lane_ctx(params->lane_ctx);
-  ThreadNameF("p2r2_convert_thread_%I64u", lane_idx());
-  
   //////////////////////////////////////////////////////////////
   //- rjf: do base MSF parse
   //
@@ -3957,7 +3916,7 @@ p2r2_convert_thread_entry_point(void *p)
   //////////////////////////////////////////////////////////////
   //- rjf: bundle all outputs
   //
-  if(lane_idx() == 0)
+  RDIM_BakeParams result = {0};
   {
     //- rjf: produce top-level-info
     RDIM_TopLevelInfo top_level_info = {0};
@@ -3993,18 +3952,20 @@ p2r2_convert_thread_entry_point(void *p)
     }
     
     //- rjf: fill
-    params->out_bake_params->top_level_info   = top_level_info;
-    params->out_bake_params->binary_sections  = binary_sections;
-    params->out_bake_params->units            = all_units;
-    params->out_bake_params->types            = all_types;
-    params->out_bake_params->udts             = all_udts;
-    params->out_bake_params->src_files        = all_src_files;
-    params->out_bake_params->line_tables      = all_line_tables;
-    params->out_bake_params->global_variables = all_global_variables;
-    params->out_bake_params->thread_variables = all_thread_variables;
-    params->out_bake_params->constants        = all_constants;
-    params->out_bake_params->procedures       = all_procedures;
-    params->out_bake_params->scopes           = all_scopes;
-    params->out_bake_params->inline_sites     = all_inline_sites;
+    result.top_level_info   = top_level_info;
+    result.binary_sections  = binary_sections;
+    result.units            = all_units;
+    result.types            = all_types;
+    result.udts             = all_udts;
+    result.src_files        = all_src_files;
+    result.line_tables      = all_line_tables;
+    result.global_variables = all_global_variables;
+    result.thread_variables = all_thread_variables;
+    result.constants        = all_constants;
+    result.procedures       = all_procedures;
+    result.scopes           = all_scopes;
+    result.inline_sites     = all_inline_sites;
   }
+  
+  return result;
 }

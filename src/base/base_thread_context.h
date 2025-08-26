@@ -51,7 +51,7 @@ internal Arena *tctx_get_scratch(Arena **conflicts, U64 count);
 #define scratch_end(scratch) temp_end(scratch)
 
 //- rjf: lane metadata
-internal void tctx_set_lane_ctx(LaneCtx lane_ctx);
+internal LaneCtx tctx_set_lane_ctx(LaneCtx lane_ctx);
 internal void tctx_lane_barrier_wait(void);
 internal Rng1U64 tctx_lane_idx_range_from_count(U64 count);
 #define lane_idx() (tctx_selected()->lane_ctx.lane_idx)

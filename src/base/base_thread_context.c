@@ -75,11 +75,13 @@ tctx_get_scratch(Arena **conflicts, U64 count)
 
 //- rjf: lane metadata
 
-internal void
+internal LaneCtx
 tctx_set_lane_ctx(LaneCtx lane_ctx)
 {
   TCTX *tctx = tctx_selected();
+  LaneCtx restore = tctx->lane_ctx;
   tctx->lane_ctx = lane_ctx;
+  return restore;
 }
 
 internal void

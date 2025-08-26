@@ -1123,7 +1123,7 @@ d2r_push_scope(Arena *arena, RDIM_ScopeChunkList *scopes, U64 scope_chunk_cap, D
 //~ rjf: Main Conversion Entry Point
 
 internal RDIM_BakeParams
-d2r_convert(Arena *arena, ASYNC_Root *async_root, D2R_ConvertParams *params)
+d2r_convert(Arena *arena, D2R_ConvertParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
