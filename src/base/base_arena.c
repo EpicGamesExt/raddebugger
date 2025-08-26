@@ -83,7 +83,7 @@ arena_release(Arena *arena)
 //- rjf: arena push/pop core functions
 
 internal void *
-arena_push(Arena *arena, U64 size, U64 align)
+arena_push(Arena *arena, U64 size, U64 align, B32 zero)
 {
   Arena *current = arena->current;
   U64 pos_pre = AlignPow2(current->pos, align);
@@ -139,6 +139,13 @@ arena_push(Arena *arena, U64 size, U64 align)
     pos_pst = pos_pre + size;
   }
   
+  // rjf: compute the size we need to zero
+  U64 size_to_zero = 0;
+  if(zero)
+  {
+    size_to_zero = Min(current->cmt, pos_pst) - pos_pre;
+  }
+  
   // rjf: commit new pages, if needed
   if(current->cmt < pos_pst)
   {
@@ -165,6 +172,10 @@ arena_push(Arena *arena, U64 size, U64 align)
     result = (U8 *)current+pos_pre;
     current->pos = pos_pst;
     AsanUnpoisonMemoryRegion(result, size);
+    if(size_to_zero != 0)
+    {
+      MemoryZero(result, size_to_zero);
+    }
   }
   
   // rjf: panic on failure

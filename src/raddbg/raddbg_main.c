@@ -9,6 +9,7 @@
 // [ ] stepping w/ spoofs & shadow stack enabled - writing spoof will send a stack buffer overrun event @shadow_stack_step
 // [ ] hardware breakpoints regression (global eval in ctrl)
 // [ ] native filesystem dialog, resizing raddbg window -> crash!
+// [ ] stdout/stderr path target setting is now busted >:(
 //
 //- memory view
 // [ ] have smaller visible range than entire memory
@@ -220,6 +221,7 @@
 #include "async/async.h"
 #include "rdi/rdi_local.h"
 #include "rdi_make/rdi_make_local.h"
+#include "rdi_make/rdi_make_local_2.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
 #include "file_stream/file_stream.h"
@@ -271,6 +273,7 @@
 #include "async/async.c"
 #include "rdi/rdi_local.c"
 #include "rdi_make/rdi_make_local.c"
+#include "rdi_make/rdi_make_local_2.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"
 #include "file_stream/file_stream.c"
