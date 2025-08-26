@@ -7,22 +7,56 @@
 #include "radbin/generated/radbin.meta.c"
 
 ////////////////////////////////
-//~ rjf: Top-Level Entry Point
+//~ rjf: Top-Level Entry Points
 
 internal void
 rb_entry_point(CmdLine *cmdline)
 {
+  Temp scratch = scratch_begin(0, 0);
+  U64 threads_count = os_get_system_info()->logical_processor_count;
+  OS_Handle *threads = push_array(scratch.arena, OS_Handle, threads_count);
+  RB_ThreadParams *threads_params = push_array(scratch.arena, RB_ThreadParams, threads_count);
+  Barrier barrier = barrier_alloc(threads_count);
+  for EachIndex(idx, threads_count)
+  {
+    threads_params[idx].cmdline = cmdline;
+    threads_params[idx].lane_ctx.lane_idx   = idx;
+    threads_params[idx].lane_ctx.lane_count = threads_count;
+    threads_params[idx].lane_ctx.barrier    = barrier;
+    threads[idx] = os_thread_launch(rb_thread_entry_point, &threads_params[idx], 0);
+  }
+  for EachIndex(idx, threads_count)
+  {
+    os_thread_join(threads[idx], max_U64);
+  }
+  scratch_end(scratch);
+}
+
+internal void
+rb_thread_entry_point(void *p)
+{
+  RB_ThreadParams *params = (RB_ThreadParams *)p;
+  CmdLine *cmdline = params->cmdline;
+  LaneCtx lctx = params->lane_ctx;
+  lane_ctx(lctx);
   Arena *arena = arena_alloc();
-  ASYNC_Root *async_root = async_root_alloc();
   Log *log = log_alloc();
   log_select(log);
   log_scope_begin();
   
   //////////////////////////////
+  //- rjf: set up shared state
+  //
+  if(lane_idx() == 0)
+  {
+    rb_shared = push_array(arena, RB_Shared, 1);
+  }
+  lane_sync();
+  
+  //////////////////////////////
   //- rjf: analyze & load command line input files
   //
-  RB_FileList input_files = {0};
-  ProfScope("analyze & load command line input files")
+  ProfScope("analyze & load command line input files") if(lane_idx() == 0)
   {
     String8List input_file_path_tasks = str8_list_copy(arena, &cmdline->inputs);
     for(String8Node *n = input_file_path_tasks.first; n != 0; n = n->next)
@@ -318,23 +352,29 @@ rb_entry_point(CmdLine *cmdline)
         f->data         = file_data;
         RB_FileNode *file_n = push_array(arena, RB_FileNode, 1);
         file_n->v = f;
-        SLLQueuePush(input_files.first, input_files.last, file_n);
-        input_files.count += 1;
+        SLLQueuePush(rb_shared->input_files.first, rb_shared->input_files.last, file_n);
+        rb_shared->input_files.count += 1;
       }
     }
   }
+  lane_sync();
+  RB_FileList input_files = rb_shared->input_files;
   
   //////////////////////////////
   //- rjf: bucket input files by format
   //
-  RB_FileList input_files_from_format_table[RB_FileFormat_COUNT] = {0};
-  for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
+  ProfScope("bucket input files by format") if(lane_idx() == 0)
   {
-    RB_FileNode *file_n = push_array(arena, RB_FileNode, 1);
-    file_n->v = n->v;
-    SLLQueuePush(input_files_from_format_table[n->v->format].first, input_files_from_format_table[n->v->format].last, file_n);
-    input_files_from_format_table[n->v->format].count += 1;
+    for(RB_FileNode *n = input_files.first; n != 0; n = n->next)
+    {
+      RB_FileNode *file_n = push_array(arena, RB_FileNode, 1);
+      file_n->v = n->v;
+      SLLQueuePush(rb_shared->input_files_from_format_table[n->v->format].first, rb_shared->input_files_from_format_table[n->v->format].last, file_n);
+      rb_shared->input_files_from_format_table[n->v->format].count += 1;
+    }
   }
+  lane_sync();
+  RB_FileList *input_files_from_format_table = rb_shared->input_files_from_format_table;
   
   //////////////////////////////
   //- rjf: unpack which kind of output we're producing, and to where
@@ -400,17 +440,21 @@ rb_entry_point(CmdLine *cmdline)
   //////////////////////////////
   //- rjf: print help preamble
   //
-  if(output_kind == OutputKind_Null || cmdline->inputs.node_count == 0)
+  if(lane_idx() == 0)
   {
-    fprintf(stderr, "%s\n", BUILD_TITLE);
-    fprintf(stderr, "%s\n\n", BUILD_VERSION_STRING_LITERAL);
-    if(output_kind != OutputKind_Null)
+    if(output_kind == OutputKind_Null || cmdline->inputs.node_count == 0)
     {
-      fprintf(stderr, "%.*s Help\n", str8_varg(output_kind_info[output_kind].title));
-      fprintf(stderr, "To see top-level options for radbin, run the binary with no arguments.\n\n");
+      fprintf(stderr, "%s\n", BUILD_TITLE);
+      fprintf(stderr, "%s\n\n", BUILD_VERSION_STRING_LITERAL);
+      if(output_kind != OutputKind_Null)
+      {
+        fprintf(stderr, "%.*s Help\n", str8_varg(output_kind_info[output_kind].title));
+        fprintf(stderr, "To see top-level options for radbin, run the binary with no arguments.\n\n");
+      }
+      fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
     }
-    fprintf(stderr, "-------------------------------------------------------------------------------\n\n");
   }
+  lane_sync();
   
   //////////////////////////////
   //- rjf: perform operation based on output kind
@@ -423,6 +467,7 @@ rb_entry_point(CmdLine *cmdline)
     //
     default:
     case OutputKind_Null:
+    if(lane_idx() == 0)
     {
       fprintf(stderr, "USAGE EXAMPLES\n\n");
       
@@ -479,7 +524,7 @@ rb_entry_point(CmdLine *cmdline)
     case OutputKind_Breakpad:
     {
       //- rjf: no inputs => help
-      if(cmdline->inputs.node_count == 0) switch(output_kind)
+      if(lane_idx() == 0 && cmdline->inputs.node_count == 0) switch(output_kind)
       {
         default:
         case OutputKind_RDI:
@@ -638,7 +683,7 @@ rb_entry_point(CmdLine *cmdline)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          ProfScope("convert") bake_params = d2r_convert(arena, async_root, &convert_params);
+          ProfScope("convert") bake_params = d2r_convert(arena, &convert_params);
           
           // rjf: no output path? -> pick one based on debug
           if(output_path.size == 0)
@@ -672,23 +717,7 @@ rb_entry_point(CmdLine *cmdline)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          if(cmd_line_has_flag(cmdline, str8_lit("p2r2")))
-          {
-            ProfScope("convert (2)")
-            {
-              U64 thread_count = os_get_system_info()->logical_processor_count;
-              Arena **thread_arenas = push_array(arena, Arena *, thread_count);
-              for EachIndex(idx, thread_count)
-              {
-                thread_arenas[idx] = arena_alloc();
-              }
-              bake_params = p2r2_convert(thread_arenas, thread_count, &convert_params);
-            }
-          }
-          else
-          {
-            ProfScope("convert") bake_params = p2r_convert(arena, async_root, &convert_params);
-          }
+          bake_params = p2r2_convert(arena, &convert_params);
           
           // rjf: no output path? -> pick one based on PDB
           if(output_path.size == 0) switch(output_kind)
@@ -838,7 +867,7 @@ rb_entry_point(CmdLine *cmdline)
       B32 deterministic = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
       
       //- rjf: no inputs => help
-      if(cmdline->inputs.node_count == 0)
+      if(lane_idx() == 0 && cmdline->inputs.node_count == 0)
       {
         fprintf(stderr, "All input files specified on the command line will be dumped. Currently, only\n");
         fprintf(stderr, "RDI files are supported.\n\n");
@@ -1028,43 +1057,50 @@ rb_entry_point(CmdLine *cmdline)
   //////////////////////////////
   //- rjf: write outputs
   //
-  if(output_path.size != 0) ProfScope("write outputs [file]")
+  if(lane_idx() == 0)
   {
-    os_write_data_list_to_file_path(output_path, output_blobs);
-    log_infof("Results written to %S", output_path);
-  }
-  else ProfScope("write outputs [stdout]")
-  {
-    for(String8Node *n = output_blobs.first; n != 0; n = n->next)
+    if(output_path.size != 0) ProfScope("write outputs [file]")
     {
-      for(U64 off = 0; off < n->string.size;)
-      {
-        U64 size_to_write = Min(n->string.size - off, GB(2));
-        fwrite(n->string.str + off, size_to_write, 1, stdout);
-        off += size_to_write;
-      }
+      os_write_data_list_to_file_path(output_path, output_blobs);
+      log_infof("Results written to %S", output_path);
     }
-    log_info(str8_lit("Results written to stdout"));
+    else ProfScope("write outputs [stdout]")
+    {
+      for(String8Node *n = output_blobs.first; n != 0; n = n->next)
+      {
+        for(U64 off = 0; off < n->string.size;)
+        {
+          U64 size_to_write = Min(n->string.size - off, GB(2));
+          fwrite(n->string.str + off, size_to_write, 1, stdout);
+          off += size_to_write;
+        }
+      }
+      log_info(str8_lit("Results written to stdout"));
+    }
   }
+  lane_sync();
   
   //////////////////////////////
   //- rjf: write info & errors
   //
   LogScopeResult log_scope = log_scope_end(arena);
-  if(cmd_line_has_flag(cmdline, str8_lit("verbose")) && log_scope.strings[LogMsgKind_Info].size != 0)
+  if(lane_idx() == 0)
   {
-    String8List lines = wrapped_lines_from_string(arena, log_scope.strings[LogMsgKind_Info], 80, 80, 0);
-    for(String8Node *n = lines.first; n != 0; n = n->next)
+    if(cmd_line_has_flag(cmdline, str8_lit("verbose")) && log_scope.strings[LogMsgKind_Info].size != 0)
     {
-      fprintf(stderr, "%.*s\n", str8_varg(n->string));
+      String8List lines = wrapped_lines_from_string(arena, log_scope.strings[LogMsgKind_Info], 80, 80, 0);
+      for(String8Node *n = lines.first; n != 0; n = n->next)
+      {
+        fprintf(stderr, "%.*s\n", str8_varg(n->string));
+      }
     }
-  }
-  if(log_scope.strings[LogMsgKind_UserError].size != 0)
-  {
-    String8List lines = wrapped_lines_from_string(arena, log_scope.strings[LogMsgKind_UserError], 80, 80, 0);
-    for(String8Node *n = lines.first; n != 0; n = n->next)
+    if(log_scope.strings[LogMsgKind_UserError].size != 0)
     {
-      fprintf(stderr, "%.*s\n", str8_varg(n->string));
+      String8List lines = wrapped_lines_from_string(arena, log_scope.strings[LogMsgKind_UserError], 80, 80, 0);
+      for(String8Node *n = lines.first; n != 0; n = n->next)
+      {
+        fprintf(stderr, "%.*s\n", str8_varg(n->string));
+      }
     }
   }
 }

@@ -133,7 +133,6 @@ struct P2R2_Shared
 
 global P2R2_Shared *p2r2_shared = 0;
 
-internal RDIM_BakeParams p2r2_convert(Arena **thread_arenas, U64 thread_count, P2R_ConvertParams *in);
-internal void p2r2_convert_thread_entry_point(void *p);
+internal RDIM_BakeParams p2r2_convert(Arena *arena, P2R_ConvertParams *params);
 
 #endif // RDI_FROM_PDB_2_H

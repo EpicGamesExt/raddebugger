@@ -10,6 +10,16 @@
 #include "radbin/generated/radbin.meta.h"
 
 ////////////////////////////////
+//~ rjf: Thread Parameters
+
+typedef struct RB_ThreadParams RB_ThreadParams;
+struct RB_ThreadParams
+{
+  CmdLine *cmdline;
+  LaneCtx lane_ctx;
+};
+
+////////////////////////////////
 //~ rjf: File Types
 
 typedef U32 RB_FileFormatFlags;
@@ -46,8 +56,24 @@ read_only global RB_File rb_file_nil = {0};
 #define rb_file_list_first(list) ((list)->first ? (list)->first->v : &rb_file_nil)
 
 ////////////////////////////////
-//~ rjf: Top-Level Entry Point
+//~ rjf: Cross-Thread State
+
+typedef struct RB_Shared RB_Shared;
+struct RB_Shared
+{
+  RB_FileList input_files;
+  RB_FileList input_files_from_format_table[RB_FileFormat_COUNT];
+};
+
+////////////////////////////////
+//~ rjf: Globals
+
+global RB_Shared *rb_shared = 0;
+
+////////////////////////////////
+//~ rjf: Top-Level Entry Points
 
 internal void rb_entry_point(CmdLine *cmdline);
+internal void rb_thread_entry_point(void *p);
 
 #endif //RADBIN_H
