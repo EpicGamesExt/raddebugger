@@ -751,7 +751,7 @@ rb_thread_entry_point(void *p)
         {
           // rjf: bake
           RDIM_BakeResults bake_results = {0};
-          ProfScope("bake") bake_results = rdim_bake(arena, async_root, &bake_params);
+          ProfScope("bake") bake_results = rdim2_bake(arena, &bake_params);
           
           // rjf: serialize
           RDIM_SerializedSectionBundle serialized_section_bundle = {0};
@@ -772,7 +772,6 @@ rb_thread_entry_point(void *p)
         //- rjf: generate breakpad text
         case OutputKind_Breakpad:
         {
-          p2b_async_root = async_root;
           String8List dump = {0};
           
           //- rjf: kick off unit vmap baking
