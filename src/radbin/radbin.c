@@ -38,6 +38,7 @@ rb_thread_entry_point(void *p)
   RB_ThreadParams *params = (RB_ThreadParams *)p;
   CmdLine *cmdline = params->cmdline;
   LaneCtx lctx = params->lane_ctx;
+  ThreadNameF("radbin_thread_%I64u", lctx.lane_idx);
   lane_ctx(lctx);
   Arena *arena = arena_alloc();
   Log *log = log_alloc();
@@ -717,7 +718,7 @@ rb_thread_entry_point(void *p)
             convert_params.subset_flags   = subset_flags;
             convert_params.deterministic  = cmd_line_has_flag(cmdline, str8_lit("deterministic"));
           }
-          bake_params = p2r2_convert(arena, &convert_params);
+          ProfScope("convert") bake_params = p2r2_convert(arena, &convert_params);
           
           // rjf: no output path? -> pick one based on PDB
           if(output_path.size == 0) switch(output_kind)

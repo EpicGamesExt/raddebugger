@@ -127,7 +127,7 @@ enum
 // #define rdim_arena_alloc   <name of your creation function - must be (void) -> Arena*>
 // #define rdim_arena_release <name of your release function  - must be (Arena*) -> void>
 // #define rdim_arena_pos     <name of your position function - must be (Arena*) -> U64>
-// #define rdim_arena_push    <name of your pushing function  - must be (Arena*, U64 size) -> void*>
+// #define rdim_arena_push    <name of your pushing function  - must be (Arena*, U64 size, U64 align, B32 zero) -> void*>
 // #define rdim_arena_pop_to  <name of your popping function  - must be (Arena*, U64 pos) -> void>
 
 #if !defined(RDIM_Arena)
@@ -1166,7 +1166,7 @@ struct RDIM_LineRec
 typedef struct RDIM_TopLevelInfoBakeResult RDIM_TopLevelInfoBakeResult;
 struct RDIM_TopLevelInfoBakeResult
 {
-  RDI_TopLevelInfo *top_level_info;
+  RDI_TopLevelInfo top_level_info;
 };
 
 typedef struct RDIM_BinarySectionBakeResult RDIM_BinarySectionBakeResult;
@@ -1404,8 +1404,8 @@ RDI_PROC RDI_U64 rdim_arena_pos_fallback(RDIM_Arena *arena);
 RDI_PROC void *rdim_arena_push_fallback(RDIM_Arena *arena, RDI_U64 align, RDI_U64 size);
 RDI_PROC void rdim_arena_pop_to_fallback(RDIM_Arena *arena, RDI_U64 pos);
 #endif
-#define rdim_push_array_no_zero(a,T,c) (T*)rdim_arena_push((a), sizeof(T)*(c), RDIM_AlignOf(T))
-#define rdim_push_array(a,T,c) (T*)rdim_memzero(rdim_push_array_no_zero(a,T,c), sizeof(T)*(c))
+#define rdim_push_array_no_zero(a,T,c) (T*)rdim_arena_push((a), sizeof(T)*(c), RDIM_AlignOf(T), (0))
+#define rdim_push_array(a,T,c) (T*)rdim_arena_push((a), sizeof(T)*(c), RDIM_AlignOf(T), (1))
 
 //- rjf: thread-local scratch arenas
 #if !defined (RDIM_SCRATCH_OVERRIDE)

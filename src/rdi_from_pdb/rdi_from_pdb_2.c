@@ -2937,12 +2937,12 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ////////////////////////////
     //- rjf: set up outputs for this sym stream
     //
-    U64 sym_procedures_chunk_cap = 1024;
-    U64 sym_global_variables_chunk_cap = 1024;
-    U64 sym_thread_variables_chunk_cap = 1024;
-    U64 sym_constants_chunk_cap = 1024;
-    U64 sym_scopes_chunk_cap = 1024;
-    U64 sym_inline_sites_chunk_cap = 1024;
+    U64 sym_procedures_chunk_cap = 16384;
+    U64 sym_global_variables_chunk_cap = 16384;
+    U64 sym_thread_variables_chunk_cap = 16384;
+    U64 sym_constants_chunk_cap = 16384;
+    U64 sym_scopes_chunk_cap = 16384;
+    U64 sym_inline_sites_chunk_cap = 16384;
     RDIM_SymbolChunkList sym_procedures = {0};
     RDIM_SymbolChunkList sym_global_variables = {0};
     RDIM_SymbolChunkList sym_thread_variables = {0};
