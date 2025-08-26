@@ -1150,6 +1150,17 @@ struct RDIM_VMapMarker
   RDI_U32 begin_range;
 };
 
+//- rjf: line table records
+
+typedef struct RDIM_LineRec RDIM_LineRec;
+struct RDIM_LineRec
+{
+  RDI_U32 file_id;
+  RDI_U32 line_num;
+  RDI_U16 col_first;
+  RDI_U16 col_opl;
+};
+
 //- rjf: baking results
 
 typedef struct RDIM_TopLevelInfoBakeResult RDIM_TopLevelInfoBakeResult;

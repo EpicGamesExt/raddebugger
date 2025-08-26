@@ -3124,14 +3124,6 @@ rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
           // [1] keys: sortable array; pairs voffs with line info records; null records are sequence enders
           // [2] recs: contains all the source coordinates for a range of voffs
           //
-          typedef struct RDIM_LineRec RDIM_LineRec;
-          struct RDIM_LineRec
-          {
-            RDI_U32 file_id;
-            RDI_U32 line_num;
-            RDI_U16 col_first;
-            RDI_U16 col_opl;
-          };
           RDI_U64 line_count = src_line_table->line_count;
           RDI_U64 seq_count = src_line_table->seq_count;
           RDI_U64 key_count = line_count + seq_count;
