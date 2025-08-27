@@ -343,6 +343,10 @@ typedef struct MSCRT_ParsedFuncInfoV4
   MSCRT_IP2State32V4       ip2state_map;
 } MSCRT_ParsedFuncInfoV4;
 
+//- Entry Point
+
+internal String8 msvcrt_ctr_entry_from_user_entry(String8 user_entry_point);
+
 //- Delay Load Helper
 
 internal String8 mscrt_delay_load_helper_name_from_machine(COFF_MachineType machine);
