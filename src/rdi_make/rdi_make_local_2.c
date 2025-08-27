@@ -28,7 +28,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("gather all unsorted, joined, line table info; & sort")
   {
-    //- rjf: set up outputs
+    //- rjf: set up outputsw
     ProfScope("set up outputs") if(lane_idx() == 0)
     {
       rdim2_shared->line_tables_count = params->line_tables.total_count;
@@ -45,18 +45,18 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           }
         }
       }
-      rdim2_shared->final_line_tables_count = params->line_tables.total_count + 1;
-      rdim2_shared->final_line_voffs_count  = params->line_tables.total_line_count + 2*params->line_tables.total_seq_count;
-      rdim2_shared->final_lines_count       = params->line_tables.total_line_count + params->line_tables.total_seq_count;
-      rdim2_shared->final_cols_count        = 1;
+      rdim2_shared->baked_line_tables.line_tables_count       = params->line_tables.total_count + 1;
+      rdim2_shared->baked_line_tables.line_table_voffs_count  = params->line_tables.total_line_count + 2*params->line_tables.total_seq_count;
+      rdim2_shared->baked_line_tables.line_table_lines_count  = params->line_tables.total_line_count + params->line_tables.total_seq_count;
+      rdim2_shared->baked_line_tables.line_table_columns_count= 1;
       ProfScope("allocate outputs")
       {
         rdim2_shared->unsorted_joined_line_tables = push_array(arena, RDIM_UnsortedJoinedLineTable, rdim2_shared->line_tables_count);
         rdim2_shared->sorted_line_table_keys = push_array(arena, RDIM_SortKey *, rdim2_shared->line_tables_count);
-        rdim2_shared->final_line_tables = push_array(arena, RDI_LineTable, rdim2_shared->final_line_tables_count);
-        rdim2_shared->final_line_voffs  = push_array(arena, RDI_U64,       rdim2_shared->final_line_voffs_count);
-        rdim2_shared->final_lines       = push_array(arena, RDI_Line,      rdim2_shared->final_lines_count);
-        rdim2_shared->final_cols        = push_array(arena, RDI_Column,    rdim2_shared->final_cols_count);
+        rdim2_shared->baked_line_tables.line_tables        = push_array(arena, RDI_LineTable, rdim2_shared->baked_line_tables.line_tables_count);
+        rdim2_shared->baked_line_tables.line_table_voffs   = push_array(arena, RDI_U64,       rdim2_shared->baked_line_tables.line_table_voffs_count);
+        rdim2_shared->baked_line_tables.line_table_lines   = push_array(arena, RDI_Line,      rdim2_shared->baked_line_tables.line_table_lines_count);
+        rdim2_shared->baked_line_tables.line_table_columns = push_array(arena, RDI_Column,    rdim2_shared->baked_line_tables.line_table_columns_count);
       }
       U64 voffs_base_idx = 0;
       U64 lines_base_idx = 0;
@@ -65,7 +65,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       {
         U64 final_idx = idx+1; // NOTE(rjf): +1, to reserve [0] for nil
         RDIM_LineTable *src = rdim2_shared->src_line_tables[idx];
-        RDI_LineTable *dst = &rdim2_shared->final_line_tables[final_idx];
+        RDI_LineTable *dst = &rdim2_shared->baked_line_tables.line_tables[final_idx];
         dst->voffs_base_idx = voffs_base_idx; // TODO(rjf): @u64_to_u32
         dst->lines_base_idx = lines_base_idx; // TODO(rjf): @u64_to_u32
         dst->cols_base_idx  = cols_base_idx; // TODO(rjf): @u64_to_u32
@@ -137,10 +137,10 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           //- rjf: fill
           RDIM_SortKey *sorted_line_keys = rdim2_shared->sorted_line_table_keys[line_table_idx];
           U64 sorted_line_keys_count = rdim2_shared->unsorted_joined_line_tables[line_table_idx].key_count;
-          RDI_LineTable *dst_line_table = &rdim2_shared->final_line_tables[line_table_idx+1];
-          U64 *arranged_voffs           = rdim2_shared->final_line_voffs + dst_line_table->voffs_base_idx;
-          RDI_Line *arranged_lines      = rdim2_shared->final_lines + dst_line_table->lines_base_idx;
-          RDI_Column *arranged_cols     = rdim2_shared->final_cols + dst_line_table->cols_base_idx;
+          RDI_LineTable *dst_line_table = &rdim2_shared->baked_line_tables.line_tables[line_table_idx+1];
+          U64 *arranged_voffs           = rdim2_shared->baked_line_tables.line_table_voffs   + dst_line_table->voffs_base_idx;
+          RDI_Line *arranged_lines      = rdim2_shared->baked_line_tables.line_table_lines   + dst_line_table->lines_base_idx;
+          RDI_Column *arranged_cols     = rdim2_shared->baked_line_tables.line_table_columns + dst_line_table->cols_base_idx;
           {
             for EachIndex(idx, sorted_line_keys_count)
             {
@@ -200,7 +200,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: push all strings into this lane's map
     ProfScope("push all strings into this lane's map")
     {
-      //- rjf: push strings from source files
+      // rjf: push strings from source files
       ProfScope("src files")
       {
         for(RDIM_SrcFileChunkNode *n = params->src_files.first; n != 0; n = n->next)
@@ -210,7 +210,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      //- rjf: push strings from units
+      // rjf: push strings from units
       ProfScope("units")
       {
         for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
@@ -220,7 +220,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      //- rjf: push strings from types
+      // rjf: push strings from types
       ProfScope("types")
       {
         for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
@@ -230,7 +230,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      //- rjf: push strings from udts
+      // rjf: push strings from udts
       ProfScope("udts")
       {
         for(RDIM_UDTChunkNode *n = params->udts.first; n != 0; n = n->next)
@@ -240,7 +240,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      //- rjf: push strings from symbols
+      // rjf: push strings from symbols
       RDIM_SymbolChunkList *symbol_lists[] =
       {
         &params->global_variables,
@@ -340,20 +340,212 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
   }
   lane_sync();
+  RDIM_BakeStringMapTight *bake_strings = &rdim2_shared->bake_strings;
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: bake units, src files, symbols, UDTs
+  //
+  {
+    //- rjf: setup outputs
+    if(lane_idx() == lane_from_task_idx(0))
+    {
+      rdim2_shared->baked_units.units_count = params->units.total_count+1;
+      rdim2_shared->baked_units.units = push_array(arena, RDI_Unit, rdim2_shared->baked_units.units_count);
+    }
+    if(lane_idx() == lane_from_task_idx(1))
+    {
+      rdim2_shared->baked_src_files.source_files_count = params->src_files.total_count+1;
+      rdim2_shared->baked_src_files.source_files = push_array(arena, RDI_SourceFile, rdim2_shared->baked_src_files.source_files_count);
+    }
+    if(lane_idx() == lane_from_task_idx(2))
+    {
+      rdim2_shared->baked_src_files.source_line_maps_count = params->src_files.source_line_map_count+1;
+      rdim2_shared->baked_src_files.source_line_maps = push_array(arena, RDI_SourceLineMap, rdim2_shared->baked_src_files.source_line_maps_count);
+    }
+    if(lane_idx() == lane_from_task_idx(3))
+    {
+      rdim2_shared->baked_udts.udts_count = params->udts.total_count+1;
+      rdim2_shared->baked_udts.udts = push_array(arena, RDI_UDT, rdim2_shared->baked_udts.udts_count);
+    }
+    if(lane_idx() == lane_from_task_idx(4))
+    {
+      rdim2_shared->baked_udts.members_count = params->udts.total_member_count+1;
+      rdim2_shared->baked_udts.members = push_array(arena, RDI_Member, rdim2_shared->baked_udts.members_count);
+    }
+    if(lane_idx() == lane_from_task_idx(5))
+    {
+      rdim2_shared->baked_udts.enum_members_count = params->udts.total_enum_val_count+1;
+      rdim2_shared->baked_udts.enum_members = push_array(arena, RDI_EnumMember, rdim2_shared->baked_udts.enum_members_count);
+    }
+    if(lane_idx() == lane_from_task_idx(6))
+    {
+      rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
+      rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
+    }
+    if(lane_idx() == lane_from_task_idx(7))
+    {
+      rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
+      rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
+    }
+    if(lane_idx() == lane_from_task_idx(8))
+    {
+      rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
+      rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
+    }
+    if(lane_idx() == lane_from_task_idx(9))
+    {
+      rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
+      rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
+    }
+    if(lane_idx() == lane_from_task_idx(10))
+    {
+      rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
+      rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
+    }
+    if(lane_idx() == lane_from_task_idx(11))
+    {
+      rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
+      rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
+    }
+    if(lane_idx() == lane_from_task_idx(12))
+    {
+      rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
+      rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
+    }
+    lane_sync();
+    
+    //- rjf: bake units
+    ProfScope("bake units")
+    {
+      for EachNode(n, RDIM_UnitChunkNode, params->units.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Unit *src = &n->v[n_idx];
+          RDI_Unit *dst = &rdim2_shared->baked_units.units[n->base_idx + n_idx + 1];
+          dst->unit_name_string_idx     = rdim_bake_idx_from_string(bake_strings, src->unit_name);
+          dst->compiler_name_string_idx = rdim_bake_idx_from_string(bake_strings, src->compiler_name);
+          dst->source_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->source_file);
+          dst->object_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->object_file);
+          dst->archive_file_path_node   = rdim_bake_path_node_idx_from_string(path_tree, src->archive_file);
+          dst->build_path_node          = rdim_bake_path_node_idx_from_string(path_tree, src->build_path);
+          dst->language                 = src->language;
+          dst->line_table_idx           = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+        }
+      }
+    }
+    
+    //- rjf: bake global variables
+    ProfScope("bake global variables")
+    {
+      for EachNode(n, RDIM_SymbolChunkNode, params->global_variables.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Symbol *src = &n->v[n_idx];
+          RDI_GlobalVariable *dst = &rdim2_shared->baked_global_variables.global_variables[n->base_idx + n_idx + 1];
+          dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->voff            = src->offset;
+          dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+          }
+        }
+      }
+    }
+    
+    //- rjf: bake thread variables
+    ProfScope("bake thread variables")
+    {
+      for EachNode(n, RDIM_SymbolChunkNode, params->thread_variables.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Symbol *src = &n->v[n_idx];
+          RDI_ThreadVariable *dst = &rdim2_shared->baked_thread_variables.thread_variables[n->base_idx + n_idx + 1];
+          dst->name_string_idx = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->tls_off         = (RDI_U32)src->offset; // TODO(rjf): @u64_to_u32
+          dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type);
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+          }
+        }
+      }
+    }
+    
+    //- rjf: bake inline sites
+    ProfScope("bake inline sites")
+    {
+      for EachNode(n, RDIM_InlineSiteChunkNode, params->inline_sites.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDI_InlineSite *dst = &rdim2_shared->baked_inline_sites.inline_sites[n->base_idx + n_idx + 1];
+          RDIM_InlineSite *src = &n->v[n_idx];
+          dst->name_string_idx   = rdim_bake_idx_from_string(bake_strings, src->name);
+          dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+          dst->owner_type_idx    = (RDI_U32)rdim_idx_from_type(src->owner); // TODO(rjf): @u64_to_u32
+          dst->line_table_idx    = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+        }
+      }
+    }
+  }
+  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: package results
   //
   RDIM_BakeResults result = {0};
   {
-    result.line_tables.line_tables                         = rdim2_shared->final_line_tables;
-    result.line_tables.line_tables_count                   = rdim2_shared->final_line_tables_count;
-    result.line_tables.line_table_voffs                    = rdim2_shared->final_line_voffs;
-    result.line_tables.line_table_voffs_count              = rdim2_shared->final_line_voffs_count;
-    result.line_tables.line_table_lines                    = rdim2_shared->final_lines;
-    result.line_tables.line_table_lines_count              = rdim2_shared->final_lines_count;
-    result.line_tables.line_table_columns                  = rdim2_shared->final_cols;
-    result.line_tables.line_table_columns_count            = rdim2_shared->final_cols_count;
+    // result.top_level_info         = rdim2_shared->baked_top_level_info;
+    // result.binary_sections        = rdim2_shared->baked_binary_sections;
+    result.units                  = rdim2_shared->baked_units;
+    result.unit_vmap              = rdim2_shared->baked_unit_vmap;
+    result.src_files              = rdim2_shared->baked_src_files;
+    result.line_tables            = rdim2_shared->baked_line_tables;
+    // result.type_nodes             = rdim2_shared->baked_type_nodes;
+    result.udts                   = rdim2_shared->baked_udts;
+    result.global_variables       = rdim2_shared->baked_global_variables;
+    result.global_vmap            = rdim2_shared->baked_global_vmap;
+    result.thread_variables       = rdim2_shared->baked_thread_variables;
+    result.constants              = rdim2_shared->baked_constants;
+    result.procedures             = rdim2_shared->baked_procedures;
+    // result.scopes                 = rdim2_shared->baked_scopes;
+    result.inline_sites           = rdim2_shared->baked_inline_sites;
+    result.scope_vmap             = rdim2_shared->baked_scope_vmap;
+    // result.top_level_name_maps    = rdim2_shared->baked_top_level_name_maps;
+    // result.name_maps              = rdim2_shared->baked_name_maps;
+    // result.file_paths             = rdim2_shared->baked_file_paths;
+    result.strings                = rdim2_shared->baked_strings;
+    // result.idx_runs               = rdim2_shared->baked_idx_runs;
+    // result.location_blocks        = rdim2_shared->baked_location_blocks;
+    // result.location_data          = rdim2_shared->baked_location_data;
   }
   
   return result;
