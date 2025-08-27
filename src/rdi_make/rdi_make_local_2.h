@@ -37,6 +37,10 @@ struct RDIM2_Shared
   RDIM_BakeStringMapLoose *bake_string_map__loose;
   RDIM_BakeStringMapTight bake_strings;
   
+  RDIM_BakeNameMapTopology bake_name_map_topology[RDI_NameMapKind_COUNT];
+  RDIM_BakeNameMap2 **lane_bake_name_maps[RDI_NameMapKind_COUNT];
+  RDIM_BakeNameMap2 *bake_name_maps[RDI_NameMapKind_COUNT];
+  
   RDIM_UnitBakeResult baked_units;
   RDIM_UnitVMapBakeResult baked_unit_vmap;
   RDIM_SrcFileBakeResult baked_src_files;

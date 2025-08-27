@@ -28,7 +28,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("gather all unsorted, joined, line table info; & sort")
   {
-    //- rjf: set up outputsw
+    //- rjf: set up outputs
     ProfScope("set up outputs") if(lane_idx() == 0)
     {
       rdim2_shared->line_tables_count = params->line_tables.total_count;
@@ -349,6 +349,151 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   }
   lane_sync();
   RDIM_BakeStringMapTight *bake_strings = &rdim2_shared->bake_strings;
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: bake name maps
+  //
+  ProfScope("bake name maps")
+  {
+    //- rjf: set up
+    if(lane_idx() == 0)
+    {
+      for EachNonZeroEnumVal(RDI_NameMapKind, k)
+      {
+        U64 slot_count = 0;
+        switch((RDI_NameMapKindEnum)k)
+        {
+          case RDI_NameMapKind_NULL:
+          case RDI_NameMapKind_COUNT:
+          {}break;
+#define Case(name, total_count) case RDI_NameMapKind_##name:{slot_count = ((total_count) + (total_count)/4);}break
+          Case(GlobalVariables, params->global_variables.total_count);
+          Case(ThreadVariables, params->thread_variables.total_count);
+          Case(Constants, params->constants.total_count);
+          Case(Procedures, params->procedures.total_count);
+          Case(LinkNameProcedures, params->procedures.total_count);
+          Case(Types, params->types.total_count);
+          Case(NormalSourcePaths, params->src_files.total_count);
+#undef Case
+        }
+        rdim2_shared->lane_bake_name_maps[k] = push_array(arena, RDIM_BakeNameMap2 *, lane_count());
+        rdim2_shared->bake_name_map_topology[k].slots_count = slot_count;
+      }
+    }
+    lane_sync();
+    
+    //- rjf: wide build
+    for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("name map build %.*s", str8_varg(rdi_string_from_name_map_kind(k)))
+    {
+      RDIM_BakeNameMapTopology *top = &rdim2_shared->bake_name_map_topology[k];
+      rdim2_shared->lane_bake_name_maps[k][lane_idx()] = rdim_bake_name_map_2_make(arena, top);
+      RDIM_BakeNameMap2 *map = rdim2_shared->lane_bake_name_maps[k][lane_idx()];
+      B32 link_names = 0;
+      RDIM_SymbolChunkList *symbols = 0;
+      switch((RDI_NameMapKindEnum)k)
+      {
+        case RDI_NameMapKind_NULL:
+        case RDI_NameMapKind_COUNT:
+        {}break;
+        case RDI_NameMapKind_GlobalVariables:   {symbols = &params->global_variables;}goto symbol_name_map_build;
+        case RDI_NameMapKind_ThreadVariables:   {symbols = &params->thread_variables;}goto symbol_name_map_build;
+        case RDI_NameMapKind_Constants:         {symbols = &params->constants;}goto symbol_name_map_build;
+        case RDI_NameMapKind_Procedures:        {symbols = &params->procedures;}goto symbol_name_map_build;
+        case RDI_NameMapKind_LinkNameProcedures:{symbols = &params->procedures; link_names = 1;}goto symbol_name_map_build;
+        symbol_name_map_build:;
+        {
+          for EachNode(n, RDIM_SymbolChunkNode, symbols->first)
+          {
+            Rng1U64 n_range = lane_range(n->count);
+            for EachInRange(n_idx, n_range)
+            {
+              RDIM_Symbol *symbol = &n->v[n_idx];
+              rdim_bake_name_map_2_insert(arena, top, map, 4, link_names ? symbol->link_name : symbol->name, rdim_idx_from_symbol(symbol));
+            }
+          }
+        }break;
+        case RDI_NameMapKind_Types:
+        {
+          RDIM_TypeChunkList *types = &params->types;
+          for EachNode(n, RDIM_TypeChunkNode, types->first)
+          {
+            Rng1U64 n_range = lane_range(n->count);
+            for EachInRange(n_idx, n_range)
+            {
+              RDIM_Type *type = &n->v[n_idx];
+              rdim_bake_name_map_2_insert(arena, top, map, 4, type->name, rdim_idx_from_type(type));
+            }
+          }
+        }break;
+        case RDI_NameMapKind_NormalSourcePaths:
+        {
+          RDIM_SrcFileChunkList *src_files = &params->src_files;
+          for EachNode(n, RDIM_SrcFileChunkNode, src_files->first)
+          {
+            Rng1U64 n_range = lane_range(n->count);
+            for EachInRange(n_idx, n_range)
+            {
+              RDIM_SrcFile *src_file = &n->v[n_idx];
+              RDIM_String8 normalized_path = rdim_lower_from_str8(arena, src_file->path);
+              rdim_bake_name_map_2_insert(arena, top, map, 4, normalized_path, rdim_idx_from_src_file(src_file));
+            }
+          }
+        }break;
+      }
+    }
+    lane_sync();
+    
+    //- rjf: join & sort
+    if(lane_idx() == 0)
+    {
+      for EachNonZeroEnumVal(RDI_NameMapKind, k)
+      {
+        rdim2_shared->bake_name_maps[k] = rdim_bake_name_map_2_make(arena, &rdim2_shared->bake_name_map_topology[k]);
+      }
+    }
+    lane_sync();
+    for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("name map join & sort %.*s", str8_varg(rdi_string_from_name_map_kind(k)))
+    {
+      RDIM_BakeNameMapTopology *top = &rdim2_shared->bake_name_map_topology[k];
+      RDIM_BakeNameMap2 *map = rdim2_shared->bake_name_maps[k];
+      
+      //- rjf: join
+      ProfScope("join")
+      {
+        Rng1U64 slot_range = lane_range(top->slots_count);
+        for EachInRange(slot_idx, slot_range)
+        {
+          for EachIndex(src_lane_idx, lane_count())
+          {
+            RDIM_BakeNameMap2 *src_map = rdim2_shared->lane_bake_name_maps[k][src_lane_idx];
+            RDIM_BakeNameMap2 *dst_map = map;
+            if(dst_map->slots[slot_idx] == 0 && src_map->slots[slot_idx] != 0)
+            {
+              dst_map->slots[slot_idx] = src_map->slots[slot_idx];
+            }
+            else if(dst_map->slots[slot_idx] != 0 && src_map->slots[slot_idx] != 0)
+            {
+              rdim_bake_name_chunk_list_concat_in_place(dst_map->slots[slot_idx], src_map->slots[slot_idx]);
+            }
+          }
+        }
+      }
+      
+      //- rjf: sort
+      ProfScope("sort")
+      {
+        Rng1U64 slot_range = lane_range(top->slots_count);
+        for EachInRange(slot_idx, slot_range)
+        {
+          if(map->slots[slot_idx] != 0 && map->slots[slot_idx]->total_count > 1)
+          {
+            *map->slots[slot_idx] = rdim_bake_name_chunk_list_sorted_from_unsorted(arena, map->slots[slot_idx]);
+          }
+        }
+      }
+    }
+  }
+  lane_sync();
   
   //////////////////////////////////////////////////////////////
   //- rjf: bake units, src files, symbols, UDTs

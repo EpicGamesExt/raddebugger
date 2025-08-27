@@ -1105,6 +1105,47 @@ struct RDIM_BakePathTree
 
 //- rjf: name maps
 
+typedef struct RDIM_BakeName RDIM_BakeName;
+struct RDIM_BakeName
+{
+  RDIM_String8 string;
+  RDI_U64 hash;
+  RDI_U64 idx;
+};
+
+typedef struct RDIM_BakeNameChunkNode RDIM_BakeNameChunkNode;
+struct RDIM_BakeNameChunkNode
+{
+  RDIM_BakeNameChunkNode *next;
+  RDIM_BakeName *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_BakeNameChunkList RDIM_BakeNameChunkList;
+struct RDIM_BakeNameChunkList
+{
+  RDIM_BakeNameChunkNode *first;
+  RDIM_BakeNameChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+typedef struct RDIM_BakeNameMapTopology RDIM_BakeNameMapTopology;
+struct RDIM_BakeNameMapTopology
+{
+  RDI_U64 slots_count;
+};
+
+typedef struct RDIM_BakeNameMap2 RDIM_BakeNameMap2;
+struct RDIM_BakeNameMap2
+{
+  RDIM_BakeNameChunkList **slots;
+};
+
+//- rjf: name maps (OLD)
+
 typedef struct RDIM_BakeNameMapValNode RDIM_BakeNameMapValNode;
 struct RDIM_BakeNameMapValNode
 {
@@ -1558,6 +1599,15 @@ RDI_PROC RDIM_BakeStringMapBaseIndices rdim_bake_string_map_base_indices_from_ma
 RDI_PROC RDIM_BakeStringMapTight rdim_bake_string_map_tight_from_loose(RDIM_Arena *arena, RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapBaseIndices *map_base_indices, RDIM_BakeStringMapLoose *map);
 RDI_PROC RDI_U32 rdim_bake_idx_from_string(RDIM_BakeStringMapTight *map, RDIM_String8 string);
 
+//- rjf: bake name chunk list
+RDI_PROC RDIM_BakeName *rdim_bake_name_chunk_list_push(RDIM_Arena *arena, RDIM_BakeNameChunkList *list, RDI_U64 cap);
+RDI_PROC void rdim_bake_name_chunk_list_concat_in_place(RDIM_BakeNameChunkList *dst, RDIM_BakeNameChunkList *to_push);
+RDI_PROC RDIM_BakeNameChunkList rdim_bake_name_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeNameChunkList *src);
+
+//- rjf: bake name chunk list maps
+RDI_PROC RDIM_BakeNameMap2 *rdim_bake_name_map_2_make(RDIM_Arena *arena, RDIM_BakeNameMapTopology *top);
+RDI_PROC void rdim_bake_name_map_2_insert(RDIM_Arena *arena, RDIM_BakeNameMapTopology *map_topology, RDIM_BakeNameMap2 *map, RDI_U64 chunk_cap, RDIM_String8 string, RDI_U64 idx);
+
 //- rjf: bake idx run map reading/writing
 RDI_PROC RDI_U64 rdim_hash_from_idx_run(RDI_U32 *idx_run, RDI_U32 count);
 RDI_PROC RDI_U32 rdim_bake_idx_from_idx_run(RDIM_BakeIdxRunMap *map, RDI_U32 *idx_run, RDI_U32 count);
@@ -1569,6 +1619,7 @@ RDI_PROC RDI_U32 rdim_bake_path_node_idx_from_string(RDIM_BakePathTree *tree, RD
 RDI_PROC RDIM_BakePathNode *rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
 
 //- rjf: bake name maps writing
+RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_make(RDIM_Arena *arena, RDI_U64 expected_count);
 RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, RDIM_String8 string, RDI_U32 idx);
 
 ////////////////////////////////
