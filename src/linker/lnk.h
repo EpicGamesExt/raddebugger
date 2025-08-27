@@ -201,7 +201,7 @@ internal String8 lnk_manifest_from_inputs(Arena *arena, LNK_IO_Flags io_flags, S
 
 internal String8 lnk_make_null_obj(Arena *arena);
 internal String8 lnk_make_res_obj(Arena *arena, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name);
-internal String8 lnk_make_linker_coff_obj(Arena *arena, COFF_TimeStamp time_stamp, COFF_MachineType machine, String8 cwd_path, String8 exe_path, String8 pdb_path, String8 cmd_line, String8 obj_name);
+internal String8 lnk_make_linker_obj(Arena *arena, LNK_Config *config);
 
 // --- Link Context ------------------------------------------------------------
 
@@ -211,8 +211,7 @@ internal B32     lnk_is_lib_loaded(HashTable *loaded_lib_ht, String8 lib_path);
 internal void    lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht, String8 path);
 internal void    lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path);
 
-internal LNK_InputObjList lnk_push_linker_symbols(Arena *arena, LNK_Config *config);
-internal void             lnk_queue_lib_member_for_input(Arena *arena, LNK_Config *config, LNK_Symbol *pull_in_ref, LNK_Lib *lib, U32 member_idx, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
+internal void lnk_queue_lib_member_for_input(Arena *arena, LNK_Config *config, LNK_Symbol *pull_in_ref, LNK_Lib *lib, U32 member_idx, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list);
 
 internal LNK_LinkContext lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);
 
