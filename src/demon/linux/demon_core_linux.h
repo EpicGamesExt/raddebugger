@@ -279,7 +279,7 @@ struct DMN_LNX_State
   Arena *arena;
   
   // rjf: access locking mechanism
-  OS_Handle access_mutex;
+  Mutex access_mutex;
   B32 access_run_state;
   
   // rjf: deferred events
