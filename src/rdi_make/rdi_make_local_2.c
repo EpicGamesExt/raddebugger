@@ -200,6 +200,14 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     //- rjf: push all strings into this lane's map
     ProfScope("push all strings into this lane's map")
     {
+      // rjf: push small top-level strings
+      if(lane_idx() == 0) ProfScope("push small top-level strings")
+      {
+        rdim_bake_string_map_loose_push_top_level_info(arena, lane_map_top, lane_map, &params->top_level_info);
+        rdim_bake_string_map_loose_push_binary_sections(arena, lane_map_top, lane_map, &params->binary_sections);
+        rdim_bake_string_map_loose_push_path_tree(arena, lane_map_top, lane_map, path_tree);
+      }
+      
       // rjf: push strings from source files
       ProfScope("src files")
       {
@@ -314,8 +322,8 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      //- rjf: sort string table
-      ProfScope("sort string table")
+      //- rjf: sort
+      ProfScope("sort")
       {
         RDIM_BakeStringMapLoose *map = rdim2_shared->bake_string_map__loose;
         Rng1U64 slot_range = lane_range(rdim2_shared->bake_string_map_topology.slots_count);
