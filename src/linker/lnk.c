@@ -876,6 +876,49 @@ lnk_make_linker_coff_obj(Arena            *arena,
 }
 
 internal String8
+lnk_make_linker_obj(Arena *arena, LNK_Config *config)
+{
+  ProfBeginFunction();
+
+  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, config->machine);
+
+  // Emit __ImageBase symbol.
+  //
+  // This symbol is used with REL32 to compute delta from current IP
+  // to the image base. CRT uses this trick to get to HINSTANCE * without
+  // passing it around as a function argument.
+  //
+  //  100h: lea rax, [rip + ffffff00h] ; -100h 
+  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("__ImageBase"), 0, COFF_SymStorageClass_External);
+  
+  { // load config symbols
+    if (config->machine == COFF_MachineType_X86) {
+      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    }
+    
+    // TODO: investigate IMAGE_ENCLAVE_CONFIG 32/64
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_ENCLAVE_CONFIG_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME)        , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_COUNT_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_TABLE_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_COUNT_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
+  }
+
+  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
+  coff_obj_writer_release(&obj_writer);
+
+  ProfEnd();
+  return obj;
+}
+
+internal String8
 lnk_get_lib_name(String8 path)
 {
   static String8 LIB_EXT = str8_lit_comp(".LIB");
@@ -920,49 +963,6 @@ lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path)
     String8 path_copy = push_str8_copy(arena, path);
     hash_table_push_path_u64(arena, loaded_lib_ht, path_copy, 0);
   }
-}
-
-internal String8
-lnk_make_linker_obj(Arena *arena, LNK_Config *config)
-{
-  ProfBeginFunction();
-
-  COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(COFF_TimeStamp_Max, config->machine);
-
-  // Emit __ImageBase symbol.
-  //
-  // This symbol is used with REL32 to compute delta from current IP
-  // to the image base. CRT uses this trick to get to HINSTANCE * without
-  // passing it around as a function argument.
-  //
-  //  100h: lea rax, [rip + ffffff00h] ; -100h 
-  coff_obj_writer_push_symbol_abs(obj_writer, str8_lit("__ImageBase"), 0, COFF_SymStorageClass_External);
-  
-  { // load config symbols
-    if (config->machine == COFF_MachineType_X86) {
-      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-      coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_SAFE_SE_HANDLER_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    }
-    
-    // TODO: investigate IMAGE_ENCLAVE_CONFIG 32/64
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_ENCLAVE_CONFIG_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME)        , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_COUNT_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_TABLE_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_LONGJMP_COUNT_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_TABLE_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_EHCONT_COUNT_SYMBOL_NAME) , 0, COFF_SymStorageClass_External);
-  }
-
-  String8 obj = coff_obj_writer_serialize(arena, obj_writer);
-  coff_obj_writer_release(&obj_writer);
-
-  ProfEnd();
-  return obj;
 }
 
 internal void
@@ -1761,129 +1761,95 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
       } break;
       case State_SearchEntryPoint: {
         ProfBegin("Search Entry Point");
-        LNK_Symbol *entry_point_symbol = 0;
         
-        B32 is_entry_point_unspecified = config->entry_point_name.size == 0;
-        if (is_entry_point_unspecified) {
-          if (config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
-            // we don't have a subsystem and entry point name,
-            // so we loop over every subsystem and search potential entry
-            // points in the symbol table 
-            for EachIndex(subsys_idx, PE_WindowsSubsystem_COUNT) {
-              String8Array name_arr  = pe_get_entry_point_names(config->machine, (PE_WindowsSubsystem)subsys_idx, config->file_characteristics);
-              for EachIndex(entry_idx, name_arr.count) {
-                entry_point_symbol = lnk_symbol_table_search(symtab, name_arr.v[entry_idx]);
-                if (entry_point_symbol) {
-                  config->subsystem        = (PE_WindowsSubsystem)subsys_idx;
-                  config->entry_point_name = name_arr.v[entry_idx];
-                  goto dbl_break;
-                }
-              }
-            }
-            
-            // search for potential entry points in libs
-            if (config->entry_point_name.size) {
-              for EachIndex(subsys_idx, PE_WindowsSubsystem_COUNT) {
-                String8Array name_arr = pe_get_entry_point_names(config->machine, (PE_WindowsSubsystem)subsys_idx, config->file_characteristics);
-                for EachIndex(entry_idx, name_arr.count) {
-                  for EachIndex(i, ArrayCount(lib_index)) {
-                    for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-                      if (lnk_search_lib(&lib_n->data, name_arr.v[entry_idx], 0)) {
-                        config->subsystem        = (PE_WindowsSubsystem)subsys_idx;
-                        config->entry_point_name = name_arr.v[entry_idx];
-                        goto dbl_break;
-                      }
-                    }
-                  }
-                }
-              }
-            } 
-            
-            dbl_break:;
-          } else {
-            // we have subsystem but no entry point name, get potential entry point names
-            // and see which is in the symbol table
-            String8Array name_arr = pe_get_entry_point_names(config->machine, config->subsystem, config->file_characteristics);
-            for EachIndex(entry_idx, name_arr.count) {
-              LNK_Symbol *symbol = lnk_symbol_table_search(symtab, name_arr.v[entry_idx]);
+        // loop over all possible subsystems and entry point names and pick
+        // subsystem that has a defined entry point symbol
+        if (config->entry_point_name.size == 0) {
+          PE_WindowsSubsystem  subsys_first       = config->subsystem;
+          PE_WindowsSubsystem  subsys_last        = config->subsystem == PE_WindowsSubsystem_UNKNOWN ? PE_WindowsSubsystem_COUNT : config->subsystem+1;
+          LNK_Symbol          *entry_point_symbol = 0;
+          for (U64 subsys_idx = subsys_first; subsys_idx < subsys_last; subsys_idx += 1) {
+            String8Array entry_points = pe_get_entry_point_names(config->machine, (PE_WindowsSubsystem)subsys_idx, config->file_characteristics);
+            for EachIndex(i, entry_points.count) {
+              LNK_Symbol *symbol = lnk_symbol_table_search(symtab, entry_points.v[i]);
               if (symbol) {
-                if (config->entry_point_name.size) {
-                  lnk_error(LNK_Error_EntryPoint,
-                            "multiple entry point symbols found: %S(%S) and %S(%S)",
-                            entry_point_symbol->name, entry_point_symbol->defined.obj->path,
-                            symbol->name, symbol->defined.obj->path);
-                } else {
-                  config->entry_point_name = name_arr.v[entry_idx];
-                }
+                config->subsystem        = subsys_idx;
+                config->entry_point_name = entry_points.v[i];
+                goto found_entry_and_subsystem;
               }
             }
-            
-            // search for entry point in libs
-            if (!config->entry_point_name.size) {
-              for EachIndex(entry_idx, name_arr.count) {
-                for EachIndex(i, ArrayCount(lib_index)) {
-                  for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
-                    if (lnk_search_lib(&lib_n->data, name_arr.v[entry_idx], 0)) {
-                      config->entry_point_name = name_arr.v[entry_idx];
-                      goto dbl_break2;
-                    }
-                  }
-                }
-              }
-              dbl_break2:;
-            }
           }
-          
-          // redirect user entry to appropriate CRT entry
-          if (str8_match_lit("wmain", config->entry_point_name, 0)) {
-            config->entry_point_name = str8_lit("wmainCRTStartup");
-          } else if (str8_match_lit("main", config->entry_point_name, 0)) {
-            config->entry_point_name = str8_lit("mainCRTStartup");
-          } else if (str8_match_lit("WinMain", config->entry_point_name, 0)) {
-            config->entry_point_name = str8_lit("WinMainCRTStartup");
-          } else if (str8_match_lit("wWinMain", config->entry_point_name, 0)) {
-            config->entry_point_name = str8_lit("wWinMainCRTStartup");
-          }
+          found_entry_and_subsystem:;
         }
-        
-        // generate undefined symbol so in case obj is in lib it will be linked
+
+        // search for entry point in libs
+        if (config->entry_point_name.size == 0 && config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
+          String8Array entry_points = pe_get_entry_point_names(config->machine, config->subsystem, config->file_characteristics);
+          for EachIndex(entry_idx, entry_points.count) {
+            for EachIndex(i, ArrayCount(lib_index)) {
+              for (LNK_LibNode *lib_n = lib_index[i].first; lib_n != 0; lib_n = lib_n->next) {
+                if (lnk_search_lib(&lib_n->data, entry_points.v[entry_idx], 0)) {
+                  config->entry_point_name = entry_points.v[entry_idx];
+                  goto found_entry_in_libs;
+                }
+              }
+            }
+          }
+          found_entry_in_libs:;
+        }
+
+        // infer subsystem from entry point name
+        if (config->entry_point_name.size != 0 && config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
+          for EachIndex(subsys_idx, PE_WindowsSubsystem_COUNT) {
+            String8Array entry_points = pe_get_entry_point_names(config->machine, subsys_idx, config->file_characteristics);
+            for EachIndex(i, entry_points.count) {
+              if (str8_match(entry_points.v[i], config->entry_point_name, 0)) {
+                config->subsystem = subsys_idx;
+                goto subsystem_inferred_from_entry;
+              }
+            }
+          }
+          subsystem_inferred_from_entry:;
+        }
+
+        // do we have an entry point name?
         if (config->entry_point_name.size) {
+          // redirect user entry to appropriate CRT entry
+          String8 crt_entry_point_name = msvcrt_ctr_entry_from_user_entry(config->entry_point_name);
+          config->entry_point_name = crt_entry_point_name.size ? crt_entry_point_name : config->entry_point_name;
+
+          // generate undefined symbol for entry point
+          //
           // TODO: config_refactor
           String8List value_strings = {0};
           str8_list_push(scratch.arena, &value_strings, config->entry_point_name);
           lnk_apply_cmd_option_to_config(tp_arena->v[0], config, str8_lit("include"), value_strings, 0);
-        }
-        // no entry point, print out error and exit
-        else {
-          lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
-        }
-        
-        // by default terminal server is enabled for windows and console applications
-        if (~config->flags & LNK_ConfigFlag_NoTsAware && 
-            ~config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
-          if (config->subsystem == PE_WindowsSubsystem_WINDOWS_GUI || config->subsystem == PE_WindowsSubsystem_WINDOWS_CUI) {
-            config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
+
+          // do we have a subsystem?
+          if (config->subsystem != PE_WindowsSubsystem_UNKNOWN) {
+            // if subsystem version not specified set default values
+            if (config->subsystem_ver.major == 0 && config->subsystem_ver.minor == 0) {
+              config->subsystem_ver = lnk_get_default_subsystem_version(config->subsystem, config->machine);
+            }
+
+            // check subsystem version against allowed min version
+            Version min_subsystem_ver = lnk_get_min_subsystem_version(config->subsystem, config->machine);
+            if (version_compar(config->subsystem_ver, min_subsystem_ver) < 0) {
+              lnk_error(LNK_Error_Cmdl, "subsystem version %I64u.%I64u can't be lower than %I64u.%I64u", 
+                        config->subsystem_ver.major, config->subsystem_ver.minor, min_subsystem_ver.major, min_subsystem_ver.minor);
+            }
+
+            // by default terminal server is enabled for windows and console applications
+            if (~config->flags & LNK_ConfigFlag_NoTsAware && ~config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+              if (config->subsystem == PE_WindowsSubsystem_WINDOWS_GUI || config->subsystem == PE_WindowsSubsystem_WINDOWS_CUI) {
+                config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
+              }
+            }
+          } else {
+            lnk_error(LNK_Error_NoSubsystem, "unknown subsystem, please use /SUBSYSTEM to set subsytem type you need");
           }
         }
-        
-        // do we have a subsystem?
-        if (config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
-          lnk_error(LNK_Error_NoSubsystem, "unknown subsystem, please use /SUBSYSTEM to set subsytem type you need");
-        }
-        
-        if (config->subsystem_ver.major == 0 && config->subsystem_ver.minor == 0) {
-          // subsystem version not specified, set default values
-          config->subsystem_ver = lnk_get_default_subsystem_version(config->subsystem, config->machine);
-        }
-        
-        // check subsystem version against allowed min version
-        Version min_subsystem_ver = lnk_get_min_subsystem_version(config->subsystem, config->machine);
-        int ver_cmp = version_compar(config->subsystem_ver, min_subsystem_ver);
-        if (ver_cmp < 0) {
-          lnk_error(LNK_Error_Cmdl, "subsystem version %I64u.%I64u can't be lower than %I64u.%I64u", 
-                    config->subsystem_ver.major, config->subsystem_ver.minor, min_subsystem_ver.major, min_subsystem_ver.minor);
-        }
-        
+
         ProfEnd();
       } break;
       case State_InputLinkerObjs: {
@@ -2214,6 +2180,11 @@ lnk_build_link_context(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config)
 #endif
     }
     ProfEnd();
+
+
+    if (config->entry_point_name.size == 0) {
+      lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
+    }
 
     ProfBegin("Report Unresolved Symbols");
     {
