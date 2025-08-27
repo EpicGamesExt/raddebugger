@@ -2,6 +2,22 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
+msvcrt_ctr_entry_from_user_entry(String8 user_entry)
+{
+  String8 crt_entry = {0};
+  if (str8_match_lit("wmain", user_entry, 0)) {
+    crt_entry = str8_lit("wmainCRTStartup");
+  } else if (str8_match_lit("main", user_entry, 0)) {
+    crt_entry = str8_lit("mainCRTStartup");
+  } else if (str8_match_lit("WinMain", user_entry, 0)) {
+    crt_entry = str8_lit("WinMainCRTStartup");
+  } else if (str8_match_lit("wWinMain", user_entry, 0)) {
+    crt_entry = str8_lit("wWinMainCRTStartup");
+  }
+  return crt_entry;
+}
+
+internal String8
 mscrt_delay_load_helper_name_from_machine(COFF_MachineType machine)
 {
   String8 delay_load_helper_name = str8_zero();
