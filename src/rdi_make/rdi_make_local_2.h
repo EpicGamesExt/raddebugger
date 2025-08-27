@@ -41,9 +41,15 @@ struct RDIM2_Shared
   RDIM_BakeNameMap2 **lane_bake_name_maps[RDI_NameMapKind_COUNT];
   RDIM_BakeNameMap2 *bake_name_maps[RDI_NameMapKind_COUNT];
   
+  RDIM_BakeIdxRunMapTopology bake_idx_run_map_topology;
+  RDIM_BakeIdxRunMapLoose **lane_bake_idx_run_maps__loose;
+  RDIM_BakeIdxRunMapLoose *bake_idx_run_map__loose;
+  RDIM_BakeIdxRunMap2 *bake_idx_runs;
+  
   RDIM_UnitBakeResult baked_units;
   RDIM_UnitVMapBakeResult baked_unit_vmap;
   RDIM_SrcFileBakeResult baked_src_files;
+  RDIM_TypeNodeBakeResult baked_type_nodes;
   RDIM_UDTBakeResult baked_udts;
   RDIM_GlobalVariableBakeResult baked_global_variables;
   RDIM_GlobalVMapBakeResult baked_global_vmap;

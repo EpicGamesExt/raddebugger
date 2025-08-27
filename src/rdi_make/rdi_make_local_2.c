@@ -496,7 +496,153 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
-  //- rjf: bake units, src files, symbols, UDTs
+  //- rjf: bake index runs
+  //
+  ProfScope("bake index runs")
+  {
+    //- rjf: set up per-lane outputs
+    if(lane_idx() == 0) ProfScope("set up per-lane outputs")
+    {
+      rdim2_shared->bake_idx_run_map_topology.slots_count = (64 +
+                                                             params->procedures.total_count +
+                                                             params->global_variables.total_count +
+                                                             params->thread_variables.total_count +
+                                                             params->types.total_count);
+      rdim2_shared->lane_bake_idx_run_maps__loose = push_array(arena, RDIM_BakeIdxRunMapLoose *, lane_count());
+    }
+    lane_sync();
+    
+    //- rjf: set up this lane's map
+    ProfScope("set up this lane's map")
+    {
+      rdim2_shared->lane_bake_idx_run_maps__loose[lane_idx()] = rdim_bake_idx_run_map_loose_make(arena, &rdim2_shared->bake_idx_run_map_topology);
+    }
+    RDIM_BakeIdxRunMapTopology *lane_map_top = &rdim2_shared->bake_idx_run_map_topology;
+    RDIM_BakeIdxRunMapLoose *lane_map = rdim2_shared->lane_bake_idx_run_maps__loose[lane_idx()];
+    
+    //- rjf: wide fill of all index runs
+    ProfScope("fill all lane index run maps")
+    {
+      //- rjf: bake runs of function-type parameter lists
+      ProfScope("bake runs of function-type parameter lists")
+      {
+        for EachNode(n, RDIM_TypeChunkNode, params->types.first)
+        {
+          Rng1U64 range = lane_range(n->count);
+          ProfScope("[%I64u, %I64u)", range.min, range.max) for EachInRange(n_idx, range)
+          {
+            RDIM_Type *type = &n->v[n_idx];
+            if(type->count == 0)
+            {
+              continue;
+            }
+            if(type->kind == RDI_TypeKind_Function || type->kind == RDI_TypeKind_Method)
+            {
+              RDI_U32 param_idx_run_count = type->count;
+              RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
+              for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
+              {
+                param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(type->param_types[idx]); // TODO(rjf): @u64_to_u32
+              }
+              rdim_bake_idx_run_map_loose_insert(arena, lane_map_top, lane_map, 4, param_idx_run, param_idx_run_count);
+            }
+          }
+        }
+      }
+      
+      //- rjf: bake runs of name map match lists
+      for EachNonZeroEnumVal(RDI_NameMapKind, k) ProfScope("bake runs of name map match lists (%.*s)", str8_varg(rdi_string_from_name_map_kind(k)))
+      {
+        RDIM_BakeNameMapTopology *top = &rdim2_shared->bake_name_map_topology[k];
+        RDIM_BakeNameMap2 *map = rdim2_shared->bake_name_maps[k];
+        Rng1U64 slot_idx_range = lane_range(top->slots_count);
+        for EachInRange(slot_idx, slot_idx_range)
+        {
+          RDIM_BakeNameChunkList *slot = map->slots[slot_idx];
+          if(slot != 0)
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            typedef struct IdxRunNode IdxRunNode;
+            struct IdxRunNode
+            {
+              IdxRunNode *next;
+              RDI_U64 idx;
+            };
+            IdxRunNode *first_idx_run_node = 0;
+            IdxRunNode *last_idx_run_node = 0;
+            U64 active_idx_count = 0;
+            U64 active_hash = 0;
+            RDIM_BakeNameChunkNode *n = slot->first;
+            U64 n_idx = 0;
+            for(;;)
+            {
+              // rjf: advance chunk
+              if(n != 0 && n_idx >= n->count)
+              {
+                n = n->next;
+                n_idx = 0;
+              }
+              
+              // rjf: grab next element
+              U64 hash = 0;
+              U64 idx = 0;
+              if(n != 0)
+              {
+                hash = n->v[n_idx].hash;
+                idx  = n->v[n_idx].idx;
+              }
+              
+              // rjf: next element hash doesn't match the active? -> push index run, clear active list, start new list
+              if(hash != active_hash && active_idx_count != 0)
+              {
+                if(active_idx_count > 1)
+                {
+                  RDI_U64 idxs_count = active_idx_count;
+                  RDI_U32 *idxs = rdim_push_array(arena, RDI_U32, idxs_count);
+                  {
+                    U64 write_idx = 0;
+                    for EachNode(idx_run_n, IdxRunNode, first_idx_run_node)
+                    {
+                      idxs[write_idx] = (RDI_U32)idx_run_n->idx; // TODO(rjf): @u64_to_u32
+                      write_idx += 1;
+                    }
+                  }
+                  rdim_bake_idx_run_map_loose_insert(arena, lane_map_top, lane_map, 4, idxs, idxs_count);
+                }
+                active_hash = hash;
+                first_idx_run_node = 0;
+                last_idx_run_node = 0;
+                temp_end(scratch);
+              }
+              
+              // rjf: hash matches the active list -> push
+              if(hash != 0 && hash == active_hash)
+              {
+                IdxRunNode *idx_run_n = push_array(scratch.arena, IdxRunNode, 1);
+                idx_run_n->idx = idx;
+                SLLQueuePush(first_idx_run_node, last_idx_run_node, idx_run_n);
+                active_idx_count += 1;
+              }
+              
+              // rjf: advance index
+              n_idx += 1;
+              
+              // rjf: end on zero node
+              if(n == 0)
+              {
+                break;
+              }
+            }
+            scratch_end(scratch);
+          }
+        }
+      }
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: bake units, src files, symbols, types, UDTs
   //
   {
     //- rjf: setup outputs
@@ -517,50 +663,55 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(3))
     {
+      rdim2_shared->baked_type_nodes.type_nodes_count = params->types.total_count+1;
+      rdim2_shared->baked_type_nodes.type_nodes = push_array(arena, RDI_TypeNode, rdim2_shared->baked_type_nodes.type_nodes_count);
+    }
+    if(lane_idx() == lane_from_task_idx(4))
+    {
       rdim2_shared->baked_udts.udts_count = params->udts.total_count+1;
       rdim2_shared->baked_udts.udts = push_array(arena, RDI_UDT, rdim2_shared->baked_udts.udts_count);
     }
-    if(lane_idx() == lane_from_task_idx(4))
+    if(lane_idx() == lane_from_task_idx(5))
     {
       rdim2_shared->baked_udts.members_count = params->udts.total_member_count+1;
       rdim2_shared->baked_udts.members = push_array(arena, RDI_Member, rdim2_shared->baked_udts.members_count);
     }
-    if(lane_idx() == lane_from_task_idx(5))
+    if(lane_idx() == lane_from_task_idx(6))
     {
       rdim2_shared->baked_udts.enum_members_count = params->udts.total_enum_val_count+1;
       rdim2_shared->baked_udts.enum_members = push_array(arena, RDI_EnumMember, rdim2_shared->baked_udts.enum_members_count);
     }
-    if(lane_idx() == lane_from_task_idx(6))
+    if(lane_idx() == lane_from_task_idx(7))
     {
       rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
       rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(7))
+    if(lane_idx() == lane_from_task_idx(8))
     {
       rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
       rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(8))
+    if(lane_idx() == lane_from_task_idx(9))
     {
       rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
     }
-    if(lane_idx() == lane_from_task_idx(9))
+    if(lane_idx() == lane_from_task_idx(10))
     {
       rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
     }
-    if(lane_idx() == lane_from_task_idx(10))
+    if(lane_idx() == lane_from_task_idx(11))
     {
       rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
       rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
     }
-    if(lane_idx() == lane_from_task_idx(11))
+    if(lane_idx() == lane_from_task_idx(12))
     {
       rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
       rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
     }
-    if(lane_idx() == lane_from_task_idx(12))
+    if(lane_idx() == lane_from_task_idx(13))
     {
       rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
       rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
