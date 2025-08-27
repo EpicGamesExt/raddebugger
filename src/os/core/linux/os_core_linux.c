@@ -4,7 +4,6 @@
 ////////////////////////////////
 //~ rjf: Helpers
 
-#include <asm-generic/errno.h>
 internal DateTime
 os_lnx_date_time_from_tm(tm in, U32 msec)
 {
