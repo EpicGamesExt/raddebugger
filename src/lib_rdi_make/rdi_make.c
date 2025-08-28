@@ -4,8 +4,51 @@
 ////////////////////////////////
 //~ rjf: API Implementation Helper Macros
 
-#define rdim_require(root, b32, else_code, error_msg)  do { if(!(b32)) {rdim_push_msg((root), (error_msg)); else_code;} }while(0)
-#define rdim_requiref(root, b32, else_code, fmt, ...)  do { if(!(b32)) {rdim_push_msgf((root), (fmt), __VA_ARGS__); else_code;} }while(0)
+#define RDIM_IdxedChunkListPush(arena, list, chunk_type, element_type, cap_value, result) \
+element_type *result = 0;\
+do\
+{\
+chunk_type *n = list->last;\
+if(n == 0 || n->count >= n->cap)\
+{\
+n = rdim_push_array(arena, chunk_type, 1);\
+n->cap = cap_value;\
+n->base_idx = list->total_count;\
+n->v = rdim_push_array_no_zero(arena, element_type, n->cap);\
+RDIM_SLLQueuePush(list->first, list->last, n);\
+list->chunk_count += 1;\
+}\
+result = &n->v[n->count];\
+result->chunk = n;\
+n->count += 1;\
+list->total_count += 1;\
+}while(0)
+
+#define RDIM_IdxedChunkListElementGetIdx(ptr, result) \
+RDI_U64 idx = 0;\
+if(ptr != 0 && ptr->chunk != 0)\
+{\
+idx = ptr->chunk->base_idx + (ptr - ptr->chunk->v) + 1;\
+}
+
+#define RDIM_IdxedChunkListConcatInPlace(chunk_type, dst, to_push, ...) \
+for(chunk_type *n = to_push->first; n != 0; n = n->next)\
+{\
+n->base_idx += dst->total_count;\
+}\
+if(dst->last != 0 && to_push->first != 0)\
+{\
+dst->last->next = to_push->first;\
+dst->last = to_push->last;\
+dst->chunk_count += to_push->chunk_count;\
+dst->total_count += to_push->total_count;\
+__VA_ARGS__;\
+}\
+else if(dst->first == 0)\
+{\
+rdim_memcpy_struct(dst, to_push);\
+}\
+rdim_memzero_struct(to_push);
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -277,6 +320,12 @@ rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 sep)
 
 //- rjf: sortable range sorting
 
+RSFORCEINLINE int
+rdim_sort_key_is_before(void *l, void *r)
+{
+  return ((RDIM_SortKey *)l)->key < ((RDIM_SortKey *)r)->key;
+}
+
 RDI_PROC RDIM_SortKey *
 rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
 {
@@ -286,6 +335,7 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
   // Also - this sort should be a "stable" sort. In the use case of sorting vmap
   // ranges, we want to be able to rely on order, so it needs to be preserved here.
   
+  RDIM_ProfBegin("rdim_sort_key_array");
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   RDIM_SortKey *result = 0;
   
@@ -436,6 +486,7 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
 #endif
   
   rdim_scratch_end(scratch);
+  RDIM_ProfEnd();
   return result;
 }
 
@@ -641,55 +692,23 @@ rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list)
 RDI_PROC RDIM_SrcFile *
 rdim_src_file_chunk_list_push(RDIM_Arena *arena, RDIM_SrcFileChunkList *list, RDI_U64 cap)
 {
-  RDIM_SrcFileChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_SrcFileChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_SrcFile, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_SrcFile *src_file = &n->v[n->count];
-  src_file->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
-  return src_file;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_SrcFileChunkNode, RDIM_SrcFile, cap, result);
+  return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_src_file(RDIM_SrcFile *src_file)
 {
-  RDI_U64 idx = 0;
-  if(src_file != 0 && src_file->chunk != 0)
-  {
-    idx = (src_file->chunk->base_idx + (src_file - src_file->chunk->v) + 1);
-  }
+  RDIM_IdxedChunkListElementGetIdx(src_file, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFileChunkList *to_push)
 {
-  for(RDIM_SrcFileChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-    dst->source_line_map_count += to_push->source_line_map_count;
-    dst->total_line_count += to_push->total_line_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_SrcFileChunkNode, dst, to_push,
+                                   dst->source_line_map_count += to_push->source_line_map_count,
+                                   dst->total_line_count += to_push->total_line_count);
 }
 
 RDI_PROC void
@@ -711,56 +730,24 @@ rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_f
 RDI_PROC RDIM_LineTable *
 rdim_line_table_chunk_list_push(RDIM_Arena *arena, RDIM_LineTableChunkList *list, RDI_U64 cap)
 {
-  RDIM_LineTableChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_LineTableChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_LineTable, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_LineTable *line_table = &n->v[n->count];
-  line_table->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
-  return line_table;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_LineTableChunkNode, RDIM_LineTable, cap, result);
+  return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_line_table(RDIM_LineTable *line_table)
 {
-  RDI_U64 idx = 0;
-  if(line_table != 0 && line_table->chunk != 0)
-  {
-    idx = line_table->chunk->base_idx + (line_table - line_table->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(line_table, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_line_table_chunk_list_concat_in_place(RDIM_LineTableChunkList *dst, RDIM_LineTableChunkList *to_push)
 {
-  for(RDIM_LineTableChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-    dst->total_seq_count += to_push->total_seq_count;
-    dst->total_line_count += to_push->total_line_count;
-    dst->total_col_count += to_push->total_col_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_LineTableChunkNode, dst, to_push,
+                                   dst->total_seq_count += to_push->total_seq_count,
+                                   dst->total_line_count += to_push->total_line_count,
+                                   dst->total_col_count += to_push->total_col_count);
 }
 
 RDI_PROC RDIM_LineSequence *
@@ -788,53 +775,21 @@ rdim_line_table_push_sequence(RDIM_Arena *arena, RDIM_LineTableChunkList *line_t
 RDI_PROC RDIM_Unit *
 rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list, RDI_U64 cap)
 {
-  RDIM_UnitChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_UnitChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_Unit, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Unit *unit = &n->v[n->count];
-  unit->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
-  return unit;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_UnitChunkNode, RDIM_Unit, cap, result);
+  return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_unit(RDIM_Unit *unit)
 {
-  RDI_U64 idx = 0;
-  if(unit != 0 && unit->chunk != 0)
-  {
-    idx = unit->chunk->base_idx + (unit - unit->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(unit, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList *to_push)
 {
-  for(RDIM_UnitChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_UnitChunkNode, dst, to_push);
 }
 
 ////////////////////////////////
@@ -867,53 +822,21 @@ rdim_type_list_push(RDIM_Arena *arena, RDIM_TypeList *list, RDIM_Type *v)
 RDI_PROC RDIM_Type *
 rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap)
 {
-  RDIM_TypeChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_TypeChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_Type, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Type *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_TypeChunkNode, RDIM_Type, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_type(RDIM_Type *type)
 {
-  RDI_U64 idx = 0;
-  if(type != 0 && type->chunk != 0)
-  {
-    idx = type->chunk->base_idx + (type - type->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(type, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList *to_push)
 {
-  for(RDIM_TypeChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_TypeChunkNode, dst, to_push);
 }
 
 //- rjf: UDT members
@@ -921,53 +844,21 @@ rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList
 RDI_PROC RDIM_UDTMember *
 rdim_udt_member_chunk_list_push(RDIM_Arena *arena, RDIM_UDTMemberChunkList *list, RDI_U64 cap)
 {
-  RDIM_UDTMemberChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_UDTMemberChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_UDTMember, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_UDTMember *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_UDTMemberChunkNode, RDIM_UDTMember, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_udt_member(RDIM_UDTMember *member)
 {
-  RDI_U64 idx = 0;
-  if(member != 0 && member->chunk != 0)
-  {
-    idx = member->chunk->base_idx + (member - member->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(member, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_udt_member_chunk_list_concat_in_place(RDIM_UDTMemberChunkList *dst, RDIM_UDTMemberChunkList *to_push)
 {
-  for(RDIM_UDTMemberChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_UDTMemberChunkNode, dst, to_push);
 }
 
 //- rjf: UDT enum values
@@ -975,53 +866,21 @@ rdim_udt_member_chunk_list_concat_in_place(RDIM_UDTMemberChunkList *dst, RDIM_UD
 RDI_PROC RDIM_UDTEnumVal *
 rdim_udt_enum_val_chunk_list_push(RDIM_Arena *arena, RDIM_UDTEnumValChunkList *list, RDI_U64 cap)
 {
-  RDIM_UDTEnumValChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_UDTEnumValChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_UDTEnumVal, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_UDTEnumVal *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_UDTEnumValChunkNode, RDIM_UDTEnumVal, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_udt_enum_val(RDIM_UDTEnumVal *enum_val)
 {
-  RDI_U64 idx = 0;
-  if(enum_val != 0 && enum_val->chunk != 0)
-  {
-    idx = enum_val->chunk->base_idx + (enum_val - enum_val->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(enum_val, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_udt_enum_val_chunk_list_concat_in_place(RDIM_UDTEnumValChunkList *dst, RDIM_UDTEnumValChunkList *to_push)
 {
-  for(RDIM_UDTEnumValChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_UDTEnumValChunkNode, dst, to_push);
 }
 
 //- rjf: UDTs
@@ -1029,55 +888,23 @@ rdim_udt_enum_val_chunk_list_concat_in_place(RDIM_UDTEnumValChunkList *dst, RDIM
 RDI_PROC RDIM_UDT *
 rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap)
 {
-  RDIM_UDTChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_UDTChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_UDT, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_UDT *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_UDTChunkNode, RDIM_UDT, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_udt(RDIM_UDT *udt)
 {
-  RDI_U64 idx = 0;
-  if(udt != 0 && udt->chunk != 0)
-  {
-    idx = udt->chunk->base_idx + (udt - udt->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(udt, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *to_push)
 {
-  for(RDIM_UDTChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-    dst->total_member_count += to_push->total_member_count;
-    dst->total_enum_val_count += to_push->total_enum_val_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_UDTChunkNode, dst, to_push,
+                                   dst->total_member_count += to_push->total_member_count,
+                                   dst->total_enum_val_count += to_push->total_enum_val_count);
 }
 
 RDI_PROC RDIM_UDTMember *
@@ -1106,54 +933,21 @@ rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt
 RDI_PROC RDIM_Symbol *
 rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap)
 {
-  RDIM_SymbolChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_SymbolChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_Symbol, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Symbol *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_SymbolChunkNode, RDIM_Symbol, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_symbol(RDIM_Symbol *symbol)
 {
-  RDI_U64 idx = 0;
-  if(symbol != 0 && symbol->chunk != 0)
-  {
-    idx = symbol->chunk->base_idx + (symbol - symbol->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(symbol, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push)
 {
-  for(RDIM_SymbolChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-    dst->total_value_data_size += to_push->total_value_data_size;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_SymbolChunkNode, dst, to_push, dst->total_value_data_size += to_push->total_value_data_size);
 }
 
 internal void
@@ -1169,53 +963,36 @@ rdim_symbol_push_value_data(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDIM_
 RDI_PROC RDIM_InlineSite *
 rdim_inline_site_chunk_list_push(RDIM_Arena *arena, RDIM_InlineSiteChunkList *list, RDI_U64 cap)
 {
-  RDIM_InlineSiteChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_InlineSiteChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_InlineSite, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_InlineSite *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_InlineSiteChunkNode, RDIM_InlineSite, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_inline_site(RDIM_InlineSite *inline_site)
 {
-  RDI_U64 idx = 0;
-  if(inline_site != 0 && inline_site->chunk != 0)
-  {
-    idx = inline_site->chunk->base_idx + (inline_site - inline_site->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(inline_site, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_InlineSiteChunkList *to_push)
 {
-  for(RDIM_InlineSiteChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_InlineSiteChunkNode, dst, to_push);
+}
+
+////////////////////////////////
+//~ rjf: [Building] Location Info Building
+
+RDI_PROC RDIM_Location *
+rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_Location *loc)
+{
+  
+}
+
+RDI_PROC void
+rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push)
+{
+  
 }
 
 ////////////////////////////////
@@ -1226,56 +1003,24 @@ rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_
 RDI_PROC RDIM_Scope *
 rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap)
 {
-  RDIM_ScopeChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_ScopeChunkNode, 1);
-    n->cap = cap;
-    n->base_idx = list->total_count;
-    n->v = rdim_push_array(arena, RDIM_Scope, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Scope *result = &n->v[n->count];
-  result->chunk = n;
-  n->count += 1;
-  list->total_count += 1;
+  RDIM_IdxedChunkListPush(arena, list, RDIM_ScopeChunkNode, RDIM_Scope, cap, result);
   return result;
 }
 
 RDI_PROC RDI_U64
 rdim_idx_from_scope(RDIM_Scope *scope)
 {
-  RDI_U64 idx = 0;
-  if(scope != 0 && scope->chunk != 0)
-  {
-    idx = scope->chunk->base_idx + (scope - scope->chunk->v) + 1;
-  }
+  RDIM_IdxedChunkListElementGetIdx(scope, idx);
   return idx;
 }
 
 RDI_PROC void
 rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push)
 {
-  for(RDIM_ScopeChunkNode *n = to_push->first; n != 0; n = n->next)
-  {
-    n->base_idx += dst->total_count;
-  }
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count      += to_push->chunk_count;
-    dst->total_count      += to_push->total_count;
-    dst->scope_voff_count += to_push->scope_voff_count;
-    dst->local_count      += to_push->local_count;
-    dst->location_count   += to_push->location_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
+  RDIM_IdxedChunkListConcatInPlace(RDIM_ScopeChunkNode, dst, to_push,
+                                   dst->scope_voff_count += to_push->scope_voff_count,
+                                   dst->local_count      += to_push->local_count,
+                                   dst->location_count   += to_push->location_count);
 }
 
 RDI_PROC void
@@ -1464,6 +1209,7 @@ rdim_count_from_location_block_chunk_list(RDIM_String8List *list)
 RDI_PROC RDIM_BakeVMap
 rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count)
 {
+  RDIM_ProfBegin("rdim_bake_vmap_from_markers");
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   
   //- rjf: sort markers
@@ -1599,6 +1345,7 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
   result.vmap = vmap;
   result.count = vmap_entry_count;
   rdim_scratch_end(scratch);
+  RDIM_ProfEnd();
   return result;
 }
 
@@ -2677,6 +2424,24 @@ rdim_bake_string_map_loose_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringMap
 
 RDI_PROC void
 rdim_bake_string_map_loose_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Type *v, RDI_U64 count)
+{
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
+  {
+    rdim_bake_string_map_loose_insert(arena, top, map, 4, v[idx].name);
+  }
+}
+
+RDI_PROC void
+rdim_bake_string_map_loose_push_udt_member_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDTMember *v, RDI_U64 count)
+{
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
+  {
+    rdim_bake_string_map_loose_insert(arena, top, map, 4, v[idx].name);
+  }
+}
+
+RDI_PROC void
+rdim_bake_string_map_loose_push_udt_enum_val_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDTEnumVal *v, RDI_U64 count)
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
   {

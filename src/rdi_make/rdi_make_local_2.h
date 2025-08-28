@@ -50,17 +50,20 @@ struct RDIM2_Shared
   RDIM_IndexRunBakeResult baked_idx_runs;
   
   RDIM_UnitBakeResult baked_units;
-  RDIM_UnitVMapBakeResult baked_unit_vmap;
   RDIM_SrcFileBakeResult baked_src_files;
   RDIM_TypeNodeBakeResult baked_type_nodes;
   RDIM_UDTBakeResult baked_udts;
   RDIM_GlobalVariableBakeResult baked_global_variables;
-  RDIM_GlobalVMapBakeResult baked_global_vmap;
   RDIM_ThreadVariableBakeResult baked_thread_variables;
   RDIM_ConstantsBakeResult baked_constants;
   RDIM_ProcedureBakeResult baked_procedures;
-  RDIM_ScopeVMapBakeResult baked_scope_vmap;
   RDIM_InlineSiteBakeResult baked_inline_sites;
+  
+  RDIM_TopLevelInfoBakeResult baked_top_level_info;
+  RDIM_BinarySectionBakeResult baked_binary_sections;
+  RDIM_UnitVMapBakeResult baked_unit_vmap;
+  RDIM_ScopeVMapBakeResult baked_scope_vmap;
+  RDIM_GlobalVMapBakeResult baked_global_vmap;
 };
 
 global RDIM2_Shared *rdim2_shared = 0;

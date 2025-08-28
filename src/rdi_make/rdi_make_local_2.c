@@ -238,13 +238,23 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         }
       }
       
-      // rjf: push strings from udts
-      ProfScope("udts")
+      // rjf: push strings from udt members
+      ProfScope("udt members")
       {
-        for(RDIM_UDTChunkNode *n = params->udts.first; n != 0; n = n->next)
+        for EachNode(n, RDIM_UDTMemberChunkNode, params->members.first)
         {
           Rng1U64 range = lane_range(n->count);
-          rdim_bake_string_map_loose_push_udt_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+          rdim_bake_string_map_loose_push_udt_member_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
+        }
+      }
+      
+      // rjf: push strings from udt enum values
+      ProfScope("udt enum values")
+      {
+        for EachNode(n, RDIM_UDTEnumValChunkNode, params->enum_vals.first)
+        {
+          Rng1U64 range = lane_range(n->count);
+          rdim_bake_string_map_loose_push_udt_enum_val_slice(arena, lane_map_top, lane_map, n->v + range.min, dim_1u64(range));
         }
       }
       
@@ -339,12 +349,30 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     lane_sync();
     
     //- rjf: tighten string table
-    if(lane_idx() == 0) ProfScope("tighten string table")
+    ProfScope("tighten string table")
     {
       RDIM_BakeStringMapLoose *map = rdim2_shared->bake_string_map__loose;
       RDIM_BakeStringMapTopology *map_top = &rdim2_shared->bake_string_map_topology;
-      RDIM_BakeStringMapBaseIndices bake_string_map_base_idxes = rdim_bake_string_map_base_indices_from_map_loose(arena, map_top, map);
-      rdim2_shared->bake_strings = rdim_bake_string_map_tight_from_loose(arena, map_top, &bake_string_map_base_idxes, map);
+      if(lane_idx() == 0) ProfScope("calc base indices, set up tight map")
+      {
+        RDIM_BakeStringMapBaseIndices bake_string_map_base_indices = rdim_bake_string_map_base_indices_from_map_loose(arena, map_top, map);
+        rdim2_shared->bake_strings.slots_count = map_top->slots_count;
+        rdim2_shared->bake_strings.slots = rdim_push_array(arena, RDIM_BakeStringChunkList, rdim2_shared->bake_strings.slots_count);
+        rdim2_shared->bake_strings.slots_base_idxs = bake_string_map_base_indices.slots_base_idxs;
+        rdim2_shared->bake_strings.total_count = rdim2_shared->bake_strings.slots_base_idxs[rdim2_shared->bake_strings.slots_count];
+      }
+      lane_sync();
+      ProfScope("fill tight map")
+      {
+        Rng1U64 slot_range = lane_range(rdim2_shared->bake_strings.slots_count);
+        for EachInRange(idx, slot_range)
+        {
+          if(map->slots[idx] != 0)
+          {
+            rdim_memcpy_struct(&rdim2_shared->bake_strings.slots[idx], map->slots[idx]);
+          }
+        }
+      }
     }
   }
   lane_sync();
@@ -1071,12 +1099,40 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   lane_sync();
   
   //////////////////////////////////////////////////////////////
+  //- rjf: do final baking tasks
+  //
+  ProfScope("do final baking tasks")
+  {
+    if(lane_idx() == lane_from_task_idx(0)) ProfScope("bake top level info")
+    {
+      rdim2_shared->baked_top_level_info = rdim_bake_top_level_info(arena, bake_strings, &params->top_level_info);
+    }
+    if(lane_idx() == lane_from_task_idx(1)) ProfScope("bake binary sections")
+    {
+      rdim2_shared->baked_binary_sections = rdim_bake_binary_sections(arena, bake_strings, &params->binary_sections);
+    }
+    if(lane_idx() == lane_from_task_idx(2)) ProfScope("bake unit vmap")
+    {
+      rdim2_shared->baked_unit_vmap = rdim_bake_unit_vmap(arena, &params->units);
+    }
+    if(lane_idx() == lane_from_task_idx(3)) ProfScope("bake scope vmap")
+    {
+      rdim2_shared->baked_scope_vmap = rdim_bake_scope_vmap(arena, &params->scopes);
+    }
+    if(lane_idx() == lane_from_task_idx(4)) ProfScope("bake global vmap")
+    {
+      rdim2_shared->baked_global_vmap = rdim_bake_global_vmap(arena, &params->global_variables);
+    }
+  }
+  lane_sync();
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: package results
   //
   RDIM_BakeResults result = {0};
   {
-    // result.top_level_info         = rdim2_shared->baked_top_level_info;
-    // result.binary_sections        = rdim2_shared->baked_binary_sections;
+    result.top_level_info         = rdim2_shared->baked_top_level_info;
+    result.binary_sections        = rdim2_shared->baked_binary_sections;
     result.units                  = rdim2_shared->baked_units;
     result.unit_vmap              = rdim2_shared->baked_unit_vmap;
     result.src_files              = rdim2_shared->baked_src_files;

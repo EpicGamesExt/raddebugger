@@ -214,27 +214,6 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
     out->sections_count = dsec_count;
   }
   
-  //////////////////////////////
-  //- rjf: validate results
-  //
-  if(result == RDI_ParseStatus_Good)
-  {
-    for(RDI_SectionKind k = (RDI_SectionKind)(RDI_SectionKind_NULL+1); k < RDI_SectionKind_COUNT; k = (RDI_SectionKind)(k+1))
-    {
-      if(rdi_section_is_required_table[k])
-      {
-        RDI_U64 data_size = 0;
-        RDI_SectionEncoding encoding = 0;
-        void *data = rdi_section_raw_data_from_kind(out, k, &encoding, &data_size);
-        if(data == 0 || data == &rdi_nil_element_union || data_size == 0)
-        {
-          result = RDI_ParseStatus_MissingRequiredSection;
-          break;
-        }
-      }
-    }
-  }
-  
   return result;
 }
 

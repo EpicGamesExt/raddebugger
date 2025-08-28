@@ -1031,7 +1031,6 @@ rb_thread_entry_point(void *p)
               case RDI_ParseStatus_HeaderDoesNotMatch:      {log_user_errorf("RDI parse failure: header does not match\n");}break;
               case RDI_ParseStatus_UnsupportedVersionNumber:{log_user_errorf("RDI parse failure: unsupported version\n");}break;
               case RDI_ParseStatus_InvalidDataSecionLayout: {log_user_errorf("RDI parse failure: invalid data section layout\n");}break;
-              case RDI_ParseStatus_MissingRequiredSection:  {log_user_errorf("RDI parse failure: missing required section\n");}break;
               case RDI_ParseStatus_Good:
               {
                 String8List dump = rdi_dump_list_from_parsed(arena, &rdi, rdi_dump_subset_flags);

@@ -889,6 +889,17 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
           CV_C13Parsed *src_unit_c13 = all_c13s[idx+1];
           RDIM_Unit *dst_unit = &units[idx];
           
+          // rjf: produce unit name
+          String8 unit_name = src_unit->obj_name;
+          if(unit_name.size != 0)
+          {
+            String8 unit_name_past_last_slash = str8_skip_last_slash(unit_name);
+            if(unit_name_past_last_slash.size != 0)
+            {
+              unit_name = unit_name_past_last_slash;
+            }
+          }
+          
           // rjf: produce obj name/path
           String8 obj_name = src_unit->obj_name;
           if(str8_match(obj_name, str8_lit("* Linker *"), 0) ||
@@ -958,6 +969,16 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
             }
           }
+          
+          // rjf: fill unit
+          dst_unit->unit_name     = unit_name;
+          dst_unit->compiler_name = src_unit_sym->info.compiler_name;
+          dst_unit->object_file   = obj_name;
+          dst_unit->archive_file  = src_unit->group_name;
+          dst_unit->language      = p2r_rdi_language_from_cv_language(src_unit_sym->info.language);
+          dst_unit->line_table    = line_table;
+          dst_unit->voff_ranges   = unit_ranges[idx];
+          
           scratch_end(scratch);
         }
       }

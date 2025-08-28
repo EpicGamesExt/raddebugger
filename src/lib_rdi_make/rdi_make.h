@@ -822,6 +822,8 @@ struct RDIM_UDTChunkList
 ////////////////////////////////
 //~ rjf: Location Info Types
 
+//- rjf: bytecode types
+
 typedef struct RDIM_EvalBytecodeOp RDIM_EvalBytecodeOp;
 struct RDIM_EvalBytecodeOp
 {
@@ -840,6 +842,8 @@ struct RDIM_EvalBytecode
   RDI_U32 encoded_size;
 };
 
+//- rjf: location types
+
 typedef struct RDIM_Location RDIM_Location;
 struct RDIM_Location
 {
@@ -848,6 +852,29 @@ struct RDIM_Location
   RDI_U16 offset;
   RDIM_EvalBytecode bytecode;
 };
+
+typedef struct RDIM_LocationChunkNode RDIM_LocationChunkNode;
+struct RDIM_LocationChunkNode
+{
+  RDIM_LocationChunkNode *next;
+  RDIM_Location *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+  RDI_U64 base_encoding_off;
+};
+
+typedef struct RDIM_LocationChunkList RDIM_LocationChunkList;
+struct RDIM_LocationChunkList
+{
+  RDIM_LocationChunkNode *first;
+  RDIM_LocationChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+  RDI_U64 total_encoded_size;
+};
+
+//- rjf: location case types (location * voff range)
 
 typedef struct RDIM_LocationCase RDIM_LocationCase;
 struct RDIM_LocationCase
@@ -1646,6 +1673,7 @@ RDI_PROC RDIM_UDT *rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList
 RDI_PROC RDI_U64 rdim_idx_from_udt(RDIM_UDT *udt);
 RDI_PROC void rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *to_push);
 
+//- TODO(rjf): to be removed:
 RDI_PROC RDIM_UDTMember *rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 
@@ -1663,6 +1691,12 @@ internal void rdim_symbol_push_value_data(RDIM_Arena *arena, RDIM_SymbolChunkLis
 RDI_PROC RDIM_InlineSite *rdim_inline_site_chunk_list_push(RDIM_Arena *arena, RDIM_InlineSiteChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_inline_site(RDIM_InlineSite *inline_site);
 RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_InlineSiteChunkList *to_push);
+
+////////////////////////////////
+//~ rjf: [Building] Location Info Building
+
+RDI_PROC RDIM_Location *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_Location *loc);
+RDI_PROC void rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building
@@ -1782,6 +1816,8 @@ RDI_PROC void rdim_bake_string_map_loose_push_path_tree(RDIM_Arena *arena, RDIM_
 RDI_PROC void rdim_bake_string_map_loose_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_SrcFile *v, RDI_U64 count);
 RDI_PROC void rdim_bake_string_map_loose_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Unit *v, RDI_U64 count);
 RDI_PROC void rdim_bake_string_map_loose_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Type *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_udt_member_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDTMember *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_udt_enum_val_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDTEnumVal *v, RDI_U64 count);
 RDI_PROC void rdim_bake_string_map_loose_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDT *v, RDI_U64 count);
 RDI_PROC void rdim_bake_string_map_loose_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Symbol *v, RDI_U64 count);
 RDI_PROC void rdim_bake_string_map_loose_push_inline_site_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_InlineSite *v, RDI_U64 count);
