@@ -983,16 +983,94 @@ rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_
 ////////////////////////////////
 //~ rjf: [Building] Location Info Building
 
-RDI_PROC RDIM_Location *
-rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_Location *loc)
+RDI_PROC RDI_U64
+rdim_encoded_size_from_location_info(RDIM_LocationInfo *info)
 {
-  
+  RDI_U64 result = 0;
+  switch((RDI_LocationKindEnum)info->kind)
+  {
+    case RDI_LocationKind_NULL:{}break;
+    
+    case RDI_LocationKind_AddrBytecodeStream:
+    case RDI_LocationKind_ValBytecodeStream:
+    {
+      result = sizeof(RDI_LocationBytecodeStream) + info->bytecode.encoded_size + 1;
+    }break;
+    
+    case RDI_LocationKind_AddrRegPlusU16:
+    case RDI_LocationKind_AddrAddrRegPlusU16:
+    {
+      result = sizeof(RDI_LocationRegPlusU16);
+    }break;
+    
+    case RDI_LocationKind_ValReg:
+    {
+      result = sizeof(RDI_LocationReg);
+    }break;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_Location2 *
+rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_LocationInfo *info)
+{
+  RDIM_IdxedChunkListPush(arena, list, RDIM_LocationChunkNode, RDIM_Location2, cap, result);
+  {
+    RDI_U64 encoded_size = rdim_encoded_size_from_location_info(info);
+    rdim_memcpy_struct(&result->info, info);
+    result->relative_encoding_off = list->last->encoded_size;
+    list->last->encoded_size += encoded_size;
+    list->total_encoded_size += encoded_size;
+  }
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_location(RDIM_Location2 *location)
+{
+  RDIM_IdxedChunkListElementGetIdx(location, idx);
+  return idx;
+}
+
+RDI_PROC RDI_U64
+rdim_off_from_location(RDIM_Location2 *location)
+{
+  RDI_U64 off = 0;
+  if(location != 0 && location->chunk != 0)
+  {
+    off = location->chunk->base_encoding_off + location->relative_encoding_off + 1;
+  }
+  return off;
 }
 
 RDI_PROC void
 rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push)
 {
-  
+  for(RDIM_LocationChunkNode *n = to_push->first; n != 0; n = n->next)
+  {
+    n->base_encoding_off += dst->total_encoded_size;
+  }
+  RDIM_IdxedChunkListConcatInPlace(RDIM_LocationChunkNode, dst, to_push, dst->total_encoded_size += to_push->total_encoded_size);
+}
+
+RDI_PROC RDIM_LocationCase2 *
+rdim_location_case_chunk_list_push(RDIM_Arena *arena, RDIM_LocationCaseChunkList *list, RDI_U64 cap)
+{
+  RDIM_IdxedChunkListPush(arena, list, RDIM_LocationCaseChunkNode, RDIM_LocationCase2, cap, result);
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_location_case(RDIM_LocationCase2 *location_case)
+{
+  RDIM_IdxedChunkListElementGetIdx(location_case, idx);
+  return idx;
+}
+
+RDI_PROC void
+rdim_location_case_chunk_list_concat_in_place(RDIM_LocationCaseChunkList *dst, RDIM_LocationCaseChunkList *to_push)
+{
+  RDIM_IdxedChunkListConcatInPlace(RDIM_LocationCaseChunkNode, dst, to_push);
 }
 
 ////////////////////////////////

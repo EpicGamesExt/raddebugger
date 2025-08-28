@@ -1,6 +1,49 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+internal RDIM_LocationInfo
+p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
+{
+  RDIM_LocationInfo result = {0};
+  if(0 <= offset && offset <= (S64)max_U16)
+  {
+    if(extra_indirection)
+    {
+      result.kind = RDI_LocationKind_AddrAddrRegPlusU16;
+      result.reg_code = reg_code;
+      result.offset = offset;
+    }
+    else
+    {
+      result.kind = RDI_LocationKind_AddrRegPlusU16;
+      result.reg_code = reg_code;
+      result.offset = offset;
+    }
+  }
+  else
+  {
+    RDIM_EvalBytecode bytecode = {0};
+    U32 regread_param = RDI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_RegRead, regread_param);
+    rdim_bytecode_push_sconst(arena, &bytecode, offset);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_Add, 0);
+    if(extra_indirection)
+    {
+      U64 addr_size = rdi_addr_size_from_arch(arch);
+      rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_MemRead, addr_size);
+    }
+    result.kind = RDI_LocationKind_AddrBytecodeStream;
+    result.bytecode = bytecode;
+  }
+  return result;
+}
+
+internal void
+p2r2_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
+{
+  
+}
+
 internal RDIM_BakeParams
 p2r2_convert(Arena *arena, P2R_ConvertParams *params)
 {
@@ -2990,6 +3033,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     //
     if(lane_idx() == 0)
     {
+      p2r2_shared->lanes_locations        = push_array(arena, RDIM_LocationChunkList, lane_count());
+      p2r2_shared->lanes_location_cases   = push_array(arena, RDIM_LocationCaseChunkList, lane_count());
       p2r2_shared->lanes_procedures       = push_array(arena, RDIM_SymbolChunkList, lane_count());
       p2r2_shared->lanes_global_variables = push_array(arena, RDIM_SymbolChunkList, lane_count());
       p2r2_shared->lanes_thread_variables = push_array(arena, RDIM_SymbolChunkList, lane_count());
@@ -3003,12 +3048,16 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ////////////////////////////
     //- rjf: set up outputs for this sym stream
     //
+    U64 sym_locations_chunk_cap = 16384;
+    U64 sym_location_cases_chunk_cap = 16384;
     U64 sym_procedures_chunk_cap = 16384;
     U64 sym_global_variables_chunk_cap = 16384;
     U64 sym_thread_variables_chunk_cap = 16384;
     U64 sym_constants_chunk_cap = 16384;
     U64 sym_scopes_chunk_cap = 16384;
     U64 sym_inline_sites_chunk_cap = 16384;
+    RDIM_LocationChunkList sym_locations = {0};
+    RDIM_LocationCaseChunkList sym_location_cases = {0};
     RDIM_SymbolChunkList sym_procedures = {0};
     RDIM_SymbolChunkList sym_global_variables = {0};
     RDIM_SymbolChunkList sym_thread_variables = {0};
@@ -3444,6 +3493,18 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
                 U32 byte_size = 8;
                 U32 byte_pos = 0;
                 
+                // rjf: build location
+                RDIM_LocationInfo loc_info = p2r2_location_info_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
+                RDIM_Location2 *loc2 = rdim_location_chunk_list_push_new(arena, &sym_locations, sym_locations_chunk_cap, &loc_info);
+                RDIM_LocationCase2 *loc_case = rdim_location_case_chunk_list_push(arena, &sym_location_cases, sym_locations_chunk_cap);
+                loc_case->location = loc2;
+                loc_case->voff_range.min = 0;
+                loc_case->voff_range.max = max_U64;
+                
+                // rjf: equip location case to local
+                local->first_location_case = loc_case;
+                local->location_case_count = 1;
+                
                 // rjf: set location case
                 RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Rng1U64 voff_range = {0, max_U64};
@@ -3542,7 +3603,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               }
             }break;
             
-            //- rjf: DEFRANGE_REGISTESR
+            //- rjf: DEFRANGE_REGISTER
             case CV_SymKind_DEFRANGE_REGISTER:
             {
               // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
@@ -3608,10 +3669,11 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
               U32 byte_size = rdi_addr_size_from_arch(arch);
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel->off;
-              RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_LocationInfo location_info = p2r2_location_info_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              RDIM_Location2 *location = rdim_location_chunk_list_push_new(arena, &sym_locations, sym_locations_chunk_cap, &location_info);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
+              // TODO(rjf): p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_SUBFIELD_REGISTER
@@ -3903,6 +3965,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     ////////////////////////////
     //- rjf: output this lane's symbols
     //
+    p2r2_shared->lanes_locations[lane_idx()]               = sym_locations;
+    p2r2_shared->lanes_location_cases[lane_idx()]          = sym_location_cases;
     p2r2_shared->lanes_procedures[lane_idx()]              = sym_procedures;
     p2r2_shared->lanes_global_variables[lane_idx()]        = sym_global_variables;
     p2r2_shared->lanes_thread_variables[lane_idx()]        = sym_thread_variables;
@@ -3919,49 +3983,63 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
   //- rjf: join all lane symbols
   //
   {
-    if(lane_idx() == lane_from_task_idx(0)) ProfScope("join procedures")
+    if(lane_idx() == lane_from_task_idx(0)) ProfScope("join locations")
+    {
+      for EachIndex(idx, lane_count())
+      {
+        rdim_location_chunk_list_concat_in_place(&p2r2_shared->all_locations, &p2r2_shared->lanes_locations[idx]);
+      }
+    }
+    if(lane_idx() == lane_from_task_idx(1)) ProfScope("join location cases")
+    {
+      for EachIndex(idx, lane_count())
+      {
+        rdim_location_case_chunk_list_concat_in_place(&p2r2_shared->all_location_cases, &p2r2_shared->lanes_location_cases[idx]);
+      }
+    }
+    if(lane_idx() == lane_from_task_idx(2)) ProfScope("join procedures")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_procedures, &p2r2_shared->lanes_procedures[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(1)) ProfScope("join global variables")
+    if(lane_idx() == lane_from_task_idx(3)) ProfScope("join global variables")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_global_variables, &p2r2_shared->lanes_global_variables[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(2)) ProfScope("join thread variables")
+    if(lane_idx() == lane_from_task_idx(4)) ProfScope("join thread variables")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_thread_variables, &p2r2_shared->lanes_thread_variables[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(3)) ProfScope("join constants")
+    if(lane_idx() == lane_from_task_idx(5)) ProfScope("join constants")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_symbol_chunk_list_concat_in_place(&p2r2_shared->all_constants, &p2r2_shared->lanes_constants[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(4)) ProfScope("join scopes")
+    if(lane_idx() == lane_from_task_idx(6)) ProfScope("join scopes")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_scope_chunk_list_concat_in_place(&p2r2_shared->all_scopes, &p2r2_shared->lanes_scopes[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(5)) ProfScope("join inline sites")
+    if(lane_idx() == lane_from_task_idx(7)) ProfScope("join inline sites")
     {
       for EachIndex(idx, lane_count())
       {
         rdim_inline_site_chunk_list_concat_in_place(&p2r2_shared->all_inline_sites, &p2r2_shared->lanes_inline_sites[idx]);
       }
     }
-    if(lane_idx() == lane_from_task_idx(6)) ProfScope("join typedefs")
+    if(lane_idx() == lane_from_task_idx(8)) ProfScope("join typedefs")
     {
       for EachIndex(idx, lane_count())
       {
@@ -3971,6 +4049,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     }
   }
   lane_sync();
+  RDIM_LocationChunkList all_locations           = p2r2_shared->all_locations;
+  RDIM_LocationCaseChunkList all_location_cases  = p2r2_shared->all_location_cases;
   RDIM_SymbolChunkList all_procedures            = p2r2_shared->all_procedures;
   RDIM_SymbolChunkList all_global_variables      = p2r2_shared->all_global_variables;
   RDIM_SymbolChunkList all_thread_variables      = p2r2_shared->all_thread_variables;
@@ -3991,7 +4071,7 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
       top_level_info.exe_name      = str8_skip_last_slash(params->input_exe_name);
       top_level_info.exe_hash      = exe_hash;
       top_level_info.voff_max      = exe_voff_max;
-      if(params->deterministic)
+      if(!params->deterministic)
       {
         top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
       }
@@ -4027,6 +4107,8 @@ p2r2_convert(Arena *arena, P2R_ConvertParams *params)
     result.enum_vals        = all_enum_vals;
     result.src_files        = all_src_files;
     result.line_tables      = all_line_tables;
+    result.locations        = all_locations;
+    result.location_cases   = all_location_cases;
     result.global_variables = all_global_variables;
     result.thread_variables = all_thread_variables;
     result.constants        = all_constants;

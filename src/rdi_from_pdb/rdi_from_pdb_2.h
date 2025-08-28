@@ -118,6 +118,8 @@ struct P2R2_Shared
   RDIM_UDTMemberChunkList all_members;
   RDIM_UDTEnumValChunkList all_enum_vals;
   
+  RDIM_LocationChunkList *lanes_locations;
+  RDIM_LocationCaseChunkList *lanes_location_cases;
   RDIM_SymbolChunkList *lanes_procedures;
   RDIM_SymbolChunkList *lanes_global_variables;
   RDIM_SymbolChunkList *lanes_thread_variables;
@@ -126,6 +128,8 @@ struct P2R2_Shared
   RDIM_InlineSiteChunkList *lanes_inline_sites;
   RDIM_TypeChunkList *lanes_typedefs;
   
+  RDIM_LocationChunkList all_locations;
+  RDIM_LocationCaseChunkList all_location_cases;
   RDIM_SymbolChunkList all_procedures;
   RDIM_SymbolChunkList all_global_variables;
   RDIM_SymbolChunkList all_thread_variables;
@@ -136,6 +140,9 @@ struct P2R2_Shared
 };
 
 global P2R2_Shared *p2r2_shared = 0;
+
+internal RDIM_LocationInfo p2r2_location_info_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection);
+internal void p2r2_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
 internal RDIM_BakeParams p2r2_convert(Arena *arena, P2R_ConvertParams *params);
 
