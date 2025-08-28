@@ -718,6 +718,8 @@ struct RDIM_TypeChunkList
 ////////////////////////////////
 //~ rjf: User-Defined-Type Info Types
 
+//- rjf: UDT members
+
 typedef struct RDIM_UDTMember RDIM_UDTMember;
 struct RDIM_UDTMember
 {
@@ -728,6 +730,34 @@ struct RDIM_UDTMember
   RDI_U32 off;
 };
 
+typedef struct RDIM_UDTMemberNode RDIM_UDTMemberNode;
+struct RDIM_UDTMemberNode
+{
+  RDIM_UDTMemberNode *next;
+  RDIM_UDTMember *v;
+};
+
+typedef struct RDIM_UDTMemberChunkNode RDIM_UDTMemberChunkNode;
+struct RDIM_UDTMemberChunkNode
+{
+  RDIM_UDTMemberChunkNode *next;
+  RDIM_UDTMember *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_UDTMemberChunkList RDIM_UDTMemberChunkList;
+struct RDIM_UDTMemberChunkList
+{
+  RDIM_UDTMemberChunkNode *first;
+  RDIM_UDTMemberChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+//- rjf: UDT enum values
+
 typedef struct RDIM_UDTEnumVal RDIM_UDTEnumVal;
 struct RDIM_UDTEnumVal
 {
@@ -735,6 +765,34 @@ struct RDIM_UDTEnumVal
   RDIM_String8 name;
   RDI_U64 val;
 };
+
+typedef struct RDIM_UDTEnumValNode RDIM_UDTEnumValNode;
+struct RDIM_UDTEnumValNode
+{
+  RDIM_UDTEnumValNode *next;
+  RDIM_UDTEnumVal *v;
+};
+
+typedef struct RDIM_UDTEnumValChunkNode RDIM_UDTEnumValChunkNode;
+struct RDIM_UDTEnumValChunkNode
+{
+  RDIM_UDTEnumValChunkNode *next;
+  RDIM_UDTEnumVal *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_UDTEnumValChunkList RDIM_UDTEnumValChunkList;
+struct RDIM_UDTEnumValChunkList
+{
+  RDIM_UDTEnumValChunkNode *first;
+  RDIM_UDTEnumValChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+//- rjf: UDTs
 
 typedef struct RDIM_UDT RDIM_UDT;
 struct RDIM_UDT
