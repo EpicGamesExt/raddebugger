@@ -46,6 +46,9 @@ struct RDIM2_Shared
   RDIM_BakeIdxRunMapLoose *bake_idx_run_map__loose;
   RDIM_BakeIdxRunMap2 *bake_idx_runs;
   
+  RDIM_StringBakeResult baked_strings;
+  RDIM_IndexRunBakeResult baked_idx_runs;
+  
   RDIM_UnitBakeResult baked_units;
   RDIM_UnitVMapBakeResult baked_unit_vmap;
   RDIM_SrcFileBakeResult baked_src_files;
@@ -58,8 +61,6 @@ struct RDIM2_Shared
   RDIM_ProcedureBakeResult baked_procedures;
   RDIM_ScopeVMapBakeResult baked_scope_vmap;
   RDIM_InlineSiteBakeResult baked_inline_sites;
-  
-  RDIM_StringBakeResult baked_strings;
 };
 
 global RDIM2_Shared *rdim2_shared = 0;
