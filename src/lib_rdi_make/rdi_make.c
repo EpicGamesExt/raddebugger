@@ -840,6 +840,8 @@ rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList
 ////////////////////////////////
 //~ rjf: [Building] Type Info Building
 
+//- rjf: type nodes
+
 RDI_PROC RDIM_Type **
 rdim_array_from_type_list(RDIM_Arena *arena, RDIM_TypeList list)
 {
@@ -913,6 +915,116 @@ rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList
   }
   rdim_memzero_struct(to_push);
 }
+
+//- rjf: UDT members
+
+RDI_PROC RDIM_UDTMember *
+rdim_udt_member_chunk_list_push(RDIM_Arena *arena, RDIM_UDTMemberChunkList *list, RDI_U64 cap)
+{
+  RDIM_UDTMemberChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_UDTMemberChunkNode, 1);
+    n->cap = cap;
+    n->base_idx = list->total_count;
+    n->v = rdim_push_array(arena, RDIM_UDTMember, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_UDTMember *result = &n->v[n->count];
+  result->chunk = n;
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_udt_member(RDIM_UDTMember *member)
+{
+  RDI_U64 idx = 0;
+  if(member != 0 && member->chunk != 0)
+  {
+    idx = member->chunk->base_idx + (member - member->chunk->v) + 1;
+  }
+  return idx;
+}
+
+RDI_PROC void
+rdim_udt_member_chunk_list_concat_in_place(RDIM_UDTMemberChunkList *dst, RDIM_UDTMemberChunkList *to_push)
+{
+  for(RDIM_UDTMemberChunkNode *n = to_push->first; n != 0; n = n->next)
+  {
+    n->base_idx += dst->total_count;
+  }
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+//- rjf: UDT enum values
+
+RDI_PROC RDIM_UDTEnumVal *
+rdim_udt_enum_val_chunk_list_push(RDIM_Arena *arena, RDIM_UDTEnumValChunkList *list, RDI_U64 cap)
+{
+  RDIM_UDTEnumValChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_UDTEnumValChunkNode, 1);
+    n->cap = cap;
+    n->base_idx = list->total_count;
+    n->v = rdim_push_array(arena, RDIM_UDTEnumVal, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_UDTEnumVal *result = &n->v[n->count];
+  result->chunk = n;
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_udt_enum_val(RDIM_UDTEnumVal *enum_val)
+{
+  RDI_U64 idx = 0;
+  if(enum_val != 0 && enum_val->chunk != 0)
+  {
+    idx = enum_val->chunk->base_idx + (enum_val - enum_val->chunk->v) + 1;
+  }
+  return idx;
+}
+
+RDI_PROC void
+rdim_udt_enum_val_chunk_list_concat_in_place(RDIM_UDTEnumValChunkList *dst, RDIM_UDTEnumValChunkList *to_push)
+{
+  for(RDIM_UDTEnumValChunkNode *n = to_push->first; n != 0; n = n->next)
+  {
+    n->base_idx += dst->total_count;
+  }
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+//- rjf: UDTs
 
 RDI_PROC RDIM_UDT *
 rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap)
