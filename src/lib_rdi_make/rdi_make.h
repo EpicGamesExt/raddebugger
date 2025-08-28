@@ -1467,6 +1467,13 @@ struct RDIM_LocationBakeResult
   RDI_U64 location_data_size;
 };
 
+typedef struct RDIM_LocationBlockBakeResult RDIM_LocationBlockBakeResult;
+struct RDIM_LocationBlockBakeResult
+{
+  RDI_LocationBlock *location_blocks;
+  RDI_U64 location_blocks_count;
+};
+
 typedef struct RDIM_GlobalVariableBakeResult RDIM_GlobalVariableBakeResult;
 struct RDIM_GlobalVariableBakeResult
 {
