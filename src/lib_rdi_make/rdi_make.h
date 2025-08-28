@@ -844,8 +844,8 @@ struct RDIM_EvalBytecode
 
 //- rjf: location types
 
-typedef struct RDIM_Location RDIM_Location;
-struct RDIM_Location
+typedef struct RDIM_LocationInfo RDIM_LocationInfo;
+struct RDIM_LocationInfo
 {
   RDI_LocationKind kind;
   RDI_U8 reg_code;
@@ -853,15 +853,24 @@ struct RDIM_Location
   RDIM_EvalBytecode bytecode;
 };
 
+typedef struct RDIM_Location2 RDIM_Location2;
+struct RDIM_Location2
+{
+  struct RDIM_LocationChunkNode *chunk;
+  RDIM_LocationInfo info;
+  RDI_U64 relative_encoding_off;
+};
+
 typedef struct RDIM_LocationChunkNode RDIM_LocationChunkNode;
 struct RDIM_LocationChunkNode
 {
   RDIM_LocationChunkNode *next;
-  RDIM_Location *v;
+  RDIM_Location2 *v;
   RDI_U64 count;
   RDI_U64 cap;
   RDI_U64 base_idx;
   RDI_U64 base_encoding_off;
+  RDI_U64 encoded_size;
 };
 
 typedef struct RDIM_LocationChunkList RDIM_LocationChunkList;
@@ -874,7 +883,47 @@ struct RDIM_LocationChunkList
   RDI_U64 total_encoded_size;
 };
 
-//- rjf: location case types (location * voff range)
+//- rjf: location cases
+
+typedef struct RDIM_LocationCase2 RDIM_LocationCase2;
+struct RDIM_LocationCase2
+{
+  struct RDIM_LocationCaseChunkNode *chunk;
+  RDIM_Location2 *location;
+  RDIM_Rng1U64 voff_range;
+};
+
+typedef struct RDIM_LocationCaseChunkNode RDIM_LocationCaseChunkNode;
+struct RDIM_LocationCaseChunkNode
+{
+  RDIM_LocationCaseChunkNode *next;
+  RDIM_LocationCase2 *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_LocationCaseChunkList RDIM_LocationCaseChunkList;
+struct RDIM_LocationCaseChunkList
+{
+  RDIM_LocationCaseChunkNode *first;
+  RDIM_LocationCaseChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+//- rjf: locations (OLD)
+
+typedef struct RDIM_Location RDIM_Location;
+struct RDIM_Location
+{
+  RDI_LocationKind kind;
+  RDI_U8 reg_code;
+  RDI_U16 offset;
+  RDIM_EvalBytecode bytecode;
+};
+
+//- rjf: location case types (location * voff range) (OLD)
 
 typedef struct RDIM_LocationCase RDIM_LocationCase;
 struct RDIM_LocationCase
@@ -974,6 +1023,8 @@ struct RDIM_Local
   RDIM_String8 name;
   RDIM_Type *type;
   RDIM_LocationSet locset;
+  RDIM_LocationCase2 *first_location_case;
+  RDI_U64 location_case_count;
 };
 
 typedef struct RDIM_Scope RDIM_Scope;
@@ -1031,6 +1082,8 @@ struct RDIM_BakeParams
   RDIM_UDTEnumValChunkList enum_vals;
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
+  RDIM_LocationChunkList locations;
+  RDIM_LocationCaseChunkList location_cases;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList constants;
@@ -1407,6 +1460,13 @@ struct RDIM_UDTBakeResult
   RDI_U64 enum_members_count;
 };
 
+typedef struct RDIM_LocationBakeResult RDIM_LocationBakeResult;
+struct RDIM_LocationBakeResult
+{
+  RDI_U8 *location_data;
+  RDI_U64 location_data_size;
+};
+
 typedef struct RDIM_GlobalVariableBakeResult RDIM_GlobalVariableBakeResult;
 struct RDIM_GlobalVariableBakeResult
 {
@@ -1695,8 +1755,15 @@ RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkLi
 ////////////////////////////////
 //~ rjf: [Building] Location Info Building
 
-RDI_PROC RDIM_Location *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_Location *loc);
+RDI_PROC RDI_U64 rdim_encoded_size_from_location_info(RDIM_LocationInfo *info);
+RDI_PROC RDIM_Location2 *rdim_location_chunk_list_push_new(RDIM_Arena *arena, RDIM_LocationChunkList *list, RDI_U64 cap, RDIM_LocationInfo *info);
+RDI_PROC RDI_U64 rdim_idx_from_location(RDIM_Location2 *location);
+RDI_PROC RDI_U64 rdim_off_from_location(RDIM_Location2 *location);
 RDI_PROC void rdim_location_chunk_list_concat_in_place(RDIM_LocationChunkList *dst, RDIM_LocationChunkList *to_push);
+
+RDI_PROC RDIM_LocationCase2 *rdim_location_case_chunk_list_push(RDIM_Arena *arena, RDIM_LocationCaseChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_location_case(RDIM_LocationCase2 *location_case);
+RDI_PROC void rdim_location_case_chunk_list_concat_in_place(RDIM_LocationCaseChunkList *dst, RDIM_LocationCaseChunkList *to_push);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building

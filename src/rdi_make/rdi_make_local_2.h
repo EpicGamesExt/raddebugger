@@ -53,6 +53,7 @@ struct RDIM2_Shared
   RDIM_SrcFileBakeResult baked_src_files;
   RDIM_TypeNodeBakeResult baked_type_nodes;
   RDIM_UDTBakeResult baked_udts;
+  RDIM_LocationBakeResult baked_locations;
   RDIM_GlobalVariableBakeResult baked_global_variables;
   RDIM_ThreadVariableBakeResult baked_thread_variables;
   RDIM_ConstantsBakeResult baked_constants;

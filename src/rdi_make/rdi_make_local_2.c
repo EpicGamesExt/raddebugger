@@ -816,35 +816,40 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(7))
     {
+      rdim2_shared->baked_locations.location_data_size = params->locations.total_encoded_size+1;
+      rdim2_shared->baked_locations.location_data = push_array(arena, RDI_U8, rdim2_shared->baked_locations.location_data_size);
+    }
+    if(lane_idx() == lane_from_task_idx(8))
+    {
       rdim2_shared->baked_global_variables.global_variables_count = params->global_variables.total_count+1;
       rdim2_shared->baked_global_variables.global_variables = push_array(arena, RDI_GlobalVariable, rdim2_shared->baked_global_variables.global_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(8))
+    if(lane_idx() == lane_from_task_idx(9))
     {
       rdim2_shared->baked_thread_variables.thread_variables_count = params->thread_variables.total_count+1;
       rdim2_shared->baked_thread_variables.thread_variables = push_array(arena, RDI_ThreadVariable, rdim2_shared->baked_thread_variables.thread_variables_count);
     }
-    if(lane_idx() == lane_from_task_idx(9))
+    if(lane_idx() == lane_from_task_idx(10))
     {
       rdim2_shared->baked_constants.constants_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constants = push_array(arena, RDI_Constant, rdim2_shared->baked_constants.constants_count);
     }
-    if(lane_idx() == lane_from_task_idx(10))
+    if(lane_idx() == lane_from_task_idx(11))
     {
       rdim2_shared->baked_constants.constant_values_count = params->constants.total_count+1;
       rdim2_shared->baked_constants.constant_values = push_array(arena, RDI_U32, rdim2_shared->baked_constants.constant_values_count);
     }
-    if(lane_idx() == lane_from_task_idx(11))
+    if(lane_idx() == lane_from_task_idx(12))
     {
       rdim2_shared->baked_constants.constant_value_data_size = params->constants.total_value_data_size;
       rdim2_shared->baked_constants.constant_value_data = push_array(arena, RDI_U8, rdim2_shared->baked_constants.constant_value_data_size);
     }
-    if(lane_idx() == lane_from_task_idx(12))
+    if(lane_idx() == lane_from_task_idx(13))
     {
       rdim2_shared->baked_procedures.procedures_count = params->procedures.total_count+1;
       rdim2_shared->baked_procedures.procedures = push_array(arena, RDI_Procedure, rdim2_shared->baked_procedures.procedures_count);
     }
-    if(lane_idx() == lane_from_task_idx(13))
+    if(lane_idx() == lane_from_task_idx(14))
     {
       rdim2_shared->baked_inline_sites.inline_sites_count = params->inline_sites.total_count+1;
       rdim2_shared->baked_inline_sites.inline_sites = push_array(arena, RDI_InlineSite, rdim2_shared->baked_inline_sites.inline_sites_count);
@@ -1011,6 +1016,49 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             dst_udt->flags |= RDI_UDTFlag_EnumMembers;
             dst_udt->member_first = rdim_idx_from_udt_enum_val(src_udt->first_enum_val);
             dst_udt->member_count = src_udt->enum_val_count;
+          }
+        }
+      }
+    }
+    
+    //- rjf: bake locations
+    ProfScope("bake locations")
+    {
+      for EachNode(n, RDIM_LocationChunkNode, params->locations.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_Location2 *loc = &n->v[n_idx];
+          RDI_U8 *dst = &rdim2_shared->baked_locations.location_data[n->base_encoding_off + loc->relative_encoding_off + 1];
+          switch((RDI_LocationKindEnum)loc->info.kind)
+          {
+            case RDI_LocationKind_NULL:{}break;
+            case RDI_LocationKind_AddrBytecodeStream:
+            case RDI_LocationKind_ValBytecodeStream:
+            {
+              MemoryCopy(dst+0, &loc->info.kind, sizeof(loc->info.kind));
+              RDI_U64 write_off = sizeof(loc->info.kind);
+              for EachNode(op_node, RDIM_EvalBytecodeOp, loc->info.bytecode.first_op)
+              {
+                MemoryCopy(dst + write_off, &op_node->op, 1);
+                write_off += 1;
+                MemoryCopy(dst + write_off, &op_node->p, op_node->p_size);
+                write_off += op_node->p_size;
+              }
+              dst[write_off] = 0;
+            }break;
+            case RDI_LocationKind_AddrRegPlusU16:
+            case RDI_LocationKind_AddrAddrRegPlusU16:
+            {
+              RDI_LocationRegPlusU16 baked = {loc->info.kind, loc->info.reg_code, loc->info.offset};
+              MemoryCopy(dst, &baked, sizeof(baked));
+            }break;
+            case RDI_LocationKind_ValReg:
+            {
+              RDI_LocationReg baked = {loc->info.kind, loc->info.reg_code};
+              MemoryCopy(dst, &baked, sizeof(baked));
+            }break;
           }
         }
       }
