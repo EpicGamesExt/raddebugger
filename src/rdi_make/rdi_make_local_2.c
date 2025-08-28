@@ -778,12 +778,12 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     }
     if(lane_idx() == lane_from_task_idx(5))
     {
-      rdim2_shared->baked_udts.members_count = params->udts.total_member_count+1;
+      rdim2_shared->baked_udts.members_count = params->members.total_count+1;
       rdim2_shared->baked_udts.members = push_array(arena, RDI_Member, rdim2_shared->baked_udts.members_count);
     }
     if(lane_idx() == lane_from_task_idx(6))
     {
-      rdim2_shared->baked_udts.enum_members_count = params->udts.total_enum_val_count+1;
+      rdim2_shared->baked_udts.enum_members_count = params->enum_vals.total_count+1;
       rdim2_shared->baked_udts.enum_members = push_array(arena, RDI_EnumMember, rdim2_shared->baked_udts.enum_members_count);
     }
     if(lane_idx() == lane_from_task_idx(7))
@@ -919,6 +919,40 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       }
     }
     
+    //- rjf: bake UDT members
+    ProfScope("bake UDT members")
+    {
+      for EachNode(n, RDIM_UDTMemberChunkNode, params->members.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_UDTMember *src_member = &n->v[n_idx];
+          RDI_Member *dst_member = &rdim2_shared->baked_udts.members[n->base_idx + n_idx + 1];
+          dst_member->kind            = src_member->kind;
+          dst_member->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_member->name);
+          dst_member->type_idx        = (RDI_U32)rdim_idx_from_type(src_member->type); // TODO(rjf): @u64_to_u32
+          dst_member->off             = src_member->off;
+        }
+      }
+    }
+    
+    //- rjf: bake UDT enum vals
+    ProfScope("bake UDT enum vals")
+    {
+      for EachNode(n, RDIM_UDTEnumValChunkNode, params->enum_vals.first)
+      {
+        Rng1U64 range = lane_range(n->count);
+        for EachInRange(n_idx, range)
+        {
+          RDIM_UDTEnumVal *src_member = &n->v[n_idx];
+          RDI_EnumMember *dst_member = &rdim2_shared->baked_udts.enum_members[n->base_idx + n_idx + 1];
+          dst_member->name_string_idx = rdim_bake_idx_from_string(bake_strings, src_member->name);
+          dst_member->val             = src_member->val;
+        }
+      }
+    }
+    
     //- rjf: bake UDTs
     ProfScope("bake UDTs")
     {
@@ -936,40 +970,20 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           dst_udt->line = src_udt->line;
           dst_udt->col  = src_udt->col;
           
-#if 0
-          //- rjf: fill members
+          //- rjf: fill member info
           if(src_udt->member_count != 0)
           {
-            dst_udt->member_first = dst_member_idx;
+            dst_udt->member_first = rdim_idx_from_udt_member(src_udt->first_member);
             dst_udt->member_count = src_udt->member_count;
-            for(RDIM_UDTMember *src_member = src_udt->first_member;
-                src_member != 0;
-                src_member = src_member->next, dst_member_idx += 1)
-            {
-              RDI_Member *dst_member = &members[dst_member_idx];
-              dst_member->kind            = src_member->kind;
-              dst_member->name_string_idx = rdim_bake_idx_from_string(strings, src_member->name);
-              dst_member->type_idx        = (RDI_U32)rdim_idx_from_type(src_member->type); // TODO(rjf): @u64_to_u32
-              dst_member->off             = src_member->off;
-            }
           }
           
           //- rjf: fill enum members
           else if(src_udt->enum_val_count != 0)
           {
             dst_udt->flags |= RDI_UDTFlag_EnumMembers;
-            dst_udt->member_first = dst_enum_member_idx;
+            dst_udt->member_first = rdim_idx_from_udt_enum_val(src_udt->first_enum_val);
             dst_udt->member_count = src_udt->enum_val_count;
-            for(RDIM_UDTEnumVal *src_member = src_udt->first_enum_val;
-                src_member != 0;
-                src_member = src_member->next, dst_enum_member_idx += 1)
-            {
-              RDI_EnumMember *dst_member = &enum_members[dst_enum_member_idx];
-              dst_member->name_string_idx = rdim_bake_idx_from_string(strings, src_member->name);
-              dst_member->val             = src_member->val;
-            }
           }
-#endif
         }
       }
     }

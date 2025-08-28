@@ -723,18 +723,12 @@ struct RDIM_TypeChunkList
 typedef struct RDIM_UDTMember RDIM_UDTMember;
 struct RDIM_UDTMember
 {
+  struct RDIM_UDTMemberChunkNode *chunk;
   RDIM_UDTMember *next;
   RDI_MemberKind kind;
   RDIM_String8 name;
   RDIM_Type *type;
   RDI_U32 off;
-};
-
-typedef struct RDIM_UDTMemberNode RDIM_UDTMemberNode;
-struct RDIM_UDTMemberNode
-{
-  RDIM_UDTMemberNode *next;
-  RDIM_UDTMember *v;
 };
 
 typedef struct RDIM_UDTMemberChunkNode RDIM_UDTMemberChunkNode;
@@ -761,16 +755,10 @@ struct RDIM_UDTMemberChunkList
 typedef struct RDIM_UDTEnumVal RDIM_UDTEnumVal;
 struct RDIM_UDTEnumVal
 {
+  struct RDIM_UDTEnumValChunkNode *chunk;
   RDIM_UDTEnumVal *next;
   RDIM_String8 name;
   RDI_U64 val;
-};
-
-typedef struct RDIM_UDTEnumValNode RDIM_UDTEnumValNode;
-struct RDIM_UDTEnumValNode
-{
-  RDIM_UDTEnumValNode *next;
-  RDIM_UDTEnumVal *v;
 };
 
 typedef struct RDIM_UDTEnumValChunkNode RDIM_UDTEnumValChunkNode;
@@ -1012,6 +1000,8 @@ struct RDIM_BakeParams
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
   RDIM_UDTChunkList udts;
+  RDIM_UDTMemberChunkList members;
+  RDIM_UDTEnumValChunkList enum_vals;
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
   RDIM_SymbolChunkList global_variables;
@@ -1636,12 +1626,26 @@ RDI_PROC void rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM
 ////////////////////////////////
 //~ rjf: [Building] Type Info & UDT Building
 
+//- rjf: type nodes
 RDI_PROC RDIM_Type *rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_type(RDIM_Type *type);
 RDI_PROC void rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList *to_push);
+
+//- rjf: UDT members
+RDI_PROC RDIM_UDTMember *rdim_udt_member_chunk_list_push(RDIM_Arena *arena, RDIM_UDTMemberChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_udt_member(RDIM_UDTMember *member);
+RDI_PROC void rdim_udt_member_chunk_list_concat_in_place(RDIM_UDTMemberChunkList *dst, RDIM_UDTMemberChunkList *to_push);
+
+//- rjf: UDT enum values
+RDI_PROC RDIM_UDTEnumVal *rdim_udt_enum_val_chunk_list_push(RDIM_Arena *arena, RDIM_UDTEnumValChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_udt_enum_val(RDIM_UDTEnumVal *enum_val);
+RDI_PROC void rdim_udt_enum_val_chunk_list_concat_in_place(RDIM_UDTEnumValChunkList *dst, RDIM_UDTEnumValChunkList *to_push);
+
+//- rjf: UDTs
 RDI_PROC RDIM_UDT *rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_udt(RDIM_UDT *udt);
 RDI_PROC void rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *to_push);
+
 RDI_PROC RDIM_UDTMember *rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 
