@@ -50,7 +50,6 @@ typedef enum RDI_ParseStatus
   RDI_ParseStatus_HeaderDoesNotMatch = 1,
   RDI_ParseStatus_UnsupportedVersionNumber = 2,
   RDI_ParseStatus_InvalidDataSecionLayout = 3,
-  RDI_ParseStatus_MissingRequiredSection = 4,
 }
 RDI_ParseStatus;
 

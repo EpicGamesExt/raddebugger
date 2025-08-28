@@ -117,49 +117,49 @@ RDI_HeaderMemberTable:
 ////////////////////////////////
 //~ rjf: Format Section Tables
 
-@table(name  name_lower  element_type  value  is_required  index_base_type  desc)
+@table(name  name_lower  element_type  value  index_base_type  desc)
 RDI_SectionTable:
 {
-  {NULL                          null                               RDI_U8              0x0000   -    -                                              ""}
-  {TopLevelInfo                  top_level_info                     RDI_TopLevelInfo    0x0001   -    -                                              ""}
-  {StringData                    string_data                        RDI_U8              0x0002   x    -                                              ""}
-  {StringTable                   string_table                       RDI_U32             0x0003   x    U32                                            ""}
-  {IndexRuns                     index_runs                         RDI_U32             0x0004   x    U32                                            ""}
-  {BinarySections                binary_sections                    RDI_BinarySection   0x0005   -    U32                                            ""}
-  {FilePathNodes                 file_path_nodes                    RDI_FilePathNode    0x0006   -    U32                                            ""}
-  {SourceFiles                   source_files                       RDI_SourceFile      0x0007   -    U32                                            ""}
-  {LineTables                    line_tables                        RDI_LineTable       0x0008   -    U32                                            ""}
-  {LineInfoVOffs                 line_info_voffs                    RDI_U64             0x0009   -    U32                                            ""}
-  {LineInfoLines                 line_info_lines                    RDI_Line            0x000A   -    U32                                            ""}
-  {LineInfoColumns               line_info_columns                  RDI_Column          0x000B   -    U32                                            ""}
-  {SourceLineMaps                source_line_maps                   RDI_SourceLineMap   0x000C   -    U32                                            ""}
-  {SourceLineMapNumbers          source_line_map_numbers            RDI_U32             0x000D   -    U32                                            ""}
-  {SourceLineMapRanges           source_line_map_ranges             RDI_U32             0x000E   -    U32                                            ""}
-  {SourceLineMapVOffs            source_line_map_voffs              RDI_U64             0x000F   -    U32                                            ""}
-  {Units                         units                              RDI_Unit            0x0010   -    U32                                            ""}
-  {UnitVMap                      unit_vmap                          RDI_VMapEntry       0x0011   -    -                                              ""}
-  {TypeNodes                     type_nodes                         RDI_TypeNode        0x0012   -    U32                                            ""}
-  {UDTs                          udts                               RDI_UDT             0x0013   -    U32                                            ""}
-  {Members                       members                            RDI_Member          0x0014   -    U32                                            ""}
-  {EnumMembers                   enum_members                       RDI_EnumMember      0x0015   -    U32                                            ""}
-  {GlobalVariables               global_variables                   RDI_GlobalVariable  0x0016   -    U32                                            ""}
-  {GlobalVMap                    global_vmap                        RDI_VMapEntry       0x0017   -    -                                              ""}
-  {ThreadVariables               thread_variables                   RDI_ThreadVariable  0x0018   -    U32                                            ""}
-  {Constants                     constants                          RDI_Constant        0x0019   -    U32                                            ""}
-  {Procedures                    procedures                         RDI_Procedure       0x001A   -    U32                                            ""}
-  {Scopes                        scopes                             RDI_Scope           0x001B   -    U32                                            ""}
-  {ScopeVOffData                 scope_voff_data                    RDI_U64             0x001C   -    U32                                            ""}
-  {ScopeVMap                     scope_vmap                         RDI_VMapEntry       0x001D   -    -                                              ""}
-  {InlineSites                   inline_sites                       RDI_InlineSite      0x001E   -    U32                                            ""}
-  {Locals                        locals                             RDI_Local           0x001F   -    U32                                            ""}
-  {LocationBlocks                location_blocks                    RDI_LocationBlock   0x0020   -    U32                                            ""}
-  {LocationData                  location_data                      RDI_U8              0x0021   -    U32                                            ""}
-  {ConstantValueData             constant_value_data                RDI_U8              0x0022   -    U32                                            ""}
-  {ConstantValueTable            constant_value_table               RDI_U32             0x0023   -    U32                                            ""}
-  {NameMaps                      name_maps                          RDI_NameMap         0x0024   -    U32                                            ""}
-  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0025   -    U32                                            ""}
-  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0026   -    U32                                            ""}
-  {COUNT                         count                              RDI_U8              0x0027   -    -                                              ""}
+  {NULL                          null                               RDI_U8              0x0000   -                                              ""}
+  {TopLevelInfo                  top_level_info                     RDI_TopLevelInfo    0x0001   -                                              ""}
+  {StringData                    string_data                        RDI_U8              0x0002   -                                              ""}
+  {StringTable                   string_table                       RDI_U32             0x0003   U32                                            ""}
+  {IndexRuns                     index_runs                         RDI_U32             0x0004   U32                                            ""}
+  {BinarySections                binary_sections                    RDI_BinarySection   0x0005   U32                                            ""}
+  {FilePathNodes                 file_path_nodes                    RDI_FilePathNode    0x0006   U32                                            ""}
+  {SourceFiles                   source_files                       RDI_SourceFile      0x0007   U32                                            ""}
+  {LineTables                    line_tables                        RDI_LineTable       0x0008   U32                                            ""}
+  {LineInfoVOffs                 line_info_voffs                    RDI_U64             0x0009   U32                                            ""}
+  {LineInfoLines                 line_info_lines                    RDI_Line            0x000A   U32                                            ""}
+  {LineInfoColumns               line_info_columns                  RDI_Column          0x000B   U32                                            ""}
+  {SourceLineMaps                source_line_maps                   RDI_SourceLineMap   0x000C   U32                                            ""}
+  {SourceLineMapNumbers          source_line_map_numbers            RDI_U32             0x000D   U32                                            ""}
+  {SourceLineMapRanges           source_line_map_ranges             RDI_U32             0x000E   U32                                            ""}
+  {SourceLineMapVOffs            source_line_map_voffs              RDI_U64             0x000F   U32                                            ""}
+  {Units                         units                              RDI_Unit            0x0010   U32                                            ""}
+  {UnitVMap                      unit_vmap                          RDI_VMapEntry       0x0011   -                                              ""}
+  {TypeNodes                     type_nodes                         RDI_TypeNode        0x0012   U32                                            ""}
+  {UDTs                          udts                               RDI_UDT             0x0013   U32                                            ""}
+  {Members                       members                            RDI_Member          0x0014   U32                                            ""}
+  {EnumMembers                   enum_members                       RDI_EnumMember      0x0015   U32                                            ""}
+  {GlobalVariables               global_variables                   RDI_GlobalVariable  0x0016   U32                                            ""}
+  {GlobalVMap                    global_vmap                        RDI_VMapEntry       0x0017   -                                              ""}
+  {ThreadVariables               thread_variables                   RDI_ThreadVariable  0x0018   U32                                            ""}
+  {Constants                     constants                          RDI_Constant        0x0019   U32                                            ""}
+  {Procedures                    procedures                         RDI_Procedure       0x001A   U32                                            ""}
+  {Scopes                        scopes                             RDI_Scope           0x001B   U32                                            ""}
+  {ScopeVOffData                 scope_voff_data                    RDI_U64             0x001C   U32                                            ""}
+  {ScopeVMap                     scope_vmap                         RDI_VMapEntry       0x001D   -                                              ""}
+  {InlineSites                   inline_sites                       RDI_InlineSite      0x001E   U32                                            ""}
+  {Locals                        locals                             RDI_Local           0x001F   U32                                            ""}
+  {LocationBlocks                location_blocks                    RDI_LocationBlock   0x0020   U32                                            ""}
+  {LocationData                  location_data                      RDI_U8              0x0021   U32                                            ""}
+  {ConstantValueData             constant_value_data                RDI_U8              0x0022   U32                                            ""}
+  {ConstantValueTable            constant_value_table               RDI_U32             0x0023   U32                                            ""}
+  {NameMaps                      name_maps                          RDI_NameMap         0x0024   U32                                            ""}
+  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0025   U32                                            ""}
+  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0026   U32                                            ""}
+  {COUNT                         count                              RDI_U8              0x0027   -                                              ""}
 }
 
 @table(name value)
@@ -230,11 +230,6 @@ RDI_SectionMemberTable:
 @data(RDI_U16) rdi_section_element_size_table:
 {
   @expand(RDI_SectionTable a) `sizeof($(a.element_type))`;
-}
-
-@data(RDI_U8) rdi_section_is_required_table:
-{
-  @expand(RDI_SectionTable a) `$(a.is_required == 'x' -> 1)$(a.is_required != 'x' -> 0)`;
 }
 
 ////////////////////////////////

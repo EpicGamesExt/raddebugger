@@ -1572,7 +1572,6 @@ RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTyp
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
 extern RDI_U16 rdi_section_element_size_table[40];
-extern RDI_U8 rdi_section_is_required_table[40];
 extern RDI_U16 rdi_eval_op_ctrlbits_table[52];
 
 #endif // RDI_H
