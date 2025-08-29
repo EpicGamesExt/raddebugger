@@ -335,7 +335,6 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
   // Also - this sort should be a "stable" sort. In the use case of sorting vmap
   // ranges, we want to be able to rely on order, so it needs to be preserved here.
   
-  RDIM_ProfBegin("rdim_sort_key_array");
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   RDIM_SortKey *result = 0;
   
@@ -486,7 +485,6 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
 #endif
   
   rdim_scratch_end(scratch);
-  RDIM_ProfEnd();
   return result;
 }
 
@@ -1291,7 +1289,15 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   
   //- rjf: sort markers
+#if 0
   RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, marker_count);
+#else
+  ProfBegin("sort markers");
+  RDIM_SortKey *sorted_keys = rdim_push_array(scratch.arena, RDIM_SortKey, marker_count);
+  rdim_memcpy(sorted_keys, keys, marker_count*sizeof(keys[0]));
+  radsort(sorted_keys, marker_count, rdim_sort_key_is_before);
+  ProfEnd();
+#endif
   
   //- rjf: determine if an extra vmap entry for zero is needed
   RDI_U32 extra_vmap_entry = 0;
@@ -1304,6 +1310,7 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
   RDI_U32 vmap_count_raw = marker_count - 1 + extra_vmap_entry;
   RDI_VMapEntry *vmap = rdim_push_array(arena, RDI_VMapEntry, vmap_count_raw + 1);
   RDI_U32 vmap_entry_count_pass_1 = 0;
+  ProfScope("fill output vmap entries")
   {
     typedef struct RDIM_VMapRangeTracker RDIM_VMapRangeTracker;
     struct RDIM_VMapRangeTracker
@@ -1402,6 +1409,7 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
   
   //- rjf: combine duplicate neighbors
   RDI_U32 vmap_entry_count = 0;
+  ProfScope("combine duplicate neighbors")
   {
     RDI_VMapEntry *vmap_ptr = vmap;
     RDI_VMapEntry *vmap_opl = vmap + vmap_entry_count_pass_1;

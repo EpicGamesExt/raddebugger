@@ -21,6 +21,11 @@ struct RDIM_UnsortedJoinedLineTable
 typedef struct RDIM2_Shared RDIM2_Shared;
 struct RDIM2_Shared
 {
+  B32 group_split;
+  U64 group_0_lane_count;
+  Barrier group_0_barrier;
+  Barrier group_1_barrier;
+  
   RDIM_BakePathTree *path_tree;
   
   RDI_U64 line_tables_count;

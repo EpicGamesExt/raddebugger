@@ -1355,7 +1355,7 @@ internal Barrier
 os_barrier_alloc(U64 count)
 {
   OS_W32_Entity *entity = os_w32_entity_alloc(OS_W32_EntityKind_Barrier);
-  InitializeSynchronizationBarrier(&entity->sb, count, -1);
+  BOOL init_good = InitializeSynchronizationBarrier(&entity->sb, count, -1);
   Barrier result = {IntFromPtr(entity)};
   return result;
 }
