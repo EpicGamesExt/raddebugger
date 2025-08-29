@@ -996,8 +996,6 @@ X(RDI_U32, voff_range_first)\
 X(RDI_U32, voff_range_opl)\
 X(RDI_U32, local_first)\
 X(RDI_U32, local_count)\
-X(RDI_U32, static_local_idx_run_first)\
-X(RDI_U32, static_local_count)\
 X(RDI_U32, inline_site_idx)\
 
 #define RDI_InlineSite_XList \
@@ -1446,8 +1444,6 @@ RDI_U32 voff_range_first;
 RDI_U32 voff_range_opl;
 RDI_U32 local_first;
 RDI_U32 local_count;
-RDI_U32 static_local_idx_run_first;
-RDI_U32 static_local_count;
 RDI_U32 inline_site_idx;
 };
 
