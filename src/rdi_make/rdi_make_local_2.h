@@ -21,11 +21,6 @@ struct RDIM_UnsortedJoinedLineTable
 typedef struct RDIM2_Shared RDIM2_Shared;
 struct RDIM2_Shared
 {
-  B32 group_split;
-  U64 group_0_lane_count;
-  Barrier group_0_barrier;
-  Barrier group_1_barrier;
-  
   RDI_U64 scope_vmap_count;
   RDIM_SortKey *scope_vmap_keys;
   RDIM_SortKey *scope_vmap_keys__swap;
