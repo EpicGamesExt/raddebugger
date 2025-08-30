@@ -136,8 +136,9 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       // rjf: sort
       ProfScope("sort")
       {
-        U64 digits_count = 8;
-        U64 num_possible_values_per_digit = 1<<digits_count;
+        U64 bits_per_digit = 8;
+        U64 digits_count = 64 / bits_per_digit;
+        U64 num_possible_values_per_digit = 1 << bits_per_digit;
         rdim2_shared->lane_digit_counts[lane_idx()] = push_array_no_zero(arena, U32, num_possible_values_per_digit);
         rdim2_shared->lane_digit_offsets[lane_idx()] = push_array_no_zero(arena, U32, num_possible_values_per_digit);
         RDIM_SortKey *src = rdim2_shared->scope_vmap_keys;
@@ -153,14 +154,13 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             for EachInRange(idx, range)
             {
               RDIM_SortKey *sort_key = &src[idx];
-              U8 byte_value = (U8)(sort_key->key >> (digit_idx*8));
-              digit_counts[byte_value] += 1;
+              U16 digit_value = (U16)(U8)(sort_key->key >> (digit_idx*bits_per_digit));
+              digit_counts[digit_value] += 1;
             }
           }
           lane_sync();
           
           // rjf: compute thread * digit value *relative* offset table
-#if 1
           {
             Rng1U64 range = lane_range(num_possible_values_per_digit);
             for EachInRange(value_idx, range)
@@ -179,6 +179,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           if(lane_idx() == 0)
           {
             U64 last_off = 0;
+            U64 num_of_nonzero_digit = 0;
             for EachIndex(value_idx, num_possible_values_per_digit)
             {
               for EachIndex(lane_idx, lane_count())
@@ -208,22 +209,6 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
 #endif
           }
           lane_sync();
-#else
-          if(lane_idx() == 0)
-          {
-            U64 last_off = 0;
-            for EachIndex(value_idx, num_possible_values_per_digit)
-            {
-              for EachIndex(lane_idx, lane_count())
-              {
-                rdim2_shared->lane_digit_offsets[lane_idx][value_idx] = last_off;
-                last_off += rdim2_shared->lane_digit_counts[lane_idx][value_idx];
-              }
-            }
-            AssertAlways(last_off == element_count);
-          }
-          lane_sync();
-#endif
           
           // rjf: move
           {
@@ -232,9 +217,9 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
             for EachInRange(idx, range)
             {
               RDIM_SortKey *src_key = &src[idx];
-              U8 byte_value = (U8)(src_key->key >> (digit_idx*8));
-              U64 dst_off = lane_digit_offsets[byte_value];
-              lane_digit_offsets[byte_value] += 1;
+              U16 digit_value = (U16)(U8)(src_key->key >> (digit_idx*bits_per_digit));
+              U64 dst_off = lane_digit_offsets[digit_value];
+              lane_digit_offsets[digit_value] += 1;
               MemoryCopyStruct(&dst[dst_off], src_key);
             }
           }
