@@ -2068,8 +2068,7 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
             
             // rjf: [read only] if we did prefix content, do a parenthesized pointer value
             if(!(params->flags & EV_StringFlag_DisableAddresses) && params->flags & EV_StringFlag_ReadOnlyDisplayRules &&
-               ptr_data->did_prefix_content &&
-               (!ptr_data->did_prefix_string || ptr_data->value_eval.value.u64 == 0))
+               ptr_data->did_prefix_content)
             {
               *out_string = push_str8f(arena, " (%S)", ptr_value_string);
             }

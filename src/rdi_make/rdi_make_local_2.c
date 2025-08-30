@@ -28,6 +28,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   //
   B32 group_0 = 1;
   B32 group_1 = 1;
+#if 0
   LaneCtx lane_ctx_restore = {0};
   if(rdim2_shared->group_split)
   {
@@ -56,6 +57,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       group_1 = 1;
     }
   }
+#endif
   
   //////////////////////////////////////////////////////////////
   //- rjf: group 0
@@ -70,7 +72,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
       }
       if(lane_idx() == lane_from_task_idx(1)) ProfScope("bake scope vmap")
       {
-        rdim2_shared->baked_scope_vmap = rdim_bake_scope_vmap(arena, &params->scopes);
+        // rdim2_shared->baked_scope_vmap = rdim_bake_scope_vmap(arena, &params->scopes);
       }
       if(lane_idx() == lane_from_task_idx(2)) ProfScope("bake global vmap")
       {
@@ -85,6 +87,183 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
   //
   if(group_1)
   {
+    //////////////////////////////////////////////////////////////
+    //- rjf: bake scope vmap
+    //
+    ProfScope("bake scope vmap")
+    {
+      // rjf: set up
+      if(lane_idx() == 0)
+      {
+        rdim2_shared->scope_vmap_count = params->scopes.scope_voff_count;
+        rdim2_shared->scope_vmap_keys = push_array_no_zero(arena, RDIM_SortKey, rdim2_shared->scope_vmap_count);
+        rdim2_shared->scope_vmap_keys__swap = push_array_no_zero(arena, RDIM_SortKey, rdim2_shared->scope_vmap_count);
+        rdim2_shared->scope_vmap_markers = push_array_no_zero(arena, RDIM_VMapMarker, rdim2_shared->scope_vmap_count);
+        ProfScope("fill keys/markers")
+        {
+          RDIM_SortKey *key_ptr = rdim2_shared->scope_vmap_keys;
+          RDIM_VMapMarker *marker_ptr = rdim2_shared->scope_vmap_markers;
+          for(RDIM_ScopeChunkNode *chunk_n = params->scopes.first; chunk_n != 0; chunk_n = chunk_n->next)
+          {
+            for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1)
+            {
+              RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
+              RDI_U32 scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope); // TODO(rjf): @u64_to_u32
+              for(RDIM_Rng1U64Node *n = src_scope->voff_ranges.first; n != 0; n = n->next)
+              {
+                key_ptr->key = n->v.min;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = scope_idx;
+                marker_ptr->begin_range = 1;
+                key_ptr += 1;
+                marker_ptr += 1;
+                
+                key_ptr->key = n->v.max;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = scope_idx;
+                marker_ptr->begin_range = 0;
+                key_ptr += 1;
+                marker_ptr += 1;
+              }
+            }
+          }
+        }
+        rdim2_shared->lane_digit_counts = push_array(arena, U32 *, lane_count());
+        rdim2_shared->lane_digit_offsets = push_array(arena, U32 *, lane_count());
+      }
+      lane_sync();
+      
+      // rjf: sort
+      ProfScope("sort")
+      {
+        U64 digits_count = 8;
+        U64 num_possible_values_per_digit = 1<<digits_count;
+        rdim2_shared->lane_digit_counts[lane_idx()] = push_array_no_zero(arena, U32, num_possible_values_per_digit);
+        rdim2_shared->lane_digit_offsets[lane_idx()] = push_array_no_zero(arena, U32, num_possible_values_per_digit);
+        RDIM_SortKey *src = rdim2_shared->scope_vmap_keys;
+        RDIM_SortKey *dst = rdim2_shared->scope_vmap_keys__swap;
+        U64 element_count = rdim2_shared->scope_vmap_count;
+        for EachIndex(digit_idx, digits_count)
+        {
+          // rjf: count digit value occurrences per-lane
+          {
+            U32 *digit_counts = rdim2_shared->lane_digit_counts[lane_idx()];
+            MemoryZero(digit_counts, sizeof(digit_counts[0])*num_possible_values_per_digit);
+            Rng1U64 range = lane_range(element_count);
+            for EachInRange(idx, range)
+            {
+              RDIM_SortKey *sort_key = &src[idx];
+              U8 byte_value = (U8)(sort_key->key >> (digit_idx*8));
+              digit_counts[byte_value] += 1;
+            }
+          }
+          lane_sync();
+          
+          // rjf: compute thread * digit value *relative* offset table
+#if 1
+          {
+            Rng1U64 range = lane_range(num_possible_values_per_digit);
+            for EachInRange(value_idx, range)
+            {
+              U64 layout_off = 0;
+              for EachIndex(lane_idx, lane_count())
+              {
+                rdim2_shared->lane_digit_offsets[lane_idx][value_idx] = layout_off;
+                layout_off += rdim2_shared->lane_digit_counts[lane_idx][value_idx];
+              }
+            }
+          }
+          lane_sync();
+          
+          // rjf: convert relative offsets -> absolute offsets
+          if(lane_idx() == 0)
+          {
+            U64 last_off = 0;
+            for EachIndex(value_idx, num_possible_values_per_digit)
+            {
+              for EachIndex(lane_idx, lane_count())
+              {
+                rdim2_shared->lane_digit_offsets[lane_idx][value_idx] += last_off;
+              }
+              last_off = rdim2_shared->lane_digit_offsets[lane_count()-1][value_idx] + rdim2_shared->lane_digit_counts[lane_count()-1][value_idx];
+            }
+            AssertAlways(last_off == element_count);
+#if 0
+            for EachIndex(value_idx, num_possible_values_per_digit)
+            {
+              for EachIndex(lane_idx, lane_count())
+              {
+                U64 prev = 0;
+                if(lane_idx > 0)
+                {
+                  prev = rdim2_shared->lane_digit_offsets[lane_idx-1][value_idx] + rdim2_shared->lane_digit_counts[lane_idx-1][value_idx];
+                }
+                else if(value_idx > 0)
+                {
+                  prev = rdim2_shared->lane_digit_offsets[lane_count()-1][value_idx-1] + rdim2_shared->lane_digit_counts[lane_count()-1][value_idx-1];
+                }
+                AssertAlways(rdim2_shared->lane_digit_offsets[lane_idx][value_idx] == prev);
+              }
+            }
+#endif
+          }
+          lane_sync();
+#else
+          if(lane_idx() == 0)
+          {
+            U64 last_off = 0;
+            for EachIndex(value_idx, num_possible_values_per_digit)
+            {
+              for EachIndex(lane_idx, lane_count())
+              {
+                rdim2_shared->lane_digit_offsets[lane_idx][value_idx] = last_off;
+                last_off += rdim2_shared->lane_digit_counts[lane_idx][value_idx];
+              }
+            }
+            AssertAlways(last_off == element_count);
+          }
+          lane_sync();
+#endif
+          
+          // rjf: move
+          {
+            U32 *lane_digit_offsets = rdim2_shared->lane_digit_offsets[lane_idx()];
+            Rng1U64 range = lane_range(element_count);
+            for EachInRange(idx, range)
+            {
+              RDIM_SortKey *src_key = &src[idx];
+              U8 byte_value = (U8)(src_key->key >> (digit_idx*8));
+              U64 dst_off = lane_digit_offsets[byte_value];
+              lane_digit_offsets[byte_value] += 1;
+              MemoryCopyStruct(&dst[dst_off], src_key);
+            }
+          }
+          lane_sync();
+          
+          // rjf: swap
+          {
+            RDIM_SortKey *swap = src;
+            src = dst;
+            dst = swap;
+          }
+        }
+      }
+      lane_sync();
+      
+      // rjf: assert sortedness
+      {
+        RDIM_SortKey *dst = rdim2_shared->scope_vmap_keys;
+        U64 element_count = rdim2_shared->scope_vmap_count;
+        for EachIndex(idx, element_count)
+        {
+          if(idx > 0)
+          {
+            AssertAlways(dst[idx-1].key <= dst[idx].key);
+          }
+        }
+      }
+    }
+    
     //////////////////////////////////////////////////////////////
     //- rjf: build interned path tree
     //
@@ -141,9 +320,7 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
           }
           if(lane_idx() == lane_from_task_idx(2))
           {
-            rdim2_shared->baked_line_tables.line_tables        = push_array(arena, RDI_LineTable, rdim2_shared->baked_line_tables.line_tables_count);
-            
-            // rjf: lay out line tables in joined info
+            rdim2_shared->baked_line_tables.line_tables = push_array(arena, RDI_LineTable, rdim2_shared->baked_line_tables.line_tables_count);
             ProfScope("lay out line tables")
             {
               U64 voffs_base_idx = 0;
@@ -815,17 +992,35 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
         lane_sync();
         
         //- rjf: tighten idx run table
-        if(lane_idx() == 0) ProfScope("tighten idx run table")
+        ProfScope("tighten idx run table")
         {
           RDIM_BakeIdxRunMapLoose *map = rdim2_shared->bake_idx_run_map__loose;
           RDIM_BakeIdxRunMapTopology *map_top = &rdim2_shared->bake_idx_run_map_topology;
-          RDIM_BakeIdxRunMapBaseIndices bake_idx_run_map_base_idxes = rdim_bake_idx_run_map_base_indices_from_map_loose(arena, map_top, map);
-          rdim2_shared->bake_idx_runs = rdim_bake_idx_run_map_from_loose(arena, map_top, &bake_idx_run_map_base_idxes, map);
+          if(lane_idx() == 0) ProfScope("calc base indices, set up tight map")
+          {
+            RDIM_BakeIdxRunMapBaseIndices bake_idx_run_map_base_indices = rdim_bake_idx_run_map_base_indices_from_map_loose(arena, map_top, map);
+            rdim2_shared->bake_idx_runs.slots_count = map_top->slots_count;
+            rdim2_shared->bake_idx_runs.slots = rdim_push_array(arena, RDIM_BakeIdxRunChunkList, rdim2_shared->bake_idx_runs.slots_count);
+            rdim2_shared->bake_idx_runs.slots_base_idxs = bake_idx_run_map_base_indices.slots_base_idxs;
+            rdim2_shared->bake_idx_runs.total_count = rdim2_shared->bake_idx_runs.slots_base_idxs[rdim2_shared->bake_idx_runs.slots_count];
+          }
+          lane_sync();
+          ProfScope("fill tight map")
+          {
+            Rng1U64 slot_range = lane_range(rdim2_shared->bake_idx_runs.slots_count);
+            for EachInRange(idx, slot_range)
+            {
+              if(map->slots[idx] != 0)
+              {
+                rdim_memcpy_struct(&rdim2_shared->bake_idx_runs.slots[idx], map->slots[idx]);
+              }
+            }
+          }
         }
       }
     }
     lane_sync();
-    RDIM_BakeIdxRunMap2 *bake_idx_runs = rdim2_shared->bake_idx_runs;
+    RDIM_BakeIdxRunMap2 *bake_idx_runs = &rdim2_shared->bake_idx_runs;
     
     //////////////////////////////////////////////////////////////
     //- rjf: bake strings
@@ -1300,7 +1495,9 @@ rdim2_bake(Arena *arena, RDIM_BakeParams *params)
     {
       barrier_release(rdim2_shared->group_1_barrier);
     }
+#if 0
     lane_ctx(lane_ctx_restore);
+#endif
   }
   lane_sync();
   
