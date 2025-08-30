@@ -26,6 +26,13 @@ struct RDIM2_Shared
   Barrier group_0_barrier;
   Barrier group_1_barrier;
   
+  RDI_U64 scope_vmap_count;
+  RDIM_SortKey *scope_vmap_keys;
+  RDIM_SortKey *scope_vmap_keys__swap;
+  RDIM_VMapMarker *scope_vmap_markers;
+  U32 **lane_digit_counts;
+  U32 **lane_digit_offsets;
+  
   RDIM_BakePathTree *path_tree;
   
   RDI_U64 line_tables_count;
@@ -49,7 +56,7 @@ struct RDIM2_Shared
   RDIM_BakeIdxRunMapTopology bake_idx_run_map_topology;
   RDIM_BakeIdxRunMapLoose **lane_bake_idx_run_maps__loose;
   RDIM_BakeIdxRunMapLoose *bake_idx_run_map__loose;
-  RDIM_BakeIdxRunMap2 *bake_idx_runs;
+  RDIM_BakeIdxRunMap2 bake_idx_runs;
   
   RDIM_StringBakeResult baked_strings;
   RDIM_IndexRunBakeResult baked_idx_runs;
