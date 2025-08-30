@@ -1873,7 +1873,7 @@ ASYNC_WORK_DEF(di_match_work)
             // rjf: atomically update the node's primary match
             ins_atomic_u64_eval_assign(&node->primary_match.dbgi_idx, dbgi_idx);
             ins_atomic_u32_eval_assign(&node->primary_match.section, name_map_section_kinds[name_map_kind_idx]);
-            ins_atomic_u32_eval_assign(&node->primary_match.idx, run[0]);
+            ins_atomic_u32_eval_assign(&node->primary_match.idx, run[num-1]);
             
             // rjf: gather all alternate matches
             for(U32 match_idx = 1; match_idx < num; match_idx += 1)
